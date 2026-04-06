@@ -1,0 +1,2 @@
+# pelu
+Sistema para peluquerías
