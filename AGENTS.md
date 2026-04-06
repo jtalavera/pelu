@@ -37,7 +37,7 @@ The backend uses **SQL Server** locally (`src/backend/docker-compose.yml`) and i
 
 These rules apply to **every new screen** and should be reflected in layout, Tailwind classes, and design-system usage.
 
-1. **Viewports**: Treat layouts as mobile-first. Use Tailwind `sm:` / `md:` breakpoints so narrow screens stack content and wider screens can use multi-column or horizontal patterns. Avoid fixed widths that clip or overflow on small screens; prefer `min-w-0`, `w-full`, and `max-w-*` on containers.
+1. **Viewports**: Treat layouts as mobile-first. Use Tailwind `sm:` / `md:` breakpoints so narrow screens stack content and wider screens can use multi-column or horizontal patterns. Avoid fixed widths that clip or overflow on small screens; prefer `min-w-0`, `w-full`, and `max-w-`* on containers.
 2. **Touch targets**: Interactive controls (buttons, primary links, tab triggers, key nav items) should meet at least ~44×44px on phones. The design-system `Button` defaults encode this; extend the same idea for custom links or controls (`min-h-11`, padding).
 3. **Simple flows**: Prefer one primary action per view, vertical stacking, and full-width primary actions on narrow viewports. Reduce parallel controls on small screens (e.g. stack toolbars, scroll tab lists horizontally instead of squashing).
 4. **Safe areas**: Respect notched devices with `env(safe-area-inset-*)` padding on full-bleed layouts (see `src/frontend/src/index.css`). The HTML viewport uses `viewport-fit=cover` in `index.html`.

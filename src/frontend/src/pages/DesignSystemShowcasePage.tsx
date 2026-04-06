@@ -18,8 +18,10 @@ import {
   Checkbox,
   Drawer,
   Heading,
+  IconChevronRight,
   IconMenu,
   IconSearch,
+  IconUser,
   Input,
   InputGroup,
   Label,
@@ -50,7 +52,7 @@ import {
   ThemeToggle,
   type DataTableColumn,
 } from "@design-system";
-import { LanguageSwitcher } from "./components/LanguageSwitcher";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 
 type TableRow = {
   id: string;
@@ -84,7 +86,7 @@ const tableData: TableRow[] = [
   },
 ];
 
-export default function App() {
+export default function DesignSystemShowcasePage() {
   const { t } = useTranslation();
   const notificationsId = useId();
   const [modalOpen, setModalOpen] = useState(false);
@@ -153,7 +155,10 @@ export default function App() {
   );
 
   return (
-    <div className="mx-auto min-h-screen min-w-0 max-w-6xl overflow-x-hidden px-4 py-8 sm:px-6 sm:py-10">
+    <main
+      className="mx-auto min-h-screen min-w-0 max-w-6xl overflow-x-hidden px-4 py-8 sm:px-6 sm:py-10"
+      aria-label={t("app.title")}
+    >
       <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl space-y-2">
           <Badge variant="info">{t("app.badge")}</Badge>
@@ -204,6 +209,27 @@ export default function App() {
             <Text variant="label">{t("app.typography.labelSample")}</Text>
             <Text>{t("app.typography.body")}</Text>
             <Text variant="muted">{t("app.typography.muted")}</Text>
+          </div>
+        </section>
+
+        <Separator />
+
+        <section className="space-y-4">
+          <Heading as="h2">{t("app.sections.icons")}</Heading>
+          <Text variant="muted">{t("app.icons.hint")}</Text>
+          <div className="flex flex-wrap items-center gap-8 text-slate-700 dark:text-slate-200">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+              <IconSearch />
+            </span>
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+              <IconMenu />
+            </span>
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+              <IconUser />
+            </span>
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+              <IconChevronRight />
+            </span>
           </div>
         </section>
 
@@ -550,6 +576,6 @@ export default function App() {
           </Drawer>
         </section>
       </div>
-    </div>
+    </main>
   );
 }

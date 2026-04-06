@@ -397,6 +397,7 @@
     "sections": {
       "actions": "Acciones",
       "typography": "Tipografía",
+      "icons": "Iconos",
       "formControls": "Controles de formulario",
       "navigation": "Navegación",
       "layout": "Disposición y listas",
@@ -421,6 +422,9 @@
     "card": {
       "title": "Perfil",
       "description": "Entradas y selectores etiquetados típicos."
+    },
+    "icons": {
+      "hint": "Iconos SVG para búsqueda, menú, usuario y chevron—úsalos en botones, entradas y navegación."
     },
     "typography": {
       "h5": "Encabezado cinco",

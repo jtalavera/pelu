@@ -397,6 +397,7 @@
     "sections": {
       "actions": "Actions",
       "typography": "Typography",
+      "icons": "Icons",
       "formControls": "Form controls",
       "navigation": "Navigation",
       "layout": "Layout & lists",
@@ -421,6 +422,9 @@
     "card": {
       "title": "Profile",
       "description": "Typical labeled inputs and selects."
+    },
+    "icons": {
+      "hint": "SVG icons for search, menu, user, and chevron—use inside buttons, inputs, and navigation."
     },
     "typography": {
       "h5": "Heading five",
