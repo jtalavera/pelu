@@ -1,0 +1,124 @@
+# Deploys backend (GHCR → Azure Container Apps) and frontend (Azure Static Web Apps)
+# after CI succeeds on a push to main. Invoked via workflow_call from ci.yml (same commit as CI;
+# avoids workflow_run + head_sha checkout, which Semgrep flags as unsafe with secrets).
+# Manual runs: workflow_dispatch.
+name: Deploy Azure
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-azure-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+  packages: write
+
+jobs:
+  deploy:
+    name: Deploy to Azure (GHCR + Container App + SWA)
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+    steps:
+      # Same commit as the caller (push to main from CI) or the branch chosen for workflow_dispatch.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tag (lowercase)
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            src/backend/gradle/wrapper/gradle-wrapper.properties
+            src/backend/build.gradle.kts
+            src/backend/settings.gradle.kts
+
+      - name: Build backend JAR
+        working-directory: src/backend
+        run: chmod +x gradlew && ./gradlew bootJar --no-daemon -x test
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: src/backend
+          file: src/backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME_LOWER }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME_LOWER }}:latest
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Register GHCR pull credentials on Container App
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_READ_PACKAGES_PAT: ${{ secrets.GHCR_READ_PACKAGES_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GHCR_READ_PACKAGES_PAT:-}" ] || [ -z "${GHCR_USERNAME:-}" ]; then
+            echo "Skipping ghcr.io registry credentials (set GHCR_USERNAME + GHCR_READ_PACKAGES_PAT if the image is private)."
+            echo "If pulls fail, make the package public in GitHub Packages or add these secrets."
+            exit 0
+          fi
+          az containerapp registry set \
+            --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP_NAME }}" \
+            --server ghcr.io \
+            --username "$GHCR_USERNAME" \
+            --password "$GHCR_READ_PACKAGES_PAT"
+
+      - name: Update Container App image
+        run: |
+          az containerapp update \
+            --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP_NAME }}" \
+            --image "${{ env.IMAGE_NAME_LOWER }}:${{ env.IMAGE_TAG }}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Build frontend (production API URL)
+        working-directory: src/frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: npm ci && npm run build
+
+      - name: Deploy Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: src/frontend/dist
+          skip_app_build: true

@@ -1,0 +1,563 @@
+{
+  "designSystem": {
+    "dataTable": {
+      "dragReorderColumn": "Drag to reorder column",
+      "columns": "Columns",
+      "visibleColumns": "Visible columns"
+    },
+    "modal": {
+      "closeDialog": "Close dialog",
+      "close": "Close"
+    },
+    "theme": {
+      "switchToLight": "Switch to light mode",
+      "switchToDark": "Switch to dark mode",
+      "lightMode": "Light mode",
+      "darkMode": "Dark mode"
+    },
+    "spinner": {
+      "loading": "Loading"
+    },
+    "breadcrumbs": {
+      "navLabel": "Breadcrumb"
+    },
+    "drawer": {
+      "closePanel": "Close panel"
+    }
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "es": "Español"
+  },
+  "auth": {
+    "signup": {
+      "title": "Create an account",
+      "subtitle": "Sign up with email or Google.",
+      "passphraseHint": "Prefer a long, memorable phrase (for example forest-blue-coffee-2026). At least 14 characters, with uppercase, lowercase, numbers, and symbols.",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "submit": "Sign up",
+      "submitting": "Signing up…",
+      "or": "or",
+      "google": "Continue with Google",
+      "goToLogin": "Sign in",
+      "errors": {
+        "generic": "Something went wrong. Please try again.",
+        "network": "Network error. Check that the API is running.",
+        "PASSWORD_MISMATCH": "Passwords do not match.",
+        "PASSWORD_TOO_SHORT": "Password is too short.",
+        "PASSWORD_MISSING_UPPERCASE": "Add at least one uppercase letter.",
+        "PASSWORD_MISSING_LOWERCASE": "Add at least one lowercase letter.",
+        "PASSWORD_MISSING_DIGIT": "Add at least one number.",
+        "PASSWORD_MISSING_SYMBOL": "Add at least one symbol (for example ! or -).",
+        "PASSWORD_WEAK_OR_COMMON": "This password is too common. Choose something more unique.",
+        "PASSWORD_SEQUENTIAL": "Avoid obvious sequences like 12345 or abcde.",
+        "PASSWORD_CONTAINS_BRAND": "Do not include company or brand names in your password.",
+        "PASSWORD_CONTAINS_USER_INFO": "Do not include your email or name in your password.",
+        "EMAIL_ALREADY_REGISTERED": "This email is already registered.",
+        "INVALID_EMAIL_FORMAT": "Please provide a valid email address.",
+        "REQUIRED_FIELD": "Please complete this field.",
+        "INVALID_REQUEST": "The request is invalid. Please review your input.",
+        "OAUTH_CODE_INVALID": "Your Google sign-in session expired. Please try again.",
+        "INTERNAL_ERROR": "Something went wrong on our side. Please try again."
+      }
+    },
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Sign in with email or Google.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "or": "or",
+      "google": "Continue with Google",
+      "goToSignup": "Create an account",
+      "noAccount": "Need an account?",
+      "signupLink": "Sign up",
+      "errors": {
+        "generic": "Something went wrong. Please try again.",
+        "network": "Network error. Check that the API is running.",
+        "INVALID_CREDENTIALS": "Email or password is incorrect.",
+        "GOOGLE_ACCOUNT_USE_GOOGLE": "This account uses Google sign-in. Use “Continue with Google” instead.",
+        "INVALID_EMAIL_FORMAT": "Please provide a valid email address.",
+        "REQUIRED_FIELD": "Please complete this field.",
+        "INVALID_REQUEST": "The request is invalid. Please review your input.",
+        "OAUTH_CODE_INVALID": "Your Google sign-in session expired. Please try again.",
+        "INTERNAL_ERROR": "Something went wrong on our side. Please try again.",
+        "ACCOUNT_LOCKED": "This account is locked. Contact support if you need help.",
+        "ACCESS_DENIED": "You do not have access to this action."
+      },
+      "oauthAccountLocked": "Your account is locked. Contact support if you need help signing in."
+    },
+    "callback": {
+      "exchanging": "Completing sign-in…",
+      "missingCode": "Missing sign-in code. Try signing in with Google again.",
+      "exchangeFailed": "That sign-in link expired or was already used. Please try again.",
+      "backToLogin": "Back to sign in",
+      "backToSignup": "Back to sign up",
+      "oauthErrors": {
+        "oauth_failed": "Google sign-in did not complete. Please try again or use email signup."
+      }
+    },
+    "reset": {
+      "title": "Set a new password",
+      "subtitle": "Choose a strong password for your account.",
+      "submit": "Update password",
+      "backToLogin": "Back to sign in",
+      "missingToken": "This reset link is missing a token. Request a new reset from your administrator.",
+      "success": "Your password was updated. You can sign in with your new password.",
+      "genericError": "We could not update your password. Try again or request a new link.",
+      "errors": {
+        "PASSWORD_MISMATCH": "Passwords do not match.",
+        "RESET_TOKEN_INVALID": "This reset link is invalid or has expired. Request a new one.",
+        "PASSWORD_TOO_SHORT": "Password is too short.",
+        "PASSWORD_MISSING_UPPERCASE": "Add at least one uppercase letter.",
+        "PASSWORD_MISSING_LOWERCASE": "Add at least one lowercase letter.",
+        "PASSWORD_MISSING_DIGIT": "Add at least one number.",
+        "PASSWORD_MISSING_SYMBOL": "Add at least one symbol (for example ! or -).",
+        "PASSWORD_WEAK_OR_COMMON": "This password is too common. Choose something more unique.",
+        "PASSWORD_SEQUENTIAL": "Avoid obvious sequences like 12345 or abcde.",
+        "PASSWORD_CONTAINS_BRAND": "Do not include company or brand names in your password.",
+        "PASSWORD_CONTAINS_USER_INFO": "Do not include your email or name in your password."
+      }
+    }
+  },
+  "admin": {
+    "loading": "Checking access…",
+    "nav": {
+      "home": "Overview",
+      "tenants": "Tenants",
+      "users": "User support"
+    },
+    "layout": {
+      "heading": "System administration",
+      "lead": "Provision tenants, assign tenant administrators, and run cross-tenant user support (password reset email and account lock). SYSADMIN is granted only via database script."
+    },
+    "home": {
+      "tenantsTitle": "Tenants",
+      "tenantsDescription": "Create organizations and manage subdomain keys.",
+      "tenantsHint": "Short names are stored lowercase and validated as DNS labels.",
+      "usersTitle": "User support",
+      "usersDescription": "Search users by email, send password reset links, lock or unlock accounts.",
+      "usersHint": "Password reset applies only to accounts with a local password."
+    },
+    "tenants": {
+      "listHeading": "Existing tenants",
+      "loadError": "Could not load tenants.",
+      "empty": "No tenants yet.",
+      "manageAdmins": "Manage tenant admins",
+      "createTitle": "Create tenant",
+      "createDescription": "Legal identity, administrative contact (name and phone required; email optional), optional technical contact, and unique short name (subdomain key) and ID number.",
+      "requiredLegend": "Fields marked with * are required.",
+      "legalName": "Legal name",
+      "shortName": "Short name (subdomain)",
+      "shortNameHint": "Lowercase letters, digits, and hyphens only. No leading or trailing hyphen.",
+      "idNumber": "ID number",
+      "address": "Address",
+      "administrativeContact": "Administrative contact",
+      "technicalContact": "Technical contact",
+      "technicalContactHint": "Optional. Leave blank if you do not have a technical contact.",
+      "contactName": "Name",
+      "contactEmail": "Email",
+      "contactEmailOptional": "Email (optional)",
+      "contactPhone": "Phone number",
+      "contactNameOptional": "Name (optional)",
+      "contactPhoneOptional": "Phone number (optional)",
+      "submit": "Create tenant",
+      "created": "Tenant #{{id}} created ({{shortName}}).",
+      "genericError": "Could not create tenant.",
+      "networkError": "Network error while creating tenant.",
+      "errors": {
+        "SHORT_NAME_MUST_BE_LOWERCASE": "Short name must use lowercase letters only.",
+        "SHORT_NAME_INVALID_DNS_LABEL": "Short name must be a valid single DNS label (1–63 characters, letters, digits, hyphens, no leading or trailing hyphen).",
+        "SHORT_NAME_ALREADY_EXISTS": "This short name is already in use.",
+        "ID_NUMBER_ALREADY_EXISTS": "This ID number is already in use.",
+        "TENANT_DUPLICATE_KEY": "A unique field conflicts with an existing tenant.",
+        "SHORT_NAME_REQUIRED": "Short name is required.",
+        "REQUIRED_FIELD": "This field is required.",
+        "INVALID_EMAIL_FORMAT": "Enter a valid email address.",
+        "INVALID_REQUEST": "Invalid request."
+      }
+    },
+    "tenantDetail": {
+      "back": "Back to tenants",
+      "heading": "Tenant #{{id}}",
+      "invalidId": "Invalid tenant id.",
+      "loadError": "Could not load tenant administrators.",
+      "searchHeading": "Find users by email",
+      "searchHint": "Search the user directory by email. Users who have not registered will not appear.",
+      "emailQuery": "Email contains",
+      "searchButton": "Search",
+      "searchError": "Search failed.",
+      "networkError": "Network error.",
+      "assign": "Assign as tenant admin",
+      "assigned": "{{email}} was assigned as tenant admin.",
+      "assignmentsHeading": "Tenant administrators",
+      "noAssignments": "No administrators assigned yet.",
+      "statusActive": "Active",
+      "statusDisabled": "Disabled",
+      "disable": "Disable",
+      "reactivate": "Reactivate",
+      "remove": "Remove",
+      "disabled": "{{email}} was disabled as tenant admin.",
+      "reactivated": "{{email}} was reactivated as tenant admin.",
+      "removed": "{{email}} was removed as tenant admin.",
+      "removeConfirmTitle": "Remove tenant administrator?",
+      "removeConfirmDescription": "This revokes tenant admin access for this tenant.",
+      "removeConfirmBody": "Remove {{email}} as tenant admin for this tenant?",
+      "removeCancel": "Cancel",
+      "removeConfirm": "Remove",
+      "errors": {
+        "LAST_ACTIVE_TENANT_ADMIN": "At least one active tenant administrator is required.",
+        "TENANT_ADMIN_ALREADY_ASSIGNED": "This user is already a tenant admin for this tenant.",
+        "GENERIC": "Request failed."
+      }
+    },
+    "users": {
+      "heading": "User support",
+      "lead": "Search by email, then trigger a password reset (local-password accounts only), lock, or unlock.",
+      "emailQuery": "Email contains",
+      "searchButton": "Search",
+      "searchHint": "Enter at least two characters. Matches are based on email.",
+      "searchError": "Search failed.",
+      "networkError": "Network error.",
+      "actionsHeading": "Actions for selected user",
+      "resetPassword": "Send password reset email",
+      "resetInitiated": "Password reset email was sent (check server logs in this PoC environment).",
+      "lock": "Lock account",
+      "unlock": "Unlock account",
+      "locked": "Account locked.",
+      "unlocked": "Account unlocked.",
+      "actionFailed": "Action failed.",
+      "errors": {
+        "NO_LOCAL_PASSWORD": "This account has no local password (for example Google-only). Use identity-provider recovery instead.",
+        "GENERIC": "Request failed."
+      }
+    }
+  },
+  "tenantAdmin": {
+    "nav": {
+      "dashboard": "Overview",
+      "contractors": "Contractors",
+      "catalog": "Catalog",
+      "assignments": "Assignments",
+      "planning": "Planning"
+    },
+    "layout": {
+      "lead": "Manage contractors, services, assignments, and published planning for this tenant."
+    },
+    "entry": {
+      "loading": "Loading…",
+      "noAccessTitle": "No tenant administrator access",
+      "noAccessBody": "Your account is not an active tenant administrator for any organization. Ask a system administrator to assign you, or continue to the main app.",
+      "backHome": "Go to home",
+      "pickTitle": "Choose a tenant",
+      "pickLead": "You are a tenant administrator for more than one organization. Select one to continue."
+    },
+    "dashboard": {
+      "heading": "Tenant workspace",
+      "lead": "Open a section to manage this tenant.",
+      "contractorsTitle": "Contractors",
+      "contractorsDesc": "Link users by email, remove, or inactivate within this tenant.",
+      "catalogTitle": "Service catalog",
+      "catalogDesc": "Categories, services, client price, and contractor cost (fixed or % of client price).",
+      "assignmentsTitle": "Service assignments",
+      "assignmentsDesc": "Choose which services each contractor may provide (replace-on-save).",
+      "planningTitle": "Planning",
+      "planningDesc": "Draft availability by day and time, publish a month, copy to the next month."
+    },
+    "contractors": {
+      "heading": "Contractors",
+      "lead": "Contractors must already have a platform account. Search by email, then add them to this tenant.",
+      "loadError": "Could not load contractors.",
+      "addTitle": "Add contractor",
+      "emailLabel": "Email contains",
+      "emailPlaceholder": "Type part of the user email",
+      "search": "Search",
+      "searchMinChars": "Enter at least two characters to search.",
+      "searchError": "Search failed.",
+      "noUserHint": "No matching users. The person must register before they can be added as a contractor.",
+      "addContractor": "Add as contractor",
+      "addFailed": "Could not add contractor.",
+      "listTitle": "Contractors in this tenant",
+      "colEmail": "Email",
+      "colStatus": "Status",
+      "colActions": "Actions",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "inactivate": "Inactivate",
+      "reactivate": "Reactivate",
+      "remove": "Remove",
+      "empty": "No contractors linked yet.",
+      "removeConfirmTitle": "Remove contractor?",
+      "removeConfirmDescription": "Their service assignments and planning rows for this tenant are removed. Their platform account is unchanged.",
+      "removeConfirmBody": "Remove {{email}} from this tenant?",
+      "cancel": "Cancel",
+      "removeConfirm": "Remove",
+      "errors": {
+        "USER_MUST_REGISTER_FIRST": "That user is not registered yet.",
+        "CONTRACTOR_ALREADY_LINKED": "This user is already a contractor for this tenant."
+      }
+    },
+    "catalog": {
+      "heading": "Service catalog",
+      "lead": "Create categories, then services with client price and contractor cost.",
+      "loadError": "Could not load catalog.",
+      "saveFailed": "Could not save.",
+      "needCategoryFirst": "Create at least one category before adding services.",
+      "categoriesTitle": "Categories",
+      "categoryName": "Name",
+      "categoryDescription": "Description",
+      "createCategory": "Create category",
+      "servicesTitle": "Services",
+      "serviceCategory": "Category",
+      "serviceName": "Service name",
+      "serviceDescription": "Description",
+      "clientPrice": "Client price",
+      "costType": "Contractor cost type",
+      "costFixed": "Fixed amount (tenant pays contractor)",
+      "costPercentHint": "Percentage of client price",
+      "costFixedValue": "Fixed cost amount",
+      "costPercentValue": "Percent of client price (0–100)",
+      "createService": "Create service",
+      "updateService": "Save changes",
+      "cancelEdit": "Cancel edit",
+      "edit": "Edit",
+      "colName": "Service",
+      "colPrice": "Client price",
+      "colCost": "Cost",
+      "colActions": "Actions",
+      "errors": {
+        "DUPLICATE_CATEGORY_NAME": "A category with this name already exists.",
+        "DUPLICATE_SERVICE_NAME": "A service with this name already exists.",
+        "NO_CATEGORIES_YET": "Create a category first.",
+        "CATEGORY_NOT_FOUND": "Category not found.",
+        "PERCENT_OUT_OF_RANGE": "Percentage must be between 0 and 100.",
+        "INVALID_CLIENT_PRICE": "Client price must be zero or greater.",
+        "INVALID_COST_VALUE": "Cost value is invalid."
+      }
+    },
+    "assignments": {
+      "heading": "Contractor service assignments",
+      "lead": "Saving replaces the full set of allowed services for the selected contractor (add and remove in one action).",
+      "selectContractor": "Contractor",
+      "contractor": "Contractor",
+      "contractorPlaceholder": "Select a contractor",
+      "servicesTitle": "Services",
+      "replaceHint": "Check the services this contractor may provide, then save. Unchecked services are removed from their assignment.",
+      "searchLabel": "Filter by name",
+      "searchPlaceholder": "Partial name match",
+      "selectAllInCategory": "Select all in “{{name}}”",
+      "deselectAllInCategory": "Deselect all in “{{name}}”",
+      "save": "Save assignments",
+      "saveFailed": "Could not save assignments.",
+      "savedReplaceHint": "Assignments saved. The list you saved now defines which services this contractor may provide."
+    },
+    "planning": {
+      "heading": "Planning",
+      "lead": "Draft planning until you publish the month. Published months are read-only here; copy the prior month into the next as draft to adjust.",
+      "loadError": "Could not load planning.",
+      "saveFailed": "Could not save assignment.",
+      "publishFailed": "Could not publish.",
+      "copyFailed": "Could not copy month.",
+      "copiedTo": "Copied to {{target}}. Omitted {{omitted}} row(s) for missing or inactive contractors.",
+      "readOnlyHint": "This month is published. Draft changes are blocked; copy to the next month to build a new draft.",
+      "periodTitle": "Period",
+      "month": "Month",
+      "viewMonth": "Month view",
+      "viewWeek": "Week view",
+      "monthViewHint": "Showing all assignments in the selected calendar month.",
+      "weekInMonth": "Week segment",
+      "weekOption": "Part {{n}}",
+      "assignmentsTitle": "Assignments",
+      "noAssignments": "No assignments in this view.",
+      "addTitle": "Add assignment",
+      "contractor": "Contractor",
+      "contractorPlaceholder": "Select contractor",
+      "date": "Date",
+      "timeStart": "Start",
+      "timeEnd": "End",
+      "add": "Add to draft",
+      "delete": "Delete",
+      "publish": "Publish this month",
+      "copyNextMonth": "Copy this month → next month (draft)"
+    }
+  },
+  "app": {
+    "header": {
+      "logout": "Sign out",
+      "admin": "System admin",
+      "tenantAdmin": "Tenant admin"
+    },
+    "badge": "Design system",
+    "title": "Component gallery",
+    "lead": "Reusable primitives built with React and Tailwind CSS—buttons, forms, feedback, and layout patterns you see in modern web apps.",
+    "sections": {
+      "actions": "Actions",
+      "typography": "Typography",
+      "formControls": "Form controls",
+      "navigation": "Navigation",
+      "layout": "Layout & lists",
+      "feedback": "Feedback & status",
+      "dataDisplay": "Data display",
+      "dataTable": "Data table",
+      "overlay": "Overlay"
+    },
+    "buttons": {
+      "primary": "Primary",
+      "secondary": "Secondary",
+      "outline": "Outline",
+      "ghost": "Ghost",
+      "tertiary": "Tertiary",
+      "danger": "Danger",
+      "small": "Small",
+      "large": "Large",
+      "loading": "Loading",
+      "iconOnly": "Menu",
+      "showToast": "Show toast"
+    },
+    "card": {
+      "title": "Profile",
+      "description": "Typical labeled inputs and selects."
+    },
+    "typography": {
+      "h5": "Heading five",
+      "h6": "Heading six",
+      "labelSample": "System label",
+      "body": "Body text uses a comfortable line length for reading.",
+      "muted": "Muted supporting copy for secondary details."
+    },
+    "form": {
+      "search": "Search",
+      "searchPlaceholder": "Search…",
+      "password": "Password",
+      "passwordPlaceholder": "••••••••",
+      "show": "Show",
+      "hide": "Hide",
+      "plan": "Plan",
+      "planStarter": "Starter",
+      "planPro": "Pro",
+      "planTeam": "Team",
+      "name": "Name",
+      "namePlaceholder": "Ada Lovelace",
+      "role": "Role",
+      "rolePlaceholder": "Choose…",
+      "roleEng": "Engineering",
+      "roleDesign": "Design",
+      "rolePm": "Product",
+      "bio": "Bio",
+      "bioPlaceholder": "Short introduction…",
+      "subscribe": "Subscribe to updates",
+      "pushNotifications": "Push notifications",
+      "cancel": "Cancel",
+      "save": "Save"
+    },
+    "alerts": {
+      "infoTitle": "Heads up",
+      "infoBody": "You can combine <strong>title</strong> and body copy for inline messages.",
+      "successTitle": "Saved",
+      "successBody": "Your changes were stored successfully.",
+      "warningTitle": "Quota",
+      "warningBody": "You are approaching the limit of your plan.",
+      "destructiveTitle": "Payment failed",
+      "destructiveBody": "Update your billing method and try again."
+    },
+    "badges": {
+      "default": "Default",
+      "secondary": "Secondary",
+      "outline": "Outline",
+      "success": "Active",
+      "warning": "Pending",
+      "destructive": "Error"
+    },
+    "avatars": {
+      "alex": "Alex Morgan",
+      "jamie": "Jamie Chen",
+      "sam": "Sam Taylor"
+    },
+    "table": {
+      "hint": "Sort by clicking headers, drag the grip to reorder columns, and use the columns control to show or hide fields (Name stays visible).",
+      "columns": {
+        "name": "Name",
+        "team": "Team",
+        "status": "Status",
+        "lastUpdate": "Last update"
+      },
+      "status": {
+        "active": "Active",
+        "away": "Away"
+      },
+      "roles": {
+        "engineering": "Engineering",
+        "operations": "Operations",
+        "research": "Research"
+      }
+    },
+    "modal": {
+      "open": "Open modal",
+      "title": "Confirm action",
+      "description": "This is a lightweight dialog pattern with backdrop and escape to close.",
+      "body": "Modals work well for destructive confirmations, multi-step flows, or focused tasks without leaving the page.",
+      "cancel": "Cancel",
+      "continue": "Continue"
+    },
+    "breadcrumbs": {
+      "home": "Home",
+      "settings": "Settings",
+      "profile": "Profile"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "activity": "Activity",
+      "overviewBody": "Overview content for the current context.",
+      "activityBody": "Recent activity and audit-friendly details."
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "navbar": {
+      "brand": "Acme",
+      "docs": "Docs",
+      "pricing": "Pricing",
+      "signIn": "Sign in",
+      "signUp": "Sign up"
+    },
+    "sidebar": {
+      "product": "Console",
+      "dashboard": "Dashboard",
+      "reports": "Reports",
+      "contentTitle": "Main content",
+      "contentBody": "Sidebar + content split common in dashboards and admin tools."
+    },
+    "toast": {
+      "message": "Saved — this toast dismisses automatically."
+    },
+    "tooltip": {
+      "hint": "Extra context on hover or keyboard focus",
+      "trigger": "Hover or focus me"
+    },
+    "progress": {
+      "label": "Upload progress"
+    },
+    "accordion": {
+      "oneTitle": "Shipping",
+      "oneBody": "Standard delivery in 3–5 business days.",
+      "twoTitle": "Returns",
+      "twoBody": "Free returns within 30 days of purchase."
+    },
+    "drawer": {
+      "open": "Open drawer",
+      "title": "Details",
+      "body": "Drawers host secondary tasks, filters, or record details without leaving the page."
+    },
+    "list": {
+      "oneTitle": "Design review",
+      "oneMeta": "Today · 2:00 PM",
+      "twoTitle": "Deploy pipeline",
+      "twoMeta": "Yesterday"
+    }
+  }
+}

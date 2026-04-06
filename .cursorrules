@@ -1,0 +1,12 @@
+You MUST ALWAYS follow these rules:
+- For search UIs with a Search button: use a `<form onSubmit>` + `type="submit"` so Enter in the input runs the search (see AGENTS.md).
+- Use i18n in the frontend
+- Use reusable components from src/frontend/design-system/components always that is possible.
+- If there is a UI compoment that might be a reusable component, STOP and propose it to the user. NEVER add it automatically to the components library.
+- Always add unit testing to frotend and backend.
+- Always write testable code.
+- Always write unit tests based on acceptance criteria of the user story
+- Always build new user stories, tickets, issues in a new branch. The branch name must follow the format <type>/<issue, ticket, or user story number>_short_description. Where <type> is feat, bugfix, chore, docs, refactor, test.
+- Branching strategy is trunk based. All branches are created from main and merged back to main.
+- Issues or feature descriptions are stored in Github issues
+- Endpoints in the backend MUST ALWAYS print in the log with INFO level when they receive a request with the following information: path, method, tenant id. And when they return the response: path, method, tennat id, response status.  If the status response is not one of success, then the log level must be ERROR.

@@ -1,0 +1,563 @@
+{
+  "designSystem": {
+    "dataTable": {
+      "dragReorderColumn": "Arrastrar para reordenar columna",
+      "columns": "Columnas",
+      "visibleColumns": "Columnas visibles"
+    },
+    "modal": {
+      "closeDialog": "Cerrar diálogo",
+      "close": "Cerrar"
+    },
+    "theme": {
+      "switchToLight": "Cambiar a modo claro",
+      "switchToDark": "Cambiar a modo oscuro",
+      "lightMode": "Modo claro",
+      "darkMode": "Modo oscuro"
+    },
+    "spinner": {
+      "loading": "Cargando"
+    },
+    "breadcrumbs": {
+      "navLabel": "Migas de pan"
+    },
+    "drawer": {
+      "closePanel": "Cerrar panel"
+    }
+  },
+  "language": {
+    "label": "Idioma",
+    "en": "English",
+    "es": "Español"
+  },
+  "auth": {
+    "signup": {
+      "title": "Crear cuenta",
+      "subtitle": "Regístrate con correo o Google.",
+      "passphraseHint": "Prefiere una frase larga y memorable (por ejemplo bosque-azul-café-2026). Al menos 14 caracteres, con mayúsculas, minúsculas, números y símbolos.",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "confirmPassword": "Confirmar contraseña",
+      "submit": "Registrarse",
+      "submitting": "Registrando…",
+      "or": "o",
+      "google": "Continuar con Google",
+      "goToLogin": "Iniciar sesión",
+      "errors": {
+        "generic": "Algo salió mal. Inténtalo de nuevo.",
+        "network": "Error de red. Comprueba que la API esté en ejecución.",
+        "PASSWORD_MISMATCH": "Las contraseñas no coinciden.",
+        "PASSWORD_TOO_SHORT": "La contraseña es demasiado corta.",
+        "PASSWORD_MISSING_UPPERCASE": "Añade al menos una mayúscula.",
+        "PASSWORD_MISSING_LOWERCASE": "Añade al menos una minúscula.",
+        "PASSWORD_MISSING_DIGIT": "Añade al menos un número.",
+        "PASSWORD_MISSING_SYMBOL": "Añade al menos un símbolo (por ejemplo ! o -).",
+        "PASSWORD_WEAK_OR_COMMON": "Esta contraseña es demasiado común. Elige algo más único.",
+        "PASSWORD_SEQUENTIAL": "Evita secuencias obvias como 12345 o abcde.",
+        "PASSWORD_CONTAINS_BRAND": "No incluyas nombres de empresa o marca en la contraseña.",
+        "PASSWORD_CONTAINS_USER_INFO": "No incluyas tu correo o nombre en la contraseña.",
+        "EMAIL_ALREADY_REGISTERED": "Este correo ya está registrado.",
+        "INVALID_EMAIL_FORMAT": "Ingresa un correo electrónico válido.",
+        "REQUIRED_FIELD": "Completa este campo.",
+        "INVALID_REQUEST": "La solicitud no es válida. Revisa los datos ingresados.",
+        "OAUTH_CODE_INVALID": "Tu sesión de Google venció. Inténtalo de nuevo.",
+        "INTERNAL_ERROR": "Ocurrió un error interno. Inténtalo de nuevo."
+      }
+    },
+    "login": {
+      "title": "Iniciar sesión",
+      "subtitle": "Entra con correo o Google.",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "submit": "Iniciar sesión",
+      "submitting": "Iniciando sesión…",
+      "or": "o",
+      "google": "Continuar con Google",
+      "goToSignup": "Crear cuenta",
+      "noAccount": "¿No tienes cuenta?",
+      "signupLink": "Registrarse",
+      "errors": {
+        "generic": "Algo salió mal. Inténtalo de nuevo.",
+        "network": "Error de red. Comprueba que la API esté en ejecución.",
+        "INVALID_CREDENTIALS": "El correo o la contraseña no son correctos.",
+        "GOOGLE_ACCOUNT_USE_GOOGLE": "Esta cuenta usa Google. Inicia sesión con “Continuar con Google”.",
+        "INVALID_EMAIL_FORMAT": "Ingresa un correo electrónico válido.",
+        "REQUIRED_FIELD": "Completa este campo.",
+        "INVALID_REQUEST": "La solicitud no es válida. Revisa los datos ingresados.",
+        "OAUTH_CODE_INVALID": "Tu sesión de Google venció. Inténtalo de nuevo.",
+        "INTERNAL_ERROR": "Ocurrió un error interno. Inténtalo de nuevo.",
+        "ACCOUNT_LOCKED": "Esta cuenta está bloqueada. Contacta a soporte si necesitas ayuda.",
+        "ACCESS_DENIED": "No tienes acceso a esta acción."
+      },
+      "oauthAccountLocked": "Tu cuenta está bloqueada. Contacta a soporte si necesitas ayuda para iniciar sesión."
+    },
+    "callback": {
+      "exchanging": "Completando el inicio de sesión…",
+      "missingCode": "Falta el código de inicio de sesión. Vuelve a intentar con Google.",
+      "exchangeFailed": "El enlace caducó o ya se usó. Inténtalo de nuevo.",
+      "backToLogin": "Volver al inicio de sesión",
+      "backToSignup": "Volver al registro",
+      "oauthErrors": {
+        "oauth_failed": "El inicio con Google no se completó. Inténtalo de nuevo o regístrate con correo."
+      }
+    },
+    "reset": {
+      "title": "Establecer una nueva contraseña",
+      "subtitle": "Elige una contraseña segura para tu cuenta.",
+      "submit": "Actualizar contraseña",
+      "backToLogin": "Volver al inicio de sesión",
+      "missingToken": "Falta el token en el enlace. Solicita un nuevo restablecimiento al administrador.",
+      "success": "Tu contraseña se actualizó. Ya puedes iniciar sesión.",
+      "genericError": "No pudimos actualizar la contraseña. Inténtalo de nuevo o solicita un nuevo enlace.",
+      "errors": {
+        "PASSWORD_MISMATCH": "Las contraseñas no coinciden.",
+        "RESET_TOKEN_INVALID": "El enlace no es válido o expiró. Solicita uno nuevo.",
+        "PASSWORD_TOO_SHORT": "La contraseña es demasiado corta.",
+        "PASSWORD_MISSING_UPPERCASE": "Añade al menos una letra mayúscula.",
+        "PASSWORD_MISSING_LOWERCASE": "Añade al menos una letra minúscula.",
+        "PASSWORD_MISSING_DIGIT": "Añade al menos un número.",
+        "PASSWORD_MISSING_SYMBOL": "Añade al menos un símbolo (por ejemplo ! o -).",
+        "PASSWORD_WEAK_OR_COMMON": "Esta contraseña es demasiado común. Elige otra.",
+        "PASSWORD_SEQUENTIAL": "Evita secuencias obvias como 12345 o abcde.",
+        "PASSWORD_CONTAINS_BRAND": "No incluyas nombres de marca en la contraseña.",
+        "PASSWORD_CONTAINS_USER_INFO": "No incluyas tu correo o nombre en la contraseña."
+      }
+    }
+  },
+  "admin": {
+    "loading": "Comprobando acceso…",
+    "nav": {
+      "home": "Resumen",
+      "tenants": "Inquilinos",
+      "users": "Soporte de usuarios"
+    },
+    "layout": {
+      "heading": "Administración del sistema",
+      "lead": "Aprovisiona inquilinos, asigna administradores de inquilino y ejecuta soporte entre inquilinos (restablecimiento de contraseña y bloqueo de cuenta). SYSADMIN solo se otorga mediante script en base de datos."
+    },
+    "home": {
+      "tenantsTitle": "Inquilinos",
+      "tenantsDescription": "Crea organizaciones y gestiona claves de subdominio.",
+      "tenantsHint": "Los nombres cortos se guardan en minúsculas y se validan como etiquetas DNS.",
+      "usersTitle": "Soporte de usuarios",
+      "usersDescription": "Busca usuarios por correo, envía enlaces de restablecimiento, bloquea o desbloquea cuentas.",
+      "usersHint": "El restablecimiento de contraseña aplica solo a cuentas con contraseña local."
+    },
+    "tenants": {
+      "listHeading": "Inquilinos existentes",
+      "loadError": "No se pudieron cargar los inquilinos.",
+      "empty": "Aún no hay inquilinos.",
+      "manageAdmins": "Gestionar administradores",
+      "createTitle": "Crear inquilino",
+      "createDescription": "Identidad legal, contacto administrativo (nombre y teléfono obligatorios; correo opcional), contacto técnico opcional, y nombre corto (subdominio) e ID únicos.",
+      "requiredLegend": "Los campos marcados con * son obligatorios.",
+      "legalName": "Nombre legal",
+      "shortName": "Nombre corto (subdominio)",
+      "shortNameHint": "Solo letras minúsculas, dígitos y guiones. Sin guión al inicio o al final.",
+      "idNumber": "Número de ID",
+      "address": "Dirección",
+      "administrativeContact": "Contacto administrativo",
+      "technicalContact": "Contacto técnico",
+      "technicalContactHint": "Opcional. Déjalo en blanco si no hay contacto técnico.",
+      "contactName": "Nombre",
+      "contactEmail": "Correo electrónico",
+      "contactEmailOptional": "Correo electrónico (opcional)",
+      "contactPhone": "Número de teléfono",
+      "contactNameOptional": "Nombre (opcional)",
+      "contactPhoneOptional": "Número de teléfono (opcional)",
+      "submit": "Crear inquilino",
+      "created": "Inquilino #{{id}} creado ({{shortName}}).",
+      "genericError": "No se pudo crear el inquilino.",
+      "networkError": "Error de red al crear el inquilino.",
+      "errors": {
+        "SHORT_NAME_MUST_BE_LOWERCASE": "El nombre corto debe usar solo letras minúsculas.",
+        "SHORT_NAME_INVALID_DNS_LABEL": "El nombre corto debe ser una etiqueta DNS válida (1–63 caracteres, letras, dígitos, guiones, sin guión inicial o final).",
+        "SHORT_NAME_ALREADY_EXISTS": "Este nombre corto ya está en uso.",
+        "ID_NUMBER_ALREADY_EXISTS": "Este número de ID ya está en uso.",
+        "TENANT_DUPLICATE_KEY": "Un campo único entra en conflicto con un inquilino existente.",
+        "SHORT_NAME_REQUIRED": "El nombre corto es obligatorio.",
+        "REQUIRED_FIELD": "Este campo es obligatorio.",
+        "INVALID_EMAIL_FORMAT": "Introduce un correo electrónico válido.",
+        "INVALID_REQUEST": "Solicitud no válida."
+      }
+    },
+    "tenantDetail": {
+      "back": "Volver a inquilinos",
+      "heading": "Inquilino #{{id}}",
+      "invalidId": "Id de inquilino no válido.",
+      "loadError": "No se pudieron cargar los administradores del inquilino.",
+      "searchHeading": "Buscar usuarios por correo",
+      "searchHint": "Busca en el directorio por correo. Quienes no se registraron no aparecerán.",
+      "emailQuery": "El correo contiene",
+      "searchButton": "Buscar",
+      "searchError": "La búsqueda falló.",
+      "networkError": "Error de red.",
+      "assign": "Asignar como administrador del inquilino",
+      "assigned": "{{email}} fue asignado como administrador del inquilino.",
+      "assignmentsHeading": "Administradores del inquilino",
+      "noAssignments": "Aún no hay administradores asignados.",
+      "statusActive": "Activo",
+      "statusDisabled": "Desactivado",
+      "disable": "Desactivar",
+      "reactivate": "Reactivar",
+      "remove": "Eliminar",
+      "disabled": "{{email}} fue desactivado como administrador del inquilino.",
+      "reactivated": "{{email}} fue reactivado como administrador del inquilino.",
+      "removed": "{{email}} fue eliminado como administrador del inquilino.",
+      "removeConfirmTitle": "¿Eliminar administrador del inquilino?",
+      "removeConfirmDescription": "Esto revoca el acceso de administrador para este inquilino.",
+      "removeConfirmBody": "¿Eliminar a {{email}} como administrador de este inquilino?",
+      "removeCancel": "Cancelar",
+      "removeConfirm": "Eliminar",
+      "errors": {
+        "LAST_ACTIVE_TENANT_ADMIN": "Se requiere al menos un administrador de inquilino activo.",
+        "TENANT_ADMIN_ALREADY_ASSIGNED": "Este usuario ya es administrador de este inquilino.",
+        "GENERIC": "La solicitud falló."
+      }
+    },
+    "users": {
+      "heading": "Soporte de usuarios",
+      "lead": "Busca por correo y luego inicia restablecimiento de contraseña (solo cuentas locales), bloqueo o desbloqueo.",
+      "emailQuery": "El correo contiene",
+      "searchButton": "Buscar",
+      "searchHint": "Introduce al menos dos caracteres. Las coincidencias se basan en el correo.",
+      "searchError": "La búsqueda falló.",
+      "networkError": "Error de red.",
+      "actionsHeading": "Acciones para el usuario seleccionado",
+      "resetPassword": "Enviar correo de restablecimiento",
+      "resetInitiated": "Se envió el correo de restablecimiento (revisa los logs del servidor en este entorno PoC).",
+      "lock": "Bloquear cuenta",
+      "unlock": "Desbloquear cuenta",
+      "locked": "Cuenta bloqueada.",
+      "unlocked": "Cuenta desbloqueada.",
+      "actionFailed": "La acción falló.",
+      "errors": {
+        "NO_LOCAL_PASSWORD": "Esta cuenta no tiene contraseña local (por ejemplo solo Google). Usa la recuperación del proveedor de identidad.",
+        "GENERIC": "La solicitud falló."
+      }
+    }
+  },
+  "tenantAdmin": {
+    "nav": {
+      "dashboard": "Resumen",
+      "contractors": "Contratistas",
+      "catalog": "Catálogo",
+      "assignments": "Asignaciones",
+      "planning": "Planificación"
+    },
+    "layout": {
+      "lead": "Gestiona contratistas, servicios, asignaciones y la planificación publicada de este inquilino."
+    },
+    "entry": {
+      "loading": "Cargando…",
+      "noAccessTitle": "Sin acceso de administrador de inquilino",
+      "noAccessBody": "Tu cuenta no es administradora activa de ninguna organización. Pide a un administrador del sistema que te asigne, o continúa a la app principal.",
+      "backHome": "Ir al inicio",
+      "pickTitle": "Elige un inquilino",
+      "pickLead": "Eres administrador de más de una organización. Selecciona una para continuar."
+    },
+    "dashboard": {
+      "heading": "Espacio del inquilino",
+      "lead": "Abre una sección para gestionar este inquilino.",
+      "contractorsTitle": "Contratistas",
+      "contractorsDesc": "Vincula usuarios por correo, elimina o desactiva en este inquilino.",
+      "catalogTitle": "Catálogo de servicios",
+      "catalogDesc": "Categorías, servicios, precio al cliente y coste del contratista (fijo o % del precio al cliente).",
+      "assignmentsTitle": "Asignación de servicios",
+      "assignmentsDesc": "Elige qué servicios puede ofrecer cada contratista (sustitución al guardar).",
+      "planningTitle": "Planificación",
+      "planningDesc": "Borrador de disponibilidad por día y hora, publicar un mes, copiar al siguiente."
+    },
+    "contractors": {
+      "heading": "Contratistas",
+      "lead": "Los contratistas deben tener ya una cuenta en la plataforma. Busca por correo y añádelos a este inquilino.",
+      "loadError": "No se pudieron cargar los contratistas.",
+      "addTitle": "Añadir contratista",
+      "emailLabel": "El correo contiene",
+      "emailPlaceholder": "Escribe parte del correo del usuario",
+      "search": "Buscar",
+      "searchMinChars": "Introduce al menos dos caracteres para buscar.",
+      "searchError": "La búsqueda falló.",
+      "noUserHint": "No hay usuarios coincidentes. La persona debe registrarse antes de poder añadirla como contratista.",
+      "addContractor": "Añadir como contratista",
+      "addFailed": "No se pudo añadir el contratista.",
+      "listTitle": "Contratistas de este inquilino",
+      "colEmail": "Correo",
+      "colStatus": "Estado",
+      "colActions": "Acciones",
+      "statusActive": "Activo",
+      "statusInactive": "Inactivo",
+      "inactivate": "Desactivar",
+      "reactivate": "Reactivar",
+      "remove": "Eliminar",
+      "empty": "Aún no hay contratistas vinculados.",
+      "removeConfirmTitle": "¿Eliminar contratista?",
+      "removeConfirmDescription": "Se eliminan sus asignaciones de servicio y filas de planificación para este inquilino. Su cuenta de plataforma no cambia.",
+      "removeConfirmBody": "¿Eliminar a {{email}} de este inquilino?",
+      "cancel": "Cancelar",
+      "removeConfirm": "Eliminar",
+      "errors": {
+        "USER_MUST_REGISTER_FIRST": "Ese usuario aún no está registrado.",
+        "CONTRACTOR_ALREADY_LINKED": "Este usuario ya es contratista de este inquilino."
+      }
+    },
+    "catalog": {
+      "heading": "Catálogo de servicios",
+      "lead": "Crea categorías y luego servicios con precio al cliente y coste del contratista.",
+      "loadError": "No se pudo cargar el catálogo.",
+      "saveFailed": "No se pudo guardar.",
+      "needCategoryFirst": "Crea al menos una categoría antes de añadir servicios.",
+      "categoriesTitle": "Categorías",
+      "categoryName": "Nombre",
+      "categoryDescription": "Descripción",
+      "createCategory": "Crear categoría",
+      "servicesTitle": "Servicios",
+      "serviceCategory": "Categoría",
+      "serviceName": "Nombre del servicio",
+      "serviceDescription": "Descripción",
+      "clientPrice": "Precio al cliente",
+      "costType": "Tipo de coste del contratista",
+      "costFixed": "Importe fijo (el inquilino paga al contratista)",
+      "costPercentHint": "Porcentaje del precio al cliente",
+      "costFixedValue": "Importe fijo del coste",
+      "costPercentValue": "Porcentaje del precio al cliente (0–100)",
+      "createService": "Crear servicio",
+      "updateService": "Guardar cambios",
+      "cancelEdit": "Cancelar edición",
+      "edit": "Editar",
+      "colName": "Servicio",
+      "colPrice": "Precio cliente",
+      "colCost": "Coste",
+      "colActions": "Acciones",
+      "errors": {
+        "DUPLICATE_CATEGORY_NAME": "Ya existe una categoría con este nombre.",
+        "DUPLICATE_SERVICE_NAME": "Ya existe un servicio con este nombre.",
+        "NO_CATEGORIES_YET": "Crea primero una categoría.",
+        "CATEGORY_NOT_FOUND": "Categoría no encontrada.",
+        "PERCENT_OUT_OF_RANGE": "El porcentaje debe estar entre 0 y 100.",
+        "INVALID_CLIENT_PRICE": "El precio al cliente debe ser cero o mayor.",
+        "INVALID_COST_VALUE": "El valor del coste no es válido."
+      }
+    },
+    "assignments": {
+      "heading": "Asignación de servicios a contratistas",
+      "lead": "Al guardar se sustituye el conjunto completo de servicios permitidos para el contratista seleccionado.",
+      "selectContractor": "Contratista",
+      "contractor": "Contratista",
+      "contractorPlaceholder": "Selecciona un contratista",
+      "servicesTitle": "Servicios",
+      "replaceHint": "Marca los servicios que puede ofrecer este contratista y guarda. Los no marcados se eliminan de su asignación.",
+      "searchLabel": "Filtrar por nombre",
+      "searchPlaceholder": "Coincidencia parcial del nombre",
+      "selectAllInCategory": "Seleccionar todos en «{{name}}»",
+      "deselectAllInCategory": "Quitar todos en «{{name}}»",
+      "save": "Guardar asignaciones",
+      "saveFailed": "No se pudieron guardar las asignaciones.",
+      "savedReplaceHint": "Asignaciones guardadas. La lista guardada define qué servicios puede ofrecer este contratista."
+    },
+    "planning": {
+      "heading": "Planificación",
+      "lead": "Planificación en borrador hasta que publiques el mes. Los meses publicados son de solo lectura aquí; copia el mes anterior al siguiente como borrador para ajustar.",
+      "loadError": "No se pudo cargar la planificación.",
+      "saveFailed": "No se pudo guardar la asignación.",
+      "publishFailed": "No se pudo publicar.",
+      "copyFailed": "No se pudo copiar el mes.",
+      "copiedTo": "Copiado a {{target}}. Omitidas {{omitted}} fila(s) por contratistas inactivos o inexistentes.",
+      "readOnlyHint": "Este mes está publicado. No se pueden cambios en borrador; copia al mes siguiente para crear un nuevo borrador.",
+      "periodTitle": "Periodo",
+      "month": "Mes",
+      "viewMonth": "Vista mes",
+      "viewWeek": "Vista semana",
+      "monthViewHint": "Mostrando todas las asignaciones del mes seleccionado.",
+      "weekInMonth": "Segmento de semana",
+      "weekOption": "Parte {{n}}",
+      "assignmentsTitle": "Asignaciones",
+      "noAssignments": "No hay asignaciones en esta vista.",
+      "addTitle": "Añadir asignación",
+      "contractor": "Contratista",
+      "contractorPlaceholder": "Selecciona contratista",
+      "date": "Fecha",
+      "timeStart": "Inicio",
+      "timeEnd": "Fin",
+      "add": "Añadir al borrador",
+      "delete": "Eliminar",
+      "publish": "Publicar este mes",
+      "copyNextMonth": "Copiar este mes → mes siguiente (borrador)"
+    }
+  },
+  "app": {
+    "header": {
+      "logout": "Cerrar sesión",
+      "admin": "Administración del sistema",
+      "tenantAdmin": "Admin. de inquilino"
+    },
+    "badge": "Sistema de diseño",
+    "title": "Galería de componentes",
+    "lead": "Primitivas reutilizables con React y Tailwind CSS: botones, formularios, retroalimentación y patrones de diseño habituales en aplicaciones web modernas.",
+    "sections": {
+      "actions": "Acciones",
+      "typography": "Tipografía",
+      "formControls": "Controles de formulario",
+      "navigation": "Navegación",
+      "layout": "Disposición y listas",
+      "feedback": "Retroalimentación y estado",
+      "dataDisplay": "Presentación de datos",
+      "dataTable": "Tabla de datos",
+      "overlay": "Superposición"
+    },
+    "buttons": {
+      "primary": "Principal",
+      "secondary": "Secundario",
+      "outline": "Contorno",
+      "ghost": "Fantasma",
+      "tertiary": "Terciario",
+      "danger": "Peligro",
+      "small": "Pequeño",
+      "large": "Grande",
+      "loading": "Cargando",
+      "iconOnly": "Menú",
+      "showToast": "Mostrar aviso"
+    },
+    "card": {
+      "title": "Perfil",
+      "description": "Entradas y selectores etiquetados típicos."
+    },
+    "typography": {
+      "h5": "Encabezado cinco",
+      "h6": "Encabezado seis",
+      "labelSample": "Etiqueta de sistema",
+      "body": "El cuerpo de texto usa una longitud cómoda para lectura.",
+      "muted": "Texto secundario atenuado para detalles de apoyo."
+    },
+    "form": {
+      "search": "Buscar",
+      "searchPlaceholder": "Buscar…",
+      "password": "Contraseña",
+      "passwordPlaceholder": "••••••••",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "plan": "Plan",
+      "planStarter": "Inicial",
+      "planPro": "Pro",
+      "planTeam": "Equipo",
+      "name": "Nombre",
+      "namePlaceholder": "Ada Lovelace",
+      "role": "Rol",
+      "rolePlaceholder": "Elegir…",
+      "roleEng": "Ingeniería",
+      "roleDesign": "Diseño",
+      "rolePm": "Producto",
+      "bio": "Biografía",
+      "bioPlaceholder": "Breve presentación…",
+      "subscribe": "Suscribirse a novedades",
+      "pushNotifications": "Notificaciones push",
+      "cancel": "Cancelar",
+      "save": "Guardar"
+    },
+    "alerts": {
+      "infoTitle": "Aviso",
+      "infoBody": "Puedes combinar <strong>título</strong> y cuerpo para mensajes en línea.",
+      "successTitle": "Guardado",
+      "successBody": "Tus cambios se guardaron correctamente.",
+      "warningTitle": "Cuota",
+      "warningBody": "Te estás acercando al límite de tu plan.",
+      "destructiveTitle": "Pago fallido",
+      "destructiveBody": "Actualiza tu método de facturación e inténtalo de nuevo."
+    },
+    "badges": {
+      "default": "Predeterminado",
+      "secondary": "Secundario",
+      "outline": "Contorno",
+      "success": "Activo",
+      "warning": "Pendiente",
+      "destructive": "Error"
+    },
+    "avatars": {
+      "alex": "Alex Morgan",
+      "jamie": "Jamie Chen",
+      "sam": "Sam Taylor"
+    },
+    "table": {
+      "hint": "Ordena haciendo clic en los encabezados, arrastra el asa para reordenar columnas y usa el control de columnas para mostrar u ocultar campos (Nombre permanece visible).",
+      "columns": {
+        "name": "Nombre",
+        "team": "Equipo",
+        "status": "Estado",
+        "lastUpdate": "Última actualización"
+      },
+      "status": {
+        "active": "Activo",
+        "away": "Ausente"
+      },
+      "roles": {
+        "engineering": "Ingeniería",
+        "operations": "Operaciones",
+        "research": "Investigación"
+      }
+    },
+    "modal": {
+      "open": "Abrir modal",
+      "title": "Confirmar acción",
+      "description": "Patrón de diálogo ligero con fondo y cierre con Escape.",
+      "body": "Los modales sirven bien para confirmaciones destructivas, flujos por pasos o tareas enfocadas sin salir de la página.",
+      "cancel": "Cancelar",
+      "continue": "Continuar"
+    },
+    "breadcrumbs": {
+      "home": "Inicio",
+      "settings": "Ajustes",
+      "profile": "Perfil"
+    },
+    "tabs": {
+      "overview": "Resumen",
+      "activity": "Actividad",
+      "overviewBody": "Contenido de resumen para el contexto actual.",
+      "activityBody": "Actividad reciente y detalles útiles para auditoría."
+    },
+    "pagination": {
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "navbar": {
+      "brand": "Acme",
+      "docs": "Docs",
+      "pricing": "Precios",
+      "signIn": "Entrar",
+      "signUp": "Registrarse"
+    },
+    "sidebar": {
+      "product": "Consola",
+      "dashboard": "Panel",
+      "reports": "Informes",
+      "contentTitle": "Contenido principal",
+      "contentBody": "Barra lateral + contenido, habitual en paneles y administración."
+    },
+    "toast": {
+      "message": "Guardado: este aviso se cierra solo."
+    },
+    "tooltip": {
+      "hint": "Contexto extra al pasar el ratón o enfocar con teclado",
+      "trigger": "Pasa el ratón o enfócame"
+    },
+    "progress": {
+      "label": "Progreso de subida"
+    },
+    "accordion": {
+      "oneTitle": "Envío",
+      "oneBody": "Entrega estándar en 3–5 días laborables.",
+      "twoTitle": "Devoluciones",
+      "twoBody": "Devoluciones gratuitas en los 30 días posteriores a la compra."
+    },
+    "drawer": {
+      "open": "Abrir panel",
+      "title": "Detalles",
+      "body": "Los paneles laterales alojan tareas secundarias, filtros o detalles sin salir de la página."
+    },
+    "list": {
+      "oneTitle": "Revisión de diseño",
+      "oneMeta": "Hoy · 14:00",
+      "twoTitle": "Pipeline de despliegue",
+      "twoMeta": "Ayer"
+    }
+  }
+}

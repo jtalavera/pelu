@@ -1,0 +1,9 @@
+# Local SQL Server for ./gradlew bootRun (default profile). Playwright e2e uses in-memory H2 (profile e2e). Default MSSQL_SA_PASSWORD matches application.properties; create service_app_db + service_app login once if missing (see AGENTS.md).
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-The.S3cr3t.2026}"
+    ports:
+      - "1433:1433"

@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (lint, audit, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Dependency vulnerability check (npm audit)
+        run: npm audit --audit-level=high
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build artifacts
+        run: npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: src/frontend/dist
+
+  backend:
+    name: Backend (lint, audit, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            src/backend/gradle/wrapper/gradle-wrapper.properties
+            src/backend/build.gradle.kts
+            src/backend/settings.gradle.kts
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Lint (Spotless)
+        run: ./gradlew spotlessCheck
+
+      - name: Unit tests
+        run: ./gradlew test
+
+      - name: Build artifacts
+        run: ./gradlew bootJar
+
+      - name: Dependency vulnerability check (Trivy on JAR)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: src/backend/build/libs
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Upload backend JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: src/backend/build/libs/*.jar
+
+  # Static analysis without GitHub Code Scanning (CodeQL requires that feature on the repo).
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: pip install --no-cache-dir semgrep
+
+      # --config auto requires metrics; use explicit packs if you need --metrics off.
+      - name: Run Semgrep
+        run: semgrep scan --config auto --error
+
+  deploy:
+    name: Deploy to Azure
+    needs: [frontend, backend, sast]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/deploy-azure.yml
+    secrets: inherit

@@ -1,0 +1,12 @@
+# Copy to backend.hcl and fill in your values (or edit backend.hcl in the repo).
+# Bootstrap the storage account first (see infrastructure.md — Remote state).
+#
+#   cp backend.hcl.example backend.hcl
+#   terraform init -backend-config=backend.hcl
+#
+# If you already have local terraform.tfstate, add -migrate-state to upload it:
+#   terraform init -backend-config=backend.hcl -migrate-state
+
+resource_group_name  = "rg-terraform-state"
+storage_account_name = "sttfstateyouruniqueid"
+container_name       = "tfstate"

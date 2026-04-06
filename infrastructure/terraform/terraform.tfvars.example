@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (do not commit secrets; tfvars is gitignored).
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location          = "eastus2"
+name_prefix       = "cursortest"
+
+# If terraform apply fails on Azure SQL with ProvisioningDisabled in `location`, set a SQL region that works for your subscription (e.g. westeurope, centralus).
+# sql_server_location = "westeurope"
+
+# Optional: replace with your image from GHCR/Docker Hub after you build the Spring Boot container.
+# backend_container_image = "ghcr.io/your-org/your-backend:latest"
+# backend_container_port  = 8080
+
+# Optional: scale-to-zero when idle (default 0 / 1).
+# backend_min_replicas = 0
+# backend_max_replicas = 1
