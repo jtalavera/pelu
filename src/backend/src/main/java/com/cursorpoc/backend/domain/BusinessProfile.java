@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -38,8 +37,11 @@ public class BusinessProfile {
   @Column(name = "contact_email", length = 320)
   private String contactEmail;
 
-  @Lob
-  @Column(name = "logo_data_url")
+  /**
+   * Matches Flyway: NVARCHAR(MAX). Do not use @Lob — SQL Server maps LOB to CLOB and validation
+   * fails.
+   */
+  @Column(name = "logo_data_url", columnDefinition = "NVARCHAR(MAX)")
   private String logoDataUrl;
 
   public Long getTenantId() {
