@@ -39,3 +39,4 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 - Depende de almacenamiento de logo y de pipeline de PDF (puede enlazarse con HU-14 cuando exista).
 - **Pruebas:** validación RUC (válidos/inválidos), guardado, lectura en PDF, intento de facturación sin RUC.
+- **UX:** los errores de validación en pantalla se muestran en rojo (color destructivo) con texto que indica el formato requerido (p. ej. RUC); ver `AGENTS.md` · *Form validation (frontend)* y `FieldValidationError` en el frontend.

@@ -48,3 +48,10 @@ These rules apply to **every new screen** and should be reflected in layout, Tai
 ### Search fields (keyboard and accessibility)
 
 When a **search** (or filter) field has a separate **Search** button, wire them with a `**<form onSubmit>`** and a `**type="submit"`** button so that **Enter in the input runs the same action as the button** (native form behavior, no duplicate `onKeyDown` handlers). Prefer this pattern for any future search/filter bar with a primary action. Reference: `AdminTenantDetailPage` (tenant admin user search) and `AdminUserSupportPage` (user directory search).
+
+### Form validation (frontend)
+
+1. **Visibility** — Field-level validation messages must use the **destructive** semantic color so they are always clearly **red** in both themes: `text-[rgb(var(--color-destructive))]` (see `FieldValidationError` in `src/frontend/src/components/FieldValidationError.tsx` and `FIELD_VALIDATION_ERROR_CLASS`). Do not rely on default browser validation bubbles for styled forms when you need consistent product styling; use `noValidate` and explicit messages where appropriate.
+2. **Content** — Each message should say **what failed** and **what format or rule is required**, with a **concrete example** when the field has a pattern (e.g. Paraguay RUC: eight digits, hyphen, check digit, e.g. `80000005-6`). Copy must be in **i18n** (English and Spanish).
+3. **Accessibility** — Use `role="alert"` on inline validation text and associate controls with `aria-invalid` and `aria-describedby` pointing at the error id when there is an error.
+4. **Scope** — Non-validation failures (network, server unavailable) may use `Alert` `variant="destructive"`; **validation** feedback should prefer inline red text under the relevant field (or a single red `FieldValidationError` at the top of the form for server-side validation without a clear field).

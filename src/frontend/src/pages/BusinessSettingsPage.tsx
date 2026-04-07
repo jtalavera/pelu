@@ -12,6 +12,8 @@ import {
   Textarea,
 } from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
+import { looksLikeRucValidationError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
+import { FieldValidationError } from "../components/FieldValidationError";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
 
 type BusinessProfileResponse = {
@@ -30,7 +32,8 @@ export default function BusinessSettingsPage() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [ruc, setRuc] = useState("");
@@ -40,10 +43,13 @@ export default function BusinessSettingsPage() {
   /** null = server had no logo; "" = user cleared; string = image data URL */
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [rucError, setRucError] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [saveValidationError, setSaveValidationError] = useState<string | null>(null);
+  const [businessNameError, setBusinessNameError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const data = await femmeJson<BusinessProfileResponse>("/api/business-profile");
       setBusinessName(data.businessName);
@@ -53,7 +59,7 @@ export default function BusinessSettingsPage() {
       setContactEmail(data.contactEmail ?? "");
       setLogoDataUrl(data.logoDataUrl ?? null);
     } catch {
-      setError(t("femme.businessSettings.loadError"));
+      setLoadError(t("femme.businessSettings.loadError"));
     } finally {
       setLoading(false);
     }
@@ -67,15 +73,17 @@ export default function BusinessSettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_LOGO_BYTES) {
-      setError(t("femme.businessSettings.logoTooLarge"));
+      setLogoError(t("femme.businessSettings.logoTooLarge"));
       return;
     }
+    setLogoError(null);
+    if (saveValidationError) setSaveValidationError(null);
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : null;
       if (result) {
         setLogoDataUrl(result);
-        setError(null);
+        setLogoError(null);
       }
     };
     reader.readAsDataURL(file);
@@ -89,13 +97,19 @@ export default function BusinessSettingsPage() {
     e.preventDefault();
     setSuccess(false);
     setRucError(null);
+    setSaveValidationError(null);
+    setSaveError(null);
+    setBusinessNameError(null);
+    if (!businessName.trim()) {
+      setBusinessNameError(t("femme.businessSettings.businessNameRequired"));
+      return;
+    }
     const rucTrim = ruc.trim();
     if (rucTrim.length > 0 && !isValidParaguayRuc(rucTrim)) {
       setRucError(t("femme.businessSettings.rucInvalid"));
       return;
     }
     setSaving(true);
-    setError(null);
     try {
       await femmePutJson<BusinessProfileResponse>("/api/business-profile", {
         businessName: businessName.trim(),
@@ -109,8 +123,14 @@ export default function BusinessSettingsPage() {
       setSuccess(true);
       await load();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg || t("femme.businessSettings.saveError"));
+      const parsed = parseApiErrorMessage(err);
+      if (looksLikeRucValidationError(parsed)) {
+        setRucError(t("femme.businessSettings.rucInvalid"));
+      } else if (parsed.length > 0) {
+        setSaveValidationError(parsed);
+      } else {
+        setSaveError(t("femme.businessSettings.saveError"));
+      }
     } finally {
       setSaving(false);
     }
@@ -136,9 +156,14 @@ export default function BusinessSettingsPage() {
         </Text>
       </div>
 
-      {error ? (
+      {loadError ? (
         <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
-          {error}
+          {loadError}
+        </Alert>
+      ) : null}
+      {saveError ? (
+        <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
+          {saveError}
         </Alert>
       ) : null}
       {success ? (
@@ -148,43 +173,59 @@ export default function BusinessSettingsPage() {
       ) : null}
 
       <Card className="p-4 sm:p-6">
-        <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+          {saveValidationError ? (
+            <FieldValidationError>{saveValidationError}</FieldValidationError>
+          ) : null}
           <div>
             <Label htmlFor="businessName">{t("femme.businessSettings.businessName")}</Label>
             <Input
               id="businessName"
               value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
+              onChange={(e) => {
+                setBusinessName(e.target.value);
+                if (businessNameError) setBusinessNameError(null);
+                if (saveValidationError) setSaveValidationError(null);
+              }}
               required
               className="mt-1 w-full"
               autoComplete="organization"
+              aria-invalid={!!businessNameError}
+              aria-describedby={businessNameError ? "business-name-error" : undefined}
             />
+            <FieldValidationError id="business-name-error">{businessNameError}</FieldValidationError>
           </div>
           <div>
             <Label htmlFor="ruc">{t("femme.businessSettings.ruc")}</Label>
             <Input
               id="ruc"
               value={ruc}
-              onChange={(e) => setRuc(e.target.value)}
+              onChange={(e) => {
+                setRuc(e.target.value);
+                if (rucError) setRucError(null);
+                if (saveValidationError) setSaveValidationError(null);
+              }}
               placeholder="80000005-6"
               className="mt-1 w-full"
               aria-invalid={!!rucError}
+              aria-describedby={rucError ? "ruc-error" : "ruc-hint"}
             />
-            {rucError ? (
-              <Text variant="small" className="mt-1 text-[rgb(var(--color-destructive))]">
-                {rucError}
+            <FieldValidationError id="ruc-error">{rucError}</FieldValidationError>
+            {!rucError ? (
+              <Text variant="small" id="ruc-hint" className="mt-1 text-[rgb(var(--color-muted-foreground))]">
+                {t("femme.businessSettings.rucHint")}
               </Text>
             ) : null}
-            <Text variant="small" className="mt-1 text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.businessSettings.rucHint")}
-            </Text>
           </div>
           <div>
             <Label htmlFor="address">{t("femme.businessSettings.address")}</Label>
             <Textarea
               id="address"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                if (saveValidationError) setSaveValidationError(null);
+              }}
               className="mt-1 w-full min-h-[88px]"
             />
           </div>
@@ -193,7 +234,10 @@ export default function BusinessSettingsPage() {
             <Input
               id="phone"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (saveValidationError) setSaveValidationError(null);
+              }}
               className="mt-1 w-full"
               autoComplete="tel"
             />
@@ -204,7 +248,10 @@ export default function BusinessSettingsPage() {
               id="contactEmail"
               type="email"
               value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
+              onChange={(e) => {
+                setContactEmail(e.target.value);
+                if (saveValidationError) setSaveValidationError(null);
+              }}
               className="mt-1 w-full"
               autoComplete="email"
             />
@@ -217,7 +264,10 @@ export default function BusinessSettingsPage() {
               accept="image/*"
               onChange={onLogoFile}
               className="mt-1 w-full min-h-11"
+              aria-invalid={!!logoError}
+              aria-describedby={logoError ? "logo-error" : undefined}
             />
+            <FieldValidationError id="logo-error">{logoError}</FieldValidationError>
             {logoPreview ? (
               <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <img
