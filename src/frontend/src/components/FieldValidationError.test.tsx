@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { FieldValidationError, FIELD_VALIDATION_ERROR_CLASS } from "./FieldValidationError";
+import { FieldValidationError } from "./FieldValidationError";
 
 describe("FieldValidationError", () => {
   it("renders nothing when children is empty", () => {
@@ -8,11 +8,11 @@ describe("FieldValidationError", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders role=alert with destructive styling class", () => {
+  it("renders role=alert with red Tailwind classes", () => {
     render(<FieldValidationError>Invalid</FieldValidationError>);
     const el = screen.getByRole("alert");
     expect(el.textContent).toBe("Invalid");
-    expect(el.className).toContain(FIELD_VALIDATION_ERROR_CLASS.split(" ")[0]);
-    expect(el.className).toContain("text-[rgb(var(--color-destructive))]");
+    expect(el.className).toContain("text-red-600");
+    expect(el.className).toContain("dark:text-red-400");
   });
 });

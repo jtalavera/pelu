@@ -1,21 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { computeParaguayRucVerificationDigit, isValidParaguayRuc } from "./paraguayRuc";
+import { isValidParaguayRuc } from "./paraguayRuc";
 
 describe("paraguayRuc", () => {
-  it("accepts known valid RUC", () => {
+  it("accepts digit-hyphen-digit pattern", () => {
     expect(isValidParaguayRuc("80000005-6")).toBe(true);
+    expect(isValidParaguayRuc("80000005-5")).toBe(true);
+    expect(isValidParaguayRuc("1-2")).toBe(true);
   });
 
-  it("rejects wrong check digit", () => {
-    expect(isValidParaguayRuc("80000005-5")).toBe(false);
-  });
-
-  it("rejects bad format", () => {
+  it("rejects missing hyphen or non-digits", () => {
     expect(isValidParaguayRuc("80000005")).toBe(false);
+    expect(isValidParaguayRuc("abc-1")).toBe(false);
     expect(isValidParaguayRuc("")).toBe(false);
-  });
-
-  it("computeDigit matches backend sample", () => {
-    expect(computeParaguayRucVerificationDigit("80000005")).toBe(6);
   });
 });

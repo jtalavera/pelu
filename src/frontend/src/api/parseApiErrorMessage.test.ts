@@ -16,12 +16,8 @@ describe("parseApiErrorMessage", () => {
 });
 
 describe("looksLikeRucValidationError", () => {
-  it("detects RUC-related English messages", () => {
+  it("detects RUC-related messages", () => {
     expect(looksLikeRucValidationError("Invalid RUC format")).toBe(true);
-    expect(looksLikeRucValidationError("check digit")).toBe(true);
-  });
-
-  it("detects Spanish dígito verificador", () => {
-    expect(looksLikeRucValidationError("dígito verificador incorrecto")).toBe(true);
+    expect(looksLikeRucValidationError("something else")).toBe(false);
   });
 });

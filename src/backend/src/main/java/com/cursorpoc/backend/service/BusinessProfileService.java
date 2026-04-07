@@ -44,8 +44,7 @@ public class BusinessProfileService {
     BusinessProfile bp = loadOrThrow(tenantId);
     String ruc = blankToNull(request.ruc());
     if (ruc != null && !ParaguayRucValidator.isValid(ruc)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "Invalid RUC format or check digit");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid RUC format");
     }
     bp.setBusinessName(request.businessName().trim());
     bp.setRuc(ruc);

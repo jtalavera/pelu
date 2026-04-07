@@ -42,9 +42,7 @@ class BusinessProfileServiceTest {
 
   @Test
   void update_rejectsInvalidRuc() {
-    var req =
-        new BusinessProfileUpdateRequest(
-            "Salon X", "80000005-5", null, null, null, null); // wrong DV
+    var req = new BusinessProfileUpdateRequest("Salon X", "not-a-ruc", null, null, null, null);
     assertThatThrownBy(() -> service.update(5L, req)).isInstanceOf(ResponseStatusException.class);
   }
 

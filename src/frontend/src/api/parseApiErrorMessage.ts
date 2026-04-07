@@ -29,5 +29,5 @@ export function parseApiErrorMessage(err: unknown): string {
 /** True when the server message likely refers to RUC validation (map to RUC field error). */
 export function looksLikeRucValidationError(message: string): boolean {
   const m = message.toLowerCase();
-  return m.includes("ruc") || m.includes("check digit") || m.includes("dígito verificador");
+  return m.includes("ruc");
 }
