@@ -73,6 +73,28 @@ For pipelines, create an app registration / service principal with rights on the
 
 Use OIDC federated credentials where possible instead of long-lived secrets.
 
+#### GitHub Actions OIDC — federated identity subject (`AADSTS700213`)
+
+If `azure/login` fails with **AADSTS700213** (“No matching federated identity record for presented assertion subject …”), the **Federated credential** on the app registration (the one whose **Application (client) ID** matches `AZURE_CLIENT_ID`) does not match the subject GitHub sends.
+
+For a workflow triggered by a **push to `main`** on repository `jtalavera/pelu`, the assertion subject is:
+
+```text
+repo:jtalavera/pelu:ref:refs/heads/main
+```
+
+Configure Entra to accept it:
+
+| Field | Value |
+| ----- | ----- |
+| **Issuer** | `https://token.actions.githubusercontent.com` |
+| **Audience** | `api://AzureADTokenExchange` (default for workload identity federation) |
+| **Subject identifier** | Exact string above (org/repo/branch must match your real GitHub repo; case-sensitive per [Microsoft](https://learn.microsoft.com/entra/workload-id/workload-identity-federation)) |
+
+**Portal:** Microsoft Entra ID → **App registrations** → your app → **Certificates & secrets** → **Federated credentials** → **Add**. Use **GitHub Actions deploying Azure resources**, pick **Organization** `jtalavera`, **Repository** `pelu`, **Entity type** Branch, **Branch** `main` — or add a **custom** credential and paste the subject string.
+
+If you deploy from a [GitHub Environment](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect#using-openid-connect-with-reusable-workflows) instead, the subject is `repo:ORG/REPO:environment:NAME`; add a **separate** federated credential for that pattern. After **renaming** the repo or changing org, update or recreate federated credentials.
+
 ### 4. Confirm providers and state
 
 - From `infrastructure/terraform`, run `**terraform init -backend-config=backend.hcl`** (after `backend.hcl` exists; see §5). Plain `terraform init` is not enough if the backend block expects that file.
