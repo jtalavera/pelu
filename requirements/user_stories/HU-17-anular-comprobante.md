@@ -1,0 +1,37 @@
+# HU-17 · Anular un comprobante
+
+| Campo | Valor |
+|--------|--------|
+| **ID** | HU-17 |
+| **Módulo** | Facturación |
+| **Estado** | `Backlog` |
+
+**Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
+
+## Definiciones transversales
+
+Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Convenciones (zona horaria del servidor, etc.): [PRD Femme MVP v1](../prds/femme_historias_usuario_mvp_v1.md#definiciones-transversales).
+
+---
+
+## Historia de usuario
+
+**Como** administrador,  
+**quiero** anular un comprobante emitido por error,  
+**para** corregir el registro sin eliminar el historial.
+
+---
+
+## Criterios de aceptación
+
+1. **Acción desde detalle** — Se puede anular un comprobante desde su vista de detalle (con permisos de admin).
+2. **Razón obligatoria** — El sistema solicita una razón de anulación en texto obligatorio antes de confirmar.
+3. **Estado y visibilidad** — Tras anular, el comprobante pasa a estado “Anulado” y sigue visible en el historial con ese estado.
+4. **Restricción temporal** — No se puede anular un comprobante de un día anterior al cierre de caja del mismo día (regla exacta implementada de forma consistente con HU-18).
+
+---
+
+## Notas para estimación y pruebas
+
+- Alinear con reglas de cierre de caja y numeración fiscal.
+- **Pruebas:** anulación mismo día permitida según regla, día anterior bloqueada, historial y PDF reflejan anulación.
