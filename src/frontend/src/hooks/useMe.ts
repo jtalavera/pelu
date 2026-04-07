@@ -2,16 +2,11 @@ import { useEffect, useState } from "react";
 import { apiBaseUrl } from "../api/baseUrl";
 import { authHeaders } from "../api/authHeaders";
 
+/** Current user from `GET /api/me` (Femme tenant admin). */
 export type Me = {
   userId: number;
+  tenantId: number;
   email: string;
-  privileged: boolean;
-  accountLocked: boolean;
-  tenantAdminTenants?: Array<{
-    tenantId: number;
-    shortName: string;
-    legalName: string;
-  }>;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {

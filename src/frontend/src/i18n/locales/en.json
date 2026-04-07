@@ -25,6 +25,60 @@
       "closePanel": "Close panel"
     }
   },
+  "femme": {
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Use your administrator email and password.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "errorInvalid": "Invalid email or password.",
+      "errorNetwork": "Network error. Check that the API is running.",
+      "forgotPassword": "Forgot password?"
+    },
+    "forgot": {
+      "title": "Reset password",
+      "submit": "Send reset link",
+      "submitting": "Sending…",
+      "sent": "If an account exists, check the server logs for the reset link (development).",
+      "backToLogin": "Back to sign in"
+    },
+    "nav": {
+      "dashboard": "Dashboard",
+      "calendar": "Calendar",
+      "services": "Services",
+      "professionals": "Professionals",
+      "clients": "Clients",
+      "billing": "Billing",
+      "settings": "Settings",
+      "logout": "Sign out"
+    },
+    "footer": {
+      "designSystem": "Design system"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "loading": "Loading…",
+      "error": "Could not load dashboard.",
+      "appointmentsToday": "Appointments today",
+      "total": "Total",
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "revenueDay": "Today",
+      "revenueWeek": "This week",
+      "invoiced": "Invoiced",
+      "collected": "Collected",
+      "emptyDay": "No appointments yet today.",
+      "fiscalAlerts": "Alerts"
+    },
+    "placeholder": {
+      "title": "Coming soon",
+      "body": "This area will be wired to the API in the next iteration."
+    }
+  },
   "language": {
     "label": "Language",
     "en": "English",

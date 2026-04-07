@@ -25,6 +25,60 @@
       "closePanel": "Cerrar panel"
     }
   },
+  "femme": {
+    "login": {
+      "title": "Iniciar sesión",
+      "subtitle": "Usá tu correo y contraseña de administrador.",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "submit": "Iniciar sesión",
+      "submitting": "Iniciando sesión…",
+      "errorInvalid": "Correo o contraseña incorrectos.",
+      "errorNetwork": "Error de red. Comprobá que la API esté en ejecución.",
+      "forgotPassword": "¿Olvidaste tu contraseña?"
+    },
+    "forgot": {
+      "title": "Restablecer contraseña",
+      "submit": "Enviar enlace",
+      "submitting": "Enviando…",
+      "sent": "Si existe una cuenta, revisá los logs del servidor para el enlace (desarrollo).",
+      "backToLogin": "Volver al inicio de sesión"
+    },
+    "nav": {
+      "dashboard": "Panel",
+      "calendar": "Calendario",
+      "services": "Servicios",
+      "professionals": "Profesionales",
+      "clients": "Clientes",
+      "billing": "Facturación",
+      "settings": "Configuración",
+      "logout": "Cerrar sesión"
+    },
+    "footer": {
+      "designSystem": "Sistema de diseño"
+    },
+    "dashboard": {
+      "title": "Panel",
+      "loading": "Cargando…",
+      "error": "No se pudo cargar el panel.",
+      "appointmentsToday": "Turnos de hoy",
+      "total": "Total",
+      "pending": "Pendientes",
+      "confirmed": "Confirmados",
+      "inProgress": "En curso",
+      "completed": "Completados",
+      "revenueDay": "Hoy",
+      "revenueWeek": "Esta semana",
+      "invoiced": "Facturado",
+      "collected": "Cobrado",
+      "emptyDay": "Aún no hay turnos hoy.",
+      "fiscalAlerts": "Alertas"
+    },
+    "placeholder": {
+      "title": "Próximamente",
+      "body": "Esta sección se conectará a la API en la siguiente iteración."
+    }
+  },
   "language": {
     "label": "Idioma",
     "en": "English",

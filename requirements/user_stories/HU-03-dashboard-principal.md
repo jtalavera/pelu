@@ -1,10 +1,12 @@
 # HU-03 · Ver el dashboard principal
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-03 |
+
+| Campo      | Valor                                 |
+| ---------- | ------------------------------------- |
+| **ID**     | HU-03                                 |
 | **Módulo** | Autenticación & configuración inicial |
-| **Estado** | `Backlog` |
+| **Estado** | `Backlog`                             |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 

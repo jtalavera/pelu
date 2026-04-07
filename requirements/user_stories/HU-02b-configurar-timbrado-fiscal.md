@@ -1,10 +1,12 @@
 # HU-02b · Configurar timbrado fiscal
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-02b |
+
+| Campo      | Valor                                 |
+| ---------- | ------------------------------------- |
+| **ID**     | HU-02b                                |
 | **Módulo** | Autenticación & configuración inicial |
-| **Estado** | `Backlog` |
+| **Estado** | `Backlog`                             |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
