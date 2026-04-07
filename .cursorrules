@@ -3,7 +3,7 @@ You MUST ALWAYS follow these rules:
 - Use i18n in the frontend. Supported languages are english and spanish
 - Use reusable components from src/frontend/design-system/components always that is possible.
 - If there is a UI compoment that might be a reusable component, STOP and propose it to the user. NEVER add it automatically to the components library.
-- All screens and UI components must support the light and dark themes.
+- All screens and UI components must support the light and dark themes. There should be an option to switch between both themes in every screen.
 - Always add unit testing to frotend and backend.
 - Always write testable code.
 - Always write unit tests based on acceptance criteria of the user story
