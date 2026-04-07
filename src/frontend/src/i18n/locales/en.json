@@ -52,6 +52,7 @@
       "clients": "Clients",
       "billing": "Billing",
       "settings": "Settings",
+      "businessSettings": "Business settings",
       "logout": "Sign out"
     },
     "footer": {
@@ -72,7 +73,34 @@
       "invoiced": "Invoiced",
       "collected": "Collected",
       "emptyDay": "No appointments yet today.",
-      "fiscalAlerts": "Alerts"
+      "fiscalAlerts": "Alerts",
+      "alerts": {
+        "businessRucMissing": "Add a valid business RUC to issue invoices.",
+        "fiscalExpiringSoon": "Your fiscal stamp (timbrado) expires in less than 30 days.",
+        "fiscalLowRange": "Less than 10% of invoice numbers remain in the current range."
+      }
+    },
+    "businessSettings": {
+      "title": "Business settings",
+      "lead": "Name, tax ID (RUC), contact details, and logo used on invoices and PDFs. Changes apply only when you save.",
+      "loading": "Loading…",
+      "loadError": "Could not load business settings.",
+      "saveError": "Could not save. Check your data and try again.",
+      "errorTitle": "Error",
+      "savedTitle": "Saved",
+      "savedBody": "Your business details were saved.",
+      "businessName": "Business name",
+      "ruc": "RUC",
+      "rucHint": "Paraguay format with check digit, e.g. 80000005-6. Leave empty if not set yet.",
+      "rucInvalid": "Enter a valid Paraguay RUC (format and check digit).",
+      "address": "Address",
+      "phone": "Phone",
+      "contactEmail": "Contact email",
+      "logo": "Logo (image)",
+      "logoTooLarge": "Image is too large. Use a smaller file.",
+      "removeLogo": "Remove logo",
+      "save": "Save",
+      "saving": "Saving…"
     },
     "placeholder": {
       "title": "Coming soon",

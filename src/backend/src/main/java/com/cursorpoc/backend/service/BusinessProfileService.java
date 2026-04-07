@@ -15,6 +15,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class BusinessProfileService {
 
+  private static final int MAX_LOGO_DATA_URL_CHARS = 2_500_000;
+
   private final TenantRepository tenantRepository;
   private final BusinessProfileRepository businessProfileRepository;
 
@@ -30,6 +32,13 @@ public class BusinessProfileService {
     return toDto(bp);
   }
 
+  @Transactional(readOnly = true)
+  public boolean isRucReadyForInvoicing(long tenantId) {
+    BusinessProfile bp = loadOrThrow(tenantId);
+    String ruc = bp.getRuc();
+    return ruc != null && ParaguayRucValidator.isValid(ruc);
+  }
+
   @Transactional
   public BusinessProfileResponse update(long tenantId, BusinessProfileUpdateRequest request) {
     BusinessProfile bp = loadOrThrow(tenantId);
@@ -43,7 +52,14 @@ public class BusinessProfileService {
     bp.setAddress(blankToNull(request.address()));
     bp.setPhone(blankToNull(request.phone()));
     bp.setContactEmail(blankToNull(request.contactEmail()));
-    bp.setLogoDataUrl(request.logoDataUrl());
+    if (request.logoDataUrl() != null) {
+      if (request.logoDataUrl().isBlank()) {
+        bp.setLogoDataUrl(null);
+      } else {
+        validateLogoDataUrl(request.logoDataUrl());
+        bp.setLogoDataUrl(request.logoDataUrl());
+      }
+    }
     return toDto(bp);
   }
 
@@ -67,13 +83,26 @@ public class BusinessProfileService {
   }
 
   private static BusinessProfileResponse toDto(BusinessProfile bp) {
+    String ruc = bp.getRuc();
+    boolean rucValid = ruc != null && ParaguayRucValidator.isValid(ruc);
     return new BusinessProfileResponse(
         bp.getBusinessName(),
-        bp.getRuc(),
+        ruc,
         bp.getAddress(),
         bp.getPhone(),
         bp.getContactEmail(),
-        bp.getLogoDataUrl());
+        bp.getLogoDataUrl(),
+        rucValid);
+  }
+
+  private static void validateLogoDataUrl(String dataUrl) {
+    if (dataUrl.length() > MAX_LOGO_DATA_URL_CHARS) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Logo image is too large");
+    }
+    if (!dataUrl.startsWith("data:image/")) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Logo must be a data URL image (data:image/...)");
+    }
   }
 
   private static String blankToNull(String s) {

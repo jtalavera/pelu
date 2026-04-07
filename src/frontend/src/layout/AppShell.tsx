@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Button, Heading, Navbar } from "@design-system";
+import { Button, Heading, Navbar, ThemeToggle } from "@design-system";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useSessionRefresh } from "../auth/useSessionRefresh";
@@ -34,6 +34,7 @@ export function AppShell() {
         end={
           <div className="flex flex-wrap items-center gap-2">
             <LanguageSwitcher />
+            <ThemeToggle />
             <Button type="button" variant="ghost" onClick={logout} className="min-h-11">
               {t("femme.nav.logout")}
             </Button>
@@ -62,7 +63,7 @@ export function AppShell() {
               {t("femme.nav.billing")}
             </NavLink>
             <NavLink to="/app/settings" className={navClass}>
-              {t("femme.nav.settings")}
+              {t("femme.nav.businessSettings")}
             </NavLink>
           </nav>
         </aside>

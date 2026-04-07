@@ -8,6 +8,7 @@ import com.cursorpoc.backend.web.dto.ResetPasswordRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping(path = "/api/auth")
+@RequestMapping("/api/auth")
 public class AuthController {
 
   private final AuthService authService;
@@ -33,18 +34,20 @@ public class AuthController {
   @PostMapping("/refresh")
   public TokenResponse refresh(@AuthenticationPrincipal FemmeUserPrincipal principal) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
     }
     return authService.refresh(principal);
   }
 
   @PostMapping("/forgot-password")
-  public void forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+  public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
     authService.forgotPassword(request);
+    return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/reset-password")
-  public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+  public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
     authService.resetPassword(request);
+    return ResponseEntity.noContent().build();
   }
 }

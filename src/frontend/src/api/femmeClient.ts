@@ -26,3 +26,7 @@ export async function femmeJson<T>(
 export async function femmePostJson<T>(path: string, body: unknown): Promise<T> {
   return femmeJson<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
+
+export async function femmePutJson<T>(path: string, body: unknown): Promise<T> {
+  return femmeJson<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}

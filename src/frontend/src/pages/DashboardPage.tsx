@@ -144,9 +144,11 @@ export default function DashboardPage() {
           </Text>
           <div className="flex flex-col gap-2">
             {data.fiscalAlerts.map((al, i) => (
-              <Alert key={`${al.messageKey}-${i}`} variant="warning" title={al.message}>
-                {al.messageKey}
-              </Alert>
+              <Alert
+                key={`${al.messageKey}-${i}`}
+                variant="warning"
+                title={t(`femme.dashboard.alerts.${al.messageKey}`, { defaultValue: al.message })}
+              />
             ))}
           </div>
         </div>

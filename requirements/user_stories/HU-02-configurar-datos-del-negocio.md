@@ -5,7 +5,7 @@
 | ---------- | ------------------------------------- |
 | **ID**     | HU-02                                 |
 | **Módulo** | Autenticación & configuración inicial |
-| **Estado** | `Backlog`                             |
+| **Estado** | `Done`                                |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`

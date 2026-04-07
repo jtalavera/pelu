@@ -10,12 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping(
-    path = "/api/me",
-    produces = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping("/api")
 public class MeController {
 
-  @GetMapping
+  @GetMapping("/me")
   public MeResponse me(@AuthenticationPrincipal FemmeUserPrincipal principal) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");

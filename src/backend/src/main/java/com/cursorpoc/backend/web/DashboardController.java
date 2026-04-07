@@ -1,15 +1,17 @@
 package com.cursorpoc.backend.web;
 
+import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.DashboardService;
-import com.cursorpoc.backend.service.TenantContext;
 import com.cursorpoc.backend.web.dto.DashboardResponse;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping(path = "/api/dashboard", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping("/api/dashboard")
 public class DashboardController {
 
   private final DashboardService dashboardService;
@@ -19,7 +21,10 @@ public class DashboardController {
   }
 
   @GetMapping
-  public DashboardResponse dashboard() {
-    return dashboardService.build(TenantContext.requireTenantId());
+  public DashboardResponse get(@AuthenticationPrincipal FemmeUserPrincipal principal) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+    }
+    return dashboardService.build(principal.getTenantId());
   }
 }
