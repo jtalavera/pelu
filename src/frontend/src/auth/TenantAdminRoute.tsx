@@ -5,7 +5,7 @@ import { useMe } from "../hooks/useMe";
 type Props = { children: React.ReactNode };
 
 /**
- * Ensures the URL tenant id matches an active tenant-admin assignment for the current user.
+ * Ensures the URL tenant id matches the authenticated user's tenant (Femme single-tenant admin).
  */
 export function TenantAdminRoute({ children }: Props) {
   const { tenantId: tenantIdParam } = useParams();
@@ -24,11 +24,8 @@ export function TenantAdminRoute({ children }: Props) {
     return <Navigate to="/" replace />;
   }
 
-  const tenants = me.tenantAdminTenants ?? [];
-  const allowed = tenants.some((t) => t.tenantId === tenantId);
-  if (!allowed) {
-    const first = tenants[0];
-    return <Navigate to={first ? `/tenant-admin/${first.tenantId}` : "/"} replace />;
+  if (me.tenantId !== tenantId) {
+    return <Navigate to="/app" replace />;
   }
 
   return <>{children}</>;

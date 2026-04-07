@@ -12,6 +12,7 @@ Single product with two services under `src/`:
 | Frontend | `src/frontend/` | React 18 + Vite + Tailwind + i18next          | `:5173`  |
 | Backend  | `src/backend/`  | Spring Boot 4 (Java 21) + SQL Server + Flyway | `:8080`  |
 
+**Femme product docs:** PRD and cross-cutting definitions — `requirements/prds/femme_historias_usuario_mvp_v1.md` (section *Definiciones transversales*: multi-tenant, server timezone, etc.). User stories — `requirements/user_stories/`. Open product questions — `requirements/preguntas_abiertas_v1.md`.
 
 The backend uses **SQL Server** locally (`src/backend/docker-compose.yml`) and in **Azure** (production). Default credentials match that stack: database `**service_app_db`**, user `**service_app`**, password from `**MSSQL_SA_PASSWORD**` (default `**The.S3cr3t.2026**`, same as the container’s `**MSSQL_SA_PASSWORD**`). Create the database and `**service_app**` login once before the first `./gradlew bootRun` if they do not exist (locally use `sqlcmd` or any SQL client as `**sa**`). **Automated tests** (`./gradlew test`) and **Playwright e2e** (`profile` `**e2e`**) use an **in-memory H2** database (MSSQL compatibility mode), not SQL Server. **Docker** is not required for backend unit or integration tests.
 
