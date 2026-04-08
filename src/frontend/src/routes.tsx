@@ -5,6 +5,7 @@ import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
+import BusinessSettingsPage from "./pages/BusinessSettingsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 export function AppRoutes() {
@@ -26,7 +27,7 @@ export function AppRoutes() {
         <Route path="/app/professionals" element={<PlaceholderPage />} />
         <Route path="/app/clients" element={<PlaceholderPage />} />
         <Route path="/app/billing" element={<PlaceholderPage />} />
-        <Route path="/app/settings" element={<PlaceholderPage />} />
+        <Route path="/app/settings" element={<BusinessSettingsPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>

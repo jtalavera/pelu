@@ -11,3 +11,4 @@ You MUST ALWAYS follow these rules:
 - Branching strategy is trunk based. All branches are created from main and merged back to main.
 - Endpoints in the backend MUST ALWAYS print in the log with INFO level when they receive a request with the following information: path, method, tenant id. And when they return the response: path, method, tennat id, response status.  If the status response is not one of success, then the log level must be ERROR.
 - Code, tables, and any technical artifact are named in english.
+- Frontend validation: show field validation messages in red using `FieldValidationError` (`text-red-600` / `dark:text-red-400`; do not use undefined CSS vars like `--color-destructive`). Messages must state the required format with a clear example when applicable. Use i18n (en + es). Prefer `role="alert"` and `aria-describedby` on fields with errors.

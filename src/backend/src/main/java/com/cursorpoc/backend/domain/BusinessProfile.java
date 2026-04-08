@@ -37,7 +37,11 @@ public class BusinessProfile {
   @Column(name = "contact_email", length = 320)
   private String contactEmail;
 
-  @Column(name = "logo_data_url", length = 4000)
+  /**
+   * Matches Flyway: NVARCHAR(MAX). Do not use @Lob — SQL Server maps LOB to CLOB and validation
+   * fails.
+   */
+  @Column(name = "logo_data_url", columnDefinition = "NVARCHAR(MAX)")
   private String logoDataUrl;
 
   public Long getTenantId() {

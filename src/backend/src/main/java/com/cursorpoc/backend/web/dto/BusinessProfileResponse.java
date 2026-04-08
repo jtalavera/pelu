@@ -6,4 +6,5 @@ public record BusinessProfileResponse(
     String address,
     String phone,
     String contactEmail,
-    String logoDataUrl) {}
+    String logoDataUrl,
+    boolean rucValidForInvoicing) {}

@@ -5,7 +5,7 @@
 | ---------- | ------------------------------------- |
 | **ID**     | HU-02                                 |
 | **Módulo** | Autenticación & configuración inicial |
-| **Estado** | `Backlog`                             |
+| **Estado** | `Done`                                |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -28,7 +28,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 1. **Pantalla de configuración** — Existe una pantalla “Configuración del negocio” accesible desde el menú (solo rol Admin en MVP). Los datos corresponden al **tenant** actual (este negocio en el modelo multi-tenant).
 2. **Campos editables** — Se pueden cargar y guardar: nombre del negocio, RUC, dirección, teléfono, email de contacto y logo (imagen).
-3. **Validación RUC paraguayo** — El campo RUC acepta el formato paraguayo (ej. `80012345-6`) y valida el dígito verificador; entradas inválidas no se guardan o se rechazan con mensaje claro.
+3. **Validación RUC paraguayo** — El campo RUC acepta el formato con dígitos, guion y dígitos (ej. `80012345-6`); entradas que no cumplan el formato no se guardan o se rechazan con mensaje claro en rojo.
 4. **RUC obligatorio para facturar** — Si el RUC no está cargado, al intentar emitir una factura el sistema advierte o bloquea según regla de negocio definida (comportamiento observable y consistente).
 5. **Comprobantes PDF** — Los datos guardados (incluido RUC) aparecen en el encabezado de los comprobantes PDF generados por el sistema.
 6. **Guardado explícito** — Los cambios se persisten solo al usar un botón de guardar explícito; no hay autoguardado al escribir en los campos.
@@ -39,3 +39,4 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 - Depende de almacenamiento de logo y de pipeline de PDF (puede enlazarse con HU-14 cuando exista).
 - **Pruebas:** validación RUC (válidos/inválidos), guardado, lectura en PDF, intento de facturación sin RUC.
+- **UX:** los errores de validación en pantalla se muestran en rojo (color destructivo) con texto que indica el formato requerido (p. ej. RUC); ver `AGENTS.md` · *Form validation (frontend)* y `FieldValidationError` en el frontend.

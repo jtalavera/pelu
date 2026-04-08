@@ -52,6 +52,7 @@
       "clients": "Clientes",
       "billing": "Facturación",
       "settings": "Configuración",
+      "businessSettings": "Negocio",
       "logout": "Cerrar sesión"
     },
     "footer": {
@@ -72,7 +73,35 @@
       "invoiced": "Facturado",
       "collected": "Cobrado",
       "emptyDay": "Aún no hay turnos hoy.",
-      "fiscalAlerts": "Alertas"
+      "fiscalAlerts": "Alertas",
+      "alerts": {
+        "businessRucMissing": "Agregá un RUC de negocio válido para emitir facturas.",
+        "fiscalExpiringSoon": "El timbrado fiscal vence en menos de 30 días.",
+        "fiscalLowRange": "Queda menos del 10% del rango de numeración de facturas."
+      }
+    },
+    "businessSettings": {
+      "title": "Configuración del negocio",
+      "lead": "Nombre, RUC, datos de contacto y logo que aparecen en facturas y PDF. Los cambios se guardan solo al pulsar Guardar.",
+      "loading": "Cargando…",
+      "loadError": "No se pudo cargar la configuración del negocio.",
+      "saveError": "No se pudo guardar. Revisá los datos e intentá de nuevo.",
+      "errorTitle": "Error",
+      "savedTitle": "Guardado",
+      "savedBody": "Los datos del negocio se guardaron correctamente.",
+      "businessName": "Nombre del negocio",
+      "businessNameRequired": "Ingresá el nombre del negocio.",
+      "ruc": "RUC",
+      "rucHint": "Formato: dígitos, guion, dígitos (ej.: 80000005-6). Dejalo vacío si aún no lo cargaste.",
+      "rucInvalid": "RUC inválido. Solo dígitos, un guion y dígitos (ej.: 80000005-6).",
+      "address": "Dirección",
+      "phone": "Teléfono",
+      "contactEmail": "Correo de contacto",
+      "logo": "Logo (imagen)",
+      "logoTooLarge": "La imagen supera el máximo permitido (1,5 MB). Usá un PNG o JPEG más pequeño.",
+      "removeLogo": "Quitar logo",
+      "save": "Guardar",
+      "saving": "Guardando…"
     },
     "placeholder": {
       "title": "Próximamente",

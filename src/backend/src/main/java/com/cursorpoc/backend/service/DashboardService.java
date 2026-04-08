@@ -26,16 +26,19 @@ public class DashboardService {
   private final AppointmentRepository appointmentRepository;
   private final InvoiceRepository invoiceRepository;
   private final FiscalStampRepository fiscalStampRepository;
+  private final BusinessProfileService businessProfileService;
 
   public DashboardService(
       FemmeTimeProperties timeProperties,
       AppointmentRepository appointmentRepository,
       InvoiceRepository invoiceRepository,
-      FiscalStampRepository fiscalStampRepository) {
+      FiscalStampRepository fiscalStampRepository,
+      BusinessProfileService businessProfileService) {
     this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
     this.invoiceRepository = invoiceRepository;
     this.fiscalStampRepository = fiscalStampRepository;
+    this.businessProfileService = businessProfileService;
   }
 
   @Transactional(readOnly = true)
@@ -83,6 +86,11 @@ public class DashboardService {
                 tenantId, InvoiceStatus.ISSUED, weekStart, weekEnd));
 
     List<DashboardResponse.FiscalAlert> alerts = new ArrayList<>();
+    if (!businessProfileService.isRucReadyForInvoicing(tenantId)) {
+      alerts.add(
+          new DashboardResponse.FiscalAlert(
+              "warning", "businessRucMissing", "Configure a valid business RUC to issue invoices"));
+    }
     fiscalStampRepository
         .findByTenant_IdAndActiveTrue(tenantId)
         .ifPresent(stamp -> addFiscalAlerts(stamp, zone, alerts));
@@ -103,7 +111,7 @@ public class DashboardService {
       if (days >= 0 && days < 30) {
         out.add(
             new DashboardResponse.FiscalAlert(
-                "warning", "fiscal.expiringSoon", "Timbrado expires in less than 30 days"));
+                "warning", "fiscalExpiringSoon", "Timbrado expires in less than 30 days"));
       }
     }
     int range = stamp.getRangeTo() - stamp.getRangeFrom() + 1;
@@ -115,7 +123,7 @@ public class DashboardService {
       if (pct.compareTo(BigDecimal.TEN) < 0) {
         out.add(
             new DashboardResponse.FiscalAlert(
-                "warning", "fiscal.lowRange", "Less than 10% of invoice numbers remain"));
+                "warning", "fiscalLowRange", "Less than 10% of invoice numbers remain"));
       }
     }
   }
