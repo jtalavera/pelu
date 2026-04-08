@@ -103,7 +103,8 @@ public class FiscalStampService {
     return fiscalStampRepository
         .findById(id)
         .filter(s -> s.getTenant().getId().equals(tenantId))
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiscal stamp not found"));
+        .orElseThrow(
+            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiscal stamp not found"));
   }
 
   private Tenant loadTenant(long tenantId) {
@@ -116,8 +117,7 @@ public class FiscalStampService {
     String trimmed = raw == null ? "" : raw.trim();
     if (trimmed.isEmpty() || !trimmed.chars().allMatch(Character::isDigit)) {
       throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST,
-          "Stamp number must contain digits only (e.g. 12345678).");
+          HttpStatus.BAD_REQUEST, "Stamp number must contain digits only (e.g. 12345678).");
     }
     return trimmed;
   }

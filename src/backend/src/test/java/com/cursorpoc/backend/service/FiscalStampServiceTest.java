@@ -46,12 +46,7 @@ class FiscalStampServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     var req =
         new FiscalStampCreateRequest(
-            "12a34",
-            LocalDate.of(2025, 1, 1),
-            LocalDate.of(2026, 1, 1),
-            1,
-            100,
-            1);
+            "12a34", LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 1), 1, 100, 1);
     assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
   }
 
@@ -67,12 +62,7 @@ class FiscalStampServiceTest {
             });
     var req =
         new FiscalStampCreateRequest(
-            " 12345 ",
-            LocalDate.of(2025, 1, 1),
-            LocalDate.of(2026, 1, 1),
-            10,
-            100,
-            50);
+            " 12345 ", LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 1), 10, 100, 50);
     var dto = service.create(1L, req);
     assertThat(dto.stampNumber()).isEqualTo("12345");
     assertThat(dto.active()).isFalse();
@@ -87,12 +77,7 @@ class FiscalStampServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     var req =
         new FiscalStampCreateRequest(
-            "1",
-            LocalDate.of(2025, 1, 1),
-            LocalDate.of(2026, 1, 1),
-            10,
-            20,
-            5);
+            "1", LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 1), 10, 20, 5);
     assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
   }
 
@@ -101,12 +86,7 @@ class FiscalStampServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     var req =
         new FiscalStampCreateRequest(
-            "1",
-            LocalDate.of(2026, 1, 1),
-            LocalDate.of(2025, 1, 1),
-            1,
-            10,
-            1);
+            "1", LocalDate.of(2026, 1, 1), LocalDate.of(2025, 1, 1), 1, 10, 1);
     assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
   }
 
@@ -124,9 +104,7 @@ class FiscalStampServiceTest {
     s.setLockedAfterInvoice(true);
     when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
 
-    var req =
-        new FiscalStampUpdateRequest(
-            LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 5);
+    var req = new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 5);
     assertThatThrownBy(() -> service.update(1L, 3L, req))
         .isInstanceOf(ResponseStatusException.class);
   }

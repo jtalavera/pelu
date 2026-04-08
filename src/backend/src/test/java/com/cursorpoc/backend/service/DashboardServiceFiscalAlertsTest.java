@@ -37,7 +37,11 @@ class DashboardServiceFiscalAlertsTest {
     time.setBusinessZoneId(ZONE.getId());
     dashboardService =
         new DashboardService(
-            time, appointmentRepository, invoiceRepository, fiscalStampRepository, businessProfileService);
+            time,
+            appointmentRepository,
+            invoiceRepository,
+            fiscalStampRepository,
+            businessProfileService);
   }
 
   @Test
@@ -48,8 +52,7 @@ class DashboardServiceFiscalAlertsTest {
     DashboardResponse d = dashboardService.build(1L);
 
     assertThat(d.fiscalAlerts()).anyMatch(a -> "fiscalNoActiveStamp".equals(a.messageKey()));
-    assertThat(d.fiscalAlerts().stream().anyMatch(a -> "blocking".equals(a.severity())))
-        .isTrue();
+    assertThat(d.fiscalAlerts().stream().anyMatch(a -> "blocking".equals(a.severity()))).isTrue();
   }
 
   @Test
