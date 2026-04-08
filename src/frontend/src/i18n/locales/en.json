@@ -52,7 +52,7 @@
       "clients": "Clients",
       "billing": "Billing",
       "settings": "Settings",
-      "businessSettings": "Business settings",
+      "businessSettings": "Settings",
       "logout": "Sign out"
     },
     "footer": {
@@ -77,8 +77,15 @@
       "alerts": {
         "businessRucMissing": "Add a valid business RUC to issue invoices.",
         "fiscalExpiringSoon": "Your fiscal stamp (timbrado) expires in less than 30 days.",
-        "fiscalLowRange": "Less than 10% of invoice numbers remain in the current range."
+        "fiscalLowRange": "Less than 10% of invoice numbers remain in the current range.",
+        "fiscalNoActiveStamp": "No active fiscal stamp. Go to Settings → Timbrado to add and activate one.",
+        "fiscalExpiredOrExhausted": "The fiscal stamp is expired or the number range is exhausted. Add a new stamp under Settings → Timbrado."
       }
+    },
+    "settings": {
+      "sectionTitle": "Settings",
+      "tabBusiness": "Business",
+      "tabFiscalStamp": "Timbrado"
     },
     "businessSettings": {
       "title": "Business settings",
@@ -102,6 +109,47 @@
       "removeLogo": "Remove logo",
       "save": "Save",
       "saving": "Saving…"
+    },
+    "fiscalStamp": {
+      "title": "Fiscal stamp (timbrado)",
+      "lead": "Register the stamp authorized by the tax office (SET), validity dates, and the invoice number range. Only one stamp can be active at a time.",
+      "loading": "Loading…",
+      "loadError": "Could not load fiscal stamps.",
+      "saveError": "Could not save. Check your data and try again.",
+      "savedBody": "Your changes were saved.",
+      "empty": "No stamps yet. Add one below.",
+      "registeredTitle": "Registered stamps",
+      "addTitle": "Add stamp",
+      "stampNumber": "Stamp number",
+      "stampNumberHint": "Digits only, as assigned by SET (e.g. 12345678).",
+      "stampNumberInvalid": "Enter digits only for the stamp number (e.g. 12345678).",
+      "validFrom": "Validity start",
+      "validUntil": "Validity end",
+      "rangeFrom": "Number from",
+      "rangeTo": "Number to",
+      "initialEmission": "Starting invoice number",
+      "initialEmissionHint": "Must be within the from–to range (e.g. continue from a previous system).",
+      "nextEmission": "Next invoice number",
+      "nextLabel": "Next number",
+      "rangeLabel": "Range {{from}}–{{to}}",
+      "validityLabel": "Valid from {{from}} until {{until}}",
+      "active": "Active",
+      "inactive": "Inactive",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "edit": "Edit dates and next number",
+      "editTitle": "Edit stamp",
+      "save": "Save",
+      "cancel": "Cancel",
+      "add": "Add stamp",
+      "saving": "Saving…",
+      "lockedHint": "This stamp was used on invoices; the stamp number and range cannot be changed. Deactivate it and add a new stamp.",
+      "dateRequired": "Select a date.",
+      "integerInvalid": "Enter a non-negative whole number (e.g. 1).",
+      "rangeOrder": "The “to” number must be greater than or equal to “from”.",
+      "validUntilBeforeFrom": "The end of validity must be after the start date.",
+      "initialEmissionRange": "Must be between {{from}} and {{to}} (inclusive). Example: if the range is {{from}}–{{to}}, use {{from}} to start at the beginning.",
+      "nextEmissionRange": "Must be between {{from}} and {{to}} (inclusive)."
     },
     "placeholder": {
       "title": "Coming soon",

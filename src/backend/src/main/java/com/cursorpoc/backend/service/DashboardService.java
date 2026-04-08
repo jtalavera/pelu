@@ -93,7 +93,17 @@ public class DashboardService {
     }
     fiscalStampRepository
         .findByTenant_IdAndActiveTrue(tenantId)
-        .ifPresent(stamp -> addFiscalAlerts(stamp, zone, alerts));
+        .ifPresentOrElse(
+            stamp -> addFiscalAlerts(stamp, zone, alerts),
+            () -> {
+              if (businessProfileService.isRucReadyForInvoicing(tenantId)) {
+                alerts.add(
+                    new DashboardResponse.FiscalAlert(
+                        "blocking",
+                        "fiscalNoActiveStamp",
+                        "No active fiscal stamp. Add and activate a stamp in Settings."));
+              }
+            });
 
     return new DashboardResponse(
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
@@ -106,13 +116,21 @@ public class DashboardService {
       FiscalStamp stamp, java.time.ZoneId zone, List<DashboardResponse.FiscalAlert> out) {
     LocalDate today = LocalDate.now(zone);
     LocalDate until = stamp.getValidUntil();
-    if (!until.isBefore(today)) {
-      long days = java.time.temporal.ChronoUnit.DAYS.between(today, until);
-      if (days >= 0 && days < 30) {
-        out.add(
-            new DashboardResponse.FiscalAlert(
-                "warning", "fiscalExpiringSoon", "Timbrado expires in less than 30 days"));
-      }
+    boolean expired = until.isBefore(today);
+    boolean rangeExhausted = stamp.getNextEmissionNumber() > stamp.getRangeTo();
+    if (expired || rangeExhausted) {
+      out.add(
+          new DashboardResponse.FiscalAlert(
+              "blocking",
+              "fiscalExpiredOrExhausted",
+              "The fiscal stamp is expired or the number range is exhausted. Add a new stamp in Settings."));
+      return;
+    }
+    long days = java.time.temporal.ChronoUnit.DAYS.between(today, until);
+    if (days >= 0 && days < 30) {
+      out.add(
+          new DashboardResponse.FiscalAlert(
+              "warning", "fiscalExpiringSoon", "Timbrado expires in less than 30 days"));
     }
     int range = stamp.getRangeTo() - stamp.getRangeFrom() + 1;
     if (range > 0) {
