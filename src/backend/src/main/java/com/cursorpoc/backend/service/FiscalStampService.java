@@ -60,8 +60,7 @@ public class FiscalStampService {
   public FiscalStampResponse update(long tenantId, long id, FiscalStampUpdateRequest request) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
     if (stamp.isLockedAfterInvoice()) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
     }
     validateDateOrder(request.validFrom(), request.validUntil());
     validateEmissionInRange(request.nextEmissionNumber(), stamp.getRangeFrom(), stamp.getRangeTo());
@@ -115,16 +114,14 @@ public class FiscalStampService {
   private static String validateStampNumberDigits(String raw) {
     String trimmed = raw == null ? "" : raw.trim();
     if (trimmed.isEmpty() || !trimmed.chars().allMatch(Character::isDigit)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "STAMP_NUMBER_DIGITS_ONLY");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_NUMBER_DIGITS_ONLY");
     }
     return trimmed;
   }
 
   private static void validateDateOrder(java.time.LocalDate from, java.time.LocalDate until) {
     if (!until.isAfter(from)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "VALIDITY_END_BEFORE_START");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VALIDITY_END_BEFORE_START");
     }
   }
 
@@ -136,8 +133,7 @@ public class FiscalStampService {
 
   private static void validateEmissionInRange(int emission, int rangeFrom, int rangeTo) {
     if (emission < rangeFrom || emission > rangeTo) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "EMISSION_OUT_OF_RANGE");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EMISSION_OUT_OF_RANGE");
     }
   }
 

@@ -22,6 +22,7 @@ The backend uses **SQL Server** locally (`src/backend/docker-compose.yml`) and i
 - **Frontend**: `npm run dev` from `src/frontend/` (Vite dev server on port 5173)
 - **Backend**: From `src/backend/`, start SQL Server (`docker compose up -d` or Podman equivalent) and ensure `**service_app_db`** and login `**service_app`** exist (see above), then `./gradlew bootRun` (Spring Boot on port 8080, uses `--no-daemon` for single-use Gradle daemon)
 - **Backend tests**: `./gradlew test --no-daemon` from `src/backend/`
+- **Backend lint (Spotless / Google Java Format)**: `./gradlew spotlessCheck --no-daemon` from `src/backend/`. Run `./gradlew spotlessApply --no-daemon` to auto-fix formatting. **Always run `spotlessCheck` before committing Java changes.**
 - **Frontend type check**: `npx tsc --noEmit` from `src/frontend/`
 - **Frontend build**: `npm run build` from `src/frontend/`
 

@@ -61,8 +61,7 @@ public class InvoicePdfService {
   @Transactional(readOnly = true)
   public byte[] buildInvoicePdf(long invoiceId, long tenantId) {
     if (!businessProfileService.isRucReadyForInvoicing(tenantId)) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "BUSINESS_RUC_REQUIRED_FOR_PDF");
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "BUSINESS_RUC_REQUIRED_FOR_PDF");
     }
     Invoice invoice =
         invoiceRepository
@@ -70,8 +69,7 @@ public class InvoicePdfService {
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
     if (invoice.getStatus() != InvoiceStatus.ISSUED) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "INVOICE_PDF_ONLY_FOR_ISSUED");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_PDF_ONLY_FOR_ISSUED");
     }
     Tenant tenant = invoice.getTenant();
     if (tenant.getId() != tenantId) {
