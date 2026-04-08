@@ -12,6 +12,7 @@ Single product with two services under `src/`:
 | Frontend | `src/frontend/` | React 18 + Vite + Tailwind + i18next          | `:5173`  |
 | Backend  | `src/backend/`  | Spring Boot 4 (Java 21) + SQL Server + Flyway | `:8080`  |
 
+
 **Femme product docs:** PRD and cross-cutting definitions — `requirements/prds/femme_historias_usuario_mvp_v1.md` (section *Definiciones transversales*: multi-tenant, server timezone, etc.). User stories — `requirements/user_stories/`. Open product questions — `requirements/preguntas_abiertas_v1.md`.
 
 The backend uses **SQL Server** locally (`src/backend/docker-compose.yml`) and in **Azure** (production). Default credentials match that stack: database `**service_app_db`**, user `**service_app`**, password from `**MSSQL_SA_PASSWORD**` (default `**The.S3cr3t.2026**`, same as the container’s `**MSSQL_SA_PASSWORD**`). Create the database and `**service_app**` login once before the first `./gradlew bootRun` if they do not exist (locally use `sqlcmd` or any SQL client as `**sa**`). **Automated tests** (`./gradlew test`) and **Playwright e2e** (`profile` `**e2e`**) use an **in-memory H2** database (MSSQL compatibility mode), not SQL Server. **Docker** is not required for backend unit or integration tests.
@@ -60,14 +61,14 @@ When a **search** (or filter) field has a separate **Search** button, wire them 
 
 1. Add all new copy to **both** `src/frontend/src/i18n/locales/en.json` and `src/frontend/src/i18n/locales/es.json` before using it. Keys in both files must be structurally identical.
 2. Use `t("key")` for every string rendered to the user. No raw string literals in JSX for copy.
-3. For backend error messages, the backend returns **error codes** (e.g. `INVALID_RUC_FORMAT`) in the `error` field of the JSON response. Use `translateApiError(err, t, "femme.apiErrors.GENERIC")` from `src/frontend/src/api/parseApiErrorMessage.ts` to get a translated message. Register new error codes under `femme.apiErrors.*` in both locale files.
+3. For backend error messages, the backend returns **error codes** (e.g. `INVALID_RUC_FORMAT`) in the `error` field of the JSON response. Use `translateApiError(err, t, "femme.apiErrors.GENERIC")` from `src/frontend/src/api/parseApiErrorMessage.ts` to get a translated message. Register new error codes under `femme.apiErrors.`* in both locale files.
 4. Any `aria-label`, `aria-describedby` text, `placeholder`, and `title` must also use `t()`.
 
 #### Backend i18n rules
 
-5. Backend services and controllers **must NOT** return English prose in `ResponseStatusException` reason strings. Always use a short **SCREAMING_SNAKE_CASE error code** (e.g. `"INVALID_RUC_FORMAT"`, `"CATEGORY_INACTIVE"`). The frontend translates these codes using `femme.apiErrors.*` i18n keys.
-6. Log messages in the backend can stay in English (they are for developers, not end users).
-7. When adding a new backend error condition, add the corresponding error code to `femme.apiErrors.*` in both locale files.
+1. Backend services and controllers **must NOT** return English prose in `ResponseStatusException` reason strings. Always use a short **SCREAMING_SNAKE_CASE error code** (e.g. `"INVALID_RUC_FORMAT"`, `"CATEGORY_INACTIVE"`). The frontend translates these codes using `femme.apiErrors.`* i18n keys.
+2. Log messages in the backend can stay in English (they are for developers, not end users).
+3. When adding a new backend error condition, add the corresponding error code to `femme.apiErrors.`* in both locale files.
 
 ### Form validation (frontend)
 
