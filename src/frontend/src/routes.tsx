@@ -10,6 +10,7 @@ import ServicesPage from "./pages/ServicesPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
+import ProfessionalsPage from "./pages/ProfessionalsPage";
 
 export function AppRoutes() {
   return (
@@ -27,7 +28,7 @@ export function AppRoutes() {
         <Route path="/app" element={<DashboardPage />} />
         <Route path="/app/calendar" element={<PlaceholderPage />} />
         <Route path="/app/services" element={<ServicesPage />} />
-        <Route path="/app/professionals" element={<PlaceholderPage />} />
+        <Route path="/app/professionals" element={<ProfessionalsPage />} />
         <Route path="/app/clients" element={<PlaceholderPage />} />
         <Route path="/app/billing" element={<PlaceholderPage />} />
         <Route path="/app/settings" element={<SettingsLayout />}>
