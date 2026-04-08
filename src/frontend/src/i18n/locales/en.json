@@ -271,7 +271,14 @@
       "emptyTitle": "No professionals yet.",
       "emptyBody": "Create a professional to assign them to appointments.",
       "cancel": "Cancel",
-      "save": "Save",
+      "save": "Save schedule",
+      "saveAndNext": "Save and set schedule",
+      "back": "Back to details",
+      "tabs": {
+        "details": "Details",
+        "schedule": "Schedule",
+        "detailsHint": "Save the professional's details first, then configure their schedule."
+      },
       "days": {
         "mon": "Monday",
         "tue": "Tuesday",
@@ -283,17 +290,22 @@
       },
       "form": {
         "fullName": "Full name",
-        "fullNameRequired": "Enter a full name.",
+        "fullNameRequired": "Enter the professional's full name (e.g. Ana García).",
+        "fullNamePlaceholder": "e.g. Ana García",
         "phone": "Phone",
+        "phonePlaceholder": "e.g. 0981 123 456",
         "email": "Email",
+        "emailPlaceholder": "e.g. ana@salon.com",
         "photoDataUrl": "Photo (optional)",
-        "photoHelp": "Paste an image data URL (data:image/…).",
-        "scheduleTitle": "Weekly schedule",
-        "scheduleLead": "Set working hours for each day (HH:MM).",
+        "photoPlaceholder": "data:image/png;base64,…",
+        "photoHelp": "Paste an image data URL (data:image/…). Maximum 1.5 MB.",
+        "scheduleLead": "Set working hours for each day of the week (format HH:MM, e.g. 09:00–17:00).",
         "start": "Start",
         "end": "End",
-        "scheduleInvalid": "Invalid schedule. Use HH:MM for all days (e.g. 09:00).",
-        "scheduleRangeInvalid": "Invalid schedule range. Start must be before end (e.g. 09:00–17:00)."
+        "timePlaceholderStart": "09:00",
+        "timePlaceholderEnd": "17:00",
+        "scheduleInvalid": "Invalid time. Use HH:MM for every day (e.g. 09:00).",
+        "scheduleRangeInvalid": "Invalid range. Start must be before end (e.g. 09:00–17:00)."
       }
     }
   },

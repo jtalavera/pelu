@@ -67,44 +67,27 @@ class ProfessionalDirectoryServiceTest {
   }
 
   @Test
-  void create_trimsName_andSetsActive_andReplacesSchedules() {
+  void create_trimsName_andSetsActive() {
     lenient()
         .when(professionalScheduleRepository.findByProfessionalIdOrderByDayOfWeekAscIdAsc(1L))
         .thenReturn(List.of());
 
-    var req =
-        new ProfessionalUpsertRequest(
-            "  Ana Gomez  ",
-            "  555  ",
-            "  ana@example.com ",
-            "data:image/png;base64,abc",
-            List.of(
-                new ProfessionalScheduleRequest(
-                    (short) 1, LocalTime.of(9, 0), LocalTime.of(17, 0))));
+    var req = new ProfessionalUpsertRequest("  Ana Gomez  ", "  555  ", "  ana@example.com ", null);
 
     var res = service.create(1L, req);
     assertThat(res.fullName()).isEqualTo("Ana Gomez");
     assertThat(res.active()).isTrue();
+    assertThat(res.phone()).isEqualTo("555");
   }
 
   @Test
-  void create_rejectsOverlappingSchedules() {
-    var req =
-        new ProfessionalUpsertRequest(
-            "Ana",
-            null,
-            null,
-            null,
-            List.of(
-                new ProfessionalScheduleRequest((short) 1, LocalTime.of(9, 0), LocalTime.of(12, 0)),
-                new ProfessionalScheduleRequest(
-                    (short) 1, LocalTime.of(11, 0), LocalTime.of(13, 0))));
-
+  void create_rejectsBlankName() {
+    var req = new ProfessionalUpsertRequest("   ", null, null, null);
     assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
   }
 
   @Test
-  void update_rejectsInvalidRange() {
+  void updateSchedules_rejectsOverlappingSchedules() {
     Professional p = new Professional();
     p.setId(10L);
     p.setTenant(tenant);
@@ -112,18 +95,50 @@ class ProfessionalDirectoryServiceTest {
     p.setActive(true);
     lenient().when(professionalRepository.findByIdAndTenant_Id(10L, 1L)).thenReturn(Optional.of(p));
 
-    var req =
-        new ProfessionalUpsertRequest(
-            "Ana",
-            null,
-            null,
-            null,
-            List.of(
-                new ProfessionalScheduleRequest(
-                    (short) 2, LocalTime.of(12, 0), LocalTime.of(12, 0))));
+    var schedules =
+        List.of(
+            new ProfessionalScheduleRequest((short) 1, LocalTime.of(9, 0), LocalTime.of(12, 0)),
+            new ProfessionalScheduleRequest((short) 1, LocalTime.of(11, 0), LocalTime.of(13, 0)));
 
-    assertThatThrownBy(() -> service.update(1L, 10L, req))
+    assertThatThrownBy(() -> service.updateSchedules(1L, 10L, schedules))
         .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void updateSchedules_rejectsInvalidRange() {
+    Professional p = new Professional();
+    p.setId(10L);
+    p.setTenant(tenant);
+    p.setFullName("Ana");
+    p.setActive(true);
+    lenient().when(professionalRepository.findByIdAndTenant_Id(10L, 1L)).thenReturn(Optional.of(p));
+
+    var schedules =
+        List.of(
+            new ProfessionalScheduleRequest((short) 2, LocalTime.of(12, 0), LocalTime.of(12, 0)));
+
+    assertThatThrownBy(() -> service.updateSchedules(1L, 10L, schedules))
+        .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void updateSchedules_acceptsValidSchedule() {
+    Professional p = new Professional();
+    p.setId(10L);
+    p.setTenant(tenant);
+    p.setFullName("Ana");
+    p.setActive(true);
+    lenient().when(professionalRepository.findByIdAndTenant_Id(10L, 1L)).thenReturn(Optional.of(p));
+
+    var saved =
+        List.of(
+            new ProfessionalScheduleRequest((short) 1, LocalTime.of(9, 0), LocalTime.of(17, 0)));
+    lenient()
+        .when(professionalScheduleRepository.findByProfessionalIdOrderByDayOfWeekAscIdAsc(10L))
+        .thenReturn(List.of());
+
+    var res = service.updateSchedules(1L, 10L, saved);
+    assertThat(res.active()).isTrue();
   }
 
   @Test

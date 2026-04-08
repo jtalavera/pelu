@@ -51,7 +51,6 @@ public class ProfessionalDirectoryService {
     applyUpsert(p, request);
     p.setActive(true);
     professionalRepository.save(p);
-    replaceSchedules(p.getId(), request.schedules());
     return toResponse(p, schedulesFor(p.getId()));
   }
 
@@ -61,7 +60,6 @@ public class ProfessionalDirectoryService {
     Professional p = loadProfessionalOrThrow(tenantId, professionalId);
     applyUpsert(p, request);
     professionalRepository.save(p);
-    replaceSchedules(p.getId(), request.schedules());
     return toResponse(p, schedulesFor(p.getId()));
   }
 
@@ -70,6 +68,15 @@ public class ProfessionalDirectoryService {
     Professional p = loadProfessionalOrThrow(tenantId, professionalId);
     p.setActive(false);
     professionalRepository.save(p);
+    return toResponse(p, schedulesFor(p.getId()));
+  }
+
+  @Transactional
+  public ProfessionalResponse updateSchedules(
+      long tenantId, long professionalId, List<ProfessionalScheduleRequest> schedules) {
+    Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    validateSchedules(schedules);
+    replaceSchedules(p.getId(), schedules);
     return toResponse(p, schedulesFor(p.getId()));
   }
 
@@ -89,7 +96,6 @@ public class ProfessionalDirectoryService {
         p.setPhotoDataUrl(request.photoDataUrl());
       }
     }
-    validateSchedules(request.schedules());
   }
 
   private void validateSchedules(List<ProfessionalScheduleRequest> schedules) {
