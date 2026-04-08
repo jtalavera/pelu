@@ -9,6 +9,7 @@ import BusinessSettingsPage from "./pages/BusinessSettingsPage";
 import ServicesPage from "./pages/ServicesPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import BillingPage from "./pages/BillingPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 
 export function AppRoutes() {
@@ -29,7 +30,7 @@ export function AppRoutes() {
         <Route path="/app/services" element={<ServicesPage />} />
         <Route path="/app/professionals" element={<PlaceholderPage />} />
         <Route path="/app/clients" element={<PlaceholderPage />} />
-        <Route path="/app/billing" element={<PlaceholderPage />} />
+        <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="business" replace />} />
           <Route path="business" element={<BusinessSettingsPage />} />

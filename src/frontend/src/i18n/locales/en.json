@@ -157,6 +157,28 @@
       "title": "Coming soon",
       "body": "This area will be wired to the API in the next iteration."
     },
+    "billing": {
+      "title": "Billing",
+      "lead": "Register the daily cash register opening to start issuing invoices.",
+      "loading": "Loading…",
+      "loadError": "Could not load cash register status.",
+      "saveError": "Could not open the cash register. Check your data and try again.",
+      "savedBody": "Cash register opened successfully.",
+      "errorTitle": "Error",
+      "savedTitle": "Opened",
+      "sessionOpen": "Cash register is open",
+      "sessionClosed": "Cash register is closed",
+      "noOpenSession": "No cash register is open. Open the cash register to start issuing invoices.",
+      "openTitle": "Open cash register",
+      "openingCashAmount": "Initial cash amount",
+      "openingCashAmountHint": "Enter the initial cash amount in the register (e.g. 50000).",
+      "openingCashAmountInvalid": "Enter a valid amount greater than or equal to 0 (e.g. 50000).",
+      "open": "Open cash register",
+      "opening": "Opening…",
+      "openedAt": "Opened at",
+      "openedBy": "Opened by",
+      "initialAmount": "Initial amount"
+    },
     "apiErrors": {
       "GENERIC": "An unexpected error occurred. Please try again.",
       "UNAUTHORIZED": "You must be signed in to perform this action.",
@@ -181,7 +203,9 @@
       "INVOICE_PDF_ONLY_FOR_ISSUED": "Invoice PDF is only available for issued invoices.",
       "BUSINESS_PROFILE_NOT_FOUND": "Business profile not found.",
       "INVALID_REQUEST": "The request is invalid. Please review your input.",
-      "BAD_REQUEST": "Invalid request."
+      "BAD_REQUEST": "Invalid request.",
+      "CASH_SESSION_ALREADY_OPEN": "There is already an open cash register. Close it before opening a new one.",
+      "USER_NOT_FOUND": "User not found."
     },
     "services": {
       "title": "Services",

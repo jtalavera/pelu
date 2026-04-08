@@ -157,6 +157,28 @@
       "title": "Próximamente",
       "body": "Esta sección se conectará a la API en la siguiente iteración."
     },
+    "billing": {
+      "title": "Facturación",
+      "lead": "Registrá la apertura de caja del día para comenzar a emitir comprobantes.",
+      "loading": "Cargando…",
+      "loadError": "No se pudo cargar el estado de la caja.",
+      "saveError": "No se pudo abrir la caja. Revisá los datos e intentá de nuevo.",
+      "savedBody": "Caja abierta correctamente.",
+      "errorTitle": "Error",
+      "savedTitle": "Abierta",
+      "sessionOpen": "La caja está abierta",
+      "sessionClosed": "La caja está cerrada",
+      "noOpenSession": "No hay caja abierta. Abrí la caja para comenzar a emitir comprobantes.",
+      "openTitle": "Abrir caja",
+      "openingCashAmount": "Monto inicial en efectivo",
+      "openingCashAmountHint": "Ingresá el monto inicial en efectivo de la caja (ej.: 50000).",
+      "openingCashAmountInvalid": "Ingresá un monto válido mayor o igual a 0 (ej.: 50000).",
+      "open": "Abrir caja",
+      "opening": "Abriendo…",
+      "openedAt": "Abierta el",
+      "openedBy": "Abierta por",
+      "initialAmount": "Monto inicial"
+    },
     "apiErrors": {
       "GENERIC": "Ocurrió un error inesperado. Intentá de nuevo.",
       "UNAUTHORIZED": "Debés iniciar sesión para realizar esta acción.",
@@ -181,7 +203,9 @@
       "INVOICE_PDF_ONLY_FOR_ISSUED": "El PDF de factura solo está disponible para facturas emitidas.",
       "BUSINESS_PROFILE_NOT_FOUND": "Perfil del negocio no encontrado.",
       "INVALID_REQUEST": "La solicitud no es válida. Revisá los datos ingresados.",
-      "BAD_REQUEST": "Solicitud inválida."
+      "BAD_REQUEST": "Solicitud inválida.",
+      "CASH_SESSION_ALREADY_OPEN": "Ya hay una caja abierta. Cerrala antes de abrir una nueva.",
+      "USER_NOT_FOUND": "Usuario no encontrado."
     },
     "services": {
       "title": "Servicios",
