@@ -52,7 +52,7 @@
       "clients": "Clientes",
       "billing": "Facturación",
       "settings": "Configuración",
-      "businessSettings": "Negocio",
+      "businessSettings": "Configuración",
       "logout": "Cerrar sesión"
     },
     "footer": {
@@ -77,8 +77,15 @@
       "alerts": {
         "businessRucMissing": "Agregá un RUC de negocio válido para emitir facturas.",
         "fiscalExpiringSoon": "El timbrado fiscal vence en menos de 30 días.",
-        "fiscalLowRange": "Queda menos del 10% del rango de numeración de facturas."
+        "fiscalLowRange": "Queda menos del 10% del rango de numeración de facturas.",
+        "fiscalNoActiveStamp": "No hay timbrado activo. En Configuración → Timbrado cargá y activá uno.",
+        "fiscalExpiredOrExhausted": "El timbrado está vencido o se agotó el rango de numeración. Cargá un timbrado nuevo en Configuración → Timbrado."
       }
+    },
+    "settings": {
+      "sectionTitle": "Configuración",
+      "tabBusiness": "Negocio",
+      "tabFiscalStamp": "Timbrado"
     },
     "businessSettings": {
       "title": "Configuración del negocio",
@@ -102,6 +109,47 @@
       "removeLogo": "Quitar logo",
       "save": "Guardar",
       "saving": "Guardando…"
+    },
+    "fiscalStamp": {
+      "title": "Timbrado fiscal",
+      "lead": "Registrá el timbrado habilitado por la SET, las fechas de vigencia y el rango de numeración. Solo puede haber un timbrado activo a la vez.",
+      "loading": "Cargando…",
+      "loadError": "No se pudo cargar el timbrado.",
+      "saveError": "No se pudo guardar. Revisá los datos e intentá de nuevo.",
+      "savedBody": "Los cambios se guardaron correctamente.",
+      "empty": "Todavía no hay timbrados. Agregá uno abajo.",
+      "registeredTitle": "Timbrados registrados",
+      "addTitle": "Agregar timbrado",
+      "stampNumber": "Número de timbrado",
+      "stampNumberHint": "Solo dígitos, como asigna la SET (ej.: 12345678).",
+      "stampNumberInvalid": "Ingresá solo dígitos para el número de timbrado (ej.: 12345678).",
+      "validFrom": "Inicio de vigencia",
+      "validUntil": "Fin de vigencia",
+      "rangeFrom": "Número desde",
+      "rangeTo": "Número hasta",
+      "initialEmission": "Número de inicio de emisión",
+      "initialEmissionHint": "Debe estar entre “desde” y “hasta” (ej.: continuidad desde otro sistema).",
+      "nextEmission": "Próximo número de factura",
+      "nextLabel": "Próximo número",
+      "rangeLabel": "Rango {{from}}–{{to}}",
+      "validityLabel": "Vigente desde {{from}} hasta {{until}}",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "activate": "Activar",
+      "deactivate": "Desactivar",
+      "edit": "Editar fechas y próximo número",
+      "editTitle": "Editar timbrado",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "add": "Agregar timbrado",
+      "saving": "Guardando…",
+      "lockedHint": "Este timbrado ya se usó en facturas; no se puede cambiar el número ni el rango. Desactivalo y creá uno nuevo.",
+      "dateRequired": "Elegí una fecha.",
+      "integerInvalid": "Ingresá un número entero mayor o igual a cero (ej.: 1).",
+      "rangeOrder": "El número “hasta” debe ser mayor o igual que “desde”.",
+      "validUntilBeforeFrom": "El fin de vigencia debe ser posterior al inicio.",
+      "initialEmissionRange": "Debe estar entre {{from}} y {{to}} (inclusive). Ejemplo: si el rango es {{from}}–{{to}}, usá {{from}} para empezar al inicio.",
+      "nextEmissionRange": "Debe estar entre {{from}} y {{to}} (inclusive)."
     },
     "placeholder": {
       "title": "Próximamente",

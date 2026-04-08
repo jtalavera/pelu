@@ -6,7 +6,9 @@ import DashboardPage from "./pages/DashboardPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
+import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import SettingsLayout from "./pages/settings/SettingsLayout";
 
 export function AppRoutes() {
   return (
@@ -27,7 +29,11 @@ export function AppRoutes() {
         <Route path="/app/professionals" element={<PlaceholderPage />} />
         <Route path="/app/clients" element={<PlaceholderPage />} />
         <Route path="/app/billing" element={<PlaceholderPage />} />
-        <Route path="/app/settings" element={<BusinessSettingsPage />} />
+        <Route path="/app/settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="business" replace />} />
+          <Route path="business" element={<BusinessSettingsPage />} />
+          <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
+        </Route>
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>
