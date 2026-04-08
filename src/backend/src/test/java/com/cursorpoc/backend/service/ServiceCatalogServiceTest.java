@@ -133,4 +133,3 @@ class ServiceCatalogServiceTest {
         .isInstanceOf(ResponseStatusException.class);
   }
 }
-

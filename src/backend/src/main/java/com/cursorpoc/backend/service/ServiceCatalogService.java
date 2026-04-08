@@ -44,7 +44,8 @@ public class ServiceCatalogService {
   }
 
   @Transactional
-  public ServiceCategoryResponse createCategory(long tenantId, ServiceCategoryUpsertRequest request) {
+  public ServiceCategoryResponse createCategory(
+      long tenantId, ServiceCategoryUpsertRequest request) {
     Tenant tenant = loadTenantOrThrow(tenantId);
     ServiceCategory c = new ServiceCategory();
     c.setTenant(tenant);
@@ -76,14 +77,16 @@ public class ServiceCatalogService {
     String qLower = qNorm.toLowerCase(Locale.ROOT);
 
     return salonServiceRepository.findByTenant_IdOrderByNameAsc(tenantId).stream()
-        .filter(s -> categoryId.isEmpty() || Objects.equals(s.getCategory().getId(), categoryId.get()))
+        .filter(
+            s -> categoryId.isEmpty() || Objects.equals(s.getCategory().getId(), categoryId.get()))
         .filter(
             s ->
                 qLower.isEmpty()
                     || s.getName().toLowerCase(Locale.ROOT).contains(qLower)
                     || s.getCategory().getName().toLowerCase(Locale.ROOT).contains(qLower))
         .sorted(
-            Comparator.comparing((SalonService s) -> s.getCategory().getName(), String.CASE_INSENSITIVE_ORDER)
+            Comparator.comparing(
+                    (SalonService s) -> s.getCategory().getName(), String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(SalonService::getName, String.CASE_INSENSITIVE_ORDER))
         .map(ServiceCatalogService::toServiceResponse)
         .toList();
@@ -108,7 +111,8 @@ public class ServiceCatalogService {
   }
 
   @Transactional
-  public ServiceResponse updateService(long tenantId, long serviceId, ServiceUpsertRequest request) {
+  public ServiceResponse updateService(
+      long tenantId, long serviceId, ServiceUpsertRequest request) {
     SalonService s = loadServiceOrThrow(tenantId, serviceId);
     ServiceCategory category = loadCategoryOrThrow(tenantId, request.categoryId());
     if (!category.isActive()) {
@@ -163,4 +167,3 @@ public class ServiceCatalogService {
         s.isActive());
   }
 }
-
