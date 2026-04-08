@@ -1,10 +1,12 @@
 # HU-05 · Crear y gestionar profesionales
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-05 |
+
+| Campo      | Valor        |
+| ---------- | ------------ |
+| **ID**     | HU-05        |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog` |
+| **Estado** | `Backlog`    |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 

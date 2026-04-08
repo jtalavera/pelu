@@ -5,7 +5,7 @@
 | ---------- | ------------------------------------- |
 | **ID**     | HU-02b                                |
 | **Módulo** | Autenticación & configuración inicial |
-| **Estado** | `Backlog`                             |
+| **Estado** | `Done`                                |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -43,3 +43,4 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 ## Notas para estimación y pruebas
 
 - **Pruebas:** límites de rango, cambio de timbrado activo, primera factura → bloqueo de edición, alertas (fechas y porcentaje simulados), bloqueo al vencer/agotar.
+

@@ -1,10 +1,12 @@
 # HU-04 · Crear y gestionar servicios
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-04 |
+
+| Campo      | Valor        |
+| ---------- | ------------ |
+| **ID**     | HU-04        |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog` |
+| **Estado** | `Done`       |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -35,3 +37,4 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 ## Notas para estimación y pruebas
 
 - **Pruebas:** CRUD feliz, desactivado oculto en selector de nuevos turnos, visible en historial, búsqueda/filtro con casos límite (sin resultados).
+
