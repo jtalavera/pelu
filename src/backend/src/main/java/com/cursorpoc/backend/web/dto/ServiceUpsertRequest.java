@@ -10,4 +10,3 @@ public record ServiceUpsertRequest(
     @NotNull Long categoryId,
     @NotNull @Min(0) BigDecimal priceMinor,
     @Min(1) int durationMinutes) {}
-

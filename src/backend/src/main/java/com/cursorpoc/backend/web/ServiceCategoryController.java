@@ -68,4 +68,3 @@ public class ServiceCategoryController {
     return serviceCatalogService.deactivateCategory(principal.getTenantId(), categoryId);
   }
 }
-

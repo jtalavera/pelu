@@ -10,4 +10,3 @@ public record ServiceResponse(
     BigDecimal priceMinor,
     int durationMinutes,
     boolean active) {}
-

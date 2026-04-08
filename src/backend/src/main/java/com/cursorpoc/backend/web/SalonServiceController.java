@@ -70,6 +70,4 @@ public class SalonServiceController {
     }
     return serviceCatalogService.deactivateService(principal.getTenantId(), id);
   }
-
 }
-
