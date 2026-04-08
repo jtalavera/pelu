@@ -2,11 +2,14 @@ package com.cursorpoc.backend.bootstrap;
 
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
+import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import java.time.LocalDate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -26,6 +29,7 @@ public class FemmeDataInitializer {
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       BusinessProfileRepository businessProfileRepository,
+      FiscalStampRepository fiscalStampRepository,
       PasswordEncoder passwordEncoder) {
     return args -> {
       if (appUserRepository.count() > 0) {
@@ -46,6 +50,19 @@ public class FemmeDataInitializer {
       profile.setTenant(tenant);
       profile.setBusinessName("Demo salon");
       businessProfileRepository.save(profile);
+
+      LocalDate today = LocalDate.now();
+      FiscalStamp stamp = new FiscalStamp();
+      stamp.setTenant(tenant);
+      stamp.setStampNumber("12345678");
+      stamp.setValidFrom(today.minusYears(1));
+      stamp.setValidUntil(today.plusYears(2));
+      stamp.setRangeFrom(1);
+      stamp.setRangeTo(9_999_999);
+      stamp.setNextEmissionNumber(1);
+      stamp.setActive(true);
+      stamp.setLockedAfterInvoice(false);
+      fiscalStampRepository.save(stamp);
 
       log.info(
           "Seeded demo tenant id={} and admin user admin@demo.com (password Demo123!)",
