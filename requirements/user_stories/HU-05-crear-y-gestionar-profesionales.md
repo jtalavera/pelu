@@ -36,3 +36,4 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 ## Notas para estimación y pruebas
 
 - **Pruebas:** horarios que afecten disponibilidad en HU-07, desactivación impide asignación en nuevos turnos, historial intacto.
+

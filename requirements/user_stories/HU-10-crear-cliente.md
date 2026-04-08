@@ -1,10 +1,12 @@
 # HU-10 · Crear un cliente
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-10 |
+
+| Campo      | Valor          |
+| ---------- | -------------- |
+| **ID**     | HU-10          |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog` |
+| **Estado** | `Backlog`      |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
