@@ -146,7 +146,7 @@ export default function DashboardPage() {
             {data.fiscalAlerts.map((al, i) => (
               <Alert
                 key={`${al.messageKey}-${i}`}
-                variant="warning"
+                variant={al.severity === "blocking" ? "destructive" : "warning"}
                 title={t(`femme.dashboard.alerts.${al.messageKey}`, { defaultValue: al.message })}
               />
             ))}

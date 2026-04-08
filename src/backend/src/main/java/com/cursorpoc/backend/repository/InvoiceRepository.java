@@ -14,6 +14,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
   Optional<Invoice> findByIdAndTenant_Id(Long id, Long tenantId);
 
+  boolean existsByTenant_IdAndFiscalStamp_Id(Long tenantId, Long fiscalStampId);
+
   List<Invoice> findByTenant_IdAndIssuedAtBetweenOrderByIssuedAtDesc(
       Long tenantId, Instant from, Instant to);
 
