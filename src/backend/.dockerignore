@@ -1,4 +1,9 @@
 .gradle
-build
+# Keep build/libs so the image can COPY the pre-built bootJar (CI and local: ./gradlew bootJar first).
+build/classes
+build/generated
+build/reports
+build/resources
+build/tmp
 .idea
 *.iml
