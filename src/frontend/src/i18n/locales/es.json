@@ -106,6 +106,55 @@
     "placeholder": {
       "title": "Próximamente",
       "body": "Esta sección se conectará a la API en la siguiente iteración."
+    },
+    "services": {
+      "title": "Servicios",
+      "lead": "Gestioná categorías y servicios que se usan al agendar turnos y facturar.",
+      "loading": "Cargando…",
+      "loadError": "No se pudieron cargar los servicios.",
+      "tabs": {
+        "services": "Servicios",
+        "categories": "Categorías"
+      },
+      "search": {
+        "label": "Buscar",
+        "placeholder": "Buscar por nombre o categoría…",
+        "submit": "Buscar",
+        "clear": "Limpiar"
+      },
+      "filter": {
+        "category": "Categoría",
+        "all": "Todas"
+      },
+      "actions": {
+        "newService": "Nuevo servicio",
+        "newCategory": "Nueva categoría",
+        "edit": "Editar",
+        "deactivate": "Desactivar",
+        "close": "Cerrar",
+        "save": "Guardar"
+      },
+      "fields": {
+        "name": "Nombre",
+        "category": "Categoría",
+        "price": "Precio",
+        "durationMinutes": "Duración (min)"
+      },
+      "empty": {
+        "services": "No hay servicios para mostrar.",
+        "categories": "No hay categorías para mostrar."
+      },
+      "validation": {
+        "nameRequired": "Ingresá un nombre.",
+        "categoryRequired": "Elegí una categoría.",
+        "durationInvalid": "Duración inválida. Usá un número entero mayor o igual a 1 (ej.: 30).",
+        "priceInvalid": "Precio inválido. Usá un número mayor o igual a 0 (ej.: 25000)."
+      },
+      "confirmDeactivate": {
+        "title": "Confirmar desactivación",
+        "serviceBody": "El servicio se desactivará y no aparecerá en nuevos turnos. El historial se conserva.",
+        "categoryBody": "La categoría se desactivará. Los servicios existentes que la referencian se conservan."
+      }
     }
   },
   "language": {

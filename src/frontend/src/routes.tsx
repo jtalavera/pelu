@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
+import ServicesPage from "./pages/ServicesPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 export function AppRoutes() {
@@ -23,7 +24,7 @@ export function AppRoutes() {
       >
         <Route path="/app" element={<DashboardPage />} />
         <Route path="/app/calendar" element={<PlaceholderPage />} />
-        <Route path="/app/services" element={<PlaceholderPage />} />
+        <Route path="/app/services" element={<ServicesPage />} />
         <Route path="/app/professionals" element={<PlaceholderPage />} />
         <Route path="/app/clients" element={<PlaceholderPage />} />
         <Route path="/app/billing" element={<PlaceholderPage />} />

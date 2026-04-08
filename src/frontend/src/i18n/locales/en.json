@@ -106,6 +106,65 @@
     "placeholder": {
       "title": "Coming soon",
       "body": "This area will be wired to the API in the next iteration."
+    },
+    "services": {
+      "title": "Services",
+      "lead": "Manage categories and services for scheduling and invoicing.",
+      "loading": "Loading…",
+      "loadError": "Could not load services.",
+      "saveError": "Could not save. Check your data and try again.",
+      "saving": "Saving…",
+      "errorTitle": "Error",
+      "tabs": {
+        "services": "Services",
+        "categories": "Categories"
+      },
+      "search": {
+        "label": "Search",
+        "placeholder": "Search by service or category…",
+        "submit": "Search",
+        "clear": "Clear"
+      },
+      "filter": {
+        "label": "Category",
+        "allCategories": "All categories"
+      },
+      "cancel": "Cancel",
+      "save": "Save",
+      "categories": {
+        "add": "New category",
+        "addTitle": "New category",
+        "editTitle": "Edit category",
+        "name": "Name",
+        "nameRequired": "Enter a category name.",
+        "edit": "Edit",
+        "deactivate": "Deactivate",
+        "deactivateConfirm": "Deactivate category \"{{name}}\"?",
+        "inactive": "(inactive)",
+        "emptyTitle": "No categories yet.",
+        "emptyBody": "Create a category to start defining services."
+      },
+      "services": {
+        "add": "New service",
+        "addTitle": "New service",
+        "editTitle": "Edit service",
+        "name": "Name",
+        "nameRequired": "Enter a service name.",
+        "category": "Category",
+        "categoryPlaceholder": "Select…",
+        "categoryRequired": "Choose a category.",
+        "price": "Price",
+        "priceInvalid": "Invalid price. Use a number ≥ 0 (e.g. 25000).",
+        "duration": "Duration (minutes)",
+        "durationInvalid": "Invalid duration. Use an integer ≥ 1 (e.g. 30).",
+        "meta": "{{category}} · {{duration}} min · {{price}}",
+        "edit": "Edit",
+        "deactivate": "Deactivate",
+        "deactivateConfirm": "Deactivate service \"{{name}}\"?",
+        "inactive": "(inactive)",
+        "emptyTitle": "No services yet.",
+        "emptyBody": "Create a service to use it in appointments and invoices."
+      }
     }
   },
   "language": {
