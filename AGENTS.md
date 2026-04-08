@@ -33,6 +33,8 @@ The backend uses **SQL Server** locally (`src/backend/docker-compose.yml`) and i
 - The Gradle wrapper automatically downloads Gradle 8.14.3 on first run; no manual Gradle installation needed.
 - Java 21 is required for the backend (toolchain configured in `build.gradle.kts`).
 - **Flyway checksum mismatch** (e.g. after editing a migration that was already applied, or after replacing an old migration with a Java migration): run `bash scripts/flyway-repair.sh` from the repo root (uses Podman or Docker; set `SPRING_DATASOURCE_URL` / credentials if they differ from defaults). That runs `flyway repair` against your SQL Server so `flyway_schema_history` checksums match the files on disk. Alternatively, drop and recreate the dev database if you do not need the data.
+- **Demo tenant**: On first startup `FemmeDataInitializer` seeds a demo tenant (id=1) with admin user `admin@demo.com` / password `Demo123!`. Use these credentials for local login and manual testing.
+- **Cloud VM Docker**: Docker in the cloud agent VM requires `fuse-overlayfs` storage driver and `iptables-legacy`. These are configured during initial environment setup (daemon.json + update-alternatives). SQL Server container needs ~5 seconds after `docker compose up -d` before accepting connections.
 
 ### Frontend responsive UI (mobile-first)
 
