@@ -44,7 +44,7 @@ public class BusinessProfileService {
     BusinessProfile bp = loadOrThrow(tenantId);
     String ruc = blankToNull(request.ruc());
     if (ruc != null && !ParaguayRucValidator.isValid(ruc)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid RUC format");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
     bp.setBusinessName(request.businessName().trim());
     bp.setRuc(ruc);
@@ -73,7 +73,7 @@ public class BusinessProfileService {
         tenantRepository
             .findById(tenantId)
             .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
     BusinessProfile bp = new BusinessProfile();
     bp.setTenant(tenant);
     bp.setBusinessName(tenant.getName());
@@ -96,11 +96,10 @@ public class BusinessProfileService {
 
   private static void validateLogoDataUrl(String dataUrl) {
     if (dataUrl.length() > MAX_LOGO_DATA_URL_CHARS) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Logo image is too large");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "LOGO_TOO_LARGE");
     }
     if (!dataUrl.startsWith("data:image/")) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "Logo must be a data URL image (data:image/...)");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "LOGO_INVALID_FORMAT");
     }
   }
 

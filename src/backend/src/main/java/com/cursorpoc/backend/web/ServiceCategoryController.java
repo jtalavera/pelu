@@ -33,7 +33,7 @@ public class ServiceCategoryController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @RequestParam(name = "active", required = false) Boolean active) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.listCategories(principal.getTenantId(), active);
   }
@@ -43,7 +43,7 @@ public class ServiceCategoryController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody ServiceCategoryUpsertRequest request) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.createCategory(principal.getTenantId(), request);
   }
@@ -54,7 +54,7 @@ public class ServiceCategoryController {
       @PathVariable long categoryId,
       @Valid @RequestBody ServiceCategoryUpsertRequest request) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.updateCategory(principal.getTenantId(), categoryId, request);
   }
@@ -63,7 +63,7 @@ public class ServiceCategoryController {
   public ServiceCategoryResponse deactivate(
       @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable long categoryId) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.deactivateCategory(principal.getTenantId(), categoryId);
   }

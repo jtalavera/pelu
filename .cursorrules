@@ -1,6 +1,6 @@
 You MUST ALWAYS follow these rules:
 - For search UIs with a Search button: use a `<form onSubmit>` + `type="submit"` so Enter in the input runs the search (see AGENTS.md).
-- Use i18n in the frontend. Supported languages are english and spanish
+- Use i18n in the frontend. Supported languages are english and spanish. EVERY user-visible string (buttons, labels, headings, messages, placeholders, aria-labels, confirmations, errors) MUST use t() from useTranslation(). Add all new copy to BOTH en.json and es.json. Backend errors must be returned as SCREAMING_SNAKE_CASE error codes and translated using femme.apiErrors.* i18n keys. See AGENTS.md "i18n enforcement" section for full rules.
 - Use reusable components from src/frontend/design-system/components always that is possible.
 - If there is a UI compoment that might be a reusable component, STOP and propose it to the user. NEVER add it automatically to the components library.
 - All screens and UI components must support the light and dark themes. There should be an option to switch between both themes in every screen.

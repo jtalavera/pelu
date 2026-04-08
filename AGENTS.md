@@ -51,6 +51,23 @@ These rules apply to **every new screen** and should be reflected in layout, Tai
 
 When a **search** (or filter) field has a separate **Search** button, wire them with a `**<form onSubmit>`** and a `**type="submit"`** button so that **Enter in the input runs the same action as the button** (native form behavior, no duplicate `onKeyDown` handlers). Prefer this pattern for any future search/filter bar with a primary action. Reference: `AdminTenantDetailPage` (tenant admin user search) and `AdminUserSupportPage` (user directory search).
 
+### i18n enforcement (ALL text visible to users)
+
+**EVERY user-visible string — buttons, labels, headings, messages, placeholders, aria-labels, confirmations — MUST go through `t()` from `useTranslation()`. Never hardcode user-facing text in components.**
+
+#### Frontend i18n rules
+
+1. Add all new copy to **both** `src/frontend/src/i18n/locales/en.json` and `src/frontend/src/i18n/locales/es.json` before using it. Keys in both files must be structurally identical.
+2. Use `t("key")` for every string rendered to the user. No raw string literals in JSX for copy.
+3. For backend error messages, the backend returns **error codes** (e.g. `INVALID_RUC_FORMAT`) in the `error` field of the JSON response. Use `translateApiError(err, t, "femme.apiErrors.GENERIC")` from `src/frontend/src/api/parseApiErrorMessage.ts` to get a translated message. Register new error codes under `femme.apiErrors.*` in both locale files.
+4. Any `aria-label`, `aria-describedby` text, `placeholder`, and `title` must also use `t()`.
+
+#### Backend i18n rules
+
+5. Backend services and controllers **must NOT** return English prose in `ResponseStatusException` reason strings. Always use a short **SCREAMING_SNAKE_CASE error code** (e.g. `"INVALID_RUC_FORMAT"`, `"CATEGORY_INACTIVE"`). The frontend translates these codes using `femme.apiErrors.*` i18n keys.
+6. Log messages in the backend can stay in English (they are for developers, not end users).
+7. When adding a new backend error condition, add the corresponding error code to `femme.apiErrors.*` in both locale files.
+
 ### Form validation (frontend)
 
 1. **Visibility** — Field-level validation messages must use the **destructive** semantic color so they are always clearly **red** in both themes: `text-[rgb(var(--color-destructive))]` (see `FieldValidationError` in `src/frontend/src/components/FieldValidationError.tsx` and `FIELD_VALIDATION_ERROR_CLASS`). Do not rely on default browser validation bubbles for styled forms when you need consistent product styling; use `noValidate` and explicit messages where appropriate.

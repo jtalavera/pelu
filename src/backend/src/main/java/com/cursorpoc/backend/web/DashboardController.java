@@ -23,7 +23,7 @@ public class DashboardController {
   @GetMapping
   public DashboardResponse get(@AuthenticationPrincipal FemmeUserPrincipal principal) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return dashboardService.build(principal.getTenantId());
   }

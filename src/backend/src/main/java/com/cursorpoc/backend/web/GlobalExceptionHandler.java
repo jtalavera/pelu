@@ -21,12 +21,12 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Invalid request"));
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "INVALID_REQUEST"));
   }
 
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Bad request"));
+        .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "BAD_REQUEST"));
   }
 }

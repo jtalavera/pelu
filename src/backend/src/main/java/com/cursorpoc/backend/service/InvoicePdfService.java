@@ -62,20 +62,20 @@ public class InvoicePdfService {
   public byte[] buildInvoicePdf(long invoiceId, long tenantId) {
     if (!businessProfileService.isRucReadyForInvoicing(tenantId)) {
       throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "Business RUC is required to generate invoice PDFs");
+          HttpStatus.CONFLICT, "BUSINESS_RUC_REQUIRED_FOR_PDF");
     }
     Invoice invoice =
         invoiceRepository
             .findByIdAndTenant_Id(invoiceId, tenantId)
             .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
     if (invoice.getStatus() != InvoiceStatus.ISSUED) {
       throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "Invoice PDF is only available for issued invoices");
+          HttpStatus.BAD_REQUEST, "INVOICE_PDF_ONLY_FOR_ISSUED");
     }
     Tenant tenant = invoice.getTenant();
     if (tenant.getId() != tenantId) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found");
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND");
     }
     Hibernate.initialize(invoice.getLines());
     Hibernate.initialize(invoice.getPaymentAllocations());
@@ -85,7 +85,7 @@ public class InvoicePdfService {
             .orElseThrow(
                 () ->
                     new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Business profile not found"));
+                        HttpStatus.NOT_FOUND, "BUSINESS_PROFILE_NOT_FOUND"));
     return renderPdf(bp, invoice);
   }
 

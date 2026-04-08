@@ -28,7 +28,7 @@ export function AppShell() {
         className="border-b border-[rgb(var(--color-border))] bg-[rgb(var(--color-card))] px-4 py-3 dark:bg-[rgb(var(--color-card))]"
         brand={
           <Heading as="h2" className="text-base font-semibold">
-            Femme
+            {t("femme.appName")}
           </Heading>
         }
         end={
@@ -43,7 +43,7 @@ export function AppShell() {
       />
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <aside className="w-full border-b border-[rgb(var(--color-border))] md:w-56 md:border-b-0 md:border-r md:pt-4">
-          <nav className="flex flex-col gap-1 px-2 pb-4 md:px-3" aria-label="Main">
+          <nav className="flex flex-col gap-1 px-2 pb-4 md:px-3" aria-label={t("femme.nav.mainLabel")}>
             <NavLink to="/app" end className={navClass}>
               {t("femme.nav.dashboard")}
             </NavLink>

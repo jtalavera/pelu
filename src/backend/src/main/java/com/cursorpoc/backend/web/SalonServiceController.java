@@ -35,7 +35,7 @@ public class SalonServiceController {
       @RequestParam(name = "categoryId", required = false) Long categoryId,
       @RequestParam(name = "q", required = false) String q) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.listServices(
         principal.getTenantId(), Optional.ofNullable(categoryId), q);
@@ -46,7 +46,7 @@ public class SalonServiceController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody ServiceUpsertRequest request) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.createService(principal.getTenantId(), request);
   }
@@ -57,7 +57,7 @@ public class SalonServiceController {
       @PathVariable("id") long id,
       @Valid @RequestBody ServiceUpsertRequest request) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.updateService(principal.getTenantId(), id, request);
   }
@@ -66,7 +66,7 @@ public class SalonServiceController {
   public ServiceResponse deactivate(
       @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.deactivateService(principal.getTenantId(), id);
   }
