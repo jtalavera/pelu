@@ -17,7 +17,7 @@ import {
   Text,
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
-import { parseApiErrorMessage } from "../api/parseApiErrorMessage";
+import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 
 type ServiceCategory = { id: number; name: string; active: boolean };
@@ -145,7 +145,7 @@ export default function ServicesPage() {
       setCategoryModalOpen(false);
       await load();
     } catch (e) {
-      setCategorySaveError(parseApiErrorMessage(e) || t("femme.services.saveError"));
+      setCategorySaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
       setCategorySaving(false);
     }
@@ -157,7 +157,7 @@ export default function ServicesPage() {
       await femmePostJson<ServiceCategory>(`/api/service-categories/${c.id}/deactivate`, {});
       await load();
     } catch (e) {
-      setError(parseApiErrorMessage(e) || t("femme.services.saveError"));
+      setError(translateApiError(e, t, "femme.services.saveError"));
     }
   }
 
@@ -217,7 +217,7 @@ export default function ServicesPage() {
       await onSearchSubmit(new Event("submit") as unknown as React.FormEvent);
       await load();
     } catch (e) {
-      setServiceSaveError(parseApiErrorMessage(e) || t("femme.services.saveError"));
+      setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
       setServiceSaving(false);
     }
@@ -230,7 +230,7 @@ export default function ServicesPage() {
       await onSearchSubmit(new Event("submit") as unknown as React.FormEvent);
       await load();
     } catch (e) {
-      setError(parseApiErrorMessage(e) || t("femme.services.saveError"));
+      setError(translateApiError(e, t, "femme.services.saveError"));
     }
   }
 

@@ -56,9 +56,9 @@ public class AuthService {
         appUserRepository
             .findByEmail(request.email().trim().toLowerCase())
             .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+                () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
     if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
     }
     Instant now = Instant.now();
     String token =
@@ -99,9 +99,9 @@ public class AuthService {
         passwordResetTokenRepository
             .findByTokenHashAndUsedFalse(hash)
             .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token"));
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
     if (token.getExpiresAt().isBefore(Instant.now())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token expired");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
     AppUser user = token.getUser();
     user.setPasswordHash(passwordEncoder.encode(request.newPassword()));

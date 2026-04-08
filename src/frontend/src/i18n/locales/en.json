@@ -26,6 +26,7 @@
     }
   },
   "femme": {
+    "appName": "Femme",
     "login": {
       "title": "Sign in",
       "subtitle": "Use your administrator email and password.",
@@ -45,6 +46,7 @@
       "backToLogin": "Back to sign in"
     },
     "nav": {
+      "mainLabel": "Main navigation",
       "dashboard": "Dashboard",
       "calendar": "Calendar",
       "services": "Services",
@@ -154,6 +156,32 @@
     "placeholder": {
       "title": "Coming soon",
       "body": "This area will be wired to the API in the next iteration."
+    },
+    "apiErrors": {
+      "GENERIC": "An unexpected error occurred. Please try again.",
+      "UNAUTHORIZED": "You must be signed in to perform this action.",
+      "TENANT_NOT_FOUND": "Organization not found.",
+      "INVALID_RUC_FORMAT": "Invalid RUC format. Use digits, hyphen, and digits (e.g. 80000005-6).",
+      "LOGO_TOO_LARGE": "Logo image is too large. Maximum size is 1.5 MB.",
+      "LOGO_INVALID_FORMAT": "Logo must be an image file (data:image/...).",
+      "CATEGORY_NOT_FOUND": "Category not found.",
+      "CATEGORY_INACTIVE": "The selected category is inactive. Please choose an active category.",
+      "SERVICE_NOT_FOUND": "Service not found.",
+      "FISCAL_STAMP_NOT_FOUND": "Fiscal stamp not found.",
+      "STAMP_LOCKED_AFTER_INVOICE": "Cannot edit this stamp because it has already been used on invoices. Deactivate it and add a new stamp.",
+      "STAMP_NUMBER_DIGITS_ONLY": "Stamp number must contain digits only (e.g. 12345678).",
+      "VALIDITY_END_BEFORE_START": "The end of validity must be after the start date.",
+      "INVALID_NUMBER_RANGE": "Invalid number range. The \"to\" value must be greater than or equal to \"from\".",
+      "EMISSION_OUT_OF_RANGE": "The emission number must be within the from–to range.",
+      "INVALID_CREDENTIALS": "Email or password is incorrect.",
+      "INVALID_TOKEN": "This reset link is invalid or has expired.",
+      "TOKEN_EXPIRED": "This reset link has expired. Request a new one.",
+      "INVOICE_NOT_FOUND": "Invoice not found.",
+      "BUSINESS_RUC_REQUIRED_FOR_PDF": "A valid business RUC is required to generate invoice PDFs.",
+      "INVOICE_PDF_ONLY_FOR_ISSUED": "Invoice PDF is only available for issued invoices.",
+      "BUSINESS_PROFILE_NOT_FOUND": "Business profile not found.",
+      "INVALID_REQUEST": "The request is invalid. Please review your input.",
+      "BAD_REQUEST": "Invalid request."
     },
     "services": {
       "title": "Services",

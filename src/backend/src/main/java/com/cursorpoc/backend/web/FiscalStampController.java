@@ -67,7 +67,7 @@ public class FiscalStampController {
 
   private static void requirePrincipal(FemmeUserPrincipal principal) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
   }
 }

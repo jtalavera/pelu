@@ -27,7 +27,7 @@ public class BusinessProfileController {
   @GetMapping
   public BusinessProfileResponse get(@AuthenticationPrincipal FemmeUserPrincipal principal) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return businessProfileService.get(principal.getTenantId());
   }
@@ -37,7 +37,7 @@ public class BusinessProfileController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody BusinessProfileUpdateRequest request) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return businessProfileService.update(principal.getTenantId(), request);
   }

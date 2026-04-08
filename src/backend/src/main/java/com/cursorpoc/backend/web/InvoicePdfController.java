@@ -27,7 +27,7 @@ public class InvoicePdfController {
   public ResponseEntity<byte[]> pdf(
       @PathVariable Long id, @AuthenticationPrincipal FemmeUserPrincipal principal) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     byte[] bytes = invoicePdfService.buildInvoicePdf(id, principal.getTenantId());
     return ResponseEntity.ok()

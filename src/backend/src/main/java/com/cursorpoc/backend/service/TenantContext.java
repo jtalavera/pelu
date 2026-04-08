@@ -13,7 +13,7 @@ public final class TenantContext {
   public static long requireTenantId() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !(auth.getPrincipal() instanceof FemmeUserPrincipal p)) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return p.getTenantId();
   }
@@ -21,7 +21,7 @@ public final class TenantContext {
   public static FemmeUserPrincipal requirePrincipal() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !(auth.getPrincipal() instanceof FemmeUserPrincipal p)) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return p;
   }

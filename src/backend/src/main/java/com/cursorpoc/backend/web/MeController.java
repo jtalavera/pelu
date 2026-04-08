@@ -16,7 +16,7 @@ public class MeController {
   @GetMapping("/me")
   public MeResponse me(@AuthenticationPrincipal FemmeUserPrincipal principal) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return new MeResponse(principal.getUserId(), principal.getTenantId(), principal.getUsername());
   }

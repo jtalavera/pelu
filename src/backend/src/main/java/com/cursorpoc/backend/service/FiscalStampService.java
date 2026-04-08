@@ -60,9 +60,7 @@ public class FiscalStampService {
   public FiscalStampResponse update(long tenantId, long id, FiscalStampUpdateRequest request) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
     if (stamp.isLockedAfterInvoice()) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST,
-          "Cannot edit stamp number or range after invoices were issued; deactivate and add a new stamp.");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
     }
     validateDateOrder(request.validFrom(), request.validUntil());
     validateEmissionInRange(request.nextEmissionNumber(), stamp.getRangeFrom(), stamp.getRangeTo());
@@ -104,42 +102,38 @@ public class FiscalStampService {
         .findById(id)
         .filter(s -> s.getTenant().getId().equals(tenantId))
         .orElseThrow(
-            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiscal stamp not found"));
+            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "FISCAL_STAMP_NOT_FOUND"));
   }
 
   private Tenant loadTenant(long tenantId) {
     return tenantRepository
         .findById(tenantId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
   }
 
   private static String validateStampNumberDigits(String raw) {
     String trimmed = raw == null ? "" : raw.trim();
     if (trimmed.isEmpty() || !trimmed.chars().allMatch(Character::isDigit)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "Stamp number must contain digits only (e.g. 12345678).");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_NUMBER_DIGITS_ONLY");
     }
     return trimmed;
   }
 
   private static void validateDateOrder(java.time.LocalDate from, java.time.LocalDate until) {
     if (!until.isAfter(from)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "End date must be after the start date of validity.");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VALIDITY_END_BEFORE_START");
     }
   }
 
   private static void validateRange(int rangeFrom, int rangeTo) {
     if (rangeFrom > rangeTo) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid number range.");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_NUMBER_RANGE");
     }
   }
 
   private static void validateEmissionInRange(int emission, int rangeFrom, int rangeTo) {
     if (emission < rangeFrom || emission > rangeTo) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST,
-          "Initial emission number must be between the from and to range (inclusive).");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EMISSION_OUT_OF_RANGE");
     }
   }
 

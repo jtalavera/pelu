@@ -12,7 +12,7 @@ import {
   Textarea,
 } from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
-import { looksLikeRucValidationError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
+import { looksLikeRucValidationError, parseApiErrorMessage, translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
 
@@ -123,13 +123,15 @@ export default function BusinessSettingsPage() {
       setSuccess(true);
       await load();
     } catch (err) {
-      const parsed = parseApiErrorMessage(err);
-      if (looksLikeRucValidationError(parsed)) {
+      const code = parseApiErrorMessage(err);
+      if (looksLikeRucValidationError(code)) {
         setRucError(t("femme.businessSettings.rucInvalid"));
-      } else if (parsed.length > 0) {
-        setSaveValidationError(parsed);
+      } else if (code === "LOGO_TOO_LARGE") {
+        setLogoError(t("femme.apiErrors.LOGO_TOO_LARGE"));
+      } else if (code === "LOGO_INVALID_FORMAT") {
+        setLogoError(t("femme.apiErrors.LOGO_INVALID_FORMAT"));
       } else {
-        setSaveError(t("femme.businessSettings.saveError"));
+        setSaveError(translateApiError(err, t, "femme.businessSettings.saveError"));
       }
     } finally {
       setSaving(false);

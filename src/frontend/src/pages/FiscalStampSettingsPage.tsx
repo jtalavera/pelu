@@ -11,7 +11,7 @@ import {
   Text,
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
-import { parseApiErrorMessage } from "../api/parseApiErrorMessage";
+import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 
 type FiscalStampRow = {
@@ -142,8 +142,7 @@ export default function FiscalStampSettingsPage() {
       setInitialEmission("");
       await load();
     } catch (err) {
-      const msg = parseApiErrorMessage(err);
-      setSaveError(msg || t("femme.fiscalStamp.saveError"));
+      setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
     } finally {
       setCreating(false);
     }
@@ -157,7 +156,7 @@ export default function FiscalStampSettingsPage() {
       setSuccess(true);
       await load();
     } catch (err) {
-      setSaveError(parseApiErrorMessage(err) || t("femme.fiscalStamp.saveError"));
+      setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
     }
   }
 
@@ -169,7 +168,7 @@ export default function FiscalStampSettingsPage() {
       setSuccess(true);
       await load();
     } catch (err) {
-      setSaveError(parseApiErrorMessage(err) || t("femme.fiscalStamp.saveError"));
+      setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
     }
   }
 
@@ -226,7 +225,7 @@ export default function FiscalStampSettingsPage() {
       closeEdit();
       await load();
     } catch (err) {
-      setSaveError(parseApiErrorMessage(err) || t("femme.fiscalStamp.saveError"));
+      setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
     } finally {
       setEditSaving(false);
     }

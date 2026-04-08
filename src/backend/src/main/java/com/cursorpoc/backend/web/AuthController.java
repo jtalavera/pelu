@@ -34,7 +34,7 @@ public class AuthController {
   @PostMapping("/refresh")
   public TokenResponse refresh(@AuthenticationPrincipal FemmeUserPrincipal principal) {
     if (principal == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return authService.refresh(principal);
   }

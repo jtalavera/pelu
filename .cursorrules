@@ -1,6 +1,6 @@
 You MUST ALWAYS follow these rules:
 - For search UIs with a Search button: use a `<form onSubmit>` + `type="submit"` so Enter in the input runs the search (see AGENTS.md).
-- Use i18n in the frontend. Supported languages are english and spanish
+- Use i18n in the frontend. Supported languages are english and spanish. EVERY user-visible string (buttons, labels, headings, messages, placeholders, aria-labels, confirmations, errors) MUST use t() from useTranslation(). Add all new copy to BOTH en.json and es.json. Backend errors must be returned as SCREAMING_SNAKE_CASE error codes and translated using femme.apiErrors.* i18n keys. See AGENTS.md "i18n enforcement" section for full rules.
 - Use reusable components from src/frontend/design-system/components always that is possible.
 - If there is a UI compoment that might be a reusable component, STOP and propose it to the user. NEVER add it automatically to the components library.
 - All screens and UI components must support the light and dark themes. There should be an option to switch between both themes in every screen.
@@ -11,4 +11,5 @@ You MUST ALWAYS follow these rules:
 - Branching strategy is trunk based. All branches are created from main and merged back to main.
 - Endpoints in the backend MUST ALWAYS print in the log with INFO level when they receive a request with the following information: path, method, tenant id. And when they return the response: path, method, tennat id, response status.  If the status response is not one of success, then the log level must be ERROR.
 - Code, tables, and any technical artifact are named in english.
+- Backend Java code MUST pass Spotless (Google Java Format). Always run `./gradlew spotlessApply --no-daemon` from `src/backend/` after editing Java files, then verify with `./gradlew spotlessCheck --no-daemon` before committing.
 - Frontend validation: show field validation messages in red using `FieldValidationError` (`text-red-600` / `dark:text-red-400`; do not use undefined CSS vars like `--color-destructive`). Messages must state the required format with a clear example when applicable. Use i18n (en + es). Prefer `role="alert"` and `aria-describedby` on fields with errors.

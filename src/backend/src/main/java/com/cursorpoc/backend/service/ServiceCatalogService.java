@@ -97,7 +97,7 @@ public class ServiceCatalogService {
     Tenant tenant = loadTenantOrThrow(tenantId);
     ServiceCategory category = loadCategoryOrThrow(tenantId, request.categoryId());
     if (!category.isActive()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category is inactive");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
     SalonService s = new SalonService();
     s.setTenant(tenant);
@@ -116,7 +116,7 @@ public class ServiceCatalogService {
     SalonService s = loadServiceOrThrow(tenantId, serviceId);
     ServiceCategory category = loadCategoryOrThrow(tenantId, request.categoryId());
     if (!category.isActive()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category is inactive");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
     s.setCategory(category);
     s.setName(request.name().trim());
@@ -137,19 +137,19 @@ public class ServiceCatalogService {
   private Tenant loadTenantOrThrow(long tenantId) {
     return tenantRepository
         .findById(tenantId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
   }
 
   private ServiceCategory loadCategoryOrThrow(long tenantId, long categoryId) {
     return serviceCategoryRepository
         .findByIdAndTenant_Id(categoryId, tenantId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CATEGORY_NOT_FOUND"));
   }
 
   private SalonService loadServiceOrThrow(long tenantId, long serviceId) {
     return salonServiceRepository
         .findByIdAndTenant_Id(serviceId, tenantId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found"));
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND"));
   }
 
   private static ServiceCategoryResponse toCategoryResponse(ServiceCategory c) {
