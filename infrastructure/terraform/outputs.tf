@@ -15,8 +15,8 @@ output "static_web_app_api_key" {
 }
 
 output "container_app_fqdn" {
-  description = "Public FQDN of the backend Container App."
-  value       = azurerm_container_app.backend.latest_revision_fqdn
+  description = "Stable app-level FQDN of the backend Container App (does not change across revisions)."
+  value       = azurerm_container_app.backend.ingress[0].fqdn
 }
 
 output "sql_server_location" {
