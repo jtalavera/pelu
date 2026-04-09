@@ -299,12 +299,13 @@
         "photoDataUrl": "Photo (optional)",
         "photoPlaceholder": "data:image/png;base64,…",
         "photoHelp": "Paste an image data URL (data:image/…). Maximum 1.5 MB.",
-        "scheduleLead": "Set working hours for each day of the week (format HH:MM, e.g. 09:00–17:00).",
+        "scheduleLead": "Set working hours per day (HH:MM). Leave both fields empty on days off.",
         "start": "Start",
         "end": "End",
         "timePlaceholderStart": "09:00",
         "timePlaceholderEnd": "17:00",
-        "scheduleInvalid": "Invalid time. Use HH:MM for every day (e.g. 09:00).",
+        "scheduleDayIncomplete": "For each working day, enter both start and end, or leave both empty for a day off.",
+        "scheduleInvalid": "Invalid time. Use HH:MM (e.g. 09:00).",
         "scheduleRangeInvalid": "Invalid range. Start must be before end (e.g. 09:00–17:00)."
       }
     }

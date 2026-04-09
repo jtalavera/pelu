@@ -99,8 +99,8 @@ public class ProfessionalDirectoryService {
   }
 
   private void validateSchedules(List<ProfessionalScheduleRequest> schedules) {
-    if (schedules == null) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_SCHEDULES_REQUIRED");
+    if (schedules == null || schedules.isEmpty()) {
+      return;
     }
     for (ProfessionalScheduleRequest r : schedules) {
       if (r == null) {

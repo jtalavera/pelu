@@ -308,12 +308,13 @@
         "photoDataUrl": "Foto (opcional)",
         "photoPlaceholder": "data:image/png;base64,…",
         "photoHelp": "Pegá un data URL de imagen (data:image/...). Máximo 1,5 MB.",
-        "scheduleLead": "Definí el horario de trabajo para cada día de la semana (formato HH:MM, ej.: 09:00–17:00).",
+        "scheduleLead": "Definí el horario por día (HH:MM). Dejá ambos campos vacíos en los días que no trabaja.",
         "start": "Desde",
         "end": "Hasta",
         "timePlaceholderStart": "09:00",
         "timePlaceholderEnd": "17:00",
-        "scheduleInvalid": "Horario inválido. Usá HH:MM para cada día (ej.: 09:00).",
+        "scheduleDayIncomplete": "En cada día laboral, ingresá inicio y fin, o dejá ambos vacíos si no trabaja.",
+        "scheduleInvalid": "Hora inválida. Usá HH:MM (ej.: 09:00).",
         "scheduleRangeInvalid": "Rango inválido. La hora de inicio debe ser anterior a la de fin (ej.: 09:00–17:00)."
       }
     }

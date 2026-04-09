@@ -43,8 +43,37 @@ const DAYS: Array<{ value: number; key: string }> = [
   { value: 7, key: "sun" },
 ];
 
-function defaultWeekSchedules(): Schedule[] {
-  return DAYS.map((d) => ({ dayOfWeek: d.value, startTime: "09:00", endTime: "17:00" }));
+/** Normalizes API time strings (e.g. "09:00:00") to HH:MM for inputs. */
+function formatTimeFromApi(time: unknown): string {
+  if (time == null) return "";
+  const s = String(time).trim();
+  if (!s) return "";
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function schedulesFromProfessional(p: Professional | null): Schedule[] {
+  const byDay = new Map<number, Schedule>();
+  if (p?.schedules?.length) {
+    for (const s of p.schedules) {
+      byDay.set(s.dayOfWeek, {
+        dayOfWeek: s.dayOfWeek,
+        startTime: formatTimeFromApi(s.startTime),
+        endTime: formatTimeFromApi(s.endTime),
+      });
+    }
+  }
+  return DAYS.map((d) => {
+    const existing = byDay.get(d.value);
+    return {
+      dayOfWeek: d.value,
+      startTime: existing?.startTime ?? "",
+      endTime: existing?.endTime ?? "",
+    };
+  });
 }
 
 function normalizeTime(s: string): string | null {
@@ -78,7 +107,7 @@ export default function ProfessionalsPage() {
   const [detailSaving, setDetailSaving] = useState(false);
 
   // schedule tab
-  const [schedules, setSchedules] = useState<Schedule[]>(defaultWeekSchedules);
+  const [schedules, setSchedules] = useState<Schedule[]>(() => schedulesFromProfessional(null));
   const [scheduleErrors, setScheduleErrors] = useState<ScheduleErrors>(null);
   const [scheduleSaveError, setScheduleSaveError] = useState<string | null>(null);
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -112,11 +141,7 @@ export default function ProfessionalsPage() {
   }
 
   function resetScheduleForm(p: Professional | null) {
-    setSchedules(
-      Array.isArray(p?.schedules) && (p?.schedules.length ?? 0) > 0
-        ? p!.schedules.map((s) => ({ ...s }))
-        : defaultWeekSchedules(),
-    );
+    setSchedules(schedulesFromProfessional(p));
     setScheduleErrors(null);
     setScheduleSaveError(null);
   }
@@ -182,8 +207,17 @@ export default function ProfessionalsPage() {
     const normalized: Schedule[] = [];
     for (const d of DAYS) {
       const row = schedules.find((s) => s.dayOfWeek === d.value);
-      const start = normalizeTime(row?.startTime ?? "");
-      const end = normalizeTime(row?.endTime ?? "");
+      const rawStart = row?.startTime?.trim() ?? "";
+      const rawEnd = row?.endTime?.trim() ?? "";
+      if (!rawStart && !rawEnd) {
+        continue;
+      }
+      if (!rawStart || !rawEnd) {
+        setScheduleErrors({ schedules: t("femme.professionals.form.scheduleDayIncomplete") });
+        return;
+      }
+      const start = normalizeTime(rawStart);
+      const end = normalizeTime(rawEnd);
       if (!start || !end) {
         setScheduleErrors({ schedules: t("femme.professionals.form.scheduleInvalid") });
         return;
@@ -431,8 +465,8 @@ export default function ProfessionalsPage() {
                 {DAYS.map((d) => {
                   const row = schedules.find((s) => s.dayOfWeek === d.value) ?? {
                     dayOfWeek: d.value,
-                    startTime: "09:00",
-                    endTime: "17:00",
+                    startTime: "",
+                    endTime: "",
                   };
                   return (
                     <Card key={d.value} className="p-3">

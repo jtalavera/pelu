@@ -122,6 +122,22 @@ class ProfessionalDirectoryServiceTest {
   }
 
   @Test
+  void updateSchedules_acceptsEmptySchedule() {
+    Professional p = new Professional();
+    p.setId(10L);
+    p.setTenant(tenant);
+    p.setFullName("Ana");
+    p.setActive(true);
+    lenient().when(professionalRepository.findByIdAndTenant_Id(10L, 1L)).thenReturn(Optional.of(p));
+    lenient()
+        .when(professionalScheduleRepository.findByProfessionalIdOrderByDayOfWeekAscIdAsc(10L))
+        .thenReturn(List.of());
+
+    var res = service.updateSchedules(1L, 10L, List.of());
+    assertThat(res.active()).isTrue();
+  }
+
+  @Test
   void updateSchedules_acceptsValidSchedule() {
     Professional p = new Professional();
     p.setId(10L);
