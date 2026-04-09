@@ -17,6 +17,7 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 
 type Schedule = { dayOfWeek: number; startTime: string; endTime: string };
@@ -111,6 +112,8 @@ export default function ProfessionalsPage() {
   const [scheduleErrors, setScheduleErrors] = useState<ScheduleErrors>(null);
   const [scheduleSaveError, setScheduleSaveError] = useState<string | null>(null);
   const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  const [deactivateTarget, setDeactivateTarget] = useState<Professional | null>(null);
 
   const daysByValue = useMemo(() => new Map(DAYS.map((d) => [d.value, d.key] as const)), []);
 
@@ -252,8 +255,14 @@ export default function ProfessionalsPage() {
     setSchedules((prev) => prev.map((s) => (s.dayOfWeek === dow ? { ...s, ...patch } : s)));
   }
 
-  async function deactivate(p: Professional) {
-    if (!window.confirm(t("femme.professionals.deactivateConfirm", { name: p.fullName }))) return;
+  function requestDeactivate(p: Professional) {
+    setDeactivateTarget(p);
+  }
+
+  async function confirmDeactivate() {
+    const p = deactivateTarget;
+    if (!p) return;
+    setDeactivateTarget(null);
     try {
       await femmePostJson<Professional>(`/api/professionals/${p.id}/deactivate`, {});
       await load();
@@ -333,7 +342,7 @@ export default function ProfessionalsPage() {
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={() => deactivate(p)}
+                    onClick={() => requestDeactivate(p)}
                     className="min-h-11"
                   >
                     {t("femme.professionals.deactivate")}
@@ -544,6 +553,20 @@ export default function ProfessionalsPage() {
           </TabsContent>
         </Tabs>
       </Modal>
+
+      {deactivateTarget ? (
+        <ConfirmDialog
+          open
+          title={t("femme.professionals.deactivateDialogTitle")}
+          description={t("femme.professionals.deactivateDialogDescription", {
+            name: deactivateTarget.fullName,
+          })}
+          cancelLabel={t("femme.professionals.cancel")}
+          confirmLabel={t("femme.professionals.deactivate")}
+          onCancel={() => setDeactivateTarget(null)}
+          onConfirm={() => void confirmDeactivate()}
+        />
+      ) : null}
     </div>
   );
 }
