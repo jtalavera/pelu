@@ -10,7 +10,6 @@ import ServicesPage from "./pages/ServicesPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
 import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
