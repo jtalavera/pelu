@@ -273,7 +273,12 @@
       "INVALID_REQUEST": "The request is invalid. Please review your input.",
       "BAD_REQUEST": "Invalid request.",
       "CASH_SESSION_ALREADY_OPEN": "There is already an open cash register. Close it before opening a new one.",
-      "USER_NOT_FOUND": "User not found."
+      "USER_NOT_FOUND": "User not found.",
+      "APPOINTMENT_NOT_FOUND": "Appointment not found.",
+      "APPOINTMENT_OVERLAP": "This time slot is already taken for the selected professional. Please choose a different time.",
+      "APPOINTMENT_NOT_EDITABLE": "This appointment cannot be edited. Only Pending or Confirmed appointments can be modified.",
+      "INVALID_APPOINTMENT_STATUS": "Invalid appointment status.",
+      "INVALID_DATE_FORMAT": "Invalid date format."
     },
     "services": {
       "title": "Services",
@@ -397,6 +402,82 @@
         "scheduleInvalid": "Invalid time. Use HH:MM (e.g. 09:00).",
         "scheduleRangeInvalid": "Invalid range. Start must be before end (e.g. 09:00–17:00)."
       }
+    },
+    "calendar": {
+      "title": "Appointments",
+      "today": "Today",
+      "prev": "Previous week",
+      "next": "Next week",
+      "allProfessionals": "All professionals",
+      "filterByProfessional": "Filter by professional",
+      "newAppointment": "New appointment",
+      "noAppointments": "No appointments this week.",
+      "weekOf": "Week of {{date}}",
+      "days": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      },
+      "status": {
+        "PENDING": "Pending",
+        "CONFIRMED": "Confirmed",
+        "IN_PROGRESS": "In progress",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled",
+        "NO_SHOW": "No show"
+      },
+      "detail": {
+        "title": "Appointment detail",
+        "client": "Client",
+        "occasionalClient": "Occasional client",
+        "professional": "Professional",
+        "service": "Service",
+        "date": "Date",
+        "time": "Time",
+        "duration": "{{minutes}} min",
+        "status": "Status",
+        "cancelReason": "Cancellation reason",
+        "changeStatus": "Change status",
+        "edit": "Edit appointment",
+        "close": "Close",
+        "save": "Save",
+        "cancel": "Cancel"
+      },
+      "form": {
+        "title": "New appointment",
+        "editTitle": "Edit appointment",
+        "date": "Date",
+        "time": "Time",
+        "professional": "Professional",
+        "service": "Service",
+        "client": "Client",
+        "occasionalClient": "Occasional client (no registration)",
+        "searchClient": "Search client...",
+        "selectProfessional": "Select professional",
+        "selectService": "Select service",
+        "selectClient": "Select or leave empty for occasional client",
+        "save": "Save",
+        "cancel": "Cancel",
+        "errors": {
+          "dateRequired": "Date is required.",
+          "timeRequired": "Time is required.",
+          "professionalRequired": "Professional is required.",
+          "serviceRequired": "Service is required."
+        }
+      },
+      "cancelDialog": {
+        "title": "Cancel appointment",
+        "reason": "Reason (optional)",
+        "reasonPlaceholder": "Enter reason for cancellation...",
+        "confirm": "Confirm cancellation",
+        "cancel": "Go back"
+      },
+      "loading": "Loading appointments…",
+      "error": "Could not load appointments."
     }
   },
   "language": {

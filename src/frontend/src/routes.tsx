@@ -11,6 +11,7 @@ import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
@@ -29,7 +30,7 @@ export function AppRoutes() {
         }
       >
         <Route path="/app" element={<DashboardPage />} />
-        <Route path="/app/calendar" element={<PlaceholderPage />} />
+        <Route path="/app/calendar" element={<CalendarPage />} />
         <Route path="/app/services" element={<ServicesPage />} />
         <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/clients" element={<ClientsPage />} />
