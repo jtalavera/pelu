@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
@@ -25,6 +25,8 @@ const PROFESSIONAL = {
   active: true,
   schedules: [{ dayOfWeek: 1, startTime: "09:00:00", endTime: "17:00:00" }],
 };
+
+const INACTIVE_PROFESSIONAL = { ...PROFESSIONAL, active: false };
 
 function renderPage() {
   return render(
@@ -55,6 +57,25 @@ describe("ProfessionalsPage", () => {
     expect(await screen.findAllByRole("heading", { name: /professionals/i })).toBeTruthy();
     expect(await screen.findByText(/ana gomez/i)).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /new professional/i }).length).toBeGreaterThan(0);
+  });
+
+  it("shows Activate for inactive professionals and calls activate API on confirm", async () => {
+    femmeJson
+      .mockResolvedValueOnce([INACTIVE_PROFESSIONAL])
+      .mockResolvedValueOnce([{ ...INACTIVE_PROFESSIONAL, active: true }]);
+    femmePostJson.mockResolvedValue({ ...INACTIVE_PROFESSIONAL, active: true });
+    renderPage();
+    await screen.findByText(/ana gomez/i);
+
+    await userEvent.click(getFirst("button", /^activate$/i));
+
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^activate$/i }));
+
+    await waitFor(() => {
+      expect(femmePostJson).toHaveBeenCalledWith("/api/professionals/1/activate", {});
+    });
+    expect(femmeJson.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows Details tab first and Schedule tab is disabled for new professional", async () => {

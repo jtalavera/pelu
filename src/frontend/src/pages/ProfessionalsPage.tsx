@@ -114,6 +114,7 @@ export default function ProfessionalsPage() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
 
   const [deactivateTarget, setDeactivateTarget] = useState<Professional | null>(null);
+  const [activateTarget, setActivateTarget] = useState<Professional | null>(null);
 
   const daysByValue = useMemo(() => new Map(DAYS.map((d) => [d.value, d.key] as const)), []);
 
@@ -271,6 +272,22 @@ export default function ProfessionalsPage() {
     }
   }
 
+  function requestActivate(p: Professional) {
+    setActivateTarget(p);
+  }
+
+  async function confirmActivate() {
+    const p = activateTarget;
+    if (!p) return;
+    setActivateTarget(null);
+    try {
+      await femmePostJson<Professional>(`/api/professionals/${p.id}/activate`, {});
+      await load();
+    } catch (e) {
+      setPageError(translateApiError(e, t, "femme.professionals.saveError"));
+    }
+  }
+
   const scheduleDisabled = !savedProfessional;
 
   if (loading) {
@@ -347,7 +364,16 @@ export default function ProfessionalsPage() {
                   >
                     {t("femme.professionals.deactivate")}
                   </Button>
-                ) : null}
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => requestActivate(p)}
+                    className="min-h-11"
+                  >
+                    {t("femme.professionals.activate")}
+                  </Button>
+                )}
               </div>
             </div>
           </Card>
@@ -565,6 +591,21 @@ export default function ProfessionalsPage() {
           confirmLabel={t("femme.professionals.deactivate")}
           onCancel={() => setDeactivateTarget(null)}
           onConfirm={() => void confirmDeactivate()}
+        />
+      ) : null}
+
+      {activateTarget ? (
+        <ConfirmDialog
+          open
+          title={t("femme.professionals.activateDialogTitle")}
+          description={t("femme.professionals.activateDialogDescription", {
+            name: activateTarget.fullName,
+          })}
+          cancelLabel={t("femme.professionals.cancel")}
+          confirmLabel={t("femme.professionals.activate")}
+          confirmVariant="primary"
+          onCancel={() => setActivateTarget(null)}
+          onConfirm={() => void confirmActivate()}
         />
       ) : null}
     </div>

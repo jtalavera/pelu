@@ -67,6 +67,15 @@ public class ProfessionalController {
     return professionalDirectoryService.deactivate(principal.getTenantId(), id);
   }
 
+  @PostMapping("/{id}/activate")
+  public ProfessionalResponse activate(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    return professionalDirectoryService.activate(principal.getTenantId(), id);
+  }
+
   @PutMapping("/{id}/schedules")
   public ProfessionalResponse updateSchedules(
       @AuthenticationPrincipal FemmeUserPrincipal principal,

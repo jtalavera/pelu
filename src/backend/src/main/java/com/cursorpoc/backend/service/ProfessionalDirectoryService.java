@@ -72,6 +72,14 @@ public class ProfessionalDirectoryService {
   }
 
   @Transactional
+  public ProfessionalResponse activate(long tenantId, long professionalId) {
+    Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    p.setActive(true);
+    professionalRepository.save(p);
+    return toResponse(p, schedulesFor(p.getId()));
+  }
+
+  @Transactional
   public ProfessionalResponse updateSchedules(
       long tenantId, long professionalId, List<ProfessionalScheduleRequest> schedules) {
     Professional p = loadProfessionalOrThrow(tenantId, professionalId);

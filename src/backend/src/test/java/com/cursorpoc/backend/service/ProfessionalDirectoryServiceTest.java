@@ -172,4 +172,20 @@ class ProfessionalDirectoryServiceTest {
     var res = service.deactivate(1L, 10L);
     assertThat(res.active()).isFalse();
   }
+
+  @Test
+  void activate_setsActiveTrue() {
+    Professional p = new Professional();
+    p.setId(10L);
+    p.setTenant(tenant);
+    p.setFullName("Ana");
+    p.setActive(false);
+    lenient().when(professionalRepository.findByIdAndTenant_Id(10L, 1L)).thenReturn(Optional.of(p));
+    lenient()
+        .when(professionalScheduleRepository.findByProfessionalIdOrderByDayOfWeekAscIdAsc(10L))
+        .thenReturn(List.of());
+
+    var res = service.activate(1L, 10L);
+    assertThat(res.active()).isTrue();
+  }
 }
