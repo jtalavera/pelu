@@ -1,10 +1,12 @@
 # HU-13 · Abrir la caja del día
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-13 |
+
+| Campo      | Valor       |
+| ---------- | ----------- |
+| **ID**     | HU-13       |
 | **Módulo** | Facturación |
-| **Estado** | `Backlog` |
+| **Estado** | `Backlog`   |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 

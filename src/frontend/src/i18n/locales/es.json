@@ -178,6 +178,7 @@
       "openedAt": "Abierta el",
       "openedBy": "Abierta por",
       "initialAmount": "Monto inicial"
+    },
     "clients": {
       "title": "Clientes",
       "lead": "Gestioná tu directorio de clientes. Creá clientes y vinculalos a turnos.",
@@ -252,7 +253,7 @@
       "INVALID_REQUEST": "La solicitud no es válida. Revisá los datos ingresados.",
       "BAD_REQUEST": "Solicitud inválida.",
       "CASH_SESSION_ALREADY_OPEN": "Ya hay una caja abierta. Cerrala antes de abrir una nueva.",
-      "USER_NOT_FOUND": "Usuario no encontrado."
+      "USER_NOT_FOUND": "Usuario no encontrado.",
       "PROFESSIONAL_NOT_FOUND": "Profesional no encontrada.",
       "PROFESSIONAL_NAME_REQUIRED": "Ingresá el nombre completo.",
       "PROFESSIONAL_SCHEDULES_REQUIRED": "Definí los horarios de trabajo.",

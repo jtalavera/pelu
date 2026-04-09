@@ -178,6 +178,7 @@
       "openedAt": "Opened at",
       "openedBy": "Opened by",
       "initialAmount": "Initial amount"
+    },
     "clients": {
       "title": "Clients",
       "lead": "Manage your client directory. Create clients and link them to appointments.",
