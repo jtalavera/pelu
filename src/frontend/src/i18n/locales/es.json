@@ -212,7 +212,27 @@
       "emptyTitle": "Aún no hay clientes.",
       "emptyBody": "Creá una cliente para vincularla a turnos y facturas.",
       "visits": "{{count}} visita",
-      "visits_other": "{{count}} visitas"
+      "visits_other": "{{count}} visitas",
+      "viewProfile": "Ver perfil",
+      "profileTitle": "Perfil de cliente",
+      "profileLoadError": "No se pudo cargar el perfil de la cliente.",
+      "editSuccess": "Cliente actualizada correctamente.",
+      "backToList": "Volver a clientes",
+      "basicInfo": "Información básica",
+      "history": "Historial",
+      "appointments": "Turnos",
+      "invoices": "Comprobantes",
+      "noAppointments": "Sin turnos registrados.",
+      "noInvoices": "Sin comprobantes registrados.",
+      "inlineSearch": {
+        "label": "Cliente",
+        "placeholder": "Buscar por nombre, teléfono o RUC…",
+        "noResults": "No se encontraron clientes.",
+        "createNew": "Crear nueva cliente",
+        "occasional": "Cliente ocasional",
+        "minChars": "Escribí al menos 2 caracteres para buscar.",
+        "selected": "Cliente seleccionada"
+      }
     },
     "apiErrors": {
       "GENERIC": "Ocurrió un error inesperado. Intentá de nuevo.",
