@@ -44,8 +44,8 @@ function getFirst(role: string, name: RegExp | string) {
 }
 
 describe("ProfessionalsPage", () => {
-  beforeEach(() => {
-    void i18n.changeLanguage("en");
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     femmeJson.mockReset();
     femmePostJson.mockReset();
     femmePutJson.mockReset();
@@ -65,9 +65,9 @@ describe("ProfessionalsPage", () => {
       .mockResolvedValueOnce([{ ...INACTIVE_PROFESSIONAL, active: true }]);
     femmePostJson.mockResolvedValue({ ...INACTIVE_PROFESSIONAL, active: true });
     renderPage();
-    await screen.findByText(/ana gomez/i);
 
-    await userEvent.click(getFirst("button", /^activate$/i));
+    const activateBtns = await screen.findAllByRole("button", { name: /^activate$/i });
+    await userEvent.click(activateBtns[0]);
 
     const dialog = screen.getByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: /^activate$/i }));
