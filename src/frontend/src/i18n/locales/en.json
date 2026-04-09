@@ -212,7 +212,27 @@
       "emptyTitle": "No clients yet.",
       "emptyBody": "Create a client to link them to appointments and invoices.",
       "visits": "{{count}} visit",
-      "visits_other": "{{count}} visits"
+      "visits_other": "{{count}} visits",
+      "viewProfile": "View profile",
+      "profileTitle": "Client profile",
+      "profileLoadError": "Could not load client profile.",
+      "editSuccess": "Client updated successfully.",
+      "backToList": "Back to clients",
+      "basicInfo": "Basic information",
+      "history": "History",
+      "appointments": "Appointments",
+      "invoices": "Invoices",
+      "noAppointments": "No appointments on record.",
+      "noInvoices": "No invoices on record.",
+      "inlineSearch": {
+        "label": "Client",
+        "placeholder": "Search by name, phone, or RUC…",
+        "noResults": "No clients found.",
+        "createNew": "Create new client",
+        "occasional": "Occasional client",
+        "minChars": "Type at least 2 characters to search.",
+        "selected": "Selected client"
+      }
     },
     "apiErrors": {
       "GENERIC": "An unexpected error occurred. Please try again.",

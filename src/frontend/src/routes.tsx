@@ -9,6 +9,8 @@ import BusinessSettingsPage from "./pages/BusinessSettingsPage";
 import ServicesPage from "./pages/ServicesPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import ClientsPage from "./pages/ClientsPage";
+import ClientDetailPage from "./pages/ClientDetailPage";
+import PlaceholderPage from "./pages/PlaceholderPage";
 import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
@@ -32,6 +34,7 @@ export function AppRoutes() {
         <Route path="/app/services" element={<ServicesPage />} />
         <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/clients" element={<ClientsPage />} />
+        <Route path="/app/clients/:id" element={<ClientDetailPage />} />
         <Route path="/app/professionals" element={<ProfessionalsPage />} />
         <Route path="/app/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="business" replace />} />

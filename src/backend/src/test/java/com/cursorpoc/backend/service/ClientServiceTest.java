@@ -216,6 +216,112 @@ class ClientServiceTest {
   }
 
   @Test
+  void getById_existingClient_returnsResponse() {
+    Client c = buildClient(5L, "Ana", "0981000001", "ana@b.com", null);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+
+    var response = clientService.getById(1L, 5L);
+    assertThat(response.id()).isEqualTo(5L);
+    assertThat(response.fullName()).isEqualTo("Ana");
+  }
+
+  @Test
+  void getById_notFound_throwsNotFound() {
+    lenient().when(clientRepository.findByIdAndTenant_Id(99L, 1L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> clientService.getById(1L, 99L))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.NOT_FOUND));
+  }
+
+  @Test
+  void update_changesNameAndPhone() {
+    Client c = buildClient(5L, "Old Name", "0981000000", null, null);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+    lenient()
+        .when(clientRepository.findByTenantIdAndPhone(1L, "0981999999"))
+        .thenReturn(Optional.empty());
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response =
+        clientService.update(1L, 5L, new ClientRequest("New Name", "0981999999", null, null));
+    assertThat(response.fullName()).isEqualTo("New Name");
+    assertThat(response.phone()).isEqualTo("0981999999");
+  }
+
+  @Test
+  void update_samePhone_doesNotThrowDuplicate() {
+    Client c = buildClient(5L, "Ana", "0981000001", null, null);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+    lenient()
+        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
+        .thenReturn(Optional.of(c));
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+
+    // same phone → no conflict
+    var response = clientService.update(1L, 5L, new ClientRequest("Ana", "0981000001", null, null));
+    assertThat(response.phone()).isEqualTo("0981000001");
+  }
+
+  @Test
+  void update_duplicatePhone_throwsConflict() {
+    Client c = buildClient(5L, "Ana", "0981000001", null, null);
+    Client other = buildClient(6L, "Other", "0981999999", null, null);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+    lenient()
+        .when(clientRepository.findByTenantIdAndPhone(1L, "0981999999"))
+        .thenReturn(Optional.of(other));
+
+    assertThatThrownBy(
+            () -> clientService.update(1L, 5L, new ClientRequest("Ana", "0981999999", null, null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.CONFLICT));
+  }
+
+  @Test
+  void update_notFound_throwsNotFound() {
+    lenient().when(clientRepository.findByIdAndTenant_Id(99L, 1L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> clientService.update(1L, 99L, new ClientRequest("Name", null, null, null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.NOT_FOUND));
+  }
+
+  @Test
+  void update_invalidRuc_throwsBadRequest() {
+    Client c = buildClient(5L, "Ana", null, null, null);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+
+    assertThatThrownBy(
+            () -> clientService.update(1L, 5L, new ClientRequest("Ana", null, null, "BADRUC")))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
   void deactivate_existingClient_setsInactive() {
     Client c = buildClient(5L, "Ana", null, null, null);
     c.setActive(true);
