@@ -18,6 +18,7 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 
 type ServiceCategory = { id: number; name: string; active: boolean };
@@ -30,6 +31,11 @@ type SalonService = {
   durationMinutes: number;
   active: boolean;
 };
+
+type ServicesDeactivateTarget =
+  | { kind: "category"; item: ServiceCategory }
+  | { kind: "service"; item: SalonService }
+  | null;
 
 function normalizeMoneyInput(raw: string) {
   const s = raw.trim().replace(",", ".");
@@ -72,6 +78,8 @@ export default function ServicesPage() {
   } | null>(null);
   const [serviceSaveError, setServiceSaveError] = useState<string | null>(null);
   const [serviceSaving, setServiceSaving] = useState(false);
+
+  const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
 
   const activeCategories = useMemo(() => categories.filter((c) => c.active), [categories]);
 
@@ -151,14 +159,8 @@ export default function ServicesPage() {
     }
   }
 
-  async function deactivateCategory(c: ServiceCategory) {
-    if (!window.confirm(t("femme.services.categories.deactivateConfirm", { name: c.name }))) return;
-    try {
-      await femmePostJson<ServiceCategory>(`/api/service-categories/${c.id}/deactivate`, {});
-      await load();
-    } catch (e) {
-      setError(translateApiError(e, t, "femme.services.saveError"));
-    }
+  function requestDeactivateCategory(c: ServiceCategory) {
+    setDeactivateTarget({ kind: "category", item: c });
   }
 
   function openNewService() {
@@ -223,11 +225,24 @@ export default function ServicesPage() {
     }
   }
 
-  async function deactivateService(s: SalonService) {
-    if (!window.confirm(t("femme.services.services.deactivateConfirm", { name: s.name }))) return;
+  function requestDeactivateService(s: SalonService) {
+    setDeactivateTarget({ kind: "service", item: s });
+  }
+
+  async function confirmDeactivateTarget() {
+    const target = deactivateTarget;
+    if (!target) return;
+    setDeactivateTarget(null);
     try {
-      await femmePostJson<SalonService>(`/api/services/${s.id}/deactivate`, {});
-      await onSearchSubmit(new Event("submit") as unknown as React.FormEvent);
+      if (target.kind === "category") {
+        await femmePostJson<ServiceCategory>(
+          `/api/service-categories/${target.item.id}/deactivate`,
+          {},
+        );
+      } else {
+        await femmePostJson<SalonService>(`/api/services/${target.item.id}/deactivate`, {});
+        await onSearchSubmit(new Event("submit") as unknown as React.FormEvent);
+      }
       await load();
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
@@ -350,7 +365,7 @@ export default function ServicesPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => deactivateService(s)}
+                        onClick={() => requestDeactivateService(s)}
                         className="min-h-11"
                       >
                         {t("femme.services.services.deactivate")}
@@ -391,7 +406,7 @@ export default function ServicesPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => deactivateCategory(c)}
+                        onClick={() => requestDeactivateCategory(c)}
                         className="min-h-11"
                       >
                         {t("femme.services.categories.deactivate")}
@@ -526,6 +541,31 @@ export default function ServicesPage() {
           </div>
         </div>
       </Modal>
+
+      {deactivateTarget ? (
+        <ConfirmDialog
+          open
+          title={t(
+            deactivateTarget.kind === "category"
+              ? "femme.services.categories.deactivateDialogTitle"
+              : "femme.services.services.deactivateDialogTitle",
+          )}
+          description={t(
+            deactivateTarget.kind === "category"
+              ? "femme.services.categories.deactivateDialogDescription"
+              : "femme.services.services.deactivateDialogDescription",
+            { name: deactivateTarget.item.name },
+          )}
+          cancelLabel={t("femme.services.cancel")}
+          confirmLabel={t(
+            deactivateTarget.kind === "category"
+              ? "femme.services.categories.deactivate"
+              : "femme.services.services.deactivate",
+          )}
+          onCancel={() => setDeactivateTarget(null)}
+          onConfirm={() => void confirmDeactivateTarget()}
+        />
+      ) : null}
     </div>
   );
 }
