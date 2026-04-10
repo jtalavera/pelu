@@ -38,6 +38,19 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
   List<Appointment> findInRange(
       @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
 
+  @Query(
+      """
+      SELECT a FROM Appointment a WHERE a.tenant.id = :tenantId
+      AND a.startAt >= :from AND a.startAt < :to
+      AND (:professionalId IS NULL OR a.professional.id = :professionalId)
+      ORDER BY a.startAt ASC
+      """)
+  List<Appointment> findInRangeFiltered(
+      @Param("tenantId") Long tenantId,
+      @Param("from") Instant from,
+      @Param("to") Instant to,
+      @Param("professionalId") Long professionalId);
+
   long countByTenant_IdAndStatus(Long tenantId, AppointmentStatus status);
 
   long countByTenant_IdAndStatusAndStartAtGreaterThanEqualAndStartAtLessThan(

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -33,6 +34,7 @@ function validateRuc(ruc: string): boolean {
 
 export default function ClientsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +219,14 @@ export default function ClientsPage() {
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => navigate(`/app/clients/${client.id}`)}
+                  className="min-h-11"
+                >
+                  {t("femme.clients.viewProfile")}
+                </Button>
                 {client.active ? (
                   <Button
                     type="button"

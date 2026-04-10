@@ -72,6 +72,56 @@ public class ClientService {
     return toResponse(client);
   }
 
+  public ClientResponse getById(long tenantId, long clientId) {
+    Client client =
+        clientRepository
+            .findByIdAndTenant_Id(clientId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+    return toResponse(client);
+  }
+
+  @Transactional
+  public ClientResponse update(long tenantId, long clientId, ClientRequest request) {
+    Client client =
+        clientRepository
+            .findByIdAndTenant_Id(clientId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+
+    String fullName = request.fullName().trim();
+    String phone = blankToNull(request.phone());
+    String email = blankToNull(request.email());
+    String ruc = blankToNull(request.ruc());
+
+    if (ruc != null && !ParaguayRucValidator.isValid(ruc)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
+    }
+
+    if (phone != null
+        && !phone.equals(client.getPhone())
+        && clientRepository.findByTenantIdAndPhone(tenantId, phone).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
+    }
+    if (email != null
+        && !email.equalsIgnoreCase(client.getEmail())
+        && clientRepository.findByTenantIdAndEmail(tenantId, email).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
+    }
+    if (ruc != null
+        && !ruc.equals(client.getRuc())
+        && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
+    }
+
+    client.setFullName(fullName);
+    client.setPhone(phone);
+    client.setEmail(email);
+    client.setRuc(ruc);
+    clientRepository.save(client);
+    return toResponse(client);
+  }
+
   @Transactional
   public ClientResponse deactivate(long tenantId, long clientId) {
     Client client =
