@@ -11,6 +11,7 @@ import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.CashSessionOpenRequest;
 import com.cursorpoc.backend.web.dto.CashSessionResponse;
@@ -33,6 +34,7 @@ class CashSessionServiceTest {
   @Mock private CashSessionRepository cashSessionRepository;
   @Mock private TenantRepository tenantRepository;
   @Mock private AppUserRepository appUserRepository;
+  @Mock private InvoiceRepository invoiceRepository;
 
   @InjectMocks private CashSessionService service;
 

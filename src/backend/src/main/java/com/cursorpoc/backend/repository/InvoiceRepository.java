@@ -21,6 +21,33 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
   @Query(
       """
+      SELECT i FROM Invoice i
+      WHERE i.tenant.id = :tenantId
+      AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
+      AND (:toDate IS NULL OR i.issuedAt <= :toDate)
+      AND (:clientId IS NULL OR i.client.id = :clientId)
+      AND (:status IS NULL OR i.status = :status)
+      ORDER BY i.issuedAt DESC
+      """)
+  List<Invoice> findByTenantWithFilters(
+      @Param("tenantId") Long tenantId,
+      @Param("fromDate") Instant fromDate,
+      @Param("toDate") Instant toDate,
+      @Param("clientId") Long clientId,
+      @Param("status") InvoiceStatus status);
+
+  @Query(
+      """
+      SELECT COALESCE(MAX(i.invoiceNumber), 0) FROM Invoice i
+      WHERE i.tenant.id = :tenantId AND i.fiscalStamp.id = :fiscalStampId
+      """)
+  int findMaxInvoiceNumberByTenantAndFiscalStamp(
+      @Param("tenantId") Long tenantId, @Param("fiscalStampId") Long fiscalStampId);
+
+  List<Invoice> findByCashSession_IdAndTenant_Id(Long cashSessionId, Long tenantId);
+
+  @Query(
+      """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
       WHERE i.tenant.id = :tenantId AND i.status = :status
       AND i.issuedAt >= :from AND i.issuedAt < :to
@@ -43,4 +70,20 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("status") InvoiceStatus status,
       @Param("from") Instant from,
       @Param("to") Instant to);
+
+  @Query(
+      """
+      SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
+      WHERE i.cashSession.id = :cashSessionId AND i.status = :status
+      """)
+  BigDecimal sumTotalByCashSessionAndStatus(
+      @Param("cashSessionId") Long cashSessionId, @Param("status") InvoiceStatus status);
+
+  @Query(
+      """
+      SELECT COUNT(i) FROM Invoice i
+      WHERE i.cashSession.id = :cashSessionId AND i.status = :status
+      """)
+  long countByCashSessionAndStatus(
+      @Param("cashSessionId") Long cashSessionId, @Param("status") InvoiceStatus status);
 }
