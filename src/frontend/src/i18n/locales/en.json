@@ -416,7 +416,7 @@
       "INVALID_PAYMENT_METHOD": "Invalid payment method.",
       "INVALID_DISCOUNT_TYPE": "Invalid discount type.",
       "INVOICE_ALREADY_VOIDED": "This invoice is already voided.",
-      "CASH_SESSION_CLOSED_CANNOT_VOID": "Cannot void an invoice after the cash session is closed."
+      "CASH_SESSION_CLOSED_CANNOT_VOID": "Cannot void an invoice after the cash session is closed.",
       "APPOINTMENT_NOT_FOUND": "Appointment not found.",
       "APPOINTMENT_OVERLAP": "This time slot is already taken for the selected professional. Please choose a different time.",
       "APPOINTMENT_NOT_EDITABLE": "This appointment cannot be edited. Only Pending or Confirmed appointments can be modified.",

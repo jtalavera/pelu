@@ -425,7 +425,7 @@
       "INVALID_SCHEDULE_RANGE": "Rango horario inválido.",
       "SCHEDULE_OVERLAP": "Los horarios se superponen.",
       "PHOTO_TOO_LARGE": "La foto es demasiado grande. El tamaño máximo es 1,5 MB.",
-      "PHOTO_INVALID_FORMAT": "La foto debe ser una imagen (data:image/...)."
+      "PHOTO_INVALID_FORMAT": "La foto debe ser una imagen (data:image/...).",
       "APPOINTMENT_NOT_FOUND": "Turno no encontrado.",
       "APPOINTMENT_OVERLAP": "Este horario ya está ocupado para la profesional seleccionada. Por favor elija un horario diferente.",
       "APPOINTMENT_NOT_EDITABLE": "Este turno no puede ser editado. Solo los turnos en estado Pendiente o Confirmado pueden modificarse.",
