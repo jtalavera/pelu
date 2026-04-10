@@ -1,19 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Alert,
-  Button,
-  Card,
-  Heading,
-  Input,
-  Label,
-  Spinner,
-  Text,
-  Textarea,
-} from "@design-system";
+import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
 import { looksLikeRucValidationError, parseApiErrorMessage, translateApiError } from "../api/parseApiErrorMessage";
-import { FieldValidationError } from "../components/FieldValidationError";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
 
 type BusinessProfileResponse = {
@@ -28,8 +17,58 @@ type BusinessProfileResponse = {
 
 const MAX_LOGO_BYTES = 1_500_000;
 
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 11,
+  fontWeight: 500,
+  color: "var(--color-ink-2)",
+  marginBottom: 4,
+};
+
+const hintStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: "var(--color-ink-3)",
+  marginTop: 3,
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 500,
+  letterSpacing: "0.06em",
+  color: "var(--color-ink-3)",
+  textTransform: "uppercase",
+  margin: "14px 0 10px",
+  paddingBottom: 6,
+  borderBottom: "var(--border-default)",
+};
+
+function buildInputStyle(
+  hasError: boolean,
+  focused: boolean,
+): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: "8px 11px",
+    border: hasError ? "1px solid var(--color-danger)" : "1px solid var(--color-stone-md)",
+    borderRadius: "var(--radius-md)",
+    fontSize: 12,
+    color: "var(--color-ink)",
+    background: "var(--color-white)",
+    width: "100%",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+  if (focused) {
+    base.boxShadow = hasError
+      ? "0 0 0 3px var(--color-danger-lt)"
+      : "0 0 0 3px var(--color-rose-lt)";
+    if (!hasError) base.borderColor = "var(--color-rose)";
+  }
+  return base;
+}
+
 export default function BusinessSettingsPage() {
   const { t } = useTranslation();
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -46,6 +85,9 @@ export default function BusinessSettingsPage() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const [saveValidationError, setSaveValidationError] = useState<string | null>(null);
   const [businessNameError, setBusinessNameError] = useState<string | null>(null);
+  const [logoFileLabel, setLogoFileLabel] = useState<string | null>(null);
+  const [logoDims, setLogoDims] = useState<{ w: number; h: number } | null>(null);
+  const [focusField, setFocusField] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,8 +100,10 @@ export default function BusinessSettingsPage() {
       setPhone(data.phone ?? "");
       setContactEmail(data.contactEmail ?? "");
       setLogoDataUrl(data.logoDataUrl ?? null);
+      setLogoFileLabel(null);
     } catch {
       setLoadError(t("femme.businessSettings.loadError"));
+      setSuccess(false);
     } finally {
       setLoading(false);
     }
@@ -68,6 +112,19 @@ export default function BusinessSettingsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const url = logoDataUrl && logoDataUrl.length > 0 ? logoDataUrl : null;
+    if (!url) {
+      setLogoDims(null);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      setLogoDims({ w: img.naturalWidth, h: img.naturalHeight });
+    };
+    img.src = url;
+  }, [logoDataUrl]);
 
   function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -78,19 +135,38 @@ export default function BusinessSettingsPage() {
     }
     setLogoError(null);
     if (saveValidationError) setSaveValidationError(null);
+    setLogoFileLabel(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : null;
       if (result) {
         setLogoDataUrl(result);
         setLogoError(null);
+        const img = new Image();
+        img.onload = () => {
+          setLogoDims({ w: img.naturalWidth, h: img.naturalHeight });
+        };
+        img.src = result;
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = "";
   }
 
   function clearLogo() {
     setLogoDataUrl("");
+    setLogoFileLabel(null);
+    setLogoDims(null);
+  }
+
+  async function onCancel() {
+    setSaveError(null);
+    setSuccess(false);
+    setBusinessNameError(null);
+    setRucError(null);
+    setLogoError(null);
+    setSaveValidationError(null);
+    await load();
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -140,48 +216,99 @@ export default function BusinessSettingsPage() {
 
   const logoPreview = logoDataUrl && logoDataUrl.length > 0 ? logoDataUrl : null;
 
+  const ghostBtn: React.CSSProperties = {
+    background: "var(--color-white)",
+    color: "var(--color-ink-2)",
+    border: "var(--border-default)",
+    borderRadius: "var(--radius-md)",
+    padding: "7px 14px",
+    fontSize: 12,
+    cursor: "pointer",
+  };
+
+  const primaryBtn: React.CSSProperties = {
+    background: "var(--color-rose)",
+    color: "var(--color-on-primary)",
+    border: "none",
+    borderRadius: "var(--radius-md)",
+    padding: "8px 16px",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+  };
+
+  const errTextStyle: React.CSSProperties = {
+    fontSize: 10,
+    color: "var(--color-danger)",
+    marginTop: 3,
+  };
+
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center gap-3">
+      <div style={{ display: "flex", minHeight: "40vh", alignItems: "center", justifyContent: "center", gap: 12 }}>
         <Spinner size="lg" />
         <Text>{t("femme.businessSettings.loading")}</Text>
       </div>
     );
   }
 
+  const feedback = loadError || saveError || success;
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div>
-        <Heading as="h1">{t("femme.businessSettings.title")}</Heading>
-        <Text variant="muted" className="mt-1">
-          {t("femme.businessSettings.lead")}
-        </Text>
-      </div>
-
-      {loadError ? (
-        <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
-          {loadError}
-        </Alert>
-      ) : null}
-      {saveError ? (
-        <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
-          {saveError}
-        </Alert>
-      ) : null}
-      {success ? (
-        <Alert variant="success" title={t("femme.businessSettings.savedTitle")}>
-          {t("femme.businessSettings.savedBody")}
-        </Alert>
-      ) : null}
-
-      <Card className="p-4 sm:p-6">
-        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-          {saveValidationError ? (
-            <FieldValidationError>{saveValidationError}</FieldValidationError>
+    <div>
+      {feedback ? (
+        <div
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 5,
+            marginBottom: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            background: "var(--color-white)",
+            paddingBottom: 4,
+          }}
+        >
+          {loadError ? (
+            <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
+              {loadError}
+            </Alert>
           ) : null}
+          {saveError ? (
+            <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
+              {saveError}
+            </Alert>
+          ) : null}
+          {success ? (
+            <Alert variant="success" title={t("femme.businessSettings.savedTitle")}>
+              {t("femme.businessSettings.savedBody")}
+            </Alert>
+          ) : null}
+        </div>
+      ) : null}
+
+      <form onSubmit={onSubmit} noValidate>
+        {saveValidationError ? (
+          <p role="alert" style={errTextStyle}>
+            {saveValidationError}
+          </p>
+        ) : null}
+
+        <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionGeneral")}</div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+          }}
+        >
           <div>
-            <Label htmlFor="businessName">{t("femme.businessSettings.businessName")}</Label>
-            <Input
+            <label htmlFor="businessName" style={labelStyle}>
+              {t("femme.businessSettings.businessName")}
+              <span style={{ color: "var(--color-rose)" }}> *</span>
+            </label>
+            <input
               id="businessName"
               value={businessName}
               onChange={(e) => {
@@ -189,17 +316,25 @@ export default function BusinessSettingsPage() {
                 if (businessNameError) setBusinessNameError(null);
                 if (saveValidationError) setSaveValidationError(null);
               }}
-              required
-              className="mt-1 w-full"
+              className="mt-0 w-full"
               autoComplete="organization"
               aria-invalid={!!businessNameError}
               aria-describedby={businessNameError ? "business-name-error" : undefined}
+              onFocus={() => setFocusField("businessName")}
+              onBlur={() => setFocusField(null)}
+              style={buildInputStyle(!!businessNameError, focusField === "businessName")}
             />
-            <FieldValidationError id="business-name-error">{businessNameError}</FieldValidationError>
+            {businessNameError ? (
+              <p id="business-name-error" role="alert" style={errTextStyle}>
+                {businessNameError}
+              </p>
+            ) : null}
           </div>
           <div>
-            <Label htmlFor="ruc">{t("femme.businessSettings.ruc")}</Label>
-            <Input
+            <label htmlFor="ruc" style={labelStyle}>
+              {t("femme.businessSettings.ruc")}
+            </label>
+            <input
               id="ruc"
               value={ruc}
               onChange={(e) => {
@@ -208,45 +343,75 @@ export default function BusinessSettingsPage() {
                 if (saveValidationError) setSaveValidationError(null);
               }}
               placeholder="80000005-6"
-              className="mt-1 w-full"
               aria-invalid={!!rucError}
               aria-describedby={rucError ? "ruc-error" : "ruc-hint"}
+              onFocus={() => setFocusField("ruc")}
+              onBlur={() => setFocusField(null)}
+              style={buildInputStyle(!!rucError, focusField === "ruc")}
             />
-            <FieldValidationError id="ruc-error">{rucError}</FieldValidationError>
-            {!rucError ? (
-              <Text variant="small" id="ruc-hint" className="mt-1 text-[rgb(var(--color-muted-foreground))]">
+            {rucError ? (
+              <p id="ruc-error" role="alert" style={errTextStyle}>
+                {rucError}
+              </p>
+            ) : (
+              <p id="ruc-hint" style={hintStyle}>
                 {t("femme.businessSettings.rucHint")}
-              </Text>
-            ) : null}
+              </p>
+            )}
           </div>
-          <div>
-            <Label htmlFor="address">{t("femme.businessSettings.address")}</Label>
-            <Textarea
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label htmlFor="address" style={labelStyle}>
+              {t("femme.businessSettings.address")}
+            </label>
+            <textarea
               id="address"
               value={address}
               onChange={(e) => {
                 setAddress(e.target.value);
                 if (saveValidationError) setSaveValidationError(null);
               }}
-              className="mt-1 w-full min-h-[88px]"
+              rows={4}
+              onFocus={() => setFocusField("address")}
+              onBlur={() => setFocusField(null)}
+              style={{
+                ...buildInputStyle(false, focusField === "address"),
+                resize: "none",
+                minHeight: 88,
+              }}
             />
           </div>
+        </div>
+
+        <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionContact")}</div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+          }}
+        >
           <div>
-            <Label htmlFor="phone">{t("femme.businessSettings.phone")}</Label>
-            <Input
+            <label htmlFor="phone" style={labelStyle}>
+              {t("femme.businessSettings.phone")}
+            </label>
+            <input
               id="phone"
               value={phone}
               onChange={(e) => {
                 setPhone(e.target.value);
                 if (saveValidationError) setSaveValidationError(null);
               }}
-              className="mt-1 w-full"
               autoComplete="tel"
+              onFocus={() => setFocusField("phone")}
+              onBlur={() => setFocusField(null)}
+              style={buildInputStyle(false, focusField === "phone")}
             />
           </div>
           <div>
-            <Label htmlFor="contactEmail">{t("femme.businessSettings.contactEmail")}</Label>
-            <Input
+            <label htmlFor="contactEmail" style={labelStyle}>
+              {t("femme.businessSettings.contactEmail")}
+            </label>
+            <input
               id="contactEmail"
               type="email"
               value={contactEmail}
@@ -254,40 +419,148 @@ export default function BusinessSettingsPage() {
                 setContactEmail(e.target.value);
                 if (saveValidationError) setSaveValidationError(null);
               }}
-              className="mt-1 w-full"
               autoComplete="email"
+              onFocus={() => setFocusField("contactEmail")}
+              onBlur={() => setFocusField(null)}
+              style={buildInputStyle(false, focusField === "contactEmail")}
             />
           </div>
-          <div>
-            <Label htmlFor="logo">{t("femme.businessSettings.logo")}</Label>
-            <Input
-              id="logo"
-              type="file"
-              accept="image/*"
-              onChange={onLogoFile}
-              className="mt-1 w-full min-h-11"
-              aria-invalid={!!logoError}
-              aria-describedby={logoError ? "logo-error" : undefined}
-            />
-            <FieldValidationError id="logo-error">{logoError}</FieldValidationError>
-            {logoPreview ? (
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <img
-                  src={logoPreview}
-                  alt=""
-                  className="h-16 w-auto max-w-[200px] rounded border border-[rgb(var(--color-border))] object-contain"
-                />
-                <Button type="button" variant="secondary" onClick={clearLogo} className="min-h-11">
-                  {t("femme.businessSettings.removeLogo")}
-                </Button>
+        </div>
+
+        <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionLogo")}</div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label htmlFor="logo-file-input" style={labelStyle}>
+            {t("femme.businessSettings.logo")}
+          </label>
+          <input
+            ref={logoInputRef}
+            id="logo-file-input"
+            type="file"
+            accept="image/*"
+            onChange={onLogoFile}
+            className="sr-only"
+          />
+          {logoPreview ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 10,
+                background: "var(--color-stone)",
+                borderRadius: "var(--radius-md)",
+                border: "var(--border-default)",
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "var(--radius-md)",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                  background: "var(--color-white)",
+                  border: "var(--border-default)",
+                }}
+              >
+                <img src={logoPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
               </div>
-            ) : null}
-          </div>
-          <Button type="submit" variant="primary" className="min-h-11 w-full sm:w-auto" disabled={saving}>
-            {saving ? t("femme.businessSettings.saving") : t("femme.businessSettings.save")}
-          </Button>
-        </form>
-      </Card>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 500 }}>
+                  {logoFileLabel
+                    ? t("femme.businessSettings.logoFileName", { name: logoFileLabel })
+                    : t("femme.businessSettings.logoUploaded")}
+                </div>
+                {logoDims ? (
+                  <div style={{ fontSize: 10, color: "var(--color-ink-3)", marginTop: 2 }}>
+                    {t("femme.businessSettings.logoDimensions", {
+                      width: logoDims.w,
+                      height: logoDims.h,
+                    })}
+                  </div>
+                ) : null}
+              </div>
+              <button type="button" style={ghostBtn} onClick={() => logoInputRef.current?.click()}>
+                {t("femme.businessSettings.changeLogo")}
+              </button>
+              <button
+                type="button"
+                onClick={clearLogo}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--color-danger)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                }}
+              >
+                {t("femme.businessSettings.removeLogo")}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              aria-invalid={!!logoError}
+              aria-describedby={logoError ? "logo-err" : undefined}
+              style={{
+                width: "100%",
+                border: "1.5px dashed var(--color-stone-md)",
+                borderRadius: "var(--radius-md)",
+                padding: 20,
+                textAlign: "center",
+                cursor: "pointer",
+                background: "var(--color-stone)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--color-rose-md)";
+                e.currentTarget.style.background = "var(--color-rose-lt)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--color-stone-md)";
+                e.currentTarget.style.background = "var(--color-stone)";
+              }}
+            >
+              <span style={{ fontSize: 12, color: "var(--color-ink-2)" }}>
+                {t("femme.businessSettings.logo")}
+              </span>
+            </button>
+          )}
+          {logoError ? (
+            <p id="logo-err" role="alert" style={errTextStyle}>
+              {logoError}
+            </p>
+          ) : null}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+            marginTop: 16,
+            paddingTop: 12,
+            borderTop: "var(--border-default)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => void onCancel()}
+            disabled={saving}
+            style={{
+              ...ghostBtn,
+              opacity: saving ? 0.6 : 1,
+              cursor: saving ? "not-allowed" : "pointer",
+            }}
+          >
+            {t("femme.businessSettings.cancel")}
+          </button>
+          <button type="submit" style={primaryBtn} disabled={saving}>
+            {saving ? t("femme.businessSettings.saving") : t("femme.businessSettings.saveChanges")}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

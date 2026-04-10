@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { Button, Card, Heading, Input, Label, Text } from "@design-system";
+import { Button, Heading, Input, Label, Text } from "@design-system";
 import { apiBaseUrl } from "../api/baseUrl";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 
@@ -26,42 +26,82 @@ export default function ForgotPasswordPage() {
     }
   }
 
+  const inputClassName =
+    "mt-1 w-full border-[var(--color-stone-md)] bg-[var(--color-white)] text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus-visible:border-[var(--color-rose)] focus-visible:ring-2 focus-visible:ring-[var(--color-rose-lt)] dark:focus-visible:ring-[var(--color-rose-md)]";
+
   return (
-    <div className="min-h-screen bg-[rgb(var(--color-bg))] px-4 py-10 text-[rgb(var(--color-fg))]">
+    <div
+      className="min-h-screen bg-[var(--color-stone)] px-4 py-10 text-[var(--color-ink)]"
+      style={{
+        paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))",
+        paddingLeft: "max(1rem, env(safe-area-inset-left))",
+        paddingRight: "max(1rem, env(safe-area-inset-right))",
+        paddingTop: "max(2.5rem, env(safe-area-inset-top))",
+      }}
+    >
       <div className="mx-auto flex max-w-md flex-col gap-6">
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-4">
+          <span
+            className="text-lg font-medium text-[var(--color-rose)]"
+            style={{ letterSpacing: "-0.01em" }}
+          >
+            {t("femme.appName")}
+          </span>
           <LanguageSwitcher />
         </div>
-        <Card className="p-6 shadow-sm">
-          <Heading as="h1" className="mb-4">
+
+        <div
+          className="rounded-[var(--radius-xl)] p-6 md:p-8"
+          style={{
+            background: "var(--color-white)",
+            border: "var(--border-default)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+          }}
+        >
+          <Heading as="h1" className="mb-4 !text-[var(--color-ink)]">
             {t("femme.forgot.title")}
           </Heading>
           {done ? (
-            <Text>{t("femme.forgot.sent")}</Text>
+            <Text className="text-[var(--color-ink-2)]">{t("femme.forgot.sent")}</Text>
           ) : (
             <form className="flex flex-col gap-4" onSubmit={onSubmit}>
               <div>
-                <Label htmlFor="email">{t("femme.login.email")}</Label>
+                <Label htmlFor="email" className="text-[var(--color-ink-2)]">
+                  {t("femme.login.email")}
+                </Label>
                 <Input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="mt-1 w-full"
+                  className={inputClassName}
                 />
               </div>
-              <Button type="submit" variant="primary" className="min-h-11 w-full" disabled={submitting}>
+              <Button
+                type="submit"
+                variant="primary"
+                className="min-h-11 w-full rounded-[var(--radius-md)]"
+                style={{
+                  background: "var(--color-rose)",
+                  color: "var(--color-on-primary)",
+                  border: "none",
+                }}
+                disabled={submitting}
+              >
                 {submitting ? t("femme.forgot.submitting") : t("femme.forgot.submit")}
               </Button>
             </form>
           )}
           <div className="mt-4">
-            <Link to="/login" className="text-sm text-[rgb(var(--color-primary))] underline-offset-4 hover:underline">
+            <Link
+              to="/login"
+              className="text-sm font-medium text-[var(--color-rose)] underline-offset-4 hover:text-[var(--color-rose-dk)] hover:underline"
+            >
               {t("femme.forgot.backToLogin")}
             </Link>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

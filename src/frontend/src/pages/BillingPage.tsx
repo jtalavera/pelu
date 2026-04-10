@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -11,10 +11,6 @@ import {
   Modal,
   Select,
   Spinner,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   Text,
   Textarea,
 } from "@design-system";
@@ -23,6 +19,7 @@ import { authHeaders } from "../api/authHeaders";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { useDateLocale } from "../i18n/dateLocale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +56,8 @@ type InvoiceListItem = {
   status: string;
   total: string;
   issuedAt: string;
+  servicesSummary?: string | null;
+  paymentMethodsSummary?: string | null;
 };
 
 type InvoiceLine = {
@@ -109,9 +108,9 @@ type PaymentForm = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function fmt(isoString: string): string {
+function fmt(isoString: string, locale: string): string {
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(locale, {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(isoString));
@@ -120,9 +119,9 @@ function fmt(isoString: string): string {
   }
 }
 
-function fmtDate(isoString: string): string {
+function fmtDate(isoString: string, locale: string): string {
   try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: "short" }).format(
+    return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(
       new Date(isoString),
     );
   } catch {
@@ -134,6 +133,52 @@ function fmtNum(v: string | number | null | undefined): string {
   if (v === null || v === undefined) return "0";
   const n = Number(v);
   return isNaN(n) ? String(v) : n.toLocaleString();
+}
+
+function fmtGs(v: string | number | null | undefined): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "Gs. —";
+  return "Gs. " + Math.round(n).toLocaleString("es-PY");
+}
+
+function todayRangeIso(): { from: string; to: string } {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
+
+function InvoiceStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
+  let bg = "var(--color-warning-lt)";
+  let color = "var(--color-warning)";
+  let label = t("femme.billing.session.statusPending");
+  if (status === "ISSUED") {
+    bg = "var(--color-success-lt)";
+    color = "var(--color-success)";
+    label = t("femme.billing.session.statusIssued");
+  } else if (status === "VOIDED") {
+    bg = "var(--color-danger-lt)";
+    color = "var(--color-danger)";
+    label = t("femme.billing.session.statusVoided");
+  }
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 500,
+        padding: "2px 8px",
+        borderRadius: "var(--radius-pill)",
+        display: "inline-block",
+        whiteSpace: "nowrap",
+        background: bg,
+        color,
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 const PAYMENT_METHODS = [
@@ -156,6 +201,7 @@ function InvoiceDetailModal({
   onVoided: () => void;
 }) {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -293,7 +339,7 @@ function InvoiceDetailModal({
               </div>
               <div>
                 <span className="font-medium">{t("femme.billing.history.detail.issuedAt")}: </span>
-                {fmt(invoice.issuedAt)}
+                {fmt(invoice.issuedAt, dateLocale)}
               </div>
               <div>
                 <span className="font-medium">{t("femme.billing.history.detail.client")}: </span>
@@ -448,10 +494,24 @@ function capitalize(s: string): string {
     .join("");
 }
 
+function paymentMethodsLabel(
+  summary: string | null | undefined,
+  t: (key: string) => string,
+): string {
+  if (!summary?.trim()) return "—";
+  return summary
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((m) => t(`femme.billing.invoice.paymentMethod${capitalize(m)}`))
+    .join(" + ");
+}
+
 // ─── InvoiceHistoryTab ────────────────────────────────────────────────────────
 
 function InvoiceHistoryTab() {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -586,7 +646,7 @@ function InvoiceHistoryTab() {
                   className="border-t border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-muted)/0.4)]"
                 >
                   <td className="px-3 py-2 font-mono">{inv.invoiceNumberFormatted}</td>
-                  <td className="px-3 py-2">{fmtDate(inv.issuedAt)}</td>
+                  <td className="px-3 py-2">{fmtDate(inv.issuedAt, dateLocale)}</td>
                   <td className="px-3 py-2">{inv.clientDisplayName ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{fmtNum(inv.total)}</td>
                   <td className="px-3 py-2 text-center">
@@ -1176,11 +1236,16 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
 function CashSessionTab({
   currentSession,
   onSessionChanged,
+  onNewInvoice,
+  refreshTrigger,
 }: {
   currentSession: CashSession | null;
   onSessionChanged: () => void;
+  onNewInvoice: () => void;
+  refreshTrigger: number;
 }) {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
   const [openingAmount, setOpeningAmount] = useState("");
   const [amountError, setAmountError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1194,6 +1259,40 @@ function CashSessionTab({
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeResult, setCloseResult] = useState<CashSessionCloseResponse | null>(null);
+
+  const [todayInvoices, setTodayInvoices] = useState<InvoiceListItem[]>([]);
+  const [todayLoading, setTodayLoading] = useState(false);
+  const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
+
+  const loadTodayInvoices = useCallback(async () => {
+    if (!currentSession) {
+      setTodayInvoices([]);
+      return;
+    }
+    setTodayLoading(true);
+    try {
+      const { from, to } = todayRangeIso();
+      const qs = new URLSearchParams();
+      qs.set("from", from);
+      qs.set("to", to);
+      const data = await femmeJson<InvoiceListItem[]>(`/api/invoices?${qs.toString()}`);
+      setTodayInvoices(Array.isArray(data) ? data : []);
+    } catch {
+      setTodayInvoices([]);
+    } finally {
+      setTodayLoading(false);
+    }
+  }, [currentSession]);
+
+  useEffect(() => {
+    void loadTodayInvoices();
+  }, [loadTodayInvoices, refreshTrigger, currentSession?.id]);
+
+  const dayTotalIssued = useMemo(() => {
+    return todayInvoices
+      .filter((i) => i.status === "ISSUED")
+      .reduce((acc, i) => acc + (Number(i.total) || 0), 0);
+  }, [todayInvoices]);
 
   async function handleOpenSession(e: React.FormEvent) {
     e.preventDefault();
@@ -1247,8 +1346,47 @@ function CashSessionTab({
 
   const diff = closeResult ? parseFloat(closeResult.cashDifference) : null;
 
+  const primaryBtn: React.CSSProperties = {
+    background: "var(--color-rose)",
+    color: "var(--color-on-primary)",
+    border: "none",
+    borderRadius: "var(--radius-md)",
+    padding: "8px 16px",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    whiteSpace: "nowrap",
+  };
+
+  const destructiveSoft: React.CSSProperties = {
+    background: "var(--color-danger-lt)",
+    color: "var(--color-danger)",
+    border: "none",
+    borderRadius: "var(--radius-md)",
+    padding: "8px 14px",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+
+  const thStyle: React.CSSProperties = {
+    padding: "9px 12px",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--color-ink-3)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    textAlign: "left",
+    background: "var(--color-stone)",
+    whiteSpace: "nowrap",
+  };
+
   return (
-    <div className="flex flex-col gap-6">
+    <div>
       {openError && (
         <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
           {openError}
@@ -1265,11 +1403,24 @@ function CashSessionTab({
         </Alert>
       )}
 
-      {/* Close result summary */}
       {closeResult && (
-        <Card className="p-4 sm:p-6 flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-slate-400" aria-hidden="true" />
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            padding: 16,
+            marginBottom: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-ink-3)" }}
+              aria-hidden
+            />
             <Heading as="h2" className="text-lg">
               {t("femme.billing.close.closedTitle")}
             </Heading>
@@ -1277,7 +1428,7 @@ function CashSessionTab({
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <span>
               <span className="font-medium">{t("femme.billing.close.closedAt")}: </span>
-              {fmt(closeResult.closedAt)}
+              {fmt(closeResult.closedAt, dateLocale)}
             </span>
             <span>
               <span className="font-medium">{t("femme.billing.close.closedBy")}: </span>
@@ -1301,10 +1452,14 @@ function CashSessionTab({
               {t("femme.billing.close.countedCash")}
             </span>
             <span className="text-right">{fmtNum(closeResult.countedCashAmount)}</span>
-            <span className={`font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}>
+            <span
+              className={`font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
+            >
               {t("femme.billing.close.difference")}
             </span>
-            <span className={`text-right font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}>
+            <span
+              className={`text-right font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
+            >
               {diff !== null && diff >= 0 ? "+" : ""}
               {fmtNum(closeResult.cashDifference)}
             </span>
@@ -1324,67 +1479,192 @@ function CashSessionTab({
               </div>
             </div>
           )}
-        </Card>
+        </div>
       )}
 
-      {/* Current session status */}
-      <Card className="p-4 sm:p-6">
-        <div className="flex items-center gap-3">
+      {/* Estado de caja */}
+      <div
+        style={{
+          background: "var(--color-white)",
+          borderRadius: "var(--radius-xl)",
+          border: "var(--border-default)",
+          padding: 16,
+          marginBottom: 14,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
           <span
-            className={`inline-block h-3 w-3 rounded-full ${currentSession ? "bg-emerald-500" : "bg-slate-400"}`}
-            aria-hidden="true"
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: currentSession ? "var(--color-success)" : "var(--color-ink-3)",
+            }}
+            aria-hidden
           />
-          <Heading as="h2" className="text-lg">
-            {currentSession
-              ? t("femme.billing.sessionOpen")
-              : t("femme.billing.sessionClosed")}
-          </Heading>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: currentSession ? "var(--color-success)" : "var(--color-ink-2)",
+            }}
+          >
+            {currentSession ? t("femme.billing.sessionOpen") : t("femme.billing.sessionClosed")}
+          </span>
         </div>
 
         {currentSession ? (
-          <div className="mt-4 flex flex-col gap-2">
-            <div className="flex flex-wrap gap-x-6 gap-y-1">
-              <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                <span className="font-medium text-[rgb(var(--color-foreground))]">
-                  {t("femme.billing.openedAt")}:{" "}
-                </span>
-                {fmt(currentSession.openedAt)}
-              </Text>
-              <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                <span className="font-medium text-[rgb(var(--color-foreground))]">
-                  {t("femme.billing.openedBy")}:{" "}
-                </span>
-                {currentSession.openedByEmail}
-              </Text>
-              <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                <span className="font-medium text-[rgb(var(--color-foreground))]">
-                  {t("femme.billing.initialAmount")}:{" "}
-                </span>
-                {fmtNum(currentSession.openingCashAmount)}
-              </Text>
-            </div>
-            {!showCloseForm && (
-              <div className="mt-3">
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setShowCloseForm(true)}
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 10,
+                marginBottom: 14,
+              }}
+            >
+              <div
+                style={{
+                  background: "var(--color-stone)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "10px 12px",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--color-ink-3)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    marginBottom: 3,
+                  }}
                 >
+                  {t("femme.billing.session.metricOpenedAt")}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+                  {fmt(currentSession.openedAt, dateLocale)}
+                </div>
+              </div>
+              <div
+                style={{
+                  background: "var(--color-stone)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "10px 12px",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--color-ink-3)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    marginBottom: 3,
+                  }}
+                >
+                  {t("femme.billing.session.metricOpenedBy")}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+                  {currentSession.openedByEmail}
+                </div>
+              </div>
+              <div
+                style={{
+                  background: "var(--color-stone)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "10px 12px",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--color-ink-3)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    marginBottom: 3,
+                  }}
+                >
+                  {t("femme.billing.session.metricOpeningAmount")}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+                  {fmtGs(currentSession.openingCashAmount)}
+                </div>
+              </div>
+            </div>
+
+            {!showCloseForm && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" style={primaryBtn} onClick={onNewInvoice}>
+                  {t("femme.billing.session.newInvoiceButton")}
+                </button>
+                <button type="button" style={destructiveSoft} onClick={() => setShowCloseForm(true)}>
                   {t("femme.billing.close.title")}
-                </Button>
+                </button>
               </div>
             )}
-          </div>
+          </>
         ) : (
-          <Text variant="muted" className="mt-3">
-            {t("femme.billing.noOpenSession")}
-          </Text>
+          !closeResult && (
+            <>
+              <Text variant="muted" style={{ display: "block", marginBottom: 12 }}>
+                {t("femme.billing.noOpenSession")}
+              </Text>
+              <form
+                id="billing-open-session"
+                onSubmit={(e) => void handleOpenSession(e)}
+                noValidate
+                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+              >
+                <div>
+                  <Label htmlFor="opening-amount">{t("femme.billing.openingCashAmount")}</Label>
+                  <Input
+                    id="opening-amount"
+                    inputMode="decimal"
+                    value={openingAmount}
+                    onChange={(e) => {
+                      setOpeningAmount(e.target.value);
+                      setAmountError(null);
+                      setOpenError(null);
+                      setOpenSuccess(false);
+                    }}
+                    className="mt-1 w-full"
+                    placeholder="0"
+                    aria-invalid={!!amountError}
+                    aria-describedby={amountError ? "amount-err" : "amount-hint"}
+                  />
+                  <FieldValidationError id="amount-err">{amountError}</FieldValidationError>
+                  <Text
+                    variant="small"
+                    id="amount-hint"
+                    className="mt-1 text-[rgb(var(--color-muted-foreground))]"
+                  >
+                    {t("femme.billing.openingCashAmountHint")}
+                  </Text>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    style={primaryBtn}
+                    disabled={submitting}
+                  >
+                    {submitting ? t("femme.billing.opening") : t("femme.billing.open")}
+                  </button>
+                </div>
+              </form>
+            </>
+          )
         )}
-      </Card>
+      </div>
 
-      {/* Close session form */}
       {showCloseForm && currentSession && (
-        <Card className="p-4 sm:p-6">
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            padding: 16,
+            marginBottom: 14,
+          }}
+        >
           <Heading as="h2" className="text-lg mb-4">
             {t("femme.billing.close.title")}
           </Heading>
@@ -1441,52 +1721,137 @@ function CashSessionTab({
               </Button>
             </div>
           </form>
-        </Card>
+        </div>
       )}
 
-      {/* Open session form (only when no open session) */}
-      {!currentSession && !closeResult && (
-        <Card className="p-4 sm:p-6">
-          <Heading as="h2" className="text-lg">
-            {t("femme.billing.openTitle")}
-          </Heading>
-          <form className="mt-4 flex flex-col gap-4" onSubmit={(e) => void handleOpenSession(e)} noValidate>
-            <div>
-              <Label htmlFor="opening-amount">{t("femme.billing.openingCashAmount")}</Label>
-              <Input
-                id="opening-amount"
-                inputMode="decimal"
-                value={openingAmount}
-                onChange={(e) => {
-                  setOpeningAmount(e.target.value);
-                  setAmountError(null);
-                  setOpenError(null);
-                  setOpenSuccess(false);
-                }}
-                className="mt-1 w-full"
-                placeholder="0"
-                aria-invalid={!!amountError}
-                aria-describedby={amountError ? "amount-err" : "amount-hint"}
-              />
-              <FieldValidationError id="amount-err">{amountError}</FieldValidationError>
-              <Text
-                variant="small"
-                id="amount-hint"
-                className="mt-1 text-[rgb(var(--color-muted-foreground))]"
-              >
-                {t("femme.billing.openingCashAmountHint")}
-              </Text>
+      {currentSession && (
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: 12,
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+              {t("femme.billing.session.todayInvoicesTitle")}
+            </span>
+            <span style={{ fontSize: 11, color: "var(--color-ink-3)" }}>
+              {t("femme.billing.session.todayTotal", { amount: fmtGs(dayTotalIssued) })}
+            </span>
+          </div>
+
+          {todayLoading ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 12 }}>
+              <Spinner size="sm" />
+              <Text>{t("femme.billing.session.loadingToday")}</Text>
             </div>
-            <Button
-              type="submit"
-              variant="primary"
-              className="min-h-11 w-full sm:w-auto"
-              disabled={submitting}
-            >
-              {submitting ? t("femme.billing.opening") : t("femme.billing.open")}
-            </Button>
-          </form>
-        </Card>
+          ) : todayInvoices.length === 0 ? (
+            <Text variant="muted">{t("femme.billing.session.emptyToday")}</Text>
+          ) : (
+            <div style={{ overflowX: "auto", margin: "0 -16px" }}>
+              <table
+                style={{
+                  tableLayout: "fixed",
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  minWidth: 560,
+                }}
+              >
+                <colgroup>
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "26%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "12%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.session.colInvoiceNumber")}
+                    </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.history.colClient")}
+                    </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.session.colServices")}
+                    </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.history.colTotal")}
+                    </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.session.colMethod")}
+                    </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.history.colStatus")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayInvoices.map((inv) => {
+                    const isHov = hoveredRowId === inv.id;
+                    const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
+                    const cell: React.CSSProperties = {
+                      padding: "10px 12px",
+                      fontSize: 12,
+                      color: "var(--color-ink)",
+                      verticalAlign: "middle",
+                      borderBottom: "0.5px solid var(--color-stone)",
+                      background: tdBg,
+                    };
+                    return (
+                      <tr
+                        key={inv.id}
+                        onMouseEnter={() => setHoveredRowId(inv.id)}
+                        onMouseLeave={() => setHoveredRowId(null)}
+                      >
+                        <td
+                          style={{
+                            ...cell,
+                            fontFamily: "monospace",
+                            fontSize: 11,
+                            color: "var(--color-ink-2)",
+                          }}
+                        >
+                          {inv.invoiceNumberFormatted}
+                        </td>
+                        <td style={cell}>{inv.clientDisplayName ?? "—"}</td>
+                        <td
+                          style={{
+                            ...cell,
+                            color: "var(--color-ink-2)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {inv.servicesSummary?.trim() ? inv.servicesSummary : "—"}
+                        </td>
+                        <td style={{ ...cell, fontWeight: 500 }}>{fmtGs(inv.total)}</td>
+                        <td style={{ ...cell, color: "var(--color-ink-2)", fontSize: 11 }}>
+                          {paymentMethodsLabel(inv.paymentMethodsSummary, t)}
+                        </td>
+                        <td style={cell}>
+                          <InvoiceStatusBadge status={inv.status} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1499,7 +1864,8 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("session");
+  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history">("session");
+  const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
 
   const loadCurrentSession = useCallback(async () => {
     setLoading(true);
@@ -1520,20 +1886,49 @@ export default function BillingPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center gap-3">
+      <div style={{ display: "flex", minHeight: "40vh", alignItems: "center", justifyContent: "center", gap: 12 }}>
         <Spinner size="lg" />
         <Text>{t("femme.billing.loading")}</Text>
       </div>
     );
   }
 
+  const tabBase: React.CSSProperties = {
+    padding: "6px 14px",
+    borderRadius: "var(--radius-md)",
+    fontSize: 12,
+    cursor: "pointer",
+    border: "var(--border-default)",
+    background: "var(--color-white)",
+    color: "var(--color-ink-2)",
+  };
+
+  const tabActive: React.CSSProperties = {
+    ...tabBase,
+    background: "var(--color-rose-lt)",
+    border: "1px solid var(--color-rose-md)",
+    color: "var(--color-rose-dk)",
+    fontWeight: 500,
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Heading as="h1">{t("femme.billing.title")}</Heading>
-        <Text variant="muted" className="mt-1">
-          {t("femme.billing.lead")}
-        </Text>
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
+            {t("femme.billing.title")}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
+            {t("femme.billing.pageSubtitle")}
+          </div>
+        </div>
       </div>
 
       {loadError && (
@@ -1542,38 +1937,66 @@ export default function BillingPage() {
         </Alert>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="session">{t("femme.billing.tabs.session")}</TabsTrigger>
-          <TabsTrigger value="invoice" disabled={!currentSession}>
-            {t("femme.billing.tabs.invoice")}
-          </TabsTrigger>
-          <TabsTrigger value="history">{t("femme.billing.tabs.history")}</TabsTrigger>
-        </TabsList>
+      <div style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.billing.title")}>
+        {(["session", "invoice", "history"] as const).map((tabKey) => {
+          const disabled = tabKey === "invoice" && !currentSession;
+          if (disabled) {
+            return (
+              <button
+                key={tabKey}
+                type="button"
+                role="tab"
+                aria-selected={false}
+                disabled
+                style={{
+                  ...tabBase,
+                  opacity: 0.45,
+                  cursor: "not-allowed",
+                }}
+              >
+                {t(`femme.billing.tabs.${tabKey}`)}
+              </button>
+            );
+          }
+          return (
+            <button
+              key={tabKey}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tabKey}
+              style={activeTab === tabKey ? tabActive : tabBase}
+              onClick={() => setActiveTab(tabKey)}
+            >
+              {t(`femme.billing.tabs.${tabKey}`)}
+            </button>
+          );
+        })}
+      </div>
 
-        <TabsContent value="session">
-          <CashSessionTab
-            currentSession={currentSession}
-            onSessionChanged={() => void loadCurrentSession()}
+      <div hidden={activeTab !== "session"}>
+        <CashSessionTab
+          currentSession={currentSession}
+          onSessionChanged={() => void loadCurrentSession()}
+          onNewInvoice={() => setActiveTab("invoice")}
+          refreshTrigger={invoiceListRefresh}
+        />
+      </div>
+
+      <div hidden={activeTab !== "invoice"}>
+        {currentSession ? (
+          <NewInvoiceTab
+            onIssued={() => {
+              setInvoiceListRefresh((k) => k + 1);
+            }}
           />
-        </TabsContent>
+        ) : (
+          <Text variant="muted">{t("femme.billing.noOpenSession")}</Text>
+        )}
+      </div>
 
-        <TabsContent value="invoice">
-          {currentSession ? (
-            <NewInvoiceTab
-              onIssued={() => {
-                // Stay on invoice tab; history will refresh when user navigates there
-              }}
-            />
-          ) : (
-            <Text variant="muted">{t("femme.billing.noOpenSession")}</Text>
-          )}
-        </TabsContent>
-
-        <TabsContent value="history">
-          <InvoiceHistoryTab />
-        </TabsContent>
-      </Tabs>
+      <div hidden={activeTab !== "history"}>
+        <InvoiceHistoryTab />
+      </div>
     </div>
   );
 }

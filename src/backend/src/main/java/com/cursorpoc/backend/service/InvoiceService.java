@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
 import org.springframework.http.HttpStatus;
@@ -288,6 +289,8 @@ public class InvoiceService {
   }
 
   private static InvoiceListItemResponse toListItemDto(Invoice i) {
+    Hibernate.initialize(i.getLines());
+    Hibernate.initialize(i.getPaymentAllocations());
     return new InvoiceListItemResponse(
         i.getId(),
         i.getInvoiceNumber(),
@@ -295,7 +298,37 @@ public class InvoiceService {
         i.getClientDisplayName(),
         i.getStatus().name(),
         i.getTotal(),
-        i.getIssuedAt());
+        i.getIssuedAt(),
+        buildServicesSummary(i),
+        buildPaymentMethodsSummary(i));
+  }
+
+  private static String buildServicesSummary(Invoice i) {
+    if (i.getLines() == null || i.getLines().isEmpty()) {
+      return "";
+    }
+    String s =
+        i.getLines().stream()
+            .map(InvoiceLine::getDescription)
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(desc -> !desc.isEmpty())
+            .collect(Collectors.joining(", "));
+    if (s.length() > 120) {
+      return s.substring(0, 117) + "...";
+    }
+    return s;
+  }
+
+  private static String buildPaymentMethodsSummary(Invoice i) {
+    if (i.getPaymentAllocations() == null || i.getPaymentAllocations().isEmpty()) {
+      return "";
+    }
+    return i.getPaymentAllocations().stream()
+        .map(InvoicePaymentAllocation::getMethod)
+        .map(PaymentMethod::name)
+        .distinct()
+        .collect(Collectors.joining(", "));
   }
 
   private static InvoiceResponse toDetailDto(Invoice i) {

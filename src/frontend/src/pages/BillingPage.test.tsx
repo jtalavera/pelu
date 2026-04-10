@@ -60,7 +60,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
     it("opens a cash register and shows success message", async () => {
       femmeJson.mockResolvedValueOnce(undefined);
       femmePostJson.mockResolvedValueOnce(openSession);
-      femmeJson.mockResolvedValueOnce(openSession);
+      femmeJson.mockResolvedValueOnce(openSession).mockResolvedValueOnce([]);
 
       renderPage();
 
@@ -95,7 +95,15 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
 
   describe("Cash register open state", () => {
     beforeEach(() => {
-      femmeJson.mockResolvedValue(openSession);
+      femmeJson.mockImplementation((url: string) => {
+        if (typeof url === "string" && url.includes("/api/cash-sessions/current")) {
+          return Promise.resolve(openSession);
+        }
+        if (typeof url === "string" && url.includes("/api/invoices")) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve(undefined);
+      });
     });
 
     it("shows open session info", async () => {
@@ -120,7 +128,10 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
     });
 
     it("shows invoice history tab trigger (HU-16)", async () => {
-      femmeJson.mockResolvedValueOnce(openSession).mockResolvedValue([]);
+      femmeJson
+        .mockResolvedValueOnce(openSession)
+        .mockResolvedValueOnce([])
+        .mockResolvedValue([]);
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
@@ -202,7 +213,10 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
           issuedAt: "2026-04-09T11:00:00Z",
         },
       ];
-      femmeJson.mockResolvedValueOnce(openSession).mockResolvedValue(invoices);
+      femmeJson
+        .mockResolvedValueOnce(openSession)
+        .mockResolvedValueOnce([])
+        .mockResolvedValue(invoices);
 
       renderPage();
       await screen.findAllByText(/cash register is open/i);
@@ -219,7 +233,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
 
   describe("Close cash register (HU-18)", () => {
     it("submits close request with counted cash", async () => {
-      femmeJson.mockResolvedValueOnce(openSession);
+      femmeJson.mockResolvedValueOnce(openSession).mockResolvedValueOnce([]).mockResolvedValueOnce(undefined);
       femmePostJson.mockResolvedValue({
         id: 1,
         tenantId: 1,
@@ -259,7 +273,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
     });
 
     it("shows error when close fails", async () => {
-      femmeJson.mockResolvedValueOnce(openSession);
+      femmeJson.mockResolvedValueOnce(openSession).mockResolvedValueOnce([]);
       femmePostJson.mockRejectedValue(new Error('{"error":"CASH_SESSION_NOT_OPEN"}'));
 
       renderPage();

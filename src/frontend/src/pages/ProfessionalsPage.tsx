@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
-  Card,
-  Heading,
   Input,
   Label,
   Modal,
@@ -19,6 +17,23 @@ import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { StatusBadge } from "../components/StatusBadge";
+
+// ── Avatar palette ─────────────────────────────────────────────────────────
+const AVATAR_PALETTE = [
+  { bg: "var(--color-rose-lt)",  color: "var(--color-rose-dk)"  },
+  { bg: "var(--color-mauve-lt)", color: "var(--color-mauve-dk)" },
+];
+
+function profAvatar(idx: number): { bg: string; color: string } {
+  if (idx < AVATAR_PALETTE.length) return AVATAR_PALETTE[idx];
+  return { bg: "var(--color-stone-md)", color: "var(--color-ink-2)" };
+}
+
+function getInitials(name: string): string {
+  const p = name.trim().split(/\s+/);
+  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+}
 
 type Schedule = { dayOfWeek: number; startTime: string; endTime: string };
 type Professional = {
@@ -115,6 +130,7 @@ export default function ProfessionalsPage() {
 
   const [deactivateTarget, setDeactivateTarget] = useState<Professional | null>(null);
   const [activateTarget, setActivateTarget] = useState<Professional | null>(null);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const daysByValue = useMemo(() => new Map(DAYS.map((d) => [d.value, d.key] as const)), []);
 
@@ -292,92 +308,273 @@ export default function ProfessionalsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center gap-3">
+      <div style={{ display: "flex", minHeight: "40vh", alignItems: "center", justifyContent: "center", gap: 12 }}>
         <Spinner size="lg" />
         <Text>{t("femme.professionals.loading")}</Text>
       </div>
     );
   }
 
-  if (pageError) {
-    return (
-      <Alert variant="destructive" title={t("femme.professionals.errorTitle")}>
-        {pageError}
-      </Alert>
-    );
-  }
+  const primaryBtn: React.CSSProperties = {
+    background: "var(--color-rose)",
+    color: "var(--color-on-primary)",
+    border: "none",
+    borderRadius: "var(--radius-md)",
+    padding: "8px 16px",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  };
+
+  const thStyle: React.CSSProperties = {
+    padding: "9px 12px",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--color-ink-3)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    textAlign: "left",
+    background: "var(--color-stone)",
+    whiteSpace: "nowrap",
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <Heading as="h1">{t("femme.professionals.title")}</Heading>
-          <Text variant="muted" className="mt-1">
+    <div>
+      {/* ── Page header ── */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
+            {t("femme.professionals.title")}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
             {t("femme.professionals.lead")}
-          </Text>
+          </div>
         </div>
-        <Button type="button" onClick={openNew} className="w-full sm:w-auto">
-          {t("femme.professionals.add")}
-        </Button>
+        <button type="button" style={primaryBtn} onClick={openNew}>
+          {t("femme.professionals.addNew")}
+        </button>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {professionals.length === 0 ? (
-          <Alert variant="default" title={t("femme.professionals.emptyTitle")}>
-            {t("femme.professionals.emptyBody")}
-          </Alert>
-        ) : null}
-        {professionals.map((p) => (
-          <Card key={p.id} className="p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <Heading as="h2" className="text-lg">
-                  {p.fullName}{" "}
-                  {!p.active ? (
-                    <span className="text-sm font-medium text-[rgb(var(--color-muted-foreground))]">
-                      {t("femme.professionals.inactive")}
-                    </span>
-                  ) : null}
-                </Heading>
-                <Text variant="muted" className="mt-1">
-                  {t("femme.professionals.meta", {
-                    phone: p.phone ?? t("femme.professionals.metaEmpty"),
-                    email: p.email ?? t("femme.professionals.metaEmpty"),
-                  })}
-                </Text>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => openEdit(p)}
-                  className="min-h-11"
-                >
-                  {t("femme.professionals.edit")}
-                </Button>
-                {p.active ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => requestDeactivate(p)}
-                    className="min-h-11"
+      {/* ── Error ── */}
+      {pageError && (
+        <Alert variant="destructive" title={t("femme.professionals.errorTitle")}>
+          {pageError}
+        </Alert>
+      )}
+
+      {/* ── Table ── */}
+      <div
+        style={{
+          background: "var(--color-white)",
+          borderRadius: "var(--radius-xl)",
+          border: "var(--border-default)",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
+            <colgroup>
+              <col style={{ width: "32%" }} />
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "12%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={thStyle}>{t("femme.professionals.colProfessional")}</th>
+                <th style={thStyle}>{t("femme.professionals.colPhone")}</th>
+                <th style={thStyle}>{t("femme.professionals.colEmail")}</th>
+                <th style={thStyle}>{t("femme.professionals.colStatus")}</th>
+                <th style={thStyle} />
+              </tr>
+            </thead>
+            <tbody>
+              {professionals.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    style={{
+                      padding: "24px 12px",
+                      textAlign: "center",
+                      fontSize: 12,
+                      color: "var(--color-ink-3)",
+                    }}
                   >
-                    {t("femme.professionals.deactivate")}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => requestActivate(p)}
-                    className="min-h-11"
-                  >
-                    {t("femme.professionals.activate")}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Card>
-        ))}
+                    {t("femme.professionals.emptyBody")}
+                  </td>
+                </tr>
+              ) : (
+                professionals.map((p, idx) => {
+                  const av    = profAvatar(idx);
+                  const isHov = hoveredId === p.id;
+                  const tdBg  = isHov ? "var(--color-rose-lt)" : undefined;
+                  const tdStyle: React.CSSProperties = {
+                    padding: "10px 12px",
+                    fontSize: 12,
+                    color: "var(--color-ink)",
+                    verticalAlign: "middle",
+                    borderBottom: "0.5px solid var(--color-stone)",
+                    background: tdBg,
+                  };
+
+                  return (
+                    <tr
+                      key={p.id}
+                      onMouseEnter={() => setHoveredId(p.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                    >
+                      {/* Professional: avatar + name */}
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                          <div
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: "var(--radius-pill)",
+                              background: av.bg,
+                              color: av.color,
+                              fontSize: 10,
+                              fontWeight: 500,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {getInitials(p.fullName)}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontWeight: 500,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {p.fullName}
+                            </div>
+                            {p.schedules.filter((s) => s.startTime && s.endTime).length > 0 && (
+                              <div style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
+                                {p.schedules.filter((s) => s.startTime && s.endTime).length}
+                                {" "}
+                                {t(`femme.professionals.days.${
+                                  daysByValue.get(
+                                    p.schedules.filter((s) => s.startTime && s.endTime)[0]
+                                      .dayOfWeek,
+                                  ) ?? "mon"
+                                }`)}
+                                {p.schedules.filter((s) => s.startTime && s.endTime).length > 1 ? "…" : ""}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Phone */}
+                      <td style={{ ...tdStyle, color: p.phone ? "var(--color-ink)" : "var(--color-ink-3)" }}>
+                        {p.phone ?? "—"}
+                      </td>
+
+                      {/* Email */}
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: p.email ? "var(--color-ink)" : "var(--color-ink-3)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {p.email ?? "—"}
+                      </td>
+
+                      {/* Status */}
+                      <td style={tdStyle}>
+                        <StatusBadge status={p.active ? "ACTIVE" : "INACTIVE"} />
+                      </td>
+
+                      {/* Actions */}
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            justifyContent: "flex-end",
+                            alignItems: "center",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => openEdit(p)}
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: "var(--radius-sm)",
+                              fontSize: 11,
+                              border: "0.5px solid var(--color-rose-md)",
+                              background: "transparent",
+                              color: "var(--color-rose)",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {t("femme.professionals.edit")}
+                          </button>
+                          {p.active ? (
+                            <button
+                              type="button"
+                              onClick={() => requestDeactivate(p)}
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: "var(--radius-sm)",
+                                fontSize: 11,
+                                border: "none",
+                                background: "transparent",
+                                color: "var(--color-danger)",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {t("femme.professionals.deactivateShort")}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => requestActivate(p)}
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: "var(--radius-sm)",
+                                fontSize: 11,
+                                border: "none",
+                                background: "transparent",
+                                color: "var(--color-success)",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {t("femme.professionals.activate")}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <Modal
@@ -504,7 +701,15 @@ export default function ProfessionalsPage() {
                     endTime: "",
                   };
                   return (
-                    <Card key={d.value} className="p-3">
+                    <div
+                      key={d.value}
+                      style={{
+                        padding: 12,
+                        border: "var(--border-default)",
+                        borderRadius: "var(--radius-md)",
+                        background: "var(--color-white)",
+                      }}
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <Text className="w-28 shrink-0 font-medium">
                           {t(`femme.professionals.days.${daysByValue.get(d.value)}`)}
@@ -546,7 +751,7 @@ export default function ProfessionalsPage() {
                           </div>
                         </div>
                       </div>
-                    </Card>
+                    </div>
                   );
                 })}
               </div>

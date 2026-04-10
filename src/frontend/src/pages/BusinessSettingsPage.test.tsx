@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
@@ -39,5 +40,17 @@ describe("BusinessSettingsPage", () => {
     renderPage();
     expect(await screen.findByRole("button", { name: /save/i })).toBeTruthy();
     expect(screen.getByLabelText(/business name/i)).toBeTruthy();
+  });
+
+  it("shows a success alert at the top after saving", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByLabelText(/business name/i);
+    const saveBtns = screen.getAllByRole("button", { name: /save changes/i });
+    await user.click(saveBtns[0]);
+    expect(await screen.findByText("Saved")).toBeTruthy();
+    expect(
+      screen.getByText(/Your business details were saved/i),
+    ).toBeTruthy();
   });
 });

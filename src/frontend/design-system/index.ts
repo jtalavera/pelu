@@ -1,5 +1,7 @@
 export { cn } from "./lib/cn";
-export { ThemeProvider, useTheme, type Theme } from "./ThemeProvider";
+export { ThemeProvider } from "./ThemeProvider";
+export { useThemeContext } from "../src/context/ThemeContext";
+export type { Theme } from "../src/hooks/useTheme";
 export { ThemeToggle, type ThemeToggleProps } from "./components/ThemeToggle";
 
 export {

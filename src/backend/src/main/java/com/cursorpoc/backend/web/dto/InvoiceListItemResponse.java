@@ -10,4 +10,6 @@ public record InvoiceListItemResponse(
     String clientDisplayName,
     String status,
     BigDecimal total,
-    Instant issuedAt) {}
+    Instant issuedAt,
+    String servicesSummary,
+    String paymentMethodsSummary) {}

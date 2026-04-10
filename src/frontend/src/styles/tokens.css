@@ -1,0 +1,192 @@
+html, html.light {
+  /* Colores primarios */
+  --color-rose:        #C9637A;
+  --color-rose-lt:     #F7EEF1;
+  --color-rose-md:     #E8C4CF;
+  --color-rose-dk:     #7D3347;
+
+  /* Colores secundarios */
+  --color-mauve:       #9B7FA6;
+  --color-mauve-lt:    #F2EDF5;
+  --color-mauve-md:    #D9C8E2;
+  --color-mauve-dk:    #5C3F6B;
+
+  /* Neutros */
+  --color-stone:       #F5F2EF;
+  --color-stone-md:    #E8E3DC;
+  --color-ink:         #2A2421;
+  --color-ink-2:       #6B5F59;
+  --color-ink-3:       #A0968F;
+  --color-white:       #FDFCFB;
+
+  /* Semánticos */
+  --color-success:     #3B6D11;
+  --color-success-lt:  #EAF3DE;
+  --color-warning:     #854F0B;
+  --color-warning-lt:  #FAEEDA;
+  --color-danger:      #A32D2D;
+  --color-danger-lt:   #FCEBEB;
+
+  /* Tipografía */
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Radios */
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:  10px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
+  --radius-pill: 9999px;
+
+  /* Bordes */
+  --border-default: 0.5px solid var(--color-stone-md);
+  --border-focus:   1px solid var(--color-rose);
+
+  --color-on-primary: #ffffff;
+}
+
+:root {
+  /* Colores primarios */
+  --color-rose:        #C9637A;
+  --color-rose-lt:     #F7EEF1;
+  --color-rose-md:     #E8C4CF;
+  --color-rose-dk:     #7D3347;
+
+  /* Colores secundarios */
+  --color-mauve:       #9B7FA6;
+  --color-mauve-lt:    #F2EDF5;
+  --color-mauve-md:    #D9C8E2;
+  --color-mauve-dk:    #5C3F6B;
+
+  /* Neutros */
+  --color-stone:       #F5F2EF;
+  --color-stone-md:    #E8E3DC;
+  --color-ink:         #2A2421;
+  --color-ink-2:       #6B5F59;
+  --color-ink-3:       #A0968F;
+  --color-white:       #FDFCFB;
+
+  /* Semánticos */
+  --color-success:     #3B6D11;
+  --color-success-lt:  #EAF3DE;
+  --color-warning:     #854F0B;
+  --color-warning-lt:  #FAEEDA;
+  --color-danger:      #A32D2D;
+  --color-danger-lt:   #FCEBEB;
+
+  /* Tipografía */
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Radios */
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:  10px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
+  --radius-pill: 9999px;
+
+  /* Bordes */
+  --border-default: 0.5px solid var(--color-stone-md);
+  --border-focus:   1px solid var(--color-rose);
+}
+
+body {
+  background-color: var(--color-stone);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+:root {
+  --color-on-primary: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-rose:        #E8839A;
+    --color-rose-lt:     #2E1A20;
+    --color-rose-md:     #5C2E3A;
+    --color-rose-dk:     #F4C0CF;
+
+    --color-mauve:       #B99CC4;
+    --color-mauve-lt:    #221829;
+    --color-mauve-md:    #3D2B4A;
+    --color-mauve-dk:    #E0CCEB;
+
+    --color-stone:       #1C1917;
+    --color-stone-md:    #2C2825;
+    --color-ink:         #F0EDE8;
+    --color-ink-2:       #B8AFA8;
+    --color-ink-3:       #7A7068;
+    --color-white:       #242019;
+
+    --color-success:     #7BC44A;
+    --color-success-lt:  #162009;
+    --color-warning:     #E09A50;
+    --color-warning-lt:  #261806;
+    --color-danger:      #E07070;
+    --color-danger-lt:   #280F0F;
+
+    --color-on-primary:  #ffffff;
+
+    --border-default: 0.5px solid var(--color-stone-md);
+  }
+
+  body {
+    background-color: var(--color-stone);
+    color: var(--color-ink);
+  }
+}
+
+html.dark {
+  --color-rose:        #E8839A;
+  --color-rose-lt:     #2E1A20;
+  --color-rose-md:     #5C2E3A;
+  --color-rose-dk:     #F4C0CF;
+
+  --color-mauve:       #B99CC4;
+  --color-mauve-lt:    #221829;
+  --color-mauve-md:    #3D2B4A;
+  --color-mauve-dk:    #E0CCEB;
+
+  --color-stone:       #1C1917;
+  --color-stone-md:    #2C2825;
+  --color-ink:         #F0EDE8;
+  --color-ink-2:       #B8AFA8;
+  --color-ink-3:       #7A7068;
+  --color-white:       #242019;
+
+  --color-success:     #7BC44A;
+  --color-success-lt:  #162009;
+  --color-warning:     #E09A50;
+  --color-warning-lt:  #261806;
+  --color-danger:      #E07070;
+  --color-danger-lt:   #280F0F;
+
+  --border-default: 0.5px solid var(--color-stone-md);
+
+  /* Fiscal stamp — “vigente” (higher contrast than generic success) */
+  --color-timbrado-valid-fg: #bbf7d0;
+  --color-timbrado-valid-bg: #14532d;
+  --color-timbrado-valid-meter: #4ade80;
+  --color-timbrado-valid-icon: #166534;
+}
+
+/* Light theme: timbrado “vigente” */
+html,
+html.light {
+  --color-timbrado-valid-fg: #14532d;
+  --color-timbrado-valid-bg: #bbf7d0;
+  --color-timbrado-valid-meter: #16a34a;
+  --color-timbrado-valid-icon: #bbf7d0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-timbrado-valid-fg: #bbf7d0;
+    --color-timbrado-valid-bg: #14532d;
+    --color-timbrado-valid-meter: #4ade80;
+    --color-timbrado-valid-icon: #166534;
+  }
+}

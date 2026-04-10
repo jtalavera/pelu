@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
@@ -11,13 +12,19 @@ vi.mock("../api/femmeClient", () => ({
   femmeJson: (...args: unknown[]) => femmeJson(...args),
 }));
 
+vi.mock("../api/appointments", () => ({
+  listAppointments: vi.fn(() => Promise.resolve([])),
+}));
+
 function renderPage() {
   return render(
-    <I18nextProvider i18n={i18n}>
-      <ThemeProvider>
-        <DashboardPage />
-      </ThemeProvider>
-    </I18nextProvider>,
+    <MemoryRouter>
+      <I18nextProvider i18n={i18n}>
+        <ThemeProvider>
+          <DashboardPage />
+        </ThemeProvider>
+      </I18nextProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -37,18 +44,18 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
       revenueWeek: { invoiced: "0", collected: "0" },
       fiscalAlerts: [
         {
-          severity: "blocking",
+          severity: "warning",
           messageKey: "fiscalExpiredOrExhausted",
-          message: "blocking",
+          message: "fallback",
         },
       ],
     });
   });
 
-  it("shows destructive alert for blocking fiscal messages", async () => {
+  it("shows fiscal warning when a non-blocking fiscal alert is present", async () => {
     renderPage();
-    const alerts = await screen.findAllByRole("alert");
-    const blocking = alerts.find((el) => el.textContent?.includes("expired") || el.textContent?.includes("exhausted"));
-    expect(blocking).toBeTruthy();
+    expect(
+      await screen.findByText(/fiscal stamp is expired/i),
+    ).toBeTruthy();
   });
 });
