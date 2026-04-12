@@ -26,6 +26,28 @@
     }
   },
   "femme": {
+    "listFilter": {
+      "label": "Filter list",
+      "placeholder": "Type to filter…",
+      "noMatches": "No rows match your filter."
+    },
+    "searchInput": {
+      "placeholderDefault": "Search…",
+      "clearAria": "Clear search",
+      "noResults": "No results",
+      "resultCount": "{{count}} of {{total}}"
+    },
+    "inlineActions": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "activate": "Activate"
+    },
+    "inlineEdit": {
+      "saveError": "Could not save. Please try again."
+    },
     "appName": "Femme",
     "login": {
       "title": "Sign in",
@@ -255,6 +277,7 @@
       "invoice": {
         "title": "Issue Invoice",
         "clientSection": "Client",
+        "clientSearchLabel": "Search or select client",
         "clientId": "Client (optional)",
         "clientPlaceholder": "Search or select a client…",
         "occasionalClient": "Occasional client (no record)",
@@ -395,6 +418,7 @@
         "placeholder": "Search by name, phone, or RUC…",
         "submit": "Search"
       },
+      "searchInlinePlaceholder": "Search by name, phone, or RUC…",
       "subtitle": "{{count}} clients registered",
       "export": "Export",
       "newClient": "+ New client",
@@ -471,6 +495,7 @@
       "LOGO_INVALID_FORMAT": "Logo must be an image file (data:image/...).",
       "CATEGORY_NOT_FOUND": "Category not found.",
       "CATEGORY_INACTIVE": "The selected category is inactive. Please choose an active category.",
+      "INVALID_CATEGORY_ACCENT": "Choose a valid category color from the palette.",
       "SERVICE_NOT_FOUND": "Service not found.",
       "FISCAL_STAMP_NOT_FOUND": "Fiscal stamp not found.",
       "STAMP_LOCKED_AFTER_INVOICE": "Cannot edit this stamp because it has already been used on invoices. Deactivate it and add a new stamp.",
@@ -506,6 +531,7 @@
       "CASH_SESSION_CLOSED_CANNOT_VOID": "Cannot void an invoice after the cash session is closed.",
       "APPOINTMENT_NOT_FOUND": "Appointment not found.",
       "APPOINTMENT_OVERLAP": "This time slot is already taken for the selected professional. Please choose a different time.",
+      "APPOINTMENT_START_IN_PAST": "The appointment cannot be in the past. Choose a future date and time (e.g. tomorrow 09:00).",
       "APPOINTMENT_NOT_EDITABLE": "This appointment cannot be edited. Only Pending or Confirmed appointments can be modified.",
       "INVALID_APPOINTMENT_STATUS": "Invalid appointment status.",
       "INVALID_DATE_FORMAT": "Invalid date format."
@@ -530,7 +556,11 @@
       },
       "filter": {
         "label": "Category",
-        "allCategories": "All categories"
+        "allCategories": "All categories",
+        "statusLabel": "Status",
+        "statusAll": "All",
+        "statusActive": "Active only",
+        "statusInactive": "Inactive only"
       },
       "cancel": "Cancel",
       "save": "Save",
@@ -544,11 +574,28 @@
         "nameRequired": "Enter a category name.",
         "edit": "Edit",
         "deactivate": "Deactivate",
+        "activate": "Reactivate",
+        "activateShort": "Reactivate",
         "deactivateDialogTitle": "Deactivate category",
         "deactivateDialogDescription": "“{{name}}” will be marked inactive. It will not be available for new services; existing history is kept.",
         "inactive": "(inactive)",
         "emptyTitle": "No categories yet.",
-        "emptyBody": "Create a category to start defining services."
+        "emptyBody": "Create a category to start defining services.",
+        "serviceCount": "{{count}} services",
+        "separatorInactive": "Inactive",
+        "statusBadgeActive": "Active",
+        "statusBadgeInactive": "Inactive",
+        "accent": {
+          "label": "Color",
+          "groupLabel": "Category color",
+          "rose": "Rose",
+          "mauve": "Mauve",
+          "success": "Green",
+          "warning": "Amber",
+          "danger": "Red",
+          "stone": "Neutral"
+        },
+        "searchInlinePlaceholder": "Search by name…"
       },
       "services": {
         "addNew": "+ New service",
@@ -570,9 +617,15 @@
         "deactivate": "Deactivate",
         "deactivateDialogTitle": "Deactivate service",
         "deactivateDialogDescription": "“{{name}}” will be marked inactive. It will not appear in new appointments; existing history is kept.",
+        "activate": "Reactivate",
+        "activateShort": "Reactivate",
+        "inactiveHint": "The category must be active to reactivate this service. Select an active category or reactivate the category first.",
+        "statusLabel": "Status",
         "inactive": "(inactive)",
         "emptyTitle": "No services yet.",
-        "emptyBody": "Create a service to use it in appointments and invoices."
+        "emptyBody": "Create a service to use it in appointments and invoices.",
+        "separatorInactive": "Inactive",
+        "searchInlinePlaceholder": "Search by name or category…"
       }
     },
     "professionals": {
@@ -592,6 +645,8 @@
       "add": "New professional",
       "addTitle": "New professional",
       "editTitle": "Edit professional",
+      "searchInlinePlaceholder": "Search by name or email…",
+      "manageDetails": "Schedule & photo",
       "edit": "Edit",
       "deactivate": "Deactivate",
       "deactivateDialogTitle": "Deactivate professional",
@@ -706,7 +761,8 @@
           "dateRequired": "Date is required.",
           "timeRequired": "Time is required.",
           "professionalRequired": "Professional is required.",
-          "serviceRequired": "Service is required."
+          "serviceRequired": "Service is required.",
+          "startInPast": "The appointment date and time must be in the future. Choose a later date or time (e.g. tomorrow 09:00)."
         }
       },
       "cancelDialog": {

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -18,8 +19,11 @@ import { apiBaseUrl } from "../api/baseUrl";
 import { authHeaders } from "../api/authHeaders";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
+import { filterByListQuery } from "../util/matchesListQuery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -518,7 +522,9 @@ function InvoiceHistoryTab() {
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [listTextQuery, setListTextQuery] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadInvoices = useCallback(
     async (from: string, to: string, status: string) => {
@@ -548,19 +554,32 @@ function InvoiceHistoryTab() {
   );
 
   useEffect(() => {
-    void loadInvoices("", "", "");
-  }, [loadInvoices]);
+    if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    filterDebounceRef.current = setTimeout(() => {
+      void loadInvoices(filterFrom, filterTo, filterStatus);
+    }, 350);
+    return () => {
+      if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    };
+  }, [filterFrom, filterTo, filterStatus, loadInvoices]);
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    void loadInvoices(filterFrom, filterTo, filterStatus);
-  }
+  const filteredInvoices = useMemo(
+    () =>
+      filterByListQuery(invoices, listTextQuery, (inv) => [
+        inv.invoiceNumberFormatted,
+        inv.clientDisplayName ?? "",
+        inv.servicesSummary ?? "",
+        inv.paymentMethodsSummary ?? "",
+        String(inv.total ?? ""),
+      ]),
+    [invoices, listTextQuery],
+  );
 
   function handleClear() {
     setFilterFrom("");
     setFilterTo("");
     setFilterStatus("");
-    void loadInvoices("", "", "");
+    setListTextQuery("");
   }
 
   return (
@@ -569,49 +588,55 @@ function InvoiceHistoryTab() {
         {t("femme.billing.history.title")}
       </Heading>
 
-      {/* Filters */}
-      <form
-        onSubmit={handleSearch}
-        className="flex flex-wrap gap-3 items-end"
-        noValidate
-      >
-        <div className="flex flex-col gap-1 min-w-[140px]">
-          <Label htmlFor="filter-from">{t("femme.billing.history.filterFrom")}</Label>
-          <Input
-            id="filter-from"
-            type="date"
-            value={filterFrom}
-            onChange={(e) => setFilterFrom(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1 min-w-[140px]">
-          <Label htmlFor="filter-to">{t("femme.billing.history.filterTo")}</Label>
-          <Input
-            id="filter-to"
-            type="date"
-            value={filterTo}
-            onChange={(e) => setFilterTo(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1 min-w-[140px]">
-          <Label htmlFor="filter-status">{t("femme.billing.history.filterStatus")}</Label>
-          <Select
-            id="filter-status"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="">{t("femme.billing.history.filterStatusAll")}</option>
-            <option value="ISSUED">{t("femme.billing.history.statusIssued")}</option>
-            <option value="VOIDED">{t("femme.billing.history.statusVoided")}</option>
-          </Select>
-        </div>
-        <Button type="submit" variant="primary" size="sm">
-          {t("femme.billing.history.search")}
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={handleClear}>
-          {t("femme.billing.history.clearFilters")}
-        </Button>
-      </form>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <ListSearchField
+          id="invoice-history-text-filter"
+          value={listTextQuery}
+          onChange={setListTextQuery}
+          label={t("femme.listFilter.label")}
+          placeholder={t("femme.listFilter.placeholder")}
+          className="w-full min-w-0 sm:max-w-[min(100%,280px)]"
+        />
+        <form
+          onSubmit={(e) => e.preventDefault()}
+          className="flex flex-wrap gap-3 items-end"
+          noValidate
+        >
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="filter-from">{t("femme.billing.history.filterFrom")}</Label>
+            <Input
+              id="filter-from"
+              type="date"
+              value={filterFrom}
+              onChange={(e) => setFilterFrom(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="filter-to">{t("femme.billing.history.filterTo")}</Label>
+            <Input
+              id="filter-to"
+              type="date"
+              value={filterTo}
+              onChange={(e) => setFilterTo(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="filter-status">{t("femme.billing.history.filterStatus")}</Label>
+            <Select
+              id="filter-status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="">{t("femme.billing.history.filterStatusAll")}</option>
+              <option value="ISSUED">{t("femme.billing.history.statusIssued")}</option>
+              <option value="VOIDED">{t("femme.billing.history.statusVoided")}</option>
+            </Select>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={handleClear}>
+            {t("femme.billing.history.clearFilters")}
+          </Button>
+        </form>
+      </div>
 
       {loadError && (
         <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
@@ -626,6 +651,8 @@ function InvoiceHistoryTab() {
         </div>
       ) : invoices.length === 0 ? (
         <Text variant="muted">{t("femme.billing.history.empty")}</Text>
+      ) : filteredInvoices.length === 0 ? (
+        <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
       ) : (
         <div className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
           <table className="min-w-full text-sm">
@@ -640,7 +667,7 @@ function InvoiceHistoryTab() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv) => (
+              {filteredInvoices.map((inv) => (
                 <tr
                   key={inv.id}
                   className="border-t border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-muted)/0.4)]"
@@ -690,6 +717,9 @@ function InvoiceHistoryTab() {
 
 function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [clientSelection, setClientSelection] = useState<ClientSelection>(null);
+  const [clientSearchKey, setClientSearchKey] = useState(0);
   const [clientDisplayName, setClientDisplayName] = useState("");
   const [clientRucOverride, setClientRucOverride] = useState("");
   const [discountType, setDiscountType] = useState("NONE");
@@ -707,6 +737,17 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   const [lineErrors, setLineErrors] = useState<Record<number, Record<string, string>>>({});
   const [paymentErrors, setPaymentErrors] = useState<Record<number, string>>({});
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
+
+  function handleClientSelectionChange(sel: ClientSelection) {
+    setClientSelection(sel);
+    if (sel?.type === "client") {
+      setClientDisplayName(sel.client.fullName);
+      setClientRucOverride(sel.client.ruc ?? "");
+    } else if (sel?.type === "occasional") {
+      setClientDisplayName("");
+      setClientRucOverride("");
+    }
+  }
 
   // Computed totals
   const subtotal = lines.reduce((acc, l) => {
@@ -841,6 +882,7 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
     if (!validate()) return;
 
     const payload = {
+      clientId: clientSelection?.type === "client" ? clientSelection.client.id : null,
       clientDisplayName: clientDisplayName.trim() || null,
       clientRucOverride: clientRucOverride.trim() || null,
       discountType: discountType !== "NONE" ? discountType : null,
@@ -867,6 +909,8 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
       setSuccessInvoiceNumber(result.invoiceNumberFormatted);
       setLastInvoiceId(result.id);
       // Reset form
+      setClientSelection(null);
+      setClientSearchKey((k) => k + 1);
       setClientDisplayName("");
       setClientRucOverride("");
       setDiscountType("NONE");
@@ -950,6 +994,19 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
           <Heading as="h3" className="text-base">
             {t("femme.billing.invoice.clientSection")}
           </Heading>
+          <ClientSearchField
+            key={clientSearchKey}
+            id="billing-client-search"
+            value={clientSelection}
+            onChange={handleClientSelectionChange}
+            onCreateNew={(q) =>
+              navigate("/app/clients", {
+                state: { openCreateClient: true, prefilledName: q },
+              })
+            }
+            label={t("femme.billing.invoice.clientSearchLabel")}
+            placeholder={t("femme.billing.invoice.clientPlaceholder")}
+          />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="client-display-name">
@@ -1262,6 +1319,7 @@ function CashSessionTab({
 
   const [todayInvoices, setTodayInvoices] = useState<InvoiceListItem[]>([]);
   const [todayLoading, setTodayLoading] = useState(false);
+  const [sessionListQuery, setSessionListQuery] = useState("");
   const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
 
   const loadTodayInvoices = useCallback(async () => {
@@ -1288,11 +1346,23 @@ function CashSessionTab({
     void loadTodayInvoices();
   }, [loadTodayInvoices, refreshTrigger, currentSession?.id]);
 
+  const visibleTodayInvoices = useMemo(
+    () =>
+      filterByListQuery(todayInvoices, sessionListQuery, (inv) => [
+        inv.invoiceNumberFormatted,
+        inv.clientDisplayName ?? "",
+        inv.servicesSummary ?? "",
+        inv.paymentMethodsSummary ?? "",
+        String(inv.total ?? ""),
+      ]),
+    [todayInvoices, sessionListQuery],
+  );
+
   const dayTotalIssued = useMemo(() => {
-    return todayInvoices
+    return visibleTodayInvoices
       .filter((i) => i.status === "ISSUED")
       .reduce((acc, i) => acc + (Number(i.total) || 0), 0);
-  }, [todayInvoices]);
+  }, [visibleTodayInvoices]);
 
   async function handleOpenSession(e: React.FormEvent) {
     e.preventDefault();
@@ -1750,6 +1820,16 @@ function CashSessionTab({
             </span>
           </div>
 
+          <div style={{ marginBottom: 12 }}>
+            <ListSearchField
+              id="billing-session-today-filter"
+              value={sessionListQuery}
+              onChange={setSessionListQuery}
+              label={t("femme.listFilter.label")}
+              placeholder={t("femme.listFilter.placeholder")}
+            />
+          </div>
+
           {todayLoading ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 12 }}>
               <Spinner size="sm" />
@@ -1757,6 +1837,8 @@ function CashSessionTab({
             </div>
           ) : todayInvoices.length === 0 ? (
             <Text variant="muted">{t("femme.billing.session.emptyToday")}</Text>
+          ) : visibleTodayInvoices.length === 0 ? (
+            <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
           ) : (
             <div style={{ overflowX: "auto", margin: "0 -16px" }}>
               <table
@@ -1798,7 +1880,7 @@ function CashSessionTab({
                   </tr>
                 </thead>
                 <tbody>
-                  {todayInvoices.map((inv) => {
+                  {visibleTodayInvoices.map((inv) => {
                     const isHov = hoveredRowId === inv.id;
                     const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
                     const cell: React.CSSProperties = {

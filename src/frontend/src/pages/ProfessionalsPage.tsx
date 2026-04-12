@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { SearchInput } from "../components/ui/SearchInput";
+import { InlineEditActions } from "../components/ui/InlineEditActions";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { useInlineEdit } from "../hooks/useInlineEdit";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -133,6 +137,12 @@ export default function ProfessionalsPage() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const daysByValue = useMemo(() => new Map(DAYS.map((d) => [d.value, d.key] as const)), []);
+
+  const { query: listQuery, setQuery: setListQuery, filtered: visibleProfessionals, highlight } =
+    useFilteredList<Professional>({
+      items: professionals,
+      fields: ["fullName", "phone", "email"],
+    });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -304,6 +314,60 @@ export default function ProfessionalsPage() {
     }
   }
 
+  const handleInlineSave = useCallback(
+    async (p: Professional) => {
+      const nameTrim = p.fullName.trim();
+      if (!nameTrim) {
+        throw new Error("NAME_REQUIRED");
+      }
+      await femmePutJson<Professional>(`/api/professionals/${p.id}`, {
+        fullName: nameTrim,
+        phone: p.phone?.trim() || null,
+        email: p.email?.trim() || null,
+        photoDataUrl: p.photoDataUrl?.trim() || null,
+      });
+      await load();
+    },
+    [load],
+  );
+
+  const {
+    editingData,
+    saving: inlineSaving,
+    saveError: inlineSaveError,
+    startEdit,
+    cancelEdit,
+    updateField,
+    saveEdit,
+    isEditing,
+  } = useInlineEdit<Professional>({
+    onSave: handleInlineSave,
+    saveErrorMessage: t("femme.inlineEdit.saveError"),
+  });
+
+  const inputEditStyle: React.CSSProperties = {
+    padding: "6px 9px",
+    border: "1px solid var(--color-rose-md)",
+    borderRadius: "var(--radius-md)",
+    fontSize: 12,
+    color: "var(--color-ink)",
+    background: "var(--color-white)",
+    outline: "none",
+    width: "100%",
+    minWidth: 80,
+  };
+
+  const keySaveCancel = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveEdit();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    }
+  };
+
   const scheduleDisabled = !savedProfessional;
 
   if (loading) {
@@ -372,6 +436,17 @@ export default function ProfessionalsPage() {
         </Alert>
       )}
 
+      <div style={{ marginBottom: 12 }}>
+        <SearchInput
+          id="professionals-inline-search"
+          value={listQuery}
+          onChange={setListQuery}
+          placeholder={t("femme.professionals.searchInlinePlaceholder")}
+          resultCount={visibleProfessionals.length}
+          totalCount={professionals.length}
+        />
+      </div>
+
       {/* ── Table ── */}
       <div
         style={{
@@ -414,11 +489,25 @@ export default function ProfessionalsPage() {
                     {t("femme.professionals.emptyBody")}
                   </td>
                 </tr>
+              ) : visibleProfessionals.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    style={{
+                      padding: "24px 12px",
+                      textAlign: "center",
+                      fontSize: 12,
+                      color: "var(--color-ink-3)",
+                    }}
+                  >
+                    {t("femme.listFilter.noMatches")}
+                  </td>
+                </tr>
               ) : (
-                professionals.map((p, idx) => {
-                  const av    = profAvatar(idx);
+                visibleProfessionals.map((p, idx) => {
+                  const av = profAvatar(idx);
                   const isHov = hoveredId === p.id;
-                  const tdBg  = isHov ? "var(--color-rose-lt)" : undefined;
+                  const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
                   const tdStyle: React.CSSProperties = {
                     padding: "10px 12px",
                     fontSize: 12,
@@ -427,6 +516,66 @@ export default function ProfessionalsPage() {
                     borderBottom: "0.5px solid var(--color-stone)",
                     background: tdBg,
                   };
+                  const rowEditing = isEditing(p.id);
+                  const ed = rowEditing ? ({ ...p, ...editingData } as Professional) : p;
+
+                  if (rowEditing) {
+                    return (
+                      <tr
+                        key={p.id}
+                        style={{
+                          background: "var(--color-rose-lt)",
+                          outline: "1.5px solid var(--color-rose-md)",
+                          outlineOffset: -1,
+                        }}
+                      >
+                        <td style={{ padding: "8px 12px" }}>
+                          <input
+                            value={ed.fullName ?? ""}
+                            onChange={(e) => updateField("fullName", e.target.value)}
+                            onKeyDown={keySaveCancel}
+                            placeholder={t("femme.professionals.form.fullName")}
+                            style={inputEditStyle}
+                            aria-label={t("femme.professionals.form.fullName")}
+                          />
+                        </td>
+                        <td style={{ padding: "8px 12px" }}>
+                          <input
+                            value={ed.phone ?? ""}
+                            onChange={(e) => updateField("phone", e.target.value || null)}
+                            onKeyDown={keySaveCancel}
+                            placeholder={t("femme.professionals.form.phone")}
+                            style={inputEditStyle}
+                            aria-label={t("femme.professionals.form.phone")}
+                          />
+                        </td>
+                        <td style={{ padding: "8px 12px" }}>
+                          <input
+                            type="email"
+                            value={ed.email ?? ""}
+                            onChange={(e) => updateField("email", e.target.value || null)}
+                            onKeyDown={keySaveCancel}
+                            placeholder={t("femme.professionals.form.email")}
+                            style={inputEditStyle}
+                            aria-label={t("femme.professionals.form.email")}
+                          />
+                        </td>
+                        <td style={tdStyle}>
+                          <StatusBadge status={p.active ? "ACTIVE" : "INACTIVE"} />
+                        </td>
+                        <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                          <InlineEditActions
+                            isEditing
+                            saving={inlineSaving}
+                            saveError={inlineSaveError}
+                            onEdit={() => {}}
+                            onSave={() => void saveEdit()}
+                            onCancel={cancelEdit}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  }
 
                   return (
                     <tr
@@ -434,7 +583,6 @@ export default function ProfessionalsPage() {
                       onMouseEnter={() => setHoveredId(p.id)}
                       onMouseLeave={() => setHoveredId(null)}
                     >
-                      {/* Professional: avatar + name */}
                       <td style={tdStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                           <div
@@ -463,9 +611,9 @@ export default function ProfessionalsPage() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {p.fullName}
+                              {highlight(p.fullName) as ReactNode}
                             </div>
-                            {p.schedules.filter((s) => s.startTime && s.endTime).length > 0 && (
+                            {p.schedules.filter((s) => s.startTime && s.endTime).length > 0 ? (
                               <div style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
                                 {p.schedules.filter((s) => s.startTime && s.endTime).length}
                                 {" "}
@@ -477,17 +625,15 @@ export default function ProfessionalsPage() {
                                 }`)}
                                 {p.schedules.filter((s) => s.startTime && s.endTime).length > 1 ? "…" : ""}
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </td>
 
-                      {/* Phone */}
                       <td style={{ ...tdStyle, color: p.phone ? "var(--color-ink)" : "var(--color-ink-3)" }}>
-                        {p.phone ?? "—"}
+                        {p.phone ? (highlight(p.phone) as ReactNode) : "—"}
                       </td>
 
-                      {/* Email */}
                       <td
                         style={{
                           ...tdStyle,
@@ -497,15 +643,13 @@ export default function ProfessionalsPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {p.email ?? "—"}
+                        {p.email ? (highlight(p.email) as ReactNode) : "—"}
                       </td>
 
-                      {/* Status */}
                       <td style={tdStyle}>
                         <StatusBadge status={p.active ? "ACTIVE" : "INACTIVE"} />
                       </td>
 
-                      {/* Actions */}
                       <td style={{ ...tdStyle, textAlign: "right" }}>
                         <div
                           style={{
@@ -513,6 +657,7 @@ export default function ProfessionalsPage() {
                             gap: 6,
                             justifyContent: "flex-end",
                             alignItems: "center",
+                            flexWrap: "wrap",
                           }}
                         >
                           <button
@@ -522,50 +667,26 @@ export default function ProfessionalsPage() {
                               padding: "4px 10px",
                               borderRadius: "var(--radius-sm)",
                               fontSize: 11,
-                              border: "0.5px solid var(--color-rose-md)",
+                              border: "0.5px solid var(--color-stone-md)",
                               background: "transparent",
-                              color: "var(--color-rose)",
+                              color: "var(--color-ink-2)",
                               cursor: "pointer",
                               whiteSpace: "nowrap",
                             }}
                           >
-                            {t("femme.professionals.edit")}
+                            {t("femme.professionals.manageDetails")}
                           </button>
-                          {p.active ? (
-                            <button
-                              type="button"
-                              onClick={() => requestDeactivate(p)}
-                              style={{
-                                padding: "4px 10px",
-                                borderRadius: "var(--radius-sm)",
-                                fontSize: 11,
-                                border: "none",
-                                background: "transparent",
-                                color: "var(--color-danger)",
-                                cursor: "pointer",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {t("femme.professionals.deactivateShort")}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => requestActivate(p)}
-                              style={{
-                                padding: "4px 10px",
-                                borderRadius: "var(--radius-sm)",
-                                fontSize: 11,
-                                border: "none",
-                                background: "transparent",
-                                color: "var(--color-success)",
-                                cursor: "pointer",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {t("femme.professionals.activate")}
-                            </button>
-                          )}
+                          <InlineEditActions
+                            isEditing={false}
+                            saving={false}
+                            saveError={null}
+                            onEdit={() => startEdit(p)}
+                            onSave={() => void saveEdit()}
+                            onCancel={cancelEdit}
+                            onDeactivate={() => requestDeactivate(p)}
+                            onActivate={() => requestActivate(p)}
+                            isActive={p.active}
+                          />
                         </div>
                       </td>
                     </tr>

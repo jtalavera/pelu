@@ -5,8 +5,10 @@ import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { useMe } from "../hooks/useMe";
+import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
+import { filterByListQuery } from "../util/matchesListQuery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,13 +22,25 @@ type DashboardResponse = {
   };
   revenueDay: { invoiced: string | number; collected: string | number };
   revenueWeek: { invoiced: string | number; collected: string | number };
+  /** Distinct registered clients with ≥1 completed-type appointment in the current calendar month (tenant TZ). */
+  clientsThisMonth: number;
   fiscalAlerts: Array<{ severity: string; messageKey: string; message: string }>;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtMoney(v: string | number): string {
-  return String(v);
+/** Paraguayan guaraníes: thousands separator + currency prefix (product default). */
+function fmtMoneyGs(v: string | number, numberLocale: string): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) {
+    return "Gs. —";
+  }
+  return `Gs. ${Math.round(n).toLocaleString(numberLocale)}`;
+}
+
+function fmtCount(n: number, numberLocale: string): string {
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(n);
 }
 
 function toLocalDateStr(d: Date): string {
@@ -199,8 +213,17 @@ export default function DashboardPage() {
   const [calMonth, setCalMonth]       = useState(() => new Date());
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
+  const [apptListQuery, setApptListQuery] = useState("");
 
   const todayStr = useMemo(() => toLocalDateStr(now), [now]);
+
+  /** Local calendar day bounds as ISO instants (API requires Instant.parse, not YYYY-MM-DD). */
+  const todayRangeIso = useMemo(() => {
+    const [y, m, d] = todayStr.split("-").map((x) => parseInt(x, 10));
+    const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+    const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }, [todayStr]);
 
   // ── Polling dashboard aggregates ──────────────────────────────────────────
   const load = useCallback(async () => {
@@ -229,23 +252,39 @@ export default function DashboardPage() {
 
   // ── Today's appointments (for list + occupancy) ───────────────────────────
   useEffect(() => {
-    listAppointments(todayStr, todayStr)
+    listAppointments(todayRangeIso.from, todayRangeIso.to)
       .then(setTodayAppts)
       .catch(() => setTodayAppts([]));
-  }, [todayStr]);
+  }, [todayRangeIso.from, todayRangeIso.to]);
 
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
-    const map = new Map<number, { name: string; count: number }>();
+    const map = new Map<number, { id: number; name: string; count: number }>();
     for (const a of todayAppts) {
       const e = map.get(a.professionalId);
       if (e) e.count++;
-      else map.set(a.professionalId, { name: a.professionalName, count: 1 });
+      else
+        map.set(a.professionalId, {
+          id: a.professionalId,
+          name: a.professionalName,
+          count: 1,
+        });
     }
     return [...map.values()].sort((a, b) => b.count - a.count);
   }, [todayAppts]);
 
   const maxOccupancy = occupancy.length > 0 ? Math.max(...occupancy.map((o) => o.count)) : 1;
+
+  const visibleTodayAppts = useMemo(
+    () =>
+      filterByListQuery(todayAppts, apptListQuery, (a) => [
+        a.clientName ?? "",
+        a.professionalName,
+        a.serviceName,
+        a.status,
+      ]),
+    [todayAppts, apptListQuery],
+  );
 
   // ── Calendar helpers ──────────────────────────────────────────────────────
   const calYear     = calMonth.getFullYear();
@@ -256,6 +295,7 @@ export default function DashboardPage() {
   const todayYear   = now.getFullYear();
 
   const locale = getDateLocale(i18n);
+  const numberLocale = locale.startsWith("es") ? "es-PY" : "en-US";
 
   const monthLabel = new Intl.DateTimeFormat(locale, {
     month: "long",
@@ -412,19 +452,14 @@ export default function DashboardPage() {
 
       {/* ── 3. METRICS ── */}
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 10,
-          marginBottom: 16,
-        }}
+        className="mb-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
       >
         <MetricCard
           iconBg="var(--color-rose-lt)"
           icon={<MoneyIcon c="var(--color-rose)" />}
-          value={fmtMoney(data.revenueDay.collected)}
+          value={fmtMoneyGs(data.revenueDay.collected, numberLocale)}
           label={t("femme.dashboard.metricRevenueDay")}
-          delta={`${t("femme.dashboard.invoiced")}: ${fmtMoney(data.revenueDay.invoiced)}`}
+          delta={`${t("femme.dashboard.invoiced")}: ${fmtMoneyGs(data.revenueDay.invoiced, numberLocale)}`}
         />
         <MetricCard
           iconBg="var(--color-mauve-lt)"
@@ -438,28 +473,22 @@ export default function DashboardPage() {
         <MetricCard
           iconBg="var(--color-success-lt)"
           icon={<TrendIcon c="var(--color-success)" />}
-          value={fmtMoney(data.revenueWeek.collected)}
+          value={fmtMoneyGs(data.revenueWeek.collected, numberLocale)}
           label={t("femme.dashboard.metricRevenueWeek")}
-          delta={`${t("femme.dashboard.invoiced")}: ${fmtMoney(data.revenueWeek.invoiced)}`}
+          delta={`${t("femme.dashboard.invoiced")}: ${fmtMoneyGs(data.revenueWeek.invoiced, numberLocale)}`}
         />
         <MetricCard
           iconBg="var(--color-stone-md)"
           icon={<UsersIcon c="var(--color-ink-3)" />}
-          value="—"
+          value={fmtCount(data.clientsThisMonth, numberLocale)}
           label={t("femme.dashboard.metricClientsMonth")}
         />
       </div>
 
-      {/* ── 4. TWO-COLUMN GRID ── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 300px",
-          gap: 14,
-        }}
-      >
+      {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
         {/* LEFT: Today's appointments */}
-        <div style={cardStyle}>
+        <div style={{ ...cardStyle, minWidth: 0 }}>
           <div
             style={{
               display: "flex",
@@ -479,14 +508,28 @@ export default function DashboardPage() {
             </Link>
           </div>
 
+          <div style={{ marginBottom: 10 }}>
+            <ListSearchField
+              id="dashboard-appt-filter"
+              value={apptListQuery}
+              onChange={setApptListQuery}
+              label={t("femme.listFilter.label")}
+              placeholder={t("femme.listFilter.placeholder")}
+            />
+          </div>
+
           {todayAppts.length === 0 ? (
             <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
               {t("femme.dashboard.noAppts")}
             </div>
+          ) : visibleTodayAppts.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
+              {t("femme.listFilter.noMatches")}
+            </div>
           ) : (
-            todayAppts.map((appt, idx) => {
+            visibleTodayAppts.map((appt, idx) => {
               const ac = avatarColor(appt.professionalName);
-              const isLast = idx === todayAppts.length - 1;
+              const isLast = idx === visibleTodayAppts.length - 1;
               return (
                 <div
                   key={appt.id}
@@ -559,7 +602,7 @@ export default function DashboardPage() {
         </div>
 
         {/* RIGHT column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="flex min-w-0 flex-col gap-4">
           {/* Mini calendar */}
           <div style={cardStyle}>
             <div
@@ -644,13 +687,6 @@ export default function DashboardPage() {
                   cell.day === todayDay &&
                   calMonthIdx === todayMonth &&
                   calYear === todayYear;
-                const hasAppts =
-                  !isToday &&
-                  cell.current &&
-                  calMonthIdx === todayMonth &&
-                  calYear === todayYear &&
-                  a.total > 0 &&
-                  cell.day === todayDay;
 
                 return (
                   <div
@@ -661,19 +697,13 @@ export default function DashboardPage() {
                       padding: "4px 2px",
                       borderRadius: 5,
                       cursor: cell.current ? "pointer" : "default",
-                      fontWeight: isToday || hasAppts ? 500 : 400,
-                      background: isToday
-                        ? "var(--color-rose)"
-                        : hasAppts
-                          ? "var(--color-rose-lt)"
-                          : "transparent",
+                      fontWeight: isToday ? 500 : 400,
+                      background: isToday ? "var(--color-rose)" : "transparent",
                       color: isToday
                         ? "var(--color-on-primary)"
-                        : hasAppts
-                          ? "var(--color-rose-dk)"
-                          : cell.current
-                            ? "var(--color-ink-2)"
-                            : "var(--color-stone-md)",
+                        : cell.current
+                          ? "var(--color-ink-2)"
+                          : "var(--color-stone-md)",
                     }}
                   >
                     {cell.day}
@@ -705,7 +735,7 @@ export default function DashboardPage() {
                 const ac = avatarColor(prof.name);
                 return (
                   <div
-                    key={prof.name}
+                    key={prof.id}
                     style={{
                       display: "flex",
                       alignItems: "center",

@@ -26,6 +26,28 @@
     }
   },
   "femme": {
+    "listFilter": {
+      "label": "Filtrar lista",
+      "placeholder": "Escriba para filtrar…",
+      "noMatches": "Ninguna fila coincide con el filtro."
+    },
+    "searchInput": {
+      "placeholderDefault": "Buscar…",
+      "clearAria": "Limpiar búsqueda",
+      "noResults": "Sin resultados",
+      "resultCount": "{{count}} de {{total}}"
+    },
+    "inlineActions": {
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saving": "Guardando…",
+      "edit": "Editar",
+      "deactivate": "Desactivar",
+      "activate": "Activar"
+    },
+    "inlineEdit": {
+      "saveError": "No se pudo guardar. Intentá de nuevo."
+    },
     "appName": "Femme",
     "login": {
       "title": "Iniciar sesión",
@@ -255,6 +277,7 @@
       "invoice": {
         "title": "Emitir comprobante",
         "clientSection": "Cliente",
+        "clientSearchLabel": "Buscar o seleccionar cliente",
         "clientId": "Cliente (opcional)",
         "clientPlaceholder": "Buscar o seleccionar cliente…",
         "occasionalClient": "Cliente ocasional (sin registro)",
@@ -395,6 +418,7 @@
         "placeholder": "Buscar por nombre, teléfono o RUC…",
         "submit": "Buscar"
       },
+      "searchInlinePlaceholder": "Buscar por nombre, teléfono o RUC…",
       "subtitle": "{{count}} clientas registradas",
       "export": "Exportar",
       "newClient": "+ Nueva cliente",
@@ -471,6 +495,7 @@
       "LOGO_INVALID_FORMAT": "El logo debe ser una imagen (data:image/...).",
       "CATEGORY_NOT_FOUND": "Categoría no encontrada.",
       "CATEGORY_INACTIVE": "La categoría seleccionada está inactiva. Elegí una categoría activa.",
+      "INVALID_CATEGORY_ACCENT": "Elegí un color de categoría válido de la paleta.",
       "SERVICE_NOT_FOUND": "Servicio no encontrado.",
       "FISCAL_STAMP_NOT_FOUND": "Timbrado no encontrado.",
       "STAMP_LOCKED_AFTER_INVOICE": "No se puede editar este timbrado porque ya se usó en facturas. Desactivalo y agregá uno nuevo.",
@@ -515,6 +540,7 @@
       "PHOTO_INVALID_FORMAT": "La foto debe ser una imagen (data:image/...).",
       "APPOINTMENT_NOT_FOUND": "Turno no encontrado.",
       "APPOINTMENT_OVERLAP": "Este horario ya está ocupado para la profesional seleccionada. Por favor elija un horario diferente.",
+      "APPOINTMENT_START_IN_PAST": "No se puede agendar un turno en el pasado. Elegí una fecha y hora futuras (ej.: mañana 09:00).",
       "APPOINTMENT_NOT_EDITABLE": "Este turno no puede ser editado. Solo los turnos en estado Pendiente o Confirmado pueden modificarse.",
       "INVALID_APPOINTMENT_STATUS": "Estado de turno inválido.",
       "INVALID_DATE_FORMAT": "Formato de fecha inválido."
@@ -541,7 +567,11 @@
       },
       "filter": {
         "label": "Categoría",
-        "allCategories": "Todas las categorías"
+        "allCategories": "Todas las categorías",
+        "statusLabel": "Estado",
+        "statusAll": "Todos",
+        "statusActive": "Solo activos",
+        "statusInactive": "Solo inactivos"
       },
       "categories": {
         "addNew": "+ Nueva categoría",
@@ -553,11 +583,28 @@
         "nameRequired": "Ingresá un nombre de categoría.",
         "edit": "Editar",
         "deactivate": "Desactivar",
+        "activate": "Reactivar",
+        "activateShort": "Reactivar",
         "deactivateDialogTitle": "Desactivar categoría",
         "deactivateDialogDescription": "“{{name}}” quedará inactiva. No estará disponible para nuevos servicios; el historial existente se conserva.",
         "inactive": "(inactiva)",
         "emptyTitle": "Todavía no hay categorías.",
-        "emptyBody": "Creá una categoría para empezar a definir servicios."
+        "emptyBody": "Creá una categoría para empezar a definir servicios.",
+        "serviceCount": "{{count}} servicios",
+        "separatorInactive": "Inactivas",
+        "statusBadgeActive": "Activa",
+        "statusBadgeInactive": "Inactiva",
+        "accent": {
+          "label": "Color",
+          "groupLabel": "Color de la categoría",
+          "rose": "Rosa",
+          "mauve": "Malva",
+          "success": "Verde",
+          "warning": "Ámbar",
+          "danger": "Rojo",
+          "stone": "Neutro"
+        },
+        "searchInlinePlaceholder": "Buscar por nombre…"
       },
       "services": {
         "addNew": "+ Nuevo servicio",
@@ -579,9 +626,15 @@
         "deactivate": "Desactivar",
         "deactivateDialogTitle": "Desactivar servicio",
         "deactivateDialogDescription": "“{{name}}” quedará inactivo. No aparecerá en nuevos turnos; el historial existente se conserva.",
+        "activate": "Reactivar",
+        "activateShort": "Reactivar",
+        "inactiveHint": "La categoría debe estar activa para reactivar este servicio. Elegí una categoría activa o reactivá la categoría primero.",
+        "statusLabel": "Estado",
         "inactive": "(inactivo)",
         "emptyTitle": "Todavía no hay servicios.",
-        "emptyBody": "Creá un servicio para usarlo en turnos y facturas."
+        "emptyBody": "Creá un servicio para usarlo en turnos y facturas.",
+        "separatorInactive": "Inactivos",
+        "searchInlinePlaceholder": "Buscar por nombre o categoría…"
       }
     },
     "professionals": {
@@ -601,6 +654,8 @@
       "add": "Nueva profesional",
       "addTitle": "Nueva profesional",
       "editTitle": "Editar profesional",
+      "searchInlinePlaceholder": "Buscar por nombre o email…",
+      "manageDetails": "Horario y foto",
       "edit": "Editar",
       "deactivate": "Desactivar",
       "deactivateDialogTitle": "Desactivar profesional",
@@ -715,7 +770,8 @@
           "dateRequired": "La fecha es obligatoria.",
           "timeRequired": "La hora es obligatoria.",
           "professionalRequired": "La profesional es obligatoria.",
-          "serviceRequired": "El servicio es obligatorio."
+          "serviceRequired": "El servicio es obligatorio.",
+          "startInPast": "La fecha y hora del turno deben ser futuras. Elegí una fecha u hora posterior (ej.: mañana 09:00)."
         }
       },
       "cancelDialog": {

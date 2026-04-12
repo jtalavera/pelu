@@ -6,6 +6,8 @@ import com.cursorpoc.backend.web.dto.ServiceCategoryResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryUpsertRequest;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +23,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/service-categories")
 public class ServiceCategoryController {
+
+  private static final Logger log = LoggerFactory.getLogger(ServiceCategoryController.class);
 
   private final ServiceCatalogService serviceCatalogService;
 
@@ -66,5 +70,33 @@ public class ServiceCategoryController {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.deactivateCategory(principal.getTenantId(), categoryId);
+  }
+
+  @PostMapping("/{categoryId}/activate")
+  public ServiceCategoryResponse activate(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable long categoryId) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info(
+        "POST /api/service-categories/{}/activate tenantId={}",
+        categoryId,
+        principal.getTenantId());
+    try {
+      ServiceCategoryResponse response =
+          serviceCatalogService.activateCategory(principal.getTenantId(), categoryId);
+      log.info(
+          "POST /api/service-categories/{}/activate tenantId={} status=200",
+          categoryId,
+          principal.getTenantId());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/service-categories/{}/activate tenantId={} status={}",
+          categoryId,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 }

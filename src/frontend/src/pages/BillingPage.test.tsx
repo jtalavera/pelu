@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
+import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
 import BillingPage from "./BillingPage";
@@ -24,9 +25,11 @@ vi.mock("../api/authHeaders", () => ({
 function renderPage() {
   return render(
     <I18nextProvider i18n={i18n}>
-      <ThemeProvider>
-        <BillingPage />
-      </ThemeProvider>
+      <MemoryRouter>
+        <ThemeProvider>
+          <BillingPage />
+        </ThemeProvider>
+      </MemoryRouter>
     </I18nextProvider>,
   );
 }
@@ -225,7 +228,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       fireEvent.click(historyTabs[0]);
 
       expect(await screen.findByText("0000001")).toBeTruthy();
-      expect(screen.getByText("0000002")).toBeTruthy();
+      expect(screen.getAllByText("0000002").length).toBeGreaterThan(0);
       expect(screen.getAllByText(/issued/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/voided/i).length).toBeGreaterThan(0);
     });

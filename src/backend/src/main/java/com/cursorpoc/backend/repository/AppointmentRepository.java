@@ -65,4 +65,18 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       @Param("tenantId") Long tenantId,
       @Param("dayStart") Instant dayStart,
       @Param("dayEnd") Instant dayEnd);
+
+  /**
+   * Distinct registered clients with at least one non-cancelled appointment in {@code [from, to)}.
+   */
+  @Query(
+      """
+      SELECT COUNT(DISTINCT a.client.id) FROM Appointment a
+      WHERE a.tenant.id = :tenantId
+      AND a.client IS NOT NULL
+      AND a.startAt >= :from AND a.startAt < :to
+      AND a.status IN ('PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED')
+      """)
+  long countDistinctClientsWithAppointmentsBetween(
+      @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
 }

@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Heading, Input, Label, Spinner, Text } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
+import { filterByListQuery } from "../util/matchesListQuery";
 
 type FiscalStampRow = {
   id: number;
@@ -135,6 +137,7 @@ export default function FiscalStampSettingsPage() {
   const [editValidUntil, setEditValidUntil] = useState("");
   const [editNext, setEditNext] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [stampListQuery, setStampListQuery] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -312,6 +315,19 @@ export default function FiscalStampSettingsPage() {
   const activeRow = rows.find((r) => r.active);
   const otherRows = rows.filter((r) => !r.active);
 
+  const filteredOtherRows = useMemo(
+    () =>
+      filterByListQuery(otherRows, stampListQuery, (r) => [
+        r.stampNumber,
+        String(r.rangeFrom),
+        String(r.rangeTo),
+        String(r.nextEmissionNumber),
+        r.validFrom,
+        r.validUntil,
+      ]),
+    [otherRows, stampListQuery],
+  );
+
   const primaryBtn: React.CSSProperties = {
     background: "var(--color-rose)",
     color: "var(--color-on-primary)",
@@ -380,8 +396,22 @@ export default function FiscalStampSettingsPage() {
           <div style={sectionTitleStyle}>
             {activeRow ? t("femme.fiscalStamp.otherStampsTitle") : t("femme.fiscalStamp.registeredTitle")}
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <ListSearchField
+              id="fiscal-stamp-list-filter"
+              value={stampListQuery}
+              onChange={setStampListQuery}
+              label={t("femme.listFilter.label")}
+              placeholder={t("femme.listFilter.placeholder")}
+            />
+          </div>
+          {filteredOtherRows.length === 0 ? (
+            <Text variant="muted" style={{ marginBottom: 8 }}>
+              {t("femme.listFilter.noMatches")}
+            </Text>
+          ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {otherRows.map((row) => (
+            {filteredOtherRows.map((row) => (
               <div
                 key={row.id}
                 style={{
@@ -435,6 +465,7 @@ export default function FiscalStampSettingsPage() {
               </div>
             ))}
           </div>
+          )}
         </div>
       ) : null}
 

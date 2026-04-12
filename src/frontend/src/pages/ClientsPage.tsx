@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Input, Label, Modal, Spinner, Text } from "@design-system";
-import { femmeJson, femmePostJson } from "../api/femmeClient";
+import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { SearchInput } from "../components/ui/SearchInput";
+import { InlineEditActions } from "../components/ui/InlineEditActions";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { useInlineEdit } from "../hooks/useInlineEdit";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 
@@ -71,36 +75,18 @@ function exportCsv(clients: Client[]) {
 
 const PAGE_SIZE = 20;
 
-// ── Search icon ───────────────────────────────────────────────────────────────
-
-const SearchIcon = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <path d="m21 21-4.35-4.35" />
-  </svg>
-);
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ClientsPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const locale = getDateLocale(i18n);
 
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [clients, setClients]   = useState<Client[]>([]);
 
-  const [q, setQ]               = useState("");
   const [filter, setFilter]     = useState<FilterKey>("all");
   const [page, setPage]         = useState(1);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -133,41 +119,22 @@ export default function ClientsPage() {
     void load();
   }, [load]);
 
-  // ── Debounced keystroke search ───────────────────────────────────────────────
-  const isFirstMount = useRef(true);
+  // Open "new client" from other flows (e.g. billing → create client)
   useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      return;
+    const st = location.state as
+      | { openCreateClient?: boolean; prefilledName?: string }
+      | undefined;
+    if (st?.openCreateClient) {
+      setFullName(st.prefilledName?.trim() ?? "");
+      setPhone("");
+      setEmail("");
+      setRuc("");
+      setFieldError(null);
+      setSaveError(null);
+      setModalOpen(true);
+      navigate(location.pathname, { replace: true, state: {} });
     }
-    const timer = setTimeout(async () => {
-      setPage(1);
-      setError(null);
-      try {
-        const qs = new URLSearchParams();
-        if (q.trim()) qs.set("q", q.trim());
-        const data = await femmeJson<Client[]>(`/api/clients?${qs.toString()}`);
-        setClients(Array.isArray(data) ? data : []);
-      } catch {
-        setError(t("femme.clients.loadError"));
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [q, t]);
-
-  // Existing search submit handler (kept for Enter-key form support)
-  async function onSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      const qs = new URLSearchParams();
-      if (q.trim()) qs.set("q", q.trim());
-      const data = await femmeJson<Client[]>(`/api/clients?${qs.toString()}`);
-      setClients(Array.isArray(data) ? data : []);
-    } catch {
-      setError(t("femme.clients.loadError"));
-    }
-  }
+  }, [location.state, location.pathname, navigate]);
 
   // Reset page when filter changes
   useEffect(() => {
@@ -223,11 +190,11 @@ export default function ClientsPage() {
     }
   }
 
-  // ── Filtered + paginated ────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
+  // ── Filter pills + real-time search (client-side) + paginated ───────────────
+  const filteredByPills = useMemo(() => {
     let list = clients;
     if (filter === "active") list = list.filter((c) => c.active);
-    if (filter === "ruc")    list = list.filter((c) => !!c.ruc);
+    if (filter === "ruc") list = list.filter((c) => !!c.ruc);
     if (filter === "new") {
       const now = new Date();
       list = list.filter((c) => {
@@ -241,11 +208,75 @@ export default function ClientsPage() {
     return list;
   }, [clients, filter]);
 
-  const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage     = Math.min(page, totalPages);
-  const pageClients  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  const fromIdx      = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
-  const toIdx        = Math.min(safePage * PAGE_SIZE, filtered.length);
+  const { query: listQuery, setQuery: setListQuery, filtered: searchFiltered, highlight } =
+    useFilteredList<Client>({
+      items: filteredByPills,
+      fields: ["fullName", "phone", "email", "ruc"],
+    });
+
+  useEffect(() => {
+    setPage(1);
+  }, [listQuery]);
+
+  const handleInlineSave = useCallback(
+    async (client: Client) => {
+      const rucTrim = (client.ruc ?? "").trim();
+      if (rucTrim && !validateRuc(rucTrim)) {
+        throw new Error("INVALID_RUC");
+      }
+      await femmePutJson<Client>(`/api/clients/${client.id}`, {
+        fullName: String(client.fullName ?? "").trim(),
+        phone: client.phone?.trim() || null,
+        email: client.email?.trim() || null,
+        ruc: rucTrim || null,
+      });
+      await load();
+    },
+    [load],
+  );
+
+  const {
+    editingData,
+    saving: inlineSaving,
+    saveError: inlineSaveError,
+    startEdit,
+    cancelEdit,
+    updateField,
+    saveEdit,
+    isEditing,
+  } = useInlineEdit<Client>({
+    onSave: handleInlineSave,
+    saveErrorMessage: t("femme.inlineEdit.saveError"),
+  });
+
+  const totalPages = Math.max(1, Math.ceil(searchFiltered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageClients = searchFiltered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const fromIdx = searchFiltered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const toIdx = Math.min(safePage * PAGE_SIZE, searchFiltered.length);
+
+  const inputEditStyle: React.CSSProperties = {
+    padding: "6px 9px",
+    border: "1px solid var(--color-rose-md)",
+    borderRadius: "var(--radius-md)",
+    fontSize: 12,
+    color: "var(--color-ink)",
+    background: "var(--color-white)",
+    outline: "none",
+    width: "100%",
+    minWidth: 80,
+  };
+
+  const keySaveCancel = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveEdit();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    }
+  };
 
   // ── Shared styles ───────────────────────────────────────────────────────────
   const primaryBtn: React.CSSProperties = {
@@ -321,7 +352,7 @@ export default function ClientsPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="button" style={ghostBtn} onClick={() => exportCsv(filtered)}>
+          <button type="button" style={ghostBtn} onClick={() => exportCsv(searchFiltered)}>
             {t("femme.clients.export")}
           </button>
           <button type="button" style={primaryBtn} onClick={openNew}>
@@ -339,50 +370,14 @@ export default function ClientsPage() {
 
       {/* ── Toolbar ── */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        {/* Inline search */}
-        <form
-          onSubmit={onSearchSubmit}
-          style={{ position: "relative", flex: 1, maxWidth: 280 }}
-          role="search"
-        >
-          <Label htmlFor="client-q" className="sr-only">
-            {t("femme.clients.search.label")}
-          </Label>
-          <span
-            style={{
-              position: "absolute",
-              left: 9,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--color-ink-3)",
-              pointerEvents: "none",
-              display: "flex",
-            }}
-          >
-            <SearchIcon />
-          </span>
-          <input
-            id="client-q"
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t("femme.clients.search.placeholder")}
-            aria-label={t("femme.clients.search.label")}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "7px 10px 7px 32px",
-              border: "var(--border-default)",
-              borderRadius: "var(--radius-md)",
-              fontSize: 12,
-              background: "var(--color-stone)",
-              color: "var(--color-ink)",
-              outline: "none",
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-rose)"; }}
-            onBlur={(e)  => { e.currentTarget.style.borderColor = ""; }}
-          />
-        </form>
+        <SearchInput
+          id="clients-inline-search"
+          value={listQuery}
+          onChange={setListQuery}
+          placeholder={t("femme.clients.searchInlinePlaceholder")}
+          resultCount={searchFiltered.length}
+          totalCount={filteredByPills.length}
+        />
 
         {/* Filter pills */}
         <div role="group" aria-label={t("femme.clients.filterAll")} style={{ display: "flex", gap: 6 }}>
@@ -461,9 +456,9 @@ export default function ClientsPage() {
                 </tr>
               ) : (
                 pageClients.map((client) => {
-                  const av       = avatarStyle(client);
-                  const isHov    = hoveredId === client.id;
-                  const tdBg     = isHov ? "var(--color-rose-lt)" : undefined;
+                  const av = avatarStyle(client);
+                  const isHov = hoveredId === client.id;
+                  const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
                   const tdStyle: React.CSSProperties = {
                     padding: "10px 12px",
                     fontSize: 12,
@@ -472,6 +467,85 @@ export default function ClientsPage() {
                     borderBottom: "0.5px solid var(--color-stone)",
                     background: tdBg,
                   };
+                  const rowEditing = isEditing(client.id);
+                  const ed = rowEditing
+                    ? ({ ...client, ...editingData } as Client)
+                    : client;
+
+                  if (rowEditing) {
+                    return (
+                      <tr
+                        key={client.id}
+                        style={{
+                          background: "var(--color-rose-lt)",
+                          outline: "1.5px solid var(--color-rose-md)",
+                          outlineOffset: -1,
+                        }}
+                      >
+                        <td style={{ padding: "8px 12px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input
+                              value={ed.fullName ?? ""}
+                              onChange={(e) => updateField("fullName", e.target.value)}
+                              onKeyDown={keySaveCancel}
+                              placeholder={t("femme.clients.fullName")}
+                              style={inputEditStyle}
+                              aria-label={t("femme.clients.fullName")}
+                            />
+                            <input
+                              value={ed.email ?? ""}
+                              onChange={(e) => updateField("email", e.target.value || null)}
+                              onKeyDown={keySaveCancel}
+                              type="email"
+                              placeholder={t("femme.clients.email")}
+                              style={inputEditStyle}
+                              aria-label={t("femme.clients.email")}
+                            />
+                          </div>
+                        </td>
+                        <td style={{ padding: "8px 12px" }}>
+                          <input
+                            value={ed.phone ?? ""}
+                            onChange={(e) => updateField("phone", e.target.value || null)}
+                            onKeyDown={keySaveCancel}
+                            placeholder={t("femme.clients.phone")}
+                            style={inputEditStyle}
+                            aria-label={t("femme.clients.phone")}
+                          />
+                        </td>
+                        <td style={{ padding: "8px 12px" }}>
+                          <input
+                            value={ed.ruc ?? ""}
+                            onChange={(e) => updateField("ruc", e.target.value || null)}
+                            onKeyDown={keySaveCancel}
+                            placeholder="80000005-6"
+                            style={{ ...inputEditStyle, fontFamily: "monospace" }}
+                            aria-label={t("femme.clients.ruc")}
+                          />
+                        </td>
+                        <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
+                          {client.visitCount}
+                        </td>
+                        <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
+                          {client.lastVisitAt ? fmtDate(client.lastVisitAt, locale) : "—"}
+                        </td>
+                        <td style={tdStyle}>
+                          <StatusBadge status={client.active ? "ACTIVE" : "INACTIVE"} />
+                        </td>
+                        <td colSpan={1} style={{ padding: "8px 12px", textAlign: "right" }}>
+                          <InlineEditActions
+                            isEditing
+                            saving={inlineSaving}
+                            saveError={inlineSaveError}
+                            onEdit={() => {}}
+                            onSave={() => void saveEdit()}
+                            onCancel={cancelEdit}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return (
                     <tr
                       key={client.id}
@@ -480,7 +554,6 @@ export default function ClientsPage() {
                       onMouseLeave={() => setHoveredId(null)}
                       onClick={() => navigate(`/app/clients/${client.id}`)}
                     >
-                      {/* Client name + email */}
                       <td style={tdStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                           <div
@@ -509,9 +582,9 @@ export default function ClientsPage() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {client.fullName}
+                              {highlight(client.fullName) as ReactNode}
                             </div>
-                            {client.email && (
+                            {client.email ? (
                               <div
                                 style={{
                                   fontSize: 10,
@@ -521,19 +594,17 @@ export default function ClientsPage() {
                                   whiteSpace: "nowrap",
                                 }}
                               >
-                                {client.email}
+                                {highlight(client.email) as ReactNode}
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </td>
 
-                      {/* Phone */}
                       <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                        {client.phone ?? "—"}
+                        {client.phone ? (highlight(client.phone) as ReactNode) : "—"}
                       </td>
 
-                      {/* RUC */}
                       <td style={tdStyle}>
                         {client.ruc ? (
                           <span
@@ -543,7 +614,7 @@ export default function ClientsPage() {
                               color: "var(--color-ink-2)",
                             }}
                           >
-                            {client.ruc}
+                            {highlight(client.ruc) as ReactNode}
                           </span>
                         ) : (
                           <span style={{ color: "var(--color-ink-3)" }}>
@@ -552,24 +623,32 @@ export default function ClientsPage() {
                         )}
                       </td>
 
-                      {/* Visits */}
                       <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
                         {client.visitCount}
                       </td>
 
-                      {/* Last visit */}
                       <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
                         {client.lastVisitAt ? fmtDate(client.lastVisitAt, locale) : "—"}
                       </td>
 
-                      {/* Status */}
                       <td style={tdStyle}>
                         <StatusBadge status={client.active ? "ACTIVE" : "INACTIVE"} />
                       </td>
 
-                      {/* Actions */}
-                      <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <div style={{ display: "flex", gap: 4, justifyContent: "center", alignItems: "center" }}>
+                      <td
+                        style={{ ...tdStyle, textAlign: "center" }}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            justifyContent: "center",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <button
                             type="button"
                             onClick={(e) => {
@@ -588,27 +667,16 @@ export default function ClientsPage() {
                           >
                             {t("femme.clients.viewBtn")}
                           </button>
-                          {client.active && isHov && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void deactivateClient(client);
-                              }}
-                              aria-label={t("femme.clients.deactivate")}
-                              style={{
-                                padding: "4px 6px",
-                                borderRadius: "var(--radius-sm)",
-                                fontSize: 11,
-                                border: "0.5px solid var(--color-stone-md)",
-                                background: "transparent",
-                                color: "var(--color-ink-3)",
-                                cursor: "pointer",
-                              }}
-                            >
-                              ×
-                            </button>
-                          )}
+                          <InlineEditActions
+                            isEditing={false}
+                            saving={false}
+                            saveError={null}
+                            onEdit={() => startEdit(client)}
+                            onSave={() => void saveEdit()}
+                            onCancel={cancelEdit}
+                            onDeactivate={() => void deactivateClient(client)}
+                            isActive={client.active}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -620,7 +688,7 @@ export default function ClientsPage() {
         </div>
 
         {/* ── Pagination ── */}
-        {filtered.length > 0 && (
+        {searchFiltered.length > 0 && (
           <div
             style={{
               background: "var(--color-stone)",
@@ -637,7 +705,7 @@ export default function ClientsPage() {
               {t("femme.clients.paginationInfo", {
                 from: fromIdx,
                 to: toIdx,
-                total: filtered.length,
+                total: searchFiltered.length,
               })}
             </span>
 

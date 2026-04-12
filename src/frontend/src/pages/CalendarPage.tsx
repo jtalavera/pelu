@@ -121,6 +121,7 @@ type Client = { id: number; fullName: string };
 type FormErrors = {
   date?: string;
   time?: string;
+  startInPast?: string;
   professionalId?: string;
   serviceId?: string;
 };
@@ -317,6 +318,13 @@ export default function CalendarPage() {
     if (!formProfessionalId)
       errors.professionalId = t("femme.calendar.form.errors.professionalRequired");
     if (!formServiceId) errors.serviceId = t("femme.calendar.form.errors.serviceRequired");
+    if (formDate && formTime) {
+      const localDt = toLocalDatetimeString(new Date(formDate), formTime);
+      const startMs = new Date(localDt).getTime();
+      if (!Number.isNaN(startMs) && startMs < Date.now()) {
+        errors.startInPast = t("femme.calendar.form.errors.startInPast");
+      }
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -907,8 +915,12 @@ export default function CalendarPage() {
               type="date"
               value={formDate}
               onChange={(e) => setFormDate(e.target.value)}
-              aria-invalid={!!formErrors.date}
-              aria-describedby={formErrors.date ? "form-date-err" : undefined}
+              aria-invalid={!!(formErrors.date || formErrors.startInPast)}
+              aria-describedby={
+                [formErrors.date && "form-date-err", formErrors.startInPast && "form-start-past-err"]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus-visible:border-indigo-400"
             />
             {formErrors.date && (
@@ -923,12 +935,19 @@ export default function CalendarPage() {
               type="time"
               value={formTime}
               onChange={(e) => setFormTime(e.target.value)}
-              aria-invalid={!!formErrors.time}
-              aria-describedby={formErrors.time ? "form-time-err" : undefined}
+              aria-invalid={!!(formErrors.time || formErrors.startInPast)}
+              aria-describedby={
+                [formErrors.time && "form-time-err", formErrors.startInPast && "form-start-past-err"]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus-visible:border-indigo-400"
             />
             {formErrors.time && (
               <FieldValidationError id="form-time-err">{formErrors.time}</FieldValidationError>
+            )}
+            {formErrors.startInPast && (
+              <FieldValidationError id="form-start-past-err">{formErrors.startInPast}</FieldValidationError>
             )}
           </div>
           {/* Professional */}

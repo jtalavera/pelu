@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -14,6 +14,16 @@ import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { StatusBadge } from "../components/StatusBadge";
+import { InlineEditActions } from "../components/ui/InlineEditActions";
+import { SearchInput } from "../components/ui/SearchInput";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { useInlineEdit } from "../hooks/useInlineEdit";
+import {
+  CATEGORY_ACCENT_KEYS,
+  type CategoryAccentKey,
+  categoryAccentStyle,
+} from "../util/categoryAccent";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmtPrice(minor: string | number): string {
@@ -22,34 +32,17 @@ function fmtPrice(minor: string | number): string {
   return "Gs. " + Math.round(n).toLocaleString("es-PY");
 }
 
-function categoryIconStyle(name: string): { bg: string; color: string } {
-  const n = name.toLowerCase();
-  if (n.includes("corte"))
-    return { bg: "var(--color-rose-lt)", color: "var(--color-rose)" };
-  if (n.includes("manos") || n.includes("pies") || n.includes("manicura"))
-    return { bg: "var(--color-mauve-lt)", color: "var(--color-mauve)" };
-  if (n.includes("color") || n.includes("tratamiento"))
-    return { bg: "var(--color-success-lt)", color: "var(--color-success)" };
-  return { bg: "var(--color-stone)", color: "var(--color-ink-3)" };
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
-      width={13} height={13} viewBox="0 0 16 16" fill="none"
-    >
-      <circle cx="7" cy="7" r="5" stroke="var(--color-ink-3)" strokeWidth="1.5" />
-      <path d="M11 11l3 3" stroke="var(--color-ink-3)" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-type ServiceCategory = { id: number; name: string; active: boolean };
+type ServiceCategory = {
+  id: number;
+  name: string;
+  active: boolean;
+  accentKey: string;
+};
 type SalonService = {
   id: number;
   categoryId: number;
   categoryName: string;
+  categoryAccentKey: string;
   name: string;
   priceMinor: string | number;
   durationMinutes: number;
@@ -78,12 +71,14 @@ export default function ServicesPage() {
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<SalonService[]>([]);
 
-  const [q, setQ] = useState("");
   const [categoryFilterId, setCategoryFilterId] = useState<string>("all");
+  /** Client-side quick filter: list order is always active first when "all". */
+  const [serviceStatusFilter, setServiceStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryEditing, setCategoryEditing] = useState<ServiceCategory | null>(null);
   const [categoryName, setCategoryName] = useState("");
+  const [categoryAccentKey, setCategoryAccentKey] = useState<CategoryAccentKey>("stone");
   const [categoryNameError, setCategoryNameError] = useState<string | null>(null);
   const [categorySaveError, setCategorySaveError] = useState<string | null>(null);
   const [categorySaving, setCategorySaving] = useState(false);
@@ -102,13 +97,21 @@ export default function ServicesPage() {
   } | null>(null);
   const [serviceSaveError, setServiceSaveError] = useState<string | null>(null);
   const [serviceSaving, setServiceSaving] = useState(false);
+  const [serviceReactivating, setServiceReactivating] = useState(false);
+  const [activatingServiceId, setActivatingServiceId] = useState<number | null>(null);
+  const [activatingCategoryId, setActivatingCategoryId] = useState<number | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
   const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
 
   const activeCategories = useMemo(() => categories.filter((c) => c.active), [categories]);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Active categories plus the current service's category when editing (so inactive category still appears). */
+  const serviceCategorySelectOptions = useMemo(() => {
+    return categories.filter(
+      (c) => c.active || (serviceEditing !== null && c.id === serviceEditing.categoryId),
+    );
+  }, [categories, serviceEditing]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,45 +134,18 @@ export default function ServicesPage() {
     void load();
   }, [load]);
 
-  const runSearch = useCallback(async (searchQ: string, catId: string) => {
-    try {
-      const qs = new URLSearchParams();
-      if (searchQ.trim()) qs.set("q", searchQ.trim());
-      if (catId !== "all") qs.set("categoryId", catId);
-      const res = await femmeJson<SalonService[]>(`/api/services?${qs.toString()}`);
-      setServices(Array.isArray(res) ? res : []);
-    } catch {
-      setError(t("femme.services.loadError"));
-    }
-  }, [t]);
-
-  async function onSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    await runSearch(q, categoryFilterId);
-  }
-
-  function handleQChange(value: string) {
-    setQ(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => void runSearch(value, categoryFilterId), 350);
-  }
-
   function handleCategoryPill(val: string) {
     setCategoryFilterId(val);
-    void runSearch(q, val);
+  }
+
+  function handleServiceStatusPill(val: "all" | "active" | "inactive") {
+    setServiceStatusFilter(val);
   }
 
   function openNewCategory() {
     setCategoryEditing(null);
     setCategoryName("");
-    setCategoryNameError(null);
-    setCategorySaveError(null);
-    setCategoryModalOpen(true);
-  }
-
-  function openEditCategory(c: ServiceCategory) {
-    setCategoryEditing(c);
-    setCategoryName(c.name);
+    setCategoryAccentKey("stone");
     setCategoryNameError(null);
     setCategorySaveError(null);
     setCategoryModalOpen(true);
@@ -184,13 +160,14 @@ export default function ServicesPage() {
     }
     setCategorySaving(true);
     try {
+      const payload = { name: categoryName.trim(), accentKey: categoryAccentKey };
       if (categoryEditing) {
         await femmePutJson<ServiceCategory>(
           `/api/service-categories/${categoryEditing.id}`,
-          { name: categoryName.trim() },
+          payload,
         );
       } else {
-        await femmePostJson<ServiceCategory>("/api/service-categories", { name: categoryName.trim() });
+        await femmePostJson<ServiceCategory>("/api/service-categories", payload);
       }
       setCategoryModalOpen(false);
       await load();
@@ -205,23 +182,25 @@ export default function ServicesPage() {
     setDeactivateTarget({ kind: "category", item: c });
   }
 
+  async function activateCategoryFromList(c: ServiceCategory) {
+    setActivatingCategoryId(c.id);
+    setError(null);
+    try {
+      await femmePostJson(`/api/service-categories/${c.id}/activate`, {});
+      await load();
+    } catch (e) {
+      setError(translateApiError(e, t, "femme.services.saveError"));
+    } finally {
+      setActivatingCategoryId(null);
+    }
+  }
+
   function openNewService() {
     setServiceEditing(null);
     setServiceName("");
     setServiceCategoryId(activeCategories[0]?.id ? String(activeCategories[0].id) : "");
     setServicePrice("");
     setServiceDuration("");
-    setServiceFieldError(null);
-    setServiceSaveError(null);
-    setServiceModalOpen(true);
-  }
-
-  function openEditService(s: SalonService) {
-    setServiceEditing(s);
-    setServiceName(s.name);
-    setServiceCategoryId(String(s.categoryId));
-    setServicePrice(String(s.priceMinor));
-    setServiceDuration(String(s.durationMinutes));
     setServiceFieldError(null);
     setServiceSaveError(null);
     setServiceModalOpen(true);
@@ -258,7 +237,6 @@ export default function ServicesPage() {
         await femmePostJson<SalonService>("/api/services", payload);
       }
       setServiceModalOpen(false);
-      await onSearchSubmit(new Event("submit") as unknown as React.FormEvent);
       await load();
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
@@ -269,6 +247,37 @@ export default function ServicesPage() {
 
   function requestDeactivateService(s: SalonService) {
     setDeactivateTarget({ kind: "service", item: s });
+  }
+
+  async function activateSalonServiceFromList(s: SalonService) {
+    setActivatingServiceId(s.id);
+    setError(null);
+    try {
+      await femmePostJson(`/api/services/${s.id}/activate`, {});
+      await load();
+    } catch (e) {
+      setError(translateApiError(e, t, "femme.services.saveError"));
+    } finally {
+      setActivatingServiceId(null);
+    }
+  }
+
+  async function activateSalonServiceFromModal() {
+    if (!serviceEditing) return;
+    setServiceReactivating(true);
+    setServiceSaveError(null);
+    try {
+      const updated = await femmePostJson<SalonService>(
+        `/api/services/${serviceEditing.id}/activate`,
+        {},
+      );
+      setServiceEditing(updated);
+      await load();
+    } catch (e) {
+      setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
+    } finally {
+      setServiceReactivating(false);
+    }
   }
 
   async function confirmDeactivateTarget() {
@@ -283,7 +292,6 @@ export default function ServicesPage() {
         );
       } else {
         await femmePostJson<SalonService>(`/api/services/${target.item.id}/deactivate`, {});
-        await onSearchSubmit(new Event("submit") as unknown as React.FormEvent);
       }
       await load();
     } catch (e) {
@@ -297,6 +305,204 @@ export default function ServicesPage() {
       ...activeCategories.map((c) => ({ value: String(c.id), label: c.name })),
     ];
   }, [activeCategories, t]);
+
+  const statusFilterOptions = useMemo(
+    () =>
+      [
+        { value: "all" as const, label: t("femme.services.filter.statusAll") },
+        { value: "active" as const, label: t("femme.services.filter.statusActive") },
+        { value: "inactive" as const, label: t("femme.services.filter.statusInactive") },
+      ] as const,
+    [t],
+  );
+
+  const baseFilteredByCategory = useMemo(() => {
+    if (categoryFilterId === "all") return services;
+    return services.filter((s) => String(s.categoryId) === categoryFilterId);
+  }, [services, categoryFilterId]);
+
+  const displayedServices = useMemo(() => {
+    const list = baseFilteredByCategory;
+    if (serviceStatusFilter === "active") {
+      return list.filter((s) => s.active);
+    }
+    if (serviceStatusFilter === "inactive") {
+      return list.filter((s) => !s.active);
+    }
+    const active = list.filter((s) => s.active);
+    const inactive = list.filter((s) => !s.active);
+    return [...active, ...inactive];
+  }, [baseFilteredByCategory, serviceStatusFilter]);
+
+  const serviceFilterFields = useMemo(() => ["name", "categoryName"] as (keyof SalonService)[], []);
+  const {
+    query: serviceSearchQuery,
+    setQuery: setServiceSearchQuery,
+    filtered: servicesTextFiltered,
+    highlight: highlightService,
+  } = useFilteredList<SalonService>({
+    items: displayedServices,
+    fields: serviceFilterFields,
+  });
+
+  const categoryFilterFields = useMemo(() => ["name"] as (keyof ServiceCategory)[], []);
+  const {
+    query: categorySearchQuery,
+    setQuery: setCategorySearchQuery,
+    filtered: categoriesTextFiltered,
+    highlight: highlightCategory,
+  } = useFilteredList<ServiceCategory>({
+    items: categories,
+    fields: categoryFilterFields,
+  });
+
+  const handleInlineServiceSave = useCallback(
+    async (s: SalonService) => {
+      const nameTrim = String(s.name ?? "").trim();
+      const categoryId = Number(s.categoryId);
+      const priceRaw = s.priceMinor;
+      const price =
+        typeof priceRaw === "number" ? priceRaw : normalizeMoneyInput(String(priceRaw ?? ""));
+      const duration = Number(s.durationMinutes);
+      if (!nameTrim) throw new Error("INVALID");
+      if (!Number.isFinite(categoryId)) throw new Error("INVALID");
+      if (price == null || !Number.isFinite(price) || price < 0) throw new Error("INVALID");
+      if (!Number.isFinite(duration) || duration < 1) throw new Error("INVALID");
+      await femmePutJson<SalonService>(`/api/services/${s.id}`, {
+        name: nameTrim,
+        categoryId,
+        priceMinor: price,
+        durationMinutes: duration,
+      });
+      await load();
+    },
+    [load],
+  );
+
+  const handleInlineCategorySave = useCallback(
+    async (c: ServiceCategory) => {
+      const nameTrim = String(c.name ?? "").trim();
+      if (!nameTrim) throw new Error("INVALID");
+      const accentKey = CATEGORY_ACCENT_KEYS.includes(c.accentKey as CategoryAccentKey)
+        ? (c.accentKey as CategoryAccentKey)
+        : "stone";
+      await femmePutJson<ServiceCategory>(`/api/service-categories/${c.id}`, {
+        name: nameTrim,
+        accentKey,
+      });
+      await load();
+    },
+    [load],
+  );
+
+  const {
+    editingData: serviceEditingData,
+    saving: serviceInlineSaving,
+    saveError: serviceInlineSaveError,
+    startEdit: startServiceEdit,
+    cancelEdit: cancelServiceEdit,
+    updateField: updateServiceField,
+    saveEdit: saveServiceEdit,
+    isEditing: isEditingService,
+  } = useInlineEdit<SalonService>({
+    onSave: handleInlineServiceSave,
+    saveErrorMessage: t("femme.inlineEdit.saveError"),
+  });
+
+  const {
+    editingData: categoryEditingData,
+    saving: categoryInlineSaving,
+    saveError: categoryInlineSaveError,
+    startEdit: startCategoryEdit,
+    cancelEdit: cancelCategoryEdit,
+    updateField: updateCategoryField,
+    saveEdit: saveCategoryEdit,
+    isEditing: isEditingCategory,
+  } = useInlineEdit<ServiceCategory>({
+    onSave: handleInlineCategorySave,
+    saveErrorMessage: t("femme.inlineEdit.saveError"),
+  });
+
+  const categoriasOrdenadas = useMemo(
+    () =>
+      [...categoriesTextFiltered].sort((a, b) => {
+        if (a.active === b.active) return 0;
+        return a.active ? -1 : 1;
+      }),
+    [categoriesTextFiltered],
+  );
+
+  const serviciosOrdenados = useMemo(
+    () =>
+      [...servicesTextFiltered].sort((a, b) => {
+        if (a.active === b.active) return 0;
+        return a.active ? -1 : 1;
+      }),
+    [servicesTextFiltered],
+  );
+
+  const keySaveCancelService = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveServiceEdit();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelServiceEdit();
+    }
+  };
+
+  const keySaveCancelCategory = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveCategoryEdit();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelCategoryEdit();
+    }
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--color-ink-2)",
+    display: "block",
+    marginBottom: 3,
+  };
+
+  const inputEditStyle: React.CSSProperties = {
+    padding: "6px 9px",
+    border: "1px solid var(--color-rose-md)",
+    borderRadius: "var(--radius-md)",
+    fontSize: 12,
+    color: "var(--color-ink)",
+    background: "var(--color-white)",
+    outline: "none",
+    width: "100%",
+  };
+
+  const categoryInputEditStyle: React.CSSProperties = {
+    ...inputEditStyle,
+    minWidth: 80,
+  };
+
+  const inlineServiceCategoryOptions = useMemo(() => {
+    const cid = serviceEditingData.categoryId;
+    return categories.filter((c) => c.active || c.id === cid);
+  }, [categories, serviceEditingData.categoryId]);
+
+  const onServiceCategoryInlineChange = useCallback(
+    (categoryId: number) => {
+      const cat = categories.find((c) => c.id === categoryId);
+      updateServiceField("categoryId", categoryId);
+      if (cat) {
+        updateServiceField("categoryName", cat.name);
+        updateServiceField("categoryAccentKey", cat.accentKey);
+      }
+    },
+    [categories, updateServiceField],
+  );
 
   if (loading) {
     return (
@@ -321,39 +527,6 @@ export default function ServicesPage() {
     alignItems: "center",
     gap: 6,
     whiteSpace: "nowrap",
-  };
-
-  const editBtnStyle: React.CSSProperties = {
-    padding: "4px 10px",
-    borderRadius: "var(--radius-sm)",
-    fontSize: 11,
-    border: "0.5px solid var(--color-rose-md)",
-    background: "transparent",
-    color: "var(--color-rose)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
-
-  const deactBtnStyle: React.CSSProperties = {
-    padding: "4px 10px",
-    borderRadius: "var(--radius-sm)",
-    fontSize: 11,
-    border: "none",
-    background: "transparent",
-    color: "var(--color-danger)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
-
-  const searchInputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "7px 10px 7px 30px",
-    border: "var(--border-default)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    background: "var(--color-stone)",
-    color: "var(--color-ink)",
-    outline: "none",
   };
 
   const pillBase: React.CSSProperties = {
@@ -457,15 +630,14 @@ export default function ServicesPage() {
               flexWrap: "wrap",
             }}
           >
-            <div style={{ position: "relative", flex: 1, maxWidth: 280, minWidth: 160 }}>
-              <SearchIcon />
-              <input
-                value={q}
-                onChange={(e) => handleQChange(e.target.value)}
-                placeholder={t("femme.services.search.placeholder")}
-                style={searchInputStyle}
-              />
-            </div>
+            <SearchInput
+              id="services-list-filter"
+              value={serviceSearchQuery}
+              onChange={setServiceSearchQuery}
+              placeholder={t("femme.services.services.searchInlinePlaceholder")}
+              resultCount={servicesTextFiltered.length}
+              totalCount={displayedServices.length}
+            />
             {filterOptions.map((o) => (
               <button
                 key={o.value}
@@ -476,6 +648,34 @@ export default function ServicesPage() {
                 {o.label}
               </button>
             ))}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              style={{
+                width: 1,
+                alignSelf: "stretch",
+                minHeight: 28,
+                background: "var(--color-stone-md)",
+                flexShrink: 0,
+                margin: "0 4px",
+              }}
+            />
+            <div
+              role="group"
+              aria-label={t("femme.services.filter.statusLabel")}
+              style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}
+            >
+              {statusFilterOptions.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  style={serviceStatusFilter === o.value ? pillActive : pillBase}
+                  onClick={() => handleServiceStatusPill(o.value)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Service cards */}
@@ -491,112 +691,314 @@ export default function ServicesPage() {
               {t("femme.services.services.emptyBody")}
             </div>
           )}
-          {services.map((s) => {
-            const ic = categoryIconStyle(s.categoryName);
+          {services.length > 0 && displayedServices.length === 0 && (
+            <div
+              style={{
+                padding: "20px 0",
+                textAlign: "center",
+                fontSize: 12,
+                color: "var(--color-ink-3)",
+              }}
+            >
+              {t("femme.listFilter.noMatches")}
+            </div>
+          )}
+          {services.length > 0 && displayedServices.length > 0 && servicesTextFiltered.length === 0 && (
+            <div
+              style={{
+                padding: "20px 0",
+                textAlign: "center",
+                fontSize: 12,
+                color: "var(--color-ink-3)",
+              }}
+            >
+              {t("femme.listFilter.noMatches")}
+            </div>
+          )}
+          {serviciosOrdenados.map((s, index) => {
+            const ic = categoryAccentStyle(s.categoryAccentKey);
             const hk = `svc-${s.id}`;
             const isHov = hoveredCardKey === hk;
+            const anterior = serviciosOrdenados[index - 1];
+            const hayCambioDeEstado =
+              index > 0 &&
+              anterior.active === true &&
+              s.active === false;
             return (
-              <div
-                key={s.id}
-                onMouseEnter={() => setHoveredCardKey(hk)}
-                onMouseLeave={() => setHoveredCardKey(null)}
-                style={{
-                  background: "var(--color-white)",
-                  border: isHov
-                    ? "0.5px solid var(--color-rose-md)"
-                    : "var(--border-default)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "14px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  marginBottom: 8,
-                  cursor: "pointer",
-                  transition: "border-color 0.15s",
-                }}
-              >
-                {/* Category icon */}
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "var(--radius-md)",
-                    background: ic.bg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
+              <Fragment key={s.id}>
+                {hayCambioDeEstado ? (
                   <div
                     style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 3,
-                      background: ic.color,
-                    }}
-                  />
-                </div>
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "var(--color-ink)",
                       display: "flex",
                       alignItems: "center",
-                      gap: 6,
+                      gap: 10,
+                      margin: "16px 0 10px",
                     }}
                   >
-                    {s.name}
-                    {!s.active && (
-                      <span style={{ fontSize: 10, color: "var(--color-ink-3)", fontWeight: 400 }}>
-                        {t("femme.services.services.inactive")}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 1 }}>
-                    {s.categoryName} · {s.durationMinutes} min
-                  </div>
-                </div>
-
-                {/* Price */}
-                <div
-                  style={{
-                    marginLeft: "auto",
-                    marginRight: 16,
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: "var(--color-ink)",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {fmtPrice(s.priceMinor)}
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    style={editBtnStyle}
-                    onClick={(e) => { e.stopPropagation(); openEditService(s); }}
-                  >
-                    {t("femme.services.services.edit")}
-                  </button>
-                  {s.active && (
-                    <button
-                      type="button"
-                      style={deactBtnStyle}
-                      onClick={(e) => { e.stopPropagation(); requestDeactivateService(s); }}
+                    <div
+                      style={{
+                        flex: 1,
+                        height: "0.5px",
+                        background: "var(--color-stone-md)",
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 500,
+                        letterSpacing: "0.07em",
+                        textTransform: "uppercase",
+                        color: "var(--color-ink-3)",
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      {t("femme.services.services.deactivateShort")}
-                    </button>
-                  )}
-                </div>
-              </div>
+                      {t("femme.services.services.separatorInactive")}
+                    </span>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: "0.5px",
+                        background: "var(--color-stone-md)",
+                      }}
+                    />
+                  </div>
+                ) : null}
+                {isEditingService(s.id) ? (
+                  <div
+                    style={{
+                      background: "var(--color-rose-lt)",
+                      border: "1.5px solid var(--color-rose-md)",
+                      borderRadius: "var(--radius-lg)",
+                      padding: "14px 16px",
+                      marginBottom: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                        gap: 8,
+                      }}
+                    >
+                      <div>
+                        <label style={labelStyle} htmlFor={`svc-inline-name-${s.id}`}>
+                          {t("femme.services.services.name")}
+                        </label>
+                        <input
+                          id={`svc-inline-name-${s.id}`}
+                          value={String(serviceEditingData.name ?? "")}
+                          onChange={(e) => updateServiceField("name", e.target.value)}
+                          onKeyDown={keySaveCancelService}
+                          style={inputEditStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle} htmlFor={`svc-inline-cat-${s.id}`}>
+                          {t("femme.services.services.category")}
+                        </label>
+                        <select
+                          id={`svc-inline-cat-${s.id}`}
+                          value={String(serviceEditingData.categoryId ?? "")}
+                          onChange={(e) => onServiceCategoryInlineChange(Number(e.target.value))}
+                          onKeyDown={keySaveCancelService}
+                          style={inputEditStyle}
+                        >
+                          <option value="">{t("femme.services.services.categoryPlaceholder")}</option>
+                          {inlineServiceCategoryOptions.map((c) => (
+                            <option key={c.id} value={String(c.id)}>
+                              {c.name}
+                              {!c.active ? ` ${t("femme.services.categories.inactive")}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={labelStyle} htmlFor={`svc-inline-dur-${s.id}`}>
+                          {t("femme.services.services.duration")}
+                        </label>
+                        <input
+                          id={`svc-inline-dur-${s.id}`}
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={
+                            serviceEditingData.durationMinutes === undefined ||
+                            serviceEditingData.durationMinutes === null
+                              ? ""
+                              : String(serviceEditingData.durationMinutes)
+                          }
+                          onChange={(e) =>
+                            updateServiceField("durationMinutes", Number(e.target.value))
+                          }
+                          onKeyDown={keySaveCancelService}
+                          style={inputEditStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle} htmlFor={`svc-inline-price-${s.id}`}>
+                          {t("femme.services.services.price")}
+                        </label>
+                        <input
+                          id={`svc-inline-price-${s.id}`}
+                          type="number"
+                          min={0}
+                          step={1000}
+                          inputMode="decimal"
+                          value={
+                            serviceEditingData.priceMinor === undefined ||
+                            serviceEditingData.priceMinor === null
+                              ? ""
+                              : String(serviceEditingData.priceMinor)
+                          }
+                          onChange={(e) => {
+                            const n = normalizeMoneyInput(e.target.value);
+                            if (n != null) updateServiceField("priceMinor", n);
+                          }}
+                          onKeyDown={keySaveCancelService}
+                          style={inputEditStyle}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <InlineEditActions
+                        isEditing
+                        saving={serviceInlineSaving}
+                        saveError={serviceInlineSaveError}
+                        onEdit={() => {}}
+                        onSave={() => void saveServiceEdit()}
+                        onCancel={cancelServiceEdit}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className={`svc-card ${!s.active ? "card-inactive" : ""}`}
+                    onMouseEnter={() => {
+                      if (s.active) setHoveredCardKey(hk);
+                    }}
+                    onMouseLeave={() => {
+                      if (s.active) setHoveredCardKey(null);
+                    }}
+                    style={
+                      s.active
+                        ? {
+                            background: "var(--color-white)",
+                            border: isHov
+                              ? "0.5px solid var(--color-rose-md)"
+                              : "var(--border-default)",
+                            borderRadius: "var(--radius-lg)",
+                            padding: "14px 16px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            marginBottom: 8,
+                            cursor: "pointer",
+                            transition: "border-color 0.15s",
+                          }
+                        : {
+                            borderRadius: "var(--radius-lg)",
+                            padding: "14px 16px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            marginBottom: 8,
+                          }
+                    }
+                  >
+                    <div
+                      className="cat-ic card-icon"
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "var(--radius-md)",
+                        background: s.active ? ic.bg : "var(--color-stone-md)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: 3,
+                          background: s.active ? ic.color : "var(--color-stone-md)",
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        className="card-name"
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: "var(--color-ink)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        {highlightService(s.name)}
+                      </div>
+                      <div
+                        className="card-meta"
+                        style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 1 }}
+                      >
+                        {highlightService(s.categoryName)} · {s.durationMinutes} min
+                      </div>
+                    </div>
+
+                    <div
+                      className="card-price"
+                      style={{
+                        marginLeft: "auto",
+                        marginRight: 16,
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: "var(--color-ink)",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {fmtPrice(s.priceMinor)}
+                    </div>
+
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                      <InlineEditActions
+                        isEditing={false}
+                        saving={false}
+                        saveError={null}
+                        onEdit={() => startServiceEdit(s)}
+                        onSave={() => void saveServiceEdit()}
+                        onCancel={cancelServiceEdit}
+                        onDeactivate={
+                          s.active ? () => requestDeactivateService(s) : undefined
+                        }
+                        onActivate={
+                          !s.active
+                            ? () => {
+                                void activateSalonServiceFromList(s);
+                              }
+                            : undefined
+                        }
+                        isActive={s.active}
+                        activateLabel={
+                          activatingServiceId === s.id
+                            ? t("femme.services.saving")
+                            : t("femme.services.services.activateShort")
+                        }
+                        deactivateLabel={t("femme.services.services.deactivateShort")}
+                        activateDisabled={activatingServiceId === s.id}
+                      />
+                    </div>
+                  </div>
+                )}
+              </Fragment>
             );
           })}
         </div>
@@ -605,6 +1007,24 @@ export default function ServicesPage() {
       {/* ── Categories tab ── */}
       {tab === "categories" && (
         <div>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 12,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <SearchInput
+              id="categories-list-filter"
+              value={categorySearchQuery}
+              onChange={setCategorySearchQuery}
+              placeholder={t("femme.services.categories.searchInlinePlaceholder")}
+              resultCount={categoriesTextFiltered.length}
+              totalCount={categories.length}
+            />
+          </div>
           {categories.length === 0 && (
             <div
               style={{
@@ -617,91 +1037,279 @@ export default function ServicesPage() {
               {t("femme.services.categories.emptyBody")}
             </div>
           )}
-          {categories.map((c) => {
-            const ic = categoryIconStyle(c.name);
-            const hk = `cat-${c.id}`;
-            const isHov = hoveredCardKey === hk;
-            return (
-              <div
-                key={c.id}
-                onMouseEnter={() => setHoveredCardKey(hk)}
-                onMouseLeave={() => setHoveredCardKey(null)}
-                style={{
-                  background: "var(--color-white)",
-                  border: isHov
-                    ? "0.5px solid var(--color-rose-md)"
-                    : "var(--border-default)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "14px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  marginBottom: 8,
-                  cursor: "pointer",
-                  transition: "border-color 0.15s",
-                }}
-              >
-                {/* Category icon */}
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "var(--radius-md)",
-                    background: ic.bg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <div
-                    style={{ width: 16, height: 16, borderRadius: 3, background: ic.color }}
-                  />
-                </div>
-
-                {/* Name */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "var(--color-ink)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    {c.name}
-                    {!c.active && (
-                      <span style={{ fontSize: 10, color: "var(--color-ink-3)", fontWeight: 400 }}>
-                        {t("femme.services.categories.inactive")}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    style={editBtnStyle}
-                    onClick={(e) => { e.stopPropagation(); openEditCategory(c); }}
-                  >
-                    {t("femme.services.categories.edit")}
-                  </button>
-                  {c.active && (
-                    <button
-                      type="button"
-                      style={deactBtnStyle}
-                      onClick={(e) => { e.stopPropagation(); requestDeactivateCategory(c); }}
-                    >
-                      {t("femme.services.categories.deactivateShort")}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {categories.length > 0 && categoriesTextFiltered.length === 0 && (
+            <div
+              style={{
+                padding: "20px 0",
+                textAlign: "center",
+                fontSize: 12,
+                color: "var(--color-ink-3)",
+              }}
+            >
+              {t("femme.listFilter.noMatches")}
+            </div>
+          )}
+          {categoriesTextFiltered.length > 0 ? (
+          <div className="min-w-0 overflow-x-auto">
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "separate",
+                borderSpacing: "0 8px",
+              }}
+            >
+              <tbody>
+                {categoriasOrdenadas.map((c, index) => {
+                  const ic = categoryAccentStyle(c.accentKey);
+                  const icEditRow = isEditingCategory(c.id)
+                    ? categoryAccentStyle(String(categoryEditingData.accentKey ?? c.accentKey))
+                    : ic;
+                  const anterior = categoriasOrdenadas[index - 1];
+                  const hayCambioDeEstado =
+                    index > 0 &&
+                    anterior.active === true &&
+                    c.active === false;
+                  const svcCount = services.filter((s) => s.categoryId === c.id).length;
+                  return (
+                    <Fragment key={c.id}>
+                      {hayCambioDeEstado ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            style={{
+                              padding: "6px 14px",
+                              fontSize: 10,
+                              fontWeight: 500,
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
+                              color: "var(--color-ink-3)",
+                              background: "var(--color-stone)",
+                              borderBottom: "0.5px solid var(--color-stone-md)",
+                            }}
+                          >
+                            {t("femme.services.categories.separatorInactive")}
+                          </td>
+                        </tr>
+                      ) : null}
+                      {isEditingCategory(c.id) ? (
+                        <tr
+                          key={`${c.id}-edit`}
+                          style={{
+                            background: "var(--color-rose-lt)",
+                            outline: "1.5px solid var(--color-rose-md)",
+                            outlineOffset: -1,
+                          }}
+                        >
+                          <td style={{ padding: "8px 12px", verticalAlign: "middle", width: 52 }}>
+                            <div
+                              className="cat-ic cell-icon"
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "var(--radius-md)",
+                                background: icEditRow.bg,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: 3,
+                                  background: icEditRow.color,
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td style={{ padding: "8px 12px", verticalAlign: "middle", minWidth: 0 }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              <div>
+                                <label style={labelStyle} htmlFor={`cat-inline-name-${c.id}`}>
+                                  {t("femme.services.categories.name")}
+                                </label>
+                                <input
+                                  id={`cat-inline-name-${c.id}`}
+                                  value={String(categoryEditingData.name ?? "")}
+                                  onChange={(e) => updateCategoryField("name", e.target.value)}
+                                  onKeyDown={keySaveCancelCategory}
+                                  style={categoryInputEditStyle}
+                                />
+                              </div>
+                              <div>
+                                <label style={labelStyle} htmlFor={`cat-inline-accent-${c.id}`}>
+                                  {t("femme.services.categories.accent.label")}
+                                </label>
+                                <select
+                                  id={`cat-inline-accent-${c.id}`}
+                                  value={
+                                    CATEGORY_ACCENT_KEYS.includes(
+                                      String(categoryEditingData.accentKey) as CategoryAccentKey,
+                                    )
+                                      ? String(categoryEditingData.accentKey)
+                                      : "stone"
+                                  }
+                                  onChange={(e) =>
+                                    updateCategoryField(
+                                      "accentKey",
+                                      e.target.value as ServiceCategory["accentKey"],
+                                    )
+                                  }
+                                  onKeyDown={keySaveCancelCategory}
+                                  style={categoryInputEditStyle}
+                                >
+                                  {CATEGORY_ACCENT_KEYS.map((key) => (
+                                    <option key={key} value={key}>
+                                      {t(`femme.services.categories.accent.${key}`)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              verticalAlign: "middle",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <span className={c.active ? "badge b-ok" : "badge b-neu"}>
+                              {c.active
+                                ? t("femme.services.categories.statusBadgeActive")
+                                : t("femme.services.categories.statusBadgeInactive")}
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              verticalAlign: "middle",
+                              textAlign: "right",
+                            }}
+                          >
+                            <InlineEditActions
+                              isEditing
+                              saving={categoryInlineSaving}
+                              saveError={categoryInlineSaveError}
+                              onEdit={() => {}}
+                              onSave={() => void saveCategoryEdit()}
+                              onCancel={cancelCategoryEdit}
+                            />
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr
+                          className={!c.active ? "row-inactive row-inactive-bg" : ""}
+                          style={
+                            c.active
+                              ? {
+                                  background: "var(--color-white)",
+                                  border: "var(--border-default)",
+                                  borderRadius: "var(--radius-lg)",
+                                }
+                              : undefined
+                          }
+                        >
+                          <td style={{ padding: "14px 16px", verticalAlign: "middle", width: 52 }}>
+                            <div
+                              className="cat-ic cell-icon"
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "var(--radius-md)",
+                                background: c.active ? ic.bg : "var(--color-stone-md)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: 3,
+                                  background: c.active ? ic.color : "var(--color-stone-md)",
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td style={{ padding: "14px 16px", verticalAlign: "middle", minWidth: 0 }}>
+                            <div
+                              className="cell-name"
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: "var(--color-ink)",
+                              }}
+                            >
+                              {highlightCategory(c.name)}
+                            </div>
+                            <div
+                              className="cell-meta"
+                              style={{ fontSize: 11, marginTop: 4, color: "var(--color-ink-3)" }}
+                            >
+                              {t("femme.services.categories.serviceCount", { count: svcCount })}
+                            </div>
+                          </td>
+                          <td
+                            style={{
+                              padding: "14px 16px",
+                              verticalAlign: "middle",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <span className={c.active ? "badge b-ok" : "badge b-neu"}>
+                              {c.active
+                                ? t("femme.services.categories.statusBadgeActive")
+                                : t("femme.services.categories.statusBadgeInactive")}
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "14px 16px",
+                              verticalAlign: "middle",
+                              textAlign: "right",
+                            }}
+                          >
+                            <InlineEditActions
+                              isEditing={false}
+                              saving={false}
+                              saveError={null}
+                              onEdit={() => startCategoryEdit(c)}
+                              onSave={() => void saveCategoryEdit()}
+                              onCancel={cancelCategoryEdit}
+                              onDeactivate={
+                                c.active ? () => requestDeactivateCategory(c) : undefined
+                              }
+                              onActivate={
+                                !c.active
+                                  ? () => {
+                                      void activateCategoryFromList(c);
+                                    }
+                                  : undefined
+                              }
+                              isActive={c.active}
+                              activateLabel={
+                                activatingCategoryId === c.id
+                                  ? t("femme.services.saving")
+                                  : t("femme.services.categories.activateShort")
+                              }
+                              deactivateLabel={t("femme.services.categories.deactivateShort")}
+                              activateDisabled={activatingCategoryId === c.id}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          ) : null}
         </div>
       )}
 
@@ -731,6 +1339,46 @@ export default function ServicesPage() {
             />
             <FieldValidationError id="cat-name-err">{categoryNameError}</FieldValidationError>
           </div>
+          <fieldset className="min-w-0 border-0 p-0">
+            <legend
+              className="mb-2 text-sm font-medium"
+              style={{ color: "var(--color-ink)" }}
+            >
+              {t("femme.services.categories.accent.label")}
+            </legend>
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label={t("femme.services.categories.accent.groupLabel")}
+            >
+              {CATEGORY_ACCENT_KEYS.map((key) => {
+                const sw = categoryAccentStyle(key);
+                const selected = categoryAccentKey === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-md border-2 p-1 transition-colors"
+                    style={{
+                      borderColor: selected ? "var(--color-rose-md)" : "var(--color-stone-md)",
+                      background: "var(--color-white)",
+                    }}
+                    aria-pressed={selected}
+                    aria-label={t(`femme.services.categories.accent.${key}`)}
+                    onClick={() => setCategoryAccentKey(key)}
+                  >
+                    <span
+                      className="block size-8 rounded-sm"
+                      style={{
+                        background: sw.bg,
+                        boxShadow: "inset 0 0 0 0.5px var(--color-stone-md)",
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" onClick={() => setCategoryModalOpen(false)} className="min-h-11">
               {t("femme.services.cancel")}
@@ -758,6 +1406,35 @@ export default function ServicesPage() {
             </Alert>
           ) : null}
 
+          {serviceEditing ? (
+            <div className="flex flex-col gap-2 rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))]/30 p-3 dark:bg-[rgb(var(--color-muted))]/20">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-[rgb(var(--color-muted-foreground))]">
+                  {t("femme.services.services.statusLabel")}
+                </span>
+                <StatusBadge status={serviceEditing.active ? "ACTIVE" : "INACTIVE"} />
+              </div>
+              {!serviceEditing.active ? (
+                <>
+                  <Text variant="muted" className="text-sm">
+                    {t("femme.services.services.inactiveHint")}
+                  </Text>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-fit min-h-11 border-[rgb(var(--color-success))] text-[rgb(var(--color-success))] hover:bg-[rgb(var(--color-success))]/10"
+                    disabled={serviceReactivating}
+                    onClick={() => void activateSalonServiceFromModal()}
+                  >
+                    {serviceReactivating
+                      ? t("femme.services.saving")
+                      : t("femme.services.services.activate")}
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
           <div>
             <Label htmlFor="svc-name">{t("femme.services.services.name")}</Label>
             <Input
@@ -780,9 +1457,10 @@ export default function ServicesPage() {
               aria-describedby={serviceFieldError?.categoryId ? "svc-cat-err" : undefined}
             >
               <option value="">{t("femme.services.services.categoryPlaceholder")}</option>
-              {activeCategories.map((c) => (
+              {serviceCategorySelectOptions.map((c) => (
                 <option key={c.id} value={String(c.id)}>
                   {c.name}
+                  {!c.active ? ` ${t("femme.services.categories.inactive")}` : ""}
                 </option>
               ))}
             </Select>

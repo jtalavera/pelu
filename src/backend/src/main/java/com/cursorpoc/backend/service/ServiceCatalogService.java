@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ServiceCatalogService {
+
+  private static final Set<String> ALLOWED_CATEGORY_ACCENTS =
+      Set.of("rose", "mauve", "success", "warning", "danger", "stone");
 
   private final TenantRepository tenantRepository;
   private final ServiceCategoryRepository serviceCategoryRepository;
@@ -51,6 +55,7 @@ public class ServiceCatalogService {
     c.setTenant(tenant);
     c.setName(request.name().trim());
     c.setActive(true);
+    c.setAccentKey(normalizeAccent(request.accentKey()));
     serviceCategoryRepository.save(c);
     return toCategoryResponse(c);
   }
@@ -60,6 +65,9 @@ public class ServiceCatalogService {
       long tenantId, long categoryId, ServiceCategoryUpsertRequest request) {
     ServiceCategory c = loadCategoryOrThrow(tenantId, categoryId);
     c.setName(request.name().trim());
+    if (request.accentKey() != null) {
+      c.setAccentKey(normalizeAccent(request.accentKey()));
+    }
     serviceCategoryRepository.save(c);
     return toCategoryResponse(c);
   }
@@ -68,6 +76,14 @@ public class ServiceCatalogService {
   public ServiceCategoryResponse deactivateCategory(long tenantId, long categoryId) {
     ServiceCategory c = loadCategoryOrThrow(tenantId, categoryId);
     c.setActive(false);
+    serviceCategoryRepository.save(c);
+    return toCategoryResponse(c);
+  }
+
+  @Transactional
+  public ServiceCategoryResponse activateCategory(long tenantId, long categoryId) {
+    ServiceCategory c = loadCategoryOrThrow(tenantId, categoryId);
+    c.setActive(true);
     serviceCategoryRepository.save(c);
     return toCategoryResponse(c);
   }
@@ -134,6 +150,18 @@ public class ServiceCatalogService {
     return toServiceResponse(s);
   }
 
+  @Transactional
+  public ServiceResponse activateService(long tenantId, long serviceId) {
+    SalonService s = loadServiceOrThrow(tenantId, serviceId);
+    ServiceCategory category = s.getCategory();
+    if (!category.isActive()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
+    }
+    s.setActive(true);
+    salonServiceRepository.save(s);
+    return toServiceResponse(s);
+  }
+
   private Tenant loadTenantOrThrow(long tenantId) {
     return tenantRepository
         .findById(tenantId)
@@ -153,7 +181,7 @@ public class ServiceCatalogService {
   }
 
   private static ServiceCategoryResponse toCategoryResponse(ServiceCategory c) {
-    return new ServiceCategoryResponse(c.getId(), c.getName(), c.isActive());
+    return new ServiceCategoryResponse(c.getId(), c.getName(), c.isActive(), c.getAccentKey());
   }
 
   private static ServiceResponse toServiceResponse(SalonService s) {
@@ -161,9 +189,21 @@ public class ServiceCatalogService {
         s.getId(),
         s.getCategory().getId(),
         s.getCategory().getName(),
+        s.getCategory().getAccentKey(),
         s.getName(),
         s.getPriceMinor(),
         s.getDurationMinutes(),
         s.isActive());
+  }
+
+  private static String normalizeAccent(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return "stone";
+    }
+    String s = raw.trim().toLowerCase(Locale.ROOT);
+    if (!ALLOWED_CATEGORY_ACCENTS.contains(s)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_CATEGORY_ACCENT");
+    }
+    return s;
   }
 }

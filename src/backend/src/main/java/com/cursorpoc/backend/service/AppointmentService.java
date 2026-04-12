@@ -69,6 +69,7 @@ public class AppointmentService {
     SalonService service = loadServiceOrThrow(tenantId, request.serviceId());
 
     Instant startAt = parseInstant(request.startAt());
+    validateStartNotInPast(startAt);
     Instant endAt = startAt.plusSeconds((long) service.getDurationMinutes() * 60);
 
     validateNoOverlap(tenantId, professional.getId(), startAt, endAt, null);
@@ -121,6 +122,7 @@ public class AppointmentService {
     SalonService service = loadServiceOrThrow(tenantId, request.serviceId());
 
     Instant startAt = parseInstant(request.startAt());
+    validateStartNotInPast(startAt);
     Instant endAt = startAt.plusSeconds((long) service.getDurationMinutes() * 60);
 
     validateNoOverlap(tenantId, professional.getId(), startAt, endAt, appointmentId);
@@ -138,6 +140,12 @@ public class AppointmentService {
 
     appointmentRepository.save(appointment);
     return toResponse(appointment);
+  }
+
+  private void validateStartNotInPast(Instant startAt) {
+    if (startAt.isBefore(Instant.now())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "APPOINTMENT_START_IN_PAST");
+    }
   }
 
   private void validateNoOverlap(
