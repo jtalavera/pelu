@@ -139,11 +139,23 @@ describe("ClientsPage", () => {
     expect(screen.getByRole("button", { name: /deactivate/i })).toBeTruthy();
   });
 
-  it("inactive clients show inactive label and no deactivate button", async () => {
+  it("list with filter All includes both active and inactive clients", async () => {
+    femmeJson.mockResolvedValue([
+      sampleClient,
+      { ...sampleClient, id: 2, fullName: "Bob", active: false },
+    ]);
+    renderPage();
+    await screen.findByText("Ana García");
+    expect(screen.getByText("Bob")).toBeTruthy();
+    expect(screen.getAllByText(/inactive/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("inactive clients show inactive label, reactivate control, and no deactivate button", async () => {
     femmeJson.mockResolvedValue([{ ...sampleClient, active: false }]);
     renderPage();
     await screen.findByText("Ana García");
     expect(screen.getByText(/inactive/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /deactivate/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /reactivate/i })).toBeTruthy();
   });
 });

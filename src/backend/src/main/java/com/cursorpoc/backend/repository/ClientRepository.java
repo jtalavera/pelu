@@ -13,7 +13,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
   @Query(
       """
-      SELECT c FROM Client c WHERE c.tenant.id = :tenantId AND c.active = true
+      SELECT c FROM Client c WHERE c.tenant.id = :tenantId
       AND (
         LOWER(c.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
         OR (:phone IS NOT NULL AND c.phone IS NOT NULL AND c.phone LIKE CONCAT('%', :phone, '%'))

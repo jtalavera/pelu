@@ -10,6 +10,7 @@ import { InlineEditActions } from "../components/ui/InlineEditActions";
 import { useFilteredList } from "../hooks/useFilteredList";
 import { useInlineEdit } from "../hooks/useInlineEdit";
 import { StatusBadge } from "../components/StatusBadge";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -90,6 +91,8 @@ export default function ClientsPage() {
   const [filter, setFilter]     = useState<FilterKey>("all");
   const [page, setPage]         = useState(1);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+
+  const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
 
   // Modal state
   const [modalOpen, setModalOpen]   = useState(false);
@@ -179,11 +182,22 @@ export default function ClientsPage() {
     }
   }
 
-  // ── Deactivate ──────────────────────────────────────────────────────────────
-  async function deactivateClient(client: Client) {
-    if (!window.confirm(t("femme.clients.deactivateConfirm", { name: client.fullName }))) return;
+  // ── Deactivate / activate ───────────────────────────────────────────────────
+  async function confirmDeactivateFromList() {
+    if (!deactivateTarget) return;
     try {
-      await femmePostJson<Client>(`/api/clients/${client.id}/deactivate`, {});
+      await femmePostJson<Client>(`/api/clients/${deactivateTarget.id}/deactivate`, {});
+      setDeactivateTarget(null);
+      await load();
+    } catch (e) {
+      setError(translateApiError(e, t, "femme.clients.saveError"));
+      setDeactivateTarget(null);
+    }
+  }
+
+  async function activateClientRow(client: Client) {
+    try {
+      await femmePostJson<Client>(`/api/clients/${client.id}/activate`, {});
       await load();
     } catch (e) {
       setError(translateApiError(e, t, "femme.clients.saveError"));
@@ -682,7 +696,9 @@ export default function ClientsPage() {
                             onEdit={() => startEdit(client)}
                             onSave={() => void saveEdit()}
                             onCancel={cancelEdit}
-                            onDeactivate={() => void deactivateClient(client)}
+                            onDeactivate={() => setDeactivateTarget(client)}
+                            onActivate={() => void activateClientRow(client)}
+                            activateLabel={t("femme.clients.reactivate")}
                             isActive={client.active}
                           />
                         </div>
@@ -862,6 +878,20 @@ export default function ClientsPage() {
           </div>
         </div>
       </Modal>
+
+      {deactivateTarget ? (
+        <ConfirmDialog
+          open
+          title={t("femme.clients.deactivateDialogTitle")}
+          description={t("femme.clients.deactivateDialogDescription", {
+            name: deactivateTarget.fullName,
+          })}
+          cancelLabel={t("femme.clients.cancel")}
+          confirmLabel={t("femme.clients.deactivate")}
+          onCancel={() => setDeactivateTarget(null)}
+          onConfirm={() => void confirmDeactivateFromList()}
+        />
+      ) : null}
     </div>
   );
 }

@@ -129,12 +129,28 @@ describe("ClientDetailPage", () => {
     expect(screen.getByRole("button", { name: /deactivate/i })).toBeTruthy();
   });
 
-  it("inactive client shows inactive badge and no deactivate button", async () => {
+  it("inactive client shows inactive badge, reactivate button, and no deactivate button", async () => {
     femmeJson.mockResolvedValue({ ...sampleClient, active: false });
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     expect(screen.getByText(/inactive/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /deactivate/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /reactivate/i })).toBeTruthy();
+  });
+
+  it("shows only one success message after save", async () => {
+    femmeJson.mockResolvedValue(sampleClient);
+    const updated = { ...sampleClient, fullName: "Ana Updated" };
+    femmePutJson.mockResolvedValue(updated);
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const nameInput = screen.getByLabelText(/full name/i);
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Ana Updated");
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
+    const successNodes = screen.queryAllByText(/client updated successfully/i);
+    expect(successNodes).toHaveLength(1);
   });
 
   it("shows history tab with appointments and invoices sections", async () => {

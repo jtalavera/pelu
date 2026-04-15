@@ -8,6 +8,7 @@ type Client = {
   fullName: string;
   phone: string | null;
   ruc: string | null;
+  active?: boolean;
 };
 
 export type ClientSelection =
@@ -173,7 +174,11 @@ export function ClientSearchField({
                 <span className="flex flex-col items-start">
                   <span className="font-medium">{client.fullName}</span>
                   <span className="text-xs text-[rgb(var(--color-muted-foreground))]">
-                    {[client.phone, client.ruc ? `RUC ${client.ruc}` : null]
+                    {[
+                      client.active === false ? t("femme.status.INACTIVE") : null,
+                      client.phone,
+                      client.ruc ? `RUC ${client.ruc}` : null,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>

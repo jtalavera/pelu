@@ -343,6 +343,28 @@ class ClientServiceTest {
                     .isEqualTo(HttpStatus.NOT_FOUND));
   }
 
+  @Test
+  void activate_existingInactiveClient_setsActive() {
+    Client c = buildClient(5L, "Ana", null, null, null);
+    c.setActive(false);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+
+    var response = clientService.activate(1L, 5L);
+    assertThat(response.active()).isTrue();
+  }
+
+  @Test
+  void activate_notFound_throwsNotFound() {
+    lenient().when(clientRepository.findByIdAndTenant_Id(99L, 1L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> clientService.activate(1L, 99L))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.NOT_FOUND));
+  }
+
   private Client buildClient(Long id, String fullName, String phone, String email, String ruc) {
     Client c = new Client();
     c.setId(id);

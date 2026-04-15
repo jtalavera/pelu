@@ -120,4 +120,25 @@ public class ClientController {
       throw ex;
     }
   }
+
+  @PostMapping("/{id}/activate")
+  public ClientResponse activate(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("POST /api/clients/{}/activate tenantId={}", id, principal.getTenantId());
+    try {
+      ClientResponse result = clientService.activate(principal.getTenantId(), id);
+      log.info("POST /api/clients/{}/activate tenantId={} status=200", id, principal.getTenantId());
+      return result;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/clients/{}/activate tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode());
+      throw ex;
+    }
+  }
 }
