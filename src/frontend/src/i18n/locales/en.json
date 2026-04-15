@@ -705,6 +705,10 @@
       "next": "Next week",
       "allProfessionals": "All professionals",
       "filterByProfessional": "Filter by professional",
+      "searchable": {
+        "filterPlaceholder": "Type to filter…",
+        "noResults": "No matching options."
+      },
       "newAppointment": "New appointment",
       "noAppointments": "No appointments this week.",
       "weekOf": "Week of {{date}}",

@@ -714,6 +714,10 @@
       "next": "Semana siguiente",
       "allProfessionals": "Todas las profesionales",
       "filterByProfessional": "Filtrar por profesional",
+      "searchable": {
+        "filterPlaceholder": "Escribí para filtrar…",
+        "noResults": "No hay opciones que coincidan."
+      },
       "newAppointment": "Nuevo turno",
       "noAppointments": "No hay turnos esta semana.",
       "weekOf": "Semana del {{date}}",

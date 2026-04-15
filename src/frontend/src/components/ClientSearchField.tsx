@@ -153,7 +153,7 @@ export function ClientSearchField({
           id={`${inputId}-listbox`}
           role="listbox"
           aria-label={labelText}
-          className="absolute z-50 mt-1 w-full rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-card))] shadow-lg max-h-72 overflow-y-auto"
+          className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
         >
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">
