@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 
 import com.cursorpoc.backend.domain.Professional;
@@ -84,6 +85,30 @@ class ProfessionalDirectoryServiceTest {
   void create_rejectsBlankName() {
     var req = new ProfessionalUpsertRequest("   ", null, null, null);
     assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void create_rejectsInvalidPhotoDataUrlFormat() {
+    lenient()
+        .when(
+            professionalScheduleRepository.findByProfessionalIdOrderByDayOfWeekAscIdAsc(anyLong()))
+        .thenReturn(List.of());
+
+    var req = new ProfessionalUpsertRequest("Ana Gomez", null, null, "data:image/bmp;base64,QUFB");
+    assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void create_acceptsJpegDataUrl() {
+    lenient()
+        .when(
+            professionalScheduleRepository.findByProfessionalIdOrderByDayOfWeekAscIdAsc(anyLong()))
+        .thenReturn(List.of());
+
+    var req = new ProfessionalUpsertRequest("Ana Gomez", null, null, "data:image/jpeg;base64,abc");
+    var res = service.create(1L, req);
+    assertThat(res.fullName()).isEqualTo("Ana Gomez");
+    assertThat(res.photoDataUrl()).startsWith("data:image/jpeg;base64,");
   }
 
   @Test

@@ -25,6 +25,7 @@ import {
 import { layoutOverlappingInDay } from "../calendar/calendarAppointmentLayout";
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { FemmeNativeTimeInput } from "../components/FemmeNativeTimeInput";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { StatusBadge } from "../components/StatusBadge";
@@ -935,18 +936,17 @@ export default function CalendarPage() {
           {/* Time */}
           <div className="space-y-1">
             <Label htmlFor="form-time">{t("femme.calendar.form.time")}</Label>
-            <input
+            <FemmeNativeTimeInput
               id="form-time"
-              type="time"
               value={formTime}
               onChange={(e) => setFormTime(e.target.value)}
+              invalid={!!(formErrors.time || formErrors.startInPast)}
               aria-invalid={!!(formErrors.time || formErrors.startInPast)}
               aria-describedby={
                 [formErrors.time && "form-time-err", formErrors.startInPast && "form-start-past-err"]
                   .filter(Boolean)
                   .join(" ") || undefined
               }
-              className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus-visible:border-indigo-400"
             />
             {formErrors.time && (
               <FieldValidationError id="form-time-err">{formErrors.time}</FieldValidationError>
