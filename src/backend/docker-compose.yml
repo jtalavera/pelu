@@ -1,4 +1,6 @@
-# Local SQL Server for ./gradlew bootRun (default profile). Playwright e2e uses in-memory H2 (profile e2e). Default MSSQL_SA_PASSWORD matches application.properties; create service_app_db + service_app login once if missing (see AGENTS.md).
+# Local SQL Server for ./gradlew bootRun (default profile). Playwright e2e uses in-memory H2 (profile e2e).
+# Defaults match application.properties: database service_app_db, user service_app, password SPRING_DATASOURCE_PASSWORD or The.S3cr3t.2026.
+# mssql-init creates DB + login + user when missing (idempotent).
 #
 # Use Azure SQL Edge on Apple Silicon: the official SQL Server 2022 image is linux/amd64-only and often segfaults under emulation (podman ps empty = container exited). Edge is JDBC-compatible for local dev.
 services:
@@ -9,3 +11,17 @@ services:
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-The.S3cr3t.2026}"
     ports:
       - "1433:1433"
+
+  mssql-init:
+    image: docker.io/library/alpine:3.20
+    depends_on:
+      mssql:
+        condition: service_started
+    environment:
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-The.S3cr3t.2026}"
+      # Same default as spring.datasource.password; set SPRING_DATASOURCE_PASSWORD in .env to match Spring.
+      SERVICE_APP_PASSWORD: "${SPRING_DATASOURCE_PASSWORD:-The.S3cr3t.2026}"
+    volumes:
+      - ./docker/init-service-app.sh:/init-service-app.sh:ro
+    entrypoint: ["/bin/sh", "/init-service-app.sh"]
+    restart: "no"
