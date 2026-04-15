@@ -1,10 +1,12 @@
 # HU-21 · Fixes varios del módulo de clientes
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-21 |
+
+| Campo      | Valor          |
+| ---------- | -------------- |
+| **ID**     | HU-21          |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog` |
+| **Estado** | `Backlog`      |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
