@@ -28,6 +28,9 @@ public class ServiceCategory {
   @Column(nullable = false)
   private boolean active;
 
+  @Column(name = "accent_key", nullable = false, length = 32)
+  private String accentKey = "stone";
+
   public Long getId() {
     return id;
   }
@@ -58,5 +61,13 @@ public class ServiceCategory {
 
   public void setActive(boolean active) {
     this.active = active;
+  }
+
+  public String getAccentKey() {
+    return accentKey;
+  }
+
+  public void setAccentKey(String accentKey) {
+    this.accentKey = accentKey;
   }
 }

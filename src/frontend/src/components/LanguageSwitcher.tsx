@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "@design-system";
+import { Button, cn } from "@design-system";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 
 const languages: { code: SupportedLanguage; labelKey: string }[] = [
@@ -17,14 +17,28 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       role="group"
       aria-label={t("language.label")}
     >
-      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50/80 p-1 dark:border-slate-600 dark:bg-slate-800/50">
+      <div className="flex flex-wrap gap-1 rounded-[var(--radius-md)] border border-[var(--color-stone-md)] bg-[var(--color-stone)] p-1">
         {languages.map(({ code, labelKey }) => (
           <Button
             key={code}
             type="button"
             variant={current === code ? "primary" : "ghost"}
             size="sm"
-            className="min-w-[4.5rem]"
+            className={cn(
+              "min-w-[4.5rem]",
+              current === code
+                ? "!shadow-none"
+                : "text-[var(--color-ink-2)] hover:bg-[var(--color-white)]",
+            )}
+            style={
+              current === code
+                ? {
+                    background: "var(--color-rose)",
+                    color: "var(--color-on-primary)",
+                    border: "none",
+                  }
+                : undefined
+            }
             onClick={() => {
               persistLanguage(code);
               void i18n.changeLanguage(code);

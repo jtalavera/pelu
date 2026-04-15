@@ -53,6 +53,15 @@ public class DashboardService {
     Instant weekStart = weekStartZ.toLocalDate().atStartOfDay(zone).toInstant();
     Instant weekEnd = weekStart.plusSeconds(7L * 86400);
 
+    LocalDate today = now.toLocalDate();
+    LocalDate monthStartDate = today.withDayOfMonth(1);
+    LocalDate monthEndExclusive = monthStartDate.plusMonths(1);
+    Instant monthStart = monthStartDate.atStartOfDay(zone).toInstant();
+    Instant monthEnd = monthEndExclusive.atStartOfDay(zone).toInstant();
+    long clientsThisMonth =
+        appointmentRepository.countDistinctClientsWithAppointmentsBetween(
+            tenantId, monthStart, monthEnd);
+
     long total = appointmentRepository.countByTenantIdAndDay(tenantId, dayStart, dayEnd);
     long pending =
         appointmentRepository.countByTenant_IdAndStatusAndStartAtGreaterThanEqualAndStartAtLessThan(
@@ -109,6 +118,7 @@ public class DashboardService {
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
         new DashboardResponse.RevenueSummary(invoicedDay, collectedDay),
         new DashboardResponse.RevenueSummary(invoicedWeek, collectedWeek),
+        clientsThisMonth,
         alerts);
   }
 

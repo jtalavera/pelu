@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "./Button";
-import { useTheme } from "../ThemeProvider";
+import { useThemeContext } from "../../src/context/ThemeContext";
 
 function SunIcon({ className }: { className?: string }) {
   return (
@@ -47,7 +47,7 @@ export type ThemeToggleProps = {
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const { t } = useTranslation();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggle } = useThemeContext();
   const isDark = theme === "dark";
 
   return (
@@ -56,7 +56,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       variant="outline"
       size="sm"
       className={className}
-      onClick={toggleTheme}
+      onClick={toggle}
       aria-label={
         isDark
           ? t("designSystem.theme.switchToLight")

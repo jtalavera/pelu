@@ -58,7 +58,9 @@ class AppointmentServiceTest {
   private static final long PROFESSIONAL_ID = 10L;
   private static final long SERVICE_ID = 20L;
   private static final long CLIENT_ID = 30L;
-  private static final String START_AT = "2026-04-10T09:00:00Z";
+
+  /** Fixed future instant so tests stay valid as real time advances. */
+  private static final String START_AT = "2099-06-15T14:00:00Z";
 
   @BeforeEach
   void setUp() {
@@ -182,6 +184,20 @@ class AppointmentServiceTest {
   }
 
   @Test
+  void create_withStartInPast_throwsBadRequest() {
+    String past = Instant.now().minusSeconds(3600).toString();
+    var req = new AppointmentCreateRequest(null, PROFESSIONAL_ID, SERVICE_ID, past);
+    assertThatThrownBy(() -> service.create(TENANT_ID, req))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            e -> {
+              ResponseStatusException ex = (ResponseStatusException) e;
+              assertThat(ex.getStatusCode().value()).isEqualTo(400);
+              assertThat(ex.getReason()).isEqualTo("APPOINTMENT_START_IN_PAST");
+            });
+  }
+
+  @Test
   void create_computesEndAtFromDuration() {
     salonService.setDurationMinutes(90);
     when(appointmentRepository.countOverlapping(any(), any(), any(), any(), any(), any()))
@@ -293,6 +309,24 @@ class AppointmentServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(
             e -> assertThat(((ResponseStatusException) e).getStatusCode().value()).isEqualTo(409));
+  }
+
+  @Test
+  void update_withStartInPast_throwsBadRequest() {
+    Appointment appointment = buildAppointment(AppointmentStatus.CONFIRMED);
+    when(appointmentRepository.findByIdAndTenant_Id(1L, TENANT_ID))
+        .thenReturn(Optional.of(appointment));
+
+    String past = Instant.now().minusSeconds(3600).toString();
+    var req = new AppointmentUpdateRequest(null, PROFESSIONAL_ID, SERVICE_ID, past);
+    assertThatThrownBy(() -> service.update(TENANT_ID, 1L, req))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            e -> {
+              ResponseStatusException ex = (ResponseStatusException) e;
+              assertThat(ex.getStatusCode().value()).isEqualTo(400);
+              assertThat(ex.getReason()).isEqualTo("APPOINTMENT_START_IN_PAST");
+            });
   }
 
   @Test

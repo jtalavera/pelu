@@ -121,6 +121,39 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
     });
   });
 
+  describe("Appointment form validation", () => {
+    it("shows validation when date and time are in the past", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getAllByRole("button", { name: /new appointment/i }).length).toBeGreaterThan(0);
+      });
+      await user.click(screen.getAllByRole("button", { name: /new appointment/i })[0]);
+      await waitFor(() => {
+        expect(screen.getByRole("dialog")).toBeTruthy();
+      });
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = yesterday.toISOString().slice(0, 10);
+
+      await user.clear(screen.getByLabelText(/^date$/i));
+      await user.type(screen.getByLabelText(/^date$/i), yStr);
+      await user.clear(screen.getByLabelText(/^time$/i));
+      await user.type(screen.getByLabelText(/^time$/i), "10:00");
+
+      await user.selectOptions(screen.getByLabelText(/^professional$/i), "10");
+      await user.selectOptions(screen.getByLabelText(/^service$/i), "20");
+
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^save$/i }));
+
+      expect(
+        await screen.findByText(/must be in the future/i, {}, { timeout: 3000 }),
+      ).toBeTruthy();
+      expect(femmePostJsonMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("HU-07 - New appointment button", () => {
     it("renders new appointment button", async () => {
       renderPage();

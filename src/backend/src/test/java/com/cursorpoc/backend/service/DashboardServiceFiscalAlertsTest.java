@@ -1,6 +1,8 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -65,6 +67,18 @@ class DashboardServiceFiscalAlertsTest {
     DashboardResponse d = dashboardService.build(1L);
 
     assertThat(d.fiscalAlerts()).anyMatch(a -> "fiscalExpiredOrExhausted".equals(a.messageKey()));
+  }
+
+  @Test
+  void exposesDistinctClientsWithAppointmentsThisMonth() {
+    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(false);
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L)).thenReturn(Optional.empty());
+    when(appointmentRepository.countDistinctClientsWithAppointmentsBetween(eq(1L), any(), any()))
+        .thenReturn(15L);
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.clientsThisMonth()).isEqualTo(15L);
   }
 
   @Test

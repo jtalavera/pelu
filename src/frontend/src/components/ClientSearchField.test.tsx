@@ -48,21 +48,18 @@ describe("ClientSearchField", () => {
     expect(screen.getByLabelText(/client/i)).toBeTruthy();
   });
 
-  it("shows min chars hint when fewer than 2 chars typed", async () => {
+  it("loads all clients on focus (empty query)", async () => {
+    femmeJson.mockResolvedValue(sampleClients);
     renderField();
     const input = screen.getByRole("combobox");
-    await userEvent.type(input, "a");
-    expect(screen.getByText(/type at least 2 characters/i)).toBeTruthy();
+    await userEvent.click(input);
+    await waitFor(() => {
+      expect(femmeJson).toHaveBeenCalledWith("/api/clients");
+    });
+    expect(await screen.findByText("Ana García", {}, { timeout: 1000 })).toBeTruthy();
   });
 
-  it("does not search with fewer than 2 chars", async () => {
-    renderField();
-    const input = screen.getByRole("combobox");
-    await userEvent.type(input, "a");
-    expect(femmeJson).not.toHaveBeenCalled();
-  });
-
-  it("searches after 2+ chars are typed and debounce fires", async () => {
+  it("searches after typing and debounce fires", async () => {
     femmeJson.mockResolvedValue(sampleClients);
     renderField();
     const input = screen.getByRole("combobox");
@@ -86,7 +83,7 @@ describe("ClientSearchField", () => {
     const onCreateNew = vi.fn();
     renderField(vi.fn(), null, onCreateNew);
     const input = screen.getByRole("combobox");
-    await userEvent.type(input, "xy");
+    await userEvent.click(input);
     expect(await screen.findByText(/no clients found/i, {}, { timeout: 1000 })).toBeTruthy();
     expect(screen.getByRole("button", { name: /create new client/i })).toBeTruthy();
   });
@@ -125,5 +122,15 @@ describe("ClientSearchField", () => {
     await screen.findByText(/no clients found/i, {}, { timeout: 1000 });
     await userEvent.click(screen.getByRole("button", { name: /create new client/i }));
     expect(onCreateNew).toHaveBeenCalledWith("new");
+  });
+
+  it("offers create new when results exist", async () => {
+    femmeJson.mockResolvedValue(sampleClients);
+    const onCreateNew = vi.fn();
+    renderField(vi.fn(), null, onCreateNew);
+    const input = screen.getByRole("combobox");
+    await userEvent.click(input);
+    await screen.findByText("Ana García", {}, { timeout: 1000 });
+    expect(screen.getByRole("button", { name: /create new client/i })).toBeTruthy();
   });
 });

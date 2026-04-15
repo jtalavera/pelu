@@ -24,6 +24,8 @@ import {
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { StatusBadge } from "../components/StatusBadge";
+import { getDateLocale } from "../i18n/dateLocale";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -97,21 +99,19 @@ function toUtcIsoString(localDatetime: string): string {
   return new Date(localDatetime).toISOString();
 }
 
-// ── Status badge styles ───────────────────────────────────────────────────────
-const STATUS_COLORS: Record<AppointmentStatus, string> = {
-  PENDING:
-    "bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-300",
-  CONFIRMED:
-    "bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300",
-  IN_PROGRESS:
-    "bg-purple-100 border-purple-300 text-purple-800 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-300",
-  COMPLETED:
-    "bg-green-100 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-700 dark:text-green-300",
-  CANCELLED:
-    "bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-700/30 dark:border-slate-600 dark:text-slate-400",
-  NO_SHOW:
-    "bg-red-100 border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-700 dark:text-red-400",
-};
+// ── Professional color palette for calendar blocks ────────────────────────────
+const PROF_COLORS = [
+  { bg: "var(--color-rose-lt)",    border: "var(--color-rose)",    color: "var(--color-rose-dk)"  },
+  { bg: "var(--color-mauve-lt)",   border: "var(--color-mauve)",   color: "var(--color-mauve-dk)" },
+  { bg: "var(--color-success-lt)", border: "var(--color-success)", color: "var(--color-success)"  },
+] as const;
+
+type ProfColor = (typeof PROF_COLORS)[number];
+
+function profColor(professionalId: number, professionals: Professional[]): ProfColor {
+  const idx = professionals.findIndex((p) => p.id === professionalId);
+  return PROF_COLORS[(idx === -1 ? 0 : idx) % PROF_COLORS.length];
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Professional = { id: number; fullName: string; active: boolean };
@@ -121,6 +121,7 @@ type Client = { id: number; fullName: string };
 type FormErrors = {
   date?: string;
   time?: string;
+  startInPast?: string;
   professionalId?: string;
   serviceId?: string;
 };
@@ -128,7 +129,7 @@ type FormErrors = {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
-  const locale = i18n.language === "es" ? "es-PY" : "en-US";
+  const locale = getDateLocale(i18n);
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
@@ -314,8 +315,16 @@ export default function CalendarPage() {
     const errors: FormErrors = {};
     if (!formDate) errors.date = t("femme.calendar.form.errors.dateRequired");
     if (!formTime) errors.time = t("femme.calendar.form.errors.timeRequired");
-    if (!formProfessionalId) errors.professionalId = t("femme.calendar.form.errors.professionalRequired");
+    if (!formProfessionalId)
+      errors.professionalId = t("femme.calendar.form.errors.professionalRequired");
     if (!formServiceId) errors.serviceId = t("femme.calendar.form.errors.serviceRequired");
+    if (formDate && formTime) {
+      const localDt = toLocalDatetimeString(new Date(formDate), formTime);
+      const startMs = new Date(localDt).getTime();
+      if (!Number.isNaN(startMs) && startMs < Date.now()) {
+        errors.startInPast = t("femme.calendar.form.errors.startInPast");
+      }
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -361,63 +370,130 @@ export default function CalendarPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
   const weekLabel = `${formatDate(weekStart, locale)} – ${formatDate(addDays(weekStart, 6), locale)}`;
 
+  const navBtnStyle: React.CSSProperties = {
+    padding: "6px 10px",
+    border: "var(--border-default)",
+    borderRadius: "var(--radius-md)",
+    fontSize: 14,
+    lineHeight: 1,
+    background: "var(--color-white)",
+    color: "var(--color-ink-2)",
+    cursor: "pointer",
+  };
+
   return (
-    <div className="flex h-full flex-col gap-4 p-4 md:p-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="flex-1 text-xl font-bold text-slate-900 dark:text-slate-100">
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {/* ── Page topbar ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          paddingBottom: 16,
+          borderBottom: "var(--border-default)",
+        }}
+      >
+        <h1
+          style={{
+            fontSize: 15,
+            fontWeight: 500,
+            color: "var(--color-ink)",
+            margin: 0,
+            flexShrink: 0,
+          }}
+        >
           {t("femme.calendar.title")}
         </h1>
 
         {/* Professional filter */}
-        <div className="flex items-center gap-2">
-          <Label htmlFor="prof-filter" className="sr-only">
-            {t("femme.calendar.filterByProfessional")}
-          </Label>
-          <Select
-            id="prof-filter"
-            value={selectedProfessionalId ?? ""}
-            onChange={(e) =>
-              setSelectedProfessionalId(e.target.value ? Number(e.target.value) : null)
-            }
-            className="w-48"
-            aria-label={t("femme.calendar.filterByProfessional")}
-          >
-            <option value="">{t("femme.calendar.allProfessionals")}</option>
-            {professionals.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.fullName}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <Button variant="outline" size="sm" onClick={goToday}>
-          {t("femme.calendar.today")}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goPrev}
-          aria-label={t("femme.calendar.prev")}
+        <Label htmlFor="prof-filter" className="sr-only">
+          {t("femme.calendar.filterByProfessional")}
+        </Label>
+        <select
+          id="prof-filter"
+          value={selectedProfessionalId ?? ""}
+          onChange={(e) =>
+            setSelectedProfessionalId(e.target.value ? Number(e.target.value) : null)
+          }
+          aria-label={t("femme.calendar.filterByProfessional")}
+          style={{
+            padding: "6px 28px 6px 10px",
+            border: "var(--border-default)",
+            borderRadius: "var(--radius-md)",
+            fontSize: 12,
+            background: "var(--color-white)",
+            color: "var(--color-ink)",
+            cursor: "pointer",
+            appearance: "auto",
+          }}
         >
+          <option value="">{t("femme.calendar.allProfessionals")}</option>
+          {professionals.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.fullName}
+            </option>
+          ))}
+        </select>
+
+        {/* Today */}
+        <button
+          type="button"
+          onClick={goToday}
+          style={{
+            padding: "6px 14px",
+            border: "var(--border-default)",
+            borderRadius: "var(--radius-md)",
+            fontSize: 12,
+            background: "var(--color-white)",
+            color: "var(--color-ink-2)",
+            cursor: "pointer",
+          }}
+        >
+          {t("femme.calendar.today")}
+        </button>
+
+        {/* Week navigation */}
+        <button type="button" onClick={goPrev} aria-label={t("femme.calendar.prev")} style={navBtnStyle}>
           ‹
-        </Button>
-        <span className="min-w-[150px] text-center text-sm font-medium text-slate-700 dark:text-slate-300">
+        </button>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--color-ink)",
+            minWidth: 160,
+            textAlign: "center",
+            flexShrink: 0,
+          }}
+        >
           {weekLabel}
         </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goNext}
-          aria-label={t("femme.calendar.next")}
-        >
+        <button type="button" onClick={goNext} aria-label={t("femme.calendar.next")} style={navBtnStyle}>
           ›
-        </Button>
+        </button>
 
-        <Button size="sm" onClick={() => openNewForm()}>
-          + {t("femme.calendar.newAppointment")}
-        </Button>
+        {/* New appointment — pushed right */}
+        <button
+          type="button"
+          onClick={() => openNewForm()}
+          style={{
+            marginLeft: "auto",
+            background: "var(--color-rose)",
+            color: "var(--color-on-primary)",
+            border: "none",
+            borderRadius: "var(--radius-md)",
+            padding: "8px 16px",
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            flexShrink: 0,
+          }}
+        >
+          {t("femme.calendar.newAppointment")}
+        </button>
       </div>
 
       {/* Errors */}
@@ -429,50 +505,115 @@ export default function CalendarPage() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex justify-center py-12">
+        <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
           <Spinner size="lg" />
         </div>
       )}
 
-      {/* Calendar grid */}
+      {/* ── Calendar grid ── */}
       {!loading && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-          {/* Day header */}
-          <div className="grid border-b border-slate-200 dark:border-slate-700" style={{ gridTemplateColumns: "56px repeat(7, 1fr)" }}>
-            <div className="border-r border-slate-200 dark:border-slate-700" />
-            {weekDays.map(({ key, label, date }) => (
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            overflow: "hidden",
+            marginTop: 16,
+          }}
+        >
+          {/* Day header row */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "52px repeat(7, 1fr)",
+              borderBottom: "var(--border-default)",
+            }}
+          >
+            <div
+              style={{
+                borderRight: "var(--border-default)",
+                background: "var(--color-stone)",
+              }}
+            />
+            {weekDays.map(({ key, label, date }, dayIdx) => (
               <div
                 key={key}
-                className={`border-r border-slate-200 py-2 text-center last:border-r-0 dark:border-slate-700`}
+                style={{
+                  padding: "10px 8px",
+                  textAlign: "center",
+                  fontSize: 11,
+                  color: "var(--color-ink-3)",
+                  background: "var(--color-stone)",
+                  borderRight: dayIdx < 6 ? "var(--border-default)" : "none",
+                }}
               >
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  {label}
-                </p>
-                <p
-                  className={`text-sm font-semibold ${
-                    isToday(date)
-                      ? "flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white mx-auto"
-                      : "text-slate-900 dark:text-slate-100"
-                  }`}
+                <div
+                  style={{
+                    textTransform: "uppercase",
+                    fontSize: 9,
+                    letterSpacing: "0.06em",
+                    marginBottom: 4,
+                  }}
                 >
-                  {date.getDate()}
-                </p>
+                  {label}
+                </div>
+                {isToday(date) ? (
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: "50%",
+                      background: "var(--color-rose)",
+                      color: "var(--color-on-primary)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 500,
+                      fontSize: 12,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {date.getDate()}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 400 }}>
+                    {date.getDate()}
+                  </div>
+                )}
               </div>
             ))}
           </div>
 
           {/* Scrollable time grid */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto">
-            <div className="grid" style={{ gridTemplateColumns: "56px repeat(7, 1fr)", height: GRID_HEIGHT }}>
-              {/* Time labels */}
-              <div className="relative border-r border-slate-200 dark:border-slate-700">
+          <div
+            ref={scrollRef}
+            style={{ overflowY: "auto", maxHeight: "calc(100vh - 230px)" }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "52px repeat(7, 1fr)",
+                height: GRID_HEIGHT,
+              }}
+            >
+              {/* Hour labels */}
+              <div style={{ position: "relative", borderRight: "var(--border-default)" }}>
                 {Array.from({ length: TOTAL_HOURS }).map((_, i) => {
                   const hour = HOUR_START + i;
                   return (
                     <div
                       key={hour}
-                      className="absolute right-2 -translate-y-1/2 text-right text-xs text-slate-400 dark:text-slate-500"
-                      style={{ top: i * PX_PER_HOUR }}
+                      style={{
+                        position: "absolute",
+                        top: i * PX_PER_HOUR,
+                        right: 10,
+                        transform: "translateY(-50%)",
+                        fontSize: 11,
+                        color: "var(--color-ink-3)",
+                        textAlign: "right",
+                        paddingTop: 8,
+                        whiteSpace: "nowrap",
+                      }}
                     >
                       {String(hour).padStart(2, "0")}:00
                     </div>
@@ -483,49 +624,75 @@ export default function CalendarPage() {
               {/* Day columns */}
               {weekDays.map(({ key, date }) => {
                 const dayAppts = appointments.filter((a) => isSameDay(a.startAt, date));
-
                 return (
                   <div
                     key={key}
-                    className="relative border-r border-slate-200 last:border-r-0 dark:border-slate-700"
-                    style={{ height: GRID_HEIGHT }}
+                    style={{
+                      position: "relative",
+                      height: GRID_HEIGHT,
+                      borderLeft: "var(--border-default)",
+                    }}
                   >
-                    {/* Hour grid lines */}
+                    {/* Hour lines */}
                     {Array.from({ length: TOTAL_HOURS }).map((_, i) => (
                       <div
                         key={i}
-                        className="absolute inset-x-0 border-t border-slate-100 dark:border-slate-800"
-                        style={{ top: i * PX_PER_HOUR }}
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: i * PX_PER_HOUR,
+                          borderTop: "var(--border-default)",
+                        }}
                       />
                     ))}
-                    {/* Half-hour lines */}
+                    {/* Half-hour dashed lines */}
                     {Array.from({ length: TOTAL_HOURS }).map((_, i) => (
                       <div
                         key={`h${i}`}
-                        className="absolute inset-x-0 border-t border-dashed border-slate-50 dark:border-slate-800/50"
-                        style={{ top: i * PX_PER_HOUR + PX_PER_HOUR / 2 }}
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: i * PX_PER_HOUR + PX_PER_HOUR / 2,
+                          borderTop: "0.5px dashed var(--color-stone-md)",
+                        }}
                       />
                     ))}
 
-                    {/* Click to create new appointment */}
+                    {/* Click-to-create overlay */}
                     <button
                       type="button"
-                      className="absolute inset-0 w-full"
-                      style={{ zIndex: 0 }}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        zIndex: 0,
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
                       onClick={(e) => {
                         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                         const relY = e.clientY - rect.top;
                         const hour = Math.floor(relY / PX_PER_HOUR) + HOUR_START;
                         openNewForm(date, hour);
                       }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background =
+                          "var(--color-rose-lt)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                      }}
                       aria-label={t("femme.calendar.newAppointment")}
                     />
 
-                    {/* Appointments */}
+                    {/* Appointment blocks */}
                     {dayAppts.map((appt) => {
-                      const top = appointmentTopPx(appt.startAt);
+                      const top    = appointmentTopPx(appt.startAt);
                       const height = appointmentHeightPx(appt.durationMinutes);
-                      const colorClass = STATUS_COLORS[appt.status] ?? STATUS_COLORS.PENDING;
+                      const pc     = profColor(appt.professionalId, professionals);
                       return (
                         <button
                           key={appt.id}
@@ -534,15 +701,61 @@ export default function CalendarPage() {
                             e.stopPropagation();
                             openDetail(appt);
                           }}
-                          className={`absolute inset-x-0.5 overflow-hidden rounded border px-1 py-0.5 text-left text-xs transition-opacity hover:opacity-90 ${colorClass}`}
-                          style={{ top, height, zIndex: 10 }}
+                          style={{
+                            position: "absolute",
+                            left: 2,
+                            right: 2,
+                            top,
+                            height,
+                            zIndex: 10,
+                            borderRadius: "var(--radius-md)",
+                            padding: "6px 8px",
+                            fontSize: 11,
+                            cursor: "pointer",
+                            background: pc.bg,
+                            border: "none",
+                            borderLeft: `3px solid ${pc.border}`,
+                            color: pc.color,
+                            textAlign: "left",
+                            overflow: "hidden",
+                          }}
                           aria-label={`${appt.clientName ?? t("femme.calendar.detail.occasionalClient")} – ${appt.serviceName}`}
                         >
-                          <p className="truncate font-semibold">
+                          <p
+                            style={{
+                              fontWeight: 500,
+                              margin: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
                             {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
                           </p>
-                          <p className="truncate opacity-80">{appt.serviceName}</p>
-                          <p className="truncate opacity-70">{appt.professionalName}</p>
+                          <p
+                            style={{
+                              fontSize: 10,
+                              margin: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              opacity: 0.85,
+                            }}
+                          >
+                            {appt.serviceName}
+                          </p>
+                          <p
+                            style={{
+                              fontSize: 10,
+                              margin: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              opacity: 0.75,
+                            }}
+                          >
+                            {appt.professionalName}
+                          </p>
                         </button>
                       );
                     })}
@@ -582,7 +795,6 @@ export default function CalendarPage() {
                 <p>{detailError}</p>
               </Alert>
             )}
-
             <Row label={t("femme.calendar.detail.client")}>
               {detailAppt.clientName ?? (
                 <span className="italic text-slate-500 dark:text-slate-400">
@@ -590,7 +802,9 @@ export default function CalendarPage() {
                 </span>
               )}
             </Row>
-            <Row label={t("femme.calendar.detail.professional")}>{detailAppt.professionalName}</Row>
+            <Row label={t("femme.calendar.detail.professional")}>
+              {detailAppt.professionalName}
+            </Row>
             <Row label={t("femme.calendar.detail.service")}>
               {detailAppt.serviceName} —{" "}
               {t("femme.calendar.detail.duration", { minutes: detailAppt.durationMinutes })}
@@ -599,14 +813,12 @@ export default function CalendarPage() {
               {formatDateTime(detailAppt.startAt, locale)}
             </Row>
             <Row label={t("femme.calendar.detail.status")}>
-              <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[detailAppt.status]}`}
-              >
-                {t(`femme.calendar.status.${detailAppt.status}`)}
-              </span>
+              <StatusBadge status={detailAppt.status} />
             </Row>
             {detailAppt.cancelReason && (
-              <Row label={t("femme.calendar.detail.cancelReason")}>{detailAppt.cancelReason}</Row>
+              <Row label={t("femme.calendar.detail.cancelReason")}>
+                {detailAppt.cancelReason}
+              </Row>
             )}
           </div>
         )}
@@ -639,7 +851,6 @@ export default function CalendarPage() {
               <p role="alert">{statusError}</p>
             </Alert>
           )}
-
           <div className="space-y-1">
             <Label htmlFor="status-select">{t("femme.calendar.detail.status")}</Label>
             <Select
@@ -654,7 +865,6 @@ export default function CalendarPage() {
               ))}
             </Select>
           </div>
-
           {selectedStatus === "CANCELLED" && (
             <div className="space-y-1">
               <Label htmlFor="cancel-reason">{t("femme.calendar.cancelDialog.reason")}</Label>
@@ -697,7 +907,6 @@ export default function CalendarPage() {
               <p role="alert">{formApiError}</p>
             </Alert>
           )}
-
           {/* Date */}
           <div className="space-y-1">
             <Label htmlFor="form-date">{t("femme.calendar.form.date")}</Label>
@@ -706,15 +915,18 @@ export default function CalendarPage() {
               type="date"
               value={formDate}
               onChange={(e) => setFormDate(e.target.value)}
-              aria-invalid={!!formErrors.date}
-              aria-describedby={formErrors.date ? "form-date-err" : undefined}
+              aria-invalid={!!(formErrors.date || formErrors.startInPast)}
+              aria-describedby={
+                [formErrors.date && "form-date-err", formErrors.startInPast && "form-start-past-err"]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus-visible:border-indigo-400"
             />
             {formErrors.date && (
               <FieldValidationError id="form-date-err">{formErrors.date}</FieldValidationError>
             )}
           </div>
-
           {/* Time */}
           <div className="space-y-1">
             <Label htmlFor="form-time">{t("femme.calendar.form.time")}</Label>
@@ -723,22 +935,30 @@ export default function CalendarPage() {
               type="time"
               value={formTime}
               onChange={(e) => setFormTime(e.target.value)}
-              aria-invalid={!!formErrors.time}
-              aria-describedby={formErrors.time ? "form-time-err" : undefined}
+              aria-invalid={!!(formErrors.time || formErrors.startInPast)}
+              aria-describedby={
+                [formErrors.time && "form-time-err", formErrors.startInPast && "form-start-past-err"]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus-visible:border-indigo-400"
             />
             {formErrors.time && (
               <FieldValidationError id="form-time-err">{formErrors.time}</FieldValidationError>
             )}
+            {formErrors.startInPast && (
+              <FieldValidationError id="form-start-past-err">{formErrors.startInPast}</FieldValidationError>
+            )}
           </div>
-
           {/* Professional */}
           <div className="space-y-1">
             <Label htmlFor="form-professional">{t("femme.calendar.form.professional")}</Label>
             <Select
               id="form-professional"
               value={formProfessionalId}
-              onChange={(e) => setFormProfessionalId(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) =>
+                setFormProfessionalId(e.target.value ? Number(e.target.value) : "")
+              }
               invalid={!!formErrors.professionalId}
               aria-invalid={!!formErrors.professionalId}
               aria-describedby={formErrors.professionalId ? "form-prof-err" : undefined}
@@ -756,14 +976,15 @@ export default function CalendarPage() {
               </FieldValidationError>
             )}
           </div>
-
           {/* Service */}
           <div className="space-y-1">
             <Label htmlFor="form-service">{t("femme.calendar.form.service")}</Label>
             <Select
               id="form-service"
               value={formServiceId}
-              onChange={(e) => setFormServiceId(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) =>
+                setFormServiceId(e.target.value ? Number(e.target.value) : "")
+              }
               invalid={!!formErrors.serviceId}
               aria-invalid={!!formErrors.serviceId}
               aria-describedby={formErrors.serviceId ? "form-svc-err" : undefined}
@@ -776,17 +997,20 @@ export default function CalendarPage() {
               ))}
             </Select>
             {formErrors.serviceId && (
-              <FieldValidationError id="form-svc-err">{formErrors.serviceId}</FieldValidationError>
+              <FieldValidationError id="form-svc-err">
+                {formErrors.serviceId}
+              </FieldValidationError>
             )}
           </div>
-
           {/* Client (optional) */}
           <div className="space-y-1">
             <Label htmlFor="form-client">{t("femme.calendar.form.client")}</Label>
             <Select
               id="form-client"
               value={formClientId}
-              onChange={(e) => setFormClientId(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) =>
+                setFormClientId(e.target.value ? Number(e.target.value) : "")
+              }
             >
               <option value="">{t("femme.calendar.form.occasionalClient")}</option>
               {clients.map((c) => (
@@ -805,9 +1029,19 @@ export default function CalendarPage() {
 // ── Helper sub-component ──────────────────────────────────────────────────────
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex gap-2">
-      <span className="w-28 shrink-0 font-medium text-slate-600 dark:text-slate-400">{label}</span>
-      <span className="text-slate-900 dark:text-slate-100">{children}</span>
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+      <span
+        style={{
+          width: 112,
+          flexShrink: 0,
+          fontWeight: 500,
+          fontSize: 13,
+          color: "var(--color-ink-2)",
+        }}
+      >
+        {label}
+      </span>
+      <span style={{ fontSize: 13, color: "var(--color-ink)" }}>{children}</span>
     </div>
   );
 }

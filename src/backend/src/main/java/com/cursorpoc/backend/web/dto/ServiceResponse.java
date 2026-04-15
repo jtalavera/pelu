@@ -6,6 +6,7 @@ public record ServiceResponse(
     long id,
     long categoryId,
     String categoryName,
+    String categoryAccentKey,
     String name,
     BigDecimal priceMinor,
     int durationMinutes,

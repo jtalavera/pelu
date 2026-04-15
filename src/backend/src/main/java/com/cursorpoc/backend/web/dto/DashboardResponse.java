@@ -7,6 +7,7 @@ public record DashboardResponse(
     AppointmentSummary appointmentsToday,
     RevenueSummary revenueDay,
     RevenueSummary revenueWeek,
+    long clientsThisMonth,
     List<FiscalAlert> fiscalAlerts) {
 
   public record AppointmentSummary(
