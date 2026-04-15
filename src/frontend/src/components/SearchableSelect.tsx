@@ -128,10 +128,10 @@ export function SearchableSelect<T extends string | number>({
           id={listId}
           role="listbox"
           aria-label={label}
-          className="absolute z-50 mt-1 w-full min-w-[12rem] rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-card))] shadow-lg max-h-72 overflow-y-auto"
+          className="absolute z-50 mt-1 w-full min-w-[12rem] rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-[rgb(var(--color-muted-foreground))]" role="alert">
+            <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400" role="alert">
               {noResultsText}
             </li>
           ) : (
