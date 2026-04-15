@@ -112,11 +112,39 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("shows professional options in filter dropdown", async () => {
+    it("shows professional options in filter combobox (HU-19)", async () => {
+      const user = userEvent.setup();
       renderPage();
       await waitFor(() => {
-        const anaOptions = screen.queryAllByText(/ana gomez/i);
-        expect(anaOptions.length).toBeGreaterThan(0);
+        expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0);
+      });
+      const filterCombo = screen.getByRole("combobox", {
+        name: /filter by professional/i,
+      });
+      await user.click(filterCombo);
+      expect(await screen.findByRole("listbox", { name: /filter by professional/i })).toBeTruthy();
+      expect(await screen.findByRole("button", { name: /^ana gomez$/i })).toBeTruthy();
+    });
+
+    it("does not show non-grid statuses in the week view (HU-19)", async () => {
+      const completedAppt = {
+        ...MOCK_APPOINTMENT,
+        id: 99,
+        status: "COMPLETED",
+        serviceName: "HiddenService",
+      };
+      femmeJsonMock.mockImplementation((url: string) => {
+        if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+        if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+        if (url.includes("/api/clients")) return Promise.resolve([]);
+        if (url.includes("/api/appointments")) return Promise.resolve([completedAppt]);
+        return Promise.resolve([]);
+      });
+
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.queryByText(/hiddenservice/i)).toBeNull();
       });
     });
   });
@@ -130,22 +158,27 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
       await user.click(screen.getAllByRole("button", { name: /new appointment/i })[0]);
       await waitFor(() => {
-        expect(screen.getByRole("dialog")).toBeTruthy();
+        expect(screen.getAllByRole("dialog").length).toBeGreaterThan(0);
       });
 
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yStr = yesterday.toISOString().slice(0, 10);
 
+      const formDialog = screen.getAllByRole("dialog")[0];
+
       await user.clear(screen.getByLabelText(/^date$/i));
       await user.type(screen.getByLabelText(/^date$/i), yStr);
       await user.clear(screen.getByLabelText(/^time$/i));
       await user.type(screen.getByLabelText(/^time$/i), "10:00");
 
-      await user.selectOptions(screen.getByLabelText(/^professional$/i), "10");
-      await user.selectOptions(screen.getByLabelText(/^service$/i), "20");
+      await user.click(screen.getByRole("combobox", { name: /^professional$/i }));
+      await user.click(await screen.findByRole("button", { name: /^ana gomez$/i }));
 
-      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^save$/i }));
+      await user.click(screen.getByRole("combobox", { name: /^service$/i }));
+      await user.click(await screen.findByRole("button", { name: /^haircut/i }));
+
+      await user.click(within(formDialog).getByRole("button", { name: /^save$/i }));
 
       expect(
         await screen.findByText(/must be in the future/i, {}, { timeout: 3000 }),
@@ -176,8 +209,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       await user.click(btn);
 
       await waitFor(() => {
-        const dialog = screen.getByRole("dialog");
-        expect(dialog).toBeTruthy();
+        expect(screen.getAllByRole("dialog").length).toBeGreaterThan(0);
       });
     });
   });
@@ -204,8 +236,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       await user.click(apptBtn);
 
       await waitFor(() => {
-        const dialog = screen.getByRole("dialog");
-        expect(dialog).toBeTruthy();
+        expect(screen.getByText(/appointment detail/i)).toBeTruthy();
       });
     });
   });

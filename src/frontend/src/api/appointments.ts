@@ -83,3 +83,10 @@ export const ALL_STATUSES: AppointmentStatus[] = [
   "CANCELLED",
   "NO_SHOW",
 ];
+
+/** Statuses shown on the week calendar grid (HU-19). */
+export const CALENDAR_GRID_STATUSES: AppointmentStatus[] = [
+  "PENDING",
+  "CONFIRMED",
+  "IN_PROGRESS",
+];

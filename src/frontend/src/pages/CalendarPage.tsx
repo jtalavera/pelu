@@ -14,6 +14,7 @@ import {
   AppointmentCreateRequest,
   AppointmentStatus,
   AppointmentUpdateRequest,
+  CALENDAR_GRID_STATUSES,
   EDITABLE_STATUSES,
   ALL_STATUSES,
   createAppointment,
@@ -21,9 +22,11 @@ import {
   updateAppointment,
   updateAppointmentStatus,
 } from "../api/appointments";
+import { layoutOverlappingInDay } from "../calendar/calendarAppointmentLayout";
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { SearchableSelect } from "../components/SearchableSelect";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 
@@ -162,6 +165,8 @@ export default function CalendarPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+
+  const [hoveredApptId, setHoveredApptId] = useState<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -406,34 +411,18 @@ export default function CalendarPage() {
         </h1>
 
         {/* Professional filter */}
-        <Label htmlFor="prof-filter" className="sr-only">
-          {t("femme.calendar.filterByProfessional")}
-        </Label>
-        <select
+        <SearchableSelect<number>
           id="prof-filter"
+          className="min-w-0 shrink"
+          labelSrOnly
+          label={t("femme.calendar.filterByProfessional")}
           value={selectedProfessionalId ?? ""}
-          onChange={(e) =>
-            setSelectedProfessionalId(e.target.value ? Number(e.target.value) : null)
-          }
-          aria-label={t("femme.calendar.filterByProfessional")}
-          style={{
-            padding: "6px 28px 6px 10px",
-            border: "var(--border-default)",
-            borderRadius: "var(--radius-md)",
-            fontSize: 12,
-            background: "var(--color-white)",
-            color: "var(--color-ink)",
-            cursor: "pointer",
-            appearance: "auto",
-          }}
-        >
-          <option value="">{t("femme.calendar.allProfessionals")}</option>
-          {professionals.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.fullName}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
+          emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
+          options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+          filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+          noResultsText={t("femme.calendar.searchable.noResults")}
+        />
 
         {/* Today */}
         <button
@@ -623,7 +612,10 @@ export default function CalendarPage() {
 
               {/* Day columns */}
               {weekDays.map(({ key, date }) => {
-                const dayAppts = appointments.filter((a) => isSameDay(a.startAt, date));
+                const dayAppts = appointments
+                  .filter((a) => isSameDay(a.startAt, date))
+                  .filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
+                const overlapLayout = layoutOverlappingInDay(dayAppts);
                 return (
                   <div
                     key={key}
@@ -631,6 +623,8 @@ export default function CalendarPage() {
                       position: "relative",
                       height: GRID_HEIGHT,
                       borderLeft: "var(--border-default)",
+                      overflow: "visible",
+                      zIndex: 0,
                     }}
                   >
                     {/* Hour lines */}
@@ -690,9 +684,14 @@ export default function CalendarPage() {
 
                     {/* Appointment blocks */}
                     {dayAppts.map((appt) => {
-                      const top    = appointmentTopPx(appt.startAt);
+                      const top = appointmentTopPx(appt.startAt);
                       const height = appointmentHeightPx(appt.durationMinutes);
-                      const pc     = profColor(appt.professionalId, professionals);
+                      const pc = profColor(appt.professionalId, professionals);
+                      const slot = overlapLayout.get(appt.id) ?? { col: 0, slotCount: 1 };
+                      const { col, slotCount } = slot;
+                      const leftPct = (col / slotCount) * 100;
+                      const widthPct = 100 / slotCount;
+                      const hovered = hoveredApptId === appt.id;
                       return (
                         <button
                           key={appt.id}
@@ -701,23 +700,29 @@ export default function CalendarPage() {
                             e.stopPropagation();
                             openDetail(appt);
                           }}
+                          onMouseEnter={() => setHoveredApptId(appt.id)}
+                          onMouseLeave={() => setHoveredApptId(null)}
                           style={{
                             position: "absolute",
-                            left: 2,
-                            right: 2,
+                            left: `${leftPct}%`,
+                            width: hovered ? "min(260px, calc(100% - 4px))" : `calc(${widthPct}% - 4px)`,
+                            marginLeft: 2,
                             top,
                             height,
-                            zIndex: 10,
+                            zIndex: hovered ? 60 : 10,
                             borderRadius: "var(--radius-md)",
-                            padding: "6px 8px",
-                            fontSize: 11,
+                            padding: hovered ? 10 : 6,
+                            fontSize: hovered ? 13 : 11,
                             cursor: "pointer",
                             background: pc.bg,
                             border: "none",
                             borderLeft: `3px solid ${pc.border}`,
                             color: pc.color,
                             textAlign: "left",
-                            overflow: "hidden",
+                            overflow: hovered ? "visible" : "hidden",
+                            boxShadow: hovered
+                              ? "0 10px 28px rgba(0, 0, 0, 0.18)"
+                              : undefined,
                           }}
                           aria-label={`${appt.clientName ?? t("femme.calendar.detail.occasionalClient")} – ${appt.serviceName}`}
                         >
@@ -952,24 +957,18 @@ export default function CalendarPage() {
           </div>
           {/* Professional */}
           <div className="space-y-1">
-            <Label htmlFor="form-professional">{t("femme.calendar.form.professional")}</Label>
-            <Select
+            <SearchableSelect<number>
               id="form-professional"
+              label={t("femme.calendar.form.professional")}
               value={formProfessionalId}
-              onChange={(e) =>
-                setFormProfessionalId(e.target.value ? Number(e.target.value) : "")
-              }
+              onChange={(v) => setFormProfessionalId(v)}
+              emptyOption={{ value: "", label: t("femme.calendar.form.selectProfessional") }}
+              options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+              noResultsText={t("femme.calendar.searchable.noResults")}
               invalid={!!formErrors.professionalId}
-              aria-invalid={!!formErrors.professionalId}
-              aria-describedby={formErrors.professionalId ? "form-prof-err" : undefined}
-            >
-              <option value="">{t("femme.calendar.form.selectProfessional")}</option>
-              {professionals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.fullName}
-                </option>
-              ))}
-            </Select>
+              describedBy={formErrors.professionalId ? "form-prof-err" : undefined}
+            />
             {formErrors.professionalId && (
               <FieldValidationError id="form-prof-err">
                 {formErrors.professionalId}
@@ -978,24 +977,21 @@ export default function CalendarPage() {
           </div>
           {/* Service */}
           <div className="space-y-1">
-            <Label htmlFor="form-service">{t("femme.calendar.form.service")}</Label>
-            <Select
+            <SearchableSelect<number>
               id="form-service"
+              label={t("femme.calendar.form.service")}
               value={formServiceId}
-              onChange={(e) =>
-                setFormServiceId(e.target.value ? Number(e.target.value) : "")
-              }
+              onChange={(v) => setFormServiceId(v)}
+              emptyOption={{ value: "", label: t("femme.calendar.form.selectService") }}
+              options={services.map((s) => ({
+                value: s.id,
+                label: `${s.name} (${s.durationMinutes} min)`,
+              }))}
+              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+              noResultsText={t("femme.calendar.searchable.noResults")}
               invalid={!!formErrors.serviceId}
-              aria-invalid={!!formErrors.serviceId}
-              aria-describedby={formErrors.serviceId ? "form-svc-err" : undefined}
-            >
-              <option value="">{t("femme.calendar.form.selectService")}</option>
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.durationMinutes} min)
-                </option>
-              ))}
-            </Select>
+              describedBy={formErrors.serviceId ? "form-svc-err" : undefined}
+            />
             {formErrors.serviceId && (
               <FieldValidationError id="form-svc-err">
                 {formErrors.serviceId}
@@ -1004,21 +1000,16 @@ export default function CalendarPage() {
           </div>
           {/* Client (optional) */}
           <div className="space-y-1">
-            <Label htmlFor="form-client">{t("femme.calendar.form.client")}</Label>
-            <Select
+            <SearchableSelect<number>
               id="form-client"
+              label={t("femme.calendar.form.client")}
               value={formClientId}
-              onChange={(e) =>
-                setFormClientId(e.target.value ? Number(e.target.value) : "")
-              }
-            >
-              <option value="">{t("femme.calendar.form.occasionalClient")}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.fullName}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => setFormClientId(v)}
+              emptyOption={{ value: "", label: t("femme.calendar.form.occasionalClient") }}
+              options={clients.map((c) => ({ value: c.id, label: c.fullName }))}
+              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+              noResultsText={t("femme.calendar.searchable.noResults")}
+            />
           </div>
         </div>
       </Modal>
