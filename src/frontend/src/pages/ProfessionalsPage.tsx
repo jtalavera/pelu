@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SearchInput } from "../components/ui/SearchInput";
 import { InlineEditActions } from "../components/ui/InlineEditActions";
 import { useFilteredList } from "../hooks/useFilteredList";
@@ -21,7 +21,13 @@ import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { FemmeNativeTimeInput } from "../components/FemmeNativeTimeInput";
 import { StatusBadge } from "../components/StatusBadge";
+import {
+  PROFESSIONAL_PHOTO_ACCEPT,
+  type ProfessionalPhotoValidationErrorCode,
+  validateAndReadProfessionalPhotoFile,
+} from "../utils/professionalPhotoUpload";
 
 // ── Avatar palette ─────────────────────────────────────────────────────────
 const AVATAR_PALETTE = [
@@ -50,7 +56,7 @@ type Professional = {
   schedules: Schedule[];
 };
 
-type DetailErrors = { fullName?: string } | null;
+type DetailErrors = { fullName?: string; photo?: string } | null;
 type ScheduleErrors = { schedules?: string } | null;
 
 const DAYS: Array<{ value: number; key: string }> = [
@@ -136,6 +142,24 @@ export default function ProfessionalsPage() {
   const [activateTarget, setActivateTarget] = useState<Professional | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
+
+  const photoValidationMessage = useCallback(
+    (code: ProfessionalPhotoValidationErrorCode) => {
+      switch (code) {
+        case "EXTENSION_INVALID":
+          return t("femme.professionals.form.photoErrorExtensionInvalid");
+        case "FILE_TOO_LARGE":
+          return t("femme.professionals.form.photoErrorFileTooLarge");
+        case "DIMENSIONS_TOO_LARGE":
+          return t("femme.professionals.form.photoErrorDimensionsTooLarge");
+        case "IMAGE_LOAD_FAILED":
+          return t("femme.professionals.form.photoErrorImageLoadFailed");
+      }
+    },
+    [t],
+  );
+
   const daysByValue = useMemo(() => new Map(DAYS.map((d) => [d.value, d.key] as const)), []);
 
   const { query: listQuery, setQuery: setListQuery, filtered: visibleProfessionals, highlight } =
@@ -168,6 +192,9 @@ export default function ProfessionalsPage() {
     setPhotoDataUrl(p?.photoDataUrl ?? "");
     setDetailErrors(null);
     setDetailSaveError(null);
+    if (photoFileInputRef.current) {
+      photoFileInputRef.current.value = "";
+    }
   }
 
   function resetScheduleForm(p: Professional | null) {
@@ -198,11 +225,16 @@ export default function ProfessionalsPage() {
   }
 
   async function saveDetails() {
-    setDetailErrors(null);
     setDetailSaveError(null);
     const nameTrim = fullName.trim();
     if (!nameTrim) {
-      setDetailErrors({ fullName: t("femme.professionals.form.fullNameRequired") });
+      setDetailErrors((prev) => ({
+        fullName: t("femme.professionals.form.fullNameRequired"),
+        ...(prev?.photo ? { photo: prev.photo } : {}),
+      }));
+      return;
+    }
+    if (detailErrors?.photo) {
       return;
     }
     setDetailSaving(true);
@@ -211,7 +243,7 @@ export default function ProfessionalsPage() {
         fullName: nameTrim,
         phone: phone.trim() || null,
         email: email.trim() || null,
-        photoDataUrl: photoDataUrl.trim() || null,
+        photoDataUrl: photoDataUrl.trim(),
       };
       let saved: Professional;
       if (savedProfessional) {
@@ -220,6 +252,7 @@ export default function ProfessionalsPage() {
         saved = await femmePostJson<Professional>("/api/professionals", payload);
       }
       setSavedProfessional(saved);
+      setDetailErrors(null);
       await load();
       setTab("schedule");
     } catch (e) {
@@ -281,6 +314,33 @@ export default function ProfessionalsPage() {
   ) {
     setSchedules((prev) => prev.map((s) => (s.dayOfWeek === dow ? { ...s, ...patch } : s)));
   }
+
+  const onPhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    setDetailErrors((prev) => {
+      if (!prev?.photo) return prev;
+      return prev.fullName ? { fullName: prev.fullName } : null;
+    });
+    if (!file) return;
+    const res = await validateAndReadProfessionalPhotoFile(file);
+    if (!res.ok) {
+      setDetailErrors((prev) => ({
+        fullName: prev?.fullName,
+        photo: photoValidationMessage(res.code),
+      }));
+      e.target.value = "";
+      return;
+    }
+    setPhotoDataUrl(res.dataUrl);
+  };
+
+  const clearProfessionalPhoto = () => {
+    setPhotoDataUrl("");
+    if (photoFileInputRef.current) {
+      photoFileInputRef.current.value = "";
+    }
+    setDetailErrors((prev) => (prev?.fullName ? { fullName: prev.fullName } : null));
+  };
 
   function requestDeactivate(p: Professional) {
     setDeactivateTarget(p);
@@ -776,14 +836,54 @@ export default function ProfessionalsPage() {
               </div>
 
               <div>
-                <Label htmlFor="prof-photo">{t("femme.professionals.form.photoDataUrl")}</Label>
-                <Input
-                  id="prof-photo"
-                  value={photoDataUrl}
-                  onChange={(e) => setPhotoDataUrl(e.target.value)}
-                  placeholder={t("femme.professionals.form.photoPlaceholder")}
+                <Label htmlFor="prof-photo-file">{t("femme.professionals.form.photoDataUrl")}</Label>
+                <input
+                  ref={photoFileInputRef}
+                  id="prof-photo-file"
+                  type="file"
+                  accept={PROFESSIONAL_PHOTO_ACCEPT}
+                  className="sr-only"
+                  aria-invalid={detailErrors?.photo ? true : undefined}
+                  aria-describedby={
+                    [detailErrors?.photo && "prof-photo-err", "prof-photo-help"].filter(Boolean).join(" ") ||
+                    "prof-photo-help"
+                  }
+                  aria-label={t("femme.professionals.form.photoChooseFile")}
+                  onChange={(e) => void onPhotoFileChange(e)}
                 />
-                <Text variant="muted" className="mt-1 text-xs">
+                <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 w-full sm:w-auto"
+                    onClick={() => photoFileInputRef.current?.click()}
+                  >
+                    {photoDataUrl
+                      ? t("femme.professionals.form.photoChangeFile")
+                      : t("femme.professionals.form.photoChooseFile")}
+                  </Button>
+                  {photoDataUrl ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="min-h-11 w-full sm:w-auto"
+                      onClick={clearProfessionalPhoto}
+                    >
+                      {t("femme.professionals.form.photoRemove")}
+                    </Button>
+                  ) : null}
+                </div>
+                {photoDataUrl ? (
+                  <div className="mt-3">
+                    <img
+                      src={photoDataUrl}
+                      alt={t("femme.professionals.form.photoPreviewAlt")}
+                      className="h-24 w-24 max-h-32 max-w-32 rounded-md border border-slate-200 object-cover object-center dark:border-slate-600"
+                    />
+                  </div>
+                ) : null}
+                <FieldValidationError id="prof-photo-err">{detailErrors?.photo}</FieldValidationError>
+                <Text variant="muted" className="mt-1 text-xs" id="prof-photo-help">
                   {t("femme.professionals.form.photoHelp")}
                 </Text>
               </div>
@@ -851,14 +951,15 @@ export default function ProfessionalsPage() {
                             >
                               {t("femme.professionals.form.start")}
                             </Label>
-                            <Input
+                            <FemmeNativeTimeInput
                               id={`prof-${d.value}-start`}
                               value={row.startTime}
                               onChange={(e) =>
                                 setScheduleTime(d.value, { startTime: e.target.value })
                               }
-                              placeholder={t("femme.professionals.form.timePlaceholderStart")}
-                              inputMode="numeric"
+                              invalid={!!scheduleErrors?.schedules}
+                              aria-invalid={!!scheduleErrors?.schedules}
+                              aria-label={`${t(`femme.professionals.days.${d.key}`)} — ${t("femme.professionals.form.start")}`}
                             />
                           </div>
                           <div>
@@ -868,14 +969,15 @@ export default function ProfessionalsPage() {
                             >
                               {t("femme.professionals.form.end")}
                             </Label>
-                            <Input
+                            <FemmeNativeTimeInput
                               id={`prof-${d.value}-end`}
                               value={row.endTime}
                               onChange={(e) =>
                                 setScheduleTime(d.value, { endTime: e.target.value })
                               }
-                              placeholder={t("femme.professionals.form.timePlaceholderEnd")}
-                              inputMode="numeric"
+                              invalid={!!scheduleErrors?.schedules}
+                              aria-invalid={!!scheduleErrors?.schedules}
+                              aria-label={`${t(`femme.professionals.days.${d.key}`)} — ${t("femme.professionals.form.end")}`}
                             />
                           </div>
                         </div>

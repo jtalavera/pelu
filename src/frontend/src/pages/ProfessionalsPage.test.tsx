@@ -107,6 +107,19 @@ describe("ProfessionalsPage", () => {
     ).toBeTruthy();
   });
 
+  it("Details tab uses a file input for photo with image accept (HU-20)", async () => {
+    femmeJson.mockResolvedValue([]);
+    renderPage();
+    await screen.findAllByRole("heading", { name: /professionals/i });
+
+    await userEvent.click(getFirst("button", /new professional/i));
+
+    const fileInput = document.getElementById("prof-photo-file") as HTMLInputElement | null;
+    expect(fileInput?.type).toBe("file");
+    expect(fileInput?.accept ?? "").toMatch(/image\/jpeg/);
+    expect(fileInput?.accept ?? "").toMatch(/image\/png/);
+  });
+
   it("unlocks Schedule tab after saving details", async () => {
     femmeJson.mockResolvedValue([]);
     femmePostJson.mockResolvedValue(PROFESSIONAL);

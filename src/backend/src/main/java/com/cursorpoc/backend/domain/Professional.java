@@ -31,7 +31,7 @@ public class Professional {
   @Column(length = 320)
   private String email;
 
-  @Column(name = "photo_data_url", length = 4000)
+  @Column(name = "photo_data_url", columnDefinition = "NVARCHAR(MAX)")
   private String photoDataUrl;
 
   @Column(nullable = false)

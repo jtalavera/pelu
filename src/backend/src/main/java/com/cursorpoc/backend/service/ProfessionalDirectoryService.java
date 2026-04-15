@@ -12,6 +12,7 @@ import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
 import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ProfessionalDirectoryService {
 
-  private static final int MAX_PHOTO_DATA_URL_CHARS = 2_500_000;
+  /** ~5 MB binary as base64 data URL (prefix + payload) with margin. */
+  private static final int MAX_PHOTO_DATA_URL_CHARS = 7_200_000;
 
   private final TenantRepository tenantRepository;
   private final ProfessionalRepository professionalRepository;
@@ -200,7 +202,14 @@ public class ProfessionalDirectoryService {
     if (dataUrl.length() > MAX_PHOTO_DATA_URL_CHARS) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PHOTO_TOO_LARGE");
     }
-    if (!dataUrl.startsWith("data:image/")) {
+    String lower = dataUrl.toLowerCase(Locale.ROOT);
+    boolean allowed =
+        lower.startsWith("data:image/jpeg;base64,")
+            || lower.startsWith("data:image/jpg;base64,")
+            || lower.startsWith("data:image/png;base64,")
+            || lower.startsWith("data:image/webp;base64,")
+            || lower.startsWith("data:image/gif;base64,");
+    if (!allowed) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PHOTO_INVALID_FORMAT");
     }
   }
