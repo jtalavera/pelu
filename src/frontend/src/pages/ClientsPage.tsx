@@ -344,9 +344,17 @@ export default function ClientsPage() {
         }}
       >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
+          <h1
+            style={{
+              fontSize: 15,
+              fontWeight: 500,
+              color: "var(--color-ink)",
+              margin: 0,
+              lineHeight: 1.3,
+            }}
+          >
             {t("femme.clients.title")}
-          </div>
+          </h1>
           <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
             {t("femme.clients.subtitle", { count: clients.length })}
           </div>
@@ -451,7 +459,7 @@ export default function ClientsPage() {
                       color: "var(--color-ink-3)",
                     }}
                   >
-                    {t("femme.clients.emptySearch")}
+                    {clients.length === 0 ? t("femme.clients.emptyTitle") : t("femme.clients.emptySearch")}
                   </td>
                 </tr>
               ) : (
@@ -524,7 +532,7 @@ export default function ClientsPage() {
                           />
                         </td>
                         <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                          {client.visitCount}
+                          {t("femme.clients.visits", { count: client.visitCount })}
                         </td>
                         <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
                           {client.lastVisitAt ? fmtDate(client.lastVisitAt, locale) : "—"}
@@ -624,7 +632,7 @@ export default function ClientsPage() {
                       </td>
 
                       <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                        {client.visitCount}
+                        {t("femme.clients.visits", { count: client.visitCount })}
                       </td>
 
                       <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>

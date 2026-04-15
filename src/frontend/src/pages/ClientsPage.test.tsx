@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
@@ -85,10 +85,12 @@ describe("ClientsPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     await userEvent.click(screen.getByRole("button", { name: /new client/i }));
-    expect(await screen.findByLabelText(/full name/i)).toBeTruthy();
-    expect(screen.getByLabelText(/phone/i)).toBeTruthy();
-    expect(screen.getByLabelText(/^email/i)).toBeTruthy();
-    expect(screen.getByLabelText(/^ruc/i)).toBeTruthy();
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    expect(form.getByLabelText(/full name/i)).toBeTruthy();
+    expect(form.getByLabelText(/^phone$/i)).toBeTruthy();
+    expect(form.getByLabelText(/^email$/i)).toBeTruthy();
+    expect(form.getByLabelText(/^ruc$/i)).toBeTruthy();
   });
 
   it("validates required full name field", async () => {
@@ -96,8 +98,9 @@ describe("ClientsPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     await userEvent.click(screen.getByRole("button", { name: /new client/i }));
-    await screen.findByLabelText(/full name/i);
-    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByLabelText(/full name/i);
+    await userEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/enter the client.*full name/i)).toBeTruthy();
   });
 
@@ -106,10 +109,12 @@ describe("ClientsPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     await userEvent.click(screen.getByRole("button", { name: /new client/i }));
-    await screen.findByLabelText(/full name/i);
-    await userEvent.type(screen.getByLabelText(/full name/i), "Test Client");
-    await userEvent.type(screen.getByLabelText(/^ruc/i), "invalid-ruc");
-    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    await form.findByLabelText(/full name/i);
+    await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
+    await userEvent.type(form.getByLabelText(/^ruc$/i), "invalid-ruc");
+    await userEvent.click(form.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/invalid ruc/i)).toBeTruthy();
   });
 
@@ -119,9 +124,11 @@ describe("ClientsPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     await userEvent.click(screen.getByRole("button", { name: /new client/i }));
-    await screen.findByLabelText(/full name/i);
-    await userEvent.type(screen.getByLabelText(/full name/i), "Ana García");
-    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    await form.findByLabelText(/full name/i);
+    await userEvent.type(form.getByLabelText(/full name/i), "Ana García");
+    await userEvent.click(form.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(femmePostJson).toHaveBeenCalled());
   });
 

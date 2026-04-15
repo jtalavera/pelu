@@ -417,9 +417,17 @@ export default function ProfessionalsPage() {
         }}
       >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
+          <h1
+            style={{
+              fontSize: 15,
+              fontWeight: 500,
+              color: "var(--color-ink)",
+              margin: 0,
+              lineHeight: 1.3,
+            }}
+          >
             {t("femme.professionals.title")}
-          </div>
+          </h1>
           <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
             {t("femme.professionals.lead")}
           </div>
