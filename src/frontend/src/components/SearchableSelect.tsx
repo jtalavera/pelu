@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Label, cn } from "@design-system";
 
 export type SearchableSelectOption<T extends string | number> = {
@@ -83,6 +83,24 @@ export function SearchableSelect<T extends string | number>({
   }, [allRows, query]);
 
   const showDropdown = open && !disabled;
+  const singleFiltered = showDropdown && filtered.length === 1;
+
+  const pickRow = useCallback(
+    (row: SearchableSelectOption<T | "">) => {
+      if (row.value === "") {
+        onChange("" as T | "");
+      } else {
+        onChange(row.value as T);
+      }
+      setOpen(false);
+      setQuery(
+        row.value === ""
+          ? emptyOption?.label ?? ""
+          : options.find((o) => o.value === row.value)?.label ?? "",
+      );
+    },
+    [onChange, emptyOption, options],
+  );
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
@@ -108,6 +126,13 @@ export function SearchableSelect<T extends string | number>({
             e.preventDefault();
             setOpen(false);
             setQuery(selectedLabel);
+            return;
+          }
+          if (e.key === "Enter") {
+            if (showDropdown && filtered.length === 1) {
+              e.preventDefault();
+              pickRow(filtered[0]);
+            }
           }
         }}
         placeholder={filterPlaceholder}
@@ -116,6 +141,7 @@ export function SearchableSelect<T extends string | number>({
         aria-autocomplete="list"
         aria-expanded={showDropdown}
         aria-controls={showDropdown ? listId : undefined}
+        aria-activedescendant={singleFiltered ? `${id}-option-0` : undefined}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
@@ -135,28 +161,28 @@ export function SearchableSelect<T extends string | number>({
               {noResultsText}
             </li>
           ) : (
-            filtered.map((row) => {
+            filtered.map((row, index) => {
               const selected =
                 row.value === "" ? value === "" : value === (row.value as unknown as T | "");
+              const isOnlyMatch = singleFiltered && index === 0;
               return (
-                <li key={String(row.value)} role="option" aria-selected={selected}>
+                <li
+                  key={String(row.value)}
+                  id={`${id}-option-${index}`}
+                  role="option"
+                  aria-selected={selected}
+                >
                   <Button
                     type="button"
                     variant="ghost"
-                    className="w-full justify-start rounded-none px-3 py-2 text-sm"
+                    className={cn(
+                      "w-full justify-start rounded-none px-3 py-2 text-sm",
+                      isOnlyMatch &&
+                        "bg-slate-100 ring-1 ring-inset ring-slate-200 dark:bg-slate-800 dark:ring-slate-600",
+                    )}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      if (row.value === "") {
-                        onChange("" as T | "");
-                      } else {
-                        onChange(row.value as T);
-                      }
-                      setOpen(false);
-                      setQuery(
-                        row.value === ""
-                          ? emptyOption?.label ?? ""
-                          : options.find((o) => o.value === row.value)?.label ?? "",
-                      );
+                      pickRow(row);
                     }}
                   >
                     {row.label}
