@@ -134,6 +134,18 @@ public class ClientService {
     return toResponse(client);
   }
 
+  @Transactional
+  public ClientResponse activate(long tenantId, long clientId) {
+    Client client =
+        clientRepository
+            .findByIdAndTenant_Id(clientId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+    client.setActive(true);
+    clientRepository.save(client);
+    return toResponse(client);
+  }
+
   private static String blankToNull(String value) {
     if (value == null || value.isBlank()) return null;
     return value.trim();

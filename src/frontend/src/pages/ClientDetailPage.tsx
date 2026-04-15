@@ -19,6 +19,7 @@ import {
 import { femmeJson, femmePutJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 type Client = {
   id: number;
@@ -61,6 +62,8 @@ export default function ClientDetailPage() {
   const [saving, setSaving] = useState(false);
 
   const [deactivating, setDeactivating] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
+  const [reactivating, setReactivating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,17 +124,31 @@ export default function ClientDetailPage() {
     }
   }
 
-  async function deactivateClient() {
-    if (!client) return;
-    if (!window.confirm(t("femme.clients.deactivateConfirm", { name: client.fullName }))) return;
+  async function confirmDeactivate() {
+    if (!deactivateTarget || !id) return;
     setDeactivating(true);
     try {
-      await femmePostJson<Client>(`/api/clients/${id ?? ""}/deactivate`, {});
+      await femmePostJson<Client>(`/api/clients/${id}/deactivate`, {});
+      setDeactivateTarget(null);
+      await load();
+    } catch (e) {
+      setSaveError(translateApiError(e, t, "femme.clients.saveError"));
+      setDeactivateTarget(null);
+    } finally {
+      setDeactivating(false);
+    }
+  }
+
+  async function activateClient() {
+    if (!client || !id) return;
+    setReactivating(true);
+    try {
+      await femmePostJson<Client>(`/api/clients/${id}/activate`, {});
       await load();
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
     } finally {
-      setDeactivating(false);
+      setReactivating(false);
     }
   }
 
@@ -177,13 +194,23 @@ export default function ClientDetailPage() {
           <Button
             type="button"
             variant="ghost"
-            onClick={() => void deactivateClient()}
+            onClick={() => setDeactivateTarget(client)}
             disabled={deactivating}
             className="min-h-11 sm:self-auto"
           >
             {t("femme.clients.deactivate")}
           </Button>
-        ) : null}
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void activateClient()}
+            disabled={reactivating}
+            className="min-h-11 sm:self-auto"
+          >
+            {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivate")}
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -207,9 +234,7 @@ export default function ClientDetailPage() {
         <TabsContent value="info">
           <Card className="p-6">
             {saveSuccess ? (
-              <Alert variant="default" title={t("femme.clients.editSuccess")} className="mb-4">
-                {t("femme.clients.editSuccess")}
-              </Alert>
+              <Alert variant="default" title={t("femme.clients.editSuccess")} className="mb-4" />
             ) : null}
             {saveError ? (
               <Alert variant="destructive" title={t("femme.clients.errorTitle")} className="mb-4">
@@ -299,6 +324,20 @@ export default function ClientDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {deactivateTarget ? (
+        <ConfirmDialog
+          open
+          title={t("femme.clients.deactivateDialogTitle")}
+          description={t("femme.clients.deactivateDialogDescription", {
+            name: deactivateTarget.fullName,
+          })}
+          cancelLabel={t("femme.clients.cancel")}
+          confirmLabel={t("femme.clients.deactivate")}
+          onCancel={() => setDeactivateTarget(null)}
+          onConfirm={() => void confirmDeactivate()}
+        />
+      ) : null}
     </div>
   );
 }
