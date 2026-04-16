@@ -36,6 +36,9 @@ public class AppUser {
   @Column(nullable = false, length = 32)
   private UserRole role;
 
+  @Column(nullable = false)
+  private boolean enabled = true;
+
   public Long getId() {
     return id;
   }
@@ -74,6 +77,14 @@ public class AppUser {
 
   public void setRole(UserRole role) {
     this.role = role;
+  }
+
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
   }
 
   public Long getTenantId() {
