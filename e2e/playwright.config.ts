@@ -17,6 +17,11 @@ const backendReadyUrl = "http://localhost:8080/health";
 
 const evidenceRoot = process.env.E2E_EVIDENCE_DIR?.trim();
 
+/** `on` = video for every test (success + failure). Override with E2E_VIDEO=retain-on-failure (e.g. CI). */
+const videoMode =
+  (process.env.E2E_VIDEO as "on" | "retain-on-failure" | "off" | undefined) ??
+  (process.env.CI ? "retain-on-failure" : "on");
+
 const viteServer = {
   command: "npm run dev -- --port 5173",
   cwd: frontendDir,
@@ -71,7 +76,7 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: videoMode,
     locale: "en-US",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
