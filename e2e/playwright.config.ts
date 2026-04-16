@@ -22,6 +22,23 @@ const videoMode =
   (process.env.E2E_VIDEO as "on" | "retain-on-failure" | "off" | undefined) ??
   (process.env.CI ? "retain-on-failure" : "on");
 
+/**
+ * Videos record real-time browser output; Playwright cannot slow playback of the file itself.
+ * `slowMo` adds delay after each Playwright action so on-screen motion advances more slowly in the recording.
+ *
+ * `E2E_PLAYWRIGHT_ACTION_SPEED` — 1 = full speed (no slowMo), 0.25 ≈ quarter speed vs 1 (≈4× longer timeline).
+ * Override delay exactly with `E2E_PLAYWRIGHT_SLOW_MO_MS` (non-negative integer ms).
+ */
+const explicitSlowMo = process.env.E2E_PLAYWRIGHT_SLOW_MO_MS?.trim();
+const actionSpeedRaw = process.env.E2E_PLAYWRIGHT_ACTION_SPEED ?? "0.25";
+const actionSpeed = Math.min(1, Math.max(0.05, Number(actionSpeedRaw) || 0.25));
+const slowMoMs =
+  explicitSlowMo !== undefined && explicitSlowMo !== ""
+    ? Math.max(0, Math.round(Number(explicitSlowMo)) || 0)
+    : actionSpeed >= 1
+      ? 0
+      : Math.round(120 * (1 / actionSpeed - 1));
+
 const viteServer = {
   command: "npm run dev -- --port 5173",
   cwd: frontendDir,
@@ -78,6 +95,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: videoMode,
     locale: "en-US",
+    launchOptions: {
+      slowMo: slowMoMs,
+    },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: withBackend ? [viteServer, backendServer] : viteServer,
