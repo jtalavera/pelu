@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-07 |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -29,6 +29,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Refresco del calendario** — El turno creado aparece de inmediato en el calendario (misma sesión).
 4. **Estado inicial** — El estado inicial del turno es “Pendiente”.
 5. **Duración** — Si el servicio tiene duración (ej. 90 minutos), el turno bloquea ese intervalo en el calendario para esa profesional (no solapes en el rango completo).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** modal “New appointment” en `CalendarPage` (profesional, servicio, cliente, fecha/hora).
+- **API:** `POST /api/appointments` con validación de solapes y reglas de horario.
+- **E2E:** `e2e/tests/hu-07-agendar-un-turno.spec.ts`.
 
 ---
 

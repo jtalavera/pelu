@@ -40,6 +40,16 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ---
 
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/settings/fiscal-stamp`.
+- **Frontend:** `FiscalStampSettingsPage`; timbrado activo/inactivos, rangos y numeración.
+- **API:** `/api/fiscal-stamps` (CRUD / activación según backend).
+- **Semilla demo:** timbrado inicial creado en `FemmeDataInitializer`.
+- **E2E:** `e2e/tests/hu-02b-configurar-timbrado-fiscal.spec.ts`.
+
+---
+
 ## Notas para estimación y pruebas
 
 - **Pruebas:** límites de rango, cambio de timbrado activo, primera factura → bloqueo de edición, alertas (fechas y porcentaje simulados), bloqueo al vencer/agotar.

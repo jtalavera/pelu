@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-14 |
 | **Módulo** | Facturación |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -33,6 +33,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 7. **Numeración** — Al confirmar, se asigna el siguiente número disponible dentro del rango del timbrado activo; se muestra con 7 dígitos y ceros a la izquierda (ej. `0000043`).
 8. **Sin timbrado válido** — Si no hay timbrado activo vigente, se bloquea la emisión y se muestra el error correspondiente.
 9. **PDF** — El comprobante es descargable en PDF e incluye: datos del negocio, número de timbrado, número de factura, RUC del negocio, datos de la cliente (con RUC si aplica), ítems, subtotal, descuento, total y método de pago.
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/billing` — pestaña “New Invoice” (`Issue Invoice`): ítems, descuentos, cliente ocasional, PDF.
+- **API:** emisión vía `/api/invoices` (o ruta equivalente en `InvoiceController`).
+- **E2E:** `e2e/tests/hu-14-emitir-comprobante.spec.ts`.
 
 ---
 

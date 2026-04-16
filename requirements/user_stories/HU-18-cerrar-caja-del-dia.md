@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-18 |
 | **Módulo** | Facturación |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -29,6 +29,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Diferencia** — El sistema calcula y muestra la diferencia (sobrante o faltante) entre contado y esperado.
 4. **Registro de cierre** — El cierre queda registrado con fecha, hora, usuario y el resumen completo (auditoría).
 5. **Post-cierre** — Con la caja cerrada no se pueden emitir nuevos comprobantes hasta una nueva **apertura** de caja (HU-13). El cierre del día es **opcional** para el flujo de negocio (no se obliga a cerrar para “seguir el día siguiente”), pero mientras exista caja cerrada sin nueva apertura, aplica esta restricción de emisión.
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** flujo “Close cash register” en pestaña de caja (conteo físico vs esperado).
+- **API:** cierre de sesión de caja (`POST` de cierre según `CashSessionService`).
+- **E2E:** `e2e/tests/hu-18-cerrar-caja-del-dia.spec.ts`.
 
 ---
 

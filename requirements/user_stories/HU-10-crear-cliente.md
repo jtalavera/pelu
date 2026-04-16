@@ -5,7 +5,7 @@
 | ---------- | -------------- |
 | **ID**     | HU-10          |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog`      |
+| **Estado** | `Done`      |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -31,6 +31,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Unicidad** — Antes de guardar, el sistema verifica duplicados por teléfono, email o RUC **solo cuando el campo tiene valor** (valores vacíos no participan en la unicidad); si hay conflicto, muestra qué campo está duplicado.
 4. **Disponibilidad inmediata** — La cliente creada está disponible de inmediato para búsqueda al agendar o facturar.
 5. **Cliente ocasional** — Existe opción de “cliente ocasional” representada por un **identificador genérico** del sistema (sin alta de cliente con datos obligatorios).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/clients` — modal “New client” en `ClientsPage`.
+- **API:** `POST /api/clients` con validación de RUC opcional.
+- **E2E:** `e2e/tests/hu-10-crear-cliente.spec.ts`.
 
 ---
 

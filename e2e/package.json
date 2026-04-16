@@ -10,7 +10,8 @@
     "test": "playwright test --pass-with-no-tests",
     "test:headed": "playwright test --headed",
     "test:with-backend": "E2E_WITH_BACKEND=1 playwright test",
-    "test:with-backend:headed": "E2E_WITH_BACKEND=1 playwright test --headed"
+    "test:with-backend:headed": "E2E_WITH_BACKEND=1 playwright test --headed",
+    "test:with-evidence": "bash ../scripts/run-e2e-with-evidence.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0"

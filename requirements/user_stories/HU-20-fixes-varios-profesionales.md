@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-20 |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -29,6 +29,13 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Foto — peso máximo** — Se valida que el archivo no supere **5 MB**; si lo supera, se rechaza con mensaje claro.
 4. **Foto — dimensiones máximas** — Se valida que la imagen no supere **500×500 px** de ancho ni de alto (o ambas dimensiones según regla unificada definida en implementación: típicamente *cada* lado ≤ 500 px). Si no cumple, se rechaza con mensaje claro.
 5. **Horario del profesional — selector de hora** — En el formulario donde se configura el **horario semanal** (o equivalente) de la profesional, los campos donde se ingresan **horas de inicio y fin** usan el **mismo componente o patrón de time picker** que el módulo del **calendario** (misma interacción y presentación visual alineada con el diseño del producto y temas claro / oscuro).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** búsqueda inline y edición en tabla en `ProfessionalsPage`.
+- **E2E:** `e2e/tests/hu-20-fixes-varios-profesionales.spec.ts`.
 
 ---
 

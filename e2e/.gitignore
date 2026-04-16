@@ -3,3 +3,6 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+/evidence/*
+!/evidence/README.md
+!/evidence/ACCEPTANCE_MATRIX.md

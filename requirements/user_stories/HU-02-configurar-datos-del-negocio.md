@@ -35,6 +35,15 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ---
 
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/settings/business` (layout `SettingsLayout`).
+- **Frontend:** `BusinessSettingsPage`; validación de RUC paraguayo y logo (data URL).
+- **API:** perfil de negocio vía endpoints bajo `/api/business-profile` (según controladores existentes).
+- **E2E:** `e2e/tests/hu-02-configurar-datos-del-negocio.spec.ts`.
+
+---
+
 ## Notas para estimación y pruebas
 
 - Depende de almacenamiento de logo y de pipeline de PDF (puede enlazarse con HU-14 cuando exista).

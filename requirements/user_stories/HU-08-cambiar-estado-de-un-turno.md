@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-08 |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -29,6 +29,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Cancelación** — Al marcar “Cancelado”, el sistema solicita una razón (opcional) antes o al guardar.
 4. **Completado visible** — Los turnos “Completado” se diferencian visualmente en el calendario (color o ícono).
 5. **Sin eliminación física** — No existe eliminación dura del turno; solo transiciones de estado (p. ej. cancelado), manteniendo historial.
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** detalle de cita y cambio de estado en `CalendarPage` (select de estado, cancelación con motivo).
+- **API:** actualización de estado vía API de citas (ver `AppointmentController`).
+- **E2E:** `e2e/tests/hu-08-cambiar-estado-de-un-turno.spec.ts`.
 
 ---
 

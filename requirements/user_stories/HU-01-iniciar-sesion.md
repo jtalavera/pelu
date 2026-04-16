@@ -5,7 +5,7 @@
 | ---------- | ------------------------------------- |
 | **ID**     | HU-01                                 |
 | **Módulo** | Autenticación & configuración inicial |
-| **Estado** | `Backlog`                             |
+| **Estado** | `Done`                             |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -33,6 +33,16 @@ Cada criterio es verificable mediante prueba manual o automatizada (UI, API o am
 3. **Login exitoso** — Tras credenciales válidas, el usuario es redirigido al dashboard principal (o ruta home acordada).
 4. **Sesión por inactividad (8 h)** — Tras el login, la sesión permanece válida mientras haya actividad; tras **8 horas sin actividad**, el usuario es redirigido al login (o equivalente que impida usar el panel sin reautenticar).
 5. **Recuperación de contraseña** — Existe la opción “olvidé mi contraseña” que dispara el envío de un enlace de recuperación al email indicado (flujo completo verificable: solicitud → email o mock en entorno de prueba).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Frontend:** `LoginPage` (`/login`), `ForgotPasswordPage` (`/forgot-password`); JWT almacenado en `sessionStorage` (`accessToken`).
+- **API:** `POST /api/auth/login`, `POST /api/auth/forgot-password`, reset vía `POST /api/auth/reset-password` (en desarrollo el enlace se loguea, no hay envío SMTP en MVP).
+- **Sesión:** TTL del access token `app.femme.jwt.access-token-ttl-seconds` (por defecto 28800 s = 8 h), alineado al criterio de inactividad.
+- **Usuario demo:** `admin@demo.com` / `Demo123!` (`FemmeDataInitializer`, no aplica al perfil `test`).
+- **E2E:** `e2e/tests/hu-01-iniciar-sesion.spec.ts`.
 
 ---
 
