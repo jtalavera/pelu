@@ -8,21 +8,25 @@ Single application with a **React** SPA and a **Spring Boot** API under `src/`. 
 
 ## Repository layout
 
-| Path | Contents |
-|------|----------|
-| `src/frontend/` | React app, Tailwind, i18n (English / Spanish), shared UI in `design-system/` |
-| `src/backend/` | Spring Boot API (Java 21), Gradle wrapper |
-| `e2e/` | Playwright config and scripts (optional local use) |
-| `infrastructure/` | Terraform and infra notes |
-| `.github/workflows/` | CI (`ci.yml`) and Azure deploy (`deploy-azure.yml`) |
+
+| Path                 | Contents                                                                     |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `src/frontend/`      | React app, Tailwind, i18n (English / Spanish), shared UI in `design-system/` |
+| `src/backend/`       | Spring Boot API (Java 21), Gradle wrapper                                    |
+| `e2e/`               | Playwright config and scripts (optional local use)                           |
+| `infrastructure/`    | Terraform and infra notes                                                    |
+| `.github/workflows/` | CI (`ci.yml`) and Azure deploy (`deploy-azure.yml`)                          |
+
 
 ## Tech stack
 
-| Area | Stack |
-|------|--------|
-| Frontend | React 18, Vite, TypeScript, Tailwind CSS, react-i18next, React Router |
-| Backend | Spring Boot 4, Spring Security, SpringDoc OpenAPI (Swagger UI) |
-| Tooling | ESLint (frontend), Spotless + Google Java Format (backend), Vitest, JUnit 5 |
+
+| Area     | Stack                                                                       |
+| -------- | --------------------------------------------------------------------------- |
+| Frontend | React 18, Vite, TypeScript, Tailwind CSS, react-i18next, React Router       |
+| Backend  | Spring Boot 4, Spring Security, SpringDoc OpenAPI (Swagger UI)              |
+| Tooling  | ESLint (frontend), Spotless + Google Java Format (backend), Vitest, JUnit 5 |
+
 
 ## Prerequisites
 
@@ -63,11 +67,13 @@ The current API does **not** require a database or Docker. Optional: `src/backen
 
 ### Backend endpoints
 
-| Resource | URL |
-|----------|-----|
-| Health | `GET http://localhost:8080/health` → JSON `{"status":"UP"}` |
-| OpenAPI | `GET http://localhost:8080/v3/api-docs` |
+
+| Resource   | URL                                                                            |
+| ---------- | ------------------------------------------------------------------------------ |
+| Health     | `GET http://localhost:8080/health` → JSON `{"status":"UP"}`                    |
+| OpenAPI    | `GET http://localhost:8080/v3/api-docs`                                        |
 | Swagger UI | [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) |
+
 
 Public routes are configured in `SecurityConfig`; other paths require authentication unless extended.
 
@@ -80,6 +86,31 @@ cd src/frontend && npm run test
 # Backend
 cd src/backend && ./gradlew test --no-daemon
 ```
+
+### End-to-end (Playwright)
+
+E2E tests live under `[e2e/](e2e/)` (separate `package.json` from the frontend app). From the repo root:
+
+```bash
+cd e2e && npm ci && npm test
+```
+
+If dependencies are already installed:
+
+```bash
+cd e2e && npm test
+```
+
+Other scripts:
+
+
+| Command                            | Purpose                                                                     |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| `npm run test:headed`              | Run Playwright with a visible browser                                       |
+| `npm run test:with-backend`        | Sets `E2E_WITH_BACKEND=1` before `playwright test`                          |
+| `npm run test:with-backend:headed` | Same as above, headed                                                       |
+| `npm run test:with-evidence`       | Runs `[scripts/run-e2e-with-evidence.sh](scripts/run-e2e-with-evidence.sh)` |
+
 
 ## Continuous integration
 
@@ -94,3 +125,4 @@ Successful runs on `main` trigger the **Deploy to Azure** job (reusable workflow
 ## More documentation
 
 - [AGENTS.md](AGENTS.md) — Cursor / editor-oriented notes (responsive UI, i18n, search forms). If anything conflicts with the code or this README, treat the **code** as source of truth.
+
