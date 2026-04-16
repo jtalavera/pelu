@@ -5,7 +5,7 @@
 | ---------- | ------------ |
 | **ID**     | HU-05        |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog`    |
+| **Estado** | `Done`    |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -30,6 +30,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 2. **Horarios** — Se pueden definir los días y horarios de trabajo de cada profesional (modelo explícito: ej. plantilla semanal).
 3. **Edición y desactivación** — Se puede editar o desactivar una profesional sin perder historial asociado a turnos pasados.
 4. **Listado con estado** — La lista muestra el estado de cada profesional (activa / inactiva).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/professionals` — `ProfessionalsPage` (detalle, horarios, foto).
+- **API:** `/api/professionals` y subrutas (activar/desactivar, horarios).
+- **E2E:** `e2e/tests/hu-05-crear-y-gestionar-profesionales.spec.ts`.
 
 ---
 

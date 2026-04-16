@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-17 |
 | **Módulo** | Facturación |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -28,6 +28,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 2. **Razón obligatoria** — El sistema solicita una razón de anulación en texto obligatorio antes de confirmar.
 3. **Estado y visibilidad** — Tras anular, el comprobante pasa a estado “Anulado” y sigue visible en el historial con ese estado.
 4. **Restricción temporal** — No se puede anular un comprobante de un día anterior al cierre de caja del mismo día (regla exacta implementada de forma consistente con HU-18).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** detalle de factura en historial con acción de anulación y motivo.
+- **API:** anulación con códigos de error tipados (ver `femme.apiErrors` en i18n).
+- **E2E:** `e2e/tests/hu-17-anular-comprobante.spec.ts`.
 
 ---
 

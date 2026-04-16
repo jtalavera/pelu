@@ -15,6 +15,8 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 const backendReadyUrl = "http://localhost:8080/health";
 
+const evidenceRoot = process.env.E2E_EVIDENCE_DIR?.trim();
+
 const viteServer = {
   command: "npm run dev -- --port 5173",
   cwd: frontendDir,
@@ -42,15 +44,35 @@ const withBackend =
 
 export default defineConfig({
   testDir: "./tests",
+  outputDir: evidenceRoot
+    ? path.join(evidenceRoot, "artifacts")
+    : path.join(__dirname, "test-results"),
+  // Shared Spring Boot + H2 state (e.g. one open cash session per tenant) — avoid parallel races.
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: [["list"], ["html", { open: "never" }]],
+  workers: 1,
+  reporter: [
+    ["list"],
+    [
+      "html",
+      {
+        open: "never",
+        outputFolder: evidenceRoot
+          ? path.join(evidenceRoot, "html-report")
+          : path.join(__dirname, "playwright-report"),
+      },
+    ],
+    ...(evidenceRoot
+      ? ([["json", { outputFile: path.join(evidenceRoot, "results.json") }]] as const)
+      : []),
+  ],
   use: {
     baseURL: BASE_URL,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    video: "retain-on-failure",
+    locale: "en-US",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: withBackend ? [viteServer, backendServer] : viteServer,

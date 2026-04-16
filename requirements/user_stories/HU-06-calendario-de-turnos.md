@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-06 |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -29,6 +29,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Navegación** — Se puede navegar a semanas anteriores y siguientes.
 4. **Filtro por profesional** — Se puede filtrar el calendario por profesional.
 5. **Detalle** — Al hacer clic en un turno, se accede a su vista de detalle completo.
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/calendar` — `CalendarPage` (vista semanal, filtros por profesional).
+- **API:** citas bajo `/api/appointments` (listados y conflictos de solape).
+- **E2E:** `e2e/tests/hu-06-calendario-de-turnos.spec.ts`.
 
 ---
 

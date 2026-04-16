@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-11 |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -30,6 +30,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 4. **Alta rápida** — Si no hay resultados, se puede crear una nueva cliente desde el mismo contexto sin perder el progreso del formulario principal (flujo definido en UX).
 5. **Autocompletado en factura** — Al seleccionar una cliente, sus datos (incluido RUC si aplica) se autocompletan en el formulario de factura.
 6. **Cliente ocasional** — Si se elige cliente ocasional, el vínculo usa el **identificador genérico** del tenant (sin seleccionar una cliente del directorio con datos completos); ver PRD — Definiciones transversales.
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** búsqueda en listado y campos de búsqueda inline (`SearchInput` / filtros).
+- **API:** listados y búsqueda de clientes (`/api/clients` con query).
+- **E2E:** `e2e/tests/hu-11-buscar-cliente-existente.spec.ts`.
 
 ---
 

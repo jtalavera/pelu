@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-16 |
 | **Módulo** | Facturación |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -28,6 +28,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 2. **Filtros** — Se puede filtrar por rango de fechas, cliente y estado (estados definidos en el modelo: ej. emitido, anulado).
 3. **Columnas** — Cada fila muestra: número, fecha, cliente, total y estado.
 4. **Detalle y PDF** — Desde el detalle de un comprobante se puede descargar el PDF (mismo contenido que al emitir).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/billing` — pestaña “History” (`Invoice history`).
+- **API:** listado de facturas con filtros de fecha/estado/cliente.
+- **E2E:** `e2e/tests/hu-16-historial-de-comprobantes.spec.ts`.
 
 ---
 

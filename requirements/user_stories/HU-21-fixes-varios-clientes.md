@@ -5,7 +5,7 @@
 | ---------- | -------------- |
 | **ID**     | HU-21          |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog`      |
+| **Estado** | `Done`      |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -33,6 +33,13 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 5. **Reactivar cliente** — Tras desactivar un cliente desde el formulario de edición, debe existir una acción explícita para **reactivarlo** (p. ej. botón **Reactivar** u equivalente), visible y utilizable según el estado del registro, sin quedar el caso sin salida.
 6. **Listado e inclusión de inactivos** — En el listado de clientes, cuando el filtro de estado permite **«Todas»** (o equivalente), deben mostrarse también los clientes **inactivos**, junto con los activos, de forma distinguible si el diseño lo requiere. El comportamiento actual que **oculta** inactivos incluso con «Todas» se considera **incorrecto** y debe corregirse.
 7. **Etiquetas de botones en masculino** — Los textos de botones del flujo de clientes que califiquen la acción sobre la persona deben alinearse con el criterio masculino (p. ej. textos coherentes con «cliente» ya definido en criterio 2).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** filtros tipo “pills”, búsqueda y flujos de perfil en `ClientsPage` / `ClientDetailPage`.
+- **E2E:** `e2e/tests/hu-21-fixes-varios-clientes.spec.ts`.
 
 ---
 

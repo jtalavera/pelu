@@ -5,7 +5,7 @@
 | ---------- | ------------------------------------- |
 | **ID**     | HU-03                                 |
 | **Módulo** | Autenticación & configuración inicial |
-| **Estado** | `Backlog`                             |
+| **Estado** | `Done`                             |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -30,6 +30,15 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 2. **Accesos rápidos** — Incluye acceso al calendario y a emitir un comprobante (enlaces o botones funcionales).
 3. **Refresco automático** — Los datos del dashboard se actualizan mediante **polling cada 1 minuto** (sin depender de recarga manual de página para ese ciclo).
 4. **Estado vacío** — Si no hay datos (ej. día sin turnos), se muestra un estado vacío con mensaje amigable, sin errores ni tablas rotas.
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app` — `DashboardPage`.
+- **API:** `GET /api/dashboard` (métricas del día, alertas fiscales, ingresos).
+- **UX:** saludo según hora, tarjetas de resumen y acceso rápido a nuevo turno.
+- **E2E:** `e2e/tests/hu-03-dashboard-principal.spec.ts`.
 
 ---
 

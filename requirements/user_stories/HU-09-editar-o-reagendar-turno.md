@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-09 |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -28,6 +28,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 2. **Revalidación de disponibilidad** — Al cambiar fecha u hora (o profesional), se vuelve a validar disponibilidad; conflicto → error claro, sin guardar cambios inválidos.
 3. **Refresco** — El turno actualizado se refleja de inmediato en el calendario.
 4. **Restricción por estado** — Solo se pueden editar turnos en estado Pendiente o Confirmado (otros estados bloquean edición o solo permiten acciones definidas).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** mismo modal de edición (`Edit appointment`) cuando el turno es editable (reglas de negocio en backend).
+- **API:** `PUT`/`PATCH` de cita según implementación actual.
+- **E2E:** `e2e/tests/hu-09-editar-o-reagendar-turno.spec.ts`.
 
 ---
 

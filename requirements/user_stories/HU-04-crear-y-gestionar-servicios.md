@@ -34,6 +34,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ---
 
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/services` — `ServicesPage` (pestañas servicios y categorías).
+- **API:** categorías y servicios bajo `/api/service-categories` y `/api/services` (ver controladores).
+- **E2E:** `e2e/tests/hu-04-crear-y-gestionar-servicios.spec.ts`.
+
+---
+
 ## Notas para estimación y pruebas
 
 - **Pruebas:** CRUD feliz, desactivado oculto en selector de nuevos turnos, visible en historial, búsqueda/filtro con casos límite (sin resultados).

@@ -4,7 +4,7 @@
 |--------|--------|
 | **ID** | HU-12 |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog` |
+| **Estado** | `Done` |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -30,6 +30,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 4. **Edición** — Se pueden editar nombre, teléfono, email y RUC con las mismas validaciones que en alta.
 5. **RUC y unicidad al editar** — Al cambiar teléfono, email o RUC, se aplican las mismas reglas que en alta: validación de formato/RUC y unicidad **solo para valores no vacíos** (sin duplicados fantasma por campos vacíos).
 6. **Baja lógica** — No se puede eliminar una cliente con historial asociado; solo desactivarla (historial conservado).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **Ruta:** `/app/clients/:id` — `ClientDetailPage` (pestañas información, historial).
+- **API:** `GET/PUT /api/clients/{id}`; citas y facturas relacionadas según endpoints existentes.
+- **E2E:** `e2e/tests/hu-12-ver-y-editar-perfil-cliente.spec.ts`.
 
 ---
 

@@ -5,7 +5,7 @@
 | ---------- | ------------ |
 | **ID**     | HU-19        |
 | **Módulo** | Agendamiento |
-| **Estado** | `Backlog`    |
+| **Estado** | `Done`    |
 
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
@@ -32,6 +32,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 4. **Vista principal del calendario — filtro de profesionales** — El control que permite elegir qué **profesionales** muestra el calendario filtra las opciones **a medida que se escribe**, con el mismo criterio de autobúsqueda que en los puntos anteriores.
 5. **Turnos en el mismo horario (vista)** — Si hay **dos o más turnos** que comparten la misma franja horaria visible en la celda, sus tarjetas se muestran **una al lado de la otra**, con ancho reducido para caber en el espacio. Al pasar el puntero (hover), cada tarjeta se muestra **flotante a tamaño normal** para leer el contenido con comodidad.
 6. **Estados visibles en el calendario** — En la vista de calendario solo se muestran turnos en estado **Pendiente**, **Confirmado** y **En curso**. Los demás estados **no** aparecen en la grilla (quedan ocultos en esa vista).
+
+---
+
+## Implementación actual (código, 2026-04)
+
+- **UI:** selectores con filtrado en vivo (`SearchableSelect` / placeholders `femme.calendar.searchable.*`), leyenda de solapes y filtrado de estados en vista.
+- **Implementación:** `CalendarPage` y componentes asociados.
+- **E2E:** `e2e/tests/hu-19-fixes-varios-calendario.spec.ts`.
 
 ---
 
