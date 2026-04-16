@@ -29,4 +29,18 @@ test.describe("HU-01 · Iniciar sesión", () => {
     await expect(page).toHaveURL(/\/forgot-password/);
     await expect(page.getByRole("heading", { name: "Reset password" })).toBeVisible();
   });
+
+  test("HU-01 · 5 envío de solicitud de recuperación muestra mensaje de confirmación", async ({
+    page,
+  }) => {
+    await page.goto("/forgot-password");
+    await page.getByLabel("Email").fill("admin@demo.com");
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    await expect(
+      page.getByText(
+        "If an account exists, check the server logs for the reset link (development).",
+        { exact: true },
+      ),
+    ).toBeVisible();
+  });
 });

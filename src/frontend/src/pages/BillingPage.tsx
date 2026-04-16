@@ -492,6 +492,7 @@ function InvoiceDetailModal({
 }
 
 function capitalize(s: string): string {
+  if (!s) return "";
   return s
     .split("_")
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
@@ -1534,13 +1535,13 @@ function CashSessionTab({
               {fmtNum(closeResult.cashDifference)}
             </span>
           </div>
-          {closeResult.paymentSummary.length > 0 && (
+          {(closeResult.paymentSummary ?? []).length > 0 && (
             <div className="mt-2">
               <Text className="font-medium text-sm mb-1">
                 {t("femme.billing.close.paymentBreakdown")}
               </Text>
               <div className="flex flex-col gap-1">
-                {closeResult.paymentSummary.map((ps, i) => (
+                {(closeResult.paymentSummary ?? []).map((ps, i) => (
                   <div key={i} className="flex justify-between text-sm max-w-xs">
                     <span>{t(`femme.billing.invoice.paymentMethod${capitalize(ps.method)}`)}</span>
                     <span>{fmtNum(ps.total)}</span>
