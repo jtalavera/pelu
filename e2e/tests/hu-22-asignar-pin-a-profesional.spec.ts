@@ -46,11 +46,13 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
   test("HU-22 · 1 PIN de 4 dígitos válido se guarda correctamente", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    const name = `E2E PIN4 ${Date.now()}`;
+    const suffix = Date.now();
+    const name = `E2E PIN4 ${suffix}`;
+    const pin4 = String(suffix).slice(-4);
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.locator("#prof-pin").fill("1234");
+    await dlg.locator("#prof-pin").fill(pin4);
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     // should move to schedule tab without error
     await expect(dlg.getByRole("button", { name: "Save schedule" })).toBeVisible();
@@ -59,11 +61,13 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
   test("HU-22 · 1 PIN de 7 dígitos válido se guarda correctamente", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    const name = `E2E PIN7 ${Date.now()}`;
+    const suffix = Date.now();
+    const name = `E2E PIN7 ${suffix}`;
+    const pin7 = String(suffix).slice(-7);
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.locator("#prof-pin").fill("7654321");
+    await dlg.locator("#prof-pin").fill(pin7);
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     await expect(dlg.getByRole("button", { name: "Save schedule" })).toBeVisible();
   });
@@ -115,7 +119,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     let dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.locator("#prof-pin").fill("5555");
+    await dlg.locator("#prof-pin").fill(String(Date.now()).slice(-4));
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     await dlg.getByRole("button", { name: "Save schedule" }).evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();

@@ -19,7 +19,7 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { grantProfessionalAccess, revokeProfessionalAccess } from "../api/professionalAccess";
-import { translateApiError } from "../api/parseApiErrorMessage";
+import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { FemmeNativeTimeInput } from "../components/FemmeNativeTimeInput";
@@ -300,11 +300,11 @@ export default function ProfessionalsPage() {
       await load();
       setTab("schedule");
     } catch (e) {
-      const msg = translateApiError(e, t, "femme.professionals.saveError");
-      if (msg.includes("PIN_ALREADY_IN_USE")) {
+      const rawCode = parseApiErrorMessage(e);
+      if (rawCode === "PIN_ALREADY_IN_USE") {
         setDetailErrors((prev) => ({ ...(prev ?? {}), pin: t("femme.professionals.form.pinErrorDuplicate") }));
       } else {
-        setDetailSaveError(msg);
+        setDetailSaveError(translateApiError(e, t, "femme.professionals.saveError"));
       }
     } finally {
       setDetailSaving(false);
