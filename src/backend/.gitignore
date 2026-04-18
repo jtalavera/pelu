@@ -4,3 +4,4 @@ build/
 *.iml
 .idea/
 *.log
+src/main/resources/application-local.properties

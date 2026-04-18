@@ -40,6 +40,6 @@ public class EmailService {
                     + activationUrl
                     + "\n\nThis link expires in 48 hours.");
     client.beginSend(message).getFinalResult();
-    log.info("activation email sent to {}", toEmail);
+    log.info("EMAIL SENT from={} to={} subject=\"Activate your Femme account\"", senderAddress, toEmail);
   }
 }
