@@ -35,9 +35,10 @@ test.describe("HU-11 · Buscar cliente existente", () => {
   }) => {
     const token = await loginAsDemoApi(request);
     const name = `E2E Meta ${Date.now()}`;
+    const phone = `098${String(Date.now()).slice(-7)}`;
     await apiPostJson(request, token, "/api/clients", {
       fullName: name,
-      phone: "0981123456",
+      phone,
       email: null,
       ruc: "80000005-6",
     });
@@ -45,7 +46,7 @@ test.describe("HU-11 · Buscar cliente existente", () => {
     await loginAsDemo(page);
     await page.goto("/app/clients");
     await page.getByPlaceholder("Search by name, phone, or RUC…").first().fill(name);
-    await expect(page.getByText("0981123456", { exact: true })).toBeVisible();
+    await expect(page.getByText(phone, { exact: true })).toBeVisible();
     await expect(page.getByText("80000005-6", { exact: true })).toBeVisible();
   });
 });

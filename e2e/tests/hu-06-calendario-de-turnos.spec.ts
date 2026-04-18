@@ -43,8 +43,9 @@ test.describe("HU-06 · Calendario de turnos", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar");
 
-    await expect(page.getByRole("button", { name: new RegExp(client.fullName) })).toBeVisible();
-    await expect(page.getByText(/E2E Svc /)).toBeVisible();
+    const appointmentButton = page.getByRole("button", { name: new RegExp(client.fullName) });
+    await expect(appointmentButton).toBeVisible();
+    await expect(appointmentButton.getByText(/E2E Svc /)).toBeVisible();
   });
 
   test("HU-06 · 4 filtro por profesional reduce resultados", async ({ page, request }) => {
