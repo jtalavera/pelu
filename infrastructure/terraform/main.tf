@@ -68,11 +68,17 @@ resource "azurerm_mssql_server" "main" {
 }
 
 # Azure Communication Services — Email
+resource "azurerm_resource_provider_registration" "communication" {
+  name = "Microsoft.Communication"
+}
+
 resource "azurerm_email_communication_service" "main" {
   name                = "${var.name_prefix}-email-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.main.name
   data_location       = "United States"
   tags                = var.tags
+
+  depends_on = [azurerm_resource_provider_registration.communication]
 }
 
 resource "azurerm_email_communication_service_domain" "main" {
@@ -86,6 +92,8 @@ resource "azurerm_communication_service" "main" {
   resource_group_name = azurerm_resource_group.main.name
   data_location       = "United States"
   tags                = var.tags
+
+  depends_on = [azurerm_resource_provider_registration.communication]
 }
 
 resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
