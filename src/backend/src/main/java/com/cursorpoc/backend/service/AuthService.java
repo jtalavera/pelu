@@ -30,6 +30,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,9 @@ public class AuthService {
   private static final Pattern PASSWORD_DIGIT = Pattern.compile(".*[0-9].*");
   private static final Pattern PASSWORD_SPECIAL = Pattern.compile(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*");
 
+  @Value("${app.frontend.url:http://localhost:5173}")
+  private String frontendUrl;
+
   private final AppUserRepository appUserRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final ProfessionalActivationTokenRepository activationTokenRepository;
@@ -53,6 +57,7 @@ public class AuthService {
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final FemmeJwtProperties jwtProperties;
+  private final EmailService emailService;
 
   public AuthService(
       AppUserRepository appUserRepository,
@@ -61,7 +66,8 @@ public class AuthService {
       ProfessionalRepository professionalRepository,
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
-      FemmeJwtProperties jwtProperties) {
+      FemmeJwtProperties jwtProperties,
+      EmailService emailService) {
     this.appUserRepository = appUserRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.activationTokenRepository = activationTokenRepository;
@@ -69,6 +75,7 @@ public class AuthService {
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
     this.jwtProperties = jwtProperties;
+    this.emailService = emailService;
   }
 
   public TokenResponse login(LoginRequest request) {
@@ -167,11 +174,10 @@ public class AuthService {
     professional.setSystemAccessAllowed(true);
     professionalRepository.save(professional);
 
-    log.info(
-        "professional activation link (dev): http://localhost:5173/activate?token={} (email: {})",
-        raw, email);
+    String activationUrl = frontendUrl + "/activate?token=" + raw;
+    emailService.sendActivationLink(email, activationUrl);
 
-    return new GrantAccessResponse(false, raw);
+    return new GrantAccessResponse(true, raw);
   }
 
   @Transactional
