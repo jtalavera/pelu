@@ -935,14 +935,10 @@ export default function ProfessionalsPage() {
                       checked={systemAccessAllowed}
                       onChange={(e) => setSystemAccessAllowed(e.target.checked)}
                       style={{ width: 16, height: 16, cursor: "pointer" }}
-                      aria-label={systemAccessAllowed
-                        ? t("femme.professionals.form.systemAccessDeny")
-                        : t("femme.professionals.form.systemAccessAllow")}
+                      aria-label={t("femme.professionals.form.systemAccessAllow")}
                     />
                     <span style={{ fontSize: 12, color: "var(--color-ink-2)" }}>
-                      {systemAccessAllowed
-                        ? t("femme.professionals.form.systemAccessAllow")
-                        : t("femme.professionals.form.systemAccessDeny")}
+                      {t("femme.professionals.form.systemAccessAllow")}
                     </span>
                   </label>
                 </div>
