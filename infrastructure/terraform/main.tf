@@ -96,6 +96,11 @@ resource "azurerm_communication_service" "main" {
   depends_on = [azurerm_resource_provider_registration.communication]
 }
 
+resource "azurerm_communication_service_email_domain_association" "main" {
+  communication_service_id = azurerm_communication_service.main.id
+  email_service_domain_id  = azurerm_email_communication_service_domain.main.id
+}
+
 resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
   name             = "AllowAzureServices"
   server_id        = azurerm_mssql_server.main.id
