@@ -76,7 +76,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
 
-    const pin = `9${String(Date.now()).slice(-4)}`;
+    const pin = String(Date.now()).slice(-6);
 
     // Create first professional with the PIN
     const name1 = `E2E DupPin1 ${Date.now()}`;
@@ -119,7 +119,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     let dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.locator("#prof-pin").fill(String(Date.now()).slice(-4));
+    await dlg.locator("#prof-pin").fill(String(Date.now()).slice(-6));
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     await dlg.getByRole("button", { name: "Save schedule" }).evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();

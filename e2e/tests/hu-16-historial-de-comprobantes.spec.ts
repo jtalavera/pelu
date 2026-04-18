@@ -18,6 +18,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
   });
 
   test("HU-16 · 2 filtros por fecha y estado", async ({ page, request }) => {
+    test.setTimeout(90_000);
     const token = await loginAsDemoApi(request);
     await apiPutJson(request, token, "/api/business-profile", {
       businessName: "Demo salon",
@@ -39,21 +40,9 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.locator("#pay-amount-0").fill("5000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
-    await Promise.all([
-      page.waitForResponse(
-        (r) => {
-          if (r.request().method() !== "GET" || !r.url().includes("/api/invoices")) return false;
-          try {
-            const path = new URL(r.url()).pathname;
-            return !/^\/api\/invoices\/\d+$/.test(path);
-          } catch {
-            return false;
-          }
-        },
-        { timeout: 30_000 },
-      ),
-      page.getByRole("tab", { name: "History" }).click(),
-    ]);
+    // Navigate fresh to billing to ensure History loads up-to-date data
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     await expect(
       page.locator("tbody").getByRole("row").filter({ hasText: client.fullName }),

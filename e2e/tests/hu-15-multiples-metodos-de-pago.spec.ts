@@ -58,6 +58,6 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await page.locator("#line-price-0").fill("20000");
     await page.locator("#pay-amount-0").fill("5000");
     await expect(page.getByText("Remaining", { exact: true })).toBeVisible();
-    await expect(page.getByText("15,000", { exact: true })).toBeVisible();
+    await expect(page.locator("span").getByText("15,000", { exact: true })).toBeVisible();
   });
 });
