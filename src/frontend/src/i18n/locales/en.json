@@ -79,9 +79,28 @@
       "businessSettings": "Settings",
       "logout": "Sign out",
       "adminRole": "Administrator",
+      "professionalRole": "Professional",
       "sectionMain": "Main",
       "sectionManagement": "Management",
       "sectionFinance": "Finance"
+    },
+    "activate": {
+      "title": "Set your password",
+      "subtitle": "Welcome! Set a password to access the system.",
+      "subTitleNamed": "Welcome, {{name}}! Set a password to access the system.",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "passwordHelp": "At least 8 characters with uppercase, lowercase, a digit, and a special character (e.g. Abc1@xyz).",
+      "submit": "Set password",
+      "submitting": "Setting password…",
+      "success": "Password set successfully. You can now sign in.",
+      "goToLogin": "Go to sign in",
+      "errorInvalid": "This activation link is invalid or has already been used.",
+      "errorExpired": "This activation link has expired. Ask the administrator to send a new one.",
+      "errorPasswordMismatch": "Passwords do not match.",
+      "errorPasswordWeak": "Password must be at least 8 characters and include an uppercase letter, lowercase letter, digit, and special character.",
+      "errorNetwork": "Network error. Check that the service is running.",
+      "loading": "Validating link…"
     },
     "topbar": {
       "searchPlaceholder": "Search clients, appointments…",
@@ -706,7 +725,20 @@
         "timePlaceholderEnd": "17:00",
         "scheduleDayIncomplete": "For each working day, enter both start and end, or leave both empty for a day off.",
         "scheduleInvalid": "Invalid time. Use HH:MM (e.g. 09:00).",
-        "scheduleRangeInvalid": "Invalid range. Start must be before end (e.g. 09:00–17:00)."
+        "scheduleRangeInvalid": "Invalid range. Start must be before end (e.g. 09:00–17:00).",
+        "pin": "PIN (4–7 digits, optional)",
+        "pinPlaceholder": "e.g. 1234",
+        "pinHelp": "Used for quick identification. Leave empty to remove the PIN. Must be unique per professional.",
+        "pinHasPinSet": "PIN already configured (enter a new value to replace, or leave empty to keep).",
+        "pinErrorFormat": "PIN must be between 4 and 7 numeric digits.",
+        "pinErrorDuplicate": "This PIN is already assigned to another professional.",
+        "systemAccess": "System access",
+        "systemAccessAllow": "Allow system access",
+        "systemAccessDeny": "Deny system access",
+        "systemAccessHint": "When enabled, an activation email will be sent to the professional's email address so they can set a password.",
+        "systemAccessNoEmail": "This professional has no email configured. Add an email address first.",
+        "systemAccessGranted": "Activation email sent. The professional will receive a link to set their password.",
+        "systemAccessRevokeHint": "Disabling access will immediately block the professional from signing in."
       }
     },
     "calendar": {

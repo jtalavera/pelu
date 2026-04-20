@@ -30,13 +30,14 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
       photoDataUrl: null,
     });
 
+    const fullName = `E2E Cal Filter ${suffix}`;
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     const cb = page.getByRole("combobox", { name: "Filter by professional" });
     await cb.click();
-    await cb.fill("Cal Filter");
+    await cb.fill(fullName);
     const list = page.getByRole("listbox", { name: "Filter by professional" });
-    await expect(list.getByRole("button", { name: /E2E Cal Filter/ })).toHaveCount(1);
+    await expect(list.getByRole("button", { name: new RegExp(fullName) })).toHaveCount(1);
   });
 
   test("HU-19 · 6 turno Completado no aparece en la grilla", async ({ page, request }) => {

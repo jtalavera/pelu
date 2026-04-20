@@ -54,3 +54,8 @@ output "frontend_origin_for_cors" {
   description = "HTTPS origin to allow in backend CORS and OAuth redirect configuration."
   value       = local.frontend_origin
 }
+
+output "acs_sender_address" {
+  description = "From address for transactional emails (ACS Azure-managed domain)."
+  value       = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
+}

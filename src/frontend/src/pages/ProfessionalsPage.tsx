@@ -18,7 +18,8 @@ import {
   Text,
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
-import { translateApiError } from "../api/parseApiErrorMessage";
+import { grantProfessionalAccess, revokeProfessionalAccess } from "../api/professionalAccess";
+import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { FemmeNativeTimeInput } from "../components/FemmeNativeTimeInput";
@@ -54,9 +55,12 @@ type Professional = {
   photoDataUrl: string | null;
   active: boolean;
   schedules: Schedule[];
+  hasPinSet: boolean;
+  systemAccessAllowed: boolean;
+  hasUserAccount: boolean;
 };
 
-type DetailErrors = { fullName?: string; photo?: string } | null;
+type DetailErrors = { fullName?: string; photo?: string; pin?: string } | null;
 type ScheduleErrors = { schedules?: string } | null;
 
 const DAYS: Array<{ value: number; key: string }> = [
@@ -128,6 +132,10 @@ export default function ProfessionalsPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [photoDataUrl, setPhotoDataUrl] = useState("");
+  const [pin, setPin] = useState("");
+  const [pinTouched, setPinTouched] = useState(false);
+  const [systemAccessAllowed, setSystemAccessAllowed] = useState(false);
+  const [accessGrantedMessage, setAccessGrantedMessage] = useState<string | null>(null);
   const [detailErrors, setDetailErrors] = useState<DetailErrors>(null);
   const [detailSaveError, setDetailSaveError] = useState<string | null>(null);
   const [detailSaving, setDetailSaving] = useState(false);
@@ -190,6 +198,10 @@ export default function ProfessionalsPage() {
     setPhone(p?.phone ?? "");
     setEmail(p?.email ?? "");
     setPhotoDataUrl(p?.photoDataUrl ?? "");
+    setPin("");
+    setPinTouched(false);
+    setSystemAccessAllowed(p?.systemAccessAllowed ?? false);
+    setAccessGrantedMessage(null);
     setDetailErrors(null);
     setDetailSaveError(null);
     if (photoFileInputRef.current) {
@@ -226,6 +238,7 @@ export default function ProfessionalsPage() {
 
   async function saveDetails() {
     setDetailSaveError(null);
+    setAccessGrantedMessage(null);
     const nameTrim = fullName.trim();
     if (!nameTrim) {
       setDetailErrors((prev) => ({
@@ -234,16 +247,24 @@ export default function ProfessionalsPage() {
       }));
       return;
     }
+    const pinTrim = pin.trim();
+    if (pinTouched && pinTrim && !/^\d{4,7}$/.test(pinTrim)) {
+      setDetailErrors((prev) => ({ ...(prev ?? {}), pin: t("femme.professionals.form.pinErrorFormat") }));
+      return;
+    }
     if (detailErrors?.photo) {
       return;
     }
     setDetailSaving(true);
     try {
+      const wasAllowed = savedProfessional?.systemAccessAllowed ?? false;
       const payload = {
         fullName: nameTrim,
         phone: phone.trim() || null,
         email: email.trim() || null,
         photoDataUrl: photoDataUrl.trim(),
+        pin: pinTouched ? (pinTrim || null) : undefined,
+        systemAccessAllowed,
       };
       let saved: Professional;
       if (savedProfessional) {
@@ -251,12 +272,43 @@ export default function ProfessionalsPage() {
       } else {
         saved = await femmePostJson<Professional>("/api/professionals", payload);
       }
+
+      // Handle system access changes
+      if (systemAccessAllowed && !wasAllowed) {
+        if (!email.trim()) {
+          setDetailSaveError(t("femme.professionals.form.systemAccessNoEmail"));
+          setSavedProfessional(saved);
+          await load();
+          setDetailSaving(false);
+          return;
+        }
+        try {
+          await grantProfessionalAccess(saved.id);
+          setAccessGrantedMessage(t("femme.professionals.form.systemAccessGranted"));
+        } catch (e) {
+          setDetailSaveError(translateApiError(e, t, "femme.professionals.saveError"));
+        }
+      } else if (!systemAccessAllowed && wasAllowed) {
+        try {
+          await revokeProfessionalAccess(saved.id);
+        } catch {
+          // non-fatal
+        }
+      }
+
       setSavedProfessional(saved);
       setDetailErrors(null);
+      setPin("");
+      setPinTouched(false);
       await load();
       setTab("schedule");
     } catch (e) {
-      setDetailSaveError(translateApiError(e, t, "femme.professionals.saveError"));
+      const rawCode = parseApiErrorMessage(e);
+      if (rawCode === "PIN_ALREADY_IN_USE") {
+        setDetailErrors((prev) => ({ ...(prev ?? {}), pin: t("femme.professionals.form.pinErrorDuplicate") }));
+      } else {
+        setDetailSaveError(translateApiError(e, t, "femme.professionals.saveError"));
+      }
     } finally {
       setDetailSaving(false);
     }
@@ -833,6 +885,73 @@ export default function ProfessionalsPage() {
                     placeholder={t("femme.professionals.form.emailPlaceholder")}
                   />
                 </div>
+              </div>
+
+              {/* ── PIN ── */}
+              <div>
+                <Label htmlFor="prof-pin">{t("femme.professionals.form.pin")}</Label>
+                {savedProfessional?.hasPinSet ? (
+                  <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginBottom: 4 }}>
+                    {t("femme.professionals.form.pinHasPinSet")}
+                  </div>
+                ) : null}
+                <Input
+                  id="prof-pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="new-password"
+                  value={pin}
+                  onChange={(e) => {
+                    setPin(e.target.value);
+                    setPinTouched(true);
+                    setDetailErrors((prev) => (prev ? { ...prev, pin: undefined } : prev));
+                  }}
+                  placeholder={t("femme.professionals.form.pinPlaceholder")}
+                  aria-describedby="prof-pin-help prof-pin-err"
+                />
+                <FieldValidationError id="prof-pin-err">{detailErrors?.pin}</FieldValidationError>
+                <Text variant="muted" className="mt-1 text-xs" id="prof-pin-help">
+                  {t("femme.professionals.form.pinHelp")}
+                </Text>
+              </div>
+
+              {/* ── System access ── */}
+              <div
+                style={{
+                  padding: 12,
+                  border: "var(--border-default)",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--color-stone)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-ink)" }}>
+                      {t("femme.professionals.form.systemAccess")}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
+                      {t("femme.professionals.form.systemAccessHint")}
+                    </div>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flexShrink: 0 }}>
+                    <input
+                      id="prof-system-access"
+                      type="checkbox"
+                      checked={systemAccessAllowed}
+                      onChange={(e) => setSystemAccessAllowed(e.target.checked)}
+                      style={{ width: 16, height: 16, cursor: "pointer" }}
+                      aria-label={t("femme.professionals.form.systemAccessAllow")}
+                    />
+                    <span style={{ fontSize: 12, color: "var(--color-ink-2)" }}>
+                      {t("femme.professionals.form.systemAccessAllow")}
+                    </span>
+                  </label>
+                </div>
+                {accessGrantedMessage ? (
+                  <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-success)", fontWeight: 500 }}>
+                    {accessGrantedMessage}
+                  </div>
+                ) : null}
               </div>
 
               <div>

@@ -15,7 +15,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "app_users", uniqueConstraints = @UniqueConstraint(columnNames = {"email"}))
+@Table(
+    name = "app_users",
+    uniqueConstraints = @UniqueConstraint(columnNames = {"tenant_id", "email"}))
 public class AppUser {
 
   @Id
@@ -35,6 +37,9 @@ public class AppUser {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private UserRole role;
+
+  @Column(nullable = false)
+  private boolean enabled = true;
 
   public Long getId() {
     return id;
@@ -74,6 +79,14 @@ public class AppUser {
 
   public void setRole(UserRole role) {
     this.role = role;
+  }
+
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
   }
 
   public Long getTenantId() {

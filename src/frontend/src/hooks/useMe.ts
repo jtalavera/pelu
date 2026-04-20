@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { apiBaseUrl } from "../api/baseUrl";
 import { authHeaders } from "../api/authHeaders";
 
-/** Current user from `GET /api/me` (Femme tenant admin). */
 export type Me = {
   userId: number;
   tenantId: number;
   email: string;
+  role: "ADMIN" | "PROFESSIONAL";
+  professionalId: number | null;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {

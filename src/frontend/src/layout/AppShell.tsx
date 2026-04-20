@@ -206,6 +206,7 @@ export function AppShell() {
   const email = me?.email ?? "";
   const initials = email ? getInitials(email) : "?";
   const displayName = email.split("@")[0];
+  const isProfessional = me?.role === "PROFESSIONAL";
 
   return (
     <div>
@@ -423,7 +424,7 @@ export function AppShell() {
                   {displayName}
                 </span>
                 <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
-                  {t("femme.nav.adminRole")}
+                  {isProfessional ? t("femme.nav.professionalRole") : t("femme.nav.adminRole")}
                 </span>
               </div>
               <svg
@@ -573,29 +574,37 @@ export function AppShell() {
         aria-label={t("femme.nav.mainLabel")}
       >
         <SectionLabel label={t("femme.nav.sectionMain")} />
-        <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} />
+        {!isProfessional && (
+          <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} />
+        )}
         <SideNavItem to="/app/calendar" label={t("femme.nav.calendar")} icon={<CalendarIcon />} />
 
-        <SectionLabel label={t("femme.nav.sectionManagement")} />
-        <SideNavItem to="/app/services" label={t("femme.nav.services")} icon={<ServicesIcon />} />
-        <SideNavItem
-          to="/app/professionals"
-          label={t("femme.nav.professionals")}
-          icon={<ProfessionalsIcon />}
-        />
-        <SideNavItem to="/app/clients" label={t("femme.nav.clients")} icon={<ClientsIcon />} />
+        {!isProfessional && (
+          <>
+            <SectionLabel label={t("femme.nav.sectionManagement")} />
+            <SideNavItem to="/app/services" label={t("femme.nav.services")} icon={<ServicesIcon />} />
+            <SideNavItem
+              to="/app/professionals"
+              label={t("femme.nav.professionals")}
+              icon={<ProfessionalsIcon />}
+            />
+            <SideNavItem to="/app/clients" label={t("femme.nav.clients")} icon={<ClientsIcon />} />
 
-        <SectionLabel label={t("femme.nav.sectionFinance")} />
-        <SideNavItem to="/app/billing" label={t("femme.nav.billing")} icon={<BillingIcon />} />
+            <SectionLabel label={t("femme.nav.sectionFinance")} />
+            <SideNavItem to="/app/billing" label={t("femme.nav.billing")} icon={<BillingIcon />} />
+          </>
+        )}
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        <SideNavItem
-          to="/app/settings"
-          label={t("femme.nav.businessSettings")}
-          icon={<SettingsIcon />}
-        />
+        {!isProfessional && (
+          <SideNavItem
+            to="/app/settings"
+            label={t("femme.nav.businessSettings")}
+            icon={<SettingsIcon />}
+          />
+        )}
 
         {/* User block */}
         <button

@@ -3,6 +3,11 @@ import { expect, type APIRequestContext } from "@playwright/test";
 /** Backend origin for Playwright `request` calls (matches Vite default `VITE_API_BASE_URL`). */
 export const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL ?? "http://localhost:8080";
 
+/** Function form of API_BASE for tests that call apiBaseUrl(). */
+export function apiBaseUrl(): string {
+  return API_BASE;
+}
+
 export async function loginAsDemoApi(request: APIRequestContext): Promise<string> {
   const res = await request.post(`${API_BASE}/api/auth/login`, {
     data: { email: "admin@demo.com", password: "Demo123!" },

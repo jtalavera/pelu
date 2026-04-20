@@ -65,7 +65,10 @@ public class SecurityConfig {
     originPatterns.add("http://localhost:5173");
     originPatterns.add("http://127.0.0.1:5173");
     if (StringUtils.hasText(appFrontendUrl)) {
-      originPatterns.add(appFrontendUrl.trim());
+      String trimmed = appFrontendUrl.trim();
+      if (!originPatterns.contains(trimmed)) {
+        originPatterns.add(trimmed);
+      }
     }
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOriginPatterns(originPatterns);

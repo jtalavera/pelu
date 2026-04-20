@@ -79,9 +79,28 @@
       "businessSettings": "Configuración",
       "logout": "Cerrar sesión",
       "adminRole": "Administrador",
+      "professionalRole": "Profesional",
       "sectionMain": "Principal",
       "sectionManagement": "Gestión",
       "sectionFinance": "Finanzas"
+    },
+    "activate": {
+      "title": "Establecer contraseña",
+      "subtitle": "¡Bienvenido/a! Establece una contraseña para acceder al sistema.",
+      "subTitleNamed": "¡Bienvenido/a, {{name}}! Establece una contraseña para acceder al sistema.",
+      "password": "Contraseña",
+      "confirmPassword": "Confirmar contraseña",
+      "passwordHelp": "Mínimo 8 caracteres con mayúscula, minúscula, dígito y carácter especial (ej.: Abc1@xyz).",
+      "submit": "Establecer contraseña",
+      "submitting": "Estableciendo contraseña…",
+      "success": "Contraseña establecida correctamente. Ya puedes iniciar sesión.",
+      "goToLogin": "Ir a iniciar sesión",
+      "errorInvalid": "Este enlace de activación es inválido o ya fue utilizado.",
+      "errorExpired": "Este enlace de activación ha expirado. Solicitá al administrador que envíe uno nuevo.",
+      "errorPasswordMismatch": "Las contraseñas no coinciden.",
+      "errorPasswordWeak": "La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula, dígito y carácter especial.",
+      "errorNetwork": "Error de red. Verificá que el servicio esté en ejecución.",
+      "loading": "Validando enlace…"
     },
     "topbar": {
       "searchPlaceholder": "Buscar clientes, turnos…",
@@ -715,7 +734,20 @@
         "timePlaceholderEnd": "17:00",
         "scheduleDayIncomplete": "En cada día laboral, ingresá inicio y fin, o dejá ambos vacíos si no trabaja.",
         "scheduleInvalid": "Hora inválida. Usá HH:MM (ej.: 09:00).",
-        "scheduleRangeInvalid": "Rango inválido. La hora de inicio debe ser anterior a la de fin (ej.: 09:00–17:00)."
+        "scheduleRangeInvalid": "Rango inválido. La hora de inicio debe ser anterior a la de fin (ej.: 09:00–17:00).",
+        "pin": "PIN (4–7 dígitos, opcional)",
+        "pinPlaceholder": "ej.: 1234",
+        "pinHelp": "Usado para identificación rápida. Dejá vacío para eliminar el PIN. Debe ser único por profesional.",
+        "pinHasPinSet": "PIN ya configurado (ingresá un nuevo valor para reemplazar, o dejá vacío para mantener).",
+        "pinErrorFormat": "El PIN debe tener entre 4 y 7 dígitos numéricos.",
+        "pinErrorDuplicate": "Este PIN ya está asignado a otra profesional.",
+        "systemAccess": "Acceso al sistema",
+        "systemAccessAllow": "Permitir acceso al sistema",
+        "systemAccessDeny": "Denegar acceso al sistema",
+        "systemAccessHint": "Al habilitarlo, se enviará un email de activación a la dirección de la profesional para que pueda establecer una contraseña.",
+        "systemAccessNoEmail": "Esta profesional no tiene email configurado. Agregá un email primero.",
+        "systemAccessGranted": "Email de activación enviado. La profesional recibirá un enlace para establecer su contraseña.",
+        "systemAccessRevokeHint": "Deshabilitar el acceso bloqueará inmediatamente a la profesional para iniciar sesión."
       }
     },
     "calendar": {
