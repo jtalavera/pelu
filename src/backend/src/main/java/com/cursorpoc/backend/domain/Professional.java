@@ -44,7 +44,7 @@ public class Professional {
   private boolean systemAccessAllowed = false;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "user_id")
+  @JoinColumn(name = "user_id", unique = true)
   private AppUser user;
 
   public Long getId() {
