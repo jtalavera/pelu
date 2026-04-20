@@ -25,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -47,7 +48,7 @@ public class AuthService {
   private static final Pattern PASSWORD_DIGIT = Pattern.compile(".*[0-9].*");
   private static final Pattern PASSWORD_SPECIAL = Pattern.compile(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*");
 
-  @Value("${app.frontend.url:http://localhost:5173}")
+  @Value("${app.frontend.url}")
   private String frontendUrl;
 
   private final AppUserRepository appUserRepository;
@@ -148,7 +149,7 @@ public class AuthService {
   }
 
   @Transactional
-  public GrantAccessResponse grantProfessionalAccess(long tenantId, long professionalId) {
+  public GrantAccessResponse grantProfessionalAccess(long tenantId, long professionalId, Locale locale) {
     Professional professional = professionalRepository
         .findByIdAndTenant_Id(professionalId, tenantId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
@@ -175,7 +176,7 @@ public class AuthService {
     professionalRepository.save(professional);
 
     String activationUrl = frontendUrl + "/activate?token=" + raw;
-    emailService.sendActivationLink(email, activationUrl);
+    emailService.sendActivationLink(email, activationUrl, locale);
 
     return new GrantAccessResponse(true, raw);
   }

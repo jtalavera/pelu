@@ -4,9 +4,11 @@ import com.azure.communication.email.EmailClient;
 import com.azure.communication.email.EmailClientBuilder;
 import com.azure.communication.email.models.EmailAddress;
 import com.azure.communication.email.models.EmailMessage;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,23 +25,38 @@ public class EmailService {
   @Value("${app.femme.email.sender-address:}")
   private String senderAddress;
 
-  public void sendActivationLink(String toEmail, String activationUrl) {
+  private final MessageSource messageSource;
+
+  public EmailService(MessageSource messageSource) {
+    this.messageSource = messageSource;
+  }
+
+  public void sendActivationLink(String toEmail, String activationUrl, Locale locale) {
+    String subject = messageSource.getMessage("email.activation.subject", null, locale);
+    String body =
+        messageSource.getMessage("email.activation.body", new Object[] {activationUrl}, locale);
+
     if (!enabled) {
-      log.info("professional activation link (dev): {} (email: {})", activationUrl, toEmail);
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
+          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          toEmail,
+          subject,
+          body);
       return;
     }
+
     EmailClient client =
         new EmailClientBuilder().connectionString(connectionString).buildClient();
     EmailMessage message =
         new EmailMessage()
             .setSenderAddress(senderAddress)
             .setToRecipients(new EmailAddress(toEmail))
-            .setSubject("Activate your Femme account")
-            .setBodyPlainText(
-                "You have been granted access to Femme. Set your password here:\n\n"
-                    + activationUrl
-                    + "\n\nThis link expires in 48 hours.");
+            .setSubject(subject)
+            .setBodyPlainText(body);
     client.beginSend(message).getFinalResult();
-    log.info("EMAIL SENT from={} to={} subject=\"Activate your Femme account\"", senderAddress, toEmail);
+    log.info(
+        "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
+        senderAddress, toEmail, subject, locale.getLanguage());
   }
 }

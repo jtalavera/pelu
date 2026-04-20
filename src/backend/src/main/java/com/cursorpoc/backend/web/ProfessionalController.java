@@ -11,6 +11,7 @@ import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -85,9 +86,10 @@ public class ProfessionalController {
   @PostMapping("/{id}/grant-access")
   public GrantAccessResponse grantAccess(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
-      @PathVariable("id") long id) {
+      @PathVariable("id") long id,
+      Locale locale) {
     requireAdmin(principal);
-    return authService.grantProfessionalAccess(principal.getTenantId(), id);
+    return authService.grantProfessionalAccess(principal.getTenantId(), id, locale);
   }
 
   @PostMapping("/{id}/revoke-access")
