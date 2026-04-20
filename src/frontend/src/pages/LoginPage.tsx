@@ -34,7 +34,17 @@ export default function LoginPage() {
       }
       const data = (await res.json()) as { accessToken: string };
       sessionStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, data.accessToken);
-      navigate(from, { replace: true });
+      // Decode JWT payload to get role without an extra API call
+      const payloadBase64 = data.accessToken.split(".")[1] ?? "";
+      let role = "ADMIN";
+      try {
+        const decoded = JSON.parse(atob(payloadBase64.replace(/-/g, "+").replace(/_/g, "/"))) as { role?: string };
+        role = decoded.role ?? "ADMIN";
+      } catch {
+        // keep ADMIN default
+      }
+      const destination = from !== "/app" ? from : role === "PROFESSIONAL" ? "/app/calendar" : "/app";
+      navigate(destination, { replace: true });
     } catch {
       setError(t("femme.login.errorNetwork"));
     } finally {

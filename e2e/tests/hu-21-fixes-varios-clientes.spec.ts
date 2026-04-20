@@ -27,9 +27,10 @@ test.describe("HU-21 · Fixes varios clientes", () => {
       ruc: null,
     });
 
+    const phone = `097${String(Date.now()).slice(-7)}`;
     await loginAsDemo(page);
     await page.goto(`/app/clients/${c.id}`);
-    await page.locator("#detail-phone").fill("0981555444");
+    await page.locator("#detail-phone").fill(phone);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Client updated successfully.", { exact: true })).toHaveCount(1);
   });

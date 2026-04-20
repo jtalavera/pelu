@@ -12,9 +12,10 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
   test("HU-12 · 1 y 2 listado y columnas visibles", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     const name = `E2E Prof ${Date.now()}`;
+    const phone = `099${String(Date.now()).slice(-7)}`;
     await apiPostJson(request, token, "/api/clients", {
       fullName: name,
-      phone: "0981999888",
+      phone,
       email: null,
       ruc: null,
     });
@@ -23,7 +24,7 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
     await page.goto("/app/clients");
     await page.getByPlaceholder("Search by name, phone, or RUC…").first().fill(name);
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("0981999888", { exact: true })).toBeVisible();
+    await expect(page.getByText(phone, { exact: true })).toBeVisible();
     await expect(page.getByText("No RUC", { exact: true }).first()).toBeVisible();
   });
 

@@ -30,6 +30,7 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
+import { useMe } from "../hooks/useMe";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -134,6 +135,8 @@ type FormErrors = {
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
+  const { me } = useMe();
+  const isProfessional = me?.role === "PROFESSIONAL";
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
@@ -185,11 +188,15 @@ export default function CalendarPage() {
       femmeJson<SalonService[]>("/api/services"),
     ])
       .then(([profs, svcs]) => {
-        setProfessionals(profs.filter((p) => p.active));
+        const active = profs.filter((p) => p.active);
+        setProfessionals(active);
         setServices(svcs.filter((s) => s.active));
+        if (me?.role === "PROFESSIONAL" && me.professionalId != null) {
+          setSelectedProfessionalId(me.professionalId);
+        }
       })
       .catch(() => {});
-  }, []);
+  }, [me?.role, me?.professionalId]);
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
@@ -290,7 +297,11 @@ export default function CalendarPage() {
           ? ""
           : "",
     );
-    setFormProfessionalId(selectedProfessionalId ?? "");
+    setFormProfessionalId(
+      isProfessional && me?.professionalId != null
+        ? me.professionalId
+        : (selectedProfessionalId ?? "")
+    );
     setFormServiceId("");
     setFormClientId("");
     setFormErrors({});
@@ -411,19 +422,21 @@ export default function CalendarPage() {
           {t("femme.calendar.title")}
         </h1>
 
-        {/* Professional filter */}
-        <SearchableSelect<number>
-          id="prof-filter"
-          className="min-w-0 shrink"
-          labelSrOnly
-          label={t("femme.calendar.filterByProfessional")}
-          value={selectedProfessionalId ?? ""}
-          onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
-          emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
-          options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-          filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-          noResultsText={t("femme.calendar.searchable.noResults")}
-        />
+        {/* Professional filter (hidden for professional role — they only see own agenda) */}
+        {!isProfessional && (
+          <SearchableSelect<number>
+            id="prof-filter"
+            className="min-w-0 shrink"
+            labelSrOnly
+            label={t("femme.calendar.filterByProfessional")}
+            value={selectedProfessionalId ?? ""}
+            onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
+            emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
+            options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+            filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+            noResultsText={t("femme.calendar.searchable.noResults")}
+          />
+        )}
 
         {/* Today */}
         <button
@@ -955,24 +968,45 @@ export default function CalendarPage() {
               <FieldValidationError id="form-start-past-err">{formErrors.startInPast}</FieldValidationError>
             )}
           </div>
-          {/* Professional */}
+          {/* Professional (locked to own profile for professional role) */}
           <div className="space-y-1">
-            <SearchableSelect<number>
-              id="form-professional"
-              label={t("femme.calendar.form.professional")}
-              value={formProfessionalId}
-              onChange={(v) => setFormProfessionalId(v)}
-              emptyOption={{ value: "", label: t("femme.calendar.form.selectProfessional") }}
-              options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-              noResultsText={t("femme.calendar.searchable.noResults")}
-              invalid={!!formErrors.professionalId}
-              describedBy={formErrors.professionalId ? "form-prof-err" : undefined}
-            />
-            {formErrors.professionalId && (
-              <FieldValidationError id="form-prof-err">
-                {formErrors.professionalId}
-              </FieldValidationError>
+            {isProfessional ? (
+              <div>
+                <Label>{t("femme.calendar.form.professional")}</Label>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    border: "var(--border-default)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: 13,
+                    color: "var(--color-ink-2)",
+                    background: "var(--color-stone)",
+                  }}
+                >
+                  {professionals.find((p) => p.id === me?.professionalId)?.fullName ??
+                    t("femme.calendar.form.selectProfessional")}
+                </div>
+              </div>
+            ) : (
+              <>
+                <SearchableSelect<number>
+                  id="form-professional"
+                  label={t("femme.calendar.form.professional")}
+                  value={formProfessionalId}
+                  onChange={(v) => setFormProfessionalId(v)}
+                  emptyOption={{ value: "", label: t("femme.calendar.form.selectProfessional") }}
+                  options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+                  filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+                  noResultsText={t("femme.calendar.searchable.noResults")}
+                  invalid={!!formErrors.professionalId}
+                  describedBy={formErrors.professionalId ? "form-prof-err" : undefined}
+                />
+                {formErrors.professionalId && (
+                  <FieldValidationError id="form-prof-err">
+                    {formErrors.professionalId}
+                  </FieldValidationError>
+                )}
+              </>
             )}
           </div>
           {/* Service */}

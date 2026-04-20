@@ -67,6 +67,40 @@ resource "azurerm_mssql_server" "main" {
   tags                          = var.tags
 }
 
+# Azure Communication Services — Email
+resource "azurerm_resource_provider_registration" "communication" {
+  name = "Microsoft.Communication"
+}
+
+resource "azurerm_email_communication_service" "main" {
+  name                = "${var.name_prefix}-email-${random_string.suffix.result}"
+  resource_group_name = azurerm_resource_group.main.name
+  data_location       = "United States"
+  tags                = var.tags
+
+  depends_on = [azurerm_resource_provider_registration.communication]
+}
+
+resource "azurerm_email_communication_service_domain" "main" {
+  name              = "AzureManagedDomain"
+  email_service_id  = azurerm_email_communication_service.main.id
+  domain_management = "AzureManaged"
+}
+
+resource "azurerm_communication_service" "main" {
+  name                = "${var.name_prefix}-acs-${random_string.suffix.result}"
+  resource_group_name = azurerm_resource_group.main.name
+  data_location       = "United States"
+  tags                = var.tags
+
+  depends_on = [azurerm_resource_provider_registration.communication]
+}
+
+resource "azurerm_communication_service_email_domain_association" "main" {
+  communication_service_id = azurerm_communication_service.main.id
+  email_service_domain_id  = azurerm_email_communication_service_domain.main.id
+}
+
 resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
   name             = "AllowAzureServices"
   server_id        = azurerm_mssql_server.main.id
@@ -107,6 +141,11 @@ resource "azurerm_container_app" "backend" {
     value = random_password.sql_admin.result
   }
 
+  secret {
+    name  = "acs-connection-string"
+    value = azurerm_communication_service.main.primary_connection_string
+  }
+
   template {
     min_replicas = var.backend_min_replicas
     max_replicas = var.backend_max_replicas
@@ -135,6 +174,16 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "APP_FRONTEND_URL"
         value = local.frontend_origin
+      }
+
+      env {
+        name        = "ACS_CONNECTION_STRING"
+        secret_name = "acs-connection-string"
+      }
+
+      env {
+        name  = "ACS_SENDER_ADDRESS"
+        value = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
       }
     }
   }

@@ -22,7 +22,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ProfessionalDirectoryService {
 
-  /** ~5 MB binary as base64 data URL (prefix + payload) with margin. */
   private static final int MAX_PHOTO_DATA_URL_CHARS = 7_200_000;
 
   private final TenantRepository tenantRepository;
@@ -50,7 +49,7 @@ public class ProfessionalDirectoryService {
     Tenant tenant = loadTenantOrThrow(tenantId);
     Professional p = new Professional();
     p.setTenant(tenant);
-    applyUpsert(p, request);
+    applyUpsert(p, request, tenantId);
     p.setActive(true);
     professionalRepository.save(p);
     return toResponse(p, schedulesFor(p.getId()));
@@ -60,7 +59,7 @@ public class ProfessionalDirectoryService {
   public ProfessionalResponse update(
       long tenantId, long professionalId, ProfessionalUpsertRequest request) {
     Professional p = loadProfessionalOrThrow(tenantId, professionalId);
-    applyUpsert(p, request);
+    applyUpsert(p, request, tenantId);
     professionalRepository.save(p);
     return toResponse(p, schedulesFor(p.getId()));
   }
@@ -90,14 +89,25 @@ public class ProfessionalDirectoryService {
     return toResponse(p, schedulesFor(p.getId()));
   }
 
-  private void applyUpsert(Professional p, ProfessionalUpsertRequest request) {
+  private void applyUpsert(Professional p, ProfessionalUpsertRequest request, long tenantId) {
     String name = request.fullName() == null ? "" : request.fullName().trim();
     if (name.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_NAME_REQUIRED");
     }
     p.setFullName(name);
     p.setPhone(blankToNull(request.phone()));
-    p.setEmail(blankToNull(request.email()));
+    String email = blankToNull(request.email());
+    if (email != null) {
+      boolean duplicate =
+          p.getId() == null
+              ? professionalRepository.existsByTenant_IdAndEmailIgnoreCase(tenantId, email)
+              : professionalRepository.existsByTenant_IdAndEmailIgnoreCaseAndIdNot(
+                  tenantId, email, p.getId());
+      if (duplicate) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "PROFESSIONAL_EMAIL_DUPLICATE");
+      }
+    }
+    p.setEmail(email);
     if (request.photoDataUrl() != null) {
       if (request.photoDataUrl().isBlank()) {
         p.setPhotoDataUrl(null);
@@ -106,6 +116,35 @@ public class ProfessionalDirectoryService {
         p.setPhotoDataUrl(request.photoDataUrl());
       }
     }
+    applyPin(p, request.pin(), tenantId);
+  }
+
+  private void applyPin(Professional p, String rawPin, long tenantId) {
+    if (rawPin == null) {
+      return;
+    }
+    String trimmed = rawPin.trim();
+    if (trimmed.isEmpty()) {
+      p.setPinFingerprint(null);
+      return;
+    }
+    if (!trimmed.matches("\\d{4,7}")) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_PIN_FORMAT");
+    }
+    String fingerprint = AuthService.sha256Hex(tenantId + ":" + trimmed);
+    Long excludeId = p.getId() == null ? -1L : p.getId();
+    boolean duplicate;
+    if (p.getId() == null) {
+      duplicate = professionalRepository.existsByTenant_IdAndPinFingerprint(tenantId, fingerprint);
+    } else {
+      duplicate =
+          professionalRepository.existsByTenant_IdAndPinFingerprintAndIdNot(
+              tenantId, fingerprint, excludeId);
+    }
+    if (duplicate) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "PIN_ALREADY_IN_USE");
+    }
+    p.setPinFingerprint(fingerprint);
   }
 
   private void validateSchedules(List<ProfessionalScheduleRequest> schedules) {
@@ -129,7 +168,6 @@ public class ProfessionalDirectoryService {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_SCHEDULE_RANGE");
       }
     }
-    // Disallow overlaps within same day (simple O(n^2) per day; small weekly templates).
     schedules.stream()
         .filter(Objects::nonNull)
         .collect(java.util.stream.Collectors.groupingBy(ProfessionalScheduleRequest::dayOfWeek))
@@ -181,8 +219,7 @@ public class ProfessionalDirectoryService {
             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
   }
 
-  private static ProfessionalResponse toResponse(
-      Professional p, List<ProfessionalSchedule> schedules) {
+  static ProfessionalResponse toResponse(Professional p, List<ProfessionalSchedule> schedules) {
     return new ProfessionalResponse(
         p.getId(),
         p.getFullName(),
@@ -195,7 +232,10 @@ public class ProfessionalDirectoryService {
                 s ->
                     new ProfessionalResponse.Schedule(
                         s.getDayOfWeek(), s.getStartTime(), s.getEndTime()))
-            .toList());
+            .toList(),
+        p.getPinFingerprint() != null,
+        p.isSystemAccessAllowed(),
+        p.getUser() != null);
   }
 
   private static void validatePhotoDataUrl(String dataUrl) {

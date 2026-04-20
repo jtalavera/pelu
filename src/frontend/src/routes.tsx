@@ -14,12 +14,14 @@ import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
+import ActivatePage from "./pages/ActivatePage";
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/activate" element={<ActivatePage />} />
       <Route path="/design-system" element={<DesignSystemShowcasePage />} />
       <Route
         element={

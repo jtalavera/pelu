@@ -18,6 +18,11 @@ public class MeController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    return new MeResponse(principal.getUserId(), principal.getTenantId(), principal.getUsername());
+    return new MeResponse(
+        principal.getUserId(),
+        principal.getTenantId(),
+        principal.getUsername(),
+        principal.getRole().name(),
+        principal.getProfessionalId());
   }
 }

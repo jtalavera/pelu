@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.web;
 
+import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.AppointmentService;
 import com.cursorpoc.backend.web.dto.AppointmentCreateRequest;
@@ -42,7 +43,12 @@ public class AppointmentController {
     requirePrincipal(principal);
     Instant fromInstant = parseInstantParam(from, "from");
     Instant toInstant = parseInstantParam(to, "to");
-    return appointmentService.list(principal.getTenantId(), fromInstant, toInstant, professionalId);
+    Long effectiveProfessionalId = professionalId;
+    if (principal.getRole() == UserRole.PROFESSIONAL) {
+      effectiveProfessionalId = principal.getProfessionalId();
+    }
+    return appointmentService.list(
+        principal.getTenantId(), fromInstant, toInstant, effectiveProfessionalId);
   }
 
   @GetMapping("/{id}")
@@ -58,6 +64,12 @@ public class AppointmentController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody AppointmentCreateRequest request) {
     requirePrincipal(principal);
+    if (principal.getRole() == UserRole.PROFESSIONAL) {
+      Long ownId = principal.getProfessionalId();
+      if (ownId == null || !ownId.equals(request.professionalId())) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
+      }
+    }
     return appointmentService.create(principal.getTenantId(), request);
   }
 
@@ -76,6 +88,12 @@ public class AppointmentController {
       @PathVariable("id") long id,
       @Valid @RequestBody AppointmentUpdateRequest request) {
     requirePrincipal(principal);
+    if (principal.getRole() == UserRole.PROFESSIONAL) {
+      Long ownId = principal.getProfessionalId();
+      if (ownId == null || !ownId.equals(request.professionalId())) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
+      }
+    }
     return appointmentService.update(principal.getTenantId(), id, request);
   }
 

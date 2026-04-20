@@ -18,6 +18,9 @@ public class Tenant {
   @Column(nullable = false)
   private String name;
 
+  @Column(unique = true)
+  private String domain;
+
   public Long getId() {
     return id;
   }
@@ -32,5 +35,13 @@ public class Tenant {
 
   public void setName(String name) {
     this.name = name;
+  }
+
+  public String getDomain() {
+    return domain;
+  }
+
+  public void setDomain(String domain) {
+    this.domain = domain;
   }
 }

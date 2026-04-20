@@ -10,6 +10,9 @@ public record ProfessionalResponse(
     String email,
     String photoDataUrl,
     boolean active,
-    List<Schedule> schedules) {
+    List<Schedule> schedules,
+    boolean hasPinSet,
+    boolean systemAccessAllowed,
+    boolean hasUserAccount) {
   public record Schedule(short dayOfWeek, LocalTime startTime, LocalTime endTime) {}
 }

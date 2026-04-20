@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.security;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
+import com.cursorpoc.backend.domain.enums.UserRole;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Service;
 public class JwtService {
 
   public static final String CLAIM_TENANT_ID = "tid";
+  public static final String CLAIM_ROLE = "role";
+  public static final String CLAIM_PROFESSIONAL_ID = "pid";
 
   private final FemmeJwtProperties properties;
   private final SecretKey key;
@@ -27,16 +30,26 @@ public class JwtService {
     this.key = Keys.hmacShaKeyFor(bytes);
   }
 
-  public String createAccessToken(long userId, long tenantId, String email, Instant issuedAt) {
+  public String createAccessToken(
+      long userId,
+      long tenantId,
+      String email,
+      UserRole role,
+      Long professionalId,
+      Instant issuedAt) {
     Instant exp = issuedAt.plusSeconds(properties.getAccessTokenTtlSeconds());
-    return Jwts.builder()
-        .subject(String.valueOf(userId))
-        .claim(CLAIM_TENANT_ID, tenantId)
-        .claim("email", email)
-        .issuedAt(Date.from(issuedAt))
-        .expiration(Date.from(exp))
-        .signWith(key)
-        .compact();
+    var builder =
+        Jwts.builder()
+            .subject(String.valueOf(userId))
+            .claim(CLAIM_TENANT_ID, tenantId)
+            .claim("email", email)
+            .claim(CLAIM_ROLE, role.name())
+            .issuedAt(Date.from(issuedAt))
+            .expiration(Date.from(exp));
+    if (professionalId != null) {
+      builder.claim(CLAIM_PROFESSIONAL_ID, professionalId);
+    }
+    return builder.signWith(key).compact();
   }
 
   public Optional<FemmeUserPrincipal> parseAndValidate(String token) {
@@ -52,7 +65,16 @@ public class JwtService {
       if (email == null) {
         return Optional.empty();
       }
-      return Optional.of(new FemmeUserPrincipal(userId, tenantId, email));
+      String roleName = claims.get(CLAIM_ROLE, String.class);
+      UserRole role;
+      try {
+        role = roleName != null ? UserRole.valueOf(roleName) : UserRole.ADMIN;
+      } catch (IllegalArgumentException e) {
+        role = UserRole.ADMIN;
+      }
+      Number pidClaim = claims.get(CLAIM_PROFESSIONAL_ID, Number.class);
+      Long professionalId = pidClaim != null ? pidClaim.longValue() : null;
+      return Optional.of(new FemmeUserPrincipal(userId, tenantId, email, role, professionalId));
     } catch (RuntimeException ex) {
       return Optional.empty();
     }

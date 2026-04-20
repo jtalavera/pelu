@@ -37,6 +37,16 @@ public class Professional {
   @Column(nullable = false)
   private boolean active;
 
+  @Column(name = "pin_fingerprint", length = 64)
+  private String pinFingerprint;
+
+  @Column(name = "system_access_allowed", nullable = false)
+  private boolean systemAccessAllowed = false;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "user_id", unique = true)
+  private AppUser user;
+
   public Long getId() {
     return id;
   }
@@ -91,5 +101,29 @@ public class Professional {
 
   public void setActive(boolean active) {
     this.active = active;
+  }
+
+  public String getPinFingerprint() {
+    return pinFingerprint;
+  }
+
+  public void setPinFingerprint(String pinFingerprint) {
+    this.pinFingerprint = pinFingerprint;
+  }
+
+  public boolean isSystemAccessAllowed() {
+    return systemAccessAllowed;
+  }
+
+  public void setSystemAccessAllowed(boolean systemAccessAllowed) {
+    this.systemAccessAllowed = systemAccessAllowed;
+  }
+
+  public AppUser getUser() {
+    return user;
+  }
+
+  public void setUser(AppUser user) {
+    this.user = user;
   }
 }
