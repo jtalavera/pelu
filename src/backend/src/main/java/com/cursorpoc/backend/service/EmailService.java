@@ -46,8 +46,7 @@ public class EmailService {
       return;
     }
 
-    EmailClient client =
-        new EmailClientBuilder().connectionString(connectionString).buildClient();
+    EmailClient client = new EmailClientBuilder().connectionString(connectionString).buildClient();
     EmailMessage message =
         new EmailMessage()
             .setSenderAddress(senderAddress)
@@ -57,6 +56,9 @@ public class EmailService {
     client.beginSend(message).getFinalResult();
     log.info(
         "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
-        senderAddress, toEmail, subject, locale.getLanguage());
+        senderAddress,
+        toEmail,
+        subject,
+        locale.getLanguage());
   }
 }

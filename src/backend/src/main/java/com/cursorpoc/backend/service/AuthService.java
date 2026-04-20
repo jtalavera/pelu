@@ -49,7 +49,8 @@ public class AuthService {
   private static final Pattern PASSWORD_UPPER = Pattern.compile(".*[A-Z].*");
   private static final Pattern PASSWORD_LOWER = Pattern.compile(".*[a-z].*");
   private static final Pattern PASSWORD_DIGIT = Pattern.compile(".*[0-9].*");
-  private static final Pattern PASSWORD_SPECIAL = Pattern.compile(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*");
+  private static final Pattern PASSWORD_SPECIAL =
+      Pattern.compile(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*");
 
   @Value("${app.frontend.url}")
   private String frontendUrl;
@@ -100,30 +101,40 @@ public class AuthService {
     }
     Long professionalId = null;
     if (user.getRole() == UserRole.PROFESSIONAL) {
-      professionalId = professionalRepository
-          .findByUser_Id(user.getId())
-          .map(Professional::getId)
-          .orElse(null);
+      professionalId =
+          professionalRepository.findByUser_Id(user.getId()).map(Professional::getId).orElse(null);
     }
     Instant now = Instant.now();
-    String token = jwtService.createAccessToken(
-        user.getId(), user.getTenant().getId(), user.getEmail(), user.getRole(), professionalId, now);
+    String token =
+        jwtService.createAccessToken(
+            user.getId(),
+            user.getTenant().getId(),
+            user.getEmail(),
+            user.getRole(),
+            professionalId,
+            now);
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
   }
 
   public TokenResponse refresh(FemmeUserPrincipal principal) {
     Instant now = Instant.now();
-    String token = jwtService.createAccessToken(
-        principal.getUserId(), principal.getTenantId(), principal.getUsername(),
-        principal.getRole(), principal.getProfessionalId(), now);
+    String token =
+        jwtService.createAccessToken(
+            principal.getUserId(),
+            principal.getTenantId(),
+            principal.getUsername(),
+            principal.getRole(),
+            principal.getProfessionalId(),
+            now);
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
   }
 
   @Transactional
   public void forgotPassword(ForgotPasswordRequest request, String origin) {
     Tenant tenant = resolveTenant(origin);
-    Optional<AppUser> userOpt = appUserRepository.findByEmailAndTenant_Id(
-        request.email().trim().toLowerCase(), tenant.getId());
+    Optional<AppUser> userOpt =
+        appUserRepository.findByEmailAndTenant_Id(
+            request.email().trim().toLowerCase(), tenant.getId());
     if (userOpt.isEmpty()) {
       return;
     }
@@ -158,13 +169,17 @@ public class AuthService {
   }
 
   @Transactional
-  public GrantAccessResponse grantProfessionalAccess(long tenantId, long professionalId, Locale locale) {
-    Professional professional = professionalRepository
-        .findByIdAndTenant_Id(professionalId, tenantId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+  public GrantAccessResponse grantProfessionalAccess(
+      long tenantId, long professionalId, Locale locale) {
+    Professional professional =
+        professionalRepository
+            .findByIdAndTenant_Id(professionalId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
 
     if (professional.getEmail() == null || professional.getEmail().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_EMAIL_REQUIRED_FOR_ACCESS");
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "PROFESSIONAL_EMAIL_REQUIRED_FOR_ACCESS");
     }
 
     String email = professional.getEmail().trim().toLowerCase();
@@ -192,9 +207,11 @@ public class AuthService {
 
   @Transactional
   public void revokeProfessionalAccess(long tenantId, long professionalId) {
-    Professional professional = professionalRepository
-        .findByIdAndTenant_Id(professionalId, tenantId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+    Professional professional =
+        professionalRepository
+            .findByIdAndTenant_Id(professionalId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
 
     professional.setSystemAccessAllowed(false);
     if (professional.getUser() != null) {
@@ -208,9 +225,11 @@ public class AuthService {
   @Transactional(readOnly = true)
   public ActivationTokenInfoResponse validateActivationToken(String rawToken) {
     String hash = sha256Hex(rawToken);
-    ProfessionalActivationToken token = activationTokenRepository
-        .findByTokenHashAndUsedFalse(hash)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
+    ProfessionalActivationToken token =
+        activationTokenRepository
+            .findByTokenHashAndUsedFalse(hash)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
     if (token.getExpiresAt().isBefore(Instant.now())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
@@ -226,9 +245,11 @@ public class AuthService {
     }
 
     String hash = sha256Hex(request.token());
-    ProfessionalActivationToken activationToken = activationTokenRepository
-        .findByTokenHashAndUsedFalse(hash)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
+    ProfessionalActivationToken activationToken =
+        activationTokenRepository
+            .findByTokenHashAndUsedFalse(hash)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
     if (activationToken.getExpiresAt().isBefore(Instant.now())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
@@ -289,7 +310,9 @@ public class AuthService {
     return tenantRepository
         .findById(1L)
         .orElseThrow(
-            () -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "DEFAULT_TENANT_NOT_FOUND"));
+            () ->
+                new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR, "DEFAULT_TENANT_NOT_FOUND"));
   }
 
   private static String extractHost(String origin) {

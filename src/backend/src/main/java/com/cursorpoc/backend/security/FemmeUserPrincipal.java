@@ -15,7 +15,8 @@ public class FemmeUserPrincipal implements UserDetails {
   private final UserRole role;
   private final Long professionalId;
 
-  public FemmeUserPrincipal(long userId, long tenantId, String email, UserRole role, Long professionalId) {
+  public FemmeUserPrincipal(
+      long userId, long tenantId, String email, UserRole role, Long professionalId) {
     this.userId = userId;
     this.tenantId = tenantId;
     this.email = email;

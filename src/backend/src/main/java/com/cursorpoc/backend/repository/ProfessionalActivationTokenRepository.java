@@ -12,6 +12,7 @@ public interface ProfessionalActivationTokenRepository
   Optional<ProfessionalActivationToken> findByTokenHashAndUsedFalse(String tokenHash);
 
   @Modifying
-  @Query("UPDATE ProfessionalActivationToken t SET t.used = true WHERE t.professional.id = :professionalId AND t.used = false")
+  @Query(
+      "UPDATE ProfessionalActivationToken t SET t.used = true WHERE t.professional.id = :professionalId AND t.used = false")
   void invalidateAllForProfessional(Long professionalId);
 }

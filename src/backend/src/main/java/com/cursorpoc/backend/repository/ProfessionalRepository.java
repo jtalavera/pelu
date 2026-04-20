@@ -13,7 +13,8 @@ public interface ProfessionalRepository extends JpaRepository<Professional, Long
 
   Optional<Professional> findByUser_Id(Long userId);
 
-  boolean existsByTenant_IdAndPinFingerprintAndIdNot(Long tenantId, String pinFingerprint, Long excludeId);
+  boolean existsByTenant_IdAndPinFingerprintAndIdNot(
+      Long tenantId, String pinFingerprint, Long excludeId);
 
   boolean existsByTenant_IdAndPinFingerprint(Long tenantId, String pinFingerprint);
 

@@ -133,6 +133,7 @@ export default function ProfessionalsPage() {
   const [email, setEmail] = useState("");
   const [photoDataUrl, setPhotoDataUrl] = useState("");
   const [pin, setPin] = useState("");
+  const [pinTouched, setPinTouched] = useState(false);
   const [systemAccessAllowed, setSystemAccessAllowed] = useState(false);
   const [accessGrantedMessage, setAccessGrantedMessage] = useState<string | null>(null);
   const [detailErrors, setDetailErrors] = useState<DetailErrors>(null);
@@ -198,6 +199,7 @@ export default function ProfessionalsPage() {
     setEmail(p?.email ?? "");
     setPhotoDataUrl(p?.photoDataUrl ?? "");
     setPin("");
+    setPinTouched(false);
     setSystemAccessAllowed(p?.systemAccessAllowed ?? false);
     setAccessGrantedMessage(null);
     setDetailErrors(null);
@@ -246,7 +248,7 @@ export default function ProfessionalsPage() {
       return;
     }
     const pinTrim = pin.trim();
-    if (pinTrim && !/^\d{4,7}$/.test(pinTrim)) {
+    if (pinTouched && pinTrim && !/^\d{4,7}$/.test(pinTrim)) {
       setDetailErrors((prev) => ({ ...(prev ?? {}), pin: t("femme.professionals.form.pinErrorFormat") }));
       return;
     }
@@ -261,7 +263,7 @@ export default function ProfessionalsPage() {
         phone: phone.trim() || null,
         email: email.trim() || null,
         photoDataUrl: photoDataUrl.trim(),
-        pin: pinTrim || null,
+        pin: pinTouched ? (pinTrim || null) : undefined,
         systemAccessAllowed,
       };
       let saved: Professional;
@@ -297,6 +299,7 @@ export default function ProfessionalsPage() {
       setSavedProfessional(saved);
       setDetailErrors(null);
       setPin("");
+      setPinTouched(false);
       await load();
       setTab("schedule");
     } catch (e) {
@@ -896,9 +899,11 @@ export default function ProfessionalsPage() {
                   id="prof-pin"
                   type="password"
                   inputMode="numeric"
+                  autoComplete="new-password"
                   value={pin}
                   onChange={(e) => {
                     setPin(e.target.value);
+                    setPinTouched(true);
                     setDetailErrors((prev) => (prev ? { ...prev, pin: undefined } : prev));
                   }}
                   placeholder={t("femme.professionals.form.pinPlaceholder")}

@@ -31,8 +31,7 @@ public class ProfessionalController {
   private final AuthService authService;
 
   public ProfessionalController(
-      ProfessionalDirectoryService professionalDirectoryService,
-      AuthService authService) {
+      ProfessionalDirectoryService professionalDirectoryService, AuthService authService) {
     this.professionalDirectoryService = professionalDirectoryService;
     this.authService = authService;
   }
@@ -94,8 +93,7 @@ public class ProfessionalController {
 
   @PostMapping("/{id}/revoke-access")
   public void revokeAccess(
-      @AuthenticationPrincipal FemmeUserPrincipal principal,
-      @PathVariable("id") long id) {
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
     requireAdmin(principal);
     authService.revokeProfessionalAccess(principal.getTenantId(), id);
   }

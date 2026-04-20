@@ -47,7 +47,8 @@ public class AppointmentController {
     if (principal.getRole() == UserRole.PROFESSIONAL) {
       effectiveProfessionalId = principal.getProfessionalId();
     }
-    return appointmentService.list(principal.getTenantId(), fromInstant, toInstant, effectiveProfessionalId);
+    return appointmentService.list(
+        principal.getTenantId(), fromInstant, toInstant, effectiveProfessionalId);
   }
 
   @GetMapping("/{id}")

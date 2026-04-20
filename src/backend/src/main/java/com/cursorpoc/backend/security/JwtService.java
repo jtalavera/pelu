@@ -31,15 +31,21 @@ public class JwtService {
   }
 
   public String createAccessToken(
-      long userId, long tenantId, String email, UserRole role, Long professionalId, Instant issuedAt) {
+      long userId,
+      long tenantId,
+      String email,
+      UserRole role,
+      Long professionalId,
+      Instant issuedAt) {
     Instant exp = issuedAt.plusSeconds(properties.getAccessTokenTtlSeconds());
-    var builder = Jwts.builder()
-        .subject(String.valueOf(userId))
-        .claim(CLAIM_TENANT_ID, tenantId)
-        .claim("email", email)
-        .claim(CLAIM_ROLE, role.name())
-        .issuedAt(Date.from(issuedAt))
-        .expiration(Date.from(exp));
+    var builder =
+        Jwts.builder()
+            .subject(String.valueOf(userId))
+            .claim(CLAIM_TENANT_ID, tenantId)
+            .claim("email", email)
+            .claim(CLAIM_ROLE, role.name())
+            .issuedAt(Date.from(issuedAt))
+            .expiration(Date.from(exp));
     if (professionalId != null) {
       builder.claim(CLAIM_PROFESSIONAL_ID, professionalId);
     }

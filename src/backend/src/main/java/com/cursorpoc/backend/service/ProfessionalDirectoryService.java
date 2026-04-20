@@ -101,7 +101,8 @@ public class ProfessionalDirectoryService {
       boolean duplicate =
           p.getId() == null
               ? professionalRepository.existsByTenant_IdAndEmailIgnoreCase(tenantId, email)
-              : professionalRepository.existsByTenant_IdAndEmailIgnoreCaseAndIdNot(tenantId, email, p.getId());
+              : professionalRepository.existsByTenant_IdAndEmailIgnoreCaseAndIdNot(
+                  tenantId, email, p.getId());
       if (duplicate) {
         throw new ResponseStatusException(HttpStatus.CONFLICT, "PROFESSIONAL_EMAIL_DUPLICATE");
       }
@@ -136,7 +137,9 @@ public class ProfessionalDirectoryService {
     if (p.getId() == null) {
       duplicate = professionalRepository.existsByTenant_IdAndPinFingerprint(tenantId, fingerprint);
     } else {
-      duplicate = professionalRepository.existsByTenant_IdAndPinFingerprintAndIdNot(tenantId, fingerprint, excludeId);
+      duplicate =
+          professionalRepository.existsByTenant_IdAndPinFingerprintAndIdNot(
+              tenantId, fingerprint, excludeId);
     }
     if (duplicate) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "PIN_ALREADY_IN_USE");
@@ -225,7 +228,10 @@ public class ProfessionalDirectoryService {
         p.getPhotoDataUrl(),
         p.isActive(),
         schedules.stream()
-            .map(s -> new ProfessionalResponse.Schedule(s.getDayOfWeek(), s.getStartTime(), s.getEndTime()))
+            .map(
+                s ->
+                    new ProfessionalResponse.Schedule(
+                        s.getDayOfWeek(), s.getStartTime(), s.getEndTime()))
             .toList(),
         p.getPinFingerprint() != null,
         p.isSystemAccessAllowed(),
