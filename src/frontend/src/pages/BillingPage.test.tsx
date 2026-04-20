@@ -171,11 +171,11 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       await screen.findAllByText(/cash register is open/i);
 
       // The invoice tab panel content IS in the DOM (just hidden until tab is activated)
-      // Check that the description placeholder exists in DOM (including hidden elements)
-      const descInputs = document.querySelectorAll(
-        'input[placeholder="e.g. Haircut"]',
+      // Invoice line service search (hidden tab panel)
+      const serviceInputs = document.querySelectorAll(
+        'input[placeholder="Search active services…"]',
       );
-      expect(descInputs.length).toBeGreaterThan(0);
+      expect(serviceInputs.length).toBeGreaterThan(0);
     });
 
     it("verifies invoice form is accessible in hidden panel (HU-14, HU-15)", async () => {
@@ -185,8 +185,10 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       await screen.findAllByText(/cash register is open/i);
 
       // Invoice form elements should be in DOM (inside hidden tab panel)
-      const descInputs = document.querySelectorAll('input[placeholder="e.g. Haircut"]');
-      expect(descInputs.length).toBeGreaterThan(0);
+      const serviceInputs = document.querySelectorAll(
+        'input[placeholder="Search active services…"]',
+      );
+      expect(serviceInputs.length).toBeGreaterThan(0);
 
       // Payment method select should exist
       const paymentSelects = document.querySelectorAll("select");

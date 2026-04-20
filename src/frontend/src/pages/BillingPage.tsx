@@ -20,6 +20,10 @@ import { authHeaders } from "../api/authHeaders";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
+import {
+  ServiceSearchField,
+  type SalonServiceOption,
+} from "../components/ServiceSearchField";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
@@ -103,6 +107,7 @@ type InvoiceLineForm = {
   description: string;
   quantity: string;
   unitPrice: string;
+  pickedService: SalonServiceOption | null;
 };
 
 type PaymentForm = {
@@ -726,7 +731,13 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
   const [lines, setLines] = useState<InvoiceLineForm[]>([
-    { serviceId: "", description: "", quantity: "1", unitPrice: "" },
+    {
+      serviceId: "",
+      description: "",
+      quantity: "1",
+      unitPrice: "",
+      pickedService: null,
+    },
   ]);
   const [payments, setPayments] = useState<PaymentForm[]>([
     { method: "CASH", amount: "" },
@@ -774,7 +785,13 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   function addLine() {
     setLines((prev) => [
       ...prev,
-      { serviceId: "", description: "", quantity: "1", unitPrice: "" },
+      {
+        serviceId: "",
+        description: "",
+        quantity: "1",
+        unitPrice: "",
+        pickedService: null,
+      },
     ]);
   }
 
@@ -787,7 +804,45 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
     });
   }
 
-  function updateLine(idx: number, field: keyof InvoiceLineForm, value: string) {
+  function handleLineServiceChange(idx: number, service: SalonServiceOption | null) {
+    setLines((prev) =>
+      prev.map((l, i) => {
+        if (i !== idx) return l;
+        if (service) {
+          const priceStr = String(Number(service.priceMinor) || 0);
+          return {
+            ...l,
+            pickedService: service,
+            serviceId: String(service.id),
+            description: service.name,
+            unitPrice: priceStr,
+          };
+        }
+        return {
+          ...l,
+          pickedService: null,
+          serviceId: "",
+        };
+      }),
+    );
+    if (lineErrors[idx]) {
+      setLineErrors((prev) => {
+        const next = { ...prev };
+        const fieldErrs = { ...next[idx] };
+        delete fieldErrs.service;
+        delete fieldErrs.unitPrice;
+        if (Object.keys(fieldErrs).length === 0) delete next[idx];
+        else next[idx] = fieldErrs;
+        return next;
+      });
+    }
+  }
+
+  function updateLine(
+    idx: number,
+    field: "serviceId" | "quantity" | "unitPrice",
+    value: string,
+  ) {
     setLines((prev) =>
       prev.map((l, i) => (i === idx ? { ...l, [field]: value } : l)),
     );
@@ -841,8 +896,8 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
 
     lines.forEach((l, i) => {
       const fieldErrs: Record<string, string> = {};
-      if (!l.description.trim()) {
-        fieldErrs.description = t("femme.billing.invoice.lineDescriptionRequired");
+      if (!l.serviceId.trim()) {
+        fieldErrs.service = t("femme.billing.invoice.lineServiceRequired");
       }
       const price = parseFloat(l.unitPrice);
       if (isNaN(price) || price < 0) {
@@ -891,7 +946,7 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
         discountType !== "NONE" && discountValue ? parseFloat(discountValue) : null,
       lines: lines.map((l) => ({
         serviceId: l.serviceId ? parseInt(l.serviceId) : null,
-        description: l.description,
+        description: (l.pickedService?.name ?? l.description).trim(),
         quantity: parseInt(l.quantity) || 1,
         unitPrice: parseFloat(l.unitPrice) || 0,
       })),
@@ -916,7 +971,15 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
       setClientRucOverride("");
       setDiscountType("NONE");
       setDiscountValue("");
-      setLines([{ serviceId: "", description: "", quantity: "1", unitPrice: "" }]);
+      setLines([
+        {
+          serviceId: "",
+          description: "",
+          quantity: "1",
+          unitPrice: "",
+          pickedService: null,
+        },
+      ]);
       setPayments([{ method: "CASH", amount: "" }]);
       setLineErrors({});
       setPaymentErrors({});
@@ -1046,22 +1109,17 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
                 className="grid grid-cols-12 gap-2 items-start border border-[rgb(var(--color-border))] rounded p-3"
               >
                 <div className="col-span-12 sm:col-span-5">
-                  <Label htmlFor={`line-desc-${idx}`}>
-                    {t("femme.billing.invoice.lineDescription")}
-                  </Label>
-                  <Input
-                    id={`line-desc-${idx}`}
-                    value={line.description}
-                    onChange={(e) => updateLine(idx, "description", e.target.value)}
-                    placeholder={t("femme.billing.invoice.lineDescriptionPlaceholder")}
-                    className="mt-1 w-full"
-                    aria-invalid={!!lineErrors[idx]?.description}
-                    aria-describedby={
-                      lineErrors[idx]?.description ? `line-desc-err-${idx}` : undefined
-                    }
+                  <ServiceSearchField
+                    id={`billing-line-svc-${idx}`}
+                    value={line.pickedService}
+                    onChange={(svc) => handleLineServiceChange(idx, svc)}
+                    label={t("femme.billing.invoice.lineServiceLabel")}
+                    placeholder={t("femme.billing.invoice.lineServicePlaceholder")}
+                    invalid={!!lineErrors[idx]?.service}
+                    errorDescribedById={`line-svc-err-${idx}`}
                   />
-                  <FieldValidationError id={`line-desc-err-${idx}`}>
-                    {lineErrors[idx]?.description}
+                  <FieldValidationError id={`line-svc-err-${idx}`}>
+                    {lineErrors[idx]?.service}
                   </FieldValidationError>
                 </div>
                 <div className="col-span-4 sm:col-span-2">
