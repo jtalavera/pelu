@@ -96,7 +96,17 @@ public class ProfessionalDirectoryService {
     }
     p.setFullName(name);
     p.setPhone(blankToNull(request.phone()));
-    p.setEmail(blankToNull(request.email()));
+    String email = blankToNull(request.email());
+    if (email != null) {
+      boolean duplicate =
+          p.getId() == null
+              ? professionalRepository.existsByTenant_IdAndEmailIgnoreCase(tenantId, email)
+              : professionalRepository.existsByTenant_IdAndEmailIgnoreCaseAndIdNot(tenantId, email, p.getId());
+      if (duplicate) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "PROFESSIONAL_EMAIL_DUPLICATE");
+      }
+    }
+    p.setEmail(email);
     if (request.photoDataUrl() != null) {
       if (request.photoDataUrl().isBlank()) {
         p.setPhotoDataUrl(null);
