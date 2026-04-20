@@ -31,8 +31,11 @@ public class AuthController {
   }
 
   @PostMapping("/login")
-  public TokenResponse login(@Valid @RequestBody LoginRequest request) {
-    return authService.login(request);
+  public TokenResponse login(
+      @Valid @RequestBody LoginRequest request,
+      @org.springframework.web.bind.annotation.RequestHeader(value = "Origin", required = false)
+          String origin) {
+    return authService.login(request, origin);
   }
 
   @PostMapping("/refresh")
@@ -44,8 +47,11 @@ public class AuthController {
   }
 
   @PostMapping("/forgot-password")
-  public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-    authService.forgotPassword(request);
+  public ResponseEntity<Void> forgotPassword(
+      @Valid @RequestBody ForgotPasswordRequest request,
+      @org.springframework.web.bind.annotation.RequestHeader(value = "Origin", required = false)
+          String origin) {
+    authService.forgotPassword(request, origin);
     return ResponseEntity.noContent().build();
   }
 

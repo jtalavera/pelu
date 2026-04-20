@@ -5,11 +5,13 @@ import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.PasswordResetToken;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ProfessionalActivationToken;
+import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
@@ -19,6 +21,7 @@ import com.cursorpoc.backend.web.dto.GrantAccessResponse;
 import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.ResetPasswordRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -55,6 +58,7 @@ public class AuthService {
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final ProfessionalActivationTokenRepository activationTokenRepository;
   private final ProfessionalRepository professionalRepository;
+  private final TenantRepository tenantRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final FemmeJwtProperties jwtProperties;
@@ -65,6 +69,7 @@ public class AuthService {
       PasswordResetTokenRepository passwordResetTokenRepository,
       ProfessionalActivationTokenRepository activationTokenRepository,
       ProfessionalRepository professionalRepository,
+      TenantRepository tenantRepository,
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
       FemmeJwtProperties jwtProperties,
@@ -73,16 +78,18 @@ public class AuthService {
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.activationTokenRepository = activationTokenRepository;
     this.professionalRepository = professionalRepository;
+    this.tenantRepository = tenantRepository;
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
     this.jwtProperties = jwtProperties;
     this.emailService = emailService;
   }
 
-  public TokenResponse login(LoginRequest request) {
+  public TokenResponse login(LoginRequest request, String origin) {
+    Tenant tenant = resolveTenant(origin);
     AppUser user =
         appUserRepository
-            .findByEmail(request.email().trim().toLowerCase())
+            .findByEmailAndTenant_Id(request.email().trim().toLowerCase(), tenant.getId())
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
     if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
@@ -113,8 +120,10 @@ public class AuthService {
   }
 
   @Transactional
-  public void forgotPassword(ForgotPasswordRequest request) {
-    Optional<AppUser> userOpt = appUserRepository.findByEmail(request.email().trim().toLowerCase());
+  public void forgotPassword(ForgotPasswordRequest request, String origin) {
+    Tenant tenant = resolveTenant(origin);
+    Optional<AppUser> userOpt = appUserRepository.findByEmailAndTenant_Id(
+        request.email().trim().toLowerCase(), tenant.getId());
     if (userOpt.isEmpty()) {
       return;
     }
@@ -226,9 +235,10 @@ public class AuthService {
 
     Professional professional = activationToken.getProfessional();
     String email = professional.getEmail().trim().toLowerCase();
+    long tenantId = professional.getTenant().getId();
 
     AppUser user;
-    Optional<AppUser> existing = appUserRepository.findByEmail(email);
+    Optional<AppUser> existing = appUserRepository.findByEmailAndTenant_Id(email, tenantId);
     if (existing.isPresent()) {
       user = existing.get();
       user.setEnabled(true);
@@ -265,6 +275,29 @@ public class AuthService {
     }
     if (!PASSWORD_SPECIAL.matcher(password).matches()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_WEAK");
+    }
+  }
+
+  private Tenant resolveTenant(String origin) {
+    String host = extractHost(origin);
+    if (host != null) {
+      Optional<Tenant> byDomain = tenantRepository.findByDomain(host);
+      if (byDomain.isPresent()) {
+        return byDomain.get();
+      }
+    }
+    return tenantRepository
+        .findById(1L)
+        .orElseThrow(
+            () -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "DEFAULT_TENANT_NOT_FOUND"));
+  }
+
+  private static String extractHost(String origin) {
+    if (origin == null || origin.isBlank()) return null;
+    try {
+      return URI.create(origin).getHost();
+    } catch (Exception e) {
+      return null;
     }
   }
 
