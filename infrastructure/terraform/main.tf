@@ -22,8 +22,8 @@ resource "azurerm_resource_group" "main" {
   tags     = var.tags
 }
 
-resource "azurerm_log_analytics_workspace" "aca" {
-  name                = "${var.name_prefix}-aca-logs-${random_string.suffix.result}"
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = "${var.name_prefix}-logs-${random_string.suffix.result}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   sku                 = "PerGB2018"
@@ -35,7 +35,7 @@ resource "azurerm_container_app_environment" "main" {
   name                       = "${var.name_prefix}-cae-${random_string.suffix.result}"
   location                   = azurerm_resource_group.main.location
   resource_group_name        = azurerm_resource_group.main.name
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.aca.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
   tags                       = var.tags
 
   depends_on = [azurerm_resource_provider_registration.app]
@@ -118,6 +118,79 @@ resource "azurerm_mssql_database" "app" {
   tags = var.tags
 }
 
+resource "azurerm_application_insights" "main" {
+  name                = "${var.name_prefix}-ai-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  workspace_id        = azurerm_log_analytics_workspace.main.id
+  application_type    = "web"
+  retention_in_days   = 30
+  tags                = var.tags
+}
+
+resource "azurerm_mssql_server_extended_auditing_policy" "main" {
+  server_id                               = azurerm_mssql_server.main.id
+  log_monitoring_enabled                  = true
+  storage_endpoint                        = null
+  storage_account_access_key              = null
+  storage_account_access_key_is_secondary = false
+  retention_in_days                       = 0
+}
+
+resource "azurerm_monitor_diagnostic_setting" "sql_server" {
+  name                       = "sql-diag"
+  target_resource_id         = "${azurerm_mssql_server.main.id}/databases/master"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "SQLSecurityAuditEvents"
+  }
+
+  metric {
+    category = "Basic"
+    enabled  = false
+  }
+
+  depends_on = [azurerm_mssql_server_extended_auditing_policy.main]
+}
+
+resource "azurerm_monitor_diagnostic_setting" "sql_database" {
+  name                       = "db-diag"
+  target_resource_id         = azurerm_mssql_database.app.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "SQLInsights"
+  }
+
+  enabled_log {
+    category = "Errors"
+  }
+
+  metric {
+    category = "Basic"
+    enabled  = true
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "acs" {
+  name                       = "acs-diag"
+  target_resource_id         = azurerm_communication_service.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "ChatOperational"
+  }
+
+  enabled_log {
+    category = "SMSOperational"
+  }
+
+  enabled_log {
+    category = "AuthOperational"
+  }
+}
+
 locals {
   sql_fqdn = azurerm_mssql_server.main.fully_qualified_domain_name
   sql_db   = azurerm_mssql_database.app.name
@@ -144,6 +217,11 @@ resource "azurerm_container_app" "backend" {
   secret {
     name  = "acs-connection-string"
     value = azurerm_communication_service.main.primary_connection_string
+  }
+
+  secret {
+    name  = "appinsights-connection-string"
+    value = azurerm_application_insights.main.connection_string
   }
 
   template {
@@ -184,6 +262,11 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "ACS_SENDER_ADDRESS"
         value = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
+      }
+
+      env {
+        name        = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        secret_name = "appinsights-connection-string"
       }
     }
   }
