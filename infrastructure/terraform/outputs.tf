@@ -59,3 +59,19 @@ output "acs_sender_address" {
   description = "From address for transactional emails (ACS Azure-managed domain)."
   value       = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
 }
+
+output "log_analytics_workspace_id" {
+  description = "Resource ID of the central Log Analytics Workspace."
+  value       = azurerm_log_analytics_workspace.main.id
+}
+
+output "application_insights_connection_string" {
+  description = "Application Insights connection string for the backend (sensitive)."
+  value       = azurerm_application_insights.main.connection_string
+  sensitive   = true
+}
+
+output "application_insights_app_id" {
+  description = "Application Insights application ID (for Kusto queries and dashboards)."
+  value       = azurerm_application_insights.main.app_id
+}
