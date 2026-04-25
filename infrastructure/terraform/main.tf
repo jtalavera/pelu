@@ -270,17 +270,35 @@ resource "azurerm_container_app" "backend" {
         secret_name = "appinsights-connection-string"
       }
 
-      # Default Azure probes use TCP on the ingress port with a 1s period. Spring Boot + Flyway
-      # on small SKUs often needs longer; TCP "connection refused" during JVM boot exhausts
-      # the default window. HTTP to /health (public in SecurityConfig) allows a longer budget.
+      # HTTP probes on /health (public in SecurityConfig). Kept in Terraform so deploy only
+      # needs `az containerapp update --image` and does not re-specify probes in CI.
       startup_probe {
-        transport                 = "HTTP"
-        path                      = "/health"
-        port                      = var.backend_container_port
-        initial_delay             = 10
-        interval_seconds          = 5
-        timeout                   = 5
-        failure_count_threshold   = 60
+        transport               = "HTTP"
+        path                    = "/health"
+        port                    = var.backend_container_port
+        initial_delay           = 10
+        interval_seconds        = 5
+        timeout                 = 5
+        failure_count_threshold = 60
+      }
+      liveness_probe {
+        transport               = "HTTP"
+        path                    = "/health"
+        port                    = var.backend_container_port
+        initial_delay           = 0
+        interval_seconds        = 30
+        timeout                 = 5
+        failure_count_threshold = 3
+      }
+      readiness_probe {
+        transport               = "HTTP"
+        path                    = "/health"
+        port                    = var.backend_container_port
+        initial_delay           = 0
+        interval_seconds        = 10
+        timeout                 = 5
+        failure_count_threshold = 3
+        success_count_threshold = 1
       }
     }
   }
