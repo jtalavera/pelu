@@ -9,9 +9,9 @@ export async function pickServiceLine(
   serviceFullName: string,
   lineIdx = 0,
 ): Promise<void> {
-  const escaped = serviceFullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   await page.locator(`#billing-line-svc-${lineIdx}`).fill(serviceFullName.slice(0, 12));
-  await page.getByRole("button", { name: new RegExp(escaped) }).click();
+  // exact: false → substring match; avoids dynamic RegExp construction flagged by semgrep
+  await page.getByRole("button", { name: serviceFullName, exact: false }).click();
 }
 
 /** Waits for POST /api/invoices success and the success alert (title "Invoice issued"). */

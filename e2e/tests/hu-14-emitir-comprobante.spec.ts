@@ -159,7 +159,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(fullName.slice(0, 10));
-    const option = page.getByRole("button", { name: new RegExp(fullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
+    const option = page.getByRole("button", { name: fullName, exact: false });
     await expect(option).toBeVisible();
     await expect(option).toContainText(phone);
     await expect(option).toContainText(ruc);
@@ -192,11 +192,11 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(origName.slice(0, 8));
-    await page.getByRole("button", { name: new RegExp(origName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    await page.getByRole("button", { name: origName, exact: false }).click();
     await page.getByLabel("Client display name").fill(updatedName);
     await page.getByLabel(/Client RUC/i).fill(newRuc);
     await page.locator("#billing-line-svc-0").fill(seed.serviceFullName.slice(0, 12));
-    await page.getByRole("button", { name: new RegExp(seed.serviceFullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    await page.getByRole("button", { name: seed.serviceFullName, exact: false }).click();
     await page.locator("#pay-amount-0").fill("50000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
@@ -218,9 +218,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.locator("#billing-line-svc-0").fill(seed.serviceFullName.slice(0, 10));
-    const option = page.getByRole("button", {
-      name: new RegExp(seed.serviceFullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-    });
+    const option = page.getByRole("button", { name: seed.serviceFullName, exact: false });
     await expect(option).toBeVisible();
     const text = (await option.innerText()).replace(/\r\n/g, "\n");
     expect(text.includes("\n"), "service dropdown row should be a single line of text").toBe(false);
