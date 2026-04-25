@@ -209,7 +209,13 @@ export default function DashboardPage() {
   const { me } = useMe();
   const navigate = useNavigate();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
-  useTour("dashboard", dashboardSteps, guidedTourEnabled ? me?.role : undefined, guidedTourEnabled);
+  const tourRole =
+    !guidedTourEnabled
+      ? undefined
+      : me?.role === "PROFESSIONAL"
+        ? "PROFESSIONAL"
+        : "ADMIN";
+  useTour("dashboard", dashboardSteps, tourRole, guidedTourEnabled);
 
   const [data, setData]               = useState<DashboardResponse | null>(null);
   const [loading, setLoading]         = useState(true);

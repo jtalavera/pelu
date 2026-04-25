@@ -141,7 +141,13 @@ export default function CalendarPage() {
   const { me } = useMe();
   const isProfessional = me?.role === "PROFESSIONAL";
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
-  useTour("calendar", calendarSteps, guidedTourEnabled ? me?.role : undefined, guidedTourEnabled);
+  const tourRole =
+    !guidedTourEnabled
+      ? undefined
+      : me?.role === "PROFESSIONAL"
+        ? "PROFESSIONAL"
+        : "ADMIN";
+  useTour("calendar", calendarSteps, tourRole, guidedTourEnabled);
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);

@@ -1,7 +1,9 @@
 package com.cursorpoc.backend.web;
 
+import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.security.TenantPathAccess;
 import com.cursorpoc.backend.service.FeatureFlagService;
 import com.cursorpoc.backend.web.dto.FeatureFlagResponse;
 import com.cursorpoc.backend.web.dto.FeatureFlagsResolvedResponse;
@@ -29,9 +31,12 @@ public class FeatureFlagController {
   private static final Logger log = LoggerFactory.getLogger(FeatureFlagController.class);
 
   private final FeatureFlagService featureFlagService;
+  private final FemmeSystemAdminProperties systemAdminProperties;
 
-  public FeatureFlagController(FeatureFlagService featureFlagService) {
+  public FeatureFlagController(
+      FeatureFlagService featureFlagService, FemmeSystemAdminProperties systemAdminProperties) {
     this.featureFlagService = featureFlagService;
+    this.systemAdminProperties = systemAdminProperties;
   }
 
   @GetMapping("/api/feature-flags")
@@ -40,19 +45,25 @@ public class FeatureFlagController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    long tenantId = principal.getTenantId();
-    log.info("GET /api/feature-flags tenantId={}", tenantId);
-    var map = featureFlagService.resolveAll(tenantId);
-    log.info("GET /api/feature-flags tenantId={} status=200", tenantId);
+    long effectiveTenantId =
+        principal.getRole() == UserRole.SYSTEM_ADMIN
+            ? systemAdminProperties.getTenantId()
+            : principal.getTenantId();
+    log.info(
+        "GET /api/feature-flags path=/api/feature-flags method=GET tenantId={} effectiveTenantId={}",
+        principal.getTenantId(),
+        effectiveTenantId);
+    var map = featureFlagService.resolveAll(effectiveTenantId);
+    log.info("GET /api/feature-flags tenantId={} status=200", principal.getTenantId());
     return new FeatureFlagsResolvedResponse(map);
   }
 
   @GetMapping("/api/admin/feature-flags")
   public List<FeatureFlagResponse> listGlobals(
       @AuthenticationPrincipal FemmeUserPrincipal principal) {
-    requireAdmin(principal);
+    requireSystemAdmin(principal);
     long tenantId = principal.getTenantId();
-    log.info("GET /api/admin/feature-flags tenantId={}", tenantId);
+    log.info("GET /api/admin/feature-flags method=GET tenantId={}", tenantId);
     List<FeatureFlagResponse> out = featureFlagService.listAllGlobals();
     log.info("GET /api/admin/feature-flags tenantId={} status=200", tenantId);
     return out;
@@ -63,9 +74,9 @@ public class FeatureFlagController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("flagKey") String flagKey,
       @Valid @RequestBody FeatureGlobalUpdateRequest request) {
-    requireAdmin(principal);
+    requireSystemAdmin(principal);
     long tenantId = principal.getTenantId();
-    log.info("PUT /api/admin/feature-flags/{} tenantId={}", flagKey, tenantId);
+    log.info("PUT /api/admin/feature-flags/{} method=PUT tenantId={}", flagKey, tenantId);
     try {
       FeatureFlagResponse out = featureFlagService.updateGlobal(flagKey, request);
       log.info("PUT /api/admin/feature-flags/{} tenantId={} status=200", flagKey, tenantId);
@@ -84,10 +95,12 @@ public class FeatureFlagController {
   public List<TenantFeatureFlagRowResponse> listTenantView(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("tenantId") long tenantId) {
-    requireAdmin(principal);
-    requireAdminTenantPath(principal, tenantId);
+    requireSystemAdmin(principal);
+    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
     log.info(
-        "GET /api/admin/feature-flags/tenants/{} tenantId={}", tenantId, principal.getTenantId());
+        "GET /api/admin/feature-flags/tenants/{} method=GET tenantId={}",
+        tenantId,
+        principal.getTenantId());
     List<TenantFeatureFlagRowResponse> out = featureFlagService.listTenantView(tenantId);
     log.info(
         "GET /api/admin/feature-flags/tenants/{} tenantId={} status=200",
@@ -102,10 +115,10 @@ public class FeatureFlagController {
       @PathVariable("tenantId") long tenantId,
       @PathVariable("flagKey") String flagKey,
       @Valid @RequestBody TenantFeatureFlagOverrideRequest request) {
-    requireAdmin(principal);
-    requireAdminTenantPath(principal, tenantId);
+    requireSystemAdmin(principal);
+    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
     log.info(
-        "PUT /api/admin/feature-flags/tenants/{}/{} tenantId={}",
+        "PUT /api/admin/feature-flags/tenants/{}/{} method=PUT tenantId={}",
         tenantId,
         flagKey,
         principal.getTenantId());
@@ -133,10 +146,10 @@ public class FeatureFlagController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("tenantId") long tenantId,
       @PathVariable("flagKey") String flagKey) {
-    requireAdmin(principal);
-    requireAdminTenantPath(principal, tenantId);
+    requireSystemAdmin(principal);
+    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
     log.info(
-        "DELETE /api/admin/feature-flags/tenants/{}/{} tenantId={}",
+        "DELETE /api/admin/feature-flags/tenants/{}/{} method=DELETE tenantId={}",
         tenantId,
         flagKey,
         principal.getTenantId());
@@ -159,18 +172,11 @@ public class FeatureFlagController {
     }
   }
 
-  private static void requireAdmin(FemmeUserPrincipal principal) {
+  private static void requireSystemAdmin(FemmeUserPrincipal principal) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    if (principal.getRole() != UserRole.ADMIN) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
-    }
-  }
-
-  /** Admins may only read or change tenant overrides for their own tenant. */
-  private static void requireAdminTenantPath(FemmeUserPrincipal principal, long pathTenantId) {
-    if (pathTenantId != principal.getTenantId()) {
+    if (principal.getRole() != UserRole.SYSTEM_ADMIN) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
     }
   }

@@ -9,4 +9,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
   @EntityGraph(attributePaths = "tenant")
   Optional<AppUser> findByEmailAndTenant_Id(String email, Long tenantId);
+
+  @EntityGraph(attributePaths = "tenant")
+  Optional<AppUser> findByEmail(String email);
 }

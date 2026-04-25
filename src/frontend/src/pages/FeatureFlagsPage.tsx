@@ -23,15 +23,16 @@ export default function FeatureFlagsPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const isAdmin = me?.role === "ADMIN";
-  const tenantId = me?.tenantId;
+  const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
+  const effectiveTenantId =
+    me?.role === "SYSTEM_ADMIN" ? (me.previewTenantId ?? me.tenantId) : (me?.tenantId ?? null);
 
   const load = useCallback(async () => {
-    if (!isAdmin || tenantId == null) return;
+    if (!isSystemAdmin || effectiveTenantId == null) return;
     setLoadError(null);
     try {
       const data = await femmeJson<TenantRow[]>(
-        `/api/admin/feature-flags/tenants/${tenantId}`,
+        `/api/admin/feature-flags/tenants/${effectiveTenantId}`,
         { json: false },
       );
       setRows(data);
@@ -39,14 +40,14 @@ export default function FeatureFlagsPage() {
       setRows(null);
       setLoadError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     }
-  }, [isAdmin, t, tenantId]);
+  }, [isSystemAdmin, t, effectiveTenantId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function setGlobalEnabled(flagKey: string, enabled: boolean, description: string | null) {
-    if (tenantId == null) return;
+    if (effectiveTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
@@ -64,12 +65,12 @@ export default function FeatureFlagsPage() {
   }
 
   async function setTenantOverride(flagKey: string, enabled: boolean) {
-    if (tenantId == null) return;
+    if (effectiveTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
       await femmePutJson(
-        `/api/admin/feature-flags/tenants/${tenantId}/${encodeURIComponent(flagKey)}`,
+        `/api/admin/feature-flags/tenants/${effectiveTenantId}/${encodeURIComponent(flagKey)}`,
         { enabled },
       );
       await load();
@@ -82,12 +83,12 @@ export default function FeatureFlagsPage() {
   }
 
   async function removeOverride(flagKey: string) {
-    if (tenantId == null) return;
+    if (effectiveTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
       await femmeDeleteJson(
-        `/api/admin/feature-flags/tenants/${tenantId}/${encodeURIComponent(flagKey)}`,
+        `/api/admin/feature-flags/tenants/${effectiveTenantId}/${encodeURIComponent(flagKey)}`,
       );
       await load();
       await refetchFlags();
@@ -98,7 +99,7 @@ export default function FeatureFlagsPage() {
     }
   }
 
-  if (!isAdmin) {
+  if (!isSystemAdmin) {
     return (
       <div>
         <Heading as="h2" className="text-[var(--color-ink)]">

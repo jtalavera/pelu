@@ -46,6 +46,7 @@ export function FeatureFlagProvider({ children }: ProviderProps) {
     setLoading(true);
     setError(null);
     try {
+      // Backend resolves effective tenant (SYSTEM_ADMIN sees the preview tenant in app.femme.system-admin.tenant-id).
       const res = await femmeJson<{ flags: Record<string, boolean> }>("/api/feature-flags", {
         json: false,
       });

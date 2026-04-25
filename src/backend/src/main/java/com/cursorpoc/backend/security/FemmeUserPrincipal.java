@@ -44,6 +44,10 @@ public class FemmeUserPrincipal implements UserDetails {
     return role == UserRole.ADMIN;
   }
 
+  public boolean isSystemAdmin() {
+    return role == UserRole.SYSTEM_ADMIN;
+  }
+
   public boolean isProfessional() {
     return role == UserRole.PROFESSIONAL;
   }

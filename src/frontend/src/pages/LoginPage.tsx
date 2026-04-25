@@ -46,7 +46,14 @@ export default function LoginPage() {
       } catch {
         // keep ADMIN default
       }
-      const destination = from !== "/app" ? from : role === "PROFESSIONAL" ? "/app/calendar" : "/app";
+      const destination =
+        from !== "/app"
+          ? from
+          : role === "PROFESSIONAL"
+            ? "/app/calendar"
+            : role === "SYSTEM_ADMIN"
+              ? "/app/settings/feature-flags"
+              : "/app";
       navigate(destination, { replace: true });
     } catch {
       setError(t("femme.login.errorNetwork"));

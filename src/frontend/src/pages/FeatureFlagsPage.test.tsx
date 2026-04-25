@@ -14,9 +14,10 @@ vi.mock("../hooks/useMe", () => ({
     me: {
       userId: 1,
       tenantId: 1,
-      email: "admin@demo.com",
-      role: "ADMIN" as const,
+      email: "root@pelu",
+      role: "SYSTEM_ADMIN" as const,
       professionalId: null,
+      previewTenantId: 1,
     },
     loading: false,
   }),
@@ -42,7 +43,7 @@ function renderPage() {
   );
 }
 
-describe("FeatureFlagsPage (acceptance: admin can review guided tour flag)", () => {
+describe("FeatureFlagsPage (acceptance: system admin can review guided tour flag)", () => {
   beforeEach(() => {
     void i18n.changeLanguage("en");
     refetch.mockReset();
