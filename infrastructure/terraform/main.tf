@@ -269,6 +269,19 @@ resource "azurerm_container_app" "backend" {
         name        = "APPLICATIONINSIGHTS_CONNECTION_STRING"
         secret_name = "appinsights-connection-string"
       }
+
+      # Default Azure probes use TCP on the ingress port with a 1s period. Spring Boot + Flyway
+      # on small SKUs often needs longer; TCP "connection refused" during JVM boot exhausts
+      # the default window. HTTP to /health (public in SecurityConfig) allows a longer budget.
+      startup_probe {
+        transport                 = "HTTP"
+        path                      = "/health"
+        port                      = var.backend_container_port
+        initial_delay             = 10
+        interval_seconds          = 5
+        timeout                   = 5
+        failure_count_threshold   = 60
+      }
     }
   }
 
