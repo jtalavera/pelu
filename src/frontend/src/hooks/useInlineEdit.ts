@@ -3,8 +3,10 @@ import { useCallback, useState } from "react";
 export interface UseInlineEditOptions<T> {
   onSave: (item: T) => Promise<void>;
   onCancel?: () => void;
-  /** User-visible message when save fails (i18n). */
+  /** User-visible message when save fails (i18n), if {@link formatSaveError} is not set. */
   saveErrorMessage: string;
+  /** If set, used to build the error message on save failure (e.g. `translateApiError`). */
+  formatSaveError?: (err: unknown) => string;
 }
 
 export function useInlineEdit<T extends { id: string | number }>(
@@ -15,7 +17,7 @@ export function useInlineEdit<T extends { id: string | number }>(
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const { onSave, onCancel, saveErrorMessage } = options;
+  const { onSave, onCancel, saveErrorMessage, formatSaveError } = options;
 
   const startEdit = useCallback((item: T) => {
     setEditingId(item.id);
@@ -42,12 +44,14 @@ export function useInlineEdit<T extends { id: string | number }>(
       await onSave(editingData as T);
       setEditingId(null);
       setEditingData({});
-    } catch {
-      setSaveError(saveErrorMessage);
+    } catch (e) {
+      setSaveError(
+        formatSaveError ? formatSaveError(e) : saveErrorMessage,
+      );
     } finally {
       setSaving(false);
     }
-  }, [editingId, editingData, onSave, saveErrorMessage]);
+  }, [editingId, editingData, onSave, saveErrorMessage, formatSaveError]);
 
   const isEditing = useCallback(
     (id: string | number) => editingId === id,

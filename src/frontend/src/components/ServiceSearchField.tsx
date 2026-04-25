@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Input, Label, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
+import { formatIntegerGs } from "../lib/formatMoney";
 
 export type SalonServiceOption = {
   id: number;
@@ -30,7 +31,7 @@ const DEBOUNCE_MS = 300;
 function formatPriceGs(priceMinor: string | number): string {
   const n = Number(priceMinor);
   if (!Number.isFinite(n)) return "—";
-  return Math.round(n).toLocaleString("es-PY");
+  return formatIntegerGs(n);
 }
 
 export function ServiceSearchField({
@@ -124,6 +125,14 @@ export function ServiceSearchField({
           role="combobox"
           value={query}
           onChange={handleQueryChange}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            if (!showDropdown || searching) return;
+            if (results.length === 1) {
+              e.preventDefault();
+              selectService(results[0]);
+            }
+          }}
           onFocus={() => {
             void doSearch(query.trim());
           }}
@@ -157,33 +166,39 @@ export function ServiceSearchField({
               </Text>
             </li>
           ) : null}
-          {results.map((service) => (
-            <li key={service.id} role="option" aria-selected={false}>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full justify-start rounded-none px-3 py-2 text-sm"
-                onClick={() => selectService(service)}
-              >
-                <span className="flex flex-col items-start">
-                  <span className="font-medium">{service.name}</span>
-                  <span className="text-xs text-[rgb(var(--color-muted-foreground))]">
-                    {[
-                      service.categoryName,
-                      t("femme.billing.invoice.lineServicePriceGs", {
-                        amount: formatPriceGs(service.priceMinor),
-                      }),
-                      t("femme.billing.invoice.lineServiceDuration", {
-                        minutes: service.durationMinutes,
-                      }),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+          {results.map((service) => {
+            const metaParts = [
+              service.categoryName,
+              t("femme.billing.invoice.lineServicePriceGs", {
+                amount: formatPriceGs(service.priceMinor),
+              }),
+              t("femme.billing.invoice.lineServiceDuration", {
+                minutes: service.durationMinutes,
+              }),
+            ].filter(Boolean) as string[];
+            const lineTitle = [service.name, ...metaParts].join(" · ");
+            return (
+              <li key={service.id} role="option" aria-selected={false}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto min-h-11 w-full justify-start rounded-none px-3 py-2 text-sm"
+                  onClick={() => selectService(service)}
+                  title={lineTitle}
+                >
+                  <span className="block w-full min-w-0 truncate text-left text-sm leading-snug">
+                    <span className="font-medium">{service.name}</span>
+                    {metaParts.length > 0 ? (
+                      <span className="text-[rgb(var(--color-muted-foreground))]">
+                        {" · "}
+                        {metaParts.join(" · ")}
+                      </span>
+                    ) : null}
                   </span>
-                </span>
-              </Button>
-            </li>
-          ))}
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>

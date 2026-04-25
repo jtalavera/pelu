@@ -17,8 +17,9 @@ import {
 } from "@design-system";
 import { apiBaseUrl } from "../api/baseUrl";
 import { authHeaders } from "../api/authHeaders";
-import { femmeJson, femmePostJson } from "../api/femmeClient";
+import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { validateRuc } from "../lib/validateRuc";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
 import {
   ServiceSearchField,
@@ -27,6 +28,7 @@ import {
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
+import { formatAmountDecimal, formatDecimalGs, formatGuaraniesGs } from "../lib/formatMoney";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
@@ -139,18 +141,6 @@ function fmtDate(isoString: string, locale: string): string {
   } catch {
     return isoString;
   }
-}
-
-function fmtNum(v: string | number | null | undefined): string {
-  if (v === null || v === undefined) return "0";
-  const n = Number(v);
-  return isNaN(n) ? String(v) : n.toLocaleString();
-}
-
-function fmtGs(v: string | number | null | undefined): string {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "Gs. —";
-  return "Gs. " + Math.round(n).toLocaleString("es-PY");
 }
 
 function todayRangeIso(): { from: string; to: string } {
@@ -287,8 +277,11 @@ function InvoiceDetailModal({
 
   function discountLabel(type: string, value: string | null): string {
     if (!type || type === "NONE") return "";
-    if (type === "PERCENT") return `${fmtNum(value)}%`;
-    return fmtNum(value);
+    if (type === "PERCENT") {
+      if (value == null || value === "") return "0%";
+      return `${String(value).trim()}%`;
+    }
+    return formatAmountDecimal(value, "0");
   }
 
   return (
@@ -383,8 +376,8 @@ function InvoiceDetailModal({
                       <tr key={l.id} className="border-t border-[rgb(var(--color-border))]">
                         <td className="px-3 py-2">{l.description}</td>
                         <td className="px-3 py-2 text-right">{l.quantity}</td>
-                        <td className="px-3 py-2 text-right">{fmtNum(l.unitPrice)}</td>
-                        <td className="px-3 py-2 text-right">{fmtNum(l.lineTotal)}</td>
+                        <td className="px-3 py-2 text-right">{formatAmountDecimal(l.unitPrice)}</td>
+                        <td className="px-3 py-2 text-right">{formatAmountDecimal(l.lineTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -396,7 +389,7 @@ function InvoiceDetailModal({
             <div className="flex flex-col items-end gap-1 text-sm">
               <div className="flex gap-8">
                 <span className="text-[rgb(var(--color-muted-foreground))]">{t("femme.billing.history.detail.subtotal")}</span>
-                <span>{fmtNum(invoice.subtotal)}</span>
+                <span>{formatAmountDecimal(invoice.subtotal)}</span>
               </div>
               {invoice.discountType !== "NONE" && (
                 <div className="flex gap-8">
@@ -406,7 +399,7 @@ function InvoiceDetailModal({
               )}
               <div className="flex gap-8 font-semibold">
                 <span>{t("femme.billing.history.detail.total")}</span>
-                <span>{fmtNum(invoice.total)}</span>
+                <span>{formatAmountDecimal(invoice.total)}</span>
               </div>
             </div>
 
@@ -417,7 +410,7 @@ function InvoiceDetailModal({
                 {invoice.payments.map((p, i) => (
                   <div key={i} className="flex justify-between text-sm">
                     <span>{t(`femme.billing.invoice.paymentMethod${capitalize(p.method)}`)}</span>
-                    <span>{fmtNum(p.amount)}</span>
+                    <span>{formatAmountDecimal(p.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -520,6 +513,51 @@ function paymentMethodsLabel(
     .join(" + ");
 }
 
+/** Local calendar dates: yesterday through today (two inclusive days). */
+function getDefaultInvoiceHistoryDateRange(): { from: string; to: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const today = new Date(y, m, d);
+  const yesterday = new Date(y, m, d - 1);
+  const fmt = (dt: Date) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  return { from: fmt(yesterday), to: fmt(today) };
+}
+
+function localDateYmdToIsoStart(ymd: string): string {
+  const [yy, mm, dd] = ymd.split("-").map(Number);
+  return new Date(yy, mm - 1, dd, 0, 0, 0, 0).toISOString();
+}
+
+function localDateYmdToIsoEnd(ymd: string): string {
+  const [yy, mm, dd] = ymd.split("-").map(Number);
+  return new Date(yy, mm - 1, dd, 23, 59, 59, 999).toISOString();
+}
+
+function inclusiveLocalDaysBetween(fromYmd: string, toYmd: string): number {
+  const [fy, fm, fd] = fromYmd.split("-").map(Number);
+  const [ty, tm, td] = toYmd.split("-").map(Number);
+  const a = new Date(fy, fm - 1, fd).getTime();
+  const b = new Date(ty, tm - 1, td).getTime();
+  return Math.floor((b - a) / 86400000) + 1;
+}
+
+/** null = valid; otherwise an i18n key under femme.billing.history.rangeError* */
+function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
+  if (!from.trim() || !to.trim()) {
+    return "incomplete";
+  }
+  if (from > to) {
+    return "invalidOrder";
+  }
+  if (inclusiveLocalDaysBetween(from, to) > 31) {
+    return "tooLong";
+  }
+  return null;
+}
+
 // ─── InvoiceHistoryTab ────────────────────────────────────────────────────────
 
 function InvoiceHistoryTab() {
@@ -528,8 +566,9 @@ function InvoiceHistoryTab() {
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [filterFrom, setFilterFrom] = useState("");
-  const [filterTo, setFilterTo] = useState("");
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null);
+  const [filterFrom, setFilterFrom] = useState(() => getDefaultInvoiceHistoryDateRange().from);
+  const [filterTo, setFilterTo] = useState(() => getDefaultInvoiceHistoryDateRange().to);
   const [filterStatus, setFilterStatus] = useState("");
   const [listTextQuery, setListTextQuery] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
@@ -537,24 +576,25 @@ function InvoiceHistoryTab() {
 
   const loadInvoices = useCallback(
     async (from: string, to: string, status: string) => {
-      setLoading(true);
       setLoadError(null);
+      setDateRangeError(null);
+      const rangeErr = invoiceHistoryRangeErrorKey(from, to);
+      if (rangeErr) {
+        setDateRangeError(t(`femme.billing.history.rangeError${capitalize(rangeErr)}`));
+        setInvoices([]);
+        return;
+      }
+      setLoading(true);
       try {
         const params = new URLSearchParams();
-        if (from) params.set("from", new Date(from).toISOString());
-        if (to) {
-          const toDate = new Date(to);
-          toDate.setHours(23, 59, 59, 999);
-          params.set("to", toDate.toISOString());
-        }
+        params.set("from", localDateYmdToIsoStart(from));
+        params.set("to", localDateYmdToIsoEnd(to));
         if (status) params.set("status", status);
         const qs = params.toString();
-        const data = await femmeJson<InvoiceListItem[] | null>(
-          `/api/invoices${qs ? `?${qs}` : ""}`,
-        );
+        const data = await femmeJson<InvoiceListItem[] | null>(`/api/invoices?${qs}`);
         setInvoices(Array.isArray(data) ? data : []);
-      } catch {
-        setLoadError(t("femme.billing.history.loadError"));
+      } catch (err) {
+        setLoadError(translateApiError(err, t, "femme.billing.history.loadError"));
       } finally {
         setLoading(false);
       }
@@ -585,10 +625,12 @@ function InvoiceHistoryTab() {
   );
 
   function handleClear() {
-    setFilterFrom("");
-    setFilterTo("");
+    const d = getDefaultInvoiceHistoryDateRange();
+    setFilterFrom(d.from);
+    setFilterTo(d.to);
     setFilterStatus("");
     setListTextQuery("");
+    setDateRangeError(null);
   }
 
   return (
@@ -647,6 +689,12 @@ function InvoiceHistoryTab() {
         </form>
       </div>
 
+      {dateRangeError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {dateRangeError}
+        </Alert>
+      )}
+
       {loadError && (
         <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
           {loadError}
@@ -658,7 +706,7 @@ function InvoiceHistoryTab() {
           <Spinner size="sm" />
           <Text>{t("femme.billing.history.loading")}</Text>
         </div>
-      ) : invoices.length === 0 ? (
+      ) : dateRangeError ? null : invoices.length === 0 ? (
         <Text variant="muted">{t("femme.billing.history.empty")}</Text>
       ) : filteredInvoices.length === 0 ? (
         <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
@@ -684,7 +732,7 @@ function InvoiceHistoryTab() {
                   <td className="px-3 py-2 font-mono">{inv.invoiceNumberFormatted}</td>
                   <td className="px-3 py-2">{fmtDate(inv.issuedAt, dateLocale)}</td>
                   <td className="px-3 py-2">{inv.clientDisplayName ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{fmtNum(inv.total)}</td>
+                  <td className="px-3 py-2 text-right">{formatAmountDecimal(inv.total)}</td>
                   <td className="px-3 py-2 text-center">
                     <Badge variant={inv.status === "ISSUED" ? "success" : "destructive"}>
                       {inv.status === "ISSUED"
@@ -752,6 +800,7 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   const [lineErrors, setLineErrors] = useState<Record<number, Record<string, string>>>({});
   const [paymentErrors, setPaymentErrors] = useState<Record<number, string>>({});
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
+  const [clientProfileSyncWarning, setClientProfileSyncWarning] = useState<string | null>(null);
 
   function handleClientSelectionChange(sel: ClientSelection) {
     setClientSelection(sel);
@@ -922,6 +971,16 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
       }
     });
 
+    if (clientSelection?.type === "client") {
+      if (!clientDisplayName.trim()) {
+        errors.push(t("femme.billing.invoice.clientDisplayNameRequired"));
+      }
+      const rucTrim = clientRucOverride.trim();
+      if (rucTrim && !validateRuc(rucTrim)) {
+        errors.push(t("femme.clients.rucInvalid"));
+      }
+    }
+
     setLineErrors(newLineErrors);
     setPaymentErrors(newPaymentErrors);
     setGlobalErrors(errors);
@@ -937,8 +996,14 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
     e.preventDefault();
     setSubmitError(null);
     setSuccessInvoiceNumber(null);
+    setClientProfileSyncWarning(null);
 
     if (!validate()) return;
+
+    const selectedForProfileSync =
+      clientSelection?.type === "client" ? clientSelection.client : null;
+    const profileNameAfter = clientDisplayName.trim();
+    const profileRucAfter = clientRucOverride.trim() || null;
 
     const payload = {
       clientId: clientSelection?.type === "client" ? clientSelection.client.id : null,
@@ -965,6 +1030,30 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
         "/api/invoices",
         payload,
       );
+      if (selectedForProfileSync && profileNameAfter) {
+        const origName = selectedForProfileSync.fullName.trim();
+        const origRuc = (selectedForProfileSync.ruc && selectedForProfileSync.ruc.trim()) || null;
+        const rucChanged = (profileRucAfter ?? null) !== (origRuc ?? null);
+        const nameChanged = profileNameAfter !== origName;
+        if (nameChanged || rucChanged) {
+          try {
+            await femmePutJson(`/api/clients/${selectedForProfileSync.id}`, {
+              fullName: profileNameAfter,
+              phone: (selectedForProfileSync.phone && selectedForProfileSync.phone.trim()) || null,
+              email: (selectedForProfileSync.email && selectedForProfileSync.email.trim()) || null,
+              ruc: profileRucAfter,
+            });
+          } catch (syncErr) {
+            setClientProfileSyncWarning(
+              translateApiError(
+                syncErr,
+                t,
+                "femme.billing.invoice.clientProfileSyncFailed",
+              ),
+            );
+          }
+        }
+      }
       setSuccessInvoiceNumber(result.invoiceNumberFormatted);
       setLastInvoiceId(result.id);
       // Reset form
@@ -1054,6 +1143,11 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
           </div>
         </Alert>
       )}
+      {clientProfileSyncWarning ? (
+        <Alert variant="warning" title={t("femme.billing.invoice.clientProfileSyncTitle")}>
+          {clientProfileSyncWarning}
+        </Alert>
+      ) : null}
 
       <form onSubmit={(e) => void handleSubmit(e)} noValidate className="flex flex-col gap-6">
         {/* Client section */}
@@ -1158,13 +1252,12 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
                     {lineErrors[idx]?.unitPrice}
                   </FieldValidationError>
                 </div>
-                <div className="col-span-9 sm:col-span-1 flex items-end justify-end">
-                  <Text variant="small" className="font-medium text-right">
-                    {fmtNum(
-                      ((parseFloat(line.quantity) || 0) *
-                        (parseFloat(line.unitPrice) || 0)).toString(),
+                <div className="col-span-9 sm:col-span-1 flex min-h-9 w-full items-end justify-center">
+                  <span className="w-full text-center text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
+                    {formatDecimalGs(
+                      (parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0),
                     )}
-                  </Text>
+                  </span>
                 </div>
                 <div className="col-span-3 sm:col-span-1 flex items-end justify-end">
                   {lines.length > 1 && (
@@ -1245,25 +1338,25 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
               <span className="text-[rgb(var(--color-muted-foreground))]">
                 {t("femme.billing.invoice.subtotal")}
               </span>
-              <span>{fmtNum(subtotal.toFixed(2))}</span>
+              <span>{formatAmountDecimal(subtotal.toFixed(2))}</span>
             </div>
             {discountAmount > 0 && (
               <div className="flex justify-between">
                 <span className="text-[rgb(var(--color-muted-foreground))]">
                   {t("femme.billing.invoice.discount")}
                 </span>
-                <span>-{fmtNum(discountAmount.toFixed(2))}</span>
+                <span>-{formatAmountDecimal(discountAmount.toFixed(2))}</span>
               </div>
             )}
             <div className="flex justify-between font-semibold">
               <span>{t("femme.billing.invoice.total")}</span>
-              <span>{fmtNum(total.toFixed(2))}</span>
+              <span>{formatAmountDecimal(total.toFixed(2))}</span>
             </div>
             <div
               className={`flex justify-between ${Math.abs(remaining) > 0.01 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
             >
               <span>{t("femme.billing.invoice.remaining")}</span>
-              <span>{fmtNum(remaining.toFixed(2))}</span>
+              <span>{formatAmountDecimal(remaining.toFixed(2))}</span>
             </div>
           </div>
 
@@ -1571,7 +1664,7 @@ function CashSessionTab({
             <span className="text-[rgb(var(--color-muted-foreground))]">
               {t("femme.billing.close.totalInvoiced")}
             </span>
-            <span className="text-right">{fmtNum(closeResult.totalInvoiced)}</span>
+            <span className="text-right">{formatAmountDecimal(closeResult.totalInvoiced)}</span>
             <span className="text-[rgb(var(--color-muted-foreground))]">
               {t("femme.billing.close.invoiceCount")}
             </span>
@@ -1579,11 +1672,11 @@ function CashSessionTab({
             <span className="text-[rgb(var(--color-muted-foreground))]">
               {t("femme.billing.close.expectedCash")}
             </span>
-            <span className="text-right">{fmtNum(closeResult.expectedCashAmount)}</span>
+            <span className="text-right">{formatAmountDecimal(closeResult.expectedCashAmount)}</span>
             <span className="text-[rgb(var(--color-muted-foreground))]">
               {t("femme.billing.close.countedCash")}
             </span>
-            <span className="text-right">{fmtNum(closeResult.countedCashAmount)}</span>
+            <span className="text-right">{formatAmountDecimal(closeResult.countedCashAmount)}</span>
             <span
               className={`font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
             >
@@ -1593,7 +1686,7 @@ function CashSessionTab({
               className={`text-right font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
             >
               {diff !== null && diff >= 0 ? "+" : ""}
-              {fmtNum(closeResult.cashDifference)}
+              {formatAmountDecimal(closeResult.cashDifference)}
             </span>
           </div>
           {(closeResult.paymentSummary ?? []).length > 0 && (
@@ -1605,7 +1698,7 @@ function CashSessionTab({
                 {(closeResult.paymentSummary ?? []).map((ps, i) => (
                   <div key={i} className="flex justify-between text-sm max-w-xs">
                     <span>{t(`femme.billing.invoice.paymentMethod${capitalize(ps.method)}`)}</span>
-                    <span>{fmtNum(ps.total)}</span>
+                    <span>{formatAmountDecimal(ps.total)}</span>
                   </div>
                 ))}
               </div>
@@ -1718,7 +1811,7 @@ function CashSessionTab({
                   {t("femme.billing.session.metricOpeningAmount")}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-                  {fmtGs(currentSession.openingCashAmount)}
+                  {formatGuaraniesGs(currentSession.openingCashAmount)}
                 </div>
               </div>
             </div>
@@ -1878,7 +1971,7 @@ function CashSessionTab({
               {t("femme.billing.session.todayInvoicesTitle")}
             </span>
             <span style={{ fontSize: 11, color: "var(--color-ink-3)" }}>
-              {t("femme.billing.session.todayTotal", { amount: fmtGs(dayTotalIssued) })}
+              {t("femme.billing.session.todayTotal", { amount: formatGuaraniesGs(dayTotalIssued) })}
             </span>
           </div>
 
@@ -1981,7 +2074,7 @@ function CashSessionTab({
                         >
                           {inv.servicesSummary?.trim() ? inv.servicesSummary : "—"}
                         </td>
-                        <td style={{ ...cell, fontWeight: 500 }}>{fmtGs(inv.total)}</td>
+                        <td style={{ ...cell, fontWeight: 500 }}>{formatGuaraniesGs(inv.total)}</td>
                         <td style={{ ...cell, color: "var(--color-ink-2)", fontSize: 11 }}>
                           {paymentMethodsLabel(inv.paymentMethodsSummary, t)}
                         </td>

@@ -355,14 +355,14 @@ class AppointmentServiceTest {
     Instant from = Instant.parse("2026-04-07T00:00:00Z");
     Instant to = Instant.parse("2026-04-14T00:00:00Z");
     Appointment appointment = buildAppointment(AppointmentStatus.PENDING);
-    when(appointmentRepository.findInRangeFiltered(TENANT_ID, from, to, null))
+    when(appointmentRepository.findInRangeFiltered(TENANT_ID, from, to, null, null))
         .thenReturn(List.of(appointment));
 
-    var result = service.list(TENANT_ID, from, to, null);
+    var result = service.list(TENANT_ID, from, to, null, null);
 
     assertThat(result).hasSize(1);
     assertThat(result.get(0).status()).isEqualTo("PENDING");
-    verify(appointmentRepository).findInRangeFiltered(TENANT_ID, from, to, null);
+    verify(appointmentRepository).findInRangeFiltered(TENANT_ID, from, to, null, null);
   }
 
   @Test

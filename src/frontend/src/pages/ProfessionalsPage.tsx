@@ -63,7 +63,12 @@ type Professional = {
   hasUserAccount: boolean;
 };
 
-type DetailErrors = { fullName?: string; photo?: string; pin?: string } | null;
+type DetailErrors = {
+  fullName?: string;
+  email?: string;
+  photo?: string;
+  pin?: string;
+} | null;
 type ScheduleErrors = { schedules?: string } | null;
 
 const DAYS: Array<{ value: number; key: string }> = [
@@ -311,6 +316,13 @@ export default function ProfessionalsPage() {
       const rawCode = parseApiErrorMessage(e);
       if (rawCode === "PIN_ALREADY_IN_USE") {
         setDetailErrors((prev) => ({ ...(prev ?? {}), pin: t("femme.professionals.form.pinErrorDuplicate") }));
+      } else if (rawCode === "PROFESSIONAL_EMAIL_DUPLICATE") {
+        setDetailErrors((prev) => ({
+          ...(prev ?? {}),
+          email: t("femme.apiErrors.PROFESSIONAL_EMAIL_DUPLICATE"),
+        }));
+      } else if (rawCode === "INVALID_PIN_FORMAT") {
+        setDetailErrors((prev) => ({ ...(prev ?? {}), pin: t("femme.apiErrors.INVALID_PIN_FORMAT") }));
       } else {
         setDetailSaveError(translateApiError(e, t, "femme.professionals.saveError"));
       }
@@ -460,6 +472,7 @@ export default function ProfessionalsPage() {
   } = useInlineEdit<Professional>({
     onSave: handleInlineSave,
     saveErrorMessage: t("femme.inlineEdit.saveError"),
+    formatSaveError: (e) => translateApiError(e, t, t("femme.inlineEdit.saveError")),
   });
 
   const inputEditStyle: React.CSSProperties = {
@@ -888,20 +901,21 @@ export default function ProfessionalsPage() {
                     id="prof-email"
                     inputMode="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setDetailErrors((prev) => (prev ? { ...prev, email: undefined } : prev));
+                    }}
                     placeholder={t("femme.professionals.form.emailPlaceholder")}
+                    aria-invalid={detailErrors?.email ? "true" : "false"}
+                    aria-describedby={detailErrors?.email ? "prof-email-err" : undefined}
                   />
+                  <FieldValidationError id="prof-email-err">{detailErrors?.email}</FieldValidationError>
                 </div>
               </div>
 
-              {/* ── PIN ── */}
+              {/* ── PIN (hash updated only if the user types here; leave blank to keep / omit) ── */}
               <div>
                 <Label htmlFor="prof-pin">{t("femme.professionals.form.pin")}</Label>
-                {savedProfessional?.hasPinSet ? (
-                  <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginBottom: 4 }}>
-                    {t("femme.professionals.form.pinHasPinSet")}
-                  </div>
-                ) : null}
                 <Input
                   id="prof-pin"
                   type="password"
@@ -913,7 +927,11 @@ export default function ProfessionalsPage() {
                     setPinTouched(true);
                     setDetailErrors((prev) => (prev ? { ...prev, pin: undefined } : prev));
                   }}
-                  placeholder={t("femme.professionals.form.pinPlaceholder")}
+                  placeholder={
+                    savedProfessional?.hasPinSet && !pinTouched
+                      ? t("femme.professionals.form.pinMaskPlaceholder")
+                      : t("femme.professionals.form.pinPlaceholder")
+                  }
                   aria-describedby="prof-pin-help prof-pin-err"
                 />
                 <FieldValidationError id="prof-pin-err">{detailErrors?.pin}</FieldValidationError>

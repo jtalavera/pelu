@@ -50,8 +50,10 @@ public class AppointmentService {
 
   @Transactional(readOnly = true)
   public List<AppointmentResponse> list(
-      long tenantId, Instant from, Instant to, Long professionalId) {
-    return appointmentRepository.findInRangeFiltered(tenantId, from, to, professionalId).stream()
+      long tenantId, Instant from, Instant to, Long professionalId, Long clientId) {
+    return appointmentRepository
+        .findInRangeFiltered(tenantId, from, to, professionalId, clientId)
+        .stream()
         .map(this::toResponse)
         .toList();
   }

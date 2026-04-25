@@ -12,6 +12,7 @@ import { useInlineEdit } from "../hooks/useInlineEdit";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
+import { validateRuc } from "../lib/validateRuc";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { clientsSteps } from "../tour/steps/clients";
@@ -33,12 +34,6 @@ type Client = {
 type FilterKey = "all" | "active" | "ruc" | "new";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const PARAGUAY_RUC_PATTERN = /^\d+-\d+$/;
-
-function validateRuc(ruc: string): boolean {
-  return PARAGUAY_RUC_PATTERN.test(ruc.trim());
-}
 
 function getInitials(name: string): string {
   const p = name.trim().split(/\s+/);

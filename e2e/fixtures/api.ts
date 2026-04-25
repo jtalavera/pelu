@@ -46,7 +46,9 @@ export async function apiPostJson<T>(
     headers: authHeaders(token),
     data,
   });
-  expect(res.ok(), await res.text()).toBeTruthy();
+  if (!res.ok()) {
+    throw new Error(`POST ${path} -> ${res.status()}: ${await res.text()}`);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -147,6 +149,24 @@ export async function createAppointmentApi(
   body: { clientId: number | null; professionalId: number; serviceId: number; startAt: string },
 ): Promise<{ id: number; status: string }> {
   return apiPostJson<{ id: number; status: string }>(request, token, "/api/appointments", body);
+}
+
+/** Opens the cash register via API if none is open (for seeding invoices in e2e). */
+export async function ensureCashSessionOpenApi(
+  request: APIRequestContext,
+  token: string,
+): Promise<void> {
+  const res = await request.get(`${API_BASE}/api/cash-sessions/current`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status() === 200) {
+    return;
+  }
+  const open = await request.post(`${API_BASE}/api/cash-sessions/open`, {
+    headers: authHeaders(token),
+    data: { openingCashAmount: 50_000 },
+  });
+  expect(open.ok(), await open.text()).toBeTruthy();
 }
 
 export type FiscalStampDto = {

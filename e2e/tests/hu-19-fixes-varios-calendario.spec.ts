@@ -21,16 +21,8 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await seedCategoryServiceProfessional(request, token);
-    const suffix = Date.now();
-    await apiPostJson(request, token, "/api/professionals", {
-      fullName: `E2E Cal Filter ${suffix}`,
-      phone: null,
-      email: null,
-      photoDataUrl: null,
-    });
-
-    const fullName = `E2E Cal Filter ${suffix}`;
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const fullName = seed.professionalFullName;
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     const cb = page.getByRole("combobox", { name: "Filter by professional" });
@@ -63,5 +55,53 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
       .last()
       .click();
     await expect(page.getByRole("button", { name: new RegExp(client.fullName) })).toHaveCount(0);
+  });
+
+  test("HU-25 / HU-19 al mover el cursor en la grilla, el resalte es solo 30 min (banda bajo el slot)", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/calendar");
+    const col = page.getByTestId("calendar-day-col-wed");
+    await expect(col).toBeVisible();
+    const box = await col.boundingBox();
+    expect(box).toBeTruthy();
+    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + 100);
+    const slot = col.getByTestId("calendar-hover-slot");
+    const slotBox = await slot.boundingBox();
+    expect(slotBox).toBeTruthy();
+    expect(slotBox!.height).toBeLessThan(40);
+  });
+
+  test("HU-25 / HU-19 hover en tarjeta de turno puede agrandar el bloque (texto largo)", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const longName = `E2E Longname ${"x".repeat(100)} ${Date.now()}`;
+    const client = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
+      fullName: longName,
+      phone: null,
+      email: null,
+      ruc: null,
+    });
+    const appt = await createAppointmentApi(request, token, {
+      clientId: client.id,
+      professionalId: seed.professionalId,
+      serviceId: seed.serviceId,
+      startAt: tomorrowLocalIso(10, 0),
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/calendar");
+    const card = page.getByTestId(`calendar-appt-${appt.id}`);
+    await expect(card).toBeVisible();
+    const h0 = (await card.boundingBox())!.height;
+    await card.hover();
+    const h1 = (await card.boundingBox())!.height;
+    expect(h1, "esperada expansión al hover para acomodar líneas de texto").toBeGreaterThanOrEqual(
+      h0,
+    );
   });
 });

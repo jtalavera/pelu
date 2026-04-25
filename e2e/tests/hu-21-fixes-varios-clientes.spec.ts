@@ -9,6 +9,24 @@ test.describe("HU-21 · Fixes varios clientes", () => {
     await expect(page.getByPlaceholder("Search by name, phone, or RUC…").first()).toBeVisible();
   });
 
+  test("HU-25 · / HU-21 acción al detalle: botón More… (no “View”)", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await apiPostJson(request, token, "/api/clients", {
+      fullName: `E2E MoreBtn ${Date.now()}`,
+      phone: null,
+      email: null,
+      ruc: null,
+    });
+    await loginAsDemo(page);
+    await page.goto("/app/clients");
+    await expect(
+      page.getByRole("button", { name: "More…", exact: true }).first(),
+    ).toBeVisible();
+  });
+
   test("HU-21 · 1 botón Nuevo cliente visible", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/clients");

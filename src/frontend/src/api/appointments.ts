@@ -46,10 +46,14 @@ export function listAppointments(
   from: string,
   to: string,
   professionalId?: number | null,
+  clientId?: number | null,
 ): Promise<Appointment[]> {
   const params = new URLSearchParams({ from, to });
   if (professionalId != null) {
     params.set("professionalId", String(professionalId));
+  }
+  if (clientId != null) {
+    params.set("clientId", String(clientId));
   }
   return femmeJson<Appointment[]>(`/api/appointments?${params.toString()}`);
 }

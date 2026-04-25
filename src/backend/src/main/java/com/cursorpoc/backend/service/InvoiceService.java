@@ -28,7 +28,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -42,6 +44,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class InvoiceService {
 
   private static final String OCCASIONAL_CLIENT_DISPLAY_NAME = "CONSUMIDOR FINAL";
+
+  /** Inclusive day count: (from, to) must not cover more than 31 calendar days. */
+  public static final int MAX_INVOICE_LIST_INCLUSIVE_DAYS = 31;
 
   private final InvoiceRepository invoiceRepository;
   private final CashSessionRepository cashSessionRepository;
@@ -235,6 +240,7 @@ public class InvoiceService {
   @Transactional(readOnly = true)
   public List<InvoiceListItemResponse> listInvoices(
       long tenantId, Instant fromDate, Instant toDate, Long clientId, String statusStr) {
+    Instant[] fromTo = resolveInvoiceListRange(fromDate, toDate, clientId);
     InvoiceStatus status = null;
     if (statusStr != null && !statusStr.isBlank()) {
       try {
@@ -244,10 +250,44 @@ public class InvoiceService {
       }
     }
     return invoiceRepository
-        .findByTenantWithFilters(tenantId, fromDate, toDate, clientId, status)
+        .findByTenantWithFilters(tenantId, fromTo[0], fromTo[1], clientId, status)
         .stream()
         .map(InvoiceService::toListItemDto)
         .collect(Collectors.toList());
+  }
+
+  /**
+   * With {@code clientId} set and both dates null: no date filter (all invoices for that client).
+   * With no client: default is last two local calendar days. If only one of from/to: 400. If both:
+   * for tenant-wide list, inclusive span must be ≤ 31 days; for a client filter, up to 3660
+   * inclusive days.
+   */
+  static Instant[] resolveInvoiceListRange(Instant from, Instant to, Long clientId) {
+    ZoneId zone = ZoneId.systemDefault();
+    if (from == null && to == null) {
+      if (clientId != null) {
+        return new Instant[] {null, null};
+      }
+      LocalDate today = LocalDate.now(zone);
+      Instant start = today.minusDays(1).atStartOfDay(zone).toInstant();
+      Instant end = today.atTime(LocalTime.of(23, 59, 59, 999_000_000)).atZone(zone).toInstant();
+      return new Instant[] {start, end};
+    }
+    if (from == null || to == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_RANGE_INCOMPLETE");
+    }
+    if (from.isAfter(to)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_INVALID_RANGE");
+    }
+    LocalDate dFrom = from.atZone(zone).toLocalDate();
+    LocalDate dTo = to.atZone(zone).toLocalDate();
+    long inclusiveDays = ChronoUnit.DAYS.between(dFrom, dTo) + 1;
+    int cap = clientId == null ? MAX_INVOICE_LIST_INCLUSIVE_DAYS : 3660;
+    if (inclusiveDays > cap) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH");
+    }
+    return new Instant[] {from, to};
   }
 
   @Transactional(readOnly = true)

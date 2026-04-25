@@ -9,6 +9,7 @@ import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
+import { formatGuaraniesGs } from "../lib/formatMoney";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useTour } from "../tour/useTour";
 import { dashboardSteps } from "../tour/steps/dashboard";
@@ -31,15 +32,6 @@ type DashboardResponse = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Paraguayan guaraníes: thousands separator + currency prefix (product default). */
-function fmtMoneyGs(v: string | number, numberLocale: string): string {
-  const n = Number(v);
-  if (!Number.isFinite(n)) {
-    return "Gs. —";
-  }
-  return `Gs. ${Math.round(n).toLocaleString(numberLocale)}`;
-}
 
 function fmtCount(n: number, numberLocale: string): string {
   if (!Number.isFinite(n)) return "—";
@@ -470,9 +462,9 @@ export default function DashboardPage() {
         <MetricCard
           iconBg="var(--color-rose-lt)"
           icon={<MoneyIcon c="var(--color-rose)" />}
-          value={fmtMoneyGs(data.revenueDay.collected, numberLocale)}
+          value={formatGuaraniesGs(data.revenueDay.collected)}
           label={t("femme.dashboard.metricRevenueDay")}
-          delta={`${t("femme.dashboard.invoiced")}: ${fmtMoneyGs(data.revenueDay.invoiced, numberLocale)}`}
+          delta={`${t("femme.dashboard.invoiced")}: ${formatGuaraniesGs(data.revenueDay.invoiced)}`}
         />
         <MetricCard
           iconBg="var(--color-mauve-lt)"
@@ -486,9 +478,9 @@ export default function DashboardPage() {
         <MetricCard
           iconBg="var(--color-success-lt)"
           icon={<TrendIcon c="var(--color-success)" />}
-          value={fmtMoneyGs(data.revenueWeek.collected, numberLocale)}
+          value={formatGuaraniesGs(data.revenueWeek.collected)}
           label={t("femme.dashboard.metricRevenueWeek")}
-          delta={`${t("femme.dashboard.invoiced")}: ${fmtMoneyGs(data.revenueWeek.invoiced, numberLocale)}`}
+          delta={`${t("femme.dashboard.invoiced")}: ${formatGuaraniesGs(data.revenueWeek.invoiced)}`}
         />
         <MetricCard
           iconBg="var(--color-stone-md)"

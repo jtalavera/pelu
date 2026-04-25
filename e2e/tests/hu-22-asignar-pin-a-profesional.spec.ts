@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-22 · Asignar PIN a profesional", () => {
@@ -8,6 +9,14 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
     await expect(dlg.locator("#prof-pin")).toBeVisible();
+  });
+
+  test("HU-25 / HU-22 campo PIN usa type password (enmascara dígitos)", async ({ page }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/professionals");
+    await page.getByRole("button", { name: "+ New professional" }).click();
+    const dlg = page.getByRole("dialog");
+    await expect(dlg.locator("#prof-pin")).toHaveAttribute("type", "password");
   });
 
   test("HU-22 · 2 PIN no numérico es rechazado en frontend", async ({ page }) => {
@@ -126,12 +135,47 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
 
     // Edit and clear PIN — re-open modal
     const row = page.locator("tr").filter({ hasText: name });
-    await row.getByRole("button", { name: "Schedule & photo" }).click();
+    await row.getByRole("button", { name: "More…", exact: true }).click();
     dlg = page.getByRole("dialog");
-    await expect(dlg.getByText(/PIN already configured/i)).toBeVisible();
-    // Leave PIN field empty and save
+    await expect(dlg.locator("#prof-pin")).toHaveAttribute("type", "password");
+    // Leave PIN field empty and save (mantiene PIN existente: pin no reenviado)
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     // Should advance to schedule tab without error
     await expect(dlg.getByRole("button", { name: "Save schedule" })).toBeVisible();
+  });
+
+  test("HU-25 / HU-22 email duplicado en el tenant muestra mensaje explícito", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const email = `e2e-dup-${Date.now()}@test.local`;
+    const n1 = `E2E Eml A ${Date.now()}`;
+    const n2 = `E2E Eml B ${Date.now()}`;
+    await apiPostJson(request, token, "/api/professionals", {
+      fullName: n1,
+      phone: null,
+      email,
+      photoDataUrl: null,
+    });
+    await apiPostJson(request, token, "/api/professionals", {
+      fullName: n2,
+      phone: null,
+      email: null,
+      photoDataUrl: null,
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/professionals");
+    const row = page.locator("tr").filter({ hasText: n2 });
+    await row.getByRole("button", { name: "More…", exact: true }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("Email").fill(email);
+    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await expect(
+      dlg.getByText("Another professional in your business already uses this email address.", {
+        exact: true,
+      }),
+    ).toBeVisible();
   });
 });

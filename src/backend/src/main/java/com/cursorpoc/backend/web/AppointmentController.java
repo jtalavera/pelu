@@ -39,7 +39,8 @@ public class AppointmentController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @RequestParam String from,
       @RequestParam String to,
-      @RequestParam(required = false) Long professionalId) {
+      @RequestParam(required = false) Long professionalId,
+      @RequestParam(required = false) Long clientId) {
     requirePrincipal(principal);
     Instant fromInstant = parseInstantParam(from, "from");
     Instant toInstant = parseInstantParam(to, "to");
@@ -48,7 +49,7 @@ public class AppointmentController {
       effectiveProfessionalId = principal.getProfessionalId();
     }
     return appointmentService.list(
-        principal.getTenantId(), fromInstant, toInstant, effectiveProfessionalId);
+        principal.getTenantId(), fromInstant, toInstant, effectiveProfessionalId, clientId);
   }
 
   @GetMapping("/{id}")
