@@ -1,12 +1,15 @@
 package com.cursorpoc.backend.bootstrap;
 
+import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
+import com.cursorpoc.backend.domain.FeatureFlag;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import java.time.LocalDate;
@@ -30,43 +33,72 @@ public class FemmeDataInitializer {
       AppUserRepository appUserRepository,
       BusinessProfileRepository businessProfileRepository,
       FiscalStampRepository fiscalStampRepository,
+      FeatureFlagRepository featureFlagRepository,
+      FemmeSystemAdminProperties systemAdminProperties,
       PasswordEncoder passwordEncoder) {
     return args -> {
-      if (appUserRepository.count() > 0) {
-        return;
+      if (featureFlagRepository.findByFlagKey("GUIDED_TOUR").isEmpty()) {
+        FeatureFlag guidedTour = new FeatureFlag();
+        guidedTour.setFlagKey("GUIDED_TOUR");
+        guidedTour.setEnabled(true);
+        guidedTour.setDescription("Show guided tour tooltips on every screen");
+        featureFlagRepository.save(guidedTour);
+        log.info("Seeded feature flag GUIDED_TOUR (enabled=true)");
       }
-      Tenant tenant = new Tenant();
-      tenant.setName("Demo salon");
-      tenantRepository.save(tenant);
+      if (appUserRepository.count() == 0) {
+        Tenant tenant = new Tenant();
+        tenant.setName("Demo salon");
+        tenantRepository.save(tenant);
 
-      AppUser user = new AppUser();
-      user.setTenant(tenant);
-      user.setEmail("admin@demo.com");
-      user.setPasswordHash(passwordEncoder.encode("Demo123!"));
-      user.setRole(UserRole.ADMIN);
-      appUserRepository.save(user);
+        AppUser user = new AppUser();
+        user.setTenant(tenant);
+        user.setEmail("admin@demo.com");
+        user.setPasswordHash(passwordEncoder.encode("Demo123!"));
+        user.setRole(UserRole.ADMIN);
+        appUserRepository.save(user);
 
-      BusinessProfile profile = new BusinessProfile();
-      profile.setTenant(tenant);
-      profile.setBusinessName("Demo salon");
-      businessProfileRepository.save(profile);
+        BusinessProfile profile = new BusinessProfile();
+        profile.setTenant(tenant);
+        profile.setBusinessName("Demo salon");
+        businessProfileRepository.save(profile);
 
-      LocalDate today = LocalDate.now();
-      FiscalStamp stamp = new FiscalStamp();
-      stamp.setTenant(tenant);
-      stamp.setStampNumber("12345678");
-      stamp.setValidFrom(today.minusYears(1));
-      stamp.setValidUntil(today.plusYears(2));
-      stamp.setRangeFrom(1);
-      stamp.setRangeTo(9_999_999);
-      stamp.setNextEmissionNumber(1);
-      stamp.setActive(true);
-      stamp.setLockedAfterInvoice(false);
-      fiscalStampRepository.save(stamp);
+        LocalDate today = LocalDate.now();
+        FiscalStamp stamp = new FiscalStamp();
+        stamp.setTenant(tenant);
+        stamp.setStampNumber("12345678");
+        stamp.setValidFrom(today.minusYears(1));
+        stamp.setValidUntil(today.plusYears(2));
+        stamp.setRangeFrom(1);
+        stamp.setRangeTo(9_999_999);
+        stamp.setNextEmissionNumber(1);
+        stamp.setActive(true);
+        stamp.setLockedAfterInvoice(false);
+        fiscalStampRepository.save(stamp);
 
-      log.info(
-          "Seeded demo tenant id={} and admin user admin@demo.com (password Demo123!)",
-          tenant.getId());
+        log.info(
+            "Seeded demo tenant id={} and admin user admin@demo.com (password Demo123!)",
+            tenant.getId());
+      }
+
+      var systemEmail = systemAdminProperties.getEmail().trim().toLowerCase();
+      if (appUserRepository.findByEmail(systemEmail).isEmpty()) {
+        tenantRepository
+            .findById(systemAdminProperties.getTenantId())
+            .ifPresentOrElse(
+                t -> {
+                  AppUser root = new AppUser();
+                  root.setTenant(t);
+                  root.setEmail(systemEmail);
+                  root.setPasswordHash(passwordEncoder.encode(systemAdminProperties.getPassword()));
+                  root.setRole(UserRole.SYSTEM_ADMIN);
+                  appUserRepository.save(root);
+                  log.info("Seeded system admin user {} on tenant id={}", systemEmail, t.getId());
+                },
+                () ->
+                    log.warn(
+                        "Skipped system admin seed: no tenant with id={}",
+                        systemAdminProperties.getTenantId()));
+      }
     };
   }
 }

@@ -9,6 +9,8 @@ import {
   Spinner,
   Textarea,
 } from "@design-system";
+import { useTour } from "../tour/useTour";
+import { calendarSteps } from "../tour/steps/calendar";
 import {
   Appointment,
   AppointmentCreateRequest,
@@ -30,6 +32,7 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
@@ -137,6 +140,14 @@ export default function CalendarPage() {
   const locale = getDateLocale(i18n);
   const { me } = useMe();
   const isProfessional = me?.role === "PROFESSIONAL";
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  const tourRole =
+    !guidedTourEnabled
+      ? undefined
+      : me?.role === "PROFESSIONAL"
+        ? "PROFESSIONAL"
+        : "ADMIN";
+  useTour("calendar", calendarSteps, tourRole, guidedTourEnabled);
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
@@ -402,6 +413,7 @@ export default function CalendarPage() {
     <div style={{ display: "flex", flexDirection: "column" }}>
       {/* ── Page topbar ── */}
       <div
+        data-tour="calendar-header"
         style={{
           display: "flex",
           alignItems: "center",
@@ -424,22 +436,25 @@ export default function CalendarPage() {
 
         {/* Professional filter (hidden for professional role — they only see own agenda) */}
         {!isProfessional && (
-          <SearchableSelect<number>
-            id="prof-filter"
-            className="min-w-0 shrink"
-            labelSrOnly
-            label={t("femme.calendar.filterByProfessional")}
-            value={selectedProfessionalId ?? ""}
-            onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
-            emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
-            options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-            filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-            noResultsText={t("femme.calendar.searchable.noResults")}
-          />
+          <div data-tour="calendar-prof-filter" style={{ minWidth: 0 }}>
+            <SearchableSelect<number>
+              id="prof-filter"
+              className="min-w-0 shrink"
+              labelSrOnly
+              label={t("femme.calendar.filterByProfessional")}
+              value={selectedProfessionalId ?? ""}
+              onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
+              emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
+              options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+              noResultsText={t("femme.calendar.searchable.noResults")}
+            />
+          </div>
         )}
 
         {/* Today */}
         <button
+          data-tour="calendar-today"
           type="button"
           onClick={goToday}
           style={{
@@ -456,6 +471,7 @@ export default function CalendarPage() {
         </button>
 
         {/* Week navigation */}
+        <div data-tour="calendar-week-nav" style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <button type="button" onClick={goPrev} aria-label={t("femme.calendar.prev")} style={navBtnStyle}>
           ‹
         </button>
@@ -474,9 +490,11 @@ export default function CalendarPage() {
         <button type="button" onClick={goNext} aria-label={t("femme.calendar.next")} style={navBtnStyle}>
           ›
         </button>
+        </div>
 
         {/* New appointment — pushed right */}
         <button
+          data-tour="calendar-new-appointment"
           type="button"
           onClick={() => openNewForm()}
           style={{
@@ -516,6 +534,7 @@ export default function CalendarPage() {
       {/* ── Calendar grid ── */}
       {!loading && (
         <div
+          data-tour="calendar-grid"
           style={{
             background: "var(--color-white)",
             borderRadius: "var(--radius-xl)",

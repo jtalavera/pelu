@@ -15,6 +15,7 @@ import BillingPage from "./pages/BillingPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
+import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 
 export function AppRoutes() {
   return (
@@ -41,6 +42,7 @@ export function AppRoutes() {
           <Route index element={<Navigate to="business" replace />} />
           <Route path="business" element={<BusinessSettingsPage />} />
           <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
+          <Route path="feature-flags" element={<FeatureFlagsPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
