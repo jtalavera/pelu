@@ -44,7 +44,7 @@ export function Modal({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px] dark:bg-black/60"
@@ -57,11 +57,12 @@ export function Modal({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descId : undefined}
         className={cn(
-          "relative z-10 w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:shadow-2xl",
+          "relative z-10 flex w-full max-w-lg flex-col rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:shadow-2xl",
+          "max-h-[calc(100dvh-2rem)]",
           className,
         )}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-4 dark:border-slate-700">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-6 py-4 dark:border-slate-700">
           <div className="min-w-0 space-y-1">
             {title ? (
               <h2
@@ -93,9 +94,9 @@ export function Modal({
             </Button>
           ) : null}
         </div>
-        <div className="px-6 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>
         {footer ? (
-          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-6 py-4 dark:border-slate-700 sm:flex-row sm:justify-end sm:gap-2">
+          <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-slate-100 px-6 py-4 dark:border-slate-700 sm:flex-row sm:justify-end sm:gap-2">
             {footer}
           </div>
         ) : null}

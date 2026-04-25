@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { ensureActiveFiscalStampForInvoices, loginAsDemoApi } from "../fixtures/api";
+import {
+  ensureActiveFiscalStampForInvoices,
+  loginAsDemoApi,
+  seedCategoryServiceProfessional,
+} from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
+import { pickServiceLine } from "../fixtures/invoice";
 
 test.describe("HU-15 · Múltiples métodos de pago", () => {
   test.beforeEach(async ({ request }) => {
@@ -17,12 +22,13 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
   });
 
   test("HU-15 · 1 y 2 dos métodos cuya suma iguala el total", async ({ page, request }) => {
-    await loginAsDemoApi(request);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Client display name").fill("Split pay");
-    await page.locator("#line-desc-0").fill("Service");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
     await page.getByRole("button", { name: "Add payment method" }).click();
     await page.locator("#pay-method-0").selectOption("CASH");
@@ -34,12 +40,13 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
   });
 
   test("HU-15 · 2 suma distinta del total muestra error de API", async ({ page, request }) => {
-    await loginAsDemoApi(request);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Client display name").fill("Bad sum");
-    await page.locator("#line-desc-0").fill("Service");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
     await page.locator("#pay-amount-0").fill("5000");
     await page.getByRole("button", { name: "Issue invoice" }).click();
@@ -49,15 +56,17 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
   });
 
   test("HU-15 · 3 saldo pendiente visible cuando falta asignar", async ({ page, request }) => {
-    await loginAsDemoApi(request);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Client display name").fill("Remain");
-    await page.locator("#line-desc-0").fill("Service");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("20000");
     await page.locator("#pay-amount-0").fill("5000");
     await expect(page.getByText("Remaining", { exact: true })).toBeVisible();
-    await expect(page.locator("span").getByText("15,000", { exact: true })).toBeVisible();
+    // Amount formatted in es-PY locale: thousands separator "." and decimals ","
+    await expect(page.locator("span").getByText("15.000,00", { exact: true })).toBeVisible();
   });
 });

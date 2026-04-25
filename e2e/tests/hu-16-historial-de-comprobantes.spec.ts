@@ -1,8 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { apiPutJson, ensureActiveFiscalStampForInvoices, loginAsDemoApi, seedClient } from "../fixtures/api";
+import {
+  apiPutJson,
+  ensureActiveFiscalStampForInvoices,
+  loginAsDemoApi,
+  seedCategoryServiceProfessional,
+  seedClient,
+} from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe("HU-16 · Historial de comprobantes", () => {
   test.beforeEach(async ({ request }) => {
@@ -28,6 +34,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
+    const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E Hist ${Date.now()}`);
 
     await loginAsDemo(page);
@@ -35,7 +42,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
-    await page.locator("#line-desc-0").fill("Hist line");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
     await page.locator("#pay-amount-0").fill("5000");
     await clickIssueInvoiceAndExpectSuccess(page);

@@ -6,8 +6,10 @@ import {
   isoDateLocal,
   listFiscalStamps,
   loginAsDemoApi,
+  seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { pickServiceLine } from "../fixtures/invoice";
 
 test.describe.configure({ mode: "serial" });
 
@@ -182,6 +184,8 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     });
     await apiPostJson(request, token, `/api/fiscal-stamps/${expired.id}/activate`, {});
 
+    const seed = await seedCategoryServiceProfessional(request, token);
+
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "Cash Register" }).click();
@@ -193,10 +197,9 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     }
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Client display name").fill("Walk-in");
-    await page.getByLabel("Description").first().fill("Service");
-    await page.getByLabel("Qty").first().fill("1");
-    await page.getByLabel("Unit price").first().fill("10000");
-    await page.getByRole("textbox", { name: "Amount" }).fill("10000");
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("10000");
+    await page.locator("#pay-amount-0").fill("10000");
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText("The active fiscal stamp is not valid for today's date.", { exact: true }),

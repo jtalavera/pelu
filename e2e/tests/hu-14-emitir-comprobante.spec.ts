@@ -13,7 +13,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe("HU-14 · Emitir comprobante", () => {
   test.beforeEach(async ({ request }) => {
@@ -38,6 +38,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
+    const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E Inv ${Date.now()}`);
 
     await loginAsDemo(page);
@@ -45,10 +46,10 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 6));
     await page.getByRole("button", { name: client.fullName }).click();
-    await page.locator("#line-desc-0").fill("Item A");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
     await page.getByRole("button", { name: "Add item" }).click();
-    await page.locator("#line-desc-1").fill("Item B");
+    await pickServiceLine(page, seed.serviceFullName, 1);
     await page.locator("#line-price-1").fill("3000");
     await page.locator("#pay-amount-0").fill("8000");
     await clickIssueInvoiceAndExpectSuccess(page);
@@ -64,13 +65,14 @@ test.describe("HU-14 · Emitir comprobante", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client display name").fill("Occ E2E");
-    await page.locator("#line-desc-0").fill("Walk-in");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("15000");
     await page.locator("#pay-amount-0").fill("15000");
     await clickIssueInvoiceAndExpectSuccess(page);
@@ -86,13 +88,14 @@ test.describe("HU-14 · Emitir comprobante", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Discount type").selectOption("PERCENT");
     await page.getByLabel(/Discount value/i).fill("10");
     await page.getByLabel("Client display name").fill("Disc E2E");
-    await page.locator("#line-desc-0").fill("Hair");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
     await page.locator("#pay-amount-0").fill("9000");
     await clickIssueInvoiceAndExpectSuccess(page);
@@ -107,11 +110,13 @@ test.describe("HU-14 · Emitir comprobante", () => {
       });
     }
 
+    const seed = await seedCategoryServiceProfessional(request, token);
+
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Client display name").fill("No stamp");
-    await page.locator("#line-desc-0").fill("X");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("1000");
     await page.locator("#pay-amount-0").fill("1000");
     await page.getByRole("button", { name: "Issue invoice" }).click();
@@ -143,7 +148,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     const suffix = Date.now();
     const fullName = `E2E Row ${suffix}`;
     const phone = "0981999888";
-    const ruc = "80000005-6";
+    const ruc = `8${String(suffix).slice(-5)}-6`;
     await apiPostJson(request, token, "/api/clients", {
       fullName,
       phone,
@@ -180,7 +185,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
       fullName: origName,
       phone: null,
       email: null,
-      ruc: "80000005-6",
+      ruc: null,
     });
 
     await loginAsDemo(page);

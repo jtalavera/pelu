@@ -1,8 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { apiPutJson, ensureActiveFiscalStampForInvoices, loginAsDemoApi, seedClient } from "../fixtures/api";
+import {
+  apiPutJson,
+  ensureActiveFiscalStampForInvoices,
+  loginAsDemoApi,
+  seedCategoryServiceProfessional,
+  seedClient,
+} from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe("HU-17 · Anular comprobante", () => {
   test.beforeEach(async ({ request }) => {
@@ -27,6 +33,7 @@ test.describe("HU-17 · Anular comprobante", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
+    const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E Void ${Date.now()}`);
 
     await loginAsDemo(page);
@@ -34,7 +41,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
-    await page.locator("#line-desc-0").fill("Void me");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("8000");
     await page.locator("#pay-amount-0").fill("8000");
     await clickIssueInvoiceAndExpectSuccess(page);
@@ -68,6 +75,7 @@ test.describe("HU-17 · Anular comprobante", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
+    const seed = await seedCategoryServiceProfessional(request, token);
     const clientName = `E2E Vo2 ${Date.now()}`;
     const client = await seedClient(request, token, clientName);
 
@@ -76,7 +84,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill("E2E Vo2");
     await page.getByRole("button", { name: clientName }).click();
-    await page.locator("#line-desc-0").fill("X");
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("3000");
     await page.locator("#pay-amount-0").fill("3000");
     await clickIssueInvoiceAndExpectSuccess(page);
