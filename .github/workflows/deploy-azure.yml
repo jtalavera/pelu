@@ -94,11 +94,19 @@ jobs:
             --username "$GHCR_USERNAME" \
             --password "$GHCR_READ_PACKAGES_PAT"
 
-      - name: Update Container App image
+      - name: Configure HTTP health probes (then deploy image)
         run: |
-          az containerapp update \
-            --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
-            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP_NAME }}" \
+          set -euo pipefail
+          APP="${{ secrets.AZURE_CONTAINER_APP_NAME }}"
+          RG="${{ secrets.AZURE_RESOURCE_GROUP_NAME }}"
+          # Default TCP startup probes are too aggressive for Spring Boot + Flyway on small SKUs.
+          # Apply HTTP probes to /health first, then deploy the new image so the revision
+          # starts with the relaxed startup budget (avoids combining --yaml and --image).
+          az containerapp show -n "$APP" -g "$RG" -o yaml > /tmp/ca-workload.yaml
+          python3 "${GITHUB_WORKSPACE}/scripts/azure/patch-container-app-http-probes.py" \
+            --strip-for-update /tmp/ca-workload.yaml
+          az containerapp update -n "$APP" -g "$RG" --yaml /tmp/ca-workload.yaml
+          az containerapp update -n "$APP" -g "$RG" \
             --image "${{ env.IMAGE_NAME_LOWER }}:${{ env.IMAGE_TAG }}"
 
       - name: Wait for Container App revision healthy
