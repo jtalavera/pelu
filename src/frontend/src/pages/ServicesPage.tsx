@@ -1,5 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { useTour } from "../tour/useTour";
+import { servicesSteps } from "../tour/steps/services";
 import {
   Alert,
   Button,
@@ -59,6 +62,8 @@ function normalizeMoneyInput(raw: string) {
 
 export default function ServicesPage() {
   const { t } = useTranslation();
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("services", servicesSteps, undefined, guidedTourEnabled);
   const [tab, setTab] = useState<"services" | "categories">("services");
 
   const [loading, setLoading] = useState(true);
@@ -566,6 +571,7 @@ export default function ServicesPage() {
     <div>
       {/* ── Page header ── */}
       <div
+        data-tour="services-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -586,7 +592,7 @@ export default function ServicesPage() {
             {t("femme.services.services.addNew")}
           </button>
         ) : (
-          <button type="button" style={primaryBtn} onClick={openNewCategory}>
+          <button data-tour="services-add-category" type="button" style={primaryBtn} onClick={openNewCategory}>
             {t("femme.services.categories.addNew")}
           </button>
         )}
@@ -615,7 +621,7 @@ export default function ServicesPage() {
 
       {/* ── Services tab ── */}
       {tab === "services" && (
-        <div>
+        <div data-tour="services-list">
           {/* Toolbar */}
           <div
             style={{
@@ -627,6 +633,7 @@ export default function ServicesPage() {
             }}
           >
             <SearchInput
+              data-tour="services-search"
               id="services-list-filter"
               value={serviceSearchQuery}
               onChange={setServiceSearchQuery}
@@ -634,6 +641,7 @@ export default function ServicesPage() {
               resultCount={servicesTextFiltered.length}
               totalCount={displayedServices.length}
             />
+            <div data-tour="services-filters" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {filterOptions.map((o) => (
               <button
                 key={o.value}
@@ -671,6 +679,7 @@ export default function ServicesPage() {
                   {o.label}
                 </button>
               ))}
+            </div>
             </div>
           </div>
 

@@ -5,7 +5,11 @@ import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { useSessionRefresh } from "../auth/useSessionRefresh";
 import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
+import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+import { TourButton } from "../tour/TourButton";
+import { useTourContext } from "../tour/TourContext";
+import { TourJoyride } from "../tour/TourJoyride";
 
 function getInitials(email: string): string {
   const parts = email.split("@")[0].split(/[._-]/);
@@ -37,13 +41,16 @@ function SideNavItem({
   end,
   label,
   icon,
+  tourId,
 }: {
   to: string;
   end?: boolean;
   label: string;
   icon: React.ReactNode;
+  tourId?: string;
 }) {
   return (
+    <div data-tour={tourId}>
     <NavLink
       to={to}
       end={end}
@@ -72,6 +79,7 @@ function SideNavItem({
       {icon}
       {label}
     </NavLink>
+    </div>
   );
 }
 
@@ -169,13 +177,29 @@ function MenuItem({ onClick, icon, label, color, hoverBg }: MenuItemProps) {
 }
 
 export function AppShell() {
+  return (
+    <FeatureFlagProvider>
+      <AppShellInner />
+    </FeatureFlagProvider>
+  );
+}
+
+function AppShellInner() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { me } = useMe();
   const { theme, toggle } = useThemeContext();
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  const { clearTour } = useTourContext();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   useSessionRefresh(true);
+
+  useEffect(() => {
+    return () => {
+      clearTour();
+    };
+  }, [clearTour]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -207,7 +231,6 @@ export function AppShell() {
   const initials = email ? getInitials(email) : "?";
   const displayName = email.split("@")[0];
   const isProfessional = me?.role === "PROFESSIONAL";
-
   return (
     <div>
       {/* ── TOPBAR ── */}
@@ -242,7 +265,7 @@ export function AppShell() {
         </span>
 
         {/* Search */}
-        <div style={{ flex: 1, maxWidth: 340, position: "relative" }}>
+        <div data-tour="topbar-search" style={{ flex: 1, maxWidth: 340, position: "relative" }}>
           <span
             style={{
               position: "absolute",
@@ -283,6 +306,7 @@ export function AppShell() {
         {/* Right zone */}
         <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>
           <button
+            data-tour="topbar-theme"
             type="button"
             onClick={toggle}
             title={
@@ -320,7 +344,7 @@ export function AppShell() {
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
           {/* Language switcher */}
-          <div role="group" aria-label={t("language.label")} style={{ display: "flex", gap: 4 }}>
+          <div data-tour="topbar-lang" role="group" aria-label={t("language.label")} style={{ display: "flex", gap: 4 }}>
             {(["en", "es"] as SupportedLanguage[]).map((lang) => (
               <button
                 key={lang}
@@ -350,6 +374,7 @@ export function AppShell() {
 
           {/* Notifications */}
           <button
+            data-tour="topbar-notifications"
             type="button"
             aria-label={t("femme.topbar.notifications")}
             style={{
@@ -370,7 +395,7 @@ export function AppShell() {
           </button>
 
           {/* User profile */}
-          <div ref={userMenuRef} style={{ position: "relative" }}>
+          <div data-tour="topbar-user-menu" ref={userMenuRef} style={{ position: "relative" }}>
             {/* ── Trigger ── */}
             <div
               role="button"
@@ -557,6 +582,7 @@ export function AppShell() {
 
       {/* ── SIDEBAR ── */}
       <aside
+        data-tour="nav-sidebar"
         style={{
           position: "fixed",
           top: 48,
@@ -575,23 +601,24 @@ export function AppShell() {
       >
         <SectionLabel label={t("femme.nav.sectionMain")} />
         {!isProfessional && (
-          <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} />
+          <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} tourId="nav-dashboard" />
         )}
-        <SideNavItem to="/app/calendar" label={t("femme.nav.calendar")} icon={<CalendarIcon />} />
+        <SideNavItem to="/app/calendar" label={t("femme.nav.calendar")} icon={<CalendarIcon />} tourId="nav-calendar" />
 
         {!isProfessional && (
           <>
             <SectionLabel label={t("femme.nav.sectionManagement")} />
-            <SideNavItem to="/app/services" label={t("femme.nav.services")} icon={<ServicesIcon />} />
+            <SideNavItem to="/app/services" label={t("femme.nav.services")} icon={<ServicesIcon />} tourId="nav-services" />
             <SideNavItem
               to="/app/professionals"
               label={t("femme.nav.professionals")}
               icon={<ProfessionalsIcon />}
+              tourId="nav-professionals"
             />
-            <SideNavItem to="/app/clients" label={t("femme.nav.clients")} icon={<ClientsIcon />} />
+            <SideNavItem to="/app/clients" label={t("femme.nav.clients")} icon={<ClientsIcon />} tourId="nav-clients" />
 
             <SectionLabel label={t("femme.nav.sectionFinance")} />
-            <SideNavItem to="/app/billing" label={t("femme.nav.billing")} icon={<BillingIcon />} />
+            <SideNavItem to="/app/billing" label={t("femme.nav.billing")} icon={<BillingIcon />} tourId="nav-billing" />
           </>
         )}
 
@@ -603,6 +630,7 @@ export function AppShell() {
             to="/app/settings"
             label={t("femme.nav.businessSettings")}
             icon={<SettingsIcon />}
+            tourId="nav-settings"
           />
         )}
 
@@ -666,6 +694,9 @@ export function AppShell() {
       >
         <Outlet />
       </main>
+
+      <TourJoyride enabled={guidedTourEnabled} />
+      <TourButton enabled={guidedTourEnabled} />
     </div>
   );
 }

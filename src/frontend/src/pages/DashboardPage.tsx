@@ -4,12 +4,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { filterByListQuery } from "../util/matchesListQuery";
+import { useTour } from "../tour/useTour";
+import { dashboardSteps } from "../tour/steps/dashboard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -197,6 +200,14 @@ export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const { me } = useMe();
   const navigate = useNavigate();
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  const tourRole =
+    !guidedTourEnabled
+      ? undefined
+      : me?.role === "PROFESSIONAL"
+        ? "PROFESSIONAL"
+        : "ADMIN";
+  useTour("dashboard", dashboardSteps, tourRole, guidedTourEnabled);
 
   const [data, setData]               = useState<DashboardResponse | null>(null);
   const [loading, setLoading]         = useState(true);
@@ -365,7 +376,7 @@ export default function DashboardPage() {
           marginBottom: 20,
         }}
       >
-        <div>
+        <div data-tour="dashboard-greeting">
           <div style={{ fontSize: 16, fontWeight: 500, color: "var(--color-ink)" }}>
             {t(`femme.dashboard.${greetingKey}`)}
             {userName ? `, ${userName}` : ""}
@@ -376,6 +387,7 @@ export default function DashboardPage() {
         </div>
 
         <button
+          data-tour="dashboard-new-appointment"
           type="button"
           onClick={() => navigate("/app/calendar")}
           style={{
@@ -444,6 +456,7 @@ export default function DashboardPage() {
 
       {/* ── 3. METRICS ── */}
       <div
+        data-tour="dashboard-metrics"
         className="mb-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
       >
         <MetricCard
@@ -480,7 +493,7 @@ export default function DashboardPage() {
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
         {/* LEFT: Today's appointments */}
-        <div style={{ ...cardStyle, minWidth: 0 }}>
+        <div data-tour="dashboard-appt-list" style={{ ...cardStyle, minWidth: 0 }}>
           <div
             style={{
               display: "flex",
@@ -493,6 +506,7 @@ export default function DashboardPage() {
               {t("femme.dashboard.todayAppointments")}
             </span>
             <Link
+              data-tour="dashboard-view-agenda"
               to="/app/calendar"
               style={{ fontSize: 11, color: "var(--color-rose)", textDecoration: "none" }}
             >
@@ -500,7 +514,7 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div style={{ marginBottom: 10 }}>
+          <div data-tour="dashboard-appt-filter" style={{ marginBottom: 10 }}>
             <ListSearchField
               id="dashboard-appt-filter"
               value={apptListQuery}
@@ -596,7 +610,7 @@ export default function DashboardPage() {
         {/* RIGHT column */}
         <div className="flex min-w-0 flex-col gap-4">
           {/* Mini calendar */}
-          <div style={cardStyle}>
+          <div data-tour="dashboard-mini-cal" style={cardStyle}>
             <div
               style={{
                 display: "flex",
@@ -706,7 +720,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Occupancy */}
-          <div style={cardStyle}>
+          <div data-tour="dashboard-occupancy" style={cardStyle}>
             <div
               style={{
                 fontSize: 13,

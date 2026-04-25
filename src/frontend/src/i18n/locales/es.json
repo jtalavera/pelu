@@ -77,6 +77,7 @@
       "billing": "Facturación",
       "settings": "Configuración",
       "businessSettings": "Configuración",
+      "featureFlags": "Funcionalidades",
       "logout": "Cerrar sesión",
       "adminRole": "Administrador",
       "professionalRole": "Profesional",
@@ -165,7 +166,23 @@
       "pageTitle": "Configuración",
       "pageSubtitle": "Datos del negocio, timbrado fiscal y preferencias",
       "tabBusiness": "Negocio",
-      "tabFiscalStamp": "Timbrado"
+      "tabFiscalStamp": "Timbrado",
+      "tabFeatureFlags": "Funcionalidades"
+    },
+    "featureFlags": {
+      "title": "Funcionalidades (feature flags)",
+      "subtitle": "Activá o desactivá funciones para todos por defecto, o sobreescribilas solo para esta organización. Los cambios se aplican cuando los usuarios cargan la app.",
+      "loading": "Cargando funcionalidades…",
+      "forbidden": "Necesitás permisos de administrador para gestionar las funcionalidades.",
+      "errorTitle": "No se pudo actualizar",
+      "globalDefault": "Predeterminado global",
+      "thisTenant": "Esta organización",
+      "stateOn": "Sí",
+      "stateOff": "No",
+      "usingGlobal": "Usa el predeterminado global",
+      "resetToGlobal": "Volver al global",
+      "globalSwitchAria": "Predeterminado global para {{key}}",
+      "tenantSwitchAria": "Esta organización para {{key}}"
     },
     "businessSettings": {
       "title": "Configuración del negocio",
@@ -518,7 +535,10 @@
     "apiErrors": {
       "GENERIC": "Ocurrió un error inesperado. Intentá de nuevo.",
       "UNAUTHORIZED": "Debés iniciar sesión para realizar esta acción.",
+      "FORBIDDEN": "No tenés permiso para realizar esta acción.",
       "TENANT_NOT_FOUND": "Organización no encontrada.",
+      "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
+      "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Profesional no encontrada.",
       "PROFESSIONAL_EMAIL_DUPLICATE": "Otra profesional de tu negocio ya usa este correo.",
       "PROFESSIONAL_NAME_REQUIRED": "Ingresá el nombre completo.",
@@ -843,6 +863,105 @@
       },
       "loading": "Cargando turnos…",
       "error": "No se pudieron cargar los turnos."
+    },
+    "tour": {
+      "helpButton": {
+        "label": "Tour",
+        "aria": "Iniciar recorrido guiado"
+      },
+      "controls": {
+        "back": "Atrás",
+        "close": "Cerrar",
+        "last": "Finalizar",
+        "next": "Siguiente",
+        "skip": "Saltar"
+      },
+      "nav": {
+        "sidebar": { "title": "Menú de navegación", "content": "Este panel te permite moverte entre todas las secciones de la app." },
+        "dashboard": { "title": "Panel de inicio", "content": "Tu punto de partida: ves los turnos de hoy, los ingresos y la actividad reciente de un vistazo." },
+        "calendar": { "title": "Calendario", "content": "Gestioná los turnos por día o semana. Reservá, reprogramá y cancelá desde aquí." },
+        "services": { "title": "Servicios", "content": "Administrá el catálogo de servicios y precios que ofrece tu salón." },
+        "professionals": { "title": "Profesionales", "content": "Agregá y gestioná los estilistas o especialistas que trabajan en tu salón." },
+        "clients": { "title": "Clientes", "content": "Tu base de datos completa de clientes: buscá, filtrá y abrí cualquier perfil." },
+        "billing": { "title": "Facturación", "content": "Abrí cajas, emitís facturas y revisás el historial de pagos." },
+        "settings": { "title": "Configuración", "content": "Configurá el perfil del negocio, el logo, el RUC y los timbrados fiscales." }
+      },
+      "topbar": {
+        "search": { "title": "Búsqueda global", "content": "Encontrá rápidamente un cliente, turno o registro desde cualquier pantalla." },
+        "theme": { "title": "Tema", "content": "Cambiá entre modo claro y oscuro según tu preferencia." },
+        "lang": { "title": "Idioma", "content": "Cambiá el idioma de la app entre español e inglés." },
+        "notifications": { "title": "Notificaciones", "content": "Consultá las alertas y recordatorios recientes del salón." },
+        "userMenu": { "title": "Tu cuenta", "content": "Ves tu perfil, cambiás tu contraseña o cerrás sesión." }
+      },
+      "login": {
+        "form": { "title": "¡Bienvenido/a!", "content": "Esta es la pantalla de inicio de sesión. Ingresá tus datos aquí para acceder al sistema." },
+        "email": { "title": "Campo de email", "content": "Escribí la dirección de correo electrónico asociada a tu cuenta." },
+        "password": { "title": "Campo de contraseña", "content": "Ingresá tu contraseña. Las contraseñas distinguen mayúsculas y minúsculas." },
+        "submit": { "title": "Botón de ingreso", "content": "Hacé clic aquí (o presioná Enter) para iniciar sesión después de ingresar tus datos." },
+        "forgotPassword": { "title": "¿Olvidaste tu contraseña?", "content": "Hacé clic aquí si no recordás tu contraseña — recibirás instrucciones para restablecerla." }
+      },
+      "dashboard": {
+        "greeting": { "title": "Saludo de bienvenida", "content": "Esta sección muestra tu nombre y la fecha de hoy de un vistazo." },
+        "newAppointment": { "title": "Nuevo turno", "content": "Tocá este botón para reservar un nuevo turno para un cliente ahora mismo." },
+        "metrics": { "title": "Métricas del día", "content": "Cifras clave de hoy: turnos programados, clientes atendidos e ingresos cobrados." },
+        "apptList": { "title": "Turnos de hoy", "content": "La lista completa de turnos del día, ordenada por hora. Tocá cualquier fila para ver los detalles." },
+        "apptFilter": { "title": "Filtros de turnos", "content": "Filtrá los turnos de hoy por profesional o estado para encontrar exactamente lo que necesitás." },
+        "viewAgenda": { "title": "Ir al calendario", "content": "Abre la vista completa del calendario para ver y gestionar turnos en varios días." },
+        "miniCal": { "title": "Mini calendario", "content": "Un calendario mensual compacto. Hacé clic en cualquier fecha para ir a los turnos de ese día." },
+        "occupancy": { "title": "Ocupación", "content": "Muestra qué tan llena está tu agenda hoy como porcentaje del tiempo disponible." }
+      },
+      "calendar": {
+        "header": { "title": "Encabezado del calendario", "content": "Muestra el rango de la semana actual y los controles para navegar entre semanas." },
+        "profFilter": { "title": "Filtro de profesional", "content": "Filtrá el calendario para ver solo los turnos de un estilista específico." },
+        "today": { "title": "Botón de hoy", "content": "Volvé instantáneamente al día de hoy." },
+        "weekNav": { "title": "Navegación por semana", "content": "Usá las flechas para avanzar o retroceder una semana." },
+        "newAppointment": { "title": "Nuevo turno", "content": "Abre el formulario de reserva para programar un nuevo turno para cualquier cliente y profesional." },
+        "grid": { "title": "Grilla de turnos", "content": "Cada columna representa un día y cada fila un horario. Hacé clic en cualquier celda para crear o ver un turno." }
+      },
+      "services": {
+        "header": { "title": "Encabezado de servicios", "content": "Muestra el total de categorías y un botón para agregar una nueva." },
+        "search": { "title": "Búsqueda de servicios", "content": "Escribí aquí para filtrar servicios por nombre en todas las categorías al instante." },
+        "filters": { "title": "Filtros de categoría", "content": "Hacé clic en una categoría para mostrar solo los servicios de ese grupo." },
+        "addCategory": { "title": "Nueva categoría", "content": "Crea un nuevo grupo para organizar tus servicios (por ejemplo: Cabello, Uñas, Piel)." },
+        "list": { "title": "Lista de servicios", "content": "Todos los servicios con su duración, precio y categoría. Hacé clic en cualquier fila para editarla o desactivarla." }
+      },
+      "billing": {
+        "header": { "title": "Facturación", "content": "Gestioná tu sesión de caja aquí y emití comprobantes para los clientes." },
+        "session": { "title": "Pestañas de sesión", "content": "Cambiá entre la caja activa, la creación de un comprobante y el historial completo." },
+        "newInvoice": { "title": "Nuevo comprobante", "content": "Abre el formulario para cobrarle a un cliente por los servicios prestados en esta sesión." },
+        "search": { "title": "Búsqueda y filtros de comprobantes", "content": "Buscá por cliente o número de comprobante y filtrá por rango de fechas o estado." },
+        "invoiceList": { "title": "Historial de comprobantes", "content": "Todos los comprobantes emitidos. Hacé clic en 'Ver' en cualquier fila para ver el detalle o anularlo." }
+      },
+      "clients": {
+        "header": { "title": "Clientes", "content": "Tu lista completa de clientes. Usá la búsqueda y los filtros para encontrar cualquier cliente rápidamente." },
+        "search": { "title": "Barra de búsqueda y filtros", "content": "Escribí un nombre, teléfono o email en el buscador y usá las etiquetas para filtrar por categoría." },
+        "filterTabs": { "title": "Filtros rápidos", "content": "Mostrá todos los clientes, solo los activos, los que tienen RUC o los clientes nuevos registrados recientemente." },
+        "new": { "title": "Nuevo cliente", "content": "Abre un formulario para registrar un nuevo cliente con su nombre, teléfono, email y RUC." },
+        "list": { "title": "Tabla de clientes", "content": "Todos los clientes registrados con su cantidad de visitas y última visita. Hacé clic en una fila para abrir el perfil completo." }
+      },
+      "clientDetail": {
+        "header": { "title": "Encabezado del cliente", "content": "Muestra el nombre del cliente, cantidad de visitas y un botón para volver a la lista." },
+        "tabs": { "title": "Pestañas de información", "content": "Cambiá entre los datos básicos del cliente (nombre, teléfono, email, RUC) y su historial de turnos." },
+        "editInfo": { "title": "Editar datos del cliente", "content": "Actualizá la información de contacto del cliente aquí y hacé clic en Guardar para confirmar los cambios." },
+        "status": { "title": "Activar / desactivar", "content": "Desactivá un cliente para ocultarlo de las reservas, o reactivalo cuando vuelva." }
+      },
+      "professionals": {
+        "header": { "title": "Profesionales", "content": "Todos los estilistas y especialistas registrados en tu salón." },
+        "search": { "title": "Búsqueda", "content": "Filtrá profesionales por nombre para encontrar el que buscás." },
+        "new": { "title": "Agregar profesional", "content": "Abre el formulario para registrar un nuevo estilista: nombre, contacto, horarios y foto." },
+        "list": { "title": "Tabla de profesionales", "content": "Todos los profesionales con su información de contacto, estado y un botón para editar su perfil." }
+      },
+      "businessSettings": {
+        "nav": { "title": "Configuración del negocio", "content": "Configurá la información general de tu salón que aparece en facturas e informes." },
+        "form": { "title": "Datos del negocio", "content": "Completá el nombre del salón, RUC, dirección, teléfono y email. Los campos con * son obligatorios." },
+        "logo": { "title": "Logo del salón", "content": "Subí el logo de tu salón aquí. Aparecerá en los comprobantes enviados a clientes." },
+        "save": { "title": "Guardar cambios", "content": "Hacé clic en Guardar para aplicar todos los cambios, o en Cancelar para descartarlos." }
+      },
+      "fiscalStamp": {
+        "header": { "title": "Timbrado activo", "content": "Muestra el timbrado fiscal activo, sus fechas de vigencia y los números de comprobante disponibles." },
+        "list": { "title": "Otros timbrados", "content": "Timbrados registrados anteriores o inactivos. Podés activar uno desde aquí si es necesario." },
+        "form": { "title": "Registrar nuevo timbrado", "content": "Ingresá el número de timbrado, las fechas de vigencia y el rango de numeración habilitado por la SET." }
+      }
     }
   },
   "language": {

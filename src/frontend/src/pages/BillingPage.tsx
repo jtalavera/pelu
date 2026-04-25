@@ -30,6 +30,9 @@ import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatDecimalGs, formatGuaraniesGs } from "../lib/formatMoney";
 import { filterByListQuery } from "../util/matchesListQuery";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { useTour } from "../tour/useTour";
+import { billingSteps } from "../tour/steps/billing";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -636,7 +639,7 @@ function InvoiceHistoryTab() {
         {t("femme.billing.history.title")}
       </Heading>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <div data-tour="billing-search" className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <ListSearchField
           id="invoice-history-text-filter"
           value={listTextQuery}
@@ -708,7 +711,7 @@ function InvoiceHistoryTab() {
       ) : filteredInvoices.length === 0 ? (
         <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
       ) : (
-        <div className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
+        <div data-tour="billing-invoice-list" className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
           <table className="min-w-full text-sm">
             <thead className="bg-[rgb(var(--color-muted))]">
               <tr>
@@ -1815,7 +1818,7 @@ function CashSessionTab({
 
             {!showCloseForm && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button type="button" style={primaryBtn} onClick={onNewInvoice}>
+                <button data-tour="billing-new-invoice" type="button" style={primaryBtn} onClick={onNewInvoice}>
                   {t("femme.billing.session.newInvoiceButton")}
                 </button>
                 <button type="button" style={destructiveSoft} onClick={() => setShowCloseForm(true)}>
@@ -2095,6 +2098,8 @@ function CashSessionTab({
 
 export default function BillingPage() {
   const { t } = useTranslation();
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("billing", billingSteps, undefined, guidedTourEnabled);
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -2148,6 +2153,7 @@ export default function BillingPage() {
   return (
     <div>
       <div
+        data-tour="billing-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -2171,7 +2177,7 @@ export default function BillingPage() {
         </Alert>
       )}
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.billing.title")}>
+      <div data-tour="billing-session" style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.billing.title")}>
         {(["session", "invoice", "history"] as const).map((tabKey) => {
           const disabled = tabKey === "invoice" && !currentSession;
           if (disabled) {

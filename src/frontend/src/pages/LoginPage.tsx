@@ -6,11 +6,14 @@ import { apiBaseUrl } from "../api/baseUrl";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
+import { useTour } from "../tour/useTour";
+import { loginSteps } from "../tour/steps/login";
 
 export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  useTour("login", loginSteps, undefined, false);
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/app";
 
   const [email, setEmail] = useState("");
@@ -43,7 +46,14 @@ export default function LoginPage() {
       } catch {
         // keep ADMIN default
       }
-      const destination = from !== "/app" ? from : role === "PROFESSIONAL" ? "/app/calendar" : "/app";
+      const destination =
+        from !== "/app"
+          ? from
+          : role === "PROFESSIONAL"
+            ? "/app/calendar"
+            : role === "SYSTEM_ADMIN"
+              ? "/app/settings/feature-flags"
+              : "/app";
       navigate(destination, { replace: true });
     } catch {
       setError(t("femme.login.errorNetwork"));
@@ -77,6 +87,7 @@ export default function LoginPage() {
         </div>
 
         <div
+          data-tour="login-form"
           className="rounded-[var(--radius-xl)] p-6 md:p-8"
           style={{
             background: "var(--color-white)",
@@ -91,7 +102,7 @@ export default function LoginPage() {
             {t("femme.login.subtitle")}
           </Text>
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-            <div>
+            <div data-tour="login-email">
               <Label htmlFor="email" className="text-[var(--color-ink-2)]">
                 {t("femme.login.email")}
               </Label>
@@ -106,7 +117,7 @@ export default function LoginPage() {
                 className={inputClassName}
               />
             </div>
-            <div>
+            <div data-tour="login-password">
               <Label htmlFor="password" className="text-[var(--color-ink-2)]">
                 {t("femme.login.password")}
               </Label>
@@ -123,6 +134,7 @@ export default function LoginPage() {
             </div>
             {error ? <FieldValidationError>{error}</FieldValidationError> : null}
             <Button
+              data-tour="login-submit"
               type="submit"
               variant="primary"
               className="min-h-11 w-full rounded-[var(--radius-md)]"
@@ -138,6 +150,7 @@ export default function LoginPage() {
           </form>
           <div className="mt-4 text-center">
             <Link
+              data-tour="login-forgot"
               to="/forgot-password"
               className="text-sm font-medium text-[var(--color-rose)] underline-offset-4 hover:text-[var(--color-rose-dk)] hover:underline"
             >

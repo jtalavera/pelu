@@ -1,8 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router-dom";
+import { useMe } from "../../hooks/useMe";
 
 export default function SettingsLayout() {
   const { t } = useTranslation();
+  const { me } = useMe();
+  const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -54,6 +57,11 @@ export default function SettingsLayout() {
           <NavLink to="/app/settings/fiscal-stamp" className={navClass}>
             {t("femme.settings.tabFiscalStamp")}
           </NavLink>
+          {isSystemAdmin ? (
+            <NavLink to="/app/settings/feature-flags" className={navClass}>
+              {t("femme.settings.tabFeatureFlags")}
+            </NavLink>
+          ) : null}
         </nav>
         <div style={{ padding: 20, minWidth: 0 }}>
           <Outlet />

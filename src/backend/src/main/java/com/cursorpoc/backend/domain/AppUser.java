@@ -35,7 +35,7 @@ public class AppUser {
   private String passwordHash;
 
   @Enumerated(EnumType.STRING)
-  @Column(nullable = false, length = 32)
+  @Column(nullable = false, length = 64)
   private UserRole role;
 
   @Column(nullable = false)

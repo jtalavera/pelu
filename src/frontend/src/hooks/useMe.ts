@@ -6,8 +6,13 @@ export type Me = {
   userId: number;
   tenantId: number;
   email: string;
-  role: "ADMIN" | "PROFESSIONAL";
+  role: "SYSTEM_ADMIN" | "ADMIN" | "PROFESSIONAL";
   professionalId: number | null;
+  /**
+   * When `SYSTEM_ADMIN`, the real salon tenant to use for feature flags and data preview.
+   * For other roles, usually matches `tenantId` or is null.
+   */
+  previewTenantId: number | null;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {
@@ -25,8 +30,13 @@ export function useMe(): { me: Me | null; loading: boolean } {
           if (!cancelled) setMe(null);
           return;
         }
-        const data = (await res.json()) as Me;
-        if (!cancelled) setMe(data);
+        const data = (await res.json()) as Me & { previewTenantId?: number | null };
+        if (!cancelled) {
+          setMe({
+            ...data,
+            previewTenantId: data.previewTenantId ?? null,
+          });
+        }
       } catch {
         if (!cancelled) setMe(null);
       } finally {

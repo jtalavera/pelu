@@ -7,6 +7,9 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
 import { filterByListQuery } from "../util/matchesListQuery";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { useTour } from "../tour/useTour";
+import { fiscalStampSteps } from "../tour/steps/fiscalStamp";
 
 type FiscalStampRow = {
   id: number;
@@ -115,6 +118,8 @@ function buildInputStyle(hasError: boolean, focused: boolean): React.CSSProperti
 
 export default function FiscalStampSettingsPage() {
   const { t } = useTranslation();
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("fiscal-stamp", fiscalStampSteps, undefined, guidedTourEnabled);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<FiscalStampRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -366,6 +371,7 @@ export default function FiscalStampSettingsPage() {
         </Alert>
       ) : null}
 
+      <div data-tour="fiscal-stamp-header">
       {activeRow ? (
         <>
           <ActiveStampCard row={activeRow} />
@@ -390,9 +396,10 @@ export default function FiscalStampSettingsPage() {
           {t("femme.fiscalStamp.empty")}
         </Text>
       ) : null}
+      </div>
 
       {otherRows.length > 0 ? (
-        <div style={{ marginBottom: 16 }}>
+        <div data-tour="fiscal-stamp-list" style={{ marginBottom: 16 }}>
           <div style={sectionTitleStyle}>
             {activeRow ? t("femme.fiscalStamp.otherStampsTitle") : t("femme.fiscalStamp.registeredTitle")}
           </div>
@@ -471,6 +478,7 @@ export default function FiscalStampSettingsPage() {
 
       <div style={sectionTitleStyle}>{t("femme.fiscalStamp.addTitle")}</div>
       <form
+        data-tour="fiscal-stamp-form"
         onSubmit={onCreate}
         noValidate
         style={{

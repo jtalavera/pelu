@@ -4,6 +4,9 @@ import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
 import { looksLikeRucValidationError, parseApiErrorMessage, translateApiError } from "../api/parseApiErrorMessage";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { useTour } from "../tour/useTour";
+import { businessSettingsSteps } from "../tour/steps/businessSettings";
 
 type BusinessProfileResponse = {
   businessName: string;
@@ -68,6 +71,8 @@ function buildInputStyle(
 
 export default function BusinessSettingsPage() {
   const { t } = useTranslation();
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("business-settings", businessSettingsSteps, undefined, guidedTourEnabled);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -288,7 +293,7 @@ export default function BusinessSettingsPage() {
         </div>
       ) : null}
 
-      <form onSubmit={onSubmit} noValidate>
+      <form data-tour="settings-nav" onSubmit={onSubmit} noValidate>
         {saveValidationError ? (
           <p role="alert" style={errTextStyle}>
             {saveValidationError}
@@ -297,6 +302,7 @@ export default function BusinessSettingsPage() {
 
         <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionGeneral")}</div>
         <div
+          data-tour="settings-form"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
@@ -428,7 +434,7 @@ export default function BusinessSettingsPage() {
         </div>
 
         <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionLogo")}</div>
-        <div style={{ gridColumn: "1 / -1" }}>
+        <div data-tour="settings-logo" style={{ gridColumn: "1 / -1" }}>
           <label htmlFor="logo-file-input" style={labelStyle}>
             {t("femme.businessSettings.logo")}
           </label>
@@ -535,6 +541,7 @@ export default function BusinessSettingsPage() {
         </div>
 
         <div
+          data-tour="settings-save"
           style={{
             display: "flex",
             justifyContent: "flex-end",
