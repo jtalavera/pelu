@@ -41,7 +41,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 - **Filtro por defecto (UI):** al abrir el historial, el rango es **ayer–hoy** (dos días calendario locales, según el navegador). “Limpiar filtros” vuelve a ese rango.
 - **Límite de rango:** el intervalo **desde–hasta** (incluido) no puede superar **31 días**; no hay tope de antigüedad, solo límite de amplitud del rango. Validación en front y en `GET /api/invoices` (`InvoiceService.resolveInvoiceListRange`). Si `from` y `to` faltan en la API, el backend aplica el mismo criterio por defecto (ayer–hoy, zona del servidor).
-- **Índice en BD (SQL Server):** migración `V8__invoices_tenant_issued_at_index.sql` — índice compuesto `invoices(tenant_id, issued_at DESC)` para consultas por negocio y fecha de emisión.
+- **Índice en BD (SQL Server):** migración `V9__invoices_tenant_issued_at_index.sql` — índice compuesto `invoices(tenant_id, issued_at DESC)` para consultas por negocio y fecha de emisión.
 
 ---
 
