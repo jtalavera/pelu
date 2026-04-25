@@ -27,7 +27,7 @@ function ensureKeyframes() {
  *
  * Rendered inside AppShell so it only appears on authenticated screens.
  */
-export function TourButton() {
+export function TourButton({ enabled = true }: { enabled?: boolean }) {
   const { t } = useTranslation();
   const { startTour, tourKey, seenVersion, hasSeenTour } = useTourContext();
   const [isPulsing, setIsPulsing] = useState(false);
@@ -40,7 +40,7 @@ export function TourButton() {
     setIsPulsing(!!tourKey && !hasSeenTour(tourKey));
   }, [tourKey, seenVersion, hasSeenTour]);
 
-  if (!tourKey) return null;
+  if (!enabled || !tourKey) return null;
 
   return (
     <button

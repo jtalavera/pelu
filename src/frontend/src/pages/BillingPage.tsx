@@ -28,6 +28,7 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
 import { filterByListQuery } from "../util/matchesListQuery";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { billingSteps } from "../tour/steps/billing";
 
@@ -2004,7 +2005,8 @@ function CashSessionTab({
 
 export default function BillingPage() {
   const { t } = useTranslation();
-  useTour("billing", billingSteps);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("billing", billingSteps, undefined, guidedTourEnabled);
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);

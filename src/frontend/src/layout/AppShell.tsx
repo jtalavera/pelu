@@ -5,8 +5,11 @@ import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { useSessionRefresh } from "../auth/useSessionRefresh";
 import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
+import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { TourButton } from "../tour/TourButton";
+import { useTourContext } from "../tour/TourContext";
+import { TourJoyride } from "../tour/TourJoyride";
 
 function getInitials(email: string): string {
   const parts = email.split("@")[0].split(/[._-]/);
@@ -174,13 +177,29 @@ function MenuItem({ onClick, icon, label, color, hoverBg }: MenuItemProps) {
 }
 
 export function AppShell() {
+  return (
+    <FeatureFlagProvider>
+      <AppShellInner />
+    </FeatureFlagProvider>
+  );
+}
+
+function AppShellInner() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { me } = useMe();
   const { theme, toggle } = useThemeContext();
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  const { clearTour } = useTourContext();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   useSessionRefresh(true);
+
+  useEffect(() => {
+    return () => {
+      clearTour();
+    };
+  }, [clearTour]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -212,7 +231,6 @@ export function AppShell() {
   const initials = email ? getInitials(email) : "?";
   const displayName = email.split("@")[0];
   const isProfessional = me?.role === "PROFESSIONAL";
-
   return (
     <div>
       {/* ── TOPBAR ── */}
@@ -677,7 +695,8 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <TourButton />
+      <TourJoyride enabled={guidedTourEnabled} />
+      <TourButton enabled={guidedTourEnabled} />
     </div>
   );
 }

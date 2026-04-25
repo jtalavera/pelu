@@ -77,6 +77,7 @@
       "billing": "Facturación",
       "settings": "Configuración",
       "businessSettings": "Configuración",
+      "featureFlags": "Funcionalidades",
       "logout": "Cerrar sesión",
       "adminRole": "Administrador",
       "professionalRole": "Profesional",
@@ -165,7 +166,23 @@
       "pageTitle": "Configuración",
       "pageSubtitle": "Datos del negocio, timbrado fiscal y preferencias",
       "tabBusiness": "Negocio",
-      "tabFiscalStamp": "Timbrado"
+      "tabFiscalStamp": "Timbrado",
+      "tabFeatureFlags": "Funcionalidades"
+    },
+    "featureFlags": {
+      "title": "Funcionalidades (feature flags)",
+      "subtitle": "Activá o desactivá funciones para todos por defecto, o sobreescribilas solo para esta organización. Los cambios se aplican cuando los usuarios cargan la app.",
+      "loading": "Cargando funcionalidades…",
+      "forbidden": "Necesitás permisos de administrador para gestionar las funcionalidades.",
+      "errorTitle": "No se pudo actualizar",
+      "globalDefault": "Predeterminado global",
+      "thisTenant": "Esta organización",
+      "stateOn": "Sí",
+      "stateOff": "No",
+      "usingGlobal": "Usa el predeterminado global",
+      "resetToGlobal": "Volver al global",
+      "globalSwitchAria": "Predeterminado global para {{key}}",
+      "tenantSwitchAria": "Esta organización para {{key}}"
     },
     "businessSettings": {
       "title": "Configuración del negocio",
@@ -509,7 +526,10 @@
     "apiErrors": {
       "GENERIC": "Ocurrió un error inesperado. Intentá de nuevo.",
       "UNAUTHORIZED": "Debés iniciar sesión para realizar esta acción.",
+      "FORBIDDEN": "No tenés permiso para realizar esta acción.",
       "TENANT_NOT_FOUND": "Organización no encontrada.",
+      "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
+      "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Profesional no encontrada.",
       "PROFESSIONAL_NAME_REQUIRED": "Ingresá el nombre completo.",
       "PROFESSIONAL_SCHEDULES_REQUIRED": "Definí los horarios de trabajo.",

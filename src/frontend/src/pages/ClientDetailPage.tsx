@@ -20,6 +20,7 @@ import { femmeJson, femmePutJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { clientDetailSteps } from "../tour/steps/clientDetail";
 
@@ -41,7 +42,8 @@ function validateRuc(ruc: string): boolean {
 
 export default function ClientDetailPage() {
   const { t } = useTranslation();
-  useTour("client-detail", clientDetailSteps);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("client-detail", clientDetailSteps, undefined, guidedTourEnabled);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 

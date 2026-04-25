@@ -2,11 +2,16 @@ import { Joyride } from "react-joyride";
 import { useTranslation } from "react-i18next";
 import { useTourContext } from "./TourContext";
 
-export function TourJoyride() {
+type TourJoyrideProps = {
+  /** When false, the overlay never runs (e.g. guided tour feature flag off). */
+  enabled?: boolean;
+};
+
+export function TourJoyride({ enabled = true }: TourJoyrideProps) {
   const { t } = useTranslation();
   const { run, steps, handleEvent } = useTourContext();
 
-  if (steps.length === 0) return null;
+  if (!enabled || steps.length === 0) return null;
 
   return (
     <Joyride

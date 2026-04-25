@@ -12,6 +12,7 @@ import { useInlineEdit } from "../hooks/useInlineEdit";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { clientsSteps } from "../tour/steps/clients";
 
@@ -82,7 +83,8 @@ const PAGE_SIZE = 20;
 
 export default function ClientsPage() {
   const { t, i18n } = useTranslation();
-  useTour("clients", clientsSteps);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("clients", clientsSteps, undefined, guidedTourEnabled);
   const navigate = useNavigate();
   const location = useLocation();
   const locale = getDateLocale(i18n);

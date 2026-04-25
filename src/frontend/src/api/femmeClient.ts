@@ -34,3 +34,7 @@ export async function femmePutJson<T>(path: string, body: unknown): Promise<T> {
 export async function femmePatchJson<T>(path: string, body: unknown): Promise<T> {
   return femmeJson<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
+
+export async function femmeDeleteJson<T = void>(path: string): Promise<T> {
+  return femmeJson<T>(path, { method: "DELETE" });
+}

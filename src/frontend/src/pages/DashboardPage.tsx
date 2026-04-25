@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
@@ -207,7 +208,8 @@ export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const { me } = useMe();
   const navigate = useNavigate();
-  useTour("dashboard", dashboardSteps, me?.role);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("dashboard", dashboardSteps, guidedTourEnabled ? me?.role : undefined, guidedTourEnabled);
 
   const [data, setData]               = useState<DashboardResponse | null>(null);
   const [loading, setLoading]         = useState(true);

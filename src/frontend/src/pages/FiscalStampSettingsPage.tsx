@@ -7,6 +7,7 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
 import { filterByListQuery } from "../util/matchesListQuery";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { fiscalStampSteps } from "../tour/steps/fiscalStamp";
 
@@ -117,7 +118,8 @@ function buildInputStyle(hasError: boolean, focused: boolean): React.CSSProperti
 
 export default function FiscalStampSettingsPage() {
   const { t } = useTranslation();
-  useTour("fiscal-stamp", fiscalStampSteps);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("fiscal-stamp", fiscalStampSteps, undefined, guidedTourEnabled);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<FiscalStampRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);

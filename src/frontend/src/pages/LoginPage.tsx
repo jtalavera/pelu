@@ -13,7 +13,7 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  useTour("login", loginSteps);
+  useTour("login", loginSteps, undefined, false);
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/app";
 
   const [email, setEmail] = useState("");

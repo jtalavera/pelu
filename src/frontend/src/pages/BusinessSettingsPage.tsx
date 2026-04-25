@@ -4,6 +4,7 @@ import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
 import { looksLikeRucValidationError, parseApiErrorMessage, translateApiError } from "../api/parseApiErrorMessage";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { businessSettingsSteps } from "../tour/steps/businessSettings";
 
@@ -70,7 +71,8 @@ function buildInputStyle(
 
 export default function BusinessSettingsPage() {
   const { t } = useTranslation();
-  useTour("business-settings", businessSettingsSteps);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("business-settings", businessSettingsSteps, undefined, guidedTourEnabled);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

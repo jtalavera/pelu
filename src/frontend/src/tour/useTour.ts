@@ -34,23 +34,38 @@ function buildJoyrideSteps(
  * `stepDefs` MUST be a stable module-level constant (not inline) to avoid
  * re-registering the tour on every render.
  */
-export function useTour(key: string, stepDefs: FemmeTourStepDef[], role?: string) {
+export function useTour(
+  key: string,
+  stepDefs: FemmeTourStepDef[],
+  role?: string,
+  enabled = true,
+) {
   const { t, i18n } = useTranslation();
-  const { registerTour, startTour, hasSeenTour } = useTourContext();
+  const { registerTour, startTour, hasSeenTour, clearTour } = useTourContext();
 
   const lang = i18n.resolvedLanguage ?? "en";
 
   useEffect(() => {
+    if (!enabled) {
+      clearTour();
+      return;
+    }
     const steps = buildJoyrideSteps(stepDefs, t, role);
     registerTour(key, steps);
 
     if (!hasSeenTour(key)) {
       const timer = setTimeout(startTour, 700);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearTour();
+      };
     }
+    return () => {
+      clearTour();
+    };
     // stepDefs is intentionally excluded — it must be a stable module-level constant
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, lang, role]);
+  }, [key, lang, role, enabled]);
 
   return { startTour };
 }

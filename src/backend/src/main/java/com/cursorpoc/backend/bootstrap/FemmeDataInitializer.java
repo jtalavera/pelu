@@ -2,11 +2,13 @@ package com.cursorpoc.backend.bootstrap;
 
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
+import com.cursorpoc.backend.domain.FeatureFlag;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import java.time.LocalDate;
@@ -30,8 +32,17 @@ public class FemmeDataInitializer {
       AppUserRepository appUserRepository,
       BusinessProfileRepository businessProfileRepository,
       FiscalStampRepository fiscalStampRepository,
+      FeatureFlagRepository featureFlagRepository,
       PasswordEncoder passwordEncoder) {
     return args -> {
+      if (featureFlagRepository.findByFlagKey("GUIDED_TOUR").isEmpty()) {
+        FeatureFlag guidedTour = new FeatureFlag();
+        guidedTour.setFlagKey("GUIDED_TOUR");
+        guidedTour.setEnabled(true);
+        guidedTour.setDescription("Show guided tour tooltips on every screen");
+        featureFlagRepository.save(guidedTour);
+        log.info("Seeded feature flag GUIDED_TOUR (enabled=true)");
+      }
       if (appUserRepository.count() > 0) {
         return;
       }

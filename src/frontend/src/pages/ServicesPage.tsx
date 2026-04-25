@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { servicesSteps } from "../tour/steps/services";
 import {
@@ -65,7 +66,8 @@ function normalizeMoneyInput(raw: string) {
 
 export default function ServicesPage() {
   const { t } = useTranslation();
-  useTour("services", servicesSteps);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("services", servicesSteps, undefined, guidedTourEnabled);
   const [tab, setTab] = useState<"services" | "categories">("services");
 
   const [loading, setLoading] = useState(true);

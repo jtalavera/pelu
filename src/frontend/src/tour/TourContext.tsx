@@ -15,6 +15,7 @@ interface TourContextValue {
   startTour: () => void;
   stopTour: () => void;
   registerTour: (key: string, steps: Step[]) => void;
+  clearTour: () => void;
   handleEvent: (data: EventData) => void;
   hasSeenTour: (key: string) => boolean;
 }
@@ -35,6 +36,12 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const registerTour = useCallback((key: string, newSteps: Step[]) => {
     setTourKey(key);
     setSteps(newSteps);
+    setRun(false);
+  }, []);
+
+  const clearTour = useCallback(() => {
+    setTourKey("");
+    setSteps([]);
     setRun(false);
   }, []);
 
@@ -68,6 +75,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
         startTour,
         stopTour,
         registerTour,
+        clearTour,
         handleEvent,
         hasSeenTour,
       }}

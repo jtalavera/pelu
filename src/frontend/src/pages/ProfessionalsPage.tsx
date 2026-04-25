@@ -29,6 +29,7 @@ import {
   type ProfessionalPhotoValidationErrorCode,
   validateAndReadProfessionalPhotoFile,
 } from "../utils/professionalPhotoUpload";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { professionalsSteps } from "../tour/steps/professionals";
 
@@ -119,7 +120,8 @@ function normalizeTime(s: string): string | null {
 
 export default function ProfessionalsPage() {
   const { t } = useTranslation();
-  useTour("professionals", professionalsSteps);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("professionals", professionalsSteps, undefined, guidedTourEnabled);
 
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);

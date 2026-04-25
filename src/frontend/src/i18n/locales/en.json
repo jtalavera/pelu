@@ -77,6 +77,7 @@
       "billing": "Billing",
       "settings": "Settings",
       "businessSettings": "Settings",
+      "featureFlags": "Feature flags",
       "logout": "Sign out",
       "adminRole": "Administrator",
       "professionalRole": "Professional",
@@ -165,7 +166,23 @@
       "pageTitle": "Settings",
       "pageSubtitle": "Business data, fiscal stamp (timbrado), and preferences",
       "tabBusiness": "Business",
-      "tabFiscalStamp": "Timbrado"
+      "tabFiscalStamp": "Timbrado",
+      "tabFeatureFlags": "Feature flags"
+    },
+    "featureFlags": {
+      "title": "Feature flags",
+      "subtitle": "Turn features on or off for everyone by default, or override them for this organization only. Changes apply when users load the app.",
+      "loading": "Loading feature flags…",
+      "forbidden": "You need administrator access to manage feature flags.",
+      "errorTitle": "Could not update",
+      "globalDefault": "Global default",
+      "thisTenant": "This organization",
+      "stateOn": "On",
+      "stateOff": "Off",
+      "usingGlobal": "Using global default",
+      "resetToGlobal": "Reset to global",
+      "globalSwitchAria": "Global default for {{key}}",
+      "tenantSwitchAria": "This organization for {{key}}"
     },
     "businessSettings": {
       "title": "Business settings",
@@ -509,7 +526,10 @@
     "apiErrors": {
       "GENERIC": "An unexpected error occurred. Please try again.",
       "UNAUTHORIZED": "You must be signed in to perform this action.",
+      "FORBIDDEN": "You are not allowed to perform this action.",
       "TENANT_NOT_FOUND": "Organization not found.",
+      "FLAG_NOT_FOUND": "That feature flag does not exist.",
+      "INVALID_FLAG_KEY": "Invalid feature flag name. Use uppercase letters, digits, and underscores (e.g. GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Professional not found.",
       "PROFESSIONAL_NAME_REQUIRED": "Full name is required.",
       "PROFESSIONAL_SCHEDULES_REQUIRED": "Weekly schedule is required.",

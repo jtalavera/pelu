@@ -32,6 +32,7 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
@@ -139,7 +140,8 @@ export default function CalendarPage() {
   const locale = getDateLocale(i18n);
   const { me } = useMe();
   const isProfessional = me?.role === "PROFESSIONAL";
-  useTour("calendar", calendarSteps, me?.role);
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  useTour("calendar", calendarSteps, guidedTourEnabled ? me?.role : undefined, guidedTourEnabled);
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);

@@ -4,7 +4,6 @@ import { ThemeContext } from "./context/ThemeContext";
 import { useTheme } from "./hooks/useTheme";
 import { AppRoutes } from "./routes";
 import { TourProvider } from "./tour/TourContext";
-import { TourJoyride } from "./tour/TourJoyride";
 
 export function App() {
   const { theme, toggle } = useTheme();
@@ -14,7 +13,6 @@ export function App() {
       <BrowserRouter>
         <TourProvider>
           <SyncHtmlLang />
-          <TourJoyride />
           <AppRoutes />
         </TourProvider>
       </BrowserRouter>
