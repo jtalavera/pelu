@@ -20,6 +20,8 @@ import { femmeJson, femmePutJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { useTour } from "../tour/useTour";
+import { clientDetailSteps } from "../tour/steps/clientDetail";
 
 type Client = {
   id: number;
@@ -39,6 +41,7 @@ function validateRuc(ruc: string): boolean {
 
 export default function ClientDetailPage() {
   const { t } = useTranslation();
+  useTour("client-detail", clientDetailSteps);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -181,7 +184,7 @@ export default function ClientDetailPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div data-tour="client-detail-header" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Button
           type="button"
           variant="ghost"
@@ -190,27 +193,29 @@ export default function ClientDetailPage() {
         >
           ← {t("femme.clients.backToList")}
         </Button>
-        {client.active ? (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setDeactivateTarget(client)}
-            disabled={deactivating}
-            className="min-h-11 sm:self-auto"
-          >
-            {t("femme.clients.deactivate")}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void activateClient()}
-            disabled={reactivating}
-            className="min-h-11 sm:self-auto"
-          >
-            {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivate")}
-          </Button>
-        )}
+        <div data-tour="client-detail-status">
+          {client.active ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDeactivateTarget(client)}
+              disabled={deactivating}
+              className="min-h-11 sm:self-auto"
+            >
+              {t("femme.clients.deactivate")}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void activateClient()}
+              disabled={reactivating}
+              className="min-h-11 sm:self-auto"
+            >
+              {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivate")}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -225,14 +230,14 @@ export default function ClientDetailPage() {
         </Text>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs data-tour="client-detail-tabs" value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="info">{t("femme.clients.basicInfo")}</TabsTrigger>
           <TabsTrigger value="history">{t("femme.clients.history")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="info">
-          <Card className="p-6">
+          <Card data-tour="client-detail-edit" className="p-6">
             {saveSuccess ? (
               <Alert variant="default" title={t("femme.clients.editSuccess")} className="mb-4" />
             ) : null}

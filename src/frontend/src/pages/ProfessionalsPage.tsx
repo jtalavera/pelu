@@ -29,6 +29,8 @@ import {
   type ProfessionalPhotoValidationErrorCode,
   validateAndReadProfessionalPhotoFile,
 } from "../utils/professionalPhotoUpload";
+import { useTour } from "../tour/useTour";
+import { professionalsSteps } from "../tour/steps/professionals";
 
 // ── Avatar palette ─────────────────────────────────────────────────────────
 const AVATAR_PALETTE = [
@@ -117,6 +119,7 @@ function normalizeTime(s: string): string | null {
 
 export default function ProfessionalsPage() {
   const { t } = useTranslation();
+  useTour("professionals", professionalsSteps);
 
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -521,6 +524,7 @@ export default function ProfessionalsPage() {
     <div>
       {/* ── Page header ── */}
       <div
+        data-tour="professionals-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -544,7 +548,7 @@ export default function ProfessionalsPage() {
             {t("femme.professionals.lead")}
           </div>
         </div>
-        <button type="button" style={primaryBtn} onClick={openNew}>
+        <button data-tour="professionals-new" type="button" style={primaryBtn} onClick={openNew}>
           {t("femme.professionals.addNew")}
         </button>
       </div>
@@ -556,7 +560,7 @@ export default function ProfessionalsPage() {
         </Alert>
       )}
 
-      <div style={{ marginBottom: 12 }}>
+      <div data-tour="professionals-search" style={{ marginBottom: 12 }}>
         <SearchInput
           id="professionals-inline-search"
           value={listQuery}
@@ -569,6 +573,7 @@ export default function ProfessionalsPage() {
 
       {/* ── Table ── */}
       <div
+        data-tour="professionals-list"
         style={{
           background: "var(--color-white)",
           borderRadius: "var(--radius-xl)",

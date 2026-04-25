@@ -12,6 +12,8 @@ import { useInlineEdit } from "../hooks/useInlineEdit";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
+import { useTour } from "../tour/useTour";
+import { clientsSteps } from "../tour/steps/clients";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,7 @@ const PAGE_SIZE = 20;
 
 export default function ClientsPage() {
   const { t, i18n } = useTranslation();
+  useTour("clients", clientsSteps);
   const navigate = useNavigate();
   const location = useLocation();
   const locale = getDateLocale(i18n);
@@ -350,6 +353,7 @@ export default function ClientsPage() {
     <div>
       {/* ── Page header ── */}
       <div
+        data-tour="clients-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -377,7 +381,7 @@ export default function ClientsPage() {
           <button type="button" style={ghostBtn} onClick={() => exportCsv(searchFiltered)}>
             {t("femme.clients.export")}
           </button>
-          <button type="button" style={primaryBtn} onClick={openNew}>
+          <button data-tour="clients-new" type="button" style={primaryBtn} onClick={openNew}>
             {t("femme.clients.newClient")}
           </button>
         </div>
@@ -391,7 +395,7 @@ export default function ClientsPage() {
       )}
 
       {/* ── Toolbar ── */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <div data-tour="clients-search" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <SearchInput
           id="clients-inline-search"
           value={listQuery}
@@ -402,7 +406,7 @@ export default function ClientsPage() {
         />
 
         {/* Filter pills */}
-        <div role="group" aria-label={t("femme.clients.filterAll")} style={{ display: "flex", gap: 6 }}>
+        <div data-tour="clients-filter-tabs" role="group" aria-label={t("femme.clients.filterAll")} style={{ display: "flex", gap: 6 }}>
           {FILTERS.map(({ key, label }) => {
             const isActive = filter === key;
             return (
@@ -432,6 +436,7 @@ export default function ClientsPage() {
 
       {/* ── Table ── */}
       <div
+        data-tour="clients-list"
         style={{
           background: "var(--color-white)",
           borderRadius: "var(--radius-xl)",

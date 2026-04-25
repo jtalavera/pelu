@@ -827,6 +827,105 @@
       },
       "loading": "Loading appointments…",
       "error": "Could not load appointments."
+    },
+    "tour": {
+      "helpButton": {
+        "label": "Tour",
+        "aria": "Start guided tour"
+      },
+      "controls": {
+        "back": "Back",
+        "close": "Close",
+        "last": "Finish",
+        "next": "Next",
+        "skip": "Skip"
+      },
+      "nav": {
+        "sidebar": { "title": "Navigation menu", "content": "This panel lets you move between all the sections of the app." },
+        "dashboard": { "title": "Dashboard", "content": "Your home base — view today's appointments, earnings, and activity at a glance." },
+        "calendar": { "title": "Calendar", "content": "Manage appointments by day or week. Book, reschedule, and cancel from here." },
+        "services": { "title": "Services", "content": "Manage the list of services and their prices offered by your salon." },
+        "professionals": { "title": "Professionals", "content": "Add and manage the stylists or specialists who work at your salon." },
+        "clients": { "title": "Clients", "content": "Your full client database — search, filter, and open any client profile." },
+        "billing": { "title": "Billing", "content": "Open cash sessions, issue invoices, and review payment history." },
+        "settings": { "title": "Settings", "content": "Configure your business profile, logo, RUC, and fiscal stamps." }
+      },
+      "topbar": {
+        "search": { "title": "Global search", "content": "Quickly find a client, appointment, or record from anywhere in the app." },
+        "theme": { "title": "Theme", "content": "Switch between light and dark mode to suit your working environment." },
+        "lang": { "title": "Language", "content": "Change the app language between Spanish and English." },
+        "notifications": { "title": "Notifications", "content": "See recent alerts and reminders for your salon." },
+        "userMenu": { "title": "Your account", "content": "View your profile, change your password, or sign out." }
+      },
+      "login": {
+        "form": { "title": "Welcome!", "content": "This is the sign-in screen. Enter your credentials here to access the salon management system." },
+        "email": { "title": "Email field", "content": "Type the email address associated with your account." },
+        "password": { "title": "Password field", "content": "Enter your password. Passwords are case-sensitive." },
+        "submit": { "title": "Sign in button", "content": "Click here (or press Enter) to log in after entering your credentials." },
+        "forgotPassword": { "title": "Forgot your password?", "content": "Click here if you can't remember your password — you'll receive instructions to reset it." }
+      },
+      "dashboard": {
+        "greeting": { "title": "Welcome greeting", "content": "This section shows your name and today's date at a glance." },
+        "newAppointment": { "title": "New appointment", "content": "Tap this button to schedule a new appointment for a client right now." },
+        "metrics": { "title": "Daily metrics", "content": "Key numbers for today: appointments scheduled, clients served, and revenue collected." },
+        "apptList": { "title": "Today's appointments", "content": "The full list of appointments for today, sorted by time. Tap any row to see details." },
+        "apptFilter": { "title": "Appointment filters", "content": "Filter today's appointments by professional or status to find exactly what you need." },
+        "viewAgenda": { "title": "Go to calendar", "content": "Opens the full calendar view so you can see and manage appointments across multiple days." },
+        "miniCal": { "title": "Mini calendar", "content": "A compact monthly calendar. Click any date to jump to that day's appointments." },
+        "occupancy": { "title": "Occupancy", "content": "Shows how full your schedule is today as a percentage of available time slots." }
+      },
+      "calendar": {
+        "header": { "title": "Calendar header", "content": "Shows the current week range and navigation controls to move between weeks." },
+        "profFilter": { "title": "Professional filter", "content": "Filter the calendar to see only the appointments of a specific stylist." },
+        "today": { "title": "Today button", "content": "Jump back to today's schedule instantly." },
+        "weekNav": { "title": "Week navigation", "content": "Use the arrows to move forward or backward by one week." },
+        "newAppointment": { "title": "New appointment", "content": "Opens the booking form to schedule a new appointment for any client and professional." },
+        "grid": { "title": "Appointment grid", "content": "Each column represents a day and each row a time slot. Click any slot to create or view an appointment." }
+      },
+      "services": {
+        "header": { "title": "Services header", "content": "Shows the total number of service categories and a button to add a new one." },
+        "search": { "title": "Service search", "content": "Type here to instantly filter services by name across all categories." },
+        "filters": { "title": "Category filters", "content": "Click a category pill to show only services from that category." },
+        "addCategory": { "title": "New category", "content": "Creates a new group to organise your services (for example: Hair, Nails, Skincare)." },
+        "list": { "title": "Services list", "content": "All services with their duration, price, and category. Click any row to edit or deactivate it." }
+      },
+      "billing": {
+        "header": { "title": "Billing", "content": "Manage your cash session here and issue invoices to clients." },
+        "session": { "title": "Session tabs", "content": "Switch between the active session, creating a new invoice, and the full invoice history." },
+        "newInvoice": { "title": "New invoice", "content": "Opens the invoice form to charge a client for services rendered during this session." },
+        "search": { "title": "Invoice search & filters", "content": "Search by client name or invoice number, and filter by date range or status." },
+        "invoiceList": { "title": "Invoice history", "content": "All issued invoices. Click 'View' on any row to see the full detail or void it." }
+      },
+      "clients": {
+        "header": { "title": "Clients", "content": "Your complete client list. Use the search and filters to find any client quickly." },
+        "search": { "title": "Search & filters toolbar", "content": "Type a name, phone, or email in the search box and use the pills to filter by category." },
+        "filterTabs": { "title": "Filter pills", "content": "Show all clients, only active ones, those with RUC, or new clients registered recently." },
+        "new": { "title": "New client", "content": "Opens a form to register a brand-new client with their name, phone, email, and RUC." },
+        "list": { "title": "Client table", "content": "Every registered client with visit count and last visit date. Click a row to open the full profile." }
+      },
+      "clientDetail": {
+        "header": { "title": "Client header", "content": "Shows the client's name, visit count, and a back button to return to the full list." },
+        "tabs": { "title": "Info tabs", "content": "Switch between the client's basic info (name, phone, email, RUC) and their appointment history." },
+        "editInfo": { "title": "Edit client info", "content": "Update the client's contact details here and click Save to confirm the changes." },
+        "status": { "title": "Activate / deactivate", "content": "Deactivate a client to hide them from booking, or reactivate them when they return." }
+      },
+      "professionals": {
+        "header": { "title": "Professionals", "content": "All stylists and specialists registered in your salon." },
+        "search": { "title": "Search", "content": "Filter professionals by name to find the one you're looking for." },
+        "new": { "title": "Add professional", "content": "Opens the form to register a new stylist — name, contact, schedule, and photo." },
+        "list": { "title": "Professionals table", "content": "Every professional with their contact info, status, and a button to edit their profile." }
+      },
+      "businessSettings": {
+        "nav": { "title": "Business settings", "content": "Configure your salon's general information that appears on invoices and reports." },
+        "form": { "title": "Business details", "content": "Fill in your salon name, RUC, address, phone, and email. All fields marked * are required." },
+        "logo": { "title": "Salon logo", "content": "Upload your salon's logo here. It will appear on invoices sent to clients." },
+        "save": { "title": "Save changes", "content": "Click Save to apply all changes, or Cancel to discard them." }
+      },
+      "fiscalStamp": {
+        "header": { "title": "Active fiscal stamp", "content": "Shows the currently active timbrado (fiscal stamp number), its validity dates, and the remaining invoice numbers." },
+        "list": { "title": "Other stamps", "content": "Previously registered or inactive fiscal stamps. You can activate one from here if needed." },
+        "form": { "title": "Register new stamp", "content": "Enter the timbrado number, validity dates, and the invoice number range authorised by SET Paraguay." }
+      }
     }
   },
   "language": {
