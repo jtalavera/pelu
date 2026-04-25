@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 const PROFESSIONAL_PHOTO_ACCEPT =
@@ -9,6 +10,24 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await expect(page.getByPlaceholder("Search by name or email…")).toBeVisible();
+  });
+
+  test("HU-25 / HU-20 acción al modal: botón More… (detalle profesional)", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await apiPostJson(request, token, "/api/professionals", {
+      fullName: `E2E MoreBtn ${Date.now()}`,
+      phone: null,
+      email: null,
+      photoDataUrl: null,
+    });
+    await loginAsDemo(page);
+    await page.goto("/app/professionals");
+    await expect(
+      page.getByRole("button", { name: "More…", exact: true }).first(),
+    ).toBeVisible();
   });
 
   test("HU-20 · 1 input de foto usa accept de tipos de imagen", async ({ page }) => {

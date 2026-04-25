@@ -639,6 +639,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={key}
+                    data-testid={`calendar-day-col-${key}`}
                     onMouseMove={(e) => {
                       const col = e.currentTarget as HTMLDivElement;
                       const relY = e.clientY - col.getBoundingClientRect().top;
@@ -688,6 +689,7 @@ export default function CalendarPage() {
 
                     {dayGridHover?.colKey === key ? (
                       <div
+                        data-testid="calendar-hover-slot"
                         style={{
                           position: "absolute",
                           left: 0,
@@ -736,6 +738,7 @@ export default function CalendarPage() {
                         <button
                           key={appt.id}
                           type="button"
+                          data-testid={`calendar-appt-${appt.id}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             openDetail(appt);
