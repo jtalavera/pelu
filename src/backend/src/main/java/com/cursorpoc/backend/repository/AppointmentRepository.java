@@ -43,13 +43,15 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       SELECT a FROM Appointment a WHERE a.tenant.id = :tenantId
       AND a.startAt >= :from AND a.startAt < :to
       AND (:professionalId IS NULL OR a.professional.id = :professionalId)
+      AND (:clientId IS NULL OR (a.client IS NOT NULL AND a.client.id = :clientId))
       ORDER BY a.startAt ASC
       """)
   List<Appointment> findInRangeFiltered(
       @Param("tenantId") Long tenantId,
       @Param("from") Instant from,
       @Param("to") Instant to,
-      @Param("professionalId") Long professionalId);
+      @Param("professionalId") Long professionalId,
+      @Param("clientId") Long clientId);
 
   long countByTenant_IdAndStatus(Long tenantId, AppointmentStatus status);
 

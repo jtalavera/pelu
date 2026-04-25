@@ -1,12 +1,14 @@
 import { expect, test } from "@playwright/test";
 import {
   API_BASE,
+  apiGetJson,
   apiPostJson,
   apiPutJson,
   ensureActiveFiscalStampForInvoices,
   isoDateLocal,
   listFiscalStamps,
   loginAsDemoApi,
+  seedCategoryServiceProfessional,
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
@@ -131,5 +133,91 @@ test.describe("HU-14 · Emitir comprobante", () => {
       initialEmissionNumber: Math.max(100, stamps[0]?.nextEmissionNumber ?? 100),
     });
     await apiPostJson(request, token, `/api/fiscal-stamps/${created.id}/activate`, {});
+  });
+
+  test("HU-25 · lista de clientes en una fila (nombre, teléfono, RUC)", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const suffix = Date.now();
+    const fullName = `E2E Row ${suffix}`;
+    const phone = "0981999888";
+    const ruc = "80000005-6";
+    await apiPostJson(request, token, "/api/clients", {
+      fullName,
+      phone,
+      email: null,
+      ruc,
+    });
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").fill(fullName.slice(0, 10));
+    const option = page.getByRole("button", { name: new RegExp(fullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
+    await expect(option).toBeVisible();
+    await expect(option).toContainText(phone);
+    await expect(option).toContainText(ruc);
+    const text = (await option.innerText()).replace(/\r\n/g, "\n");
+    expect(text.includes("\n"), "dropdown row should be a single line of text").toBe(false);
+  });
+
+  test("HU-25 · factura con edición de nombre/RUC actualiza el cliente en el directorio", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const suffix = Date.now();
+    const origName = `E2E Sync ${suffix}`;
+    const updatedName = `E2E Sync Upd ${suffix}`;
+    const newRuc = "80000010-1";
+    const client = await apiPostJson<{
+      id: number;
+      fullName: string;
+      ruc: string | null;
+    }>(request, token, "/api/clients", {
+      fullName: origName,
+      phone: null,
+      email: null,
+      ruc: "80000005-6",
+    });
+
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").fill(origName.slice(0, 8));
+    await page.getByRole("button", { name: new RegExp(origName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    await page.getByLabel("Client display name").fill(updatedName);
+    await page.getByLabel(/Client RUC/i).fill(newRuc);
+    await page.locator("#billing-line-svc-0").fill(seed.serviceFullName.slice(0, 12));
+    await page.getByRole("button", { name: new RegExp(seed.serviceFullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    await page.locator("#pay-amount-0").fill("50000");
+    await clickIssueInvoiceAndExpectSuccess(page);
+
+    const saved = await apiGetJson<{
+      fullName: string;
+      ruc: string | null;
+    }>(request, token, `/api/clients/${client.id}`);
+    expect(saved.fullName).toBe(updatedName);
+    expect(saved.ruc).toBe(newRuc);
+  });
+
+  test("HU-25 · lista de servicios en una fila (nombre, categoría, precio, duración)", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.locator("#billing-line-svc-0").fill(seed.serviceFullName.slice(0, 10));
+    const option = page.getByRole("button", {
+      name: new RegExp(seed.serviceFullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    });
+    await expect(option).toBeVisible();
+    const text = (await option.innerText()).replace(/\r\n/g, "\n");
+    expect(text.includes("\n"), "service dropdown row should be a single line of text").toBe(false);
   });
 });

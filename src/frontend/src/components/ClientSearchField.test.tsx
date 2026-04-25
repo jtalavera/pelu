@@ -29,8 +29,8 @@ function renderField(
 }
 
 const sampleClients = [
-  { id: 1, fullName: "Ana García", phone: "0981000001", ruc: null },
-  { id: 2, fullName: "Ana Torres", phone: null, ruc: "80000005-6" },
+  { id: 1, fullName: "Ana García", phone: "0981000001", email: null, ruc: null },
+  { id: 2, fullName: "Ana Torres", phone: null, email: null, ruc: "80000005-6" },
 ];
 
 describe("ClientSearchField", () => {
@@ -86,6 +86,22 @@ describe("ClientSearchField", () => {
     await userEvent.click(input);
     expect(await screen.findByText(/no clients found/i, {}, { timeout: 1000 })).toBeTruthy();
     expect(screen.getByRole("button", { name: /create new client/i })).toBeTruthy();
+  });
+
+  it("selects the only result on Enter", async () => {
+    femmeJson.mockResolvedValue([sampleClients[0]]);
+    const onChange = vi.fn();
+    renderField(onChange);
+    const input = screen.getByRole("combobox");
+    await userEvent.type(input, "Ana");
+    await screen.findByText("Ana García", {}, { timeout: 2000 });
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(onChange).toHaveBeenCalledWith({
+        type: "client",
+        client: expect.objectContaining({ id: 1, fullName: "Ana García" }),
+      }),
+    );
   });
 
   it("calls onChange with selected client when result clicked", async () => {

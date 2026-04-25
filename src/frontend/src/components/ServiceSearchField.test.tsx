@@ -84,6 +84,19 @@ describe("ServiceSearchField", () => {
     });
   });
 
+  it("selects the only service on Enter", async () => {
+    femmeJson.mockResolvedValue([activeSvc]);
+    const onChange = vi.fn();
+    renderField(onChange);
+    const input = screen.getByRole("combobox");
+    await userEvent.type(input, "Cut");
+    await screen.findByText("Cut", {}, { timeout: 2000 });
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ id: 1, name: "Cut" })),
+    );
+  });
+
   it("calls onChange when a result is clicked", async () => {
     femmeJson.mockResolvedValue([activeSvc]);
     const onChange = vi.fn();

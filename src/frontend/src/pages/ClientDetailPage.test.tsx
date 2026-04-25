@@ -47,10 +47,30 @@ function renderPage(clientId = "1") {
   );
 }
 
+function defaultFemmeJsonImpl(url: unknown) {
+  const s = String(url);
+  if (s.startsWith("/api/clients/") && !s.includes("?")) {
+    return Promise.resolve({
+      id: 1,
+      fullName: "Ana García",
+      phone: "0981000001",
+      email: "ana@example.com",
+      ruc: "80000005-6",
+      active: true,
+      visitCount: 3,
+    });
+  }
+  if (s.startsWith("/api/invoices?") || s.startsWith("/api/appointments?")) {
+    return Promise.resolve([]);
+  }
+  return Promise.reject(new Error(`unmocked: ${s}`));
+}
+
 describe("ClientDetailPage", () => {
   beforeEach(() => {
     void i18n.changeLanguage("en");
     femmeJson.mockReset();
+    femmeJson.mockImplementation(defaultFemmeJsonImpl);
     femmePutJson.mockReset();
     femmePostJson.mockReset();
   });
@@ -60,20 +80,17 @@ describe("ClientDetailPage", () => {
   });
 
   it("shows client name in heading after loading", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     expect(await screen.findByRole("heading", { name: /Ana García/i })).toBeTruthy();
   });
 
   it("shows visit count", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     expect(screen.getByText(/3 visit/i)).toBeTruthy();
   });
 
   it("shows edit form pre-filled with client data", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     const nameInput = screen.getByLabelText(/full name/i) as HTMLInputElement;
@@ -83,13 +100,13 @@ describe("ClientDetailPage", () => {
   });
 
   it("shows error when load fails", async () => {
+    femmeJson.mockReset();
     femmeJson.mockRejectedValue(new Error("fail"));
     renderPage();
     expect(await screen.findByText(/could not load client profile/i)).toBeTruthy();
   });
 
   it("validates required full name on save", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     const nameInput = screen.getByLabelText(/full name/i);
@@ -99,7 +116,6 @@ describe("ClientDetailPage", () => {
   });
 
   it("validates invalid RUC format on save", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     const rucInput = screen.getByLabelText(/^ruc/i);
@@ -110,7 +126,6 @@ describe("ClientDetailPage", () => {
   });
 
   it("saves successfully and updates client name", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     const updated = { ...sampleClient, fullName: "Ana Updated" };
     femmePutJson.mockResolvedValue(updated);
     renderPage();
@@ -123,14 +138,18 @@ describe("ClientDetailPage", () => {
   });
 
   it("shows deactivate button for active client", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     expect(screen.getByRole("button", { name: /deactivate/i })).toBeTruthy();
   });
 
   it("inactive client shows inactive badge, reactivate button, and no deactivate button", async () => {
-    femmeJson.mockResolvedValue({ ...sampleClient, active: false });
+    femmeJson.mockImplementation((url) => {
+      if (String(url).startsWith("/api/clients/") && !String(url).includes("?")) {
+        return Promise.resolve({ ...sampleClient, active: false });
+      }
+      return defaultFemmeJsonImpl(url);
+    });
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     expect(screen.getByText(/inactive/i)).toBeTruthy();
@@ -139,7 +158,6 @@ describe("ClientDetailPage", () => {
   });
 
   it("shows only one success message after save", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     const updated = { ...sampleClient, fullName: "Ana Updated" };
     femmePutJson.mockResolvedValue(updated);
     renderPage();
@@ -154,16 +172,54 @@ describe("ClientDetailPage", () => {
   });
 
   it("shows history tab with appointments and invoices sections", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     await userEvent.click(screen.getByRole("tab", { name: /history/i }));
-    expect(await screen.findByText(/no appointments on record/i)).toBeTruthy();
+    expect(await screen.findByText(/upcoming/i)).toBeTruthy();
+    expect(
+      (await screen.findAllByText(/no appointments on record/i)).length,
+    ).toBe(2);
     expect(screen.getByText(/no invoices on record/i)).toBeTruthy();
   });
 
+  it("history tab shows upcoming future appointment in Upcoming", async () => {
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 1);
+    femmeJson.mockImplementation((url) => {
+      const s = String(url);
+      if (s.startsWith("/api/clients/") && !s.includes("?")) {
+        return Promise.resolve(sampleClient);
+      }
+      if (s.startsWith("/api/appointments?")) {
+        return Promise.resolve([
+          {
+            id: 50,
+            clientId: 1,
+            clientName: "Ana García",
+            professionalId: 2,
+            professionalName: "Pro",
+            serviceId: 3,
+            serviceName: "Cut",
+            durationMinutes: 60,
+            startAt: future.toISOString(),
+            endAt: new Date(future.getTime() + 3600_000).toISOString(),
+            status: "CONFIRMED" as const,
+            cancelReason: null,
+          },
+        ]);
+      }
+      if (s.startsWith("/api/invoices?")) {
+        return Promise.resolve([]);
+      }
+      return defaultFemmeJsonImpl(url);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    await userEvent.click(screen.getByRole("tab", { name: /history/i }));
+    expect(await screen.findByText("Cut")).toBeTruthy();
+  });
+
   it("navigates back to client list when back button clicked", async () => {
-    femmeJson.mockResolvedValue(sampleClient);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     await userEvent.click(screen.getByRole("button", { name: /back to clients/i }));

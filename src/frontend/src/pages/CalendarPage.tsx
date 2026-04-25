@@ -38,6 +38,8 @@ const HOUR_END = 21;
 const TOTAL_HOURS = HOUR_END - HOUR_START;
 const PX_PER_HOUR = 64;
 const GRID_HEIGHT = TOTAL_HOURS * PX_PER_HOUR;
+const PX_PER_HALF_HOUR = PX_PER_HOUR / 2;
+const SLOTS_PER_DAY = TOTAL_HOURS * 2;
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -171,6 +173,10 @@ export default function CalendarPage() {
   const [statusError, setStatusError] = useState<string | null>(null);
 
   const [hoveredApptId, setHoveredApptId] = useState<number | null>(null);
+  const [dayGridHover, setDayGridHover] = useState<{
+    colKey: (typeof DAY_KEYS)[number];
+    slot: number;
+  } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -633,6 +639,18 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={key}
+                    onMouseMove={(e) => {
+                      const col = e.currentTarget as HTMLDivElement;
+                      const relY = e.clientY - col.getBoundingClientRect().top;
+                      const slot = Math.min(
+                        SLOTS_PER_DAY - 1,
+                        Math.max(0, Math.floor(relY / PX_PER_HALF_HOUR)),
+                      );
+                      setDayGridHover({ colKey: key, slot });
+                    }}
+                    onMouseLeave={() => {
+                      setDayGridHover((h) => (h?.colKey === key ? null : h));
+                    }}
                     style={{
                       position: "relative",
                       height: GRID_HEIGHT,
@@ -668,6 +686,21 @@ export default function CalendarPage() {
                       />
                     ))}
 
+                    {dayGridHover?.colKey === key ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: dayGridHover.slot * PX_PER_HALF_HOUR,
+                          height: PX_PER_HALF_HOUR,
+                          background: "var(--color-rose-lt)",
+                          zIndex: 1,
+                          pointerEvents: "none",
+                        }}
+                        aria-hidden
+                      />
+                    ) : null}
                     {/* Click-to-create overlay */}
                     <button
                       type="button"
@@ -686,20 +719,13 @@ export default function CalendarPage() {
                         const hour = Math.floor(relY / PX_PER_HOUR) + HOUR_START;
                         openNewForm(date, hour);
                       }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background =
-                          "var(--color-rose-lt)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                      }}
                       aria-label={t("femme.calendar.newAppointment")}
                     />
 
                     {/* Appointment blocks */}
                     {dayAppts.map((appt) => {
                       const top = appointmentTopPx(appt.startAt);
-                      const height = appointmentHeightPx(appt.durationMinutes);
+                      const minBlockH = appointmentHeightPx(appt.durationMinutes);
                       const pc = profColor(appt.professionalId, professionals);
                       const slot = overlapLayout.get(appt.id) ?? { col: 0, slotCount: 1 };
                       const { col, slotCount } = slot;
@@ -719,10 +745,15 @@ export default function CalendarPage() {
                           style={{
                             position: "absolute",
                             left: `${leftPct}%`,
-                            width: hovered ? "min(260px, calc(100% - 4px))" : `calc(${widthPct}% - 4px)`,
+                            width: hovered
+                              ? "auto"
+                              : `calc(${widthPct}% - 4px)`,
+                            minWidth: hovered ? `calc(${widthPct}% - 4px)` : undefined,
+                            maxWidth: hovered ? "calc(100% - 4px)" : undefined,
                             marginLeft: 2,
                             top,
-                            height,
+                            minHeight: minBlockH,
+                            height: hovered ? "auto" : minBlockH,
                             zIndex: hovered ? 60 : 10,
                             borderRadius: "var(--radius-md)",
                             padding: hovered ? 10 : 6,
@@ -744,9 +775,10 @@ export default function CalendarPage() {
                             style={{
                               fontWeight: 500,
                               margin: 0,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
+                              overflow: hovered ? "visible" : "hidden",
+                              textOverflow: hovered ? "clip" : "ellipsis",
+                              whiteSpace: hovered ? "normal" : "nowrap",
+                              wordBreak: hovered ? "break-word" : "normal",
                             }}
                           >
                             {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
@@ -755,9 +787,10 @@ export default function CalendarPage() {
                             style={{
                               fontSize: 10,
                               margin: 0,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
+                              overflow: hovered ? "visible" : "hidden",
+                              textOverflow: hovered ? "clip" : "ellipsis",
+                              whiteSpace: hovered ? "normal" : "nowrap",
+                              wordBreak: hovered ? "break-word" : "normal",
                               opacity: 0.85,
                             }}
                           >
@@ -767,9 +800,10 @@ export default function CalendarPage() {
                             style={{
                               fontSize: 10,
                               margin: 0,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
+                              overflow: hovered ? "visible" : "hidden",
+                              textOverflow: hovered ? "clip" : "ellipsis",
+                              whiteSpace: hovered ? "normal" : "nowrap",
+                              wordBreak: hovered ? "break-word" : "normal",
                               opacity: 0.75,
                             }}
                           >

@@ -24,13 +24,9 @@ import {
   type CategoryAccentKey,
   categoryAccentStyle,
 } from "../util/categoryAccent";
+import { formatGuaraniesGs } from "../lib/formatMoney";
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function fmtPrice(minor: string | number): string {
-  const n = Number(minor);
-  if (!Number.isFinite(n)) return "Gs. —";
-  return "Gs. " + Math.round(n).toLocaleString("es-PY");
-}
+// ── Types ────────────────────────────────────────────────────────────────
 
 type ServiceCategory = {
   id: number;
@@ -965,7 +961,7 @@ export default function ServicesPage() {
                         flexShrink: 0,
                       }}
                     >
-                      {fmtPrice(s.priceMinor)}
+                      {formatGuaraniesGs(s.priceMinor)}
                     </div>
 
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>

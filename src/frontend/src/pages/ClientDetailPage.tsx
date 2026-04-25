@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -17,9 +17,15 @@ import {
   Text,
 } from "@design-system";
 import { femmeJson, femmePutJson, femmePostJson } from "../api/femmeClient";
+import { listAppointments, type Appointment } from "../api/appointments";
+import { listInvoicesByClientId, type InvoiceListItem } from "../api/invoices";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { StatusBadge } from "../components/StatusBadge";
+import { useDateLocale } from "../i18n/dateLocale";
+import { formatAmountDecimal } from "../lib/formatMoney";
+import { validateRuc } from "../lib/validateRuc";
 
 type Client = {
   id: number;
@@ -31,14 +37,82 @@ type Client = {
   visitCount: number;
 };
 
-const PARAGUAY_RUC_PATTERN = /^\d+-\d+$/;
+function formatHistoryDateTime(iso: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
 
-function validateRuc(ruc: string): boolean {
-  return PARAGUAY_RUC_PATTERN.test(ruc.trim());
+function clientAppointmentsTimeRange(): { from: string; to: string } {
+  const from = new Date();
+  from.setFullYear(from.getFullYear() - 3);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date();
+  to.setFullYear(to.getFullYear() + 3);
+  to.setHours(23, 59, 59, 999);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+function splitAppointmentsByTime(appointments: Appointment[]): {
+  upcoming: Appointment[];
+  past: Appointment[];
+} {
+  const t = Date.now();
+  const upcoming: Appointment[] = [];
+  const past: Appointment[] = [];
+  for (const a of appointments) {
+    const s = new Date(a.startAt).getTime();
+    if (s >= t) {
+      upcoming.push(a);
+    } else {
+      past.push(a);
+    }
+  }
+  upcoming.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  past.sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+  return { upcoming, past };
+}
+
+function HistoryInvoiceStatusPill({ status }: { status: string }) {
+  const { t } = useTranslation();
+  let bg = "var(--color-warning-lt)";
+  let color = "var(--color-warning)";
+  let label = t("femme.billing.session.statusPending");
+  if (status === "ISSUED") {
+    bg = "var(--color-success-lt)";
+    color = "var(--color-success)";
+    label = t("femme.billing.session.statusIssued");
+  } else if (status === "VOIDED") {
+    bg = "var(--color-danger-lt)";
+    color = "var(--color-danger)";
+    label = t("femme.billing.session.statusVoided");
+  }
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 500,
+        padding: "2px 8px",
+        borderRadius: "var(--radius-pill)",
+        display: "inline-block",
+        whiteSpace: "nowrap",
+        background: bg,
+        color,
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 export default function ClientDetailPage() {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -65,6 +139,11 @@ export default function ClientDetailPage() {
   const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
   const [reactivating, setReactivating] = useState(false);
 
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyAppointments, setHistoryAppointments] = useState<Appointment[] | null>(null);
+  const [historyInvoices, setHistoryInvoices] = useState<InvoiceListItem[] | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -85,6 +164,53 @@ export default function ClientDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setHistoryAppointments(null);
+    setHistoryInvoices(null);
+    setHistoryError(null);
+  }, [id]);
+
+  const clientIdNum = id ? Number(id) : NaN;
+
+  useEffect(() => {
+    if (tab !== "history" || !id || Number.isNaN(clientIdNum)) return;
+    let cancelled = false;
+    (async () => {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const range = clientAppointmentsTimeRange();
+      try {
+        const [inv, appts] = await Promise.all([
+          listInvoicesByClientId(clientIdNum),
+          listAppointments(range.from, range.to, null, clientIdNum),
+        ]);
+        if (!cancelled) {
+          setHistoryInvoices(inv);
+          setHistoryAppointments(appts);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setHistoryError(translateApiError(e, t, "femme.clients.historyLoadError"));
+          setHistoryInvoices(null);
+          setHistoryAppointments(null);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, id, clientIdNum, t]);
+
+  const apptUpcomingPast = useMemo(
+    () =>
+      historyAppointments != null
+        ? splitAppointmentsByTime(historyAppointments)
+        : { upcoming: [] as Appointment[], past: [] as Appointment[] },
+    [historyAppointments],
+  );
 
   async function saveClient() {
     setFieldError(null);
@@ -309,18 +435,144 @@ export default function ClientDetailPage() {
 
         <TabsContent value="history">
           <div className="flex flex-col gap-4">
-            <Card className="p-4">
-              <Heading as="h2" className="mb-3 text-base">
-                {t("femme.clients.appointments")}
-              </Heading>
-              <Text variant="muted">{t("femme.clients.noAppointments")}</Text>
-            </Card>
-            <Card className="p-4">
-              <Heading as="h2" className="mb-3 text-base">
-                {t("femme.clients.invoices")}
-              </Heading>
-              <Text variant="muted">{t("femme.clients.noInvoices")}</Text>
-            </Card>
+            {historyError ? (
+              <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
+                {historyError}
+              </Alert>
+            ) : null}
+            {tab === "history" && historyLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6">
+                <Spinner size="md" />
+                <Text>{t("femme.clients.loading")}</Text>
+              </div>
+            ) : null}
+            {tab === "history" && !historyLoading && !historyError ? (
+              <>
+                <Card className="p-4">
+                  <Heading as="h2" className="mb-3 text-base">
+                    {t("femme.clients.appointments")}
+                  </Heading>
+                  {historyAppointments == null ? null : (
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <Text className="mb-2 text-sm font-medium">
+                          {t("femme.clients.historyUpcoming")}
+                        </Text>
+                        {apptUpcomingPast.upcoming.length === 0 ? (
+                          <Text variant="muted" className="text-sm">
+                            {t("femme.clients.noAppointments")}
+                          </Text>
+                        ) : (
+                          <ul className="flex flex-col gap-2" role="list">
+                            {apptUpcomingPast.upcoming.map((a) => (
+                              <li
+                                key={a.id}
+                                className="flex flex-col gap-1 rounded-md border border-[var(--color-border)]/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div>
+                                  <Text className="font-medium">
+                                    {a.serviceName}
+                                  </Text>
+                                  <Text variant="muted" className="text-sm">
+                                    {formatHistoryDateTime(a.startAt, dateLocale)} ·{" "}
+                                    {a.professionalName}
+                                  </Text>
+                                </div>
+                                <div className="self-start sm:self-center">
+                                  <StatusBadge status={a.status} />
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <Text className="mb-2 text-sm font-medium">
+                          {t("femme.clients.historyPast")}
+                        </Text>
+                        {apptUpcomingPast.past.length === 0 ? (
+                          <Text variant="muted" className="text-sm">
+                            {t("femme.clients.noAppointments")}
+                          </Text>
+                        ) : (
+                          <ul className="flex flex-col gap-2" role="list">
+                            {apptUpcomingPast.past.map((a) => (
+                              <li
+                                key={a.id}
+                                className="flex flex-col gap-1 rounded-md border border-[var(--color-border)]/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div>
+                                  <Text className="font-medium">
+                                    {a.serviceName}
+                                  </Text>
+                                  <Text variant="muted" className="text-sm">
+                                    {formatHistoryDateTime(a.startAt, dateLocale)} ·{" "}
+                                    {a.professionalName}
+                                  </Text>
+                                </div>
+                                <div className="self-start sm:self-center">
+                                  <StatusBadge status={a.status} />
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+                <Card className="p-4">
+                  <Heading as="h2" className="mb-3 text-base">
+                    {t("femme.clients.invoices")}
+                  </Heading>
+                  {historyInvoices == null || historyInvoices.length === 0 ? (
+                    <Text variant="muted">{t("femme.clients.noInvoices")}</Text>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[320px] text-left text-sm">
+                        <thead>
+                          <tr className="border-b text-xs text-[var(--color-ink-2)]">
+                            <th className="py-2 pr-2 font-medium">
+                              {t("femme.billing.history.colNumber")}
+                            </th>
+                            <th className="py-2 pr-2 font-medium">
+                              {t("femme.billing.history.colDate")}
+                            </th>
+                            <th className="py-2 pr-2 font-medium">
+                              {t("femme.billing.history.colTotal")}
+                            </th>
+                            <th className="py-2 font-medium">
+                              {t("femme.clients.colStatus")}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyInvoices.map((inv) => (
+                            <tr
+                              key={inv.id}
+                              className="border-b border-[var(--color-border)]/60"
+                            >
+                              <td className="py-2 pr-2 align-top font-mono text-xs">
+                                {inv.invoiceNumberFormatted}
+                              </td>
+                              <td className="py-2 pr-2 align-top">
+                                {formatHistoryDateTime(inv.issuedAt, dateLocale)}
+                              </td>
+                              <td className="py-2 pr-2 align-top">
+                                {formatAmountDecimal(inv.total)}
+                              </td>
+                              <td className="py-2 align-top">
+                                <HistoryInvoiceStatusPill status={inv.status} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              </>
+            ) : null}
           </div>
         </TabsContent>
       </Tabs>

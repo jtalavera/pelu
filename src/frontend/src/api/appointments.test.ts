@@ -71,6 +71,14 @@ describe("appointments API", () => {
       const call = femmeJsonMock.mock.calls[0][0] as string;
       expect(call).not.toContain("professionalId");
     });
+
+    it("includes clientId in URL when provided", async () => {
+      femmeJsonMock.mockResolvedValue([]);
+      await listAppointments("2026-04-07T00:00:00Z", "2026-04-14T00:00:00Z", null, 7);
+      expect(femmeJsonMock).toHaveBeenCalledWith(
+        expect.stringContaining("clientId=7"),
+      );
+    });
   });
 
   describe("getAppointment", () => {

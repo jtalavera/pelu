@@ -7,6 +7,7 @@ type Client = {
   id: number;
   fullName: string;
   phone: string | null;
+  email: string | null;
   ruc: string | null;
   active?: boolean;
 };
@@ -124,6 +125,14 @@ export function ClientSearchField({
           role="combobox"
           value={query}
           onChange={handleQueryChange}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            if (!showDropdown || searching) return;
+            if (results.length === 1) {
+              e.preventDefault();
+              selectClient(results[0]);
+            }
+          }}
           onFocus={() => {
             void doSearch(query.trim());
           }}
@@ -145,7 +154,9 @@ export function ClientSearchField({
         <Text variant="muted" className="mt-1 text-sm" aria-live="polite">
           {t("femme.clients.inlineSearch.selected")}: <strong>{value.client.fullName}</strong>
           {value.client.phone ? ` · ${value.client.phone}` : ""}
-          {value.client.ruc ? ` · RUC ${value.client.ruc}` : ""}
+          {value.client.ruc
+            ? ` · ${t("femme.clients.ruc")} ${value.client.ruc}`
+            : ""}
         </Text>
       ) : null}
 
@@ -163,29 +174,35 @@ export function ClientSearchField({
               </Text>
             </li>
           ) : null}
-          {results.map((client) => (
-            <li key={client.id} role="option" aria-selected={false}>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full justify-start rounded-none px-3 py-2 text-sm"
-                onClick={() => selectClient(client)}
-              >
-                <span className="flex flex-col items-start">
-                  <span className="font-medium">{client.fullName}</span>
-                  <span className="text-xs text-[rgb(var(--color-muted-foreground))]">
-                    {[
-                      client.active === false ? t("femme.status.INACTIVE") : null,
-                      client.phone,
-                      client.ruc ? `RUC ${client.ruc}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+          {results.map((client) => {
+            const metaParts = [
+              client.active === false ? t("femme.status.INACTIVE") : null,
+              client.phone,
+              client.ruc ? `${t("femme.clients.ruc")} ${client.ruc}` : null,
+            ].filter(Boolean) as string[];
+            const lineTitle = [client.fullName, ...metaParts].join(" · ");
+            return (
+              <li key={client.id} role="option" aria-selected={false}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto min-h-11 w-full justify-start rounded-none px-3 py-2 text-sm"
+                  onClick={() => selectClient(client)}
+                  title={lineTitle}
+                >
+                  <span className="block w-full min-w-0 truncate text-left text-sm leading-snug">
+                    <span className="font-medium">{client.fullName}</span>
+                    {metaParts.length > 0 ? (
+                      <span className="text-[rgb(var(--color-muted-foreground))]">
+                        {" · "}
+                        {metaParts.join(" · ")}
+                      </span>
+                    ) : null}
                   </span>
-                </span>
-              </Button>
-            </li>
-          ))}
+                </Button>
+              </li>
+            );
+          })}
           {onCreateNew ? (
             <li className="border-t border-[rgb(var(--color-border))]">
               <Button
