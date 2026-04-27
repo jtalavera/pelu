@@ -874,6 +874,7 @@
         "close": "Close",
         "last": "Finish",
         "next": "Next",
+        "nextWithProgress": "Next ({current} of {total})",
         "skip": "Skip"
       },
       "nav": {

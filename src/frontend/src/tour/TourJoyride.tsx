@@ -25,6 +25,7 @@ export function TourJoyride({ enabled = true }: TourJoyrideProps) {
         close: t("femme.tour.controls.close"),
         last: t("femme.tour.controls.last"),
         next: t("femme.tour.controls.next"),
+        nextWithProgress: t("femme.tour.controls.nextWithProgress"),
         skip: t("femme.tour.controls.skip"),
       }}
       options={{
