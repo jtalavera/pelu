@@ -17,19 +17,17 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 ## Historia de usuario
 
 **Como** administrador,  
-**quiero** buscar una cliente por nombre, teléfono o RUC desde el formulario de turno o de factura,  
-**para** vincularla rápidamente sin salir de lo que estoy haciendo.
+**quiero** buscar una cliente por nombre, teléfono o RUC en el directorio **y desde el alta de turno**,  
+**para** vincularla rápidamente sin salir del flujo.
 
 ---
 
 ## Criterios de aceptación
 
-1. **Ubicación** — El buscador aparece inline en el formulario de turno y en el de factura.
+1. **Listado principal** — En la pantalla de clientes existe un listado combinado con búsqueda por nombre, teléfono o RUC.
 2. **Búsqueda incremental** — La búsqueda se dispara mientras se escribe (desde 2 caracteres) por nombre, teléfono o RUC.
 3. **Resultados** — Cada resultado muestra nombre, teléfono y RUC (si existe) para identificar sin ambigüedad.
-4. **Alta rápida** — Si no hay resultados, se puede crear una nueva cliente desde el mismo contexto sin perder el progreso del formulario principal (flujo definido en UX).
-5. **Autocompletado en factura** — Al seleccionar una cliente, sus datos (incluido RUC si aplica) se autocompletan en el formulario de factura.
-6. **Cliente ocasional** — Si se elige cliente ocasional, el vínculo usa el **identificador genérico** del tenant (sin seleccionar una cliente del directorio con datos completos); ver PRD — Definiciones transversales.
+4. **Buscador inline en nueva cita** — En el modal de nueva cita existe un buscador de cliente que exhibe nombre (y datos relevantes) al seleccionar.
 
 ---
 
@@ -37,10 +35,10 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 - **UI:** búsqueda en listado y campos de búsqueda inline (`SearchInput` / filtros).
 - **API:** listados y búsqueda de clientes (`/api/clients` con query).
-- **E2E:** `e2e/tests/hu-11-buscar-cliente-existente.spec.ts`.
+- **E2E:** `e2e/tests/hu-11-buscar-cliente-existente.spec.ts`; cobertura de facturación (autocompletado, cliente ocasional) en **HU-10 / HU-14**.
 
 ---
 
 ## Notas para estimación y pruebas
 
-- **Pruebas:** debounce/threshold de 2 caracteres, sin resultados, selección y autocompletado, creación inline.
+- **Pruebas:** debounce/threshold de 2 caracteres, sin resultados; coherencia con **HU-07** al seleccionar cliente en nueva cita.

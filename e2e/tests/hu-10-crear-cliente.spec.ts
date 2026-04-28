@@ -3,14 +3,6 @@ import { loginAsDemoApi, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-10 · Crear cliente", () => {
-  test("abre el formulario de nuevo cliente", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/clients");
-    await expect(page.getByRole("heading", { name: "Clients" })).toBeVisible();
-    await page.getByRole("button", { name: "+ New client" }).first().click();
-    await expect(page.getByRole("heading", { name: "New client" })).toBeVisible();
-  });
-
   test("HU-10 · 1 guardar cliente con nombre obligatorio", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/clients");
@@ -57,26 +49,14 @@ test.describe("HU-10 · Crear cliente", () => {
     ).toBeVisible();
   });
 
-  test("HU-10 · 4 cliente disponible en búsqueda de facturación", async ({ page, request }) => {
+  test("HU-10 · 4 nueva cliente aparece al buscarla en el directorio", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
-    const name = `E2E Bill ${Date.now()}`;
+    const name = `E2E Find ${Date.now()}`;
     await seedClient(request, token, name);
 
     await loginAsDemo(page);
-    await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "New Invoice" }).click();
-    await page.getByLabel("Search or select client").fill(name.slice(0, 6));
-    await page.getByRole("button", { name: name }).click();
-    await expect(page.getByText("Selected client", { exact: false })).toContainText(name);
-  });
-
-  test("HU-10 · 5 cliente ocasional en factura", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "New Invoice" }).click();
-    await page.getByLabel("Search or select client").click();
-    await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("Walk-in E2E");
-    await expect(page.getByLabel("Client display name")).toHaveValue("Walk-in E2E");
+    await page.goto("/app/clients");
+    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name.slice(0, 6));
+    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
   });
 });

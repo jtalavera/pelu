@@ -1,10 +1,12 @@
 # HU-14 · Emitir un comprobante
 
-| Campo | Valor |
-|--------|--------|
-| **ID** | HU-14 |
+
+| Campo      | Valor       |
+| ---------- | ----------- |
+| **ID**     | HU-14       |
 | **Módulo** | Facturación |
-| **Estado** | `Done` |
+| **Estado** | `Done`      |
+
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -24,15 +26,25 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ## Criterios de aceptación
 
-1. **Origen del flujo** — Se puede iniciar un comprobante desde un turno completado o de forma independiente.
-2. **Ítems** — Se pueden agregar uno o varios servicios como ítems (extensible a productos en el futuro).
-3. **Cliente** — Se puede vincular a una cliente existente o emitir como “cliente ocasional” usando el **identificador genérico** del sistema (ver PRD — Definiciones transversales).
-4. **RUC en comprobante** — Si la cliente tiene RUC, se muestra automáticamente; puede ajustarse solo para esa factura sin cambiar el perfil permanente.
-5. **Descuento** — Se puede aplicar descuento en monto fijo o porcentaje sobre el total (reglas de cálculo documentadas).
-6. **Método de pago** — Se selecciona método: efectivo, débito, crédito, transferencia u otro (lista cerrada o extensible según diseño).
-7. **Numeración** — Al confirmar, se asigna el siguiente número disponible dentro del rango del timbrado activo; se muestra con 7 dígitos y ceros a la izquierda (ej. `0000043`).
-8. **Sin timbrado válido** — Si no hay timbrado activo vigente, se bloquea la emisión y se muestra el error correspondiente.
-9. **PDF** — El comprobante es descargable en PDF e incluye: datos del negocio, número de timbrado, número de factura, RUC del negocio, datos de la cliente (con RUC si aplica), ítems, subtotal, descuento, total y método de pago.
+1. **Formulario de emisión** — Existe pantalla usable (pestaña “New Invoice” u homóloga) para cargar ítems, cliente y totales con acción explícita de emisión.
+
+2. **Ítems y totales** — Se pueden agregar uno o más servicios como ítems y registrar el pago hasta cubrir el total.
+
+3. **Cliente** — Se puede emitir como cliente seleccionado del directorio **o** como “cliente ocasional” con el identificador genérico del sistema.
+
+4. **RUC en línea sobre cliente** — Si la cliente viene del directorio se precarga RUC nombre; pueden corregirse para la línea fiscal de esa emisión conforme UX (incluye sincronización opcional posterior al perfil cuando aplica, ver HU-25).
+
+5. **Descuento** — Se puede aplicar descuento como porcentaje o monto fijo sobre el total, con validaciones visibles cuando el tipo de descuento aplica.
+
+6. **Numeración correlativa** — Al confirmarse la emisión, se asigna el siguiente correlativo dentro del timbrado activo en el formato de 7 dígitos con ceros a la izquierda (aspecto observable en la confirmación o en el PDF).
+
+7. **Sin timbrado válido para la fecha** — Si no hay timbrado activo válido para el día actual (incluye expirados o rangos ilegibles), la emisión falla en UI **o** vía mensaje/error controlado antes de crear el documento definitivo.
+
+8. **Sesión de caja** — Sin sesión de caja abierta, `POST /api/invoices` (o equivalente) responde con error de dominio conocido (**p. ej.** `CASH_SESSION_NOT_OPEN`); mismo criterio de negocio que impide crear el comprobante.
+
+9. **RUC del negocio obligatorio cuando aplica** — Si falta el RUC de negocio requerido para operar fiscalmente en el modelo implementado, se muestra un aviso de producto destacado (p. ej. en dashboard) **y/o** se bloquea la emisión hasta corregirlo; el comportamiento es observable sin ambigüedad.
+
+10. **PDF** — El comprobante emitido permite descarga con tipo de contenido `application/pdf`; el archivo debe ser legible como PDF (no puede ser página de error HTML disfrazada).
 
 ---
 

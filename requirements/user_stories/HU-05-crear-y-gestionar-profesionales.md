@@ -26,7 +26,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ## Criterios de aceptación
 
-1. **Alta** — Se puede crear una profesional con: nombre completo, teléfono, email y foto (opcional).
+1. **Alta** — Se puede crear una profesional con: nombre completo, teléfono, email (**único dentro del tenant** si se informa) y foto (opcional).
 2. **Horarios** — Se pueden definir los días y horarios de trabajo de cada profesional (modelo explícito: ej. plantilla semanal).
 3. **Edición y desactivación** — Se puede editar o desactivar una profesional sin perder historial asociado a turnos pasados.
 4. **Listado con estado** — La lista muestra el estado de cada profesional (activa / inactiva).

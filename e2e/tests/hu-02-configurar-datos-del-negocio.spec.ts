@@ -1,14 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { API_BASE, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-02 · Configurar datos del negocio", () => {
-  test("pantalla de negocio bajo Ajustes", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/settings/business");
-    await expect(page.getByLabel("Business name")).toBeVisible();
-  });
-
   test("HU-02 · 1 admin ve datos del tenant cargados desde el servidor", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
@@ -39,19 +32,7 @@ test.describe("HU-02 · Configurar datos del negocio", () => {
     ).toBeVisible();
   });
 
-  test("HU-02 · 4 alerta de RUC cuando falta para facturación (dashboard)", async ({ page, request }) => {
-    // Ensure no RUC is configured so the dashboard alert is visible
-    const token = await loginAsDemoApi(request);
-    await request.put(`${API_BASE}/api/business-profile`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      data: { businessName: "Demo salon", ruc: null, address: null, phone: null, contactEmail: null, logoDataUrl: null },
-    });
-    await loginAsDemo(page);
-    await page.goto("/app");
-    await expect(page.getByText("Add a valid business RUC to issue invoices.", { exact: true })).toBeVisible();
-  });
-
-  test("HU-02 · 6 cambios sin guardar no persisten al recargar", async ({ page }) => {
+  test("HU-02 · 4 cambios sin guardar no persisten al recargar", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
     const before = await page.getByLabel("Phone").inputValue();

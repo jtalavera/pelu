@@ -16,12 +16,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await ensureActiveFiscalStampForInvoices(request, token);
   });
 
-  test("historial incluye búsqueda y detalle de factura", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(page.locator("#invoice-history-text-filter")).toBeVisible();
-  });
+
 
   test("HU-17 · 1 y 2 anular con razón obligatoria", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);

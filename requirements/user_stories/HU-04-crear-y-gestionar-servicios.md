@@ -20,7 +20,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 **Como** administrador,  
 **quiero** definir los servicios que ofrece la peluquería con su nombre, precio y duración,  
-**para** poder usarlos al agendar turnos y al emitir comprobantes.
+**para** poder usarlos al agendar turnos y en los flujos de venta del producto.
 
 ---
 

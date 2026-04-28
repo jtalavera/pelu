@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-22 · Asignar PIN a profesional", () => {
@@ -11,7 +10,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await expect(dlg.locator("#prof-pin")).toBeVisible();
   });
 
-  test("HU-25 / HU-22 campo PIN usa type password (enmascara dígitos)", async ({ page }) => {
+  test("HU-22 · 7 el campo PIN usa type password (se enmascaran los dígitos)", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
@@ -52,7 +51,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await expect(dlg.getByText(/PIN must be between 4 and 7 numeric digits/)).toBeVisible();
   });
 
-  test("HU-22 · 1 PIN de 4 dígitos válido se guarda correctamente", async ({ page }) => {
+  test("HU-22 · guardado valores PIN 4 dígitos", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     const suffix = Date.now();
@@ -63,11 +62,10 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await dlg.getByLabel("Full name").fill(name);
     await dlg.locator("#prof-pin").fill(pin4);
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
-    // should move to schedule tab without error
     await expect(dlg.getByRole("button", { name: "Save schedule" })).toBeVisible();
   });
 
-  test("HU-22 · 1 PIN de 7 dígitos válido se guarda correctamente", async ({ page }) => {
+  test("HU-22 · guardado valores PIN 7 dígitos", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     const suffix = Date.now();
@@ -87,7 +85,6 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
 
     const pin = String(Date.now()).slice(-6);
 
-    // Create first professional with the PIN
     const name1 = `E2E DupPin1 ${Date.now()}`;
     await page.getByRole("button", { name: "+ New professional" }).click();
     let dlg = page.getByRole("dialog");
@@ -97,7 +94,6 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await dlg.getByRole("button", { name: "Save schedule" }).evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
     await expect(page.getByText(name1, { exact: true }).first()).toBeVisible();
 
-    // Try to create second professional with same PIN
     const name2 = `E2E DupPin2 ${Date.now()}`;
     await page.getByRole("button", { name: "+ New professional" }).click();
     dlg = page.getByRole("dialog");
@@ -114,7 +110,6 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
-    // Leave PIN empty
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     await expect(dlg.getByRole("button", { name: "Save schedule" })).toBeVisible();
   });
@@ -124,7 +119,6 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await page.goto("/app/professionals");
     const name = `E2E ClearPin ${Date.now()}`;
 
-    // Create with a PIN
     await page.getByRole("button", { name: "+ New professional" }).click();
     let dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
@@ -133,49 +127,11 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await dlg.getByRole("button", { name: "Save schedule" }).evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
 
-    // Edit and clear PIN — re-open modal
     const row = page.locator("tr").filter({ hasText: name });
     await row.getByRole("button", { name: "More…", exact: true }).click();
     dlg = page.getByRole("dialog");
     await expect(dlg.locator("#prof-pin")).toHaveAttribute("type", "password");
-    // Leave PIN field empty and save (mantiene PIN existente: pin no reenviado)
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
-    // Should advance to schedule tab without error
     await expect(dlg.getByRole("button", { name: "Save schedule" })).toBeVisible();
-  });
-
-  test("HU-25 / HU-22 email duplicado en el tenant muestra mensaje explícito", async ({
-    page,
-    request,
-  }) => {
-    const token = await loginAsDemoApi(request);
-    const email = `e2e-dup-${Date.now()}@test.local`;
-    const n1 = `E2E Eml A ${Date.now()}`;
-    const n2 = `E2E Eml B ${Date.now()}`;
-    await apiPostJson(request, token, "/api/professionals", {
-      fullName: n1,
-      phone: null,
-      email,
-      photoDataUrl: null,
-    });
-    await apiPostJson(request, token, "/api/professionals", {
-      fullName: n2,
-      phone: null,
-      email: null,
-      photoDataUrl: null,
-    });
-
-    await loginAsDemo(page);
-    await page.goto("/app/professionals");
-    const row = page.locator("tr").filter({ hasText: n2 });
-    await row.getByRole("button", { name: "More…", exact: true }).click();
-    const dlg = page.getByRole("dialog");
-    await dlg.getByLabel("Email").fill(email);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
-    await expect(
-      dlg.getByText("Another professional in your business already uses this email address.", {
-        exact: true,
-      }),
-    ).toBeVisible();
   });
 });

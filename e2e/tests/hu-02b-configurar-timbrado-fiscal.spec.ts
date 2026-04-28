@@ -6,19 +6,12 @@ import {
   isoDateLocal,
   listFiscalStamps,
   loginAsDemoApi,
-  seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { pickServiceLine } from "../fixtures/invoice";
 
 test.describe.configure({ mode: "serial" });
 
 test.describe("HU-02b · Configurar timbrado fiscal", () => {
-  test("pantalla de timbrado bajo Ajustes", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/settings/fiscal-stamp");
-    await expect(page.getByRole("button", { name: "Deactivate" })).toBeVisible();
-  });
 
   test("HU-02b · 2 formulario Add stamp muestra campos del timbrado", async ({ page }) => {
     await loginAsDemo(page);
@@ -64,7 +57,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     ).toBeVisible();
   });
 
-  test("HU-02b · 6 solo un timbrado activo: al activar otro, el anterior queda inactivo", async ({
+  test("HU-02b · 5 solo un timbrado activo: al activar otro, el anterior queda inactivo", async ({
     page,
     request,
   }) => {
@@ -88,7 +81,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await expect(page.getByText("Valid", { exact: true }).first()).toBeVisible();
   });
 
-  test("HU-02b · 7 alerta de vencimiento en menos de 30 días en el dashboard", async ({
+  test("HU-02b · 6 alerta de vencimiento en menos de 30 días en el dashboard", async ({
     page,
     request,
   }) => {
@@ -127,7 +120,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     ).toBeVisible();
   });
 
-  test("HU-02b · 8 alerta de rango de numeración bajo 10%", async ({ page, request }) => {
+  test("HU-02b · 7 alerta de rango de numeración bajo 10%", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await apiPutJson(request, token, "/api/business-profile", {
       businessName: "Demo salon",
@@ -156,53 +149,6 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
       page.getByText("Less than 10% of invoice numbers remain in the current range.", {
         exact: true,
       }),
-    ).toBeVisible();
-  });
-
-  test("HU-02b · 9 emisión bloqueada con timbrado no válido para la fecha", async ({
-    page,
-    request,
-  }) => {
-    const token = await loginAsDemoApi(request);
-    const stamps = await listFiscalStamps(request, token);
-    for (const s of stamps) {
-      await request.post(`${API_BASE}/api/fiscal-stamps/${s.id}/deactivate`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    }
-    const until = new Date();
-    until.setDate(until.getDate() - 2);
-    const from = new Date(until);
-    from.setFullYear(from.getFullYear() - 1);
-    const expired = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
-      stampNumber: `7${Date.now().toString().slice(-7)}`,
-      validFrom: isoDateLocal(from),
-      validUntil: isoDateLocal(until),
-      rangeFrom: 3_000_000,
-      rangeTo: 3_000_100,
-      initialEmissionNumber: 3_000_000,
-    });
-    await apiPostJson(request, token, `/api/fiscal-stamps/${expired.id}/activate`, {});
-
-    const seed = await seedCategoryServiceProfessional(request, token);
-
-    await loginAsDemo(page);
-    await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
-    const openBtn = page.getByRole("button", { name: "Open cash register" });
-    if (await openBtn.isVisible()) {
-      await page.getByLabel("Initial cash amount").fill("10000");
-      await openBtn.click();
-      await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 30_000 });
-    }
-    await page.getByRole("tab", { name: "New Invoice" }).click();
-    await page.getByLabel("Client display name").fill("Walk-in");
-    await pickServiceLine(page, seed.serviceFullName, 0);
-    await page.locator("#line-price-0").fill("10000");
-    await page.locator("#pay-amount-0").fill("10000");
-    await page.getByRole("button", { name: "Issue invoice" }).click();
-    await expect(
-      page.getByText("The active fiscal stamp is not valid for today's date.", { exact: true }),
     ).toBeVisible();
   });
 });

@@ -14,12 +14,7 @@ function rxExact(s: string): RegExp {
 }
 
 test.describe("HU-07 · Agendar un turno", () => {
-  test("abre el diálogo de nuevo turno", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/calendar");
-    await page.getByRole("button", { name: "New appointment" }).first().click();
-    await expect(page.getByRole("heading", { name: "New appointment" })).toBeVisible();
-  });
+
 
   test("HU-07 · 1 crear turno con cliente, servicio y profesional", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);

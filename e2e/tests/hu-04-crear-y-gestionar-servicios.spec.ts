@@ -2,11 +2,7 @@ import { expect, test } from "@playwright/test";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-04 · Crear y gestionar servicios", () => {
-  test("página de servicios carga", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/services");
-    await expect(page.getByText("Services", { exact: true }).first()).toBeVisible();
-  });
+
 
   test("HU-04 · 1 CRUD categoría: crear y listar", async ({ page }) => {
     await loginAsDemo(page);
