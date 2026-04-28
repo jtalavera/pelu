@@ -28,7 +28,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 2. **Arqueo de efectivo** — Se puede ingresar el monto real contado en efectivo para comparar con el esperado por el sistema.
 3. **Diferencia** — El sistema calcula y muestra la diferencia (sobrante o faltante) entre contado y esperado.
 4. **Registro de cierre** — El cierre queda registrado con fecha, hora, usuario y el resumen completo (auditoría).
-5. **Post-cierre** — Con la caja cerrada no se pueden emitir nuevos comprobantes hasta una nueva **apertura** de caja (HU-13). El cierre del día es **opcional** para el flujo de negocio (no se obliga a cerrar para “seguir el día siguiente”), pero mientras exista caja cerrada sin nueva apertura, aplica esta restricción de emisión.
+5. **Post-cierre** — Con la caja cerrada no se pueden emitir nuevos comprobantes hasta abrir nuevamente la caja desde el flujo de caja registradora. El cierre del día es **opcional** para el negocio; si no se cierra, no aplica esta restricción hasta que efectivamente exista un cierre sin reapertura.
 
 ---
 

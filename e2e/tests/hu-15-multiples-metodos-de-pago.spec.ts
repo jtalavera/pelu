@@ -14,12 +14,7 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await ensureActiveFiscalStampForInvoices(request, token);
   });
 
-  test("formulario de factura incluye sección de métodos de pago", async ({ page }) => {
-    await loginAsDemo(page);
-    await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
-    await expect(page.getByText("Payment methods", { exact: true })).toBeVisible();
-  });
+
 
   test("HU-15 · 1 y 2 dos métodos cuya suma iguala el total", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);

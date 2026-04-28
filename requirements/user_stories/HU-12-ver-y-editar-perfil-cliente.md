@@ -26,7 +26,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 1. **Listado** — Existe pantalla de listado de clientes con búsqueda por nombre, teléfono o RUC.
 2. **Columnas** — El listado muestra: nombre, teléfono, RUC (si tiene) y cantidad de visitas.
-3. **Perfil** — En el perfil se ven datos básicos y un historial simple de turnos y comprobantes asociados a esa cliente.
+3. **Perfil** — En el perfil se ven datos básicos y un historial simple de turnos asociados a esa cliente.
 4. **Edición** — Se pueden editar nombre, teléfono, email y RUC con las mismas validaciones que en alta.
 5. **RUC y unicidad al editar** — Al cambiar teléfono, email o RUC, se aplican las mismas reglas que en alta: validación de formato/RUC y unicidad **solo para valores no vacíos** (sin duplicados fantasma por campos vacíos).
 6. **Baja lógica** — No se puede eliminar una cliente con historial asociado; solo desactivarla (historial conservado).

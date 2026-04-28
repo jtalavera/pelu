@@ -8,8 +8,6 @@
 | **Estado** | `In Progress`  |
 
 
-**Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
-
 ## Definiciones transversales
 
 Multi-tenant y convenciones: [PRD Femme MVP v1](../prds/femme_historias_usuario_mvp_v1.md#definiciones-transversales).
@@ -26,29 +24,36 @@ Multi-tenant y convenciones: [PRD Femme MVP v1](../prds/femme_historias_usuario_
 
 ## Criterios de aceptación
 
-1. **Emitir comprobante — lista de clientes** — En Facturación → «New Issue» / emisión de factura, el desplegable de búsqueda de clientes (`ClientSearchField`) muestra en **una sola fila** el nombre, el RUC, el teléfono, el indicador de inactiva (si aplica) y el resto de metadatos, con la misma información que antes pero sin apilar en dos renglones. Texto largo se recorta con puntos suspensivos y el `title` del ítem repite la línea completa al pasar el cursor.
-2. **Emitir comprobante — edición de cliente en la factura** — Si se eligió un cliente del directorio y se modifica en el formulario de emisión el **nombre** y/o el **RUC** (respecto del registro seleccionado), al confirmar la factura con éxito se ejecuta además un `PUT /api/clients/{id}` para **persistir esos datos en el directorio** (teléfono y email del registro se conservan). Se valida RUC con el mismo criterio que en Clientes; el nombre no puede quedar vacío con cliente vinculado. Si el guardado de factura sale bien y el `PUT` falla, se muestra una **advertencia** (el comprobante ya se emitió).
-3. **Emitir comprobante — lista de servicios** — En el buscador de servicios de cada ítem (`ServiceSearchField`), las opciones muestran en **una sola fila** el nombre, categoría, precio en guaraníes y duración, con el mismo patrón de una fila, recorte y `title` que en clientes.
-
-### Implementación (código)
-
-- **Listas / UX:** `ClientSearchField.tsx`, `ServiceSearchField.tsx`
-- **Sincronización de cliente con factura:** `BillingPage.tsx` (`NewInvoiceTab` — tras `POST /api/invoices` exitoso, condicional `femmePutJson` al cliente) + `lib/validateRuc.ts` (reutilizado también en `ClientsPage` y `ClientDetailPage`).
-- **E2E:** `e2e/tests/hu-14-emitir-comprobante.spec.ts`
-
-1. **Búsquedas con lista desplegable + Enter** — En campos estilo combobox con filtrado mientras se escribe (`ClientSearchField`, `ServiceSearchField`, `SearchableSelect` del calendario), si al **Enter** queda **una sola** opción en la lista, esa opción se aplica (sin forzar a hacer clic). `SearchableSelect` ya lo tenía; se unificó en clientes y servicios.
-2. **Facturación — total de línea** — En el formulario de ítems, el importe **cantidad × precio unitario** se muestra **centrado** en su celda, con tipografía alineada al **precio unitario** (`text-sm` / misma sensación que el `Input`).
-3. **Formato de montos (producto)** — Todos los importes en guaraníes usan separador de miles **punto** (`.`) y, cuando hay decimales, coma como separador fraccional, vía `lib/formatMoney.ts` (`es-PY`). Aplica a facturación, servicios, dashboard, etc. Regla fijada también en `.cursorrules`.
-
-### Pruebas
-
-- Playwright: tests «HU-25 · lista de clientes…», «HU-25 · factura con edición de nombre/RUC…», «HU-25 · lista de servicios…».
-- Vitest: `ClientSearchField.test.tsx`, `ServiceSearchField.test.tsx`, `lib/formatMoney.test.ts`.
+1. **Facturación — fila única cliente** — En el campo de búsqueda de clientes (`ClientSearchField`) en emisión de factura, cada opción desplegable muestra en una sola fila línea nombre, datos de contacto e indicadores necesarios (texto largo recorta con puntos suspensivos; ítem con `title` con el texto completo).
+2. **Facturación — sincronización cliente tras emisión** — Si se modificó nombre y/o RUC respecto del cliente seleccionado, tras emitir exitosamente se intenta sincronizar al directorio mediante `PUT /api/clients/{id}`; si el guardado posterior falla, se muestra advertencia porque el comprobante ya existe.
+3. **Facturación — fila única servicio** — El buscador de servicios por ítem muestra opciones en una sola línea (nombre, categoría, precio, duración) con patrón de truncado coherentemente con cliente.
+4. **Combobox + Enter** — En `ClientSearchField`, `ServiceSearchField` y `SearchableSelect` del calendario, si tras pulsar Enter queda solo una opción filtrada, esa opción se aplica como selección.
+5. **Facturación — alineación de importes de línea** — El campo que muestra cantidad × precio en cada ítem de factura está alineado y estilizado de forma uniforme respecto del precio unitario.
+6. **Montos Guaraníes** — Las cantidades monetarias siguen formato `es-PY` vía `lib/formatMoney.ts` (punto miles, coma decimal) en vistas críticas (factura, lista de servicios, dashboard al menos en caminos donde se modificó HU-25).
+7. **Historial — rango máximo / índice** — Cobertura de reglas de fecha e índice documentadas en HU-16 (implementación compartida; no duplicar aquí texto funcional más allá de la referencia cruzada).
+8. **Calendario — banda temporal** — Al mover el puntero para inspeccionar un slot temporal, la resal visual refleja el intervalo de tiempo correcto para la interacción (30 min donde aplica).
 
 ---
 
-1. **Historial de comprobantes (rango e índice)** — Criterio cubierto en [HU-16](HU-16-historial-de-comprobantes.md#actualizaciones-2026-04-rango-e-índice).
+## Implementación actual (código, 2026-04)
+
+- **Listas / UX:** `ClientSearchField.tsx`, `ServiceSearchField.tsx`.
+- **Sincronización cliente con factura:** `BillingPage.tsx` (`NewInvoiceTab`).
+- **E2E:** ver `hu-14-emitir-comprobante.spec.ts`, `hu-19-fixes-varios-calendario.spec.ts`.
+
+---
+
+## Tests automatizados (referencias)
+
+| Criterio | Playwright (`e2e/tests/`) |
+| -------- | ------------------------- |
+| 1–3 | `hu-14-emitir-comprobante.spec.ts` (prefijo `HU-25`) |
+| 4–6 | No cubiertos en una sola aserción E2E específica; ver Vitest mencionados en PR / `formatMoney`; Enter en combinación de campos donde aplica HU-07 |
+| 7 | Detalle en HU-16 |
+
+---
 
 ## Notas
 
-- Rama: `fix/general_ux`. Se irán añadiendo criterios a esta HU o historias adicionales según el alcance de cada fix.
+- Este documento sólo agrupa mejoras UX; la numeración estable de historia no debe **incrustar dependencias ascendentes** hacia HU-XX mayores mediante criterios (la referencia HU-16 arriba es documental, no requisito de implementación paralela).
+

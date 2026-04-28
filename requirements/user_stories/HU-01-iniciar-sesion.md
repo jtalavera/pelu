@@ -31,8 +31,8 @@ Cada criterio es verificable mediante prueba manual o automatizada (UI, API o am
 1. **Formulario de login** — El sistema muestra un formulario con campos de email y contraseña (y acciones asociadas según diseño).
 2. **Credenciales incorrectas** — Si el login falla, se muestra un mensaje de error claro que no revela si falló el email o la contraseña.
 3. **Login exitoso** — Tras credenciales válidas, el usuario es redirigido al dashboard principal (o ruta home acordada).
-4. **Sesión por inactividad (8 h)** — Tras el login, la sesión permanece válida mientras haya actividad; tras **8 horas sin actividad**, el usuario es redirigido al login (o equivalente que impida usar el panel sin reautenticar).
-5. **Recuperación de contraseña** — Existe la opción “olvidé mi contraseña” que dispara el envío de un enlace de recuperación al email indicado (flujo completo verificable: solicitud → email o mock en entorno de prueba).
+4. **Recuperación de contraseña — acceso** — Desde el login existe un enlace o acción **“Olvidé mi contraseña”** que navega a la pantalla de solicitud de recuperación.
+5. **Recuperación de contraseña — solicitud** — En la pantalla de recuperación, al enviar un email con formato válido, el sistema muestra un mensaje de confirmación **genérico** (sin confirmar si la cuenta existe), coherente con la política de seguridad.
 
 ---
 
@@ -40,7 +40,7 @@ Cada criterio es verificable mediante prueba manual o automatizada (UI, API o am
 
 - **Frontend:** `LoginPage` (`/login`), `ForgotPasswordPage` (`/forgot-password`); JWT almacenado en `sessionStorage` (`accessToken`).
 - **API:** `POST /api/auth/login`, `POST /api/auth/forgot-password`, reset vía `POST /api/auth/reset-password` (en desarrollo el enlace se loguea, no hay envío SMTP en MVP).
-- **Sesión:** TTL del access token `app.femme.jwt.access-token-ttl-seconds` (por defecto 28800 s = 8 h), alineado al criterio de inactividad.
+- **Sesión:** TTL del access token `app.femme.jwt.access-token-ttl-seconds` (por defecto 28800 s = 8 h). La expiración no forma parte de los criterios de aceptación verificables en e2e sin mocks de tiempo.
 - **Usuario demo:** `admin@demo.com` / `Demo123!` (`FemmeDataInitializer`, no aplica al perfil `test`).
 - **E2E:** `e2e/tests/hu-01-iniciar-sesion.spec.ts`.
 

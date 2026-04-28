@@ -11,7 +11,7 @@ import { loginAsDemo } from "../fixtures/auth";
 import { pickSearchableOption } from "../fixtures/ui";
 
 test.describe("HU-06 · Calendario de turnos", () => {
-  test("HU-06 · 3 navegación semanas actualiza el rango mostrado", async ({ page }) => {
+  test("HU-06 · 1 y · 3 vista semanal y navegación de semanas", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     const range = page.locator("span").filter({ hasText: /–/ }).first();
@@ -46,6 +46,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
     const appointmentButton = page.getByRole("button", { name: new RegExp(client.fullName) });
     await expect(appointmentButton).toBeVisible();
     await expect(appointmentButton.getByText(/E2E Svc /)).toBeVisible();
+    await expect(appointmentButton.getByText(seed.professionalFullName)).toBeVisible();
   });
 
   test("HU-06 · 4 filtro por profesional reduce resultados", async ({ page, request }) => {
