@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
   Optional<Tenant> findByDomain(String domain);
+
+  Optional<Tenant> findFirstByOrderByIdAsc();
 }

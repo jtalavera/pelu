@@ -10,4 +10,6 @@ public interface ServiceCategoryRepository extends JpaRepository<ServiceCategory
   List<ServiceCategory> findByTenant_IdOrderByNameAsc(Long tenantId);
 
   Optional<ServiceCategory> findByIdAndTenant_Id(Long id, Long tenantId);
+
+  long countByTenant_Id(Long tenantId);
 }
