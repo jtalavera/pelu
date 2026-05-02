@@ -18,4 +18,6 @@ public interface FiscalStampRepository extends JpaRepository<FiscalStamp, Long> 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT f FROM FiscalStamp f WHERE f.id = :id AND f.tenant.id = :tenantId")
   Optional<FiscalStamp> lockByIdAndTenantId(@Param("id") Long id, @Param("tenantId") Long tenantId);
+
+  long countByTenant_Id(Long tenantId);
 }

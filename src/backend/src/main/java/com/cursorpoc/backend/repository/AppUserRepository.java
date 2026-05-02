@@ -12,4 +12,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
   @EntityGraph(attributePaths = "tenant")
   Optional<AppUser> findByEmail(String email);
+
+  long countByTenant_Id(Long tenantId);
 }

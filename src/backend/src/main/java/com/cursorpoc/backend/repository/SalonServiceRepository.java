@@ -19,4 +19,6 @@ public interface SalonServiceRepository extends JpaRepository<SalonService, Long
   List<SalonService> findByTenant_IdOrderByNameAsc(@Param("tenantId") Long tenantId);
 
   Optional<SalonService> findByIdAndTenant_Id(Long id, Long tenantId);
+
+  long countByTenant_Id(Long tenantId);
 }
