@@ -5,6 +5,7 @@ import {
   apiPostJson,
   apiPutJson,
   ensureActiveFiscalStampForInvoices,
+  ensureCashSessionOpenApi,
   isoDateLocal,
   listFiscalStamps,
   loginAsDemoApi,
@@ -15,20 +16,25 @@ import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
+test.describe.configure({ mode: "serial" });
+
 test.describe("HU-14 · Emitir comprobante", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
   });
 
-  test("formulario de emisión de factura", async ({ page }) => {
+  test("HU-14 · 1 formulario de emisión de factura", async ({ page }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
   });
 
-  test("HU-14 · 2 varios ítems y HU-14 · 6 método de pago", async ({ page, request }) => {
+  test("HU-14 · 2 varios ítems, número con 7 dígitos y HU-14 · 6 método de pago", async ({
+    page,
+    request,
+  }) => {
     const token = await loginAsDemoApi(request);
     await apiPutJson(request, token, "/api/business-profile", {
       businessName: "Demo salon",
@@ -53,6 +59,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.locator("#line-price-1").fill("3000");
     await page.locator("#pay-amount-0").fill("8000");
     await clickIssueInvoiceAndExpectSuccess(page);
+    await expect(page.getByText(/Invoice \d{7} issued successfully/)).toBeVisible();
   });
 
   test("HU-14 · 3 cliente ocasional", async ({ page, request }) => {
@@ -101,7 +108,10 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await clickIssueInvoiceAndExpectSuccess(page);
   });
 
-  test("HU-14 · 8 sin timbrado activo bloquea emisión", async ({ page, request }) => {
+  test("HU-14 · 7 sin timbrado activo vigente bloquea emisión (ninguno activo)", async ({
+    page,
+    request,
+  }) => {
     const token = await loginAsDemoApi(request);
     const stamps = await listFiscalStamps(request, token);
     for (const s of stamps) {
@@ -138,6 +148,142 @@ test.describe("HU-14 · Emitir comprobante", () => {
       initialEmissionNumber: Math.max(100, stamps[0]?.nextEmissionNumber ?? 100),
     });
     await apiPostJson(request, token, `/api/fiscal-stamps/${created.id}/activate`, {});
+  });
+
+  test("HU-14 · 7 timbrado vencido: emisión rechazada", async ({ page, request }) => {
+    const token = await loginAsDemoApi(request);
+    const stamps = await listFiscalStamps(request, token);
+    for (const s of stamps) {
+      await request.post(`${API_BASE}/api/fiscal-stamps/${s.id}/deactivate`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+    const until = new Date();
+    until.setDate(until.getDate() - 2);
+    const from = new Date(until);
+    from.setFullYear(from.getFullYear() - 1);
+    const expired = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
+      stampNumber: `7${Date.now().toString().slice(-7)}`,
+      validFrom: isoDateLocal(from),
+      validUntil: isoDateLocal(until),
+      rangeFrom: 3_000_000,
+      rangeTo: 3_000_100,
+      initialEmissionNumber: 3_000_000,
+    });
+    await apiPostJson(request, token, `/api/fiscal-stamps/${expired.id}/activate`, {});
+
+    const seed = await seedCategoryServiceProfessional(request, token);
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    const openBtn = page.getByRole("button", { name: "Open cash register" });
+    if (await openBtn.isVisible()) {
+      await page.getByLabel("Initial cash amount").fill("10000");
+      await openBtn.click();
+      await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 30_000 });
+    }
+    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Client display name").fill("Walk-in");
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("10000");
+    await page.locator("#pay-amount-0").fill("10000");
+    await page.getByRole("button", { name: "Issue invoice" }).click();
+    await expect(
+      page.getByText("The active fiscal stamp is not valid for today's date.", { exact: true }),
+    ).toBeVisible();
+  });
+
+  test("HU-14 · 8 sin sesión de caja abierta la API rechaza emisión", async ({ request }) => {
+    const token = await loginAsDemoApi(request);
+    const current = await request.get(`${API_BASE}/api/cash-sessions/current`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (current.status() === 200) {
+      await request.post(`${API_BASE}/api/cash-sessions/close`, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        data: { countedCashAmount: 50_000 },
+      });
+    }
+    const res = await request.post(`${API_BASE}/api/invoices`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      data: {
+        clientId: null,
+        clientDisplayName: "E2E API",
+        clientRucOverride: null,
+        discountType: null,
+        discountValue: null,
+        lines: [{ serviceId: null, description: "Test", quantity: 1, unitPrice: 1000 }],
+        payments: [{ method: "CASH", amount: 1000 }],
+      },
+    });
+    expect([400, 409]).toContain(res.status());
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toBe("CASH_SESSION_NOT_OPEN");
+  });
+
+  test("HU-14 · 9 sin RUC de negocio: aviso destacado en el dashboard", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await request.put(`${API_BASE}/api/business-profile`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      data: {
+        businessName: "Demo salon",
+        ruc: null,
+        address: null,
+        phone: null,
+        contactEmail: null,
+        logoDataUrl: null,
+      },
+    });
+    await loginAsDemo(page);
+    await page.goto("/app");
+    await expect(
+      page.getByText("Add a valid business RUC to issue invoices.", { exact: true }),
+    ).toBeVisible();
+    await apiPutJson(request, token, "/api/business-profile", {
+      businessName: "Demo salon",
+      ruc: "80000005-6",
+      address: null,
+      phone: null,
+      contactEmail: null,
+      logoDataUrl: null,
+    });
+  });
+
+  test("HU-14 · 10 PDF devuelve application/pdf después de emitir", async ({ request }) => {
+    const token = await loginAsDemoApi(request);
+    await apiPutJson(request, token, "/api/business-profile", {
+      businessName: "Demo salon",
+      ruc: "80000005-6",
+      address: null,
+      phone: null,
+      contactEmail: null,
+      logoDataUrl: null,
+    });
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    await seedCategoryServiceProfessional(request, token);
+    const inv = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: null,
+      clientDisplayName: "PDF API E2E",
+      clientRucOverride: null,
+      discountType: null,
+      discountValue: null,
+      lines: [{ serviceId: null, description: "E2E PDF line", quantity: 1, unitPrice: 9000 }],
+      payments: [{ method: "CASH", amount: 9000 }],
+    });
+
+    const pdfRes = await request.get(`${API_BASE}/api/invoices/${inv.id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(pdfRes.status()).toBe(200);
+    const ct = pdfRes.headers()["content-type"] ?? "";
+    expect(ct).toContain("application/pdf");
+    const buf = await pdfRes.body();
+    expect(buf.slice(0, 4).toString("latin1")).toBe("%PDF");
   });
 
   test("HU-25 · lista de clientes en una fila (nombre, teléfono, RUC)", async ({

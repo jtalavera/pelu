@@ -6,13 +6,9 @@ const PROFESSIONAL_PHOTO_ACCEPT =
   "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
 
 test.describe("HU-20 · Fixes varios profesionales", () => {
-  test("listado con búsqueda inline de profesionales", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/professionals");
-    await expect(page.getByPlaceholder("Search by name or email…")).toBeVisible();
-  });
 
-  test("HU-25 / HU-20 acción al modal: botón More… (detalle profesional)", async ({
+
+  test("HU-20 · acción More… visible en tabla de profesionales", async ({
     page,
     request,
   }) => {

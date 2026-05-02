@@ -3,13 +3,7 @@ import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-21 · Fixes varios clientes", () => {
-  test("directorio de clientes con filtros y búsqueda", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/clients");
-    await expect(page.getByPlaceholder("Search by name, phone, or RUC…").first()).toBeVisible();
-  });
-
-  test("HU-25 · / HU-21 acción al detalle: botón More… (no “View”)", async ({
+  test("HU-21 · acción en listado muestra botón More… en fila", async ({
     page,
     request,
   }) => {

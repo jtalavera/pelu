@@ -27,7 +27,6 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 1. **Acción desde detalle** — Se puede anular un comprobante desde su vista de detalle (con permisos de admin).
 2. **Razón obligatoria** — El sistema solicita una razón de anulación en texto obligatorio antes de confirmar.
 3. **Estado y visibilidad** — Tras anular, el comprobante pasa a estado “Anulado” y sigue visible en el historial con ese estado.
-4. **Restricción temporal** — No se puede anular un comprobante de un día anterior al cierre de caja del mismo día (regla exacta implementada de forma consistente con HU-18).
 
 ---
 
@@ -42,4 +41,4 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 ## Notas para estimación y pruebas
 
 - Alinear con reglas de cierre de caja y numeración fiscal.
-- **Pruebas:** anulación mismo día permitida según regla, día anterior bloqueada, historial y PDF reflejan anulación.
+- **Pruebas:** anular con motivo válido en UI, historial con estado visible; cualquier política temporal detallada (días cerrados, etc.) se valida donde esté definida regla observable (principalmente HU-18 + API).

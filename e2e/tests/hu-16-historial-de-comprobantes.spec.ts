@@ -16,12 +16,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await ensureActiveFiscalStampForInvoices(request, token);
   });
 
-  test("pestaña de historial de facturas", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
-  });
+
 
   test("HU-16 · 2 filtros por fecha y estado", async ({ page, request }) => {
     test.setTimeout(90_000);
@@ -58,11 +53,11 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     });
   });
 
-  test("HU-16 · 3 columnas visibles en la tabla", async ({ page, request }) => {
-    await loginAsDemoApi(request);
+  test("HU-16 · 1 y HU-16 · 3 pestaña historial encabezados y columnas", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
+    await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Number" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Date" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Client" })).toBeVisible();

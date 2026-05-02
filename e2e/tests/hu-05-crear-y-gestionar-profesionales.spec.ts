@@ -1,12 +1,41 @@
 import { expect, test } from "@playwright/test";
+import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-05 · Crear y gestionar profesionales", () => {
-  test("página de profesionales con alta disponible", async ({ page }) => {
+  test("HU-05 · unicidad email: segundo profesional con mismo mail muestra error", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const email = `e2e-dup-${Date.now()}@test.local`;
+    const n1 = `E2E Eml A ${Date.now()}`;
+    const n2 = `E2E Eml B ${Date.now()}`;
+    await apiPostJson(request, token, "/api/professionals", {
+      fullName: n1,
+      phone: null,
+      email,
+      photoDataUrl: null,
+    });
+    await apiPostJson(request, token, "/api/professionals", {
+      fullName: n2,
+      phone: null,
+      email: null,
+      photoDataUrl: null,
+    });
+
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    await expect(page.getByRole("heading", { name: "Professionals" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "+ New professional" })).toBeVisible();
+    const row = page.locator("tr").filter({ hasText: n2 });
+    await row.getByRole("button", { name: "More…", exact: true }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("Email").fill(email);
+    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await expect(
+      dlg.getByText("Another professional in your business already uses this email address.", {
+        exact: true,
+      }),
+    ).toBeVisible();
   });
 
   test("HU-05 · 1 alta de profesional con nombre y pestaña de horarios", async ({ page }) => {

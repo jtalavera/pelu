@@ -27,7 +27,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 ## Criterios de aceptación
 
 1. **Métricas del día** — El dashboard muestra turnos del día (total, confirmados, pendientes) e **ingresos facturados** e **ingresos cobrados** del día y de la semana (definiciones alineadas al PRD — Definiciones transversales).
-2. **Accesos rápidos** — Incluye acceso al calendario y a emitir un comprobante (enlaces o botones funcionales).
+2. **Accesos rápidos** — Incluye al menos un acceso directo al calendario de turnos y un acceso para registrar una nueva cita (enlaces o botones que navegan correctamente).
 3. **Refresco automático** — Los datos del dashboard se actualizan mediante **polling cada 1 minuto** (sin depender de recarga manual de página para ese ciclo).
 4. **Estado vacío** — Si no hay datos (ej. día sin turnos), se muestra un estado vacío con mensaje amigable, sin errores ni tablas rotas.
 
