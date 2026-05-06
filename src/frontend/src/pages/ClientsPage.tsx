@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, Label, Modal, Spinner, Text } from "@design-system";
-import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
+import { Alert, Button, Input, KebabMenu, Label, Modal, Spinner, Text } from "@design-system";
+import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchInput } from "../components/ui/SearchInput";
-import { InlineEditActions } from "../components/ui/InlineEditActions";
 import { useFilteredList } from "../hooks/useFilteredList";
-import { useInlineEdit } from "../hooks/useInlineEdit";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
@@ -123,9 +121,18 @@ export default function ClientsPage() {
   }, [load]);
 
   // Open "new client" from other flows (e.g. billing → create client)
+  const [returnAfterCreate, setReturnAfterCreate] = useState<{
+    path: string;
+    tab?: "session" | "invoice" | "history";
+  } | null>(null);
   useEffect(() => {
     const st = location.state as
-      | { openCreateClient?: boolean; prefilledName?: string }
+      | {
+          openCreateClient?: boolean;
+          prefilledName?: string;
+          returnTo?: string;
+          returnTab?: "session" | "invoice" | "history";
+        }
       | undefined;
     if (st?.openCreateClient) {
       setFullName(st.prefilledName?.trim() ?? "");
@@ -135,6 +142,11 @@ export default function ClientsPage() {
       setFieldError(null);
       setSaveError(null);
       setModalOpen(true);
+      if (st.returnTo) {
+        setReturnAfterCreate({ path: st.returnTo, tab: st.returnTab });
+      } else {
+        setReturnAfterCreate(null);
+      }
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
@@ -167,13 +179,30 @@ export default function ClientsPage() {
     }
     setSaving(true);
     try {
-      await femmePostJson<Client>("/api/clients", {
+      const created = await femmePostJson<Client>("/api/clients", {
         fullName: fullName.trim(),
         phone: phone.trim() || null,
         email: email.trim() || null,
         ruc: ruc.trim() || null,
       });
       setModalOpen(false);
+      if (returnAfterCreate) {
+        const ret = returnAfterCreate;
+        setReturnAfterCreate(null);
+        navigate(ret.path, {
+          state: {
+            activeTab: ret.tab,
+            selectedClient: {
+              id: created.id,
+              fullName: created.fullName,
+              phone: created.phone,
+              email: created.email,
+              ruc: created.ruc,
+            },
+          },
+        });
+        return;
+      }
       await load();
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
@@ -232,65 +261,11 @@ export default function ClientsPage() {
     setPage(1);
   }, [listQuery]);
 
-  const handleInlineSave = useCallback(
-    async (client: Client) => {
-      const rucTrim = (client.ruc ?? "").trim();
-      if (rucTrim && !validateRuc(rucTrim)) {
-        throw new Error("INVALID_RUC");
-      }
-      await femmePutJson<Client>(`/api/clients/${client.id}`, {
-        fullName: String(client.fullName ?? "").trim(),
-        phone: client.phone?.trim() || null,
-        email: client.email?.trim() || null,
-        ruc: rucTrim || null,
-      });
-      await load();
-    },
-    [load],
-  );
-
-  const {
-    editingData,
-    saving: inlineSaving,
-    saveError: inlineSaveError,
-    startEdit,
-    cancelEdit,
-    updateField,
-    saveEdit,
-    isEditing,
-  } = useInlineEdit<Client>({
-    onSave: handleInlineSave,
-    saveErrorMessage: t("femme.inlineEdit.saveError"),
-  });
-
   const totalPages = Math.max(1, Math.ceil(searchFiltered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageClients = searchFiltered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const fromIdx = searchFiltered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const toIdx = Math.min(safePage * PAGE_SIZE, searchFiltered.length);
-
-  const inputEditStyle: React.CSSProperties = {
-    padding: "6px 9px",
-    border: "1px solid var(--color-rose-md)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    background: "var(--color-white)",
-    outline: "none",
-    width: "100%",
-    minWidth: 80,
-  };
-
-  const keySaveCancel = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void saveEdit();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      cancelEdit();
-    }
-  };
 
   // ── Shared styles ───────────────────────────────────────────────────────────
   const primaryBtn: React.CSSProperties = {
@@ -491,84 +466,6 @@ export default function ClientsPage() {
                     borderBottom: "0.5px solid var(--color-stone)",
                     background: tdBg,
                   };
-                  const rowEditing = isEditing(client.id);
-                  const ed = rowEditing
-                    ? ({ ...client, ...editingData } as Client)
-                    : client;
-
-                  if (rowEditing) {
-                    return (
-                      <tr
-                        key={client.id}
-                        style={{
-                          background: "var(--color-rose-lt)",
-                          outline: "1.5px solid var(--color-rose-md)",
-                          outlineOffset: -1,
-                        }}
-                      >
-                        <td style={{ padding: "8px 12px" }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            <input
-                              value={ed.fullName ?? ""}
-                              onChange={(e) => updateField("fullName", e.target.value)}
-                              onKeyDown={keySaveCancel}
-                              placeholder={t("femme.clients.fullName")}
-                              style={inputEditStyle}
-                              aria-label={t("femme.clients.fullName")}
-                            />
-                            <input
-                              value={ed.email ?? ""}
-                              onChange={(e) => updateField("email", e.target.value || null)}
-                              onKeyDown={keySaveCancel}
-                              type="email"
-                              placeholder={t("femme.clients.email")}
-                              style={inputEditStyle}
-                              aria-label={t("femme.clients.email")}
-                            />
-                          </div>
-                        </td>
-                        <td style={{ padding: "8px 12px" }}>
-                          <input
-                            value={ed.phone ?? ""}
-                            onChange={(e) => updateField("phone", e.target.value || null)}
-                            onKeyDown={keySaveCancel}
-                            placeholder={t("femme.clients.phone")}
-                            style={inputEditStyle}
-                            aria-label={t("femme.clients.phone")}
-                          />
-                        </td>
-                        <td style={{ padding: "8px 12px" }}>
-                          <input
-                            value={ed.ruc ?? ""}
-                            onChange={(e) => updateField("ruc", e.target.value || null)}
-                            onKeyDown={keySaveCancel}
-                            placeholder="80000005-6"
-                            style={{ ...inputEditStyle, fontFamily: "monospace" }}
-                            aria-label={t("femme.clients.ruc")}
-                          />
-                        </td>
-                        <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                          {t("femme.clients.visits", { count: client.visitCount })}
-                        </td>
-                        <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                          {client.lastVisitAt ? fmtDate(client.lastVisitAt, locale) : "—"}
-                        </td>
-                        <td style={tdStyle}>
-                          <StatusBadge status={client.active ? "ACTIVE" : "INACTIVE"} />
-                        </td>
-                        <td colSpan={1} style={{ padding: "8px 12px", textAlign: "right" }}>
-                          <InlineEditActions
-                            isEditing
-                            saving={inlineSaving}
-                            saveError={inlineSaveError}
-                            onEdit={() => {}}
-                            onSave={() => void saveEdit()}
-                            onCancel={cancelEdit}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  }
 
                   return (
                     <tr
@@ -673,35 +570,39 @@ export default function ClientsPage() {
                             flexWrap: "wrap",
                           }}
                         >
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/app/clients/${client.id}`);
-                            }}
-                            style={{
-                              padding: "4px 10px",
-                              borderRadius: "var(--radius-sm)",
-                              fontSize: 11,
-                              border: "0.5px solid var(--color-rose-md)",
-                              background: "transparent",
-                              color: "var(--color-rose)",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {t("femme.clients.viewBtn")}
-                          </button>
-                          <InlineEditActions
-                            isEditing={false}
-                            saving={false}
-                            saveError={null}
-                            onEdit={() => startEdit(client)}
-                            onSave={() => void saveEdit()}
-                            onCancel={cancelEdit}
-                            onDeactivate={() => setDeactivateTarget(client)}
-                            onActivate={() => void activateClientRow(client)}
-                            activateLabel={t("femme.clients.reactivate")}
-                            isActive={client.active}
+                          <KebabMenu
+                            id={`clients-row-${client.id}`}
+                            triggerAriaLabel={t("femme.rowActions.trigger")}
+                            items={
+                              client.active
+                                ? [
+                                    {
+                                      id: "edit-info",
+                                      label: t("femme.rowActions.clients.editInfo"),
+                                      onSelect: () =>
+                                        navigate(`/app/clients/${client.id}`),
+                                    },
+                                    {
+                                      id: "deactivate",
+                                      label: t("femme.rowActions.clients.deactivate"),
+                                      destructive: true,
+                                      onSelect: () => setDeactivateTarget(client),
+                                    },
+                                  ]
+                                : [
+                                    {
+                                      id: "edit-info",
+                                      label: t("femme.rowActions.clients.editInfo"),
+                                      onSelect: () =>
+                                        navigate(`/app/clients/${client.id}`),
+                                    },
+                                    {
+                                      id: "activate",
+                                      label: t("femme.rowActions.clients.activate"),
+                                      onSelect: () => void activateClientRow(client),
+                                    },
+                                  ]
+                            }
                           />
                         </div>
                       </td>

@@ -30,6 +30,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 4. **Edición** — Se pueden editar nombre, teléfono, email y RUC con las mismas validaciones que en alta.
 5. **RUC y unicidad al editar** — Al cambiar teléfono, email o RUC, se aplican las mismas reglas que en alta: validación de formato/RUC y unicidad **solo para valores no vacíos** (sin duplicados fantasma por campos vacíos).
 6. **Baja lógica** — No se puede eliminar una cliente con historial asociado; solo desactivarla (historial conservado).
+7. **Cancelar edición (MVP v2)** — El formulario de edición presenta el botón **Cancelar** junto al botón **Guardar**. *Cancelar* descarta los cambios pendientes (sin invocar la API) y vuelve al listado de clientes; el comportamiento concreto del kebab del listado se describe en HU-21, criterio 9.
 
 ---
 

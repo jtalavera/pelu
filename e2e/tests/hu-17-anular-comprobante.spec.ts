@@ -44,6 +44,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.getByRole("tab", { name: "History" }).click();
     await page.getByRole("button", { name: "View" }).first().click();
     await page.getByRole("button", { name: "Void invoice" }).click();
+    await expect(page.locator("#void-reason")).toBeVisible();
     await page.getByRole("button", { name: "Confirm void" }).click();
     await expect(page.getByText("Enter a reason.", { exact: true })).toBeVisible();
     await page.locator("#void-reason").fill("E2E void reason");

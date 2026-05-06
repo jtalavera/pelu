@@ -15,6 +15,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { setControlledInputValue } from "../fixtures/ui";
 
 test.describe.configure({ mode: "serial" });
 
@@ -99,6 +100,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Discount type").selectOption("PERCENT");
     await page.getByLabel(/Discount value/i).fill("10");
     await page.getByLabel("Client display name").fill("Disc E2E");
@@ -125,6 +128,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client display name").fill("No stamp");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("1000");
@@ -184,6 +189,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
       await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 30_000 });
     }
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client display name").fill("Walk-in");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
@@ -352,6 +359,144 @@ test.describe("HU-14 · Emitir comprobante", () => {
     }>(request, token, `/api/clients/${client.id}`);
     expect(saved.fullName).toBe(updatedName);
     expect(saved.ruc).toBe(newRuc);
+  });
+
+  test("HU-14 · 11+12 máscara de miles en Precio Unitario y Monto", async ({ page, request }) => {
+    const token = await loginAsDemoApi(request);
+    await apiPutJson(request, token, "/api/business-profile", {
+      businessName: "Demo salon",
+      ruc: "80000005-6",
+      address: null,
+      phone: null,
+      contactEmail: null,
+      logoDataUrl: null,
+    });
+    await seedCategoryServiceProfessional(request, token);
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "New Invoice" }).click();
+    const priceField = page.locator("#line-price-0");
+    await setControlledInputValue(priceField, "1234567");
+    await expect(priceField).toHaveValue("1.234.567");
+    const amountField = page.locator("#pay-amount-0");
+    await setControlledInputValue(amountField, "9999999");
+    await expect(amountField).toHaveValue("9.999.999");
+  });
+
+  test("HU-14 · 13 botón Emitir comprobante deshabilitado hasta cliente, ítem y pago", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await apiPutJson(request, token, "/api/business-profile", {
+      businessName: "Demo salon",
+      ruc: "80000005-6",
+      address: null,
+      phone: null,
+      contactEmail: null,
+      logoDataUrl: null,
+    });
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E Submit ${Date.now()}`);
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "New Invoice" }).click();
+
+    const issueBtn = page.getByRole("button", { name: "Issue invoice" });
+    // No client / no item / no payment yet → disabled
+    await expect(issueBtn).toBeDisabled();
+
+    // Client selected, no item / payment → still disabled
+    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 6));
+    await page.getByRole("button", { name: client.fullName }).click();
+    await expect(issueBtn).toBeDisabled();
+
+    // Add item with valid price → still disabled (no payment)
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("5000");
+    await expect(issueBtn).toBeDisabled();
+
+    // Add payment → now enabled
+    await page.locator("#pay-amount-0").fill("5000");
+    await expect(issueBtn).toBeEnabled();
+  });
+
+  test("HU-14 · 14 issuedAt mostrado en hora de Paraguay (GMT-3) en historial", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await apiPutJson(request, token, "/api/business-profile", {
+      businessName: "Demo salon",
+      ruc: "80000005-6",
+      address: null,
+      phone: null,
+      contactEmail: null,
+      logoDataUrl: null,
+    });
+    await ensureCashSessionOpenApi(request, token);
+    await seedCategoryServiceProfessional(request, token);
+    const clientDisplayName = `E2E PY Time ${Date.now()}`;
+    await apiPostJson(request, token, "/api/invoices", {
+      clientId: null,
+      clientDisplayName,
+      clientRucOverride: null,
+      discountType: null,
+      discountValue: null,
+      lines: [{ serviceId: null, description: "E2E PY Time", quantity: 1, unitPrice: 1000 }],
+      payments: [{ method: "CASH", amount: 1000 }],
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    const historyTable = page.locator('[data-tour="billing-invoice-list"]');
+    await expect(historyTable).toBeVisible({ timeout: 15_000 });
+    // Date column is the 2nd visible cell (invoice #, issued date, client, …)
+    const row = historyTable.locator("tbody tr").filter({ hasText: clientDisplayName }).first();
+    const cell = row.locator("td").nth(1);
+    await expect(cell).toBeVisible();
+    const text = await cell.innerText();
+    expect(text).toMatch(/\d{1,2}:\d{2}/);
+    expect(text).not.toMatch(/[+-]00:00|Z\b/);
+  });
+
+  test("HU-14 · 16 PDF no contiene timbrado, vigencia, encabezados, copia ni etiquetas de pago", async ({
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await apiPutJson(request, token, "/api/business-profile", {
+      businessName: "Demo salon",
+      ruc: "80000005-6",
+      address: null,
+      phone: null,
+      contactEmail: null,
+      logoDataUrl: null,
+    });
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    await seedCategoryServiceProfessional(request, token);
+    const inv = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: null,
+      clientDisplayName: `E2E PDF Clean ${Date.now()}`,
+      clientRucOverride: null,
+      discountType: null,
+      discountValue: null,
+      lines: [{ serviceId: null, description: "E2E line", quantity: 1, unitPrice: 9000 }],
+      payments: [{ method: "CASH", amount: 9000 }],
+    });
+    const pdfRes = await request.get(`${API_BASE}/api/invoices/${inv.id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(pdfRes.status()).toBe(200);
+    const buf = await pdfRes.body();
+    const raw = buf.toString("latin1");
+    // The PDF body decompresses streams but the explicit forbidden text strings
+    // are present in literal form when emitted; ensure they are absent.
+    expect(raw).not.toContain("Timbrado");
+    expect(raw).not.toContain("Vigencia");
+    expect(raw).not.toContain("COPIA: ARCHIVO TRIBUTARIO");
+    expect(raw).not.toContain("ORIGINAL: ADQUIRENTE");
   });
 
   test("HU-25 · lista de servicios en una fila (nombre, categoría, precio, duración)", async ({

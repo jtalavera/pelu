@@ -5,7 +5,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
-  tomorrowLocalIso,
+  calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { pickSearchableOption } from "../fixtures/ui";
@@ -32,7 +32,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E Cal ${Date.now()}`);
-    const startAt = tomorrowLocalIso(11, 0);
+    const startAt = calendarVisibleWeekSlotIso(11, 0);
     await createAppointmentApi(request, token, {
       clientId: client.id,
       professionalId: seed.professionalId,
@@ -63,7 +63,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(12, 0),
+      startAt: calendarVisibleWeekSlotIso(12, 0),
     });
 
     await loginAsDemo(page);
@@ -82,7 +82,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(13, 0),
+      startAt: calendarVisibleWeekSlotIso(13, 0),
     });
 
     await loginAsDemo(page);

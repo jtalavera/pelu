@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { createAppointmentApi, loginAsDemoApi, seedCategoryServiceProfessional, seedClient, tomorrowLocalIso } from "../fixtures/api";
+import { createAppointmentApi, calendarVisibleWeekSlotIso, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { bookingAppointmentDialog, fillAppointmentTime } from "../fixtures/ui";
 
 test.describe("HU-09 · Editar o reagendar turno", () => {
   test("HU-09 · 1 y 3 editar hora y ver cambio en la grilla", async ({ page, request }) => {
@@ -11,15 +12,15 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(9, 0),
+      startAt: calendarVisibleWeekSlotIso(9, 0),
     });
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Edit appointment" }).click();
-    const dlg = page.getByRole("dialog");
-    await dlg.locator("#form-time").fill("11:15");
+    const dlg = bookingAppointmentDialog(page);
+    await fillAppointmentTime(dlg, "11:15");
     await dlg.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: new RegExp(client.fullName) })).toBeVisible();
   });
@@ -32,7 +33,7 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(8, 0),
+      startAt: calendarVisibleWeekSlotIso(8, 0),
     });
 
     await loginAsDemo(page);

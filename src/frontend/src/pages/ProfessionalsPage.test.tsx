@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "../test/renderWithTour";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "../test/renderWithTour";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
@@ -51,6 +51,10 @@ describe("ProfessionalsPage", () => {
     femmePutJson.mockReset();
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it("loads professionals and shows actions", async () => {
     femmeJson.mockResolvedValue([PROFESSIONAL]);
     renderPage();
@@ -59,15 +63,22 @@ describe("ProfessionalsPage", () => {
     expect(screen.getAllByRole("button", { name: /new professional/i }).length).toBeGreaterThan(0);
   });
 
-  it("shows Activate for inactive professionals and calls activate API on confirm", async () => {
+  it("shows Activate inside the kebab menu for inactive professionals and calls activate API on confirm", async () => {
     femmeJson
       .mockResolvedValueOnce([INACTIVE_PROFESSIONAL])
       .mockResolvedValueOnce([{ ...INACTIVE_PROFESSIONAL, active: true }]);
     femmePostJson.mockResolvedValue({ ...INACTIVE_PROFESSIONAL, active: true });
     renderPage();
 
-    const activateBtns = await screen.findAllByRole("button", { name: /^activate$/i });
-    await userEvent.click(activateBtns[0]);
+    const triggers = await screen.findAllByTestId(
+      `professionals-row-${INACTIVE_PROFESSIONAL.id}-trigger`,
+    );
+    await userEvent.click(triggers[0]);
+
+    const activateMenuItem = await screen.findByRole("menuitem", {
+      name: /^activate$/i,
+    });
+    await userEvent.click(activateMenuItem);
 
     const dialog = screen.getByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: /^activate$/i }));

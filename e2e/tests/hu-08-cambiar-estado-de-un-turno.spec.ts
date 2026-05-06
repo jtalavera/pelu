@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createAppointmentApi, loginAsDemoApi, seedCategoryServiceProfessional, seedClient, tomorrowLocalIso } from "../fixtures/api";
+import { createAppointmentApi, calendarVisibleWeekSlotIso, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 test.describe("HU-08 · Cambiar estado de un turno", () => {
@@ -11,7 +11,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(10, 0),
+      startAt: calendarVisibleWeekSlotIso(10, 0),
     });
 
     await loginAsDemo(page);
@@ -31,7 +31,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(18, 0),
+      startAt: calendarVisibleWeekSlotIso(18, 0),
     });
 
     await loginAsDemo(page);
@@ -53,7 +53,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(11, 30),
+      startAt: calendarVisibleWeekSlotIso(11, 30),
     });
 
     await loginAsDemo(page);

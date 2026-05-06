@@ -35,6 +35,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 5. **Un activo** — Puede haber más de un timbrado registrado, pero solo uno activo a la vez (activar uno desactiva el otro o el flujo equivalente documentado).
 6. **Alerta vencimiento** — El dashboard muestra alerta cuando el timbrado activo vence en menos de 30 días.
 7. **Alerta rango** — Alerta cuando queda menos del 10 % del rango de numeración disponible.
+8. **Edición restringida del timbrado (MVP v2)** — En la lista de timbrados, junto al botón **Desactivar** (o **Activar**) se muestra un botón **Editar timbrado**. El formulario de edición que se abre **solo permite modificar el campo *Número de inicio de emisión***; el resto de los campos (número de timbrado, fechas de vigencia, rango desde / hasta) **no son editables** desde este flujo. Para cambiar cualquiera de esos campos se debe **desactivar** el timbrado y registrar uno nuevo. La validación del rango (criterio 3) sigue aplicando: el nuevo *Número de inicio de emisión* debe estar entre *desde* y *hasta*.
 
 ---
 

@@ -35,7 +35,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await expect(page.getByText(svcName, { exact: true }).first()).toBeVisible();
   });
 
-  test("HU-04 · 3 edición de servicio", async ({ page }) => {
+  test("HU-04 · 3+6 edición de servicio vía pop-up al hacer click en la fila", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
     await page.getByRole("button", { name: "Categories", exact: true }).click();
@@ -53,15 +53,36 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await newDlg.getByLabel("Duration (minutes)").fill("30");
     await newDlg.getByRole("button", { name: "Save" }).click();
     await page.getByPlaceholder("Search by name or category…").fill(original);
-    await page
-      .locator("div")
-      .filter({ hasText: original })
-      .getByRole("button", { name: "Edit", exact: true })
-      .click();
+    // HU-04 · 6: clicking the service row opens the edit modal (not just the label cell).
+    await page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: original }).first().click();
+    const editDlg = page.getByRole("dialog", { name: "Edit service" });
+    await expect(editDlg).toBeVisible();
     const renamed = `${original} renamed`;
-    const nameInput = page.locator('input[id^="svc-inline-name-"]');
-    await nameInput.fill(renamed);
-    await nameInput.press("Enter");
+    await editDlg.getByLabel("Name").fill(renamed);
+    await editDlg.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(renamed, { exact: true }).first()).toBeVisible();
+  });
+
+  test("HU-04 · 7 edición de categoría vía pop-up al hacer click en la fila", async ({ page }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/services");
+    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    const original = `CatRow ${Date.now()}`;
+    await page.getByRole("button", { name: "+ New category" }).click();
+    await page
+      .getByRole("dialog", { name: "New category" })
+      .getByLabel("Name")
+      .fill(original);
+    await page
+      .getByRole("dialog", { name: "New category" })
+      .getByRole("button", { name: "Save" })
+      .click();
+    await page.locator(`[data-testid^="cat-row-"]`).filter({ hasText: original }).first().click();
+    const editDlg = page.getByRole("dialog", { name: "Edit category" });
+    await expect(editDlg).toBeVisible();
+    const renamed = `${original} v2`;
+    await editDlg.getByLabel("Name").fill(renamed);
+    await editDlg.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText(renamed, { exact: true }).first()).toBeVisible();
   });
 

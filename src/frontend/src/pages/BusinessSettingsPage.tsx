@@ -4,6 +4,11 @@ import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
 import { looksLikeRucValidationError, parseApiErrorMessage, translateApiError } from "../api/parseApiErrorMessage";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
+import {
+  formatParaguayPhone,
+  isCompleteParaguayPhone,
+} from "../lib/paraguayPhone";
+import { isValidEmail } from "../lib/validateEmail";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { businessSettingsSteps } from "../tour/steps/businessSettings";
@@ -87,6 +92,8 @@ export default function BusinessSettingsPage() {
   /** null = server had no logo; "" = user cleared; string = image data URL */
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [rucError, setRucError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [contactEmailError, setContactEmailError] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [saveValidationError, setSaveValidationError] = useState<string | null>(null);
   const [businessNameError, setBusinessNameError] = useState<string | null>(null);
@@ -102,7 +109,7 @@ export default function BusinessSettingsPage() {
       setBusinessName(data.businessName);
       setRuc(data.ruc ?? "");
       setAddress(data.address ?? "");
-      setPhone(data.phone ?? "");
+      setPhone(formatParaguayPhone(data.phone ?? ""));
       setContactEmail(data.contactEmail ?? "");
       setLogoDataUrl(data.logoDataUrl ?? null);
       setLogoFileLabel(null);
@@ -169,6 +176,8 @@ export default function BusinessSettingsPage() {
     setSuccess(false);
     setBusinessNameError(null);
     setRucError(null);
+    setPhoneError(null);
+    setContactEmailError(null);
     setLogoError(null);
     setSaveValidationError(null);
     await load();
@@ -178,6 +187,8 @@ export default function BusinessSettingsPage() {
     e.preventDefault();
     setSuccess(false);
     setRucError(null);
+    setPhoneError(null);
+    setContactEmailError(null);
     setSaveValidationError(null);
     setSaveError(null);
     setBusinessNameError(null);
@@ -190,14 +201,24 @@ export default function BusinessSettingsPage() {
       setRucError(t("femme.businessSettings.rucInvalid"));
       return;
     }
+    const phoneTrim = phone.trim();
+    if (phoneTrim.length > 0 && !isCompleteParaguayPhone(phoneTrim)) {
+      setPhoneError(t("femme.businessSettings.phoneInvalid"));
+      return;
+    }
+    const emailTrim = contactEmail.trim();
+    if (emailTrim.length > 0 && !isValidEmail(emailTrim)) {
+      setContactEmailError(t("femme.businessSettings.contactEmailInvalid"));
+      return;
+    }
     setSaving(true);
     try {
       await femmePutJson<BusinessProfileResponse>("/api/business-profile", {
         businessName: businessName.trim(),
         ruc: rucTrim.length === 0 ? null : rucTrim,
         address: address.trim() || null,
-        phone: phone.trim() || null,
-        contactEmail: contactEmail.trim() || null,
+        phone: phoneTrim.length === 0 ? null : formatParaguayPhone(phoneTrim),
+        contactEmail: emailTrim.length === 0 ? null : emailTrim,
         logoDataUrl:
           logoDataUrl === null ? null : logoDataUrl === "" ? "" : logoDataUrl,
       });
@@ -404,14 +425,30 @@ export default function BusinessSettingsPage() {
               id="phone"
               value={phone}
               onChange={(e) => {
-                setPhone(e.target.value);
+                setPhone(formatParaguayPhone(e.target.value));
+                if (phoneError) setPhoneError(null);
                 if (saveValidationError) setSaveValidationError(null);
               }}
+              onBlur={() => {
+                setFocusField(null);
+                const trimmed = phone.trim();
+                if (trimmed.length > 0 && !isCompleteParaguayPhone(trimmed)) {
+                  setPhoneError(t("femme.businessSettings.phoneInvalid"));
+                }
+              }}
+              placeholder={t("femme.businessSettings.phonePlaceholder")}
               autoComplete="tel"
+              inputMode="tel"
+              aria-invalid={!!phoneError}
+              aria-describedby={phoneError ? "phone-error" : undefined}
               onFocus={() => setFocusField("phone")}
-              onBlur={() => setFocusField(null)}
-              style={buildInputStyle(false, focusField === "phone")}
+              style={buildInputStyle(!!phoneError, focusField === "phone")}
             />
+            {phoneError ? (
+              <p id="phone-error" role="alert" style={errTextStyle}>
+                {phoneError}
+              </p>
+            ) : null}
           </div>
           <div>
             <label htmlFor="contactEmail" style={labelStyle}>
@@ -423,13 +460,29 @@ export default function BusinessSettingsPage() {
               value={contactEmail}
               onChange={(e) => {
                 setContactEmail(e.target.value);
+                if (contactEmailError) setContactEmailError(null);
                 if (saveValidationError) setSaveValidationError(null);
               }}
+              onBlur={() => {
+                setFocusField(null);
+                const trimmed = contactEmail.trim();
+                if (trimmed.length > 0 && !isValidEmail(trimmed)) {
+                  setContactEmailError(
+                    t("femme.businessSettings.contactEmailInvalid"),
+                  );
+                }
+              }}
               autoComplete="email"
+              aria-invalid={!!contactEmailError}
+              aria-describedby={contactEmailError ? "contactEmail-error" : undefined}
               onFocus={() => setFocusField("contactEmail")}
-              onBlur={() => setFocusField(null)}
-              style={buildInputStyle(false, focusField === "contactEmail")}
+              style={buildInputStyle(!!contactEmailError, focusField === "contactEmail")}
             />
+            {contactEmailError ? (
+              <p id="contactEmail-error" role="alert" style={errTextStyle}>
+                {contactEmailError}
+              </p>
+            ) : null}
           </div>
         </div>
 

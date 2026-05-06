@@ -6,7 +6,7 @@ import {
   ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
-  tomorrowLocalIso,
+  calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -74,7 +74,7 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
       clientId: c.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(11, 0),
+      startAt: calendarVisibleWeekSlotIso(11, 0),
     });
     const inv = await apiPostJson<{ id: number; invoiceNumberFormatted: string }>(
       request,

@@ -30,6 +30,8 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 2. **Campos editables** — Se pueden cargar y guardar: nombre del negocio, RUC, dirección, teléfono, email de contacto y logo (imagen).
 3. **Validación RUC paraguayo** — El campo RUC acepta el formato con dígitos, guion y dígitos (ej. `80012345-6`); entradas que no cumplan el formato no se guardan o se rechazan con mensaje claro en rojo.
 4. **Guardado explícito** — Los cambios se persisten solo al usar un botón de guardar explícito; no hay autoguardado al escribir en los campos.
+5. **Teléfono — máscara con prefijo separado (MVP v2)** — En la solapa **Negocio**, el campo *Teléfono* se formatea automáticamente con la máscara local de Paraguay `(0XXX) XXX-XXX` (mismo patrón que HU-20, criterio 7). El usuario solo escribe dígitos; el formulario valida que el número tenga **10 dígitos** antes de guardar.
+6. **Email — validación de formato estándar (MVP v2)** — En la solapa **Negocio**, el campo *Email de contacto* se valida con el formato estándar de correo electrónico (debe contener `@` y al menos un carácter visible antes de la `@`); si no cumple se muestra mensaje de error y no se guarda.
 
 ---
 

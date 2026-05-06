@@ -22,6 +22,8 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client display name").fill("Split pay");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
@@ -40,6 +42,8 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client display name").fill("Bad sum");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
@@ -56,6 +60,8 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client display name").fill("Remain");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("20000");

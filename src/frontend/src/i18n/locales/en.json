@@ -48,6 +48,29 @@
     "inlineEdit": {
       "saveError": "Could not save. Please try again."
     },
+    "rowActions": {
+      "trigger": "Actions",
+      "professionals": {
+        "editDetails": "Edit details and photo",
+        "editSchedule": "Edit schedule",
+        "deactivate": "Deactivate",
+        "activate": "Activate"
+      },
+      "clients": {
+        "editInfo": "Edit information",
+        "deactivate": "Deactivate client",
+        "activate": "Reactivate client"
+      }
+    },
+    "localizedDateInput": {
+      "dialogLabel": "Calendar",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month"
+    },
+    "validation": {
+      "emailInvalid": "Enter a valid email (must include @ and text before @, e.g. name@domain.com).",
+      "phoneIncomplete": "Enter the 10 digits of the phone number (e.g. (0981) 123-456)."
+    },
     "appName": "Femme",
     "login": {
       "title": "Sign in",
@@ -200,7 +223,10 @@
       "rucInvalid": "Invalid RUC. Use only digits, one hyphen, one or more digits (e.g. 80000005-6).",
       "address": "Address",
       "phone": "Phone",
+      "phonePlaceholder": "(0XXX) XXX-XXX",
+      "phoneInvalid": "Enter the 10 digits of the phone number (e.g. (0981) 123-456).",
       "contactEmail": "Contact email",
+      "contactEmailInvalid": "Enter a valid email (must include @ and text before @, e.g. name@domain.com).",
       "logo": "Logo (image)",
       "logoTooLarge": "Image is too large. Maximum size is 1.5 MB. Use a smaller PNG or JPEG file.",
       "removeLogo": "Remove logo",
@@ -249,8 +275,9 @@
       "inactive": "Inactive",
       "activate": "Activate",
       "deactivate": "Deactivate",
-      "edit": "Edit dates and next number",
+      "edit": "Edit stamp",
       "editTitle": "Edit stamp",
+      "editLead": "Only the starting invoice number can be changed for an existing stamp. To change the stamp number, validity dates, or range, deactivate this stamp and add a new one.",
       "save": "Save",
       "cancel": "Cancel",
       "add": "Add stamp",
@@ -338,7 +365,8 @@
         "lineDescriptionRequired": "Enter a description.",
         "lineQuantity": "Qty",
         "lineUnitPrice": "Unit price",
-        "lineUnitPriceInvalid": "Enter a valid price ≥ 0.",
+        "lineUnitPricePlaceholder": "0",
+        "lineUnitPriceInvalid": "Enter a valid price ≥ 0 (use thousands separator, e.g. 25.000).",
         "lineTotal": "Total",
         "discountSection": "Discount",
         "discountType": "Discount type",
@@ -352,7 +380,8 @@
         "removePayment": "Remove",
         "paymentMethod": "Method",
         "paymentAmount": "Amount",
-        "paymentAmountInvalid": "Enter a valid amount > 0.",
+        "paymentAmountPlaceholder": "0",
+        "paymentAmountInvalid": "Enter a valid amount > 0 (use thousands separator, e.g. 50.000).",
         "paymentMethodRequired": "Select a payment method.",
         "paymentMethodCash": "Cash",
         "paymentMethodDebitCard": "Debit card",
@@ -649,6 +678,7 @@
         "separatorInactive": "Inactive",
         "statusBadgeActive": "Active",
         "statusBadgeInactive": "Inactive",
+        "openEdit": "Edit category {{name}}",
         "accent": {
           "label": "Color",
           "groupLabel": "Category color",
@@ -689,7 +719,8 @@
         "emptyTitle": "No services yet.",
         "emptyBody": "Create a service to use it in appointments and invoices.",
         "separatorInactive": "Inactive",
-        "searchInlinePlaceholder": "Search by name or category…"
+        "searchInlinePlaceholder": "Search by name or category…",
+        "openEdit": "Edit service {{name}}"
       }
     },
     "professionals": {
@@ -710,9 +741,9 @@
       "addTitle": "New professional",
       "editTitle": "Edit professional",
       "searchInlinePlaceholder": "Search by name or email…",
-      "manageDetails": "More…",
       "edit": "Edit",
       "deactivate": "Deactivate",
+      "dayOff": "Day off",
       "deactivateDialogTitle": "Deactivate professional",
       "deactivateDialogDescription": "“{{name}}” will be marked inactive. They will not be assigned to new appointments. Past appointments stay in the history.",
       "activate": "Activate",
@@ -746,9 +777,11 @@
         "fullNameRequired": "Enter the professional's full name (e.g. Ana García).",
         "fullNamePlaceholder": "e.g. Ana García",
         "phone": "Phone",
-        "phonePlaceholder": "e.g. 0981 123 456",
+        "phonePlaceholder": "(0981) 123-456",
+        "phoneInvalid": "Enter all 10 digits of the phone number. Expected format: (0981) 123-456.",
         "email": "Email",
         "emailPlaceholder": "e.g. ana@salon.com",
+        "emailInvalid": "Enter a valid email (must include @ and text before @, e.g. ana@salon.com).",
         "photoDataUrl": "Photo (optional)",
         "photoChooseFile": "Choose image…",
         "photoChangeFile": "Change image…",
@@ -759,14 +792,16 @@
         "photoErrorFileTooLarge": "File is too large. Maximum size is 5 MB (e.g. keep photos under 5 000 000 bytes).",
         "photoErrorDimensionsTooLarge": "Image is too large. Width and height must each be at most 500 px (e.g. 500×500 or 400×300).",
         "photoErrorImageLoadFailed": "Could not read the image. Try another JPEG, PNG, WebP, or GIF file.",
-        "scheduleLead": "Set working hours per day using the time picker (same as in the calendar). Leave both fields empty on days off.",
+        "scheduleLead": "Tick the days the professional works and enter the start/end times for those days using the same time picker as in the calendar.",
         "start": "Start",
         "end": "End",
         "timePlaceholderStart": "09:00",
         "timePlaceholderEnd": "17:00",
-        "scheduleDayIncomplete": "For each working day, enter both start and end, or leave both empty for a day off.",
+        "scheduleDayIncomplete": "For each selected day, enter both Start and End times.",
         "scheduleInvalid": "Invalid time. Use HH:MM (e.g. 09:00).",
         "scheduleRangeInvalid": "Invalid range. Start must be before end (e.g. 09:00–17:00).",
+        "scheduleDayActive": "Working day",
+        "scheduleNoDaysSelected": "Select at least one working day.",
         "pin": "PIN (4–7 digits, optional)",
         "pinPlaceholder": "e.g. 1234",
         "pinMaskPlaceholder": "••••••",
@@ -846,6 +881,9 @@
         "selectClient": "Select or leave empty for occasional client",
         "save": "Save",
         "cancel": "Cancel",
+        "timePlaceholder": "HH:MM",
+        "timeAriaLabel": "Time",
+        "datePlaceholder": "MM/DD/YYYY",
         "errors": {
           "dateRequired": "Date is required.",
           "timeRequired": "Time is required.",

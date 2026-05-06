@@ -48,6 +48,29 @@
     "inlineEdit": {
       "saveError": "No se pudo guardar. Intentá de nuevo."
     },
+    "rowActions": {
+      "trigger": "Acciones",
+      "professionals": {
+        "editDetails": "Editar datos y foto",
+        "editSchedule": "Editar horarios",
+        "deactivate": "Desactivar",
+        "activate": "Activar"
+      },
+      "clients": {
+        "editInfo": "Editar información",
+        "deactivate": "Desactivar cliente",
+        "activate": "Reactivar cliente"
+      }
+    },
+    "localizedDateInput": {
+      "dialogLabel": "Calendario",
+      "prevMonth": "Mes anterior",
+      "nextMonth": "Mes siguiente"
+    },
+    "validation": {
+      "emailInvalid": "Ingresá un email válido (debe contener @ y texto antes del @, ej. nombre@dominio.com).",
+      "phoneIncomplete": "Ingresá los 10 dígitos del teléfono (ej. (0981) 123-456)."
+    },
     "appName": "Femme",
     "login": {
       "title": "Iniciar sesión",
@@ -200,7 +223,10 @@
       "rucInvalid": "RUC inválido. Solo dígitos, un guion y dígitos (ej.: 80000005-6).",
       "address": "Dirección",
       "phone": "Teléfono",
+      "phonePlaceholder": "(0XXX) XXX-XXX",
+      "phoneInvalid": "Ingresá los 10 dígitos del teléfono. Formato esperado: (0981) 123-456.",
       "contactEmail": "Correo de contacto",
+      "contactEmailInvalid": "Ingresá un correo válido (debe contener @ y texto antes del @, por ej.: nombre@dominio.com).",
       "logo": "Logo (imagen)",
       "logoTooLarge": "La imagen supera el máximo permitido (1,5 MB). Usá un PNG o JPEG más pequeño.",
       "removeLogo": "Quitar logo",
@@ -249,8 +275,9 @@
       "inactive": "Inactivo",
       "activate": "Activar",
       "deactivate": "Desactivar",
-      "edit": "Editar fechas y próximo número",
+      "edit": "Editar timbrado",
       "editTitle": "Editar timbrado",
+      "editLead": "De un timbrado existente solo se puede cambiar el número de inicio de emisión. Para cambiar el número de timbrado, las fechas de vigencia o el rango, desactivá este timbrado y agregá uno nuevo.",
       "save": "Guardar",
       "cancel": "Cancelar",
       "add": "Agregar timbrado",
@@ -338,7 +365,8 @@
         "lineDescriptionRequired": "Ingresá una descripción.",
         "lineQuantity": "Cant.",
         "lineUnitPrice": "Precio unitario",
-        "lineUnitPriceInvalid": "Ingresá un precio válido ≥ 0.",
+        "lineUnitPricePlaceholder": "0",
+        "lineUnitPriceInvalid": "Ingresá un precio válido ≥ 0 (con separador de miles, ej.: 25.000).",
         "lineTotal": "Total",
         "discountSection": "Descuento",
         "discountType": "Tipo de descuento",
@@ -352,7 +380,8 @@
         "removePayment": "Quitar",
         "paymentMethod": "Método",
         "paymentAmount": "Monto",
-        "paymentAmountInvalid": "Ingresá un monto válido > 0.",
+        "paymentAmountPlaceholder": "0",
+        "paymentAmountInvalid": "Ingresá un monto válido > 0 (con separador de miles, ej.: 50.000).",
         "paymentMethodRequired": "Seleccioná un método de pago.",
         "paymentMethodCash": "Efectivo",
         "paymentMethodDebitCard": "Tarjeta de débito",
@@ -649,6 +678,7 @@
         "separatorInactive": "Inactivas",
         "statusBadgeActive": "Activa",
         "statusBadgeInactive": "Inactiva",
+        "openEdit": "Editar categoría {{name}}",
         "accent": {
           "label": "Color",
           "groupLabel": "Color de la categoría",
@@ -689,7 +719,8 @@
         "emptyTitle": "Todavía no hay servicios.",
         "emptyBody": "Creá un servicio para usarlo en turnos y facturas.",
         "separatorInactive": "Inactivos",
-        "searchInlinePlaceholder": "Buscar por nombre o categoría…"
+        "searchInlinePlaceholder": "Buscar por nombre o categoría…",
+        "openEdit": "Editar servicio {{name}}"
       }
     },
     "professionals": {
@@ -710,9 +741,9 @@
       "addTitle": "Nueva profesional",
       "editTitle": "Editar profesional",
       "searchInlinePlaceholder": "Buscar por nombre o email…",
-      "manageDetails": "Más…",
       "edit": "Editar",
       "deactivate": "Desactivar",
+      "dayOff": "Día libre",
       "deactivateDialogTitle": "Desactivar profesional",
       "deactivateDialogDescription": "“{{name}}” quedará inactiva. No se asignará a nuevos turnos. Los turnos pasados se conservan en el historial.",
       "activate": "Activar",
@@ -746,9 +777,11 @@
         "fullNameRequired": "Ingresá el nombre completo (ej.: Ana García).",
         "fullNamePlaceholder": "ej.: Ana García",
         "phone": "Teléfono",
-        "phonePlaceholder": "ej.: 0981 123 456",
+        "phonePlaceholder": "(0981) 123-456",
+        "phoneInvalid": "Ingresá los 10 dígitos del teléfono. Formato esperado: (0981) 123-456.",
         "email": "Email",
         "emailPlaceholder": "ej.: ana@salon.com",
+        "emailInvalid": "Ingresá un email válido (debe contener @ y texto antes del @, ej.: ana@salon.com).",
         "photoDataUrl": "Foto (opcional)",
         "photoChooseFile": "Elegir imagen…",
         "photoChangeFile": "Cambiar imagen…",
@@ -759,14 +792,16 @@
         "photoErrorFileTooLarge": "El archivo es demasiado grande. El máximo es 5 MB (ej.: menos de 5 000 000 bytes).",
         "photoErrorDimensionsTooLarge": "La imagen es demasiado grande. El ancho y el alto deben ser como máximo 500 px cada uno (ej.: 500×500 o 400×300).",
         "photoErrorImageLoadFailed": "No se pudo leer la imagen. Probá con otro archivo JPEG, PNG, WebP o GIF.",
-        "scheduleLead": "Definí el horario por día con el mismo selector de hora que en el calendario. Dejá ambos campos vacíos en los días que no trabaja.",
+        "scheduleLead": "Marcá los días en que la profesional atiende y cargá el horario Desde/Hasta para esos días con el mismo selector de hora que en el calendario.",
         "start": "Desde",
         "end": "Hasta",
         "timePlaceholderStart": "09:00",
         "timePlaceholderEnd": "17:00",
-        "scheduleDayIncomplete": "En cada día laboral, ingresá inicio y fin, o dejá ambos vacíos si no trabaja.",
+        "scheduleDayIncomplete": "En cada día seleccionado, ingresá la hora Desde y Hasta.",
         "scheduleInvalid": "Hora inválida. Usá HH:MM (ej.: 09:00).",
         "scheduleRangeInvalid": "Rango inválido. La hora de inicio debe ser anterior a la de fin (ej.: 09:00–17:00).",
+        "scheduleDayActive": "Día de atención",
+        "scheduleNoDaysSelected": "Marcá al menos un día de atención.",
         "pin": "PIN (4–7 dígitos, opcional)",
         "pinPlaceholder": "ej.: 1234",
         "pinMaskPlaceholder": "••••••",
@@ -846,6 +881,9 @@
         "selectClient": "Seleccionar o dejar vacío para cliente ocasional",
         "save": "Guardar",
         "cancel": "Cancelar",
+        "timePlaceholder": "HH:MM",
+        "timeAriaLabel": "Hora",
+        "datePlaceholder": "DD/MM/AAAA",
         "errors": {
           "dateRequired": "La fecha es obligatoria.",
           "timeRequired": "La hora es obligatoria.",

@@ -132,11 +132,16 @@ describe("ClientsPage", () => {
     await waitFor(() => expect(femmePostJson).toHaveBeenCalled());
   });
 
-  it("shows deactivate button for active clients", async () => {
+  it("shows kebab menu with Edit information and Deactivate client for active clients", async () => {
     femmeJson.mockResolvedValue([sampleClient]);
     renderPage();
     await screen.findByText("Ana García");
-    expect(screen.getByRole("button", { name: /deactivate/i })).toBeTruthy();
+    const trigger = screen.getByTestId(`clients-row-${sampleClient.id}-trigger`);
+    await userEvent.click(trigger);
+    expect(
+      await screen.findByRole("menuitem", { name: /edit information/i }),
+    ).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /deactivate client/i })).toBeTruthy();
   });
 
   it("list with filter All includes both active and inactive clients", async () => {
@@ -150,12 +155,18 @@ describe("ClientsPage", () => {
     expect(screen.getAllByText(/inactive/i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("inactive clients show inactive label, reactivate control, and no deactivate button", async () => {
+  it("inactive clients show inactive badge and a Reactivate item in the kebab menu (no Deactivate)", async () => {
     femmeJson.mockResolvedValue([{ ...sampleClient, active: false }]);
     renderPage();
     await screen.findByText("Ana García");
     expect(screen.getByText(/inactive/i)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /deactivate/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /reactivate/i })).toBeTruthy();
+    const trigger = screen.getByTestId(`clients-row-${sampleClient.id}-trigger`);
+    await userEvent.click(trigger);
+    expect(
+      await screen.findByRole("menuitem", { name: /reactivate client/i }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("menuitem", { name: /deactivate client/i }),
+    ).toBeNull();
   });
 });

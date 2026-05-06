@@ -5,9 +5,10 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
-  tomorrowLocalIso,
+  calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { bookingAppointmentDialog } from "../fixtures/ui";
 
 test.describe("HU-19 · Fixes varios del calendario", () => {
   test("filtro de profesionales con placeholder de búsqueda", async ({ page }) => {
@@ -40,7 +41,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(19, 0),
+      startAt: calendarVisibleWeekSlotIso(19, 0),
     });
 
     await loginAsDemo(page);
@@ -73,6 +74,28 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     expect(slotBox!.height).toBeLessThan(40);
   });
 
+  test("HU-19 · 7 modal de nuevo turno usa combobox editable de hora con intervalos de 15 min", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/calendar");
+    await page.getByRole("button", { name: /New appointment/ }).first().click();
+    const dlg = bookingAppointmentDialog(page);
+    await expect(dlg.getByRole("combobox", { name: /^Time$/ })).toBeVisible();
+  });
+
+  test("HU-19 · 8 modal de nuevo turno usa selector de fecha internacionalizado", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/calendar");
+    await page.getByRole("button", { name: /New appointment/ }).first().click();
+    const dlg = bookingAppointmentDialog(page);
+    // Localized date input renders a combobox; the popover dialog "Calendar" appears on focus.
+    await dlg.getByRole("combobox", { name: /^Date$/ }).click();
+    await expect(dlg.getByRole("dialog", { name: "Calendar", exact: true }).first()).toBeVisible();
+  });
+
   test("HU-25 / HU-19 hover en tarjeta de turno puede agrandar el bloque (texto largo)", async ({
     page,
     request,
@@ -90,7 +113,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(10, 0),
+      startAt: calendarVisibleWeekSlotIso(10, 0),
     });
 
     await loginAsDemo(page);

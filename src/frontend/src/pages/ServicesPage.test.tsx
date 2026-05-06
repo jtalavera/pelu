@@ -101,13 +101,17 @@ describe("ServicesPage", () => {
     });
   });
 
-  it("inactive service row shows Reactivate and Edit for inline editing", async () => {
+  it("inactive service row shows a Reactivate button and clicking the row opens the edit modal", async () => {
     mockLoad([sampleCategory], [inactiveService]);
     renderPage();
     await screen.findByText("Basic cut");
 
     expect(screen.getByRole("button", { name: /^Reactivate$/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^Edit$/i })).toBeTruthy();
+
+    const row = screen.getByTestId(`svc-row-${inactiveService.id}`);
+    await userEvent.click(row);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toMatch(/edit service/i);
   });
 
   it("lists active services before inactive ones", async () => {

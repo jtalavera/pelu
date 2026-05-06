@@ -8,6 +8,7 @@ import {
   Select,
   Spinner,
   Textarea,
+  TimeCombobox,
 } from "@design-system";
 import { useTour } from "../tour/useTour";
 import { calendarSteps } from "../tour/steps/calendar";
@@ -27,8 +28,8 @@ import {
 import { layoutOverlappingInDay } from "../calendar/calendarAppointmentLayout";
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
-import { FemmeNativeTimeInput } from "../components/FemmeNativeTimeInput";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { LocalizedDateInput } from "../components/LocalizedDateInput";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
@@ -985,18 +986,17 @@ export default function CalendarPage() {
           {/* Date */}
           <div className="space-y-1">
             <Label htmlFor="form-date">{t("femme.calendar.form.date")}</Label>
-            <input
+            <LocalizedDateInput
               id="form-date"
-              type="date"
               value={formDate}
-              onChange={(e) => setFormDate(e.target.value)}
-              aria-invalid={!!(formErrors.date || formErrors.startInPast)}
+              onChange={setFormDate}
+              invalid={!!(formErrors.date || formErrors.startInPast)}
               aria-describedby={
                 [formErrors.date && "form-date-err", formErrors.startInPast && "form-start-past-err"]
                   .filter(Boolean)
                   .join(" ") || undefined
               }
-              className="flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus-visible:border-indigo-400"
+              data-testid="appointment-date-input"
             />
             {formErrors.date && (
               <FieldValidationError id="form-date-err">{formErrors.date}</FieldValidationError>
@@ -1005,17 +1005,19 @@ export default function CalendarPage() {
           {/* Time */}
           <div className="space-y-1">
             <Label htmlFor="form-time">{t("femme.calendar.form.time")}</Label>
-            <FemmeNativeTimeInput
+            <TimeCombobox
               id="form-time"
               value={formTime}
-              onChange={(e) => setFormTime(e.target.value)}
+              onChange={setFormTime}
+              placeholder={t("femme.calendar.form.timePlaceholder")}
+              aria-label={t("femme.calendar.form.timeAriaLabel")}
               invalid={!!(formErrors.time || formErrors.startInPast)}
-              aria-invalid={!!(formErrors.time || formErrors.startInPast)}
               aria-describedby={
                 [formErrors.time && "form-time-err", formErrors.startInPast && "form-start-past-err"]
                   .filter(Boolean)
                   .join(" ") || undefined
               }
+              data-testid="appointment-time-input"
             />
             {formErrors.time && (
               <FieldValidationError id="form-time-err">{formErrors.time}</FieldValidationError>

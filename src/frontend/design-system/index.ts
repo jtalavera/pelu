@@ -44,6 +44,11 @@ export {
 export { Heading, Text, type HeadingProps, type TextProps } from "./components/Typography";
 export { Input, type InputProps } from "./components/Input";
 export { InputGroup, type InputGroupProps } from "./components/InputGroup";
+export {
+  KebabMenu,
+  type KebabMenuItem,
+  type KebabMenuProps,
+} from "./components/KebabMenu";
 export { Label, type LabelProps } from "./components/Label";
 export { List, ListItem, type ListProps, type ListItemProps } from "./components/List";
 export { Modal, type ModalProps } from "./components/Modal";
@@ -77,5 +82,11 @@ export {
   type TabsTriggerProps,
 } from "./components/Tabs";
 export { Textarea, type TextareaProps } from "./components/Textarea";
+export {
+  TimeCombobox,
+  buildTimeOptions,
+  normalizeTimeInput,
+  type TimeComboboxProps,
+} from "./components/TimeCombobox";
 export { Toast, type ToastProps } from "./components/Toast";
 export { Tooltip, type TooltipProps } from "./components/Tooltip";

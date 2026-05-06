@@ -429,6 +429,16 @@ export default function ClientDetailPage() {
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   type="button"
+                  variant="ghost"
+                  onClick={() => navigate("/app/clients")}
+                  disabled={saving}
+                  className="min-h-11"
+                  data-testid="client-edit-cancel"
+                >
+                  {t("femme.clients.cancel")}
+                </Button>
+                <Button
+                  type="button"
                   onClick={() => void saveClient()}
                   disabled={saving || !client.active}
                   className="min-h-11"
