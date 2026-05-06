@@ -28,9 +28,10 @@ test.describe("HU-02 · Configurar datos del negocio", () => {
     await page.goto("/app/settings/business");
     await page.getByLabel("RUC", { exact: true }).fill("bad-ruc");
     await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(
-      page.getByText("Invalid RUC. Use only digits, one hyphen, one or more digits (e.g. 80000005-6)."),
-    ).toBeVisible();
+    /** `#ruc-error`: stable hook; body is i18n (en/es). Both locales cite the canonical example. */
+    const rucErr = page.locator("#ruc-error");
+    await expect(rucErr).toBeVisible({ timeout: 10_000 });
+    await expect(rucErr).toContainText(/80000005-6/);
   });
 
   test("HU-02 · 4 cambios sin guardar no persisten al recargar", async ({ page }) => {
