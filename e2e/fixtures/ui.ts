@@ -1,9 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /** Appointment create/edit modal (avoids grabbing the nested date-picker dialog, `aria-label="Calendar"`). */
 export function bookingAppointmentDialog(page: Page): Locator {
   return page.getByRole("dialog", { name: /^(New appointment|Edit appointment)$/ });
@@ -23,13 +19,9 @@ export async function ensureCalendarShowsClientCard(
   clientNameMatcher: RegExp | string,
   opts?: { maxAheadWeeks?: number; maxBackWeeks?: number },
 ): Promise<void> {
-  const rx =
-    typeof clientNameMatcher === "string"
-      ? new RegExp(escapeRegex(clientNameMatcher))
-      : clientNameMatcher;
   await ensureLocatorVisibleByWeekNavigation(
     page,
-    () => page.getByRole("button", { name: rx }).first(),
+    () => page.getByRole("button", { name: clientNameMatcher }).first(),
     opts,
   );
 }
