@@ -10,10 +10,10 @@ const backendDir = path.resolve(__dirname, "../src/backend");
 
 /** Vite default dev port (see `npm run dev` in `src/frontend`). */
 const PORT = 5173;
-/** Use `localhost` (not `127.0.0.1`) so the URL matches Vite on macOS (IPv6 ::1). */
+/** Frontend dev URL (Vite keeps using `localhost`; API base is pinned to IPv4 in `viteServer`). */
 const BASE_URL = `http://localhost:${PORT}`;
 
-const backendReadyUrl = "http://localhost:8080/health";
+const backendReadyUrl = "http://127.0.0.1:8080/health";
 
 const evidenceRoot = process.env.E2E_EVIDENCE_DIR?.trim();
 
@@ -30,7 +30,7 @@ const videoMode =
  * Override delay exactly with `E2E_PLAYWRIGHT_SLOW_MO_MS` (non-negative integer ms).
  */
 const explicitSlowMo = process.env.E2E_PLAYWRIGHT_SLOW_MO_MS?.trim();
-const actionSpeedRaw = process.env.E2E_PLAYWRIGHT_ACTION_SPEED ?? "0.25";
+const actionSpeedRaw = process.env.E2E_PLAYWRIGHT_ACTION_SPEED ?? (process.env.CI ? "0.25" : "1");
 const actionSpeed = Math.min(1, Math.max(0.05, Number(actionSpeedRaw) || 0.25));
 const slowMoMs =
   explicitSlowMo !== undefined && explicitSlowMo !== ""
@@ -43,8 +43,15 @@ const viteServer = {
   command: "npm run dev -- --port 5173",
   cwd: frontendDir,
   url: BASE_URL,
-  reuseExistingServer: !process.env.CI,
+  /** Start Vite with `env` overrides unless `PLAYWRIGHT_REUSE_DEV_SERVER=1` (existing :5173). */
+  reuseExistingServer: process.env.PLAYWRIGHT_REUSE_DEV_SERVER === "1",
   timeout: 120_000,
+  env: {
+    ...process.env,
+    /** Match PLAYWRIGHT default API origin so fetch() from the browser does not bounce ::1 ↔ 127 mismatch. */
+    VITE_API_BASE_URL: process.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080",
+    VITE_PLAYWRIGHT: "1",
+  },
 } as const;
 
 const backendServer = {

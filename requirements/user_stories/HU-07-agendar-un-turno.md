@@ -29,6 +29,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Refresco del calendario** — El turno creado aparece de inmediato en el calendario (misma sesión).
 4. **Estado inicial** — El estado inicial del turno es “Pendiente”.
 5. **Duración** — Si el servicio tiene duración (ej. 90 minutos), el turno bloquea ese intervalo en el calendario para esa profesional (no solapes en el rango completo).
+6. **Hora editable y fecha internacionalizada (MVP v2)** — El selector de **Hora** del modal usa un combobox editable con valores de **00:00 a 23:45 cada 15 minutos** (HU-19, criterio 7), y el selector de **Fecha** está internacionalizado: formato y popover según el idioma activo (HU-19, criterio 8).
 
 ---
 

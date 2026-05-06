@@ -33,6 +33,8 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 5. **Reactivar cliente** — Tras desactivar un cliente desde el formulario de edición, debe existir una acción explícita para **reactivarlo** (p. ej. botón **Reactivar** u equivalente), visible y utilizable según el estado del registro, sin quedar el caso sin salida.
 6. **Listado e inclusión de inactivos** — En el listado de clientes, cuando el filtro de estado permite **«Todas»** (o equivalente), deben mostrarse también los clientes **inactivos**, junto con los activos, de forma distinguible si el diseño lo requiere. El comportamiento actual que **oculta** inactivos incluso con «Todas» se considera **incorrecto** y debe corregirse.
 7. **Etiquetas de botones en masculino** — Los textos de botones del flujo de clientes que califiquen la acción sobre la persona deben alinearse con el criterio masculino (p. ej. textos coherentes con «cliente» ya definido en criterio 2).
+8. **Cancelar en edición de cliente (MVP v2)** — En el formulario de edición de cliente, al lado del botón **Guardar** debe existir un botón **Cancelar**. Al hacer clic en *Cancelar* el sistema **descarta** los cambios pendientes y vuelve al **listado de clientes**, sin invocar la API.
+9. **Lista de clientes — menú kebab (MVP v2)** — En la lista de clientes, el botón *Más* se reemplaza por un **menú de tres puntos verticales** (kebab, estilo Google). Al abrirlo, expone exactamente las opciones **Editar información** y **Desactivar cliente** (o **Reactivar cliente** según el estado), traducidas mediante i18n. El botón inline *Desactivar* desaparece de la fila: la acción solo es accesible desde el menú kebab.
 
 ---
 

@@ -140,7 +140,7 @@ export default function FiscalStampSettingsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValidFrom, setEditValidFrom] = useState("");
   const [editValidUntil, setEditValidUntil] = useState("");
-  const [editNext, setEditNext] = useState("");
+  const [editStartingEmission, setEditStartingEmission] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [stampListQuery, setStampListQuery] = useState("");
 
@@ -262,13 +262,11 @@ export default function FiscalStampSettingsPage() {
     setEditingId(row.id);
     setEditValidFrom(row.validFrom);
     setEditValidUntil(row.validUntil);
-    setEditNext(String(row.nextEmissionNumber));
+    setEditStartingEmission(String(row.nextEmissionNumber));
     setSaveError(null);
     setFieldErrors((prev) => {
       const next = { ...prev };
-      delete next.editValidFrom;
-      delete next.editValidUntil;
-      delete next.editNext;
+      delete next.editStartingEmission;
       return next;
     });
   }
@@ -282,16 +280,12 @@ export default function FiscalStampSettingsPage() {
     e.preventDefault();
     if (editingId === null) return;
     const err: Record<string, string | null> = {};
-    if (!editValidFrom) err.editValidFrom = t("femme.fiscalStamp.dateRequired");
-    if (!editValidUntil) err.editValidUntil = t("femme.fiscalStamp.dateRequired");
-    if (editValidFrom && editValidUntil && editValidFrom >= editValidUntil) {
-      err.editValidUntil = t("femme.fiscalStamp.validUntilBeforeFrom");
-    }
     const row = rows.find((r) => r.id === editingId);
-    const nextN = parsePositiveInt(editNext);
-    if (nextN === null) err.editNext = t("femme.fiscalStamp.integerInvalid");
-    else if (row && (nextN < row.rangeFrom || nextN > row.rangeTo)) {
-      err.editNext = t("femme.fiscalStamp.nextEmissionRange", {
+    const nextN = parsePositiveInt(editStartingEmission);
+    if (nextN === null) {
+      err.editStartingEmission = t("femme.fiscalStamp.integerInvalid");
+    } else if (row && (nextN < row.rangeFrom || nextN > row.rangeTo)) {
+      err.editStartingEmission = t("femme.fiscalStamp.initialEmissionRange", {
         from: row.rangeFrom,
         to: row.rangeTo,
       });
@@ -639,47 +633,31 @@ export default function FiscalStampSettingsPage() {
             <Heading as="h2" id="fiscal-edit-title" className="text-lg">
               {t("femme.fiscalStamp.editTitle")}
             </Heading>
+            <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
+              {t("femme.fiscalStamp.editLead")}
+            </Text>
             <form className="mt-4 flex flex-col gap-4" onSubmit={onSaveEdit} noValidate>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="edit-vf">{t("femme.fiscalStamp.validFrom")}</Label>
-                  <Input
-                    id="edit-vf"
-                    type="date"
-                    value={editValidFrom}
-                    onChange={(e) => setEditValidFrom(e.target.value)}
-                    className="mt-1 w-full"
-                    aria-invalid={!!fieldErrors.editValidFrom}
-                    aria-describedby={fieldErrors.editValidFrom ? "edit-vf-err" : undefined}
-                  />
-                  <FieldValidationError id="edit-vf-err">{fieldErrors.editValidFrom}</FieldValidationError>
-                </div>
-                <div>
-                  <Label htmlFor="edit-vu">{t("femme.fiscalStamp.validUntil")}</Label>
-                  <Input
-                    id="edit-vu"
-                    type="date"
-                    value={editValidUntil}
-                    onChange={(e) => setEditValidUntil(e.target.value)}
-                    className="mt-1 w-full"
-                    aria-invalid={!!fieldErrors.editValidUntil}
-                    aria-describedby={fieldErrors.editValidUntil ? "edit-vu-err" : undefined}
-                  />
-                  <FieldValidationError id="edit-vu-err">{fieldErrors.editValidUntil}</FieldValidationError>
-                </div>
-              </div>
               <div>
-                <Label htmlFor="edit-next">{t("femme.fiscalStamp.nextEmission")}</Label>
+                <Label htmlFor="edit-start">{t("femme.fiscalStamp.initialEmission")}</Label>
                 <Input
-                  id="edit-next"
+                  id="edit-start"
                   inputMode="numeric"
-                  value={editNext}
-                  onChange={(e) => setEditNext(e.target.value)}
+                  value={editStartingEmission}
+                  onChange={(e) => setEditStartingEmission(e.target.value)}
                   className="mt-1 w-full"
-                  aria-invalid={!!fieldErrors.editNext}
-                  aria-describedby={fieldErrors.editNext ? "edit-next-err" : undefined}
+                  aria-invalid={!!fieldErrors.editStartingEmission}
+                  aria-describedby={
+                    fieldErrors.editStartingEmission ? "edit-start-err" : "edit-start-hint"
+                  }
                 />
-                <FieldValidationError id="edit-next-err">{fieldErrors.editNext}</FieldValidationError>
+                <FieldValidationError id="edit-start-err">
+                  {fieldErrors.editStartingEmission}
+                </FieldValidationError>
+                {!fieldErrors.editStartingEmission ? (
+                  <p id="edit-start-hint" style={hintStyle}>
+                    {t("femme.fiscalStamp.initialEmissionHint")}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" variant="primary" className="min-h-11" disabled={editSaving}>

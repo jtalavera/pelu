@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -29,6 +29,8 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatDecimalGs, formatGuaraniesGs } from "../lib/formatMoney";
+import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
+import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
@@ -128,16 +130,6 @@ function fmt(isoString: string, locale: string): string {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(isoString));
-  } catch {
-    return isoString;
-  }
-}
-
-function fmtDate(isoString: string, locale: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(
-      new Date(isoString),
-    );
   } catch {
     return isoString;
   }
@@ -344,7 +336,7 @@ function InvoiceDetailModal({
               </div>
               <div>
                 <span className="font-medium">{t("femme.billing.history.detail.issuedAt")}: </span>
-                {fmt(invoice.issuedAt, dateLocale)}
+                {formatParaguayDateTime(invoice.issuedAt, dateLocale)}
               </div>
               <div>
                 <span className="font-medium">{t("femme.billing.history.detail.client")}: </span>
@@ -730,7 +722,7 @@ function InvoiceHistoryTab() {
                   className="border-t border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-muted)/0.4)]"
                 >
                   <td className="px-3 py-2 font-mono">{inv.invoiceNumberFormatted}</td>
-                  <td className="px-3 py-2">{fmtDate(inv.issuedAt, dateLocale)}</td>
+                  <td className="px-3 py-2">{formatParaguayDateTime(inv.issuedAt, dateLocale)}</td>
                   <td className="px-3 py-2">{inv.clientDisplayName ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{formatAmountDecimal(inv.total)}</td>
                   <td className="px-3 py-2 text-center">
@@ -772,13 +764,52 @@ function InvoiceHistoryTab() {
 
 // ─── NewInvoiceTab ────────────────────────────────────────────────────────────
 
-function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
+type InitialClientForBilling = {
+  id: number;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  ruc: string | null;
+};
+
+function NewInvoiceTab({
+  onIssued,
+  initialClient,
+  onInitialClientConsumed,
+}: {
+  onIssued: () => void;
+  initialClient?: InitialClientForBilling | null;
+  onInitialClientConsumed?: () => void;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [clientSelection, setClientSelection] = useState<ClientSelection>(null);
+  const initialSelection: ClientSelection = initialClient
+    ? {
+        type: "client",
+        client: {
+          id: initialClient.id,
+          fullName: initialClient.fullName,
+          phone: initialClient.phone,
+          email: initialClient.email,
+          ruc: initialClient.ruc,
+        },
+      }
+    : null;
+  const [clientSelection, setClientSelection] = useState<ClientSelection>(initialSelection);
   const [clientSearchKey, setClientSearchKey] = useState(0);
-  const [clientDisplayName, setClientDisplayName] = useState("");
-  const [clientRucOverride, setClientRucOverride] = useState("");
+  const [clientDisplayName, setClientDisplayName] = useState(
+    initialClient?.fullName ?? "",
+  );
+  const [clientRucOverride, setClientRucOverride] = useState(
+    initialClient?.ruc ?? "",
+  );
+
+  useEffect(() => {
+    if (initialClient && onInitialClientConsumed) {
+      onInitialClientConsumed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
   const [lines, setLines] = useState<InvoiceLineForm[]>([
@@ -816,7 +847,7 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   // Computed totals
   const subtotal = lines.reduce((acc, l) => {
     const qty = parseFloat(l.quantity) || 0;
-    const price = parseFloat(l.unitPrice) || 0;
+    const price = parseMaskedMoney(l.unitPrice);
     return acc + qty * price;
   }, 0);
 
@@ -829,10 +860,35 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   const total = Math.max(0, subtotal - discountAmount);
 
   const assignedPayments = payments.reduce(
-    (acc, p) => acc + (parseFloat(p.amount) || 0),
+    (acc, p) => acc + parseMaskedMoney(p.amount),
     0,
   );
   const remaining = total - assignedPayments;
+
+  /**
+   * Whether all mandatory fields are filled to enable the "Emit" button:
+   *   1. A client is selected from the directory OR marked as occasional.
+   *   2. At least one service line with serviceId + valid unit price.
+   *   3. At least one payment with method + valid positive amount.
+   */
+  const hasClientData = (() => {
+    if (clientSelection?.type === "client") {
+      return clientDisplayName.trim().length > 0;
+    }
+    if (clientSelection?.type === "occasional") {
+      return true;
+    }
+    return false;
+  })();
+  const hasServiceLine = lines.some((l) => {
+    const price = parseMaskedMoney(l.unitPrice);
+    return l.serviceId.trim() !== "" && Number.isFinite(price) && price > 0;
+  });
+  const hasPayment = payments.some((p) => {
+    const amount = parseMaskedMoney(p.amount);
+    return p.method.trim() !== "" && Number.isFinite(amount) && amount > 0;
+  });
+  const canSubmit = hasClientData && hasServiceLine && hasPayment;
 
   function addLine() {
     setLines((prev) => [
@@ -861,13 +917,13 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
       prev.map((l, i) => {
         if (i !== idx) return l;
         if (service) {
-          const priceStr = String(Number(service.priceMinor) || 0);
+          const priceMasked = maskMoneyInput(String(Number(service.priceMinor) || 0));
           return {
             ...l,
             pickedService: service,
             serviceId: String(service.id),
             description: service.name,
-            unitPrice: priceStr,
+            unitPrice: priceMasked,
           };
         }
         return {
@@ -895,8 +951,9 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
     field: "serviceId" | "quantity" | "unitPrice",
     value: string,
   ) {
+    const next = field === "unitPrice" ? maskMoneyInput(value) : value;
     setLines((prev) =>
-      prev.map((l, i) => (i === idx ? { ...l, [field]: value } : l)),
+      prev.map((l, i) => (i === idx ? { ...l, [field]: next } : l)),
     );
     if (lineErrors[idx]?.[field]) {
       setLineErrors((prev) => {
@@ -925,8 +982,9 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
   }
 
   function updatePayment(idx: number, field: keyof PaymentForm, value: string) {
+    const next = field === "amount" ? maskMoneyInput(value) : value;
     setPayments((prev) =>
-      prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p)),
+      prev.map((p, i) => (i === idx ? { ...p, [field]: next } : p)),
     );
     if (paymentErrors[idx]) {
       setPaymentErrors((prev) => {
@@ -951,8 +1009,8 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
       if (!l.serviceId.trim()) {
         fieldErrs.service = t("femme.billing.invoice.lineServiceRequired");
       }
-      const price = parseFloat(l.unitPrice);
-      if (isNaN(price) || price < 0) {
+      const price = parseMaskedMoney(l.unitPrice);
+      if (!Number.isFinite(price) || price < 0 || l.unitPrice.trim() === "") {
         fieldErrs.unitPrice = t("femme.billing.invoice.lineUnitPriceInvalid");
       }
       if (Object.keys(fieldErrs).length > 0) {
@@ -965,8 +1023,8 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
     }
 
     payments.forEach((p, i) => {
-      const amount = parseFloat(p.amount);
-      if (isNaN(amount) || amount <= 0) {
+      const amount = parseMaskedMoney(p.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
         newPaymentErrors[i] = t("femme.billing.invoice.paymentAmountInvalid");
       }
     });
@@ -1016,11 +1074,11 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
         serviceId: l.serviceId ? parseInt(l.serviceId) : null,
         description: (l.pickedService?.name ?? l.description).trim(),
         quantity: parseInt(l.quantity) || 1,
-        unitPrice: parseFloat(l.unitPrice) || 0,
+        unitPrice: parseMaskedMoney(l.unitPrice),
       })),
       payments: payments.map((p) => ({
         method: p.method,
-        amount: parseFloat(p.amount),
+        amount: parseMaskedMoney(p.amount),
       })),
     };
 
@@ -1162,7 +1220,12 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
             onChange={handleClientSelectionChange}
             onCreateNew={(q) =>
               navigate("/app/clients", {
-                state: { openCreateClient: true, prefilledName: q },
+                state: {
+                  openCreateClient: true,
+                  prefilledName: q,
+                  returnTo: "/app/billing",
+                  returnTab: "invoice",
+                },
               })
             }
             label={t("femme.billing.invoice.clientSearchLabel")}
@@ -1238,10 +1301,10 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
                   </Label>
                   <Input
                     id={`line-price-${idx}`}
-                    inputMode="decimal"
+                    inputMode="numeric"
                     value={line.unitPrice}
                     onChange={(e) => updateLine(idx, "unitPrice", e.target.value)}
-                    placeholder="0"
+                    placeholder={t("femme.billing.invoice.lineUnitPricePlaceholder")}
                     className="mt-1 w-full"
                     aria-invalid={!!lineErrors[idx]?.unitPrice}
                     aria-describedby={
@@ -1255,7 +1318,7 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
                 <div className="col-span-9 sm:col-span-1 flex min-h-9 w-full items-end justify-center">
                   <span className="w-full text-center text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
                     {formatDecimalGs(
-                      (parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0),
+                      (parseFloat(line.quantity) || 0) * parseMaskedMoney(line.unitPrice),
                     )}
                   </span>
                 </div>
@@ -1386,10 +1449,10 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
                   </Label>
                   <Input
                     id={`pay-amount-${idx}`}
-                    inputMode="decimal"
+                    inputMode="numeric"
                     value={payment.amount}
                     onChange={(e) => updatePayment(idx, "amount", e.target.value)}
-                    placeholder="0"
+                    placeholder={t("femme.billing.invoice.paymentAmountPlaceholder")}
                     className="mt-1 w-full"
                     aria-invalid={!!paymentErrors[idx]}
                     aria-describedby={
@@ -1432,7 +1495,8 @@ function NewInvoiceTab({ onIssued }: { onIssued: () => void }) {
           type="submit"
           variant="primary"
           className="min-h-11 w-full sm:w-auto"
-          disabled={submitting}
+          disabled={submitting || !canSubmit}
+          data-testid="billing-invoice-submit"
         >
           {submitting
             ? t("femme.billing.invoice.submitting")
@@ -2100,11 +2164,31 @@ export default function BillingPage() {
   const { t } = useTranslation();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   useTour("billing", billingSteps, undefined, guidedTourEnabled);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navState = location.state as
+    | {
+        activeTab?: "session" | "invoice" | "history";
+        selectedClient?: InitialClientForBilling;
+      }
+    | null;
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history">("session");
+  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history">(
+    navState?.activeTab ?? "session",
+  );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
+  const [pendingInitialClient, setPendingInitialClient] = useState<
+    InitialClientForBilling | null
+  >(navState?.selectedClient ?? null);
+
+  useEffect(() => {
+    if (navState && (navState.activeTab || navState.selectedClient)) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadCurrentSession = useCallback(async () => {
     setLoading(true);
@@ -2228,6 +2312,8 @@ export default function BillingPage() {
             onIssued={() => {
               setInvoiceListRefresh((k) => k + 1);
             }}
+            initialClient={pendingInitialClient}
+            onInitialClientConsumed={() => setPendingInitialClient(null)}
           />
         ) : (
           <Text variant="muted">{t("femme.billing.noOpenSession")}</Text>

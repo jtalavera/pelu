@@ -1,7 +1,11 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 
-/** Backend origin for Playwright `request` calls (matches Vite default `VITE_API_BASE_URL`). */
-export const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL ?? "http://localhost:8080";
+/**
+ * Backend origin for Playwright `request` calls.
+ * Default to IPv4 loopback — Node resolves `localhost` to `::1` first on macOS while some
+ * dev servers bind only IPv4; that yields `ECONNREFUSED ::1:8080` before tests even start.
+ */
+export const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080";
 
 /** Function form of API_BASE for tests that call apiBaseUrl(). */
 export function apiBaseUrl(): string {
@@ -79,12 +83,81 @@ export async function apiPostJsonStatus(
   return { status: res.status(), text: await res.text() };
 }
 
-/** Returns an ISO-8601 instant for tomorrow at the given local hour/minute (runner TZ). */
+function padIsoPart(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** `Instant.parse`-compatible ISO string preserving the local calendar wall clock + numeric offset (no UTC shift surprises). */
+export function instantToOffsetIso(d: Date): string {
+  const y = d.getFullYear();
+  const mo = padIsoPart(d.getMonth() + 1);
+  const day = padIsoPart(d.getDate());
+  const h = padIsoPart(d.getHours());
+  const mi = padIsoPart(d.getMinutes());
+  const tzOffsetMinutes = -d.getTimezoneOffset();
+  const sign = tzOffsetMinutes >= 0 ? "+" : "-";
+  const abs = Math.abs(tzOffsetMinutes);
+  const oh = padIsoPart(Math.floor(abs / 60));
+  const om = padIsoPart(abs % 60);
+  return `${y}-${mo}-${day}T${h}:${mi}:00${sign}${oh}:${om}`;
+}
+
+/** Same Monday-first week boundaries as `/app/calendar` (`CalendarPage.startOfWeek`). */
+function startOfMondayWeek(date: Date): Date {
+  const d = new Date(date.getTime());
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDaysDate(date: Date, days: number): Date {
+  const d = new Date(date.getTime());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+/**
+ * Next `{hour}:{minute}` strictly after now and strictly inside `[Mon 00:00, following Mon 00:00)` for some
+ * calendar week reachable from today (checks this week plus up to two more). Seeds API appointments that must
+ * show on the weekly grid **without** week navigation (“tomorrow” on Sunday skips out of the current view).
+ */
+export function calendarVisibleWeekSlotIso(hour: number, minute: number): string {
+  const nowMs = Date.now();
+  for (let w = 0; w < 3; w++) {
+    const anchor = addDaysDate(new Date(nowMs), w * 7);
+    const weekStart = startOfMondayWeek(anchor);
+    const weekEndMs = addDaysDate(weekStart, 7).getTime();
+    for (let offset = 0; offset < 7; offset++) {
+      const base = addDaysDate(weekStart, offset);
+      const slot = new Date(
+        base.getFullYear(),
+        base.getMonth(),
+        base.getDate(),
+        hour,
+        minute,
+        0,
+        0,
+      );
+      const t = slot.getTime();
+      if (t > nowMs && t < weekEndMs) {
+        return instantToOffsetIso(slot);
+      }
+    }
+  }
+  const d = new Date(nowMs);
+  d.setDate(d.getDate() + 1);
+  d.setHours(hour, minute, 0, 0);
+  return instantToOffsetIso(d);
+}
+
+/** Returns an ISO-8601 instant for **calendar tomorrow** at the given local hour/minute (runner TZ). */
 export function tomorrowLocalIso(hour: number, minute: number): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   d.setHours(hour, minute, 0, 0);
-  return d.toISOString();
+  return instantToOffsetIso(d);
 }
 
 export type SeededSalon = {

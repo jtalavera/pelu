@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { API_BASE, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
+import { setControlledInputValue } from "../fixtures/ui";
 
 test.describe("HU-18 · Cerrar caja del día", () => {
   test("botón para iniciar cierre de caja", async ({ page }) => {
@@ -36,7 +37,7 @@ test.describe("HU-18 · Cerrar caja del día", () => {
     await ensureCashSessionOpen(page);
     await page.getByRole("tab", { name: "Cash Register" }).click();
     await page.getByRole("button", { name: "Close cash register" }).click();
-    await page.getByLabel("Counted cash amount").fill("999999");
+    await setControlledInputValue(page.getByLabel("Counted cash amount"), "999999");
     const [closeRes2] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/cash-sessions/close") && r.request().method() === "POST",

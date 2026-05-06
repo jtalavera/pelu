@@ -1,13 +1,20 @@
 import { expect, test } from "@playwright/test";
 import {
   createAppointmentApi,
+  calendarVisibleWeekSlotIso,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
   tomorrowLocalIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { localDatePlusDays, pickSearchableOption } from "../fixtures/ui";
+import {
+  bookingAppointmentDialog,
+  fillAppointmentDateIso,
+  fillAppointmentTime,
+  localDatePlusDays,
+  pickSearchableOption,
+} from "../fixtures/ui";
 
 function rxExact(s: string): RegExp {
   return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -24,10 +31,10 @@ test.describe("HU-07 · Agendar un turno", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: "New appointment" }).first().click();
-    const dlg = page.getByRole("dialog");
+    const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);
-    await dlg.locator("#form-date").fill(day);
-    await dlg.locator("#form-time").fill("14:30");
+    await fillAppointmentDateIso(dlg, day);
+    await fillAppointmentTime(dlg, "14:30");
     await pickSearchableOption(
       page,
       "Professional",
@@ -53,7 +60,7 @@ test.describe("HU-07 · Agendar un turno", () => {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: tomorrowLocalIso(15, 0),
+      startAt: calendarVisibleWeekSlotIso(15, 0),
     });
 
     await loginAsDemo(page);
@@ -80,10 +87,10 @@ test.describe("HU-07 · Agendar un turno", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: "New appointment" }).first().click();
-    const dlg = page.getByRole("dialog");
+    const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);
-    await dlg.locator("#form-date").fill(day);
-    await dlg.locator("#form-time").fill("16:00");
+    await fillAppointmentDateIso(dlg, day);
+    await fillAppointmentTime(dlg, "16:00");
     await pickSearchableOption(
       page,
       "Professional",
@@ -120,10 +127,10 @@ test.describe("HU-07 · Agendar un turno", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: "New appointment" }).first().click();
-    const dlg = page.getByRole("dialog");
+    const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);
-    await dlg.locator("#form-date").fill(day);
-    await dlg.locator("#form-time").fill("17:00");
+    await fillAppointmentDateIso(dlg, day);
+    await fillAppointmentTime(dlg, "17:00");
     await pickSearchableOption(
       page,
       "Professional",

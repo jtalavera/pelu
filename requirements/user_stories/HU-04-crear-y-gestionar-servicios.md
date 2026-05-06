@@ -31,6 +31,8 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 3. **Edición** — Cualquier servicio existente puede editarse con los mismos campos.
 4. **Desactivación** — Se puede desactivar un servicio sin borrarlo; no aparece en nuevos turnos pero el historial se preserva (turnos/comprobantes previos siguen referenciando el servicio según modelo de datos).
 5. **Lista con búsqueda y filtro** — La lista de servicios es buscable y filtrable por categoría.
+6. **Edición vía pop-up — servicios (MVP v2)** — En la lista de **servicios**, al hacer **clic** sobre un registro se abre un **pop-up / modal de edición** con el formulario completo del servicio. La edición *inline* sobre la fila se elimina; toda modificación pasa por el pop-up. La fila también es activable por teclado (`Enter` / `Space`) para abrir el modal.
+7. **Edición vía pop-up — categorías (MVP v2)** — Idem criterio 6 para la solapa **Categorías**: al hacer **clic** sobre un registro de categoría se abre un **pop-up / modal de edición** con el formulario de categoría; no se permite edición inline.
 
 ---
 

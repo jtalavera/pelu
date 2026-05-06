@@ -120,6 +120,50 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     ).toBeVisible();
   });
 
+  test("HU-02b · 8 botón Edit stamp solo permite cambiar Starting invoice number", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    /** Fresh active stamp stays unlocked (`lockedAfterInvoice === false`) until an invoice ties to it. */
+    const todayStr = isoDateLocal(new Date());
+    const until = new Date();
+    until.setFullYear(until.getFullYear() + 1);
+    const stampNumber = `3${Date.now().toString().slice(-7)}`;
+    const created = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
+      stampNumber,
+      validFrom: todayStr,
+      validUntil: isoDateLocal(until),
+      rangeFrom: 7_500_100,
+      rangeTo: 7_500_199,
+      initialEmissionNumber: 7_500_110,
+    });
+    await apiPostJson(request, token, `/api/fiscal-stamps/${created.id}/activate`, {});
+    const refreshed = await listFiscalStamps(request, token);
+    const row = refreshed.find((s) => s.stampNumber === stampNumber);
+    expect(row).toBeTruthy();
+    expect(row!.active).toBe(true);
+    expect(row!.lockedAfterInvoice).toBe(false);
+
+    await loginAsDemo(page);
+    await page.goto("/app/settings/fiscal-stamp");
+    const stampLbl = page.getByText(stampNumber, { exact: true });
+    await expect(stampLbl).toBeVisible({ timeout: 30_000 });
+    await stampLbl.scrollIntoViewIfNeeded();
+    await page
+      .locator('[data-tour="fiscal-stamp-header"]')
+      .getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ })
+      .click();
+    const dlg = page.getByRole("dialog");
+    await expect(
+      dlg.getByRole("heading", { name: /^(Edit stamp|Editar timbrado)$/ }),
+    ).toBeVisible();
+    await expect(dlg.getByLabel(/Starting invoice number|Número de inicio de emisión/)).toBeVisible();
+    await expect(dlg.getByLabel(/Validity start|Inicio de vigencia/)).toHaveCount(0);
+    await expect(dlg.getByLabel(/Validity end|Fin de vigencia/)).toHaveCount(0);
+    await expect(dlg.getByLabel(/Stamp number|Número de timbrado/)).toHaveCount(0);
+  });
+
   test("HU-02b · 7 alerta de rango de numeración bajo 10%", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await apiPutJson(request, token, "/api/business-profile", {

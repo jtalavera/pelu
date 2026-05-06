@@ -55,7 +55,6 @@ public class InvoicePdfService {
   private static final float MARGIN_X_PT = cmToPt(0.35f);
   private static final float BODY_PT = 8f;
   private static final float TABLE_PT = 7.5f;
-  private static final float FOOTER_PT = 7f;
 
   private final BusinessProfileRepository businessProfileRepository;
   private final InvoiceRepository invoiceRepository;
@@ -133,8 +132,8 @@ public class InvoicePdfService {
           BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
 
       PdfContentByte cb = writer.getDirectContent();
-      drawPanel(cb, bf, bfBold, 0f, invoice, dateFmt, "COPIA: ARCHIVO TRIBUTARIO");
-      drawPanel(cb, bf, bfBold, PANEL_WIDTH_PT, invoice, dateFmt, "ORIGINAL: ADQUIRENTE");
+      drawPanel(cb, bf, bfBold, 0f, invoice, dateFmt);
+      drawPanel(cb, bf, bfBold, PANEL_WIDTH_PT, invoice, dateFmt);
 
       document.close();
       return baos.toByteArray();
@@ -152,43 +151,29 @@ public class InvoicePdfService {
       BaseFont bfBold,
       float panelOriginX,
       Invoice invoice,
-      DateTimeFormatter dateFmt,
-      String copyFooter)
+      DateTimeFormatter dateFmt)
       throws Exception {
     float ox = panelOriginX + MARGIN_X_PT;
     float innerW = PANEL_WIDTH_PT - 2 * MARGIN_X_PT;
     float h = PAGE_HEIGHT_PT;
-    DateTimeFormatter vigFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    // --- Header overlay (timbrado / número) — optional alignment with blank boxes on form ---
+    // --- Header overlay (invoice number only) ---
+    // HU-21: timbrado number and validity dates are pre-printed on the
+    // continuous stationery, so we no longer overlay them on the PDF.
     cb.beginText();
-    cb.setFontAndSize(bfBold, 8.5f);
-    String stamp = invoice.getFiscalStamp().getStampNumber();
-    cb.showTextAligned(Element.ALIGN_LEFT, "Timbrado Nº " + stamp, ox, yFromTop(h, 1.05f), 0);
-    cb.setFontAndSize(bf, 7f);
-    cb.showTextAligned(
-        Element.ALIGN_LEFT,
-        "Vigencia "
-            + invoice.getFiscalStamp().getValidFrom().format(vigFmt)
-            + " al "
-            + invoice.getFiscalStamp().getValidUntil().format(vigFmt),
-        ox,
-        yFromTop(h, 1.45f),
-        0);
     cb.setFontAndSize(bfBold, 9f);
     String invNo = formatInvoiceNumber(invoice.getInvoiceNumber());
     cb.showTextAligned(Element.ALIGN_RIGHT, "Nº " + invNo, ox + innerW, yFromTop(h, 2.05f), 0);
     cb.endText();
 
-    // --- Client block (aligned with typical “Fecha / RUC / Nombre / Dirección / Tel”) ---
+    // --- Client block ---
+    // HU-21: RUC and client name are aligned to the same x-coordinate as the
+    // date field, so they line up vertically with the printed "Fecha" box.
+    float fieldX = ox + cmToPt(2.2f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
-        Element.ALIGN_LEFT,
-        dateFmt.format(invoice.getIssuedAt()),
-        ox + cmToPt(2.2f),
-        yFromTop(h, 3.05f),
-        0);
+        Element.ALIGN_LEFT, dateFmt.format(invoice.getIssuedAt()), fieldX, yFromTop(h, 3.05f), 0);
     // Contado (POS): mark near printed “CONTADO”
     cb.showTextAligned(Element.ALIGN_LEFT, "X", ox + cmToPt(5.6f), yFromTop(h, 3.05f), 0);
 
@@ -200,12 +185,13 @@ public class InvoicePdfService {
       }
     }
     if (clientRuc != null && !clientRuc.isBlank()) {
-      cb.showTextAligned(Element.ALIGN_LEFT, truncate(clientRuc, 28), ox, yFromTop(h, 3.62f), 0);
+      cb.showTextAligned(
+          Element.ALIGN_LEFT, truncate(clientRuc, 28), fieldX, yFromTop(h, 3.62f), 0);
     }
 
     String name = invoice.getClientDisplayName();
     if (name != null && !name.isBlank()) {
-      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), ox, yFromTop(h, 4.22f), 0);
+      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), fieldX, yFromTop(h, 4.22f), 0);
     }
 
     String phone = "";
@@ -217,21 +203,15 @@ public class InvoicePdfService {
         Element.ALIGN_LEFT, truncate(phone, 22), ox + cmToPt(6.2f), yFromTop(h, 4.82f), 0);
     cb.endText();
 
-    // --- Detail table: Cant. | Descripción (nombre de servicio) | P. unit. | ventas 10% ---
+    // --- Detail table (variable rows only) ---
+    // HU-21: column headers (Cant. / Descripción / P. unit. / 10%) are
+    // pre-printed on the form, so the PDF prints only the row data.
     float tableTop = yFromTop(h, 5.55f);
     float rowH = cmToPt(0.38f);
     float xCant = ox;
     float xDesc = ox + cmToPt(0.85f);
     float xPu = ox + cmToPt(6.35f);
     float x10 = ox + cmToPt(9.05f);
-
-    cb.beginText();
-    cb.setFontAndSize(bfBold, TABLE_PT);
-    cb.showTextAligned(Element.ALIGN_RIGHT, "Cant.", xCant + cmToPt(0.65f), tableTop, 0);
-    cb.showTextAligned(Element.ALIGN_LEFT, "Descripción", xDesc, tableTop, 0);
-    cb.showTextAligned(Element.ALIGN_RIGHT, "P. unit.", xPu + cmToPt(1.35f), tableTop, 0);
-    cb.showTextAligned(Element.ALIGN_RIGHT, "10%", x10 + cmToPt(0.85f), tableTop, 0);
-    cb.endText();
 
     List<InvoiceLine> lines = invoice.getLines();
     int maxRows = 11;
@@ -294,25 +274,24 @@ public class InvoicePdfService {
     cb.endText();
 
     // --- Payments (small, under totals) ---
+    // HU-21: short method labels (Efec./Deb./Cred./Transf./Otro) removed; the
+    // amount is enough alongside the pre-printed payment-method labels.
     float yPay = yFromTop(h, 12.05f);
     StringBuilder pay = new StringBuilder();
     for (InvoicePaymentAllocation p : invoice.getPaymentAllocations()) {
       if (!pay.isEmpty()) {
         pay.append("  ");
       }
-      pay.append(shortPaymentLabel(p)).append(" ").append(formatMoneyGs(p.getAmount()));
+      pay.append(formatMoneyGs(p.getAmount()));
     }
     cb.beginText();
     cb.setFontAndSize(bf, 6.5f);
     cb.showTextAligned(Element.ALIGN_LEFT, truncate(pay.toString(), 72), ox, yPay, 0);
     cb.endText();
 
-    // --- Copy designation (bottom of panel) ---
-    cb.beginText();
-    cb.setFontAndSize(bfBold, FOOTER_PT);
-    cb.showTextAligned(
-        Element.ALIGN_CENTER, copyFooter, panelOriginX + PANEL_WIDTH_PT / 2f, cmToPt(0.55f), 0);
-    cb.endText();
+    // HU-21: bottom-of-panel "COPIA: ARCHIVO TRIBUTARIO" / "ORIGINAL:
+    // ADQUIRENTE" labels removed; the panel footer is left blank because
+    // the printed form already differentiates the two copies.
   }
 
   /**
@@ -334,16 +313,6 @@ public class InvoicePdfService {
       case PERCENT -> "%";
       case FIXED -> "Gs.";
       case NONE -> "";
-    };
-  }
-
-  private static String shortPaymentLabel(InvoicePaymentAllocation p) {
-    return switch (p.getMethod()) {
-      case CASH -> "Efec.";
-      case DEBIT_CARD -> "Deb.";
-      case CREDIT_CARD -> "Cred.";
-      case TRANSFER -> "Transf.";
-      case OTHER -> "Otro";
     };
   }
 

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
@@ -18,10 +18,8 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
-import { InlineEditActions } from "../components/ui/InlineEditActions";
 import { SearchInput } from "../components/ui/SearchInput";
 import { useFilteredList } from "../hooks/useFilteredList";
-import { useInlineEdit } from "../hooks/useInlineEdit";
 import {
   CATEGORY_ACCENT_KEYS,
   type CategoryAccentKey,
@@ -357,72 +355,47 @@ export default function ServicesPage() {
     fields: categoryFilterFields,
   });
 
-  const handleInlineServiceSave = useCallback(
-    async (s: SalonService) => {
-      const nameTrim = String(s.name ?? "").trim();
-      const categoryId = Number(s.categoryId);
-      const priceRaw = s.priceMinor;
-      const price =
-        typeof priceRaw === "number" ? priceRaw : normalizeMoneyInput(String(priceRaw ?? ""));
-      const duration = Number(s.durationMinutes);
-      if (!nameTrim) throw new Error("INVALID");
-      if (!Number.isFinite(categoryId)) throw new Error("INVALID");
-      if (price == null || !Number.isFinite(price) || price < 0) throw new Error("INVALID");
-      if (!Number.isFinite(duration) || duration < 1) throw new Error("INVALID");
-      await femmePutJson<SalonService>(`/api/services/${s.id}`, {
-        name: nameTrim,
-        categoryId,
-        priceMinor: price,
-        durationMinutes: duration,
-      });
-      await load();
-    },
-    [load],
-  );
-
-  const handleInlineCategorySave = useCallback(
-    async (c: ServiceCategory) => {
-      const nameTrim = String(c.name ?? "").trim();
-      if (!nameTrim) throw new Error("INVALID");
-      const accentKey = CATEGORY_ACCENT_KEYS.includes(c.accentKey as CategoryAccentKey)
+  function openEditCategory(c: ServiceCategory) {
+    setCategoryEditing(c);
+    setCategoryName(c.name);
+    setCategoryAccentKey(
+      CATEGORY_ACCENT_KEYS.includes(c.accentKey as CategoryAccentKey)
         ? (c.accentKey as CategoryAccentKey)
-        : "stone";
-      await femmePutJson<ServiceCategory>(`/api/service-categories/${c.id}`, {
-        name: nameTrim,
-        accentKey,
-      });
-      await load();
-    },
-    [load],
-  );
+        : "stone",
+    );
+    setCategoryNameError(null);
+    setCategorySaveError(null);
+    setCategoryModalOpen(true);
+  }
 
-  const {
-    editingData: serviceEditingData,
-    saving: serviceInlineSaving,
-    saveError: serviceInlineSaveError,
-    startEdit: startServiceEdit,
-    cancelEdit: cancelServiceEdit,
-    updateField: updateServiceField,
-    saveEdit: saveServiceEdit,
-    isEditing: isEditingService,
-  } = useInlineEdit<SalonService>({
-    onSave: handleInlineServiceSave,
-    saveErrorMessage: t("femme.inlineEdit.saveError"),
-  });
+  function openEditService(s: SalonService) {
+    setServiceEditing(s);
+    setServiceName(s.name);
+    setServiceCategoryId(String(s.categoryId));
+    const priceVal =
+      typeof s.priceMinor === "number"
+        ? s.priceMinor
+        : Number(String(s.priceMinor ?? "").trim());
+    setServicePrice(Number.isFinite(priceVal) ? String(priceVal) : "");
+    setServiceDuration(String(s.durationMinutes));
+    setServiceFieldError(null);
+    setServiceSaveError(null);
+    setServiceModalOpen(true);
+  }
 
-  const {
-    editingData: categoryEditingData,
-    saving: categoryInlineSaving,
-    saveError: categoryInlineSaveError,
-    startEdit: startCategoryEdit,
-    cancelEdit: cancelCategoryEdit,
-    updateField: updateCategoryField,
-    saveEdit: saveCategoryEdit,
-    isEditing: isEditingCategory,
-  } = useInlineEdit<ServiceCategory>({
-    onSave: handleInlineCategorySave,
-    saveErrorMessage: t("femme.inlineEdit.saveError"),
-  });
+  const onRowKeyOpenService = (s: SalonService) => (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openEditService(s);
+    }
+  };
+
+  const onRowKeyOpenCategory = (c: ServiceCategory) => (e: KeyboardEvent<HTMLTableRowElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openEditCategory(c);
+    }
+  };
 
   const categoriasOrdenadas = useMemo(
     () =>
@@ -440,69 +413,6 @@ export default function ServicesPage() {
         return a.active ? -1 : 1;
       }),
     [servicesTextFiltered],
-  );
-
-  const keySaveCancelService = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void saveServiceEdit();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      cancelServiceEdit();
-    }
-  };
-
-  const keySaveCancelCategory = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void saveCategoryEdit();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      cancelCategoryEdit();
-    }
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 10,
-    fontWeight: 500,
-    color: "var(--color-ink-2)",
-    display: "block",
-    marginBottom: 3,
-  };
-
-  const inputEditStyle: React.CSSProperties = {
-    padding: "6px 9px",
-    border: "1px solid var(--color-rose-md)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    background: "var(--color-white)",
-    outline: "none",
-    width: "100%",
-  };
-
-  const categoryInputEditStyle: React.CSSProperties = {
-    ...inputEditStyle,
-    minWidth: 80,
-  };
-
-  const inlineServiceCategoryOptions = useMemo(() => {
-    const cid = serviceEditingData.categoryId;
-    return categories.filter((c) => c.active || c.id === cid);
-  }, [categories, serviceEditingData.categoryId]);
-
-  const onServiceCategoryInlineChange = useCallback(
-    (categoryId: number) => {
-      const cat = categories.find((c) => c.id === categoryId);
-      updateServiceField("categoryId", categoryId);
-      if (cat) {
-        updateServiceField("categoryName", cat.name);
-        updateServiceField("categoryAccentKey", cat.accentKey);
-      }
-    },
-    [categories, updateServiceField],
   );
 
   if (loading) {
@@ -768,125 +678,17 @@ export default function ServicesPage() {
                     />
                   </div>
                 ) : null}
-                {isEditingService(s.id) ? (
-                  <div
-                    style={{
-                      background: "var(--color-rose-lt)",
-                      border: "1.5px solid var(--color-rose-md)",
-                      borderRadius: "var(--radius-lg)",
-                      padding: "14px 16px",
-                      marginBottom: 8,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                        gap: 8,
-                      }}
-                    >
-                      <div>
-                        <label style={labelStyle} htmlFor={`svc-inline-name-${s.id}`}>
-                          {t("femme.services.services.name")}
-                        </label>
-                        <input
-                          id={`svc-inline-name-${s.id}`}
-                          value={String(serviceEditingData.name ?? "")}
-                          onChange={(e) => updateServiceField("name", e.target.value)}
-                          onKeyDown={keySaveCancelService}
-                          style={inputEditStyle}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle} htmlFor={`svc-inline-cat-${s.id}`}>
-                          {t("femme.services.services.category")}
-                        </label>
-                        <select
-                          id={`svc-inline-cat-${s.id}`}
-                          value={String(serviceEditingData.categoryId ?? "")}
-                          onChange={(e) => onServiceCategoryInlineChange(Number(e.target.value))}
-                          onKeyDown={keySaveCancelService}
-                          style={inputEditStyle}
-                        >
-                          <option value="">{t("femme.services.services.categoryPlaceholder")}</option>
-                          {inlineServiceCategoryOptions.map((c) => (
-                            <option key={c.id} value={String(c.id)}>
-                              {c.name}
-                              {!c.active ? ` ${t("femme.services.categories.inactive")}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={labelStyle} htmlFor={`svc-inline-dur-${s.id}`}>
-                          {t("femme.services.services.duration")}
-                        </label>
-                        <input
-                          id={`svc-inline-dur-${s.id}`}
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={
-                            serviceEditingData.durationMinutes === undefined ||
-                            serviceEditingData.durationMinutes === null
-                              ? ""
-                              : String(serviceEditingData.durationMinutes)
-                          }
-                          onChange={(e) =>
-                            updateServiceField("durationMinutes", Number(e.target.value))
-                          }
-                          onKeyDown={keySaveCancelService}
-                          style={inputEditStyle}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle} htmlFor={`svc-inline-price-${s.id}`}>
-                          {t("femme.services.services.price")}
-                        </label>
-                        <input
-                          id={`svc-inline-price-${s.id}`}
-                          type="number"
-                          min={0}
-                          step={1000}
-                          inputMode="decimal"
-                          value={
-                            serviceEditingData.priceMinor === undefined ||
-                            serviceEditingData.priceMinor === null
-                              ? ""
-                              : String(serviceEditingData.priceMinor)
-                          }
-                          onChange={(e) => {
-                            const n = normalizeMoneyInput(e.target.value);
-                            if (n != null) updateServiceField("priceMinor", n);
-                          }}
-                          onKeyDown={keySaveCancelService}
-                          style={inputEditStyle}
-                        />
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                      <InlineEditActions
-                        isEditing
-                        saving={serviceInlineSaving}
-                        saveError={serviceInlineSaveError}
-                        onEdit={() => {}}
-                        onSave={() => void saveServiceEdit()}
-                        onCancel={cancelServiceEdit}
-                      />
-                    </div>
-                  </div>
-                ) : (
+                {(
                   <div
                     className={`svc-card ${!s.active ? "card-inactive" : ""}`}
-                    onMouseEnter={() => {
-                      if (s.active) setHoveredCardKey(hk);
-                    }}
-                    onMouseLeave={() => {
-                      if (s.active) setHoveredCardKey(null);
-                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t("femme.services.services.openEdit", { name: s.name })}
+                    data-testid={`svc-row-${s.id}`}
+                    onMouseEnter={() => setHoveredCardKey(hk)}
+                    onMouseLeave={() => setHoveredCardKey(null)}
+                    onClick={() => openEditService(s)}
+                    onKeyDown={onRowKeyOpenService(s)}
                     style={
                       s.active
                         ? {
@@ -910,6 +712,7 @@ export default function ServicesPage() {
                             alignItems: "center",
                             gap: 12,
                             marginBottom: 8,
+                            cursor: "pointer",
                           }
                     }
                   >
@@ -973,33 +776,53 @@ export default function ServicesPage() {
                       {formatGuaraniesGs(s.priceMinor)}
                     </div>
 
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-                      <InlineEditActions
-                        isEditing={false}
-                        saving={false}
-                        saveError={null}
-                        onEdit={() => startServiceEdit(s)}
-                        onSave={() => void saveServiceEdit()}
-                        onCancel={cancelServiceEdit}
-                        onDeactivate={
-                          s.active ? () => requestDeactivateService(s) : undefined
-                        }
-                        onActivate={
-                          !s.active
-                            ? () => {
-                                void activateSalonServiceFromList(s);
-                              }
-                            : undefined
-                        }
-                        isActive={s.active}
-                        activateLabel={
-                          activatingServiceId === s.id
+                    <div
+                      style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      role="presentation"
+                    >
+                      {s.active ? (
+                        <button
+                          type="button"
+                          onClick={() => requestDeactivateService(s)}
+                          data-testid={`svc-deactivate-${s.id}`}
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: "var(--radius-md)",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            border: "0.5px solid var(--color-stone-md)",
+                            background: "transparent",
+                            color: "var(--color-ink-3)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {t("femme.services.services.deactivateShort")}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void activateSalonServiceFromList(s)}
+                          disabled={activatingServiceId === s.id}
+                          data-testid={`svc-activate-${s.id}`}
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: "var(--radius-md)",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            border: "0.5px solid var(--color-rose-md)",
+                            background: "transparent",
+                            color: "var(--color-rose)",
+                            whiteSpace: "nowrap",
+                            opacity: activatingServiceId === s.id ? 0.6 : 1,
+                          }}
+                        >
+                          {activatingServiceId === s.id
                             ? t("femme.services.saving")
-                            : t("femme.services.services.activateShort")
-                        }
-                        deactivateLabel={t("femme.services.services.deactivateShort")}
-                        activateDisabled={activatingServiceId === s.id}
-                      />
+                            : t("femme.services.services.activateShort")}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1066,9 +889,6 @@ export default function ServicesPage() {
               <tbody>
                 {categoriasOrdenadas.map((c, index) => {
                   const ic = categoryAccentStyle(c.accentKey);
-                  const icEditRow = isEditingCategory(c.id)
-                    ? categoryAccentStyle(String(categoryEditingData.accentKey ?? c.accentKey))
-                    : ic;
                   const anterior = categoriasOrdenadas[index - 1];
                   const hayCambioDeEstado =
                     index > 0 &&
@@ -1096,125 +916,24 @@ export default function ServicesPage() {
                           </td>
                         </tr>
                       ) : null}
-                      {isEditingCategory(c.id) ? (
-                        <tr
-                          key={`${c.id}-edit`}
-                          style={{
-                            background: "var(--color-rose-lt)",
-                            outline: "1.5px solid var(--color-rose-md)",
-                            outlineOffset: -1,
-                          }}
-                        >
-                          <td style={{ padding: "8px 12px", verticalAlign: "middle", width: 52 }}>
-                            <div
-                              className="cat-ic cell-icon"
-                              style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "var(--radius-md)",
-                                background: icEditRow.bg,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: 16,
-                                  height: 16,
-                                  borderRadius: 3,
-                                  background: icEditRow.color,
-                                }}
-                              />
-                            </div>
-                          </td>
-                          <td style={{ padding: "8px 12px", verticalAlign: "middle", minWidth: 0 }}>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                              <div>
-                                <label style={labelStyle} htmlFor={`cat-inline-name-${c.id}`}>
-                                  {t("femme.services.categories.name")}
-                                </label>
-                                <input
-                                  id={`cat-inline-name-${c.id}`}
-                                  value={String(categoryEditingData.name ?? "")}
-                                  onChange={(e) => updateCategoryField("name", e.target.value)}
-                                  onKeyDown={keySaveCancelCategory}
-                                  style={categoryInputEditStyle}
-                                />
-                              </div>
-                              <div>
-                                <label style={labelStyle} htmlFor={`cat-inline-accent-${c.id}`}>
-                                  {t("femme.services.categories.accent.label")}
-                                </label>
-                                <select
-                                  id={`cat-inline-accent-${c.id}`}
-                                  value={
-                                    CATEGORY_ACCENT_KEYS.includes(
-                                      String(categoryEditingData.accentKey) as CategoryAccentKey,
-                                    )
-                                      ? String(categoryEditingData.accentKey)
-                                      : "stone"
-                                  }
-                                  onChange={(e) =>
-                                    updateCategoryField(
-                                      "accentKey",
-                                      e.target.value as ServiceCategory["accentKey"],
-                                    )
-                                  }
-                                  onKeyDown={keySaveCancelCategory}
-                                  style={categoryInputEditStyle}
-                                >
-                                  {CATEGORY_ACCENT_KEYS.map((key) => (
-                                    <option key={key} value={key}>
-                                      {t(`femme.services.categories.accent.${key}`)}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                          </td>
-                          <td
-                            style={{
-                              padding: "8px 12px",
-                              verticalAlign: "middle",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <span className={c.active ? "badge b-ok" : "badge b-neu"}>
-                              {c.active
-                                ? t("femme.services.categories.statusBadgeActive")
-                                : t("femme.services.categories.statusBadgeInactive")}
-                            </span>
-                          </td>
-                          <td
-                            style={{
-                              padding: "8px 12px",
-                              verticalAlign: "middle",
-                              textAlign: "right",
-                            }}
-                          >
-                            <InlineEditActions
-                              isEditing
-                              saving={categoryInlineSaving}
-                              saveError={categoryInlineSaveError}
-                              onEdit={() => {}}
-                              onSave={() => void saveCategoryEdit()}
-                              onCancel={cancelCategoryEdit}
-                            />
-                          </td>
-                        </tr>
-                      ) : (
+                      {(
                         <tr
                           className={!c.active ? "row-inactive row-inactive-bg" : ""}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={t("femme.services.categories.openEdit", { name: c.name })}
+                          data-testid={`cat-row-${c.id}`}
+                          onClick={() => openEditCategory(c)}
+                          onKeyDown={onRowKeyOpenCategory(c)}
                           style={
                             c.active
                               ? {
                                   background: "var(--color-white)",
                                   border: "var(--border-default)",
                                   borderRadius: "var(--radius-lg)",
+                                  cursor: "pointer",
                                 }
-                              : undefined
+                              : { cursor: "pointer" }
                           }
                         >
                           <td style={{ padding: "14px 16px", verticalAlign: "middle", width: 52 }}>
@@ -1278,33 +997,50 @@ export default function ServicesPage() {
                               verticalAlign: "middle",
                               textAlign: "right",
                             }}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
                           >
-                            <InlineEditActions
-                              isEditing={false}
-                              saving={false}
-                              saveError={null}
-                              onEdit={() => startCategoryEdit(c)}
-                              onSave={() => void saveCategoryEdit()}
-                              onCancel={cancelCategoryEdit}
-                              onDeactivate={
-                                c.active ? () => requestDeactivateCategory(c) : undefined
-                              }
-                              onActivate={
-                                !c.active
-                                  ? () => {
-                                      void activateCategoryFromList(c);
-                                    }
-                                  : undefined
-                              }
-                              isActive={c.active}
-                              activateLabel={
-                                activatingCategoryId === c.id
+                            {c.active ? (
+                              <button
+                                type="button"
+                                onClick={() => requestDeactivateCategory(c)}
+                                data-testid={`cat-deactivate-${c.id}`}
+                                style={{
+                                  padding: "5px 12px",
+                                  borderRadius: "var(--radius-md)",
+                                  fontSize: 12,
+                                  cursor: "pointer",
+                                  border: "0.5px solid var(--color-stone-md)",
+                                  background: "transparent",
+                                  color: "var(--color-ink-3)",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {t("femme.services.categories.deactivateShort")}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => void activateCategoryFromList(c)}
+                                disabled={activatingCategoryId === c.id}
+                                data-testid={`cat-activate-${c.id}`}
+                                style={{
+                                  padding: "5px 12px",
+                                  borderRadius: "var(--radius-md)",
+                                  fontSize: 12,
+                                  cursor: "pointer",
+                                  border: "0.5px solid var(--color-rose-md)",
+                                  background: "transparent",
+                                  color: "var(--color-rose)",
+                                  whiteSpace: "nowrap",
+                                  opacity: activatingCategoryId === c.id ? 0.6 : 1,
+                                }}
+                              >
+                                {activatingCategoryId === c.id
                                   ? t("femme.services.saving")
-                                  : t("femme.services.categories.activateShort")
-                              }
-                              deactivateLabel={t("femme.services.categories.deactivateShort")}
-                              activateDisabled={activatingCategoryId === c.id}
-                            />
+                                  : t("femme.services.categories.activateShort")}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )}

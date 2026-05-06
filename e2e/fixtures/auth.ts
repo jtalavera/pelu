@@ -26,6 +26,8 @@ function markToursSeenScript() {
   for (const k of keys) {
     localStorage.setItem(PREFIX + k, "true");
   }
+  /** Keep UI strings aligned with assertions (navigator may be es-* by default). */
+  localStorage.setItem("cursor_poc.i18n.language", "en");
 }
 
 export async function loginAsDemo(page: Page) {
@@ -35,10 +37,20 @@ export async function loginAsDemo(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(DEMO_EMAIL);
   await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  const loginPromise = page.waitForResponse((r) => {
+    try {
+      const u = new URL(r.url());
+      return u.pathname.endsWith("/api/auth/login") && r.request().method() === "POST";
+    } catch {
+      return false;
+    }
+  });
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/app/, { timeout: 15_000 });
+  const loginResp = await loginPromise;
+  expect(loginResp.ok(), `login failed (${loginResp.status()}): ${loginResp.statusText()}`).toBeTruthy();
+  await expect(page).toHaveURL(/\/app/, { timeout: 25_000 });
   await expect(page.getByText("Appointments today", { exact: true }).first()).toBeVisible({
-    timeout: 15_000,
+    timeout: 20_000,
   });
 }
 
@@ -47,7 +59,17 @@ export async function loginAs(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
+  const loginPromise = page.waitForResponse((r) => {
+    try {
+      const u = new URL(r.url());
+      return u.pathname.endsWith("/api/auth/login") && r.request().method() === "POST";
+    } catch {
+      return false;
+    }
+  });
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/app/, { timeout: 15_000 });
+  const loginResp = await loginPromise;
+  expect(loginResp.ok(), `login failed (${loginResp.status()}): ${loginResp.statusText()}`).toBeTruthy();
+  await expect(page).toHaveURL(/\/app/, { timeout: 25_000 });
 }
 

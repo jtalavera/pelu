@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SearchInput } from "../components/ui/SearchInput";
-import { InlineEditActions } from "../components/ui/InlineEditActions";
 import { useFilteredList } from "../hooks/useFilteredList";
-import { useInlineEdit } from "../hooks/useInlineEdit";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
   Input,
+  KebabMenu,
   Label,
   Modal,
   Spinner,
@@ -16,14 +15,19 @@ import {
   TabsList,
   TabsTrigger,
   Text,
+  TimeCombobox,
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { grantProfessionalAccess, revokeProfessionalAccess } from "../api/professionalAccess";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
-import { FemmeNativeTimeInput } from "../components/FemmeNativeTimeInput";
 import { StatusBadge } from "../components/StatusBadge";
+import {
+  formatParaguayPhone,
+  isCompleteParaguayPhone,
+} from "../lib/paraguayPhone";
+import { isValidEmail } from "../lib/validateEmail";
 import {
   PROFESSIONAL_PHOTO_ACCEPT,
   type ProfessionalPhotoValidationErrorCode,
@@ -49,7 +53,12 @@ function getInitials(name: string): string {
   return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
 }
 
-type Schedule = { dayOfWeek: number; startTime: string; endTime: string };
+type Schedule = {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  active: boolean;
+};
 type Professional = {
   id: number;
   fullName: string;
@@ -65,6 +74,7 @@ type Professional = {
 
 type DetailErrors = {
   fullName?: string;
+  phone?: string;
   email?: string;
   photo?: string;
   pin?: string;
@@ -94,11 +104,10 @@ function formatTimeFromApi(time: unknown): string {
 }
 
 function schedulesFromProfessional(p: Professional | null): Schedule[] {
-  const byDay = new Map<number, Schedule>();
+  const byDay = new Map<number, { startTime: string; endTime: string }>();
   if (p?.schedules?.length) {
     for (const s of p.schedules) {
       byDay.set(s.dayOfWeek, {
-        dayOfWeek: s.dayOfWeek,
         startTime: formatTimeFromApi(s.startTime),
         endTime: formatTimeFromApi(s.endTime),
       });
@@ -106,10 +115,13 @@ function schedulesFromProfessional(p: Professional | null): Schedule[] {
   }
   return DAYS.map((d) => {
     const existing = byDay.get(d.value);
+    const start = existing?.startTime ?? "";
+    const end = existing?.endTime ?? "";
     return {
       dayOfWeek: d.value,
-      startTime: existing?.startTime ?? "",
-      endTime: existing?.endTime ?? "",
+      startTime: start,
+      endTime: end,
+      active: Boolean(start && end),
     };
   });
 }
@@ -241,6 +253,14 @@ export default function ProfessionalsPage() {
     setModalOpen(true);
   }
 
+  function openEditSchedule(p: Professional) {
+    setSavedProfessional(p);
+    resetDetailForm(p);
+    resetScheduleForm(p);
+    setTab("schedule");
+    setModalOpen(true);
+  }
+
   function closeModal() {
     setModalOpen(false);
     setSavedProfessional(null);
@@ -250,9 +270,21 @@ export default function ProfessionalsPage() {
     setDetailSaveError(null);
     setAccessGrantedMessage(null);
     const nameTrim = fullName.trim();
+    const phoneTrim = phone.trim();
+    const emailTrim = email.trim();
+    const errs: NonNullable<DetailErrors> = {};
     if (!nameTrim) {
+      errs.fullName = t("femme.professionals.form.fullNameRequired");
+    }
+    if (phoneTrim && !isCompleteParaguayPhone(phoneTrim)) {
+      errs.phone = t("femme.professionals.form.phoneInvalid");
+    }
+    if (emailTrim && !isValidEmail(emailTrim)) {
+      errs.email = t("femme.professionals.form.emailInvalid");
+    }
+    if (errs.fullName || errs.phone || errs.email) {
       setDetailErrors((prev) => ({
-        fullName: t("femme.professionals.form.fullNameRequired"),
+        ...errs,
         ...(prev?.photo ? { photo: prev.photo } : {}),
       }));
       return;
@@ -336,14 +368,18 @@ export default function ProfessionalsPage() {
     setScheduleSaveError(null);
     if (!savedProfessional) return;
 
-    const normalized: Schedule[] = [];
+    const activeDays = schedules.filter((s) => s.active);
+    if (activeDays.length === 0) {
+      setScheduleErrors({ schedules: t("femme.professionals.form.scheduleNoDaysSelected") });
+      return;
+    }
+
+    const normalized: Array<{ dayOfWeek: number; startTime: string; endTime: string }> = [];
     for (const d of DAYS) {
       const row = schedules.find((s) => s.dayOfWeek === d.value);
-      const rawStart = row?.startTime?.trim() ?? "";
-      const rawEnd = row?.endTime?.trim() ?? "";
-      if (!rawStart && !rawEnd) {
-        continue;
-      }
+      if (!row?.active) continue;
+      const rawStart = row.startTime.trim();
+      const rawEnd = row.endTime.trim();
       if (!rawStart || !rawEnd) {
         setScheduleErrors({ schedules: t("femme.professionals.form.scheduleDayIncomplete") });
         return;
@@ -382,6 +418,23 @@ export default function ProfessionalsPage() {
     patch: Partial<Pick<Schedule, "startTime" | "endTime">>,
   ) {
     setSchedules((prev) => prev.map((s) => (s.dayOfWeek === dow ? { ...s, ...patch } : s)));
+  }
+
+  function toggleScheduleDay(dow: number, active: boolean) {
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if (s.dayOfWeek !== dow) return s;
+        if (active) {
+          return {
+            ...s,
+            active: true,
+            startTime: s.startTime || "09:00",
+            endTime: s.endTime || "17:00",
+          };
+        }
+        return { ...s, active: false };
+      }),
+    );
   }
 
   const onPhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -442,61 +495,6 @@ export default function ProfessionalsPage() {
       setPageError(translateApiError(e, t, "femme.professionals.saveError"));
     }
   }
-
-  const handleInlineSave = useCallback(
-    async (p: Professional) => {
-      const nameTrim = p.fullName.trim();
-      if (!nameTrim) {
-        throw new Error("NAME_REQUIRED");
-      }
-      await femmePutJson<Professional>(`/api/professionals/${p.id}`, {
-        fullName: nameTrim,
-        phone: p.phone?.trim() || null,
-        email: p.email?.trim() || null,
-        photoDataUrl: p.photoDataUrl?.trim() || null,
-      });
-      await load();
-    },
-    [load],
-  );
-
-  const {
-    editingData,
-    saving: inlineSaving,
-    saveError: inlineSaveError,
-    startEdit,
-    cancelEdit,
-    updateField,
-    saveEdit,
-    isEditing,
-  } = useInlineEdit<Professional>({
-    onSave: handleInlineSave,
-    saveErrorMessage: t("femme.inlineEdit.saveError"),
-    formatSaveError: (e) => translateApiError(e, t, t("femme.inlineEdit.saveError")),
-  });
-
-  const inputEditStyle: React.CSSProperties = {
-    padding: "6px 9px",
-    border: "1px solid var(--color-rose-md)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    background: "var(--color-white)",
-    outline: "none",
-    width: "100%",
-    minWidth: 80,
-  };
-
-  const keySaveCancel = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void saveEdit();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      cancelEdit();
-    }
-  };
 
   const scheduleDisabled = !savedProfessional;
 
@@ -656,66 +654,6 @@ export default function ProfessionalsPage() {
                     borderBottom: "0.5px solid var(--color-stone)",
                     background: tdBg,
                   };
-                  const rowEditing = isEditing(p.id);
-                  const ed = rowEditing ? ({ ...p, ...editingData } as Professional) : p;
-
-                  if (rowEditing) {
-                    return (
-                      <tr
-                        key={p.id}
-                        style={{
-                          background: "var(--color-rose-lt)",
-                          outline: "1.5px solid var(--color-rose-md)",
-                          outlineOffset: -1,
-                        }}
-                      >
-                        <td style={{ padding: "8px 12px" }}>
-                          <input
-                            value={ed.fullName ?? ""}
-                            onChange={(e) => updateField("fullName", e.target.value)}
-                            onKeyDown={keySaveCancel}
-                            placeholder={t("femme.professionals.form.fullName")}
-                            style={inputEditStyle}
-                            aria-label={t("femme.professionals.form.fullName")}
-                          />
-                        </td>
-                        <td style={{ padding: "8px 12px" }}>
-                          <input
-                            value={ed.phone ?? ""}
-                            onChange={(e) => updateField("phone", e.target.value || null)}
-                            onKeyDown={keySaveCancel}
-                            placeholder={t("femme.professionals.form.phone")}
-                            style={inputEditStyle}
-                            aria-label={t("femme.professionals.form.phone")}
-                          />
-                        </td>
-                        <td style={{ padding: "8px 12px" }}>
-                          <input
-                            type="email"
-                            value={ed.email ?? ""}
-                            onChange={(e) => updateField("email", e.target.value || null)}
-                            onKeyDown={keySaveCancel}
-                            placeholder={t("femme.professionals.form.email")}
-                            style={inputEditStyle}
-                            aria-label={t("femme.professionals.form.email")}
-                          />
-                        </td>
-                        <td style={tdStyle}>
-                          <StatusBadge status={p.active ? "ACTIVE" : "INACTIVE"} />
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                          <InlineEditActions
-                            isEditing
-                            saving={inlineSaving}
-                            saveError={inlineSaveError}
-                            onEdit={() => {}}
-                            onSave={() => void saveEdit()}
-                            onCancel={cancelEdit}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  }
 
                   return (
                     <tr
@@ -800,32 +738,47 @@ export default function ProfessionalsPage() {
                             flexWrap: "wrap",
                           }}
                         >
-                          <button
-                            type="button"
-                            onClick={() => openEdit(p)}
-                            style={{
-                              padding: "4px 10px",
-                              borderRadius: "var(--radius-sm)",
-                              fontSize: 11,
-                              border: "0.5px solid var(--color-stone-md)",
-                              background: "transparent",
-                              color: "var(--color-ink-2)",
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {t("femme.professionals.manageDetails")}
-                          </button>
-                          <InlineEditActions
-                            isEditing={false}
-                            saving={false}
-                            saveError={null}
-                            onEdit={() => startEdit(p)}
-                            onSave={() => void saveEdit()}
-                            onCancel={cancelEdit}
-                            onDeactivate={() => requestDeactivate(p)}
-                            onActivate={() => requestActivate(p)}
-                            isActive={p.active}
+                          <KebabMenu
+                            id={`professionals-row-${p.id}`}
+                            triggerAriaLabel={t("femme.rowActions.trigger")}
+                            items={
+                              p.active
+                                ? [
+                                    {
+                                      id: "edit-details",
+                                      label: t("femme.rowActions.professionals.editDetails"),
+                                      onSelect: () => openEdit(p),
+                                    },
+                                    {
+                                      id: "edit-schedule",
+                                      label: t("femme.rowActions.professionals.editSchedule"),
+                                      onSelect: () => openEditSchedule(p),
+                                    },
+                                    {
+                                      id: "deactivate",
+                                      label: t("femme.rowActions.professionals.deactivate"),
+                                      destructive: true,
+                                      onSelect: () => requestDeactivate(p),
+                                    },
+                                  ]
+                                : [
+                                    {
+                                      id: "edit-details",
+                                      label: t("femme.rowActions.professionals.editDetails"),
+                                      onSelect: () => openEdit(p),
+                                    },
+                                    {
+                                      id: "edit-schedule",
+                                      label: t("femme.rowActions.professionals.editSchedule"),
+                                      onSelect: () => openEditSchedule(p),
+                                    },
+                                    {
+                                      id: "activate",
+                                      label: t("femme.rowActions.professionals.activate"),
+                                      onSelect: () => requestActivate(p),
+                                    },
+                                  ]
+                            }
                           />
                         </div>
                       </td>
@@ -890,20 +843,48 @@ export default function ProfessionalsPage() {
                   <Label htmlFor="prof-phone">{t("femme.professionals.form.phone")}</Label>
                   <Input
                     id="prof-phone"
+                    inputMode="tel"
+                    autoComplete="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => {
+                      setPhone(formatParaguayPhone(e.target.value));
+                      setDetailErrors((prev) => (prev ? { ...prev, phone: undefined } : prev));
+                    }}
+                    onBlur={() => {
+                      const trimmed = phone.trim();
+                      if (trimmed && !isCompleteParaguayPhone(trimmed)) {
+                        setDetailErrors((prev) => ({
+                          ...(prev ?? {}),
+                          phone: t("femme.professionals.form.phoneInvalid"),
+                        }));
+                      }
+                    }}
                     placeholder={t("femme.professionals.form.phonePlaceholder")}
+                    aria-invalid={detailErrors?.phone ? "true" : "false"}
+                    aria-describedby={detailErrors?.phone ? "prof-phone-err" : undefined}
                   />
+                  <FieldValidationError id="prof-phone-err">{detailErrors?.phone}</FieldValidationError>
                 </div>
                 <div>
                   <Label htmlFor="prof-email">{t("femme.professionals.form.email")}</Label>
                   <Input
                     id="prof-email"
+                    type="email"
                     inputMode="email"
+                    autoComplete="email"
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
                       setDetailErrors((prev) => (prev ? { ...prev, email: undefined } : prev));
+                    }}
+                    onBlur={() => {
+                      const trimmed = email.trim();
+                      if (trimmed && !isValidEmail(trimmed)) {
+                        setDetailErrors((prev) => ({
+                          ...(prev ?? {}),
+                          email: t("femme.professionals.form.emailInvalid"),
+                        }));
+                      }
                     }}
                     placeholder={t("femme.professionals.form.emailPlaceholder")}
                     aria-invalid={detailErrors?.email ? "true" : "false"}
@@ -1072,7 +1053,10 @@ export default function ProfessionalsPage() {
                     dayOfWeek: d.value,
                     startTime: "",
                     endTime: "",
+                    active: false,
                   };
+                  const dayLabel = t(`femme.professionals.days.${daysByValue.get(d.value)}`);
+                  const checkboxId = `prof-${d.value}-active`;
                   return (
                     <div
                       key={d.value}
@@ -1084,47 +1068,69 @@ export default function ProfessionalsPage() {
                       }}
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <Text className="w-28 shrink-0 font-medium">
-                          {t(`femme.professionals.days.${daysByValue.get(d.value)}`)}
-                        </Text>
-                        <div className="grid flex-1 grid-cols-2 gap-3">
-                          <div>
-                            <Label
-                              htmlFor={`prof-${d.value}-start`}
-                              className="text-xs"
-                            >
-                              {t("femme.professionals.form.start")}
-                            </Label>
-                            <FemmeNativeTimeInput
-                              id={`prof-${d.value}-start`}
-                              value={row.startTime}
-                              onChange={(e) =>
-                                setScheduleTime(d.value, { startTime: e.target.value })
-                              }
-                              invalid={!!scheduleErrors?.schedules}
-                              aria-invalid={!!scheduleErrors?.schedules}
-                              aria-label={`${t(`femme.professionals.days.${d.key}`)} — ${t("femme.professionals.form.start")}`}
-                            />
+                        <label
+                          htmlFor={checkboxId}
+                          className="flex w-28 shrink-0 cursor-pointer items-center gap-2"
+                        >
+                          <input
+                            id={checkboxId}
+                            type="checkbox"
+                            checked={row.active}
+                            onChange={(e) => toggleScheduleDay(d.value, e.target.checked)}
+                            aria-label={`${dayLabel} — ${t("femme.professionals.form.scheduleDayActive")}`}
+                            data-testid={`prof-day-${d.key}-active`}
+                            style={{ width: 16, height: 16, cursor: "pointer" }}
+                          />
+                          <span className="font-medium">{dayLabel}</span>
+                        </label>
+                        {row.active ? (
+                          <div className="grid flex-1 grid-cols-2 gap-3">
+                            <div>
+                              <Label
+                                htmlFor={`prof-${d.value}-start`}
+                                className="text-xs"
+                              >
+                                {t("femme.professionals.form.start")}
+                              </Label>
+                              <TimeCombobox
+                                id={`prof-${d.value}-start`}
+                                value={row.startTime}
+                                onChange={(next) =>
+                                  setScheduleTime(d.value, { startTime: next })
+                                }
+                                placeholder={t("femme.professionals.form.timePlaceholderStart")}
+                                invalid={!!scheduleErrors?.schedules}
+                                aria-invalid={!!scheduleErrors?.schedules}
+                                aria-label={`${dayLabel} — ${t("femme.professionals.form.start")}`}
+                                data-testid={`prof-day-${d.key}-start`}
+                              />
+                            </div>
+                            <div>
+                              <Label
+                                htmlFor={`prof-${d.value}-end`}
+                                className="text-xs"
+                              >
+                                {t("femme.professionals.form.end")}
+                              </Label>
+                              <TimeCombobox
+                                id={`prof-${d.value}-end`}
+                                value={row.endTime}
+                                onChange={(next) =>
+                                  setScheduleTime(d.value, { endTime: next })
+                                }
+                                placeholder={t("femme.professionals.form.timePlaceholderEnd")}
+                                invalid={!!scheduleErrors?.schedules}
+                                aria-invalid={!!scheduleErrors?.schedules}
+                                aria-label={`${dayLabel} — ${t("femme.professionals.form.end")}`}
+                                data-testid={`prof-day-${d.key}-end`}
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <Label
-                              htmlFor={`prof-${d.value}-end`}
-                              className="text-xs"
-                            >
-                              {t("femme.professionals.form.end")}
-                            </Label>
-                            <FemmeNativeTimeInput
-                              id={`prof-${d.value}-end`}
-                              value={row.endTime}
-                              onChange={(e) =>
-                                setScheduleTime(d.value, { endTime: e.target.value })
-                              }
-                              invalid={!!scheduleErrors?.schedules}
-                              aria-invalid={!!scheduleErrors?.schedules}
-                              aria-label={`${t(`femme.professionals.days.${d.key}`)} — ${t("femme.professionals.form.end")}`}
-                            />
-                          </div>
-                        </div>
+                        ) : (
+                          <Text variant="muted" className="flex-1 text-xs">
+                            {t("femme.professionals.dayOff")}
+                          </Text>
+                        )}
                       </div>
                     </div>
                   );
