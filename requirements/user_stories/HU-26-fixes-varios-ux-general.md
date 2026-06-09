@@ -5,7 +5,7 @@
 | ---------- | -------------- |
 | **ID**     | HU-26          |
 | **Módulo** | Varios (front) |
-| **Estado** | `In Progress`  |
+| **Estado** | `Done`  |
 
 
 ## Definiciones transversales
