@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   Input,
+  KebabMenu,
   Label,
   Modal,
   Select,
@@ -97,7 +98,6 @@ export default function ServicesPage() {
   const [serviceSaveError, setServiceSaveError] = useState<string | null>(null);
   const [serviceSaving, setServiceSaving] = useState(false);
   const [serviceReactivating, setServiceReactivating] = useState(false);
-  const [activatingServiceId, setActivatingServiceId] = useState<number | null>(null);
   const [activatingCategoryId, setActivatingCategoryId] = useState<number | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
@@ -249,15 +249,12 @@ export default function ServicesPage() {
   }
 
   async function activateSalonServiceFromList(s: SalonService) {
-    setActivatingServiceId(s.id);
     setError(null);
     try {
       await femmePostJson(`/api/services/${s.id}/activate`, {});
       await load();
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
-    } finally {
-      setActivatingServiceId(null);
     }
   }
 
@@ -777,52 +774,42 @@ export default function ServicesPage() {
                     </div>
 
                     <div
-                      style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                       role="presentation"
                     >
-                      {s.active ? (
-                        <button
-                          type="button"
-                          onClick={() => requestDeactivateService(s)}
-                          data-testid={`svc-deactivate-${s.id}`}
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: "var(--radius-md)",
-                            fontSize: 12,
-                            cursor: "pointer",
-                            border: "0.5px solid var(--color-stone-md)",
-                            background: "transparent",
-                            color: "var(--color-ink-3)",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {t("femme.services.services.deactivateShort")}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => void activateSalonServiceFromList(s)}
-                          disabled={activatingServiceId === s.id}
-                          data-testid={`svc-activate-${s.id}`}
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: "var(--radius-md)",
-                            fontSize: 12,
-                            cursor: "pointer",
-                            border: "0.5px solid var(--color-rose-md)",
-                            background: "transparent",
-                            color: "var(--color-rose)",
-                            whiteSpace: "nowrap",
-                            opacity: activatingServiceId === s.id ? 0.6 : 1,
-                          }}
-                        >
-                          {activatingServiceId === s.id
-                            ? t("femme.services.saving")
-                            : t("femme.services.services.activateShort")}
-                        </button>
-                      )}
+                      <KebabMenu
+                        id={`services-row-${s.id}`}
+                        triggerAriaLabel={t("femme.rowActions.trigger")}
+                        items={
+                          s.active
+                            ? [
+                                {
+                                  id: "edit-details",
+                                  label: t("femme.rowActions.services.editDetails"),
+                                  onSelect: () => openEditService(s),
+                                },
+                                {
+                                  id: "deactivate",
+                                  label: t("femme.rowActions.services.deactivate"),
+                                  destructive: true,
+                                  onSelect: () => requestDeactivateService(s),
+                                },
+                              ]
+                            : [
+                                {
+                                  id: "edit-details",
+                                  label: t("femme.rowActions.services.editDetails"),
+                                  onSelect: () => openEditService(s),
+                                },
+                                {
+                                  id: "activate",
+                                  label: t("femme.rowActions.services.activate"),
+                                  onSelect: () => void activateSalonServiceFromList(s),
+                                },
+                              ]
+                        }
+                      />
                     </div>
                   </div>
                 )}

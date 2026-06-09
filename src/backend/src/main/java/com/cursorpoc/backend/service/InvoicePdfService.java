@@ -157,15 +157,6 @@ public class InvoicePdfService {
     float innerW = PANEL_WIDTH_PT - 2 * MARGIN_X_PT;
     float h = PAGE_HEIGHT_PT;
 
-    // --- Header overlay (invoice number only) ---
-    // HU-21: timbrado number and validity dates are pre-printed on the
-    // continuous stationery, so we no longer overlay them on the PDF.
-    cb.beginText();
-    cb.setFontAndSize(bfBold, 9f);
-    String invNo = formatInvoiceNumber(invoice.getInvoiceNumber());
-    cb.showTextAligned(Element.ALIGN_RIGHT, "Nº " + invNo, ox + innerW, yFromTop(h, 2.05f), 0);
-    cb.endText();
-
     // --- Client block ---
     // HU-21: RUC and client name are aligned to the same x-coordinate as the
     // date field, so they line up vertically with the printed "Fecha" box.
@@ -266,7 +257,7 @@ public class InvoicePdfService {
 
     cb.setFontAndSize(bfBold, 9f);
     cb.showTextAligned(
-        Element.ALIGN_RIGHT, formatMoneyGs(invoice.getTotal()), ox + innerW, yTotal, 0);
+        Element.ALIGN_RIGHT, formatMoneyGs(invoice.getTotal()), x10 + cmToPt(0.85f), yTotal, 0);
 
     cb.setFontAndSize(bf, 7f);
     BigDecimal iva10 = vatTenFromTotal(invoice.getTotal());

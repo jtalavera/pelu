@@ -1009,6 +1009,8 @@ export default function CalendarPage() {
               id="form-time"
               value={formTime}
               onChange={setFormTime}
+              startTime="06:00"
+              endTime="20:00"
               placeholder={t("femme.calendar.form.timePlaceholder")}
               aria-label={t("femme.calendar.form.timeAriaLabel")}
               invalid={!!(formErrors.time || formErrors.startInPast)}

@@ -75,8 +75,9 @@ class InvoicePdfServiceTest {
     }
   }
 
+  /** HU-26: invoice number removed from PDF header. */
   @Test
-  void renderPdf_isValidAndContainsInvoiceNumber() throws Exception {
+  void renderPdf_isValidAndDoesNotContainInvoiceNumber() throws Exception {
     InvoicePdfService svc = newService();
 
     InvoiceLine line = new InvoiceLine();
@@ -92,7 +93,7 @@ class InvoicePdfServiceTest {
     assertThat(pdf).startsWith("%PDF".getBytes(StandardCharsets.US_ASCII));
 
     String text = extractText(pdf);
-    assertThat(text).contains("0000007");
+    assertThat(text).doesNotContain("0000007");
     assertThat(text).contains("Client");
     assertThat(text).contains("Service A");
   }

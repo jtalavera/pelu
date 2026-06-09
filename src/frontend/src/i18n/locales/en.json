@@ -60,6 +60,11 @@
         "editInfo": "Edit information",
         "deactivate": "Deactivate client",
         "activate": "Reactivate client"
+      },
+      "services": {
+        "editDetails": "Edit details",
+        "deactivate": "Deactivate",
+        "activate": "Reactivate"
       }
     },
     "localizedDateInput": {

@@ -68,15 +68,16 @@ describe("ServicesPage", () => {
     expect(container.querySelector(".card-inactive")).toBeTruthy();
   });
 
-  it("calls activate endpoint when Reactivate is clicked in the list", async () => {
+  it("calls activate endpoint when Reactivate is clicked in the kebab menu", async () => {
     mockLoad([sampleCategory], [inactiveService]);
     femmePostJson.mockResolvedValue({ ...inactiveService, active: true });
 
     renderPage();
     await screen.findByText("Basic cut");
 
-    const reactivateButtons = screen.getAllByRole("button", { name: /^Reactivate$/i });
-    await userEvent.click(reactivateButtons[0]);
+    const trigger = screen.getByTestId(`services-row-${inactiveService.id}-trigger`);
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole("menuitem", { name: /^Reactivate$/i }));
 
     await waitFor(() => {
       expect(femmePostJson).toHaveBeenCalledWith("/api/services/10/activate", {});
@@ -101,12 +102,15 @@ describe("ServicesPage", () => {
     });
   });
 
-  it("inactive service row shows a Reactivate button and clicking the row opens the edit modal", async () => {
+  it("inactive service row shows a kebab menu with Reactivate and clicking the row opens the edit modal", async () => {
     mockLoad([sampleCategory], [inactiveService]);
     renderPage();
     await screen.findByText("Basic cut");
 
-    expect(screen.getByRole("button", { name: /^Reactivate$/i })).toBeTruthy();
+    const trigger = screen.getByTestId(`services-row-${inactiveService.id}-trigger`);
+    await userEvent.click(trigger);
+    expect(screen.getByRole("menuitem", { name: /^Reactivate$/i })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
 
     const row = screen.getByTestId(`svc-row-${inactiveService.id}`);
     await userEvent.click(row);
