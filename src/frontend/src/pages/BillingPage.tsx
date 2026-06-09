@@ -678,6 +678,15 @@ function InvoiceHistoryTab() {
           <Button type="button" variant="secondary" size="sm" onClick={handleClear}>
             {t("femme.billing.history.clearFilters")}
           </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => void loadInvoices(filterFrom, filterTo, filterStatus)}
+            disabled={loading}
+          >
+            {t("femme.billing.history.refresh")}
+          </Button>
         </form>
       </div>
 
@@ -1114,6 +1123,7 @@ function NewInvoiceTab({
       }
       setSuccessInvoiceNumber(result.invoiceNumberFormatted);
       setLastInvoiceId(result.id);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       // Reset form
       setClientSelection(null);
       setClientSearchKey((k) => k + 1);
