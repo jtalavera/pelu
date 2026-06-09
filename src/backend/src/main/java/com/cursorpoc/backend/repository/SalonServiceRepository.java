@@ -21,4 +21,6 @@ public interface SalonServiceRepository extends JpaRepository<SalonService, Long
   Optional<SalonService> findByIdAndTenant_Id(Long id, Long tenantId);
 
   long countByTenant_Id(Long tenantId);
+
+  long deleteByTenant_Id(Long tenantId);
 }

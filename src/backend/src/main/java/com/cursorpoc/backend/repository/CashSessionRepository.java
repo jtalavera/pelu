@@ -22,4 +22,6 @@ public interface CashSessionRepository extends JpaRepository<CashSession, Long> 
       GROUP BY p.method
       """)
   List<Object[]> sumPaymentsByMethodForSession(@Param("cashSessionId") Long cashSessionId);
+
+  long deleteByTenant_Id(Long tenantId);
 }

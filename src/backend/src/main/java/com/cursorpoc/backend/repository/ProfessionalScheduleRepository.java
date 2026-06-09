@@ -9,4 +9,6 @@ public interface ProfessionalScheduleRepository extends JpaRepository<Profession
   List<ProfessionalSchedule> findByProfessionalIdOrderByDayOfWeekAscIdAsc(Long professionalId);
 
   void deleteByProfessionalId(Long professionalId);
+
+  long deleteByProfessional_Tenant_Id(Long tenantId);
 }

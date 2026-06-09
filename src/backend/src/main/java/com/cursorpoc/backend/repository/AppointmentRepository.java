@@ -81,4 +81,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       """)
   long countDistinctClientsWithAppointmentsBetween(
       @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
+
+  long deleteByTenant_Id(Long tenantId);
 }

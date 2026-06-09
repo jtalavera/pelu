@@ -86,4 +86,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       """)
   long countByCashSessionAndStatus(
       @Param("cashSessionId") Long cashSessionId, @Param("status") InvoiceStatus status);
+
+  List<Invoice> findAllByTenant_Id(Long tenantId);
 }

@@ -34,9 +34,18 @@ public class FemmeDataInitializer {
 
   private static final Logger log = LoggerFactory.getLogger(FemmeDataInitializer.class);
 
-  @Bean
-  @Profile("!test")
-  CommandLineRunner femmeSeed(
+  private final TenantRepository tenantRepository;
+  private final AppUserRepository appUserRepository;
+  private final BusinessProfileRepository businessProfileRepository;
+  private final FiscalStampRepository fiscalStampRepository;
+  private final FeatureFlagRepository featureFlagRepository;
+  private final ServiceCategoryRepository serviceCategoryRepository;
+  private final SalonServiceRepository salonServiceRepository;
+  private final ProfessionalRepository professionalRepository;
+  private final FemmeSystemAdminProperties systemAdminProperties;
+  private final PasswordEncoder passwordEncoder;
+
+  public FemmeDataInitializer(
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       BusinessProfileRepository businessProfileRepository,
@@ -47,6 +56,21 @@ public class FemmeDataInitializer {
       ProfessionalRepository professionalRepository,
       FemmeSystemAdminProperties systemAdminProperties,
       PasswordEncoder passwordEncoder) {
+    this.tenantRepository = tenantRepository;
+    this.appUserRepository = appUserRepository;
+    this.businessProfileRepository = businessProfileRepository;
+    this.fiscalStampRepository = fiscalStampRepository;
+    this.featureFlagRepository = featureFlagRepository;
+    this.serviceCategoryRepository = serviceCategoryRepository;
+    this.salonServiceRepository = salonServiceRepository;
+    this.professionalRepository = professionalRepository;
+    this.systemAdminProperties = systemAdminProperties;
+    this.passwordEncoder = passwordEncoder;
+  }
+
+  @Bean
+  @Profile("!test")
+  CommandLineRunner femmeSeed() {
     return args -> {
       if (featureFlagRepository.findByFlagKey("GUIDED_TOUR").isEmpty()) {
         FeatureFlag guidedTour = new FeatureFlag();
@@ -57,22 +81,21 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag GUIDED_TOUR (enabled=true)");
       }
 
-      seedDemoTenantIfNoUsers(
-          tenantRepository,
-          appUserRepository,
-          businessProfileRepository,
-          fiscalStampRepository,
-          passwordEncoder);
+      if (appUserRepository.count() == 0) {
+        Tenant tenant =
+            tenantRepository
+                .findFirstByOrderByIdAsc()
+                .orElseGet(
+                    () -> {
+                      Tenant t = new Tenant();
+                      t.setName("Demo salon");
+                      tenantRepository.save(t);
+                      return t;
+                    });
+        seedDemoTenantData(tenant);
+      }
 
-      tenantRepository
-          .findFirstByOrderByIdAsc()
-          .ifPresent(
-              tenant ->
-                  seedBootstrapCatalogIfEmpty(
-                      tenant,
-                      serviceCategoryRepository,
-                      salonServiceRepository,
-                      professionalRepository));
+      tenantRepository.findFirstByOrderByIdAsc().ifPresent(tenant -> seedCatalogIfEmpty(tenant));
 
       var systemEmail = systemAdminProperties.getEmail().trim().toLowerCase();
       if (appUserRepository.findByEmail(systemEmail).isEmpty()) {
@@ -96,27 +119,7 @@ public class FemmeDataInitializer {
     };
   }
 
-  private void seedDemoTenantIfNoUsers(
-      TenantRepository tenantRepository,
-      AppUserRepository appUserRepository,
-      BusinessProfileRepository businessProfileRepository,
-      FiscalStampRepository fiscalStampRepository,
-      PasswordEncoder passwordEncoder) {
-    if (appUserRepository.count() != 0) {
-      return;
-    }
-
-    Tenant tenant =
-        tenantRepository
-            .findFirstByOrderByIdAsc()
-            .orElseGet(
-                () -> {
-                  Tenant t = new Tenant();
-                  t.setName("Demo salon");
-                  tenantRepository.save(t);
-                  return t;
-                });
-
+  public void seedDemoTenantData(Tenant tenant) {
     if (appUserRepository.findByEmail("admin@demo.com").isEmpty()) {
       AppUser user = new AppUser();
       user.setTenant(tenant);
@@ -153,11 +156,7 @@ public class FemmeDataInitializer {
         tenant.getId());
   }
 
-  private void seedBootstrapCatalogIfEmpty(
-      Tenant tenant,
-      ServiceCategoryRepository serviceCategoryRepository,
-      SalonServiceRepository salonServiceRepository,
-      ProfessionalRepository professionalRepository) {
+  public void seedCatalogIfEmpty(Tenant tenant) {
     Long tenantId = tenant.getId();
     if (tenantId == null) {
       return;
