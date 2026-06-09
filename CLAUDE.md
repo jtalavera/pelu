@@ -137,6 +137,13 @@ Wire search/filter fields with `<form onSubmit>` + `type="submit"` button so pre
 
 Trunk-based development off `main`. Branch names: `<type>/<issue-number>_short-description` (e.g. `feat/HU-07_agendar-turno`). Types: `feat`, `bugfix`, `chore`, `docs`, `refactor`, `test`.
 
+### Automated tests
+EVERY acceptance criteria of EVERY user story MUST be covered by an automated test implemented with playwright.
+In the case of a user story containing a list of small adjustments, every adjustment must be covered by a playwright test.
+If a new requirement modifies an existing feature, the corresponding playwright test MUST be updated as well.
+All playwright tests MUST be always in sync with the latest implementation of the feature.
+If for some reason it is not possible to cover an acceptance criteria with an automated test, let the user know and ask how to move forward.
+
 ### Local DB setup (first time)
 
 ```bash

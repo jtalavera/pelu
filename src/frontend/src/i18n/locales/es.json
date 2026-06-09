@@ -60,6 +60,11 @@
         "editInfo": "Editar información",
         "deactivate": "Desactivar cliente",
         "activate": "Reactivar cliente"
+      },
+      "services": {
+        "editDetails": "Editar detalle",
+        "deactivate": "Desactivar",
+        "activate": "Reactivar"
       }
     },
     "localizedDateInput": {
@@ -420,6 +425,7 @@
         "filterClient": "Cliente",
         "search": "Buscar",
         "clearFilters": "Limpiar filtros",
+        "refresh": "Actualizar",
         "rangeErrorIncomplete": "Elegí fecha desde y hasta.",
         "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
         "rangeErrorTooLong": "El rango de fechas no puede superar 31 días (incluidos).",

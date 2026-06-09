@@ -429,7 +429,7 @@ export default function ProfessionalsPage() {
             ...s,
             active: true,
             startTime: s.startTime || "09:00",
-            endTime: s.endTime || "17:00",
+            endTime: s.endTime || "19:00",
           };
         }
         return { ...s, active: false };

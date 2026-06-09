@@ -60,6 +60,11 @@
         "editInfo": "Edit information",
         "deactivate": "Deactivate client",
         "activate": "Reactivate client"
+      },
+      "services": {
+        "editDetails": "Edit details",
+        "deactivate": "Deactivate",
+        "activate": "Reactivate"
       }
     },
     "localizedDateInput": {
@@ -420,6 +425,7 @@
         "filterClient": "Client",
         "search": "Search",
         "clearFilters": "Clear filters",
+        "refresh": "Refresh",
         "rangeErrorIncomplete": "Select both a start and end date.",
         "rangeErrorInvalidOrder": "The start date must be before the end date.",
         "rangeErrorTooLong": "The date range cannot exceed 31 days (inclusive).",
