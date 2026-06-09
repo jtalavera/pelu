@@ -15,4 +15,6 @@ public interface ProfessionalActivationTokenRepository
   @Query(
       "UPDATE ProfessionalActivationToken t SET t.used = true WHERE t.professional.id = :professionalId AND t.used = false")
   void invalidateAllForProfessional(Long professionalId);
+
+  long deleteByProfessional_Tenant_Id(Long tenantId);
 }

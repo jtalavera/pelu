@@ -12,4 +12,6 @@ public interface TenantFeatureFlagRepository extends JpaRepository<TenantFeature
   List<TenantFeatureFlag> findAllByTenantIdOrderByFlagKeyAsc(long tenantId);
 
   void deleteByTenantIdAndFlagKey(long tenantId, String flagKey);
+
+  long deleteByTenantId(long tenantId);
 }

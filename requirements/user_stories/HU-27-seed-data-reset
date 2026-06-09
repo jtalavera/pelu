@@ -1,0 +1,39 @@
+# HU-27 · Seed data reset
+
+| Campo      | Valor          |
+| ---------- | -------------- |
+| **ID**     | HU-27          |
+| **Módulo** | Backend / Admin |
+| **Estado** | `To Do`         |
+
+## Definiciones transversales
+
+Multi-tenant y convenciones: [PRD Femme MVP v1](../prds/femme_historias_usuario_mvp_v1.md#definiciones-transversales).
+
+---
+
+## Historia de usuario
+
+**Como** desarrollador,
+**quiero** un endpoint que elimine todos los datos del tenant demo y vuelva a insertar el seed completo,
+**para** restablecer el entorno de demostración a un estado inicial conocido sin necesidad de intervención manual en la base de datos.
+
+---
+
+## Criterios de aceptación
+
+1. **Endpoint** — Existe un endpoint `POST /api/admin/seed/reset` que no requiere autenticación.
+2. **Eliminación completa** — Al invocar el endpoint, se eliminan todos los registros pertenecientes al tenant demo (id=1) en todas las tablas de datos (turnos, comprobantes, profesionales, servicios, clientes, configuración de timbrado, etc.).
+3. **Re-inserción del seed** — Tras la eliminación, se ejecuta nuevamente el seeder (`FemmeDataInitializer` o equivalente) para recrear el tenant demo con datos iniciales limpios, incluyendo el usuario `admin@demo.com` / `Demo123!`.
+4. **Idempotencia** — El endpoint puede invocarse múltiples veces consecutivas sin error; cada invocación deja el sistema en el mismo estado inicial.
+5. **Respuesta** — El endpoint devuelve HTTP 200 con un cuerpo JSON `{ "status": "ok", "message": "Seed data reset successfully" }` al completarse con éxito.
+6. **Seguridad** — El endpoint sólo opera sobre el tenant demo (id=1); no puede afectar otros tenants. 
+7. **Logging** — El backend registra a nivel INFO el inicio y fin del reset, incluyendo cuántos registros fueron eliminados por tabla.
+
+---
+
+## Notas
+
+- El endpoint no expone UI; su único consumidor previsto es scripts de CI/CD o llamadas manuales via curl/Postman.
+- El orden de eliminación debe respetar las restricciones de clave foránea (eliminar en orden inverso a la inserción).
+- No se requiere migración de Flyway; la lógica vive en un nuevo `@RestController` y reutiliza `FemmeDataInitializer`.

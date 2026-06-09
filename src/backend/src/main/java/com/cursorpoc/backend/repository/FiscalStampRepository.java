@@ -20,4 +20,6 @@ public interface FiscalStampRepository extends JpaRepository<FiscalStamp, Long> 
   Optional<FiscalStamp> lockByIdAndTenantId(@Param("id") Long id, @Param("tenantId") Long tenantId);
 
   long countByTenant_Id(Long tenantId);
+
+  long deleteByTenant_Id(Long tenantId);
 }

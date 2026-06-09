@@ -23,4 +23,6 @@ public interface ProfessionalRepository extends JpaRepository<Professional, Long
   boolean existsByTenant_IdAndEmailIgnoreCase(Long tenantId, String email);
 
   long countByTenant_Id(Long tenantId);
+
+  long deleteByTenant_Id(Long tenantId);
 }

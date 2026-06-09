@@ -14,4 +14,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
   Optional<AppUser> findByEmail(String email);
 
   long countByTenant_Id(Long tenantId);
+
+  long deleteByTenant_Id(Long tenantId);
 }
