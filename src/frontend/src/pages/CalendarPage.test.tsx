@@ -151,7 +151,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
 
   describe("Appointment form validation", () => {
     it("shows validation when date and time are in the past", async () => {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       renderPage();
       await waitFor(() => {
         expect(screen.getAllByRole("button", { name: /new appointment/i }).length).toBeGreaterThan(0);
