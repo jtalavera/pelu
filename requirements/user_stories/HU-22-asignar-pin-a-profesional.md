@@ -4,7 +4,7 @@
 | ---------- | ---------------------- |
 | **ID**     | HU-22                  |
 | **Módulo** | Gestión de profesionales |
-| **Estado** | `Backlog`              |
+| **Estado** | `Done`              |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 

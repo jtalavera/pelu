@@ -4,7 +4,7 @@
 | ---------- | ---------------------- |
 | **ID**     | HU-24                  |
 | **Módulo** | Agendamiento           |
-| **Estado** | `Backlog`              |
+| **Estado** | `Done`              |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
