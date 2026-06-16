@@ -8,6 +8,7 @@ import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
+import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
@@ -17,7 +18,9 @@ import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
+import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,6 +45,7 @@ public class FemmeDataInitializer {
   private final ServiceCategoryRepository serviceCategoryRepository;
   private final SalonServiceRepository salonServiceRepository;
   private final ProfessionalRepository professionalRepository;
+  private final TaxRepository taxRepository;
   private final FemmeSystemAdminProperties systemAdminProperties;
   private final PasswordEncoder passwordEncoder;
 
@@ -54,6 +58,7 @@ public class FemmeDataInitializer {
       ServiceCategoryRepository serviceCategoryRepository,
       SalonServiceRepository salonServiceRepository,
       ProfessionalRepository professionalRepository,
+      TaxRepository taxRepository,
       FemmeSystemAdminProperties systemAdminProperties,
       PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
@@ -64,6 +69,7 @@ public class FemmeDataInitializer {
     this.serviceCategoryRepository = serviceCategoryRepository;
     this.salonServiceRepository = salonServiceRepository;
     this.professionalRepository = professionalRepository;
+    this.taxRepository = taxRepository;
     this.systemAdminProperties = systemAdminProperties;
     this.passwordEncoder = passwordEncoder;
   }
@@ -156,6 +162,42 @@ public class FemmeDataInitializer {
         tenant.getId());
   }
 
+  /**
+   * Ensures the three standard Paraguayan IVA rates exist for this tenant, then returns IVA 10%.
+   */
+  private Tax seedDefaultTaxesIfAbsent(Tenant tenant) {
+    var existing = taxRepository.findByTenant_IdOrderByNameAsc(tenant.getId());
+    if (!existing.isEmpty()) {
+      return existing.stream()
+          .filter(t -> t.getRate().compareTo(BigDecimal.TEN) == 0)
+          .findFirst()
+          .orElse(existing.get(0));
+    }
+    Tax iva10 = new Tax();
+    iva10.setTenant(tenant);
+    iva10.setName("IVA 10%");
+    iva10.setRate(new BigDecimal("10.00"));
+    iva10.setActive(true);
+    taxRepository.save(iva10);
+
+    Tax iva5 = new Tax();
+    iva5.setTenant(tenant);
+    iva5.setName("IVA 5%");
+    iva5.setRate(new BigDecimal("5.00"));
+    iva5.setActive(true);
+    taxRepository.save(iva5);
+
+    Tax exento = new Tax();
+    exento.setTenant(tenant);
+    exento.setName("Exento");
+    exento.setRate(BigDecimal.ZERO);
+    exento.setActive(true);
+    taxRepository.save(exento);
+
+    log.info("Seeded default tax types (IVA 10%, IVA 5%, Exento) for tenant id={}", tenant.getId());
+    return iva10;
+  }
+
   public void seedCatalogIfEmpty(Tenant tenant) {
     Long tenantId = tenant.getId();
     if (tenantId == null) {
@@ -164,8 +206,12 @@ public class FemmeDataInitializer {
     if (serviceCategoryRepository.countByTenant_Id(tenantId) > 0
         || salonServiceRepository.countByTenant_Id(tenantId) > 0
         || professionalRepository.countByTenant_Id(tenantId) > 0) {
+      // Ensure tax types exist even if catalog was already seeded
+      seedDefaultTaxesIfAbsent(tenant);
       return;
     }
+
+    Tax defaultTax = seedDefaultTaxesIfAbsent(tenant);
 
     Map<String, ServiceCategory> categoriesByName = new HashMap<>();
     for (String categoryName : FemmeSalonCatalogBootstrapData.CATEGORY_NAMES) {
@@ -186,6 +232,7 @@ public class FemmeDataInitializer {
       SalonService service = new SalonService();
       service.setTenant(tenant);
       service.setCategory(category);
+      service.setTax(defaultTax);
       service.setName(row.name());
       service.setPriceMinor(row.priceMinor());
       service.setDurationMinutes(FemmeSalonCatalogBootstrapData.DEFAULT_SERVICE_DURATION_MINUTES);

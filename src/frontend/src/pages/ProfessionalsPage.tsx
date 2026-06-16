@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { SearchInput } from "../components/ui/SearchInput";
 import { useFilteredList } from "../hooks/useFilteredList";
 import { useTranslation } from "react-i18next";
@@ -260,6 +260,14 @@ export default function ProfessionalsPage() {
     setTab("schedule");
     setModalOpen(true);
   }
+
+  const onRowKeyOpenEdit =
+    (p: Professional) => (e: KeyboardEvent<HTMLTableRowElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openEdit(p);
+      }
+    };
 
   function closeModal() {
     setModalOpen(false);
@@ -658,8 +666,14 @@ export default function ProfessionalsPage() {
                   return (
                     <tr
                       key={p.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={t("femme.professionals.openEdit", { name: p.fullName })}
+                      onClick={() => openEdit(p)}
+                      onKeyDown={onRowKeyOpenEdit(p)}
                       onMouseEnter={() => setHoveredId(p.id)}
                       onMouseLeave={() => setHoveredId(null)}
+                      style={{ cursor: "pointer" }}
                     >
                       <td style={tdStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -728,7 +742,11 @@ export default function ProfessionalsPage() {
                         <StatusBadge status={p.active ? "ACTIVE" : "INACTIVE"} />
                       </td>
 
-                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                      <td
+                        style={{ ...tdStyle, textAlign: "right" }}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
                         <div
                           style={{
                             display: "flex",

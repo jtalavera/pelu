@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
 import ServicesPage from "./pages/ServicesPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
+import TaxSettingsPage from "./pages/TaxSettingsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
 import CalendarPage from "./pages/CalendarPage";
@@ -42,6 +43,7 @@ export function AppRoutes() {
           <Route index element={<Navigate to="business" replace />} />
           <Route path="business" element={<BusinessSettingsPage />} />
           <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
+          <Route path="taxes" element={<TaxSettingsPage />} />
           <Route path="feature-flags" element={<FeatureFlagsPage />} />
         </Route>
       </Route>

@@ -12,8 +12,8 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "services")
-public class SalonService {
+@Table(name = "taxes")
+public class Tax {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,22 +23,11 @@ public class SalonService {
   @JoinColumn(name = "tenant_id", nullable = false)
   private Tenant tenant;
 
-  @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "category_id", nullable = false)
-  private ServiceCategory category;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "tax_id")
-  private Tax tax;
-
-  @Column(nullable = false)
+  @Column(nullable = false, length = 100)
   private String name;
 
-  @Column(name = "price_minor", nullable = false, precision = 19, scale = 2)
-  private BigDecimal priceMinor;
-
-  @Column(name = "duration_minutes", nullable = false)
-  private int durationMinutes;
+  @Column(nullable = false, precision = 5, scale = 2)
+  private BigDecimal rate;
 
   @Column(nullable = false)
   private boolean active;
@@ -59,22 +48,6 @@ public class SalonService {
     this.tenant = tenant;
   }
 
-  public ServiceCategory getCategory() {
-    return category;
-  }
-
-  public void setCategory(ServiceCategory category) {
-    this.category = category;
-  }
-
-  public Tax getTax() {
-    return tax;
-  }
-
-  public void setTax(Tax tax) {
-    this.tax = tax;
-  }
-
   public String getName() {
     return name;
   }
@@ -83,20 +56,12 @@ public class SalonService {
     this.name = name;
   }
 
-  public BigDecimal getPriceMinor() {
-    return priceMinor;
+  public BigDecimal getRate() {
+    return rate;
   }
 
-  public void setPriceMinor(BigDecimal priceMinor) {
-    this.priceMinor = priceMinor;
-  }
-
-  public int getDurationMinutes() {
-    return durationMinutes;
-  }
-
-  public void setDurationMinutes(int durationMinutes) {
-    this.durationMinutes = durationMinutes;
+  public void setRate(BigDecimal rate) {
+    this.rate = rate;
   }
 
   public boolean isActive() {

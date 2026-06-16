@@ -260,7 +260,7 @@ public class InvoicePdfService {
         Element.ALIGN_RIGHT, formatMoneyGs(invoice.getTotal()), x10 + cmToPt(0.85f), yTotal, 0);
 
     cb.setFontAndSize(bf, 7f);
-    BigDecimal iva10 = vatTenFromTotal(invoice.getTotal());
+    BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
     cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva10), x10 + cmToPt(0.85f), yIva, 0);
     cb.endText();
 
@@ -308,8 +308,36 @@ public class InvoicePdfService {
   }
 
   /**
-   * Paraguay IVA 10% included in price: IVA = total / 11 (common shortcut for tax breakdown on
-   * ticket).
+   * Sum of persisted tax amounts for lines whose tax rate equals {@code rate}, rounded to 0
+   * decimals. Falls back to the legacy total/11 formula for invoices that predate V11 (where
+   * taxAmount is null on all lines).
+   */
+  private static BigDecimal computeIvaByRate(Invoice invoice, BigDecimal rate) {
+    if (invoice.getLines() == null || invoice.getLines().isEmpty()) {
+      return BigDecimal.ZERO;
+    }
+    boolean hasTaxData = invoice.getLines().stream().anyMatch(l -> l.getTaxAmount() != null);
+    if (!hasTaxData) {
+      // Legacy invoice: fall back to IVA 10% = total / 11
+      if (rate.compareTo(BigDecimal.valueOf(10)) == 0) {
+        return vatTenFromTotal(invoice.getTotal());
+      }
+      return BigDecimal.ZERO;
+    }
+    BigDecimal sum =
+        invoice.getLines().stream()
+            .filter(
+                l ->
+                    l.getTaxRate() != null
+                        && l.getTaxRate().compareTo(rate.setScale(4, RoundingMode.HALF_UP)) == 0
+                        && l.getTaxAmount() != null)
+            .map(InvoiceLine::getTaxAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    return sum.setScale(0, RoundingMode.HALF_UP);
+  }
+
+  /**
+   * Paraguay IVA 10% included in price: IVA = total / 11 (legacy fallback for pre-V11 invoices).
    */
   private static BigDecimal vatTenFromTotal(BigDecimal total) {
     if (total == null || total.compareTo(BigDecimal.ZERO) <= 0) {

@@ -4,7 +4,7 @@
 | ---------- | ---------------------------- |
 | **ID**     | HU-28                        |
 | **Módulo** | Varios (front + back)        |
-| **Estado** | `To Do`                      |
+| **Estado** | `Done`                       |
 
 ## Definiciones transversales
 

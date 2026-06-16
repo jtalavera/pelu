@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.ServiceCategory;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
+import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.ServiceCategoryUpsertRequest;
 import com.cursorpoc.backend.web.dto.ServiceUpsertRequest;
@@ -32,6 +33,7 @@ class ServiceCatalogServiceTest {
   @Mock private TenantRepository tenantRepository;
   @Mock private ServiceCategoryRepository serviceCategoryRepository;
   @Mock private SalonServiceRepository salonServiceRepository;
+  @Mock private TaxRepository taxRepository;
 
   @InjectMocks private ServiceCatalogService service;
 
@@ -148,7 +150,7 @@ class ServiceCatalogServiceTest {
     assertThatThrownBy(
             () ->
                 service.createService(
-                    1L, new ServiceUpsertRequest("Trim", 11L, new BigDecimal("1.00"), 15)))
+                    1L, new ServiceUpsertRequest("Trim", 11L, null, new BigDecimal("1.00"), 15)))
         .isInstanceOf(ResponseStatusException.class);
   }
 

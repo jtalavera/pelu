@@ -2,10 +2,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { STATUS, type EventData, type Step } from "react-joyride";
+import { femmeJson, femmePostJson } from "../api/femmeClient";
 
 interface TourContextValue {
   run: boolean;
@@ -18,6 +21,8 @@ interface TourContextValue {
   clearTour: () => void;
   handleEvent: (data: EventData) => void;
   hasSeenTour: (key: string) => boolean;
+  /** Call once after login to sync seen state from backend. */
+  syncFromBackend: () => Promise<void>;
 }
 
 const TourContext = createContext<TourContextValue | null>(null);
@@ -29,6 +34,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [steps, setSteps] = useState<Step[]>([]);
   const [tourKey, setTourKey] = useState("");
   const [seenVersion, setSeenVersion] = useState(0);
+  const tourKeyRef = useRef(tourKey);
+  tourKeyRef.current = tourKey;
 
   const startTour = useCallback(() => setRun(true), []);
   const stopTour = useCallback(() => setRun(false), []);
@@ -52,18 +59,39 @@ export function TourProvider({ children }: { children: ReactNode }) {
     [seenVersion],
   );
 
-  const handleEvent = useCallback(
-    (data: EventData) => {
-      if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
-        setRun(false);
-        if (tourKey) {
-          localStorage.setItem(`${STORAGE_PREFIX}${tourKey}`, "true");
-          setSeenVersion((v) => v + 1);
-        }
+  const handleEvent = useCallback((data: EventData) => {
+    if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
+      setRun(false);
+      const key = tourKeyRef.current;
+      if (key) {
+        localStorage.setItem(`${STORAGE_PREFIX}${key}`, "true");
+        setSeenVersion((v) => v + 1);
+        // Persist to backend (fire-and-forget; localStorage is the offline cache)
+        femmePostJson<void>(`/api/me/tour-state/${encodeURIComponent(key)}`, {}).catch(
+          () => undefined,
+        );
       }
-    },
-    [tourKey],
-  );
+    }
+  }, []);
+
+  const syncFromBackend = useCallback(async () => {
+    try {
+      const seen = await femmeJson<{ tourKey: string }[]>("/api/me/tour-state");
+      seen.forEach(({ tourKey: k }) => {
+        localStorage.setItem(`${STORAGE_PREFIX}${k}`, "true");
+      });
+      setSeenVersion((v) => v + 1);
+    } catch {
+      // Non-critical: fall back to localStorage-only state
+    }
+  }, []);
+
+  // Sync from backend once on provider mount (fires after login when app re-renders)
+  useEffect(() => {
+    syncFromBackend();
+    // Only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <TourContext.Provider
@@ -78,6 +106,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
         clearTour,
         handleEvent,
         hasSeenTour,
+        syncFromBackend,
       }}
     >
       {children}

@@ -8,5 +8,6 @@ import java.math.BigDecimal;
 public record ServiceUpsertRequest(
     @NotBlank String name,
     @NotNull Long categoryId,
+    Long taxId,
     @NotNull @Min(0) BigDecimal priceMinor,
     @Min(1) int durationMinutes) {}

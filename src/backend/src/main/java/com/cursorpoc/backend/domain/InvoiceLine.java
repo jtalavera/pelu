@@ -1,7 +1,10 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.DiscountType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -38,6 +41,21 @@ public class InvoiceLine {
 
   @Column(name = "line_total", nullable = false, precision = 19, scale = 2)
   private BigDecimal lineTotal;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "discount_type", length = 16)
+  private DiscountType discountType;
+
+  @Column(name = "discount_value", precision = 19, scale = 2)
+  private BigDecimal discountValue;
+
+  /** Snapshot of the tax rate at time of invoice creation (IVA-incluido basis). */
+  @Column(name = "tax_rate", precision = 19, scale = 4)
+  private BigDecimal taxRate;
+
+  /** Tax amount computed as lineNet * rate / (100 + rate), rounded to 4 decimals. */
+  @Column(name = "tax_amount", precision = 19, scale = 4)
+  private BigDecimal taxAmount;
 
   public Long getId() {
     return id;
@@ -93,5 +111,37 @@ public class InvoiceLine {
 
   public void setLineTotal(BigDecimal lineTotal) {
     this.lineTotal = lineTotal;
+  }
+
+  public DiscountType getDiscountType() {
+    return discountType;
+  }
+
+  public void setDiscountType(DiscountType discountType) {
+    this.discountType = discountType;
+  }
+
+  public BigDecimal getDiscountValue() {
+    return discountValue;
+  }
+
+  public void setDiscountValue(BigDecimal discountValue) {
+    this.discountValue = discountValue;
+  }
+
+  public BigDecimal getTaxRate() {
+    return taxRate;
+  }
+
+  public void setTaxRate(BigDecimal taxRate) {
+    this.taxRate = taxRate;
+  }
+
+  public BigDecimal getTaxAmount() {
+    return taxAmount;
+  }
+
+  public void setTaxAmount(BigDecimal taxAmount) {
+    this.taxAmount = taxAmount;
   }
 }

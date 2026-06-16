@@ -7,6 +7,7 @@ interface SearchInputProps {
   resultCount?: number;
   totalCount?: number;
   id?: string;
+  maxWidth?: number | string;
 }
 
 export function SearchInput({
@@ -16,6 +17,7 @@ export function SearchInput({
   resultCount,
   totalCount,
   id = "search-input",
+  maxWidth = 320,
 }: SearchInputProps) {
   const { t } = useTranslation();
   const ph = placeholder ?? t("femme.searchInput.placeholderDefault");
@@ -29,7 +31,7 @@ export function SearchInput({
         gap: 10,
       }}
     >
-      <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+      <div style={{ position: "relative", flex: 1, maxWidth }}>
         <div
           style={{
             position: "absolute",
