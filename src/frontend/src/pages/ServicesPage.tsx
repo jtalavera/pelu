@@ -154,6 +154,14 @@ export default function ServicesPage() {
     void load();
   }, [load]);
 
+  // When taxes finish loading while a new-service dialog is already open, auto-select first active tax
+  useEffect(() => {
+    if (serviceModalOpen && !serviceEditing && serviceTaxId === "" && taxes.length > 0) {
+      const firstActiveTax = taxes.find((tx) => tx.active);
+      if (firstActiveTax) setServiceTaxId(String(firstActiveTax.id));
+    }
+  }, [taxes, serviceModalOpen, serviceEditing, serviceTaxId]);
+
   function handleCategoryPill(val: string) {
     setCategoryFilterId(val);
   }
@@ -573,6 +581,7 @@ export default function ServicesPage() {
               resultCount={servicesTextFiltered.length}
               totalCount={displayedServices.length}
               maxWidth={480}
+              style={{ flex: 1 }}
             />
             <div data-tour="services-filters" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {filterOptions.map((o) => (

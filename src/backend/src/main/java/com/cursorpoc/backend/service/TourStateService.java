@@ -32,11 +32,12 @@ public class TourStateService {
   }
 
   @Transactional
-  public void markTourSeen(long userId, String tourKey) {
+  public TourStateResponse markTourSeen(long userId, String tourKey) {
     Optional<AppUserTourState> existing =
         tourStateRepository.findByUser_IdAndTourKey(userId, tourKey);
     if (existing.isPresent()) {
-      return; // idempotent: already marked
+      AppUserTourState s = existing.get();
+      return new TourStateResponse(s.getTourKey(), s.getSeenAt());
     }
     AppUser user =
         appUserRepository
@@ -47,5 +48,6 @@ public class TourStateService {
     state.setTourKey(tourKey);
     state.setSeenAt(Instant.now());
     tourStateRepository.save(state);
+    return new TourStateResponse(tourKey, state.getSeenAt());
   }
 }

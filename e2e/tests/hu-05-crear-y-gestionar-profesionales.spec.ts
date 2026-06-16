@@ -27,7 +27,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    const row = page.getByRole("row").filter({ hasText: n2 }).first();
+    const row = page.locator("tr").filter({ hasText: n2 }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
     await page.getByRole("menuitem", { name: "Edit details and photo" }).click();
@@ -79,7 +79,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
       .getByRole("button", { name: "Save schedule" })
       .evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
 
-    const row = page.getByRole("row").filter({ hasText: name }).first();
+    const row = page.locator("tr").filter({ hasText: name }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
 
     await row.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();

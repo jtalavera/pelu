@@ -42,15 +42,16 @@ public class TourStateController {
   }
 
   @PostMapping("/{key}")
-  public void markSeen(
+  public TourStateResponse markSeen(
       @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("key") String key) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     log.info("POST /api/me/tour-state/{} userId={}", key, principal.getUserId());
     try {
-      tourStateService.markTourSeen(principal.getUserId(), key);
+      TourStateResponse response = tourStateService.markTourSeen(principal.getUserId(), key);
       log.info("POST /api/me/tour-state/{} userId={} status=200", key, principal.getUserId());
+      return response;
     } catch (ResponseStatusException ex) {
       log.error(
           "POST /api/me/tour-state/{} userId={} status={}",

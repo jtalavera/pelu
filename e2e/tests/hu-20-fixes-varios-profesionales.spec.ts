@@ -24,7 +24,7 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.locator("#professionals-inline-search").fill(name);
-    const prow = page.getByRole("row").filter({ hasText: name }).first();
+    const prow = page.locator("tr").filter({ hasText: name }).first();
     await expect(prow).toBeVisible({ timeout: 20_000 });
     await expect(prow.getByRole("button", { name: /^(Actions|Acciones)$/ })).toBeVisible();
   });
