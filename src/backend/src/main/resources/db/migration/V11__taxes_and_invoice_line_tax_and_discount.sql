@@ -39,7 +39,7 @@ BEGIN
     id        BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
     user_id   BIGINT NOT NULL,
     tour_key  NVARCHAR(100) NOT NULL,
-    seen_at   DATETIME2 NOT NULL,
+    seen_at   DATETIMEOFFSET(7) NOT NULL,
     CONSTRAINT fk_tour_state_user FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE,
     CONSTRAINT uq_tour_state_user_key UNIQUE (user_id, tour_key)
   );
