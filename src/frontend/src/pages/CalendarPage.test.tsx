@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "../test/renderWithTour";
+import { fireEvent, render, screen, waitFor, within } from "../test/renderWithTour";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
+import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
 import CalendarPage from "./CalendarPage";
@@ -38,11 +39,13 @@ const MOCK_APPOINTMENT = {
 
 function renderPage() {
   return render(
-    <I18nextProvider i18n={i18n}>
-      <ThemeProvider>
-        <CalendarPage />
-      </ThemeProvider>
-    </I18nextProvider>,
+    <MemoryRouter>
+      <I18nextProvider i18n={i18n}>
+        <ThemeProvider>
+          <CalendarPage />
+        </ThemeProvider>
+      </I18nextProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -167,10 +170,13 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
 
       const formDialog = screen.getAllByRole("dialog")[0];
 
-      await user.clear(screen.getByLabelText(/^date$/i));
-      await user.type(screen.getByLabelText(/^date$/i), yStr);
-      await user.clear(screen.getByLabelText(/^time$/i));
-      await user.type(screen.getByLabelText(/^time$/i), "10:00");
+      // Use fireEvent.change instead of user.type to avoid LocalizedDateInput's
+      // useEffect resetting text mid-keystroke (partial ISO matches like "2026-06-1"
+      // trigger onChange, which resets the display text and corrupts the final value).
+      fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: yStr } });
+      const timeInput = screen.getByLabelText(/^time$/i);
+      fireEvent.change(timeInput, { target: { value: "10:00" } });
+      fireEvent.blur(timeInput);
 
       await user.click(screen.getByRole("combobox", { name: /^professional$/i }));
       await user.click(await screen.findByRole("button", { name: /^ana gomez$/i }));
