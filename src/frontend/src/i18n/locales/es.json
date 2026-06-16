@@ -79,7 +79,7 @@
     "appName": "Femme",
     "login": {
       "title": "Iniciar sesión",
-      "subtitle": "Usá tu correo y contraseña de administrador.",
+      "subtitle": "Ingresa tu correo y contraseña del sistema.",
       "email": "Correo electrónico",
       "password": "Contraseña",
       "submit": "Iniciar sesión",
@@ -195,7 +195,35 @@
       "pageSubtitle": "Datos del negocio, timbrado fiscal y preferencias",
       "tabBusiness": "Negocio",
       "tabFiscalStamp": "Timbrado",
+      "tabTaxes": "Impuestos",
       "tabFeatureFlags": "Funcionalidades"
+    },
+    "taxes": {
+      "pageTitle": "Impuestos",
+      "pageSubtitle": "Configurá los tipos de impuestos aplicados a los servicios.",
+      "loading": "Cargando impuestos…",
+      "loadError": "No se pudieron cargar los impuestos.",
+      "saveError": "No se pudo guardar. Revisá los datos e intentá de nuevo.",
+      "errorTitle": "Error",
+      "saving": "Guardando…",
+      "addNew": "+ Nuevo impuesto",
+      "addTitle": "Nuevo impuesto",
+      "editTitle": "Editar impuesto",
+      "name": "Nombre",
+      "nameRequired": "Ingresá un nombre de impuesto.",
+      "rate": "Tasa (%)",
+      "rateInvalid": "Ingresá un porcentaje válido entre 0 y 100 (ej.: 10).",
+      "colName": "Nombre",
+      "colRate": "Tasa",
+      "colStatus": "Estado",
+      "deactivate": "Desactivar",
+      "activate": "Reactivar",
+      "deactivateDialogTitle": "Desactivar impuesto",
+      "deactivateDialogDescription": "\"{{name}}\" quedará inactivo. Los servicios existentes con este impuesto no se modifican.",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "emptyTitle": "No hay impuestos configurados.",
+      "emptyBody": "Creá un impuesto para asignarlo a los servicios."
     },
     "featureFlags": {
       "title": "Funcionalidades (feature flags)",
@@ -373,6 +401,10 @@
         "lineUnitPricePlaceholder": "0",
         "lineUnitPriceInvalid": "Ingresá un precio válido ≥ 0 (con separador de miles, ej.: 25.000).",
         "lineTotal": "Total",
+        "lineDiscountToggle": "Descuento por ítem",
+        "lineDiscountType": "Tipo",
+        "lineDiscountValue": "Descuento",
+        "lineNetTotal": "Total neto",
         "discountSection": "Descuento",
         "discountType": "Tipo de descuento",
         "discountTypeNone": "Sin descuento",
@@ -726,7 +758,9 @@
         "emptyBody": "Creá un servicio para usarlo en turnos y facturas.",
         "separatorInactive": "Inactivos",
         "searchInlinePlaceholder": "Buscar por nombre o categoría…",
-        "openEdit": "Editar servicio {{name}}"
+        "openEdit": "Editar servicio {{name}}",
+        "tax": "Tipo de impuesto",
+        "taxPlaceholder": "Sin impuesto"
       }
     },
     "professionals": {
@@ -747,6 +781,7 @@
       "addTitle": "Nueva profesional",
       "editTitle": "Editar profesional",
       "searchInlinePlaceholder": "Buscar por nombre o email…",
+      "openEdit": "Editar profesional {{name}}",
       "edit": "Editar",
       "deactivate": "Desactivar",
       "dayOff": "Día libre",
@@ -896,7 +931,9 @@
           "professionalRequired": "La profesional es obligatoria.",
           "serviceRequired": "El servicio es obligatorio.",
           "startInPast": "La fecha y hora del turno deben ser futuras. Elegí una fecha u hora posterior (ej.: mañana 09:00)."
-        }
+        },
+        "availabilityWarningDayOff": "La profesional no atiende ese día. Podés agendar igual, pero revisá el horario.",
+        "availabilityWarningOutsideHours": "El horario seleccionado está fuera del horario disponible de la profesional ({{start}}–{{end}}). Podés agendar igual."
       },
       "cancelDialog": {
         "title": "Cancelar turno",

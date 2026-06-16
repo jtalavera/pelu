@@ -697,6 +697,31 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={i}
+                    role={cell.current ? "button" : undefined}
+                    tabIndex={cell.current ? 0 : undefined}
+                    onClick={
+                      cell.current
+                        ? () => {
+                            const d = new Date(calYear, calMonthIdx, cell.day);
+                            navigate("/app/calendar", {
+                              state: { selectedDate: toLocalDateStr(d) },
+                            });
+                          }
+                        : undefined
+                    }
+                    onKeyDown={
+                      cell.current
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              const d = new Date(calYear, calMonthIdx, cell.day);
+                              navigate("/app/calendar", {
+                                state: { selectedDate: toLocalDateStr(d) },
+                              });
+                            }
+                          }
+                        : undefined
+                    }
                     style={{
                       fontSize: 10,
                       textAlign: "center",

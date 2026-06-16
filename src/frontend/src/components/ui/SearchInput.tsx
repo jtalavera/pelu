@@ -7,6 +7,8 @@ interface SearchInputProps {
   resultCount?: number;
   totalCount?: number;
   id?: string;
+  maxWidth?: number | string;
+  style?: React.CSSProperties;
 }
 
 export function SearchInput({
@@ -16,6 +18,8 @@ export function SearchInput({
   resultCount,
   totalCount,
   id = "search-input",
+  maxWidth = 320,
+  style,
 }: SearchInputProps) {
   const { t } = useTranslation();
   const ph = placeholder ?? t("femme.searchInput.placeholderDefault");
@@ -27,9 +31,10 @@ export function SearchInput({
         display: "flex",
         alignItems: "center",
         gap: 10,
+        ...style,
       }}
     >
-      <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+      <div style={{ position: "relative", flex: 1, maxWidth }}>
         <div
           style={{
             position: "absolute",

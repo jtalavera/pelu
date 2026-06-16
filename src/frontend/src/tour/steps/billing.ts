@@ -1,5 +1,18 @@
 import type { FemmeTourStepDef } from "../useTour";
 
+let switchBillingTab: ((tab: "session" | "invoice" | "history") => void) | null = null;
+
+export function registerBillingTabSwitcher(
+  fn: ((tab: "session" | "invoice" | "history") => void) | null,
+) {
+  switchBillingTab = fn;
+}
+
+function switchToHistoryAndWait(): Promise<void> {
+  switchBillingTab?.("history");
+  return new Promise<void>((resolve) => setTimeout(resolve, 120));
+}
+
 export const billingSteps: FemmeTourStepDef[] = [
   {
     target: "[data-tour='billing-header']",
@@ -24,11 +37,13 @@ export const billingSteps: FemmeTourStepDef[] = [
     titleKey: "femme.tour.billing.search.title",
     contentKey: "femme.tour.billing.search.content",
     placement: "bottom",
+    before: switchToHistoryAndWait,
   },
   {
     target: "[data-tour='billing-invoice-list']",
     titleKey: "femme.tour.billing.invoiceList.title",
     contentKey: "femme.tour.billing.invoiceList.content",
     placement: "top",
+    before: switchToHistoryAndWait,
   },
 ];

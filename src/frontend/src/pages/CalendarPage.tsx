@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -35,6 +35,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+import { useLocation } from "react-router-dom";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -125,7 +126,8 @@ function profColor(professionalId: number, professionals: Professional[]): ProfC
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Professional = { id: number; fullName: string; active: boolean };
+type ProfSchedule = { dayOfWeek: number; startTime: string; endTime: string; active: boolean };
+type Professional = { id: number; fullName: string; active: boolean; schedules?: ProfSchedule[] };
 type SalonService = { id: number; name: string; durationMinutes: number; active: boolean };
 type Client = { id: number; fullName: string };
 
@@ -152,7 +154,15 @@ export default function CalendarPage() {
         : "ADMIN";
   useTour("calendar", calendarSteps, tourRole, guidedTourEnabled);
 
-  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+  const location = useLocation();
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const selectedDate = (location.state as { selectedDate?: string } | null)?.selectedDate;
+    if (selectedDate) {
+      const d = new Date(selectedDate + "T00:00:00");
+      if (!isNaN(d.getTime())) return startOfWeek(d);
+    }
+    return startOfWeek(new Date());
+  });
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -191,6 +201,28 @@ export default function CalendarPage() {
   } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ── Availability warning (non-blocking) ────────────────────────────────────
+  // dayOfWeek: JS Date.getDay() returns 0=Sun; schedule uses 1=Mon..7=Sun
+  const availabilityWarning = useMemo((): string | null => {
+    if (!formDate || !formTime || !formProfessionalId) return null;
+    const prof = professionals.find((p) => p.id === formProfessionalId);
+    if (!prof?.schedules?.length) return null;
+    const d = new Date(formDate + "T00:00:00");
+    const jsDay = d.getDay(); // 0=Sun..6=Sat
+    const scheduleDay = jsDay === 0 ? 7 : jsDay; // convert to 1=Mon..7=Sun
+    const sched = prof.schedules.find((s) => s.dayOfWeek === scheduleDay && s.startTime && s.endTime);
+    if (!sched) return t("femme.calendar.form.availabilityWarningDayOff");
+    // Normalize API times ("09:00:00" → "09:00")
+    const normalize = (v: string) => v.slice(0, 5);
+    if (formTime < normalize(sched.startTime) || formTime >= normalize(sched.endTime)) {
+      return t("femme.calendar.form.availabilityWarningOutsideHours", {
+        start: normalize(sched.startTime),
+        end: normalize(sched.endTime),
+      });
+    }
+    return null;
+  }, [formDate, formTime, formProfessionalId, professionals, t]);
 
   // Scroll to 8am on mount
   useEffect(() => {
@@ -784,7 +816,9 @@ export default function CalendarPage() {
                             cursor: "pointer",
                             background: pc.bg,
                             border: "none",
-                            borderLeft: `3px solid ${pc.border}`,
+                            borderLeft: appt.status === "PENDING"
+                              ? `3px dotted ${pc.border}`
+                              : `3px solid ${pc.border}`,
                             color: pc.color,
                             textAlign: "left",
                             overflow: hovered ? "visible" : "hidden",
@@ -794,6 +828,27 @@ export default function CalendarPage() {
                           }}
                           aria-label={`${appt.clientName ?? t("femme.calendar.detail.occasionalClient")} – ${appt.serviceName}`}
                         >
+                          {appt.status === "CONFIRMED" && (
+                            <span
+                              aria-hidden="true"
+                              data-testid={`confirmed-check-${appt.id}`}
+                              style={{
+                                position: "absolute",
+                                top: 4,
+                                right: 4,
+                                width: 12,
+                                height: 12,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                opacity: 0.85,
+                              }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                                <path d="M2 6l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                          )}
                           <p
                             style={{
                               fontWeight: 500,
@@ -981,6 +1036,11 @@ export default function CalendarPage() {
           {formApiError && (
             <Alert variant="destructive">
               <p role="alert">{formApiError}</p>
+            </Alert>
+          )}
+          {availabilityWarning && (
+            <Alert variant="warning" data-testid="availability-warning">
+              <p role="alert">{availabilityWarning}</p>
             </Alert>
           )}
           {/* Date */}

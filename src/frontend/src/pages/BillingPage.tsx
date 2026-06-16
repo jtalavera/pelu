@@ -34,7 +34,7 @@ import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
-import { billingSteps } from "../tour/steps/billing";
+import { billingSteps, registerBillingTabSwitcher } from "../tour/steps/billing";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +115,9 @@ type InvoiceLineForm = {
   quantity: string;
   unitPrice: string;
   pickedService: SalonServiceOption | null;
+  discountEnabled: boolean;
+  discountType: "FIXED" | "PERCENT";
+  discountValue: string;
 };
 
 type PaymentForm = {
@@ -702,6 +705,7 @@ function InvoiceHistoryTab() {
         </Alert>
       )}
 
+      <div data-tour="billing-invoice-list">
       {loading ? (
         <div className="flex items-center gap-2">
           <Spinner size="sm" />
@@ -712,7 +716,7 @@ function InvoiceHistoryTab() {
       ) : filteredInvoices.length === 0 ? (
         <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
       ) : (
-        <div data-tour="billing-invoice-list" className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
+        <div className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
           <table className="min-w-full text-sm">
             <thead className="bg-[rgb(var(--color-muted))]">
               <tr>
@@ -756,6 +760,7 @@ function InvoiceHistoryTab() {
           </table>
         </div>
       )}
+      </div>
 
       {selectedInvoiceId !== null && (
         <InvoiceDetailModal
@@ -828,6 +833,9 @@ function NewInvoiceTab({
       quantity: "1",
       unitPrice: "",
       pickedService: null,
+      discountEnabled: false,
+      discountType: "PERCENT",
+      discountValue: "",
     },
   ]);
   const [payments, setPayments] = useState<PaymentForm[]>([
@@ -908,6 +916,9 @@ function NewInvoiceTab({
         quantity: "1",
         unitPrice: "",
         pickedService: null,
+        discountEnabled: false,
+        discountType: "PERCENT",
+        discountValue: "",
       },
     ]);
   }
@@ -957,7 +968,7 @@ function NewInvoiceTab({
 
   function updateLine(
     idx: number,
-    field: "serviceId" | "quantity" | "unitPrice",
+    field: "serviceId" | "quantity" | "unitPrice" | "discountValue",
     value: string,
   ) {
     const next = field === "unitPrice" ? maskMoneyInput(value) : value;
@@ -975,6 +986,20 @@ function NewInvoiceTab({
         return next;
       });
     }
+  }
+
+  function toggleLineDiscount(idx: number) {
+    setLines((prev) =>
+      prev.map((l, i) =>
+        i === idx ? { ...l, discountEnabled: !l.discountEnabled, discountValue: "" } : l,
+      ),
+    );
+  }
+
+  function setLineDiscountType(idx: number, type: "FIXED" | "PERCENT") {
+    setLines((prev) =>
+      prev.map((l, i) => (i === idx ? { ...l, discountType: type } : l)),
+    );
   }
 
   function addPayment() {
@@ -1004,7 +1029,7 @@ function NewInvoiceTab({
     }
   }
 
-  function validate(): boolean {
+  function validate(): { ok: boolean; lineErrors: Record<number, Record<string, string>>; paymentErrors: Record<number, string>; globalErrors: string[] } {
     const newLineErrors: Record<number, Record<string, string>> = {};
     const newPaymentErrors: Record<number, string> = {};
     const errors: string[] = [];
@@ -1052,11 +1077,11 @@ function NewInvoiceTab({
     setPaymentErrors(newPaymentErrors);
     setGlobalErrors(errors);
 
-    return (
+    const ok =
       Object.keys(newLineErrors).length === 0 &&
       Object.keys(newPaymentErrors).length === 0 &&
-      errors.length === 0
-    );
+      errors.length === 0;
+    return { ok, lineErrors: newLineErrors, paymentErrors: newPaymentErrors, globalErrors: errors };
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -1065,7 +1090,35 @@ function NewInvoiceTab({
     setSuccessInvoiceNumber(null);
     setClientProfileSyncWarning(null);
 
-    if (!validate()) return;
+    const validationResult = validate();
+    if (!validationResult.ok) {
+      // Build an ordered list of candidate field IDs and focus the first with an error
+      const firstErrorId = (() => {
+        if (clientSelection?.type === "client") {
+          if (!clientDisplayName.trim()) return "client-display-name";
+          if (clientRucOverride.trim() && !validateRuc(clientRucOverride.trim())) return "client-ruc";
+        }
+        for (let i = 0; i < lines.length; i++) {
+          if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
+          if (validationResult.lineErrors[i]?.unitPrice) return `line-price-${i}`;
+        }
+        for (let i = 0; i < payments.length; i++) {
+          if (validationResult.paymentErrors[i]) return `pay-amount-${i}`;
+        }
+        return null;
+      })();
+      if (firstErrorId) {
+        // Use setTimeout to allow React to commit the state update before we focus
+        setTimeout(() => {
+          const el = document.getElementById(firstErrorId);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.focus();
+          }
+        }, 0);
+      }
+      return;
+    }
 
     const selectedForProfileSync =
       clientSelection?.type === "client" ? clientSelection.client : null;
@@ -1084,6 +1137,9 @@ function NewInvoiceTab({
         description: (l.pickedService?.name ?? l.description).trim(),
         quantity: parseInt(l.quantity) || 1,
         unitPrice: parseMaskedMoney(l.unitPrice),
+        discountType: l.discountEnabled && l.discountValue ? l.discountType : null,
+        discountValue:
+          l.discountEnabled && l.discountValue ? parseFloat(l.discountValue.replace(",", ".")) : null,
       })),
       payments: payments.map((p) => ({
         method: p.method,
@@ -1138,6 +1194,9 @@ function NewInvoiceTab({
           quantity: "1",
           unitPrice: "",
           pickedService: null,
+          discountEnabled: false,
+          discountType: "PERCENT",
+          discountValue: "",
         },
       ]);
       setPayments([{ method: "CASH", amount: "" }]);
@@ -1327,9 +1386,13 @@ function NewInvoiceTab({
                 </div>
                 <div className="col-span-9 sm:col-span-1 flex min-h-9 w-full items-end justify-center">
                   <span className="w-full text-center text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
-                    {formatDecimalGs(
-                      (parseFloat(line.quantity) || 0) * parseMaskedMoney(line.unitPrice),
-                    )}
+                    {(() => {
+                      const gross = (parseFloat(line.quantity) || 0) * parseMaskedMoney(line.unitPrice);
+                      if (!line.discountEnabled || !line.discountValue) return formatDecimalGs(gross);
+                      const dv = parseFloat(line.discountValue.replace(",", ".")) || 0;
+                      const disc = line.discountType === "PERCENT" ? gross * dv / 100 : dv;
+                      return formatDecimalGs(Math.max(0, gross - disc));
+                    })()}
                   </span>
                 </div>
                 <div className="col-span-3 sm:col-span-1 flex items-end justify-end">
@@ -1343,6 +1406,40 @@ function NewInvoiceTab({
                     >
                       ×
                     </Button>
+                  )}
+                </div>
+                {/* Per-line discount row */}
+                <div className="col-span-12 flex flex-wrap items-center gap-3">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[rgb(var(--color-ink-2))]">
+                    <input
+                      type="checkbox"
+                      checked={line.discountEnabled}
+                      onChange={() => toggleLineDiscount(idx)}
+                      id={`line-disc-toggle-${idx}`}
+                    />
+                    {t("femme.billing.invoice.lineDiscountToggle")}
+                  </label>
+                  {line.discountEnabled && (
+                    <>
+                      <select
+                        value={line.discountType}
+                        onChange={(e) => setLineDiscountType(idx, e.target.value as "FIXED" | "PERCENT")}
+                        aria-label={t("femme.billing.invoice.lineDiscountType")}
+                        className="rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] px-2 py-1 text-xs"
+                      >
+                        <option value="PERCENT">{t("femme.billing.invoice.discountTypePercent")}</option>
+                        <option value="FIXED">{t("femme.billing.invoice.discountTypeFixed")}</option>
+                      </select>
+                      <Input
+                        id={`line-disc-val-${idx}`}
+                        inputMode="decimal"
+                        value={line.discountValue}
+                        onChange={(e) => updateLine(idx, "discountValue", e.target.value)}
+                        placeholder={line.discountType === "PERCENT" ? "0" : "0"}
+                        aria-label={t("femme.billing.invoice.lineDiscountValue")}
+                        className="w-24"
+                      />
+                    </>
                   )}
                 </div>
               </div>
@@ -1892,7 +1989,7 @@ function CashSessionTab({
 
             {!showCloseForm && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button data-tour="billing-new-invoice" type="button" style={primaryBtn} onClick={onNewInvoice}>
+                <button type="button" style={primaryBtn} onClick={onNewInvoice}>
                   {t("femme.billing.session.newInvoiceButton")}
                 </button>
                 <button type="button" style={destructiveSoft} onClick={() => setShowCloseForm(true)}>
@@ -2200,6 +2297,11 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    registerBillingTabSwitcher(setActiveTab);
+    return () => registerBillingTabSwitcher(null);
+  }, []);
+
   const loadCurrentSession = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -2278,6 +2380,7 @@ export default function BillingPage() {
             return (
               <button
                 key={tabKey}
+                data-tour={tabKey === "invoice" ? "billing-new-invoice" : undefined}
                 type="button"
                 role="tab"
                 aria-selected={false}
@@ -2295,6 +2398,7 @@ export default function BillingPage() {
           return (
             <button
               key={tabKey}
+              data-tour={tabKey === "invoice" ? "billing-new-invoice" : undefined}
               type="button"
               role="tab"
               aria-selected={activeTab === tabKey}

@@ -8,4 +8,8 @@ public record InvoiceLineResponse(
     String description,
     int quantity,
     BigDecimal unitPrice,
-    BigDecimal lineTotal) {}
+    String discountType,
+    BigDecimal discountValue,
+    BigDecimal lineTotal,
+    BigDecimal taxRate,
+    BigDecimal taxAmount) {}

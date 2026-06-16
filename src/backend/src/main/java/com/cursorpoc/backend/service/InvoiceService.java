@@ -154,12 +154,48 @@ public class InvoiceService {
       line.setDescription(lr.description());
       line.setQuantity(lr.quantity());
       line.setUnitPrice(lr.unitPrice().setScale(2, RoundingMode.HALF_UP));
-      BigDecimal lineTotal =
+
+      BigDecimal grossLineTotal =
           lr.unitPrice()
               .multiply(BigDecimal.valueOf(lr.quantity()))
               .setScale(2, RoundingMode.HALF_UP);
-      line.setLineTotal(lineTotal);
-      subtotal = subtotal.add(lineTotal);
+
+      // Per-line discount (applied before tax snapshot)
+      BigDecimal lineDiscountAmount = BigDecimal.ZERO;
+      DiscountType lineDiscountType = DiscountType.NONE;
+      if (lr.discountType() != null && !lr.discountType().isBlank()) {
+        try {
+          lineDiscountType = DiscountType.valueOf(lr.discountType().toUpperCase());
+        } catch (IllegalArgumentException e) {
+          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_DISCOUNT_TYPE");
+        }
+      }
+      if (lineDiscountType == DiscountType.FIXED && lr.discountValue() != null) {
+        lineDiscountAmount = lr.discountValue().setScale(2, RoundingMode.HALF_UP);
+        if (lineDiscountAmount.compareTo(grossLineTotal) > 0) {
+          lineDiscountAmount = grossLineTotal;
+        }
+      } else if (lineDiscountType == DiscountType.PERCENT && lr.discountValue() != null) {
+        lineDiscountAmount =
+            grossLineTotal
+                .multiply(lr.discountValue())
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+      }
+      if (lineDiscountType != DiscountType.NONE) {
+        line.setDiscountType(lineDiscountType);
+        line.setDiscountValue(lr.discountValue());
+      }
+
+      // Net after per-line discount — this is what goes into lineTotal
+      BigDecimal lineNet =
+          grossLineTotal.subtract(lineDiscountAmount).setScale(2, RoundingMode.HALF_UP);
+      if (lineNet.compareTo(BigDecimal.ZERO) < 0) {
+        lineNet = BigDecimal.ZERO;
+      }
+      line.setLineTotal(lineNet);
+
+      // Tax: snapshot rate from the linked service and compute IVA-incluido amount
+      BigDecimal taxRate = BigDecimal.ZERO;
       if (lr.serviceId() != null) {
         var salonService =
             salonServiceRepository
@@ -167,7 +203,22 @@ public class InvoiceService {
                 .orElseThrow(
                     () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND"));
         line.setSalonService(salonService);
+        if (salonService.getTax() != null) {
+          taxRate = salonService.getTax().getRate();
+        }
       }
+      line.setTaxRate(taxRate.setScale(4, RoundingMode.HALF_UP));
+      BigDecimal taxAmount = BigDecimal.ZERO;
+      if (taxRate.compareTo(BigDecimal.ZERO) > 0) {
+        // IVA-incluido: taxAmount = lineNet * rate / (100 + rate)
+        taxAmount =
+            lineNet
+                .multiply(taxRate)
+                .divide(BigDecimal.valueOf(100).add(taxRate), 4, RoundingMode.HALF_UP);
+      }
+      line.setTaxAmount(taxAmount);
+
+      subtotal = subtotal.add(lineNet);
       invoice.getLines().add(line);
     }
     invoice.setSubtotal(subtotal.setScale(2, RoundingMode.HALF_UP));
@@ -382,7 +433,11 @@ public class InvoiceService {
                         l.getDescription(),
                         l.getQuantity(),
                         l.getUnitPrice(),
-                        l.getLineTotal()))
+                        l.getDiscountType() != null ? l.getDiscountType().name() : null,
+                        l.getDiscountValue(),
+                        l.getLineTotal(),
+                        l.getTaxRate(),
+                        l.getTaxAmount()))
             .collect(Collectors.toList());
 
     List<InvoicePaymentAllocationResponse> payments =

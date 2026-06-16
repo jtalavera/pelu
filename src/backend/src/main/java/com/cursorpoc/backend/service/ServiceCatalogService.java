@@ -2,9 +2,11 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
+import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
+import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.ServiceCategoryResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryUpsertRequest;
@@ -30,14 +32,17 @@ public class ServiceCatalogService {
   private final TenantRepository tenantRepository;
   private final ServiceCategoryRepository serviceCategoryRepository;
   private final SalonServiceRepository salonServiceRepository;
+  private final TaxRepository taxRepository;
 
   public ServiceCatalogService(
       TenantRepository tenantRepository,
       ServiceCategoryRepository serviceCategoryRepository,
-      SalonServiceRepository salonServiceRepository) {
+      SalonServiceRepository salonServiceRepository,
+      TaxRepository taxRepository) {
     this.tenantRepository = tenantRepository;
     this.serviceCategoryRepository = serviceCategoryRepository;
     this.salonServiceRepository = salonServiceRepository;
+    this.taxRepository = taxRepository;
   }
 
   public List<ServiceCategoryResponse> listCategories(long tenantId, Boolean active) {
@@ -115,9 +120,11 @@ public class ServiceCatalogService {
     if (!category.isActive()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
+    Tax tax = request.taxId() != null ? loadTaxOrThrow(tenantId, request.taxId()) : null;
     SalonService s = new SalonService();
     s.setTenant(tenant);
     s.setCategory(category);
+    s.setTax(tax);
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
@@ -134,7 +141,9 @@ public class ServiceCatalogService {
     if (!category.isActive()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
+    Tax tax = request.taxId() != null ? loadTaxOrThrow(tenantId, request.taxId()) : null;
     s.setCategory(category);
+    s.setTax(tax);
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
@@ -180,16 +189,26 @@ public class ServiceCatalogService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND"));
   }
 
+  private Tax loadTaxOrThrow(long tenantId, long taxId) {
+    return taxRepository
+        .findByIdAndTenant_Id(taxId, tenantId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TAX_NOT_FOUND"));
+  }
+
   private static ServiceCategoryResponse toCategoryResponse(ServiceCategory c) {
     return new ServiceCategoryResponse(c.getId(), c.getName(), c.isActive(), c.getAccentKey());
   }
 
   private static ServiceResponse toServiceResponse(SalonService s) {
+    Tax tax = s.getTax();
     return new ServiceResponse(
         s.getId(),
         s.getCategory().getId(),
         s.getCategory().getName(),
         s.getCategory().getAccentKey(),
+        tax != null ? tax.getId() : null,
+        tax != null ? tax.getName() : null,
+        tax != null ? tax.getRate() : null,
         s.getName(),
         s.getPriceMinor(),
         s.getDurationMinutes(),

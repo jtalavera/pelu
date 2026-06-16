@@ -150,7 +150,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
 
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
 
-    const row = page.getByRole("row").filter({ hasText: name }).first();
+    const row = page.locator("tr").filter({ hasText: name }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
     await page.getByRole("menuitem", { name: "Edit details and photo" }).click();

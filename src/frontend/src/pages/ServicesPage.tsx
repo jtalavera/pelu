@@ -36,6 +36,13 @@ type ServiceCategory = {
   active: boolean;
   accentKey: string;
 };
+type Tax = {
+  id: number;
+  name: string;
+  rate: number;
+  active: boolean;
+};
+
 type SalonService = {
   id: number;
   categoryId: number;
@@ -45,6 +52,9 @@ type SalonService = {
   priceMinor: string | number;
   durationMinutes: number;
   active: boolean;
+  taxId?: number | null;
+  taxName?: string | null;
+  taxRate?: number | null;
 };
 
 type ServicesDeactivateTarget =
@@ -70,6 +80,7 @@ export default function ServicesPage() {
 
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<SalonService[]>([]);
+  const [taxes, setTaxes] = useState<Tax[]>([]);
 
   const [categoryFilterId, setCategoryFilterId] = useState<string>("all");
   /** Client-side quick filter: list order is always active first when "all". */
@@ -87,6 +98,7 @@ export default function ServicesPage() {
   const [serviceEditing, setServiceEditing] = useState<SalonService | null>(null);
   const [serviceName, setServiceName] = useState("");
   const [serviceCategoryId, setServiceCategoryId] = useState<string>("");
+  const [serviceTaxId, setServiceTaxId] = useState<string>("");
   const [servicePrice, setServicePrice] = useState("");
   const [serviceDuration, setServiceDuration] = useState("");
   const [serviceFieldError, setServiceFieldError] = useState<{
@@ -112,16 +124,25 @@ export default function ServicesPage() {
     );
   }, [categories, serviceEditing]);
 
+  /** Active taxes plus the currently assigned tax when editing. */
+  const serviceTaxSelectOptions = useMemo(() => {
+    return taxes.filter(
+      (tx) => tx.active || (serviceEditing?.taxId != null && tx.id === serviceEditing.taxId),
+    );
+  }, [taxes, serviceEditing]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [cats, svcs] = await Promise.all([
+      const [cats, svcs, txs] = await Promise.all([
         femmeJson<ServiceCategory[]>("/api/service-categories"),
         femmeJson<SalonService[]>("/api/services"),
+        femmeJson<Tax[]>("/api/taxes"),
       ]);
       setCategories(Array.isArray(cats) ? cats : []);
       setServices(Array.isArray(svcs) ? svcs : []);
+      setTaxes(Array.isArray(txs) ? txs : []);
     } catch {
       setError(t("femme.services.loadError"));
     } finally {
@@ -132,6 +153,14 @@ export default function ServicesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // When taxes finish loading while a new-service dialog is already open, auto-select first active tax
+  useEffect(() => {
+    if (serviceModalOpen && !serviceEditing && serviceTaxId === "" && taxes.length > 0) {
+      const firstActiveTax = taxes.find((tx) => tx.active);
+      if (firstActiveTax) setServiceTaxId(String(firstActiveTax.id));
+    }
+  }, [taxes, serviceModalOpen, serviceEditing, serviceTaxId]);
 
   function handleCategoryPill(val: string) {
     setCategoryFilterId(val);
@@ -195,9 +224,11 @@ export default function ServicesPage() {
   }
 
   function openNewService() {
+    const firstActiveTax = taxes.find((tx) => tx.active);
     setServiceEditing(null);
     setServiceName("");
     setServiceCategoryId(activeCategories[0]?.id ? String(activeCategories[0].id) : "");
+    setServiceTaxId(firstActiveTax ? String(firstActiveTax.id) : "");
     setServicePrice("");
     setServiceDuration("");
     setServiceFieldError(null);
@@ -229,6 +260,7 @@ export default function ServicesPage() {
         categoryId: Number(categoryId),
         priceMinor: price,
         durationMinutes: duration,
+        taxId: serviceTaxId ? Number(serviceTaxId) : null,
       };
       if (serviceEditing) {
         await femmePutJson<SalonService>(`/api/services/${serviceEditing.id}`, payload);
@@ -369,6 +401,7 @@ export default function ServicesPage() {
     setServiceEditing(s);
     setServiceName(s.name);
     setServiceCategoryId(String(s.categoryId));
+    setServiceTaxId(s.taxId != null ? String(s.taxId) : "");
     const priceVal =
       typeof s.priceMinor === "number"
         ? s.priceMinor
@@ -547,6 +580,8 @@ export default function ServicesPage() {
               placeholder={t("femme.services.services.searchInlinePlaceholder")}
               resultCount={servicesTextFiltered.length}
               totalCount={displayedServices.length}
+              maxWidth={480}
+              style={{ flex: 1 }}
             />
             <div data-tour="services-filters" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {filterOptions.map((o) => (
@@ -1193,6 +1228,22 @@ export default function ServicesPage() {
               ))}
             </Select>
             <FieldValidationError id="svc-cat-err">{serviceFieldError?.categoryId}</FieldValidationError>
+          </div>
+
+          <div>
+            <Label htmlFor="svc-tax">{t("femme.services.services.tax")}</Label>
+            <Select
+              id="svc-tax"
+              value={serviceTaxId}
+              onChange={(e) => setServiceTaxId(e.target.value)}
+            >
+              <option value="">{t("femme.services.services.taxPlaceholder")}</option>
+              {serviceTaxSelectOptions.map((tx) => (
+                <option key={tx.id} value={String(tx.id)}>
+                  {tx.name} ({tx.rate}%)
+                </option>
+              ))}
+            </Select>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

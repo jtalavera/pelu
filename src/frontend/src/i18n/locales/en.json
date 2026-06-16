@@ -79,7 +79,7 @@
     "appName": "Femme",
     "login": {
       "title": "Sign in",
-      "subtitle": "Use your administrator email and password.",
+      "subtitle": "Enter your system email and password.",
       "email": "Email",
       "password": "Password",
       "submit": "Sign in",
@@ -195,7 +195,35 @@
       "pageSubtitle": "Business data, fiscal stamp (timbrado), and preferences",
       "tabBusiness": "Business",
       "tabFiscalStamp": "Timbrado",
+      "tabTaxes": "Taxes",
       "tabFeatureFlags": "Feature flags"
+    },
+    "taxes": {
+      "pageTitle": "Taxes",
+      "pageSubtitle": "Configure tax types applied to services.",
+      "loading": "Loading taxes…",
+      "loadError": "Could not load taxes.",
+      "saveError": "Could not save. Check the data and try again.",
+      "errorTitle": "Error",
+      "saving": "Saving…",
+      "addNew": "+ New tax",
+      "addTitle": "New tax",
+      "editTitle": "Edit tax",
+      "name": "Name",
+      "nameRequired": "Enter a tax name.",
+      "rate": "Rate (%)",
+      "rateInvalid": "Enter a valid percentage between 0 and 100 (e.g. 10).",
+      "colName": "Name",
+      "colRate": "Rate",
+      "colStatus": "Status",
+      "deactivate": "Deactivate",
+      "activate": "Reactivate",
+      "deactivateDialogTitle": "Deactivate tax",
+      "deactivateDialogDescription": "\"{{name}}\" will be deactivated. Existing services using this tax are not modified.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "emptyTitle": "No taxes configured.",
+      "emptyBody": "Create a tax to assign it to services."
     },
     "featureFlags": {
       "title": "Feature flags",
@@ -373,6 +401,10 @@
         "lineUnitPricePlaceholder": "0",
         "lineUnitPriceInvalid": "Enter a valid price ≥ 0 (use thousands separator, e.g. 25.000).",
         "lineTotal": "Total",
+        "lineDiscountToggle": "Item discount",
+        "lineDiscountType": "Type",
+        "lineDiscountValue": "Discount",
+        "lineNetTotal": "Net total",
         "discountSection": "Discount",
         "discountType": "Discount type",
         "discountTypeNone": "None",
@@ -726,7 +758,9 @@
         "emptyBody": "Create a service to use it in appointments and invoices.",
         "separatorInactive": "Inactive",
         "searchInlinePlaceholder": "Search by name or category…",
-        "openEdit": "Edit service {{name}}"
+        "openEdit": "Edit service {{name}}",
+        "tax": "Tax type",
+        "taxPlaceholder": "No tax"
       }
     },
     "professionals": {
@@ -747,6 +781,7 @@
       "addTitle": "New professional",
       "editTitle": "Edit professional",
       "searchInlinePlaceholder": "Search by name or email…",
+      "openEdit": "Edit professional {{name}}",
       "edit": "Edit",
       "deactivate": "Deactivate",
       "dayOff": "Day off",
@@ -896,7 +931,9 @@
           "professionalRequired": "Professional is required.",
           "serviceRequired": "Service is required.",
           "startInPast": "The appointment date and time must be in the future. Choose a later date or time (e.g. tomorrow 09:00)."
-        }
+        },
+        "availabilityWarningDayOff": "The professional is not available on that day. You can still book, but please review the schedule.",
+        "availabilityWarningOutsideHours": "The selected time is outside the professional's available hours ({{start}}–{{end}}). You can still book."
       },
       "cancelDialog": {
         "title": "Cancel appointment",

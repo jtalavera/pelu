@@ -11,6 +11,8 @@ export type FemmeTourStepDef = {
   placement?: Placement;
   /** Roles that should see this step. Omit to show to all roles. */
   roles?: Array<"ADMIN" | "PROFESSIONAL">;
+  /** Runs before the step is shown; tour waits for the promise to resolve. */
+  before?: () => Promise<void>;
 };
 
 function buildJoyrideSteps(
@@ -25,6 +27,7 @@ function buildJoyrideSteps(
       title: t(d.titleKey),
       content: t(d.contentKey),
       placement: d.placement ?? "auto",
+      ...(d.before ? { before: d.before } : {}),
     }));
 }
 

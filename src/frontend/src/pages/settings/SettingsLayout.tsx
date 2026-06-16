@@ -57,6 +57,9 @@ export default function SettingsLayout() {
           <NavLink to="/app/settings/fiscal-stamp" className={navClass}>
             {t("femme.settings.tabFiscalStamp")}
           </NavLink>
+          <NavLink to="/app/settings/taxes" className={navClass}>
+            {t("femme.settings.tabTaxes")}
+          </NavLink>
           {isSystemAdmin ? (
             <NavLink to="/app/settings/feature-flags" className={navClass}>
               {t("femme.settings.tabFeatureFlags")}

@@ -13,6 +13,7 @@ public interface SalonServiceRepository extends JpaRepository<SalonService, Long
       """
       SELECT s FROM SalonService s
       JOIN FETCH s.category c
+      LEFT JOIN FETCH s.tax t
       WHERE s.tenant.id = :tenantId
       ORDER BY s.name ASC
       """)
