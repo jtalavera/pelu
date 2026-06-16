@@ -5,3 +5,4 @@ subscription_id = "b191253e-4567-44c8-971a-a973a9283ccf"
 location              = "eastus2"
 sql_server_location   = "westeurope"
 name_prefix           = "cursortest"
+backend_min_replicas  = 1
