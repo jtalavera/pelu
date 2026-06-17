@@ -95,6 +95,21 @@ const sectionTitleStyle: React.CSSProperties = {
   borderBottom: "var(--border-default)",
 };
 
+// HU-29 AC9: visually separate the "current stamp" info from the "new stamp"
+// form by enclosing each in its own bordered card.
+const sectionCardStyle: React.CSSProperties = {
+  border: "var(--border-default)",
+  borderRadius: "var(--radius-xl)",
+  padding: 16,
+  marginBottom: 16,
+  background: "var(--color-white)",
+};
+
+const createSectionCardStyle: React.CSSProperties = {
+  ...sectionCardStyle,
+  background: "var(--color-stone)",
+};
+
 function buildInputStyle(hasError: boolean, focused: boolean): React.CSSProperties {
   const base: React.CSSProperties = {
     padding: "8px 11px",
@@ -365,7 +380,14 @@ export default function FiscalStampSettingsPage() {
         </Alert>
       ) : null}
 
-      <div data-tour="fiscal-stamp-header">
+      <section
+        data-tour="fiscal-stamp-header"
+        data-testid="fiscal-stamp-current-section"
+        style={sectionCardStyle}
+      >
+      <div style={{ ...sectionTitleStyle, marginTop: 0 }}>
+        {t("femme.fiscalStamp.currentSectionTitle")}
+      </div>
       {activeRow ? (
         <>
           <ActiveStampCard row={activeRow} />
@@ -389,8 +411,10 @@ export default function FiscalStampSettingsPage() {
         <Text variant="muted" style={{ marginBottom: 14 }}>
           {t("femme.fiscalStamp.empty")}
         </Text>
-      ) : null}
-      </div>
+      ) : (
+        <Text variant="muted">{t("femme.fiscalStamp.noActiveStamp")}</Text>
+      )}
+      </section>
 
       {otherRows.length > 0 ? (
         <div data-tour="fiscal-stamp-list" style={{ marginBottom: 16 }}>
@@ -470,7 +494,8 @@ export default function FiscalStampSettingsPage() {
         </div>
       ) : null}
 
-      <div style={sectionTitleStyle}>{t("femme.fiscalStamp.addTitle")}</div>
+      <section data-testid="fiscal-stamp-create-section" style={createSectionCardStyle}>
+      <div style={{ ...sectionTitleStyle, marginTop: 0 }}>{t("femme.fiscalStamp.addTitle")}</div>
       <form
         data-tour="fiscal-stamp-form"
         onSubmit={onCreate}
@@ -615,6 +640,7 @@ export default function FiscalStampSettingsPage() {
           </button>
         </div>
       </form>
+      </section>
 
       {editingId !== null ? (
         <div

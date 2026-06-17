@@ -24,6 +24,7 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import org.hibernate.Hibernate;
@@ -55,6 +56,15 @@ public class InvoicePdfService {
   private static final float MARGIN_X_PT = cmToPt(0.35f);
   private static final float BODY_PT = 8f;
   private static final float TABLE_PT = 7.5f;
+
+  // HU-29 AC5/AC6: the detail table has three equal-width tax columns —
+  // Exenta (leftmost), IVA 5 %, and IVA 10 % (rightmost). The IVA 10 % column
+  // keeps its historical right-edge anchor (x10 + 0.85 cm = 9.90 cm from the
+  // panel origin); IVA 5 % and Exenta are placed one and two column widths to
+  // its left. The width is an estimate — tune against the physical pre-printed
+  // form if amounts don't line up with the printed column boxes.
+  private static final float TAX_COL_WIDTH_CM = 1.5f;
+  private static final float TAX_COL_10_ANCHOR_CM = 9.9f;
 
   private final BusinessProfileRepository businessProfileRepository;
   private final InvoiceRepository invoiceRepository;
@@ -204,24 +214,31 @@ public class InvoicePdfService {
     float xPu = ox + cmToPt(6.35f);
     float x10 = ox + cmToPt(9.05f);
 
-    List<InvoiceLine> lines = invoice.getLines();
     int maxRows = 11;
     float yRow = tableTop - rowH * 1.15f;
     cb.setFontAndSize(bf, TABLE_PT);
     int row = 0;
-    for (InvoiceLine line : lines) {
+    for (DetailRow dr : buildDetailRows(invoice)) {
       if (row >= maxRows) {
         break;
       }
-      String desc = lineDescriptionForPrint(line);
       cb.beginText();
-      cb.showTextAligned(
-          Element.ALIGN_RIGHT, String.valueOf(line.getQuantity()), xCant + cmToPt(0.65f), yRow, 0);
-      cb.showTextAligned(Element.ALIGN_LEFT, truncate(desc, 36), xDesc, yRow, 0);
-      cb.showTextAligned(
-          Element.ALIGN_RIGHT, formatMoneyGs(line.getUnitPrice()), xPu + cmToPt(1.35f), yRow, 0);
-      cb.showTextAligned(
-          Element.ALIGN_RIGHT, formatMoneyGs(line.getLineTotal()), x10 + cmToPt(0.85f), yRow, 0);
+      if (dr.quantity() != null) {
+        cb.showTextAligned(
+            Element.ALIGN_RIGHT, String.valueOf(dr.quantity()), xCant + cmToPt(0.65f), yRow, 0);
+      }
+      cb.showTextAligned(Element.ALIGN_LEFT, truncate(dr.description(), 36), xDesc, yRow, 0);
+      if (dr.unitPrice() != null) {
+        cb.showTextAligned(
+            Element.ALIGN_RIGHT, formatMoneyGs(dr.unitPrice()), xPu + cmToPt(1.35f), yRow, 0);
+      }
+      for (int c = 0; c < 3; c++) {
+        BigDecimal amount = dr.columnAmounts()[c];
+        if (amount != null) {
+          cb.showTextAligned(
+              Element.ALIGN_RIGHT, formatSignedMoneyGs(amount), taxColumnAnchorX(ox, c), yRow, 0);
+        }
+      }
       cb.endText();
       yRow -= rowH;
       row++;
@@ -240,28 +257,22 @@ public class InvoicePdfService {
         yPartial,
         0);
 
-    if (invoice.getDiscountType() != null
-        && invoice.getDiscountType() != DiscountType.NONE
-        && invoice.getDiscountValue() != null
-        && invoice.getDiscountValue().compareTo(BigDecimal.ZERO) > 0) {
-      cb.showTextAligned(
-          Element.ALIGN_LEFT,
-          "Dto. "
-              + discountLabel(invoice.getDiscountType())
-              + ": "
-              + formatMoneyGs(invoice.getDiscountValue()),
-          ox,
-          yPartial - cmToPt(0.42f),
-          0);
-    }
+    // HU-29 AC6: per-item and global discounts are now printed as dedicated
+    // detail rows (above), so the old single discount label here is gone.
 
     cb.setFontAndSize(bfBold, 9f);
     cb.showTextAligned(
         Element.ALIGN_RIGHT, formatMoneyGs(invoice.getTotal()), x10 + cmToPt(0.85f), yTotal, 0);
 
+    // IVA liquidation: 10 % in its column, 5 % in the column to its left.
     cb.setFontAndSize(bf, 7f);
     BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
-    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva10), x10 + cmToPt(0.85f), yIva, 0);
+    BigDecimal iva5 = computeIvaByRate(invoice, BigDecimal.valueOf(5));
+    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva10), taxColumnAnchorX(ox, 2), yIva, 0);
+    if (iva5.compareTo(BigDecimal.ZERO) > 0) {
+      cb.showTextAligned(
+          Element.ALIGN_RIGHT, formatMoneyGs(iva5), taxColumnAnchorX(ox, 1), yIva, 0);
+    }
     cb.endText();
 
     // --- Payments (small, under totals) ---
@@ -305,6 +316,156 @@ public class InvoicePdfService {
       case FIXED -> "Gs.";
       case NONE -> "";
     };
+  }
+
+  /**
+   * A single line printed in the detail table. {@code quantity}/{@code unitPrice} are non-null only
+   * for item rows; {@code columnAmounts} holds the amount per tax column (index 0 = Exenta, 1 = IVA
+   * 5 %, 2 = IVA 10 %), with {@code null} for empty columns and negative values for discounts.
+   */
+  record DetailRow(
+      Integer quantity, String description, BigDecimal unitPrice, BigDecimal[] columnAmounts) {}
+
+  /** Tax column index for a line's snapshot rate: 2 = IVA 10 %, 1 = IVA 5 %, 0 = Exenta/other. */
+  static int taxColumnIndex(BigDecimal taxRate) {
+    if (taxRate == null) {
+      return 0;
+    }
+    if (taxRate.compareTo(BigDecimal.valueOf(10)) == 0) {
+      return 2;
+    }
+    if (taxRate.compareTo(BigDecimal.valueOf(5)) == 0) {
+      return 1;
+    }
+    return 0;
+  }
+
+  /** Right-edge X (absolute) where amounts in tax column {@code col} are right-aligned. */
+  private static float taxColumnAnchorX(float ox, int col) {
+    float fromTenColumnCm = (2 - col) * TAX_COL_WIDTH_CM;
+    return ox + cmToPt(TAX_COL_10_ANCHOR_CM - fromTenColumnCm);
+  }
+
+  /**
+   * Builds the detail rows for the PDF (HU-29 AC5/AC6): each item prints its gross total in its tax
+   * column; a per-item discount adds a second row with the negative discount in the same column; a
+   * global discount adds one final row distributing the negative discount across the tax columns in
+   * proportion to each column's net subtotal.
+   */
+  static List<DetailRow> buildDetailRows(Invoice invoice) {
+    List<DetailRow> rows = new ArrayList<>();
+    if (invoice.getLines() == null) {
+      return rows;
+    }
+    BigDecimal[] netByColumn = {BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
+    for (InvoiceLine line : invoice.getLines()) {
+      int col = taxColumnIndex(line.getTaxRate());
+      BigDecimal gross = line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity()));
+      BigDecimal[] amounts = new BigDecimal[3];
+      amounts[col] = gross;
+      rows.add(
+          new DetailRow(
+              line.getQuantity(), lineDescriptionForPrint(line), line.getUnitPrice(), amounts));
+
+      BigDecimal net = line.getLineTotal() != null ? line.getLineTotal() : gross;
+      netByColumn[col] = netByColumn[col].add(net);
+
+      BigDecimal discount = gross.subtract(net);
+      if (line.getDiscountType() != null
+          && line.getDiscountType() != DiscountType.NONE
+          && discount.compareTo(BigDecimal.ZERO) > 0) {
+        BigDecimal[] discAmounts = new BigDecimal[3];
+        discAmounts[col] = discount.negate();
+        rows.add(
+            new DetailRow(
+                null,
+                lineDescriptionForPrint(line)
+                    + " "
+                    + lineDiscountDescription(line.getDiscountType(), line.getDiscountValue()),
+                null,
+                discAmounts));
+      }
+    }
+
+    // Global (invoice-level) discount: subtotal is the net-of-item-discounts sum.
+    BigDecimal globalDiscount =
+        invoice.getSubtotal() != null && invoice.getTotal() != null
+            ? invoice.getSubtotal().subtract(invoice.getTotal())
+            : BigDecimal.ZERO;
+    if (invoice.getDiscountType() != null
+        && invoice.getDiscountType() != DiscountType.NONE
+        && globalDiscount.compareTo(BigDecimal.ZERO) > 0) {
+      BigDecimal[] split = distributeGlobalDiscount(globalDiscount, netByColumn);
+      rows.add(
+          new DetailRow(
+              null,
+              "Dto. global "
+                  + lineDiscountDescription(invoice.getDiscountType(), invoice.getDiscountValue()),
+              null,
+              split));
+    }
+    return rows;
+  }
+
+  /** "Dto. 10%" for PERCENT, "Dto. 25.000 Gs." for FIXED. */
+  private static String lineDiscountDescription(DiscountType type, BigDecimal value) {
+    if (value == null) {
+      return "Dto.";
+    }
+    return switch (type) {
+      case PERCENT -> "Dto. " + value.stripTrailingZeros().toPlainString() + "%";
+      case FIXED -> "Dto. " + formatMoneyGs(value) + " Gs.";
+      case NONE -> "Dto.";
+    };
+  }
+
+  /**
+   * Distributes a positive {@code globalDiscount} (in whole guaraníes) across the three tax columns
+   * proportionally to each column's net subtotal, returning negative amounts. Any rounding
+   * remainder is added to the largest contributing column so the parts sum exactly to the discount.
+   */
+  static BigDecimal[] distributeGlobalDiscount(
+      BigDecimal globalDiscount, BigDecimal[] netByColumn) {
+    BigDecimal discount = globalDiscount.setScale(0, RoundingMode.HALF_UP);
+    BigDecimal totalNet = netByColumn[0].add(netByColumn[1]).add(netByColumn[2]);
+    BigDecimal[] out = new BigDecimal[3];
+    if (totalNet.compareTo(BigDecimal.ZERO) <= 0) {
+      return out;
+    }
+    BigDecimal allocated = BigDecimal.ZERO;
+    int largestCol = -1;
+    for (int i = 0; i < 3; i++) {
+      if (netByColumn[i].compareTo(BigDecimal.ZERO) > 0) {
+        BigDecimal part =
+            discount.multiply(netByColumn[i]).divide(totalNet, 0, RoundingMode.HALF_UP);
+        out[i] = part;
+        allocated = allocated.add(part);
+        if (largestCol < 0 || netByColumn[i].compareTo(netByColumn[largestCol]) > 0) {
+          largestCol = i;
+        }
+      }
+    }
+    BigDecimal remainder = discount.subtract(allocated);
+    if (largestCol >= 0 && remainder.compareTo(BigDecimal.ZERO) != 0) {
+      out[largestCol] = out[largestCol].add(remainder);
+    }
+    for (int i = 0; i < 3; i++) {
+      if (out[i] != null) {
+        out[i] = out[i].negate();
+      }
+    }
+    return out;
+  }
+
+  /** Money with an explicit leading minus for negatives (e.g. "-25.000"). */
+  private static String formatSignedMoneyGs(BigDecimal v) {
+    if (v == null) {
+      return "0";
+    }
+    if (v.compareTo(BigDecimal.ZERO) < 0) {
+      return "-" + formatMoneyGs(v.abs());
+    }
+    return formatMoneyGs(v);
   }
 
   /**

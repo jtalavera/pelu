@@ -27,6 +27,7 @@ import {
   categoryAccentStyle,
 } from "../util/categoryAccent";
 import { formatGuaraniesGs } from "../lib/formatMoney";
+import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyInputMask";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -61,13 +62,6 @@ type ServicesDeactivateTarget =
   | { kind: "category"; item: ServiceCategory }
   | { kind: "service"; item: SalonService }
   | null;
-
-function normalizeMoneyInput(raw: string) {
-  const s = raw.trim().replace(",", ".");
-  const v = Number(s);
-  if (!Number.isFinite(v) || v < 0) return null;
-  return v;
-}
 
 export default function ServicesPage() {
   const { t } = useTranslation();
@@ -241,7 +235,7 @@ export default function ServicesPage() {
     setServiceSaveError(null);
     const nameTrim = serviceName.trim();
     const categoryId = serviceCategoryId.trim();
-    const price = normalizeMoneyInput(servicePrice);
+    const price = moneyDigitsOnly(servicePrice) ? parseMaskedMoney(servicePrice) : null;
     const duration = Number(serviceDuration.trim());
     const nextErr: NonNullable<typeof serviceFieldError> = {};
     if (!nameTrim) nextErr.name = t("femme.services.services.nameRequired");
@@ -406,7 +400,7 @@ export default function ServicesPage() {
       typeof s.priceMinor === "number"
         ? s.priceMinor
         : Number(String(s.priceMinor ?? "").trim());
-    setServicePrice(Number.isFinite(priceVal) ? String(priceVal) : "");
+    setServicePrice(Number.isFinite(priceVal) ? maskMoneyInput(String(priceVal)) : "");
     setServiceDuration(String(s.durationMinutes));
     setServiceFieldError(null);
     setServiceSaveError(null);
@@ -1251,9 +1245,9 @@ export default function ServicesPage() {
               <Label htmlFor="svc-price">{t("femme.services.services.price")}</Label>
               <Input
                 id="svc-price"
-                inputMode="decimal"
+                inputMode="numeric"
                 value={servicePrice}
-                onChange={(e) => setServicePrice(e.target.value)}
+                onChange={(e) => setServicePrice(maskMoneyInput(e.target.value))}
                 aria-invalid={serviceFieldError?.price ? "true" : "false"}
                 aria-describedby={serviceFieldError?.price ? "svc-price-err" : undefined}
               />

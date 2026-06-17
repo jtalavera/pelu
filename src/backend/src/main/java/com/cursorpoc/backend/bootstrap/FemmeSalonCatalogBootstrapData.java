@@ -67,14 +67,13 @@ public final class FemmeSalonCatalogBootstrapData {
   public static final List<ProfessionalRow> PROFESSIONALS =
       List.of(
           new ProfessionalRow("LUCIA ZYMANSCKI"),
-          new ProfessionalRow("ISABEL ZYMANSCKI"),
           new ProfessionalRow("MIRYAM LEÓN"),
           new ProfessionalRow("ARACELY AGÜERO"),
           new ProfessionalRow("ANA MARIA CACERES"),
           new ProfessionalRow("MARTHA MARTINEZ CANTERO"),
           new ProfessionalRow("JORGELINA AGÜERO"),
           new ProfessionalRow("CONCEPCION VALDEZ"),
-          new ProfessionalRow("MERCEDES AQUINO"),
+          new ProfessionalRow("GABRIELA"),
           new ProfessionalRow("LUCIA VALENZUELA"),
           new ProfessionalRow("ROSSANA MIGUELINA ENCISO"),
           new ProfessionalRow("NORMA LEIVA"),

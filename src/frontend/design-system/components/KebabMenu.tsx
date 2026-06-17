@@ -1,11 +1,14 @@
 import {
+  useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
 
 export type KebabMenuItem = {
@@ -47,24 +50,69 @@ export function KebabMenu({
   const menuId = id ? `${id}-menu` : `kebab-${generatedId}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  // Fixed-position coordinates of the open menu, anchored under the trigger.
+  // The menu is rendered in a portal on document.body so that table containers
+  // with `overflow-x-auto` cannot clip it; it overlays the table instead.
+  const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
+
+  const updatePosition = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPosition({
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+  }, []);
 
   useEffect(() => {
     function onDocMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+      const target = e.target as Node;
+      if (
+        containerRef.current?.contains(target) ||
+        menuRef.current?.contains(target)
+      ) {
+        return;
       }
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDocMouseDown);
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
 
-  useEffect(() => {
-    if (open) {
-      const first = itemRefs.current.find(Boolean);
-      first?.focus();
+  // Keep the portalled menu anchored to the trigger while open; close on scroll
+  // of an ancestor (e.g. the table's overflow container) to avoid a detached
+  // floating menu.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
     }
-  }, [open]);
+    updatePosition();
+    // Keep the menu anchored to the trigger while open: reposition on resize and
+    // on scroll of any ancestor (capture phase) instead of closing it.
+    function reposition() {
+      updatePosition();
+    }
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    // The menu only renders once `position` is computed (it lives in a portal),
+    // so focus the first item after that commit — not merely when `open` flips.
+    if (open && position) {
+      const first = itemRefs.current.find(Boolean);
+      // preventScroll: focusing must not scroll the page (which would otherwise
+      // fire the scroll handler below and reposition the just-opened menu).
+      first?.focus({ preventScroll: true });
+    }
+  }, [open, position]);
 
   function handleTriggerKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
     if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
@@ -133,16 +181,19 @@ export function KebabMenu({
           <circle cx="8" cy="13" r="1.4" />
         </svg>
       </button>
-      {open ? (
-        <ul
-          id={menuId}
-          role="menu"
-          aria-label={triggerAriaLabel}
-          className={cn(
-            "absolute right-0 z-50 mt-1 min-w-[12rem] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg",
-            "dark:border-slate-700 dark:bg-slate-900",
-          )}
-        >
+      {open && position
+        ? createPortal(
+            <ul
+              ref={menuRef}
+              id={menuId}
+              role="menu"
+              aria-label={triggerAriaLabel}
+              style={{ top: position.top, right: position.right }}
+              className={cn(
+                "fixed z-50 min-w-[12rem] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg",
+                "dark:border-slate-700 dark:bg-slate-900",
+              )}
+            >
           {items.map((item, idx) => (
             <li key={item.id} role="none">
               <button
@@ -173,8 +224,10 @@ export function KebabMenu({
               </button>
             </li>
           ))}
-        </ul>
-      ) : null}
+            </ul>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

@@ -29,7 +29,7 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatDecimalGs, formatGuaraniesGs } from "../lib/formatMoney";
-import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
+import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -826,6 +826,7 @@ function NewInvoiceTab({
   }, []);
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
+  const [discountValueError, setDiscountValueError] = useState<string | null>(null);
   const [lines, setLines] = useState<InvoiceLineForm[]>([
     {
       serviceId: "",
@@ -861,19 +862,33 @@ function NewInvoiceTab({
     }
   }
 
-  // Computed totals
-  const subtotal = lines.reduce((acc, l) => {
-    const qty = parseFloat(l.quantity) || 0;
-    const price = parseMaskedMoney(l.unitPrice);
-    return acc + qty * price;
-  }, 0);
+  // Computed totals — mirror the backend math in InvoiceService.issueInvoice so
+  // the displayed Total equals the value payments must sum to:
+  //   gross line totals → per-item discounts → net subtotal → global discount.
+  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const lineGross = (l: InvoiceLineForm) =>
+    (parseFloat(l.quantity) || 0) * parseMaskedMoney(l.unitPrice);
+  const lineDiscountAmount = (l: InvoiceLineForm) => {
+    if (!l.discountEnabled || !l.discountValue) return 0;
+    const gross = lineGross(l);
+    const dv = parseFloat(l.discountValue.replace(",", ".")) || 0;
+    if (l.discountType === "PERCENT") return round2((gross * dv) / 100);
+    return Math.min(round2(dv), gross);
+  };
 
-  let discountAmount = 0;
+  // Subtotal shown to the user is the gross sum (before any discount); the
+  // combined Descuento line reflects per-item + global discounts (AC3).
+  const subtotal = lines.reduce((acc, l) => acc + lineGross(l), 0);
+  const perItemDiscountTotal = lines.reduce((acc, l) => acc + lineDiscountAmount(l), 0);
+  const netSubtotal = Math.max(0, subtotal - perItemDiscountTotal);
+
+  let globalDiscount = 0;
   if (discountType === "FIXED") {
-    discountAmount = Math.min(parseFloat(discountValue) || 0, subtotal);
+    globalDiscount = Math.min(parseFloat(discountValue) || 0, netSubtotal);
   } else if (discountType === "PERCENT") {
-    discountAmount = (subtotal * (parseFloat(discountValue) || 0)) / 100;
+    globalDiscount = round2((netSubtotal * (parseFloat(discountValue) || 0)) / 100);
   }
+  const discountAmount = perItemDiscountTotal + globalDiscount;
   const total = Math.max(0, subtotal - discountAmount);
 
   const assignedPayments = payments.reduce(
@@ -1047,10 +1062,31 @@ function NewInvoiceTab({
       if (!Number.isFinite(price) || price < 0 || l.unitPrice.trim() === "") {
         fieldErrs.unitPrice = t("femme.billing.invoice.lineUnitPriceInvalid");
       }
+      // AC4: per-item discount validations.
+      if (l.discountEnabled && l.discountValue.trim() !== "") {
+        const dv = parseFloat(l.discountValue.replace(",", ".")) || 0;
+        if (l.discountType === "PERCENT" && dv > 100) {
+          fieldErrs.discountValue = t("femme.billing.invoice.discountPercentTooHigh");
+        } else if (l.discountType === "FIXED" && dv > lineGross(l)) {
+          fieldErrs.discountValue = t("femme.billing.invoice.discountAmountTooHighLine");
+        }
+      }
       if (Object.keys(fieldErrs).length > 0) {
         newLineErrors[i] = fieldErrs;
       }
     });
+
+    // AC4: global discount validations.
+    let newDiscountValueError: string | null = null;
+    if (discountType !== "NONE" && discountValue.trim() !== "") {
+      const dv = parseFloat(discountValue.replace(",", ".")) || 0;
+      if (discountType === "PERCENT" && dv > 100) {
+        newDiscountValueError = t("femme.billing.invoice.discountPercentTooHigh");
+      } else if (discountType === "FIXED" && dv > netSubtotal) {
+        newDiscountValueError = t("femme.billing.invoice.discountAmountTooHighTotal");
+      }
+    }
+    setDiscountValueError(newDiscountValueError);
 
     if (payments.length === 0) {
       errors.push(t("femme.billing.invoice.paymentsRequired"));
@@ -1080,6 +1116,7 @@ function NewInvoiceTab({
     const ok =
       Object.keys(newLineErrors).length === 0 &&
       Object.keys(newPaymentErrors).length === 0 &&
+      newDiscountValueError === null &&
       errors.length === 0;
     return { ok, lineErrors: newLineErrors, paymentErrors: newPaymentErrors, globalErrors: errors };
   }
@@ -1101,6 +1138,7 @@ function NewInvoiceTab({
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
           if (validationResult.lineErrors[i]?.unitPrice) return `line-price-${i}`;
+          if (validationResult.lineErrors[i]?.discountValue) return `line-disc-val-${i}`;
         }
         for (let i = 0; i < payments.length; i++) {
           if (validationResult.paymentErrors[i]) return `pay-amount-${i}`;
@@ -1380,19 +1418,27 @@ function NewInvoiceTab({
                       lineErrors[idx]?.unitPrice ? `line-price-err-${idx}` : undefined
                     }
                   />
+                  <FieldValidationError id={`line-disc-amt-err-${idx}`}>
+                    {lineErrors[idx]?.discountValue}
+                  </FieldValidationError>
                   <FieldValidationError id={`line-price-err-${idx}`}>
                     {lineErrors[idx]?.unitPrice}
                   </FieldValidationError>
+                  {/* AC2: read-only item total with discount applied, shown only
+                      when this item has an active discount, highlighted in green. */}
+                  {line.discountEnabled && line.discountValue && (
+                    <p
+                      data-testid={`line-discounted-total-${idx}`}
+                      className="mt-1 text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
+                    >
+                      {t("femme.billing.invoice.lineDiscountedTotal")}:{" "}
+                      {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-9 sm:col-span-1 flex min-h-9 w-full items-end justify-center">
                   <span className="w-full text-center text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
-                    {(() => {
-                      const gross = (parseFloat(line.quantity) || 0) * parseMaskedMoney(line.unitPrice);
-                      if (!line.discountEnabled || !line.discountValue) return formatDecimalGs(gross);
-                      const dv = parseFloat(line.discountValue.replace(",", ".")) || 0;
-                      const disc = line.discountType === "PERCENT" ? gross * dv / 100 : dv;
-                      return formatDecimalGs(Math.max(0, gross - disc));
-                    })()}
+                    {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
                   </span>
                 </div>
                 <div className="col-span-3 sm:col-span-1 flex items-end justify-end">
@@ -1437,6 +1483,10 @@ function NewInvoiceTab({
                         onChange={(e) => updateLine(idx, "discountValue", e.target.value)}
                         placeholder={line.discountType === "PERCENT" ? "0" : "0"}
                         aria-label={t("femme.billing.invoice.lineDiscountValue")}
+                        aria-invalid={!!lineErrors[idx]?.discountValue}
+                        aria-describedby={
+                          lineErrors[idx]?.discountValue ? `line-disc-amt-err-${idx}` : undefined
+                        }
                         className="w-24"
                       />
                     </>
@@ -1487,10 +1537,18 @@ function NewInvoiceTab({
                   id="discount-value"
                   inputMode="decimal"
                   value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
+                  onChange={(e) => {
+                    setDiscountValue(e.target.value);
+                    setDiscountValueError(null);
+                  }}
                   placeholder="0"
                   className="mt-1 w-full"
+                  aria-invalid={!!discountValueError}
+                  aria-describedby={discountValueError ? "discount-value-err" : undefined}
                 />
+                <FieldValidationError id="discount-value-err">
+                  {discountValueError}
+                </FieldValidationError>
               </div>
             )}
           </div>
@@ -1647,6 +1705,7 @@ function CashSessionTab({
   const [todayLoading, setTodayLoading] = useState(false);
   const [sessionListQuery, setSessionListQuery] = useState("");
   const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const loadTodayInvoices = useCallback(async () => {
     if (!currentSession) {
@@ -1694,8 +1753,7 @@ function CashSessionTab({
     e.preventDefault();
     setOpenSuccess(false);
     setOpenError(null);
-    const trimmed = openingAmount.trim();
-    if (trimmed === "" || isNaN(Number(trimmed)) || Number(trimmed) < 0) {
+    if (moneyDigitsOnly(openingAmount) === "") {
       setAmountError(t("femme.billing.openingCashAmountInvalid"));
       return;
     }
@@ -1703,7 +1761,7 @@ function CashSessionTab({
     setSubmitting(true);
     try {
       await femmePostJson("/api/cash-sessions/open", {
-        openingCashAmount: Number(trimmed),
+        openingCashAmount: parseMaskedMoney(openingAmount),
       });
       setOpeningAmount("");
       setOpenSuccess(true);
@@ -1718,8 +1776,7 @@ function CashSessionTab({
   async function handleCloseSession(e: React.FormEvent) {
     e.preventDefault();
     setCloseError(null);
-    const trimmed = countedCash.trim();
-    if (trimmed === "" || isNaN(Number(trimmed)) || Number(trimmed) < 0) {
+    if (moneyDigitsOnly(countedCash) === "") {
       setCountedCashError(t("femme.billing.close.countedCashAmountInvalid"));
       return;
     }
@@ -1728,7 +1785,7 @@ function CashSessionTab({
     try {
       const result = await femmePostJson<CashSessionCloseResponse>(
         "/api/cash-sessions/close",
-        { countedCashAmount: Number(trimmed) },
+        { countedCashAmount: parseMaskedMoney(countedCash) },
       );
       setCloseResult(result);
       setShowCloseForm(false);
@@ -2014,10 +2071,10 @@ function CashSessionTab({
                   <Label htmlFor="opening-amount">{t("femme.billing.openingCashAmount")}</Label>
                   <Input
                     id="opening-amount"
-                    inputMode="decimal"
+                    inputMode="numeric"
                     value={openingAmount}
                     onChange={(e) => {
-                      setOpeningAmount(e.target.value);
+                      setOpeningAmount(maskMoneyInput(e.target.value));
                       setAmountError(null);
                       setOpenError(null);
                       setOpenSuccess(false);
@@ -2074,10 +2131,10 @@ function CashSessionTab({
               </Label>
               <Input
                 id="counted-cash"
-                inputMode="decimal"
+                inputMode="numeric"
                 value={countedCash}
                 onChange={(e) => {
-                  setCountedCash(e.target.value);
+                  setCountedCash(maskMoneyInput(e.target.value));
                   setCountedCashError(null);
                 }}
                 placeholder="0"
@@ -2176,12 +2233,13 @@ function CashSessionTab({
                 }}
               >
                 <colgroup>
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "26%" }} />
-                  <col style={{ width: "20%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "22%" }} />
+                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "13%" }} />
                   <col style={{ width: "12%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "10%" }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -2203,6 +2261,7 @@ function CashSessionTab({
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
                       {t("femme.billing.history.colStatus")}
                     </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -2252,6 +2311,16 @@ function CashSessionTab({
                         <td style={cell}>
                           <InvoiceStatusBadge status={inv.status} />
                         </td>
+                        <td style={{ ...cell, textAlign: "right" }}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            data-testid={`billing-today-view-${inv.id}`}
+                            onClick={() => setSelectedInvoiceId(inv.id)}
+                          >
+                            {t("femme.billing.history.viewDetail")}
+                          </Button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -2260,6 +2329,18 @@ function CashSessionTab({
             </div>
           )}
         </div>
+      )}
+
+      {selectedInvoiceId !== null && (
+        <InvoiceDetailModal
+          invoiceId={selectedInvoiceId}
+          onClose={() => setSelectedInvoiceId(null)}
+          onVoided={() => {
+            setSelectedInvoiceId(null);
+            void loadTodayInvoices();
+            onSessionChanged();
+          }}
+        />
       )}
     </div>
   );

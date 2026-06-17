@@ -157,6 +157,140 @@ class InvoicePdfServiceTest {
     assertThat(text).doesNotContain("Otro");
   }
 
+  // ─── HU-29 AC5/AC6: tax columns and discount lines ──────────────────────────
+
+  private static InvoiceLine line(
+      String desc,
+      int qty,
+      String unitPrice,
+      String taxRate,
+      DiscountType discType,
+      String discValue,
+      String lineTotal) {
+    InvoiceLine l = new InvoiceLine();
+    l.setDescription(desc);
+    l.setQuantity(qty);
+    l.setUnitPrice(new BigDecimal(unitPrice));
+    l.setTaxRate(taxRate == null ? null : new BigDecimal(taxRate));
+    l.setDiscountType(discType);
+    l.setDiscountValue(discValue == null ? null : new BigDecimal(discValue));
+    l.setLineTotal(new BigDecimal(lineTotal));
+    return l;
+  }
+
+  @Test
+  void taxColumnIndex_mapsRatesToColumns() {
+    assertThat(InvoicePdfService.taxColumnIndex(new BigDecimal("10.0000"))).isEqualTo(2);
+    assertThat(InvoicePdfService.taxColumnIndex(new BigDecimal("5.0000"))).isEqualTo(1);
+    assertThat(InvoicePdfService.taxColumnIndex(new BigDecimal("0.0000"))).isEqualTo(0);
+    assertThat(InvoicePdfService.taxColumnIndex(null)).isEqualTo(0);
+  }
+
+  /** AC5: each item's gross total lands in the column matching its tax rate. */
+  @Test
+  void buildDetailRows_placesGrossInTaxColumnByRate() {
+    InvoiceLine exenta = line("Exenta item", 2, "1000", "0", DiscountType.NONE, null, "2000");
+    InvoiceLine iva5 = line("IVA5 item", 1, "5000", "5", DiscountType.NONE, null, "5000");
+    InvoiceLine iva10 = line("IVA10 item", 3, "1000", "10", DiscountType.NONE, null, "3000");
+
+    Invoice invoice = mock(Invoice.class);
+    when(invoice.getLines()).thenReturn(List.of(exenta, iva5, iva10));
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("10000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("10000"));
+    when(invoice.getDiscountType()).thenReturn(DiscountType.NONE);
+
+    List<InvoicePdfService.DetailRow> rows = InvoicePdfService.buildDetailRows(invoice);
+    assertThat(rows).hasSize(3);
+    // Exenta → column 0
+    assertThat(rows.get(0).columnAmounts()[0]).isEqualByComparingTo("2000");
+    assertThat(rows.get(0).columnAmounts()[1]).isNull();
+    assertThat(rows.get(0).columnAmounts()[2]).isNull();
+    // IVA 5% → column 1
+    assertThat(rows.get(1).columnAmounts()[1]).isEqualByComparingTo("5000");
+    // IVA 10% → column 2
+    assertThat(rows.get(2).columnAmounts()[2]).isEqualByComparingTo("3000");
+  }
+
+  /** AC6: a per-item discount adds a second row with the negative discount in the same column. */
+  @Test
+  void buildDetailRows_addsNegativeDiscountRowInSameColumn() {
+    // Gross 10000, 10% discount → lineTotal 9000, discount 1000, tax column = IVA 10% (index 2)
+    InvoiceLine l = line("Corte", 1, "10000", "10", DiscountType.PERCENT, "10", "9000");
+    Invoice invoice = mock(Invoice.class);
+    when(invoice.getLines()).thenReturn(List.of(l));
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("9000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("9000"));
+    when(invoice.getDiscountType()).thenReturn(DiscountType.NONE);
+
+    List<InvoicePdfService.DetailRow> rows = InvoicePdfService.buildDetailRows(invoice);
+    assertThat(rows).hasSize(2);
+    // Item row: gross in column 2
+    assertThat(rows.get(0).quantity()).isEqualTo(1);
+    assertThat(rows.get(0).columnAmounts()[2]).isEqualByComparingTo("10000");
+    // Discount row: no qty/unit price, negative discount in the same column, descriptive label
+    assertThat(rows.get(1).quantity()).isNull();
+    assertThat(rows.get(1).unitPrice()).isNull();
+    assertThat(rows.get(1).columnAmounts()[2]).isEqualByComparingTo("-1000");
+    assertThat(rows.get(1).description()).contains("Corte").contains("Dto.");
+  }
+
+  /**
+   * AC6: the global discount is split negatively across columns and sums exactly to the discount.
+   */
+  @Test
+  void buildDetailRows_distributesGlobalDiscountAcrossColumns() {
+    InvoiceLine iva5 = line("A", 1, "4000", "5", DiscountType.NONE, null, "4000");
+    InvoiceLine iva10 = line("B", 1, "6000", "10", DiscountType.NONE, null, "6000");
+    Invoice invoice = mock(Invoice.class);
+    when(invoice.getLines()).thenReturn(List.of(iva5, iva10));
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("10000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("9000")); // global discount 1000
+    when(invoice.getDiscountType()).thenReturn(DiscountType.FIXED);
+    when(invoice.getDiscountValue()).thenReturn(new BigDecimal("1000"));
+
+    List<InvoicePdfService.DetailRow> rows = InvoicePdfService.buildDetailRows(invoice);
+    // 2 item rows + 1 global discount row
+    assertThat(rows).hasSize(3);
+    InvoicePdfService.DetailRow global = rows.get(2);
+    assertThat(global.description()).contains("global");
+    BigDecimal sum = BigDecimal.ZERO;
+    for (int c = 0; c < 3; c++) {
+      if (global.columnAmounts()[c] != null) {
+        sum = sum.add(global.columnAmounts()[c]);
+      }
+    }
+    assertThat(sum).isEqualByComparingTo("-1000");
+    // 40/60 split of 1000 → 400 / 600
+    assertThat(global.columnAmounts()[1]).isEqualByComparingTo("-400");
+    assertThat(global.columnAmounts()[2]).isEqualByComparingTo("-600");
+  }
+
+  @Test
+  void distributeGlobalDiscount_handlesRoundingRemainder() {
+    BigDecimal[] net = {BigDecimal.ZERO, new BigDecimal("1"), new BigDecimal("2")};
+    BigDecimal[] out = InvoicePdfService.distributeGlobalDiscount(new BigDecimal("10"), net);
+    BigDecimal sum =
+        (out[0] == null ? BigDecimal.ZERO : out[0])
+            .add(out[1] == null ? BigDecimal.ZERO : out[1])
+            .add(out[2] == null ? BigDecimal.ZERO : out[2]);
+    assertThat(sum).isEqualByComparingTo("-10");
+  }
+
+  /** AC6 smoke test: per-item discount line text is rendered into the PDF. */
+  @Test
+  void renderPdf_printsDiscountLine() throws Exception {
+    InvoicePdfService svc = newService();
+    InvoiceLine l = line("Corte premium", 1, "100", "10", DiscountType.PERCENT, "10", "90");
+
+    Invoice invoice = baseInvoice(List.of(l), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("90.00"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("90.00"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+    String text = extractText(pdf);
+    assertThat(text).contains("Dto.");
+  }
+
   @Test
   void lineDescriptionForPrint_usesServiceNameWhenLinked() {
     SalonService svc = new SalonService();
