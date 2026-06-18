@@ -1,0 +1,83 @@
+name: Auto-implement Issue with Claude
+
+on:
+  issues:
+    types: [labeled]
+
+# Only run when the `auto-implement` label is applied.
+# Create the label in Settings → Labels before using this workflow.
+jobs:
+  implement:
+    if: github.event.label.name == 'auto-implement'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # PAT so pushed branches and the created PR trigger CI workflows.
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            src/backend/gradle/wrapper/gradle-wrapper.properties
+            src/backend/build.gradle.kts
+            src/backend/settings.gradle.kts
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x src/backend/gradlew
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: src/frontend
+
+      - name: Install E2E dependencies and Playwright browsers
+        run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Implement issue with Claude Code
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GH_PAT }}
+          model: claude-sonnet-4-6
+          prompt: |
+            Use the /implement-user-story skill to implement the GitHub issue below.
+            Treat the issue body as the full feature specification (plain-text description mode).
+
+            Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
+
+            ${{ github.event.issue.body }}
+
+            CI environment notes:
+            - You are on the `main` branch — create a new feature branch as the skill requires.
+            - Node 20, Java 21, frontend (src/frontend/node_modules) and e2e deps are pre-installed.
+            - To start the backend for Playwright (uses H2, no SQL Server needed):
+                cd src/backend && ./gradlew bootRun -Dspring.profiles.active=e2e --no-daemon &
+            - To start the frontend for Playwright:
+                cd src/frontend && npm run dev &
+            - Wait ~30 s for both services to be ready before running `npm test` in e2e/.
+            - The GH_PAT is already wired as the git credential; `git push` and `gh pr create` will work.
