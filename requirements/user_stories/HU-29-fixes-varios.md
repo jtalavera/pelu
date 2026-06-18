@@ -4,7 +4,7 @@
 | ---------- | ---------------------------- |
 | **ID**     | HU-29                        |
 | **Módulo** | Varios (front + back)        |
-| **Estado** | `In Progress`                |
+| **Estado** | `Done`                |
 
 ## Definiciones transversales
 
