@@ -3,6 +3,8 @@ description: Implement a user story end-to-end: branch, build, test, commit, pus
 ---
 
 You are implementing a user story for the Femme/Pelu project. The argument passed to this skill is either:
+- a github issue number (use github cli to read the content),
+- a link to a github issue (use github cli to read the content),
 - a file path to a user story file (e.g. `requirements/user_stories/HU-30-foo.md`), or
 - a plain-text description of the feature to build.
 
