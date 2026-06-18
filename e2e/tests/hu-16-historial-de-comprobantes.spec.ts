@@ -39,18 +39,19 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
+    await expect(page.locator("#line-price-0")).toHaveValue("5.000");
     await page.locator("#pay-amount-0").fill("5000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
     // Navigate fresh to billing to ensure History loads up-to-date data
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    await expect(
-      page.locator("tbody").getByRole("row").filter({ hasText: client.fullName }),
-    ).toBeVisible({
-      timeout: 30_000,
-    });
+    const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    await expect(histRow).toBeVisible({ timeout: 30_000 });
+    // Total in history table must use dot separator, no decimals
+    await expect(histRow).toContainText("5.000");
   });
 
   test("HU-16 · 1 y HU-16 · 3 pestaña historial encabezados y columnas", async ({ page }) => {

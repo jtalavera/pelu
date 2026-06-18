@@ -55,10 +55,13 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
+    await expect(page.locator("#line-price-0")).toHaveValue("5.000");
     await page.getByRole("button", { name: "Add item" }).click();
     await pickServiceLine(page, seed.serviceFullName, 1);
     await page.locator("#line-price-1").fill("3000");
+    await expect(page.locator("#line-price-1")).toHaveValue("3.000");
     await page.locator("#pay-amount-0").fill("8000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("8.000");
     await clickIssueInvoiceAndExpectSuccess(page);
     await expect(page.getByText(/Invoice \d{7} issued successfully/)).toBeVisible();
   });
@@ -82,7 +85,9 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByLabel("Client display name").fill("Occ E2E");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("15000");
+    await expect(page.locator("#line-price-0")).toHaveValue("15.000");
     await page.locator("#pay-amount-0").fill("15000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("15.000");
     await clickIssueInvoiceAndExpectSuccess(page);
   });
 
@@ -107,7 +112,11 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByLabel("Client display name").fill("Disc E2E");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
+    await expect(page.locator("#line-price-0")).toHaveValue("10.000");
     await page.locator("#pay-amount-0").fill("9000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("9.000");
+    // 10% discount on 10.000 = total of 9.000
+    await expect(page.locator("span").filter({ hasText: /^9\.000$/ }).first()).toBeVisible();
     await clickIssueInvoiceAndExpectSuccess(page);
   });
 
@@ -133,7 +142,9 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByLabel("Client display name").fill("No stamp");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("1000");
+    await expect(page.locator("#line-price-0")).toHaveValue("1.000");
     await page.locator("#pay-amount-0").fill("1000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("1.000");
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText("No active fiscal stamp. Go to Settings → Timbrado to activate one.", {
@@ -185,6 +196,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     const openBtn = page.getByRole("button", { name: "Open cash register" });
     if (await openBtn.isVisible()) {
       await page.getByLabel("Initial cash amount").fill("10000");
+      await expect(page.getByLabel("Initial cash amount")).toHaveValue("10.000");
       await openBtn.click();
       await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 30_000 });
     }
@@ -194,7 +206,9 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByLabel("Client display name").fill("Walk-in");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
+    await expect(page.locator("#line-price-0")).toHaveValue("10.000");
     await page.locator("#pay-amount-0").fill("10000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("10.000");
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText("The active fiscal stamp is not valid for today's date.", { exact: true }),
@@ -351,6 +365,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.locator("#billing-line-svc-0").fill(seed.serviceFullName.slice(0, 12));
     await page.getByRole("button", { name: seed.serviceFullName, exact: false }).click();
     await page.locator("#pay-amount-0").fill("50000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
     const saved = await apiGetJson<{
@@ -414,10 +429,12 @@ test.describe("HU-14 · Emitir comprobante", () => {
     // Add item with valid price → still disabled (no payment)
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
+    await expect(page.locator("#line-price-0")).toHaveValue("5.000");
     await expect(issueBtn).toBeDisabled();
 
     // Add payment → now enabled
     await page.locator("#pay-amount-0").fill("5000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
     await expect(issueBtn).toBeEnabled();
   });
 

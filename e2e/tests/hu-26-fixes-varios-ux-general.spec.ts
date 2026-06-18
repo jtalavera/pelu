@@ -61,6 +61,8 @@ test.describe("HU-26 · Fixes varios UX general", () => {
 
     const row = page.getByTestId(`svc-row-${seed.serviceId}`);
     await expect(row).toBeVisible({ timeout: 15_000 });
+    // Service price in list must use dot separator with Gs. prefix, no decimals (seeded price = 50.000)
+    await expect(row.getByText("Gs. 50.000", { exact: true })).toBeVisible();
 
     // No standalone deactivate/activate button directly visible in the row actions area
     await expect(
@@ -113,7 +115,9 @@ test.describe("HU-26 · Fixes varios UX general", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
+    await expect(page.locator("#line-price-0")).toHaveValue("5.000");
     await page.locator("#pay-amount-0").fill("5000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
 
     // Scroll down so the page is not at top before issuing the invoice
     await page.evaluate(() => window.scrollTo({ top: 500, behavior: "instant" }));

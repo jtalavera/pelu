@@ -100,6 +100,8 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
     await expect(
       page.getByRole("table").getByText(inv.invoiceNumberFormatted, { exact: true }),
     ).toBeVisible();
+    // Invoice total (25.000) must display with dot separator, no decimals
+    await expect(page.getByRole("table").getByText("25.000", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Issued", { exact: true }).first(),
     ).toBeVisible();

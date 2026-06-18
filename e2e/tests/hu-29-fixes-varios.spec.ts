@@ -58,7 +58,7 @@ test.describe("HU-29 · Fixes varios", () => {
 
     const discounted = page.getByTestId("line-discounted-total-0");
     await expect(discounted).toBeVisible();
-    await expect(discounted).toContainText("9.000,00");
+    await expect(discounted).toContainText("9.000");
     await expect(discounted).toHaveClass(/text-emerald-600/);
   });
 
@@ -78,7 +78,7 @@ test.describe("HU-29 · Fixes varios", () => {
     await page.locator("#discount-value").fill("10"); // 10% of net 9.000 = 900
 
     // Combined discount = 1.000 + 900 = 1.900
-    await expect(page.getByText("-1.900,00")).toBeVisible();
+    await expect(page.getByText("-1.900")).toBeVisible();
   });
 
   // AC4 — discount validations: percentage cannot exceed 100%.

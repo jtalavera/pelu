@@ -14,8 +14,8 @@ describe("formatMoney", () => {
     expect(formatGuaraniesGs(890_000)).toBe("Gs. 890.000");
   });
 
-  it("formats decimals with comma as fraction separator", () => {
-    expect(formatDecimalGs(12_345.6)).toBe("12.345,60");
-    expect(formatAmountDecimal("100.5")).toBe("100,50");
+  it("formats money as integer (no decimals, rounded)", () => {
+    expect(formatDecimalGs(12_345.6)).toBe("12.346");
+    expect(formatAmountDecimal("100.5")).toBe("101");
   });
 });

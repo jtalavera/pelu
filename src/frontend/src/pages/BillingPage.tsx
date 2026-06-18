@@ -871,7 +871,10 @@ function NewInvoiceTab({
   const lineDiscountAmount = (l: InvoiceLineForm) => {
     if (!l.discountEnabled || !l.discountValue) return 0;
     const gross = lineGross(l);
-    const dv = parseFloat(l.discountValue.replace(",", ".")) || 0;
+    const dv =
+      l.discountType === "FIXED"
+        ? parseMaskedMoney(l.discountValue)
+        : parseFloat(l.discountValue.replace(",", ".")) || 0;
     if (l.discountType === "PERCENT") return round2((gross * dv) / 100);
     return Math.min(round2(dv), gross);
   };
@@ -884,7 +887,7 @@ function NewInvoiceTab({
 
   let globalDiscount = 0;
   if (discountType === "FIXED") {
-    globalDiscount = Math.min(parseFloat(discountValue) || 0, netSubtotal);
+    globalDiscount = Math.min(parseMaskedMoney(discountValue), netSubtotal);
   } else if (discountType === "PERCENT") {
     globalDiscount = round2((netSubtotal * (parseFloat(discountValue) || 0)) / 100);
   }
@@ -986,9 +989,15 @@ function NewInvoiceTab({
     field: "serviceId" | "quantity" | "unitPrice" | "discountValue",
     value: string,
   ) {
-    const next = field === "unitPrice" ? maskMoneyInput(value) : value;
     setLines((prev) =>
-      prev.map((l, i) => (i === idx ? { ...l, [field]: next } : l)),
+      prev.map((l, i) => {
+        if (i !== idx) return l;
+        let next = value;
+        if (field === "unitPrice" || (field === "discountValue" && l.discountType === "FIXED")) {
+          next = maskMoneyInput(value);
+        }
+        return { ...l, [field]: next };
+      }),
     );
     if (lineErrors[idx]?.[field]) {
       setLineErrors((prev) => {
@@ -1013,7 +1022,7 @@ function NewInvoiceTab({
 
   function setLineDiscountType(idx: number, type: "FIXED" | "PERCENT") {
     setLines((prev) =>
-      prev.map((l, i) => (i === idx ? { ...l, discountType: type } : l)),
+      prev.map((l, i) => (i === idx ? { ...l, discountType: type, discountValue: "" } : l)),
     );
   }
 
@@ -1064,7 +1073,10 @@ function NewInvoiceTab({
       }
       // AC4: per-item discount validations.
       if (l.discountEnabled && l.discountValue.trim() !== "") {
-        const dv = parseFloat(l.discountValue.replace(",", ".")) || 0;
+        const dv =
+          l.discountType === "FIXED"
+            ? parseMaskedMoney(l.discountValue)
+            : parseFloat(l.discountValue.replace(",", ".")) || 0;
         if (l.discountType === "PERCENT" && dv > 100) {
           fieldErrs.discountValue = t("femme.billing.invoice.discountPercentTooHigh");
         } else if (l.discountType === "FIXED" && dv > lineGross(l)) {
@@ -1079,7 +1091,10 @@ function NewInvoiceTab({
     // AC4: global discount validations.
     let newDiscountValueError: string | null = null;
     if (discountType !== "NONE" && discountValue.trim() !== "") {
-      const dv = parseFloat(discountValue.replace(",", ".")) || 0;
+      const dv =
+        discountType === "FIXED"
+          ? parseMaskedMoney(discountValue)
+          : parseFloat(discountValue.replace(",", ".")) || 0;
       if (discountType === "PERCENT" && dv > 100) {
         newDiscountValueError = t("femme.billing.invoice.discountPercentTooHigh");
       } else if (discountType === "FIXED" && dv > netSubtotal) {
@@ -1169,7 +1184,11 @@ function NewInvoiceTab({
       clientRucOverride: clientRucOverride.trim() || null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
-        discountType !== "NONE" && discountValue ? parseFloat(discountValue) : null,
+        discountType !== "NONE" && discountValue
+          ? discountType === "FIXED"
+            ? parseMaskedMoney(discountValue)
+            : parseFloat(discountValue)
+          : null,
       lines: lines.map((l) => ({
         serviceId: l.serviceId ? parseInt(l.serviceId) : null,
         description: (l.pickedService?.name ?? l.description).trim(),
@@ -1177,7 +1196,11 @@ function NewInvoiceTab({
         unitPrice: parseMaskedMoney(l.unitPrice),
         discountType: l.discountEnabled && l.discountValue ? l.discountType : null,
         discountValue:
-          l.discountEnabled && l.discountValue ? parseFloat(l.discountValue.replace(",", ".")) : null,
+          l.discountEnabled && l.discountValue
+            ? l.discountType === "FIXED"
+              ? parseMaskedMoney(l.discountValue)
+              : parseFloat(l.discountValue.replace(",", "."))
+            : null,
       })),
       payments: payments.map((p) => ({
         method: p.method,
@@ -1478,10 +1501,10 @@ function NewInvoiceTab({
                       </select>
                       <Input
                         id={`line-disc-val-${idx}`}
-                        inputMode="decimal"
+                        inputMode={line.discountType === "FIXED" ? "numeric" : "decimal"}
                         value={line.discountValue}
                         onChange={(e) => updateLine(idx, "discountValue", e.target.value)}
-                        placeholder={line.discountType === "PERCENT" ? "0" : "0"}
+                        placeholder="0"
                         aria-label={t("femme.billing.invoice.lineDiscountValue")}
                         aria-invalid={!!lineErrors[idx]?.discountValue}
                         aria-describedby={
@@ -1535,10 +1558,11 @@ function NewInvoiceTab({
                 </Label>
                 <Input
                   id="discount-value"
-                  inputMode="decimal"
+                  inputMode={discountType === "FIXED" ? "numeric" : "decimal"}
                   value={discountValue}
                   onChange={(e) => {
-                    setDiscountValue(e.target.value);
+                    const raw = e.target.value;
+                    setDiscountValue(discountType === "FIXED" ? maskMoneyInput(raw) : raw);
                     setDiscountValueError(null);
                   }}
                   placeholder="0"

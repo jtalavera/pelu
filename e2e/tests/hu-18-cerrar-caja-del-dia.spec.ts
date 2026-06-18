@@ -18,6 +18,7 @@ test.describe("HU-18 · Cerrar caja del día", () => {
     await page.getByRole("tab", { name: "Cash Register" }).click();
     await page.getByRole("button", { name: "Close cash register" }).click();
     await page.getByLabel("Counted cash amount").fill("49900");
+    await expect(page.getByLabel("Counted cash amount")).toHaveValue("49.900");
     const [closeRes] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/cash-sessions/close") && r.request().method() === "POST",
@@ -38,6 +39,7 @@ test.describe("HU-18 · Cerrar caja del día", () => {
     await page.getByRole("tab", { name: "Cash Register" }).click();
     await page.getByRole("button", { name: "Close cash register" }).click();
     await setControlledInputValue(page.getByLabel("Counted cash amount"), "999999");
+    await expect(page.getByLabel("Counted cash amount")).toHaveValue("999.999");
     const [closeRes2] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/cash-sessions/close") && r.request().method() === "POST",

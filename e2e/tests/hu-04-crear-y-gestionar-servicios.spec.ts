@@ -30,9 +30,12 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await svcDialog.getByLabel("Name").fill(svcName);
     await svcDialog.getByLabel("Category").selectOption({ label: cat });
     await svcDialog.getByLabel("Price").fill("50000");
+    await expect(svcDialog.getByLabel("Price")).toHaveValue("50.000");
     await svcDialog.getByLabel("Duration (minutes)").fill("45");
     await svcDialog.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText(svcName, { exact: true }).first()).toBeVisible();
+    const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
+    await expect(svcRow.getByText("Gs. 50.000", { exact: true })).toBeVisible();
   });
 
   test("HU-04 · 3+6 edición de servicio vía pop-up al hacer click en la fila", async ({ page }) => {
@@ -50,6 +53,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await newDlg.getByLabel("Name").fill(original);
     await newDlg.getByLabel("Category").selectOption({ label: cat });
     await newDlg.getByLabel("Price").fill("40000");
+    await expect(newDlg.getByLabel("Price")).toHaveValue("40.000");
     await newDlg.getByLabel("Duration (minutes)").fill("30");
     await newDlg.getByRole("button", { name: "Save" }).click();
     await page.getByPlaceholder("Search by name or category…").fill(original);
@@ -57,6 +61,8 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: original }).first().click();
     const editDlg = page.getByRole("dialog", { name: "Edit service" });
     await expect(editDlg).toBeVisible();
+    // Price pre-populated in edit dialog must use dot thousands separator, no decimals
+    await expect(editDlg.getByLabel("Price")).toHaveValue("40.000");
     const renamed = `${original} renamed`;
     await editDlg.getByLabel("Name").fill(renamed);
     await editDlg.getByRole("button", { name: "Save" }).click();

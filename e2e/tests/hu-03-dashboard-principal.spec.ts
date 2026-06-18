@@ -6,7 +6,9 @@ test.describe("HU-03 · Dashboard principal", () => {
     await loginAsDemo(page);
     await expect(page.getByText("Revenue today", { exact: true })).toBeVisible();
     await expect(page.getByText("Appointments today", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Gs.", { exact: false }).first()).toBeVisible();
+    // Revenue figures must use dot thousands separator with no decimals (e.g. "Gs. 1.234.567")
+    const gsText = page.getByText(/^Gs\. \d{1,3}(\.\d{3})*$/).first();
+    await expect(gsText).toBeVisible();
   });
 
   test("HU-03 · 2 accesos rápidos a calendario y nueva cita", async ({ page }) => {

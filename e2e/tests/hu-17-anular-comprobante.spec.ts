@@ -38,7 +38,9 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("8000");
+    await expect(page.locator("#line-price-0")).toHaveValue("8.000");
     await page.locator("#pay-amount-0").fill("8000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("8.000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
     await page.getByRole("tab", { name: "History" }).click();
@@ -82,7 +84,9 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.getByRole("button", { name: clientName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("3000");
+    await expect(page.locator("#line-price-0")).toHaveValue("3.000");
     await page.locator("#pay-amount-0").fill("3000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("3.000");
     await clickIssueInvoiceAndExpectSuccess(page);
     // Navigate fresh to ensure History loads up-to-date invoice data
     await page.goto("/app/billing");
@@ -91,6 +95,8 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.locator("#invoice-history-text-filter").fill(clientName);
     const clientRow = page.locator("tbody").getByRole("row").first();
     await expect(clientRow).toBeVisible({ timeout: 15_000 });
+    // Total in history table must use dot separator, no decimals
+    await expect(clientRow).toContainText("3.000");
     await clientRow.getByRole("button", { name: "View" }).click();
     await page.getByRole("button", { name: "Void invoice" }).click();
     await page.locator("#void-reason").fill("Wrong amount");

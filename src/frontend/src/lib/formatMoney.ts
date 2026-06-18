@@ -10,25 +10,23 @@ const integerFormatter = new Intl.NumberFormat(FEMME_MONEY_LOCALE, {
   minimumFractionDigits: 0,
 });
 
-const decimalFormatter = new Intl.NumberFormat(FEMME_MONEY_LOCALE, {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 /** Integer amounts (e.g. guaraníes without centavos in labels). */
 export function formatIntegerGs(n: number): string {
   if (!Number.isFinite(n)) return "—";
   return integerFormatter.format(Math.round(n));
 }
 
-/** Money amounts with two fraction digits. */
+/**
+ * Money amounts, integer-only (no decimals, rounded to nearest whole Gs.).
+ * Named "Decimal" for historical reasons; decimals are intentionally suppressed.
+ */
 export function formatDecimalGs(n: number): string {
   if (!Number.isFinite(n)) return "—";
-  return decimalFormatter.format(n);
+  return integerFormatter.format(Math.round(n));
 }
 
 /**
- * Parses API/form string or number and returns decimal Gs. formatting, or "—" / raw fallback.
+ * Parses API/form string or number and returns integer Gs. formatting, or "—" / raw fallback.
  * Use for all non-prefixed monetary values in forms and detail views.
  */
 export function formatAmountDecimal(

@@ -11,6 +11,7 @@ test.describe("HU-13 · Abrir caja del día", () => {
     const openBtn = page.getByRole("button", { name: "Open cash register" });
     if (await openBtn.isVisible()) {
       await page.getByLabel("Initial cash amount").fill("50000");
+      await expect(page.getByLabel("Initial cash amount")).toHaveValue("50.000");
       await openBtn.click();
       await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 30_000 });
     } else {
