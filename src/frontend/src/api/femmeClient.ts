@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 import { apiBaseUrl } from "./baseUrl";
 import { authHeaders } from "./authHeaders";
 
@@ -6,10 +7,12 @@ export async function femmeJson<T>(
   init?: RequestInit & { json?: boolean },
 ): Promise<T> {
   const url = `${apiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+  const lang = i18n.resolvedLanguage ?? i18n.language ?? "es";
   const res = await fetch(url, {
     ...init,
     headers: {
       ...authHeaders({ json: init?.json !== false }),
+      "Accept-Language": lang,
       ...init?.headers,
     },
   });

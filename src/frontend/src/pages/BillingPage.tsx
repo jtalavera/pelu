@@ -82,6 +82,8 @@ type InvoiceLine = {
   quantity: number;
   unitPrice: string;
   lineTotal: string;
+  discountType?: string | null;
+  discountValue?: string | null;
 };
 
 type InvoicePayment = {
@@ -363,6 +365,7 @@ function InvoiceDetailModal({
                       <th className="px-3 py-2 text-left">{t("femme.billing.history.detail.colDescription")}</th>
                       <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colQty")}</th>
                       <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colUnitPrice")}</th>
+                      <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colItemDiscount")}</th>
                       <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colLineTotal")}</th>
                     </tr>
                   </thead>
@@ -372,6 +375,11 @@ function InvoiceDetailModal({
                         <td className="px-3 py-2">{l.description}</td>
                         <td className="px-3 py-2 text-right">{l.quantity}</td>
                         <td className="px-3 py-2 text-right">{formatAmountDecimal(l.unitPrice)}</td>
+                        <td className="px-3 py-2 text-right">
+                          {l.discountType && l.discountType !== "NONE"
+                            ? discountLabel(l.discountType, l.discountValue ?? null)
+                            : "—"}
+                        </td>
                         <td className="px-3 py-2 text-right">{formatAmountDecimal(l.lineTotal)}</td>
                       </tr>
                     ))}
@@ -716,48 +724,106 @@ function InvoiceHistoryTab() {
       ) : filteredInvoices.length === 0 ? (
         <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
       ) : (
-        <div className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[rgb(var(--color-muted))]">
-              <tr>
-                <th className="px-3 py-2 text-left">{t("femme.billing.history.colNumber")}</th>
-                <th className="px-3 py-2 text-left">{t("femme.billing.history.colDate")}</th>
-                <th className="px-3 py-2 text-left">{t("femme.billing.history.colClient")}</th>
-                <th className="px-3 py-2 text-right">{t("femme.billing.history.colTotal")}</th>
-                <th className="px-3 py-2 text-center">{t("femme.billing.history.colStatus")}</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredInvoices.map((inv) => (
-                <tr
-                  key={inv.id}
-                  className="border-t border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-muted)/0.4)]"
-                >
-                  <td className="px-3 py-2 font-mono">{inv.invoiceNumberFormatted}</td>
-                  <td className="px-3 py-2">{formatParaguayDateTime(inv.issuedAt, dateLocale)}</td>
-                  <td className="px-3 py-2">{inv.clientDisplayName ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{formatAmountDecimal(inv.total)}</td>
-                  <td className="px-3 py-2 text-center">
-                    <Badge variant={inv.status === "ISSUED" ? "success" : "destructive"}>
-                      {inv.status === "ISSUED"
-                        ? t("femme.billing.history.statusIssued")
-                        : t("femme.billing.history.statusVoided")}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedInvoiceId(inv.id)}
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            overflow: "hidden",
+          }}
+        >
+          <div className="overflow-x-auto">
+            <table
+              className="min-w-full text-sm"
+              style={{ tableLayout: "fixed" }}
+            >
+              <colgroup>
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {[
+                    { key: "colNumber", align: "left" },
+                    { key: "colDate", align: "left" },
+                    { key: "colClient", align: "left" },
+                    { key: "colTotal", align: "right" },
+                    { key: "colStatus", align: "center" },
+                    { key: "", align: "right" },
+                  ].map(({ key, align }, i) => (
+                    <th
+                      key={i}
+                      style={{
+                        padding: "9px 12px",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--color-ink-3)",
+                        background: "var(--color-stone)",
+                        textAlign: align as "left" | "right" | "center",
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      {t("femme.billing.history.viewDetail")}
-                    </Button>
-                  </td>
+                      {key ? t(`femme.billing.history.${key}`) : ""}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredInvoices.map((inv) => (
+                  <tr
+                    key={inv.id}
+                    style={{
+                      borderTop: "var(--border-default)",
+                      cursor: "default",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background =
+                        "var(--color-rose-lt)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background = "";
+                    }}
+                  >
+                    <td style={{ padding: "10px 12px", fontFamily: "monospace" }}>
+                      {inv.invoiceNumberFormatted}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {formatParaguayDateTime(inv.issuedAt, dateLocale)}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>{inv.clientDisplayName ?? "—"}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                      {formatAmountDecimal(inv.total)}
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      <Badge variant={inv.status === "ISSUED" ? "success" : "destructive"}>
+                        {inv.status === "ISSUED"
+                          ? t("femme.billing.history.statusIssued")
+                          : t("femme.billing.history.statusVoided")}
+                      </Badge>
+                    </td>
+                    <td
+                      style={{ padding: "10px 12px", textAlign: "right" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedInvoiceId(inv.id)}
+                      >
+                        {t("femme.billing.history.viewDetail")}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       </div>
@@ -811,6 +877,7 @@ function NewInvoiceTab({
     : null;
   const [clientSelection, setClientSelection] = useState<ClientSelection>(initialSelection);
   const [clientSearchKey, setClientSearchKey] = useState(0);
+  const [linesKey, setLinesKey] = useState(0);
   const [clientDisplayName, setClientDisplayName] = useState(
     initialClient?.fullName ?? "",
   );
@@ -1244,10 +1311,12 @@ function NewInvoiceTab({
       // Reset form
       setClientSelection(null);
       setClientSearchKey((k) => k + 1);
+      setLinesKey((k) => k + 1);
       setClientDisplayName("");
       setClientRucOverride("");
       setDiscountType("NONE");
       setDiscountValue("");
+      setDiscountValueError(null);
       setLines([
         {
           serviceId: "",
@@ -1395,7 +1464,7 @@ function NewInvoiceTab({
           <div className="flex flex-col gap-3">
             {lines.map((line, idx) => (
               <div
-                key={idx}
+                key={`${linesKey}-${idx}`}
                 className="grid grid-cols-12 gap-2 items-start border border-[rgb(var(--color-border))] rounded p-3"
               >
                 <div className="col-span-12 sm:col-span-5">

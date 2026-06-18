@@ -135,7 +135,8 @@
       "searchPlaceholder": "Buscar clientes, turnos…",
       "notifications": "Notificaciones",
       "userMenuTriggerAria": "Abrir menú de usuario",
-      "userMenuUserSettings": "Configuración del usuario"
+      "userMenuUserSettings": "Configuración del usuario",
+      "userMenuChangePassword": "Cambiar contraseña"
     },
     "footer": {
       "designSystem": "Sistema de diseño"
@@ -491,9 +492,10 @@
           "colDescription": "Descripción",
           "colQty": "Cant.",
           "colUnitPrice": "Precio unitario",
+          "colItemDiscount": "Descuento en Ítem",
           "colLineTotal": "Total",
           "subtotal": "Subtotal",
-          "discount": "Descuento",
+          "discount": "Descuento sobre factura",
           "total": "Total",
           "payments": "Pagos",
           "voidReason2": "Razón de anulación",
@@ -671,7 +673,9 @@
       "APPOINTMENT_START_IN_PAST": "No se puede agendar un turno en el pasado. Elegí una fecha y hora futuras (ej.: mañana 09:00).",
       "APPOINTMENT_NOT_EDITABLE": "Este turno no puede ser editado. Solo los turnos en estado Pendiente o Confirmado pueden modificarse.",
       "INVALID_APPOINTMENT_STATUS": "Estado de turno inválido.",
-      "INVALID_DATE_FORMAT": "Formato de fecha inválido."
+      "INVALID_DATE_FORMAT": "Formato de fecha inválido.",
+      "PASSWORD_TOO_WEAK": "La contraseña es demasiado débil. Debe tener al menos 8 caracteres con mayúscula, minúscula, dígito y carácter especial.",
+      "PROFILE_NOT_EDITABLE_FOR_ADMIN": "El perfil de administrador no tiene campos editables. Solo podés cambiar tu contraseña."
     },
     "services": {
       "title": "Servicios",
@@ -870,6 +874,8 @@
       "today": "Hoy",
       "prev": "Semana anterior",
       "next": "Semana siguiente",
+      "prevDay": "Día anterior",
+      "nextDay": "Día siguiente",
       "allProfessionals": "Todas las profesionales",
       "filterByProfessional": "Filtrar por profesional",
       "searchable": {
@@ -1589,6 +1595,25 @@
       "oneMeta": "Hoy · 14:00",
       "twoTitle": "Pipeline de despliegue",
       "twoMeta": "Ayer"
+    },
+    "userProfile": {
+      "title": "Mi perfil",
+      "tabProfile": "Datos personales",
+      "tabPassword": "Contraseña",
+      "firstName": "Nombre",
+      "lastName": "Apellido",
+      "address": "Dirección",
+      "phone": "Teléfono",
+      "email": "Correo electrónico",
+      "save": "Guardar cambios",
+      "cancel": "Cancelar",
+      "savedTitle": "Perfil guardado correctamente",
+      "errorTitle": "Error al guardar",
+      "adminNoProfile": "Tu cuenta de administrador no tiene un perfil de profesional asociado. Solo podés cambiar tu contraseña.",
+      "newPassword": "Nueva contraseña",
+      "confirmPassword": "Confirmá la contraseña",
+      "changePassword": "Cambiar contraseña",
+      "passwordChangedTitle": "Contraseña actualizada correctamente"
     }
   }
 }

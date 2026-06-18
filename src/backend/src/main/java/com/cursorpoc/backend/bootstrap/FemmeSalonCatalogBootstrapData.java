@@ -73,7 +73,6 @@ public final class FemmeSalonCatalogBootstrapData {
           new ProfessionalRow("MARTHA MARTINEZ CANTERO"),
           new ProfessionalRow("JORGELINA AGÜERO"),
           new ProfessionalRow("CONCEPCION VALDEZ"),
-          new ProfessionalRow("GABRIELA"),
           new ProfessionalRow("LUCIA VALENZUELA"),
           new ProfessionalRow("ROSSANA MIGUELINA ENCISO"),
           new ProfessionalRow("NORMA LEIVA"),

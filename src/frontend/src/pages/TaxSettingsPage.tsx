@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Heading, Input, Label, Spinner, Text } from "@design-system";
+import { Alert, Button, Heading, Input, KebabMenu, Label, Spinner, Text } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -156,62 +156,100 @@ export default function TaxSettingsPage() {
           </Text>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[rgb(var(--color-muted))]">
-              <tr>
-                <th className="px-3 py-2 text-left">{t("femme.taxes.colName")}</th>
-                <th className="px-3 py-2 text-right">{t("femme.taxes.colRate")}</th>
-                <th className="px-3 py-2 text-center">{t("femme.taxes.colStatus")}</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {taxes.map((tax) => (
-                <tr
-                  key={tax.id}
-                  className="border-t border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-muted))]/40"
-                >
-                  <td className="px-3 py-2 font-medium">{tax.name}</td>
-                  <td className="px-3 py-2 text-right">{tax.rate}%</td>
-                  <td className="px-3 py-2 text-center">
-                    <StatusBadge status={tax.active ? "ACTIVE" : "INACTIVE"} />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="min-h-9 px-2 text-xs"
-                        onClick={() => openEdit(tax)}
-                      >
-                        {t("femme.taxes.editTitle")}
-                      </Button>
-                      {tax.active ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="min-h-9 px-2 text-xs text-[rgb(var(--color-warning))]"
-                          onClick={() => setDeactivateTarget(tax)}
-                        >
-                          {t("femme.taxes.deactivate")}
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="min-h-9 px-2 text-xs text-[rgb(var(--color-success))]"
-                          onClick={() => void activate(tax)}
-                        >
-                          {t("femme.taxes.activate")}
-                        </Button>
-                      )}
-                    </div>
-                  </td>
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            overflow: "hidden",
+          }}
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm" style={{ tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "50%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {[
+                    { key: "colName", align: "left" },
+                    { key: "colRate", align: "right" },
+                    { key: "colStatus", align: "center" },
+                    { key: "", align: "right" },
+                  ].map(({ key, align }, i) => (
+                    <th
+                      key={i}
+                      style={{
+                        padding: "9px 12px",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--color-ink-3)",
+                        background: "var(--color-stone)",
+                        textAlign: align as "left" | "right" | "center",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {key ? t(`femme.taxes.${key}`) : ""}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {taxes.map((tax) => (
+                  <tr
+                    key={tax.id}
+                    style={{ borderTop: "var(--border-default)" }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background =
+                        "var(--color-rose-lt)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background = "";
+                    }}
+                  >
+                    <td style={{ padding: "10px 12px", fontWeight: 500 }}>{tax.name}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right" }}>{tax.rate}%</td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      <StatusBadge status={tax.active ? "ACTIVE" : "INACTIVE"} />
+                    </td>
+                    <td
+                      style={{ padding: "10px 12px", textAlign: "right" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <KebabMenu
+                        id={`tax-${tax.id}`}
+                        triggerAriaLabel={t("femme.rowActions.trigger")}
+                        items={[
+                          {
+                            id: "edit",
+                            label: t("femme.taxes.editTitle"),
+                            onSelect: () => openEdit(tax),
+                          },
+                          tax.active
+                            ? {
+                                id: "deactivate",
+                                label: t("femme.taxes.deactivate"),
+                                destructive: true,
+                                onSelect: () => setDeactivateTarget(tax),
+                              }
+                            : {
+                                id: "activate",
+                                label: t("femme.taxes.activate"),
+                                onSelect: () => void activate(tax),
+                              },
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
