@@ -7,7 +7,7 @@ import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
-import { TourButton } from "../tour/TourButton";
+import { UserProfileModal } from "../components/UserProfileModal";
 import { useTourContext } from "../tour/TourContext";
 import { TourJoyride } from "../tour/TourJoyride";
 
@@ -190,9 +190,11 @@ function AppShellInner() {
   const { me } = useMe();
   const { theme, toggle } = useThemeContext();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
-  const { clearTour } = useTourContext();
+  const { clearTour, startTour, tourKey, seenVersion, hasSeenTour } = useTourContext();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileModalTab, setProfileModalTab] = useState<"profile" | "password">("profile");
   useSessionRefresh(true);
 
   useEffect(() => {
@@ -305,6 +307,45 @@ function AppShellInner() {
 
         {/* Right zone */}
         <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>
+          {/* Help tour button — before dark-mode toggle (HU-30 AC-6) */}
+          {guidedTourEnabled && tourKey && (
+            <button
+              data-tour="topbar-help-tour"
+              type="button"
+              onClick={startTour}
+              title={t("femme.tour.helpButton.aria")}
+              aria-label={t("femme.tour.helpButton.aria")}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "var(--radius-md)",
+                border: "var(--border-default)",
+                background: !hasSeenTour(tourKey) ? "var(--color-rose-lt)" : "var(--color-stone)",
+                color: !hasSeenTour(tourKey) ? "var(--color-rose-dk)" : "var(--color-ink-2)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 14,
+                fontWeight: 700,
+                flexShrink: 0,
+                transition: "background 0.15s",
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                // seenVersion keeps the derived color reactive
+                outline: seenVersion >= 0 ? undefined : undefined,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--color-stone-md)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = !hasSeenTour(tourKey)
+                  ? "var(--color-rose-lt)"
+                  : "var(--color-stone)";
+              }}
+            >
+              ?
+            </button>
+          )}
           <button
             data-tour="topbar-theme"
             type="button"
@@ -522,7 +563,8 @@ function AppShellInner() {
                 <MenuItem
                   onClick={() => {
                     setUserMenuOpen(false);
-                    navigate("/app/settings/business");
+                    setProfileModalTab("profile");
+                    setProfileModalOpen(true);
                   }}
                   color="var(--color-ink)"
                   hoverBg="var(--color-stone)"
@@ -538,6 +580,23 @@ function AppShellInner() {
                     </svg>
                   }
                   label={t("femme.topbar.userMenuUserSettings")}
+                />
+
+                <MenuItem
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    setProfileModalTab("password");
+                    setProfileModalOpen(true);
+                  }}
+                  color="var(--color-ink)"
+                  hoverBg="var(--color-stone)"
+                  icon={
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+                      <rect x="2" y="6" width="10" height="7" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
+                      <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    </svg>
+                  }
+                  label={t("femme.topbar.userMenuChangePassword")}
                 />
 
                 <div
@@ -695,8 +754,14 @@ function AppShellInner() {
         <Outlet />
       </main>
 
+      {profileModalOpen && me && (
+        <UserProfileModal
+          me={me}
+          initialTab={profileModalTab}
+          onClose={() => setProfileModalOpen(false)}
+        />
+      )}
       <TourJoyride enabled={guidedTourEnabled} />
-      <TourButton enabled={guidedTourEnabled} />
     </div>
   );
 }

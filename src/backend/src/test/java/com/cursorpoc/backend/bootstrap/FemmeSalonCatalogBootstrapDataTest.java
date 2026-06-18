@@ -7,14 +7,15 @@ import org.junit.jupiter.api.Test;
 
 class FemmeSalonCatalogBootstrapDataTest {
 
-  /** HU-29 AC7: ISABEL ZYMANSCKI and MERCEDES AQUINO removed, GABRIELA added. */
+  /**
+   * HU-30 AC2: GABRIELA removed. HU-29 AC7: ISABEL ZYMANSCKI and MERCEDES AQUINO already removed.
+   */
   @Test
-  void professionalsSeed_reflectsHu29Changes() {
+  void professionalsSeed_reflectsHu30Changes() {
     var names =
         FemmeSalonCatalogBootstrapData.PROFESSIONALS.stream()
             .map(ProfessionalRow::fullName)
             .toList();
-    assertThat(names).contains("GABRIELA");
-    assertThat(names).doesNotContain("ISABEL ZYMANSCKI", "MERCEDES AQUINO");
+    assertThat(names).doesNotContain("GABRIELA", "ISABEL ZYMANSCKI", "MERCEDES AQUINO");
   }
 }

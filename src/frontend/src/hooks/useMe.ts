@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { apiBaseUrl } from "../api/baseUrl";
 import { authHeaders } from "../api/authHeaders";
 
+export type MeProfile = {
+  fullName: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  photoDataUrl: string | null;
+};
+
 export type Me = {
   userId: number;
   tenantId: number;
@@ -13,6 +21,8 @@ export type Me = {
    * For other roles, usually matches `tenantId` or is null.
    */
   previewTenantId: number | null;
+  /** Profile data from linked Professional; null for admin without linked Professional. */
+  profile: MeProfile | null;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {

@@ -31,6 +31,9 @@ public class Professional {
   @Column(length = 320)
   private String email;
 
+  @Column(length = 255)
+  private String address;
+
   @Column(name = "photo_data_url", columnDefinition = "NVARCHAR(MAX)")
   private String photoDataUrl;
 
@@ -85,6 +88,14 @@ public class Professional {
 
   public void setEmail(String email) {
     this.email = email;
+  }
+
+  public String getAddress() {
+    return address;
+  }
+
+  public void setAddress(String address) {
+    this.address = address;
   }
 
   public String getPhotoDataUrl() {

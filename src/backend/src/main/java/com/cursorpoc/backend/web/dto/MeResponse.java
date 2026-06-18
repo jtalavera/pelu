@@ -7,4 +7,9 @@ public record MeResponse(
     String role,
     Long professionalId,
     /** When role is {@code SYSTEM_ADMIN}, the salon tenant to preview (flags, UI). */
-    Long previewTenantId) {}
+    Long previewTenantId,
+    /**
+     * Profile data from the linked Professional; null for admin users without a linked
+     * Professional.
+     */
+    MeProfileResponse profile) {}

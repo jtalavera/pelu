@@ -135,7 +135,8 @@
       "searchPlaceholder": "Search clients, appointments…",
       "notifications": "Notifications",
       "userMenuTriggerAria": "Open user menu",
-      "userMenuUserSettings": "User settings"
+      "userMenuUserSettings": "User settings",
+      "userMenuChangePassword": "Change password"
     },
     "footer": {
       "designSystem": "Design system"
@@ -491,9 +492,10 @@
           "colDescription": "Description",
           "colQty": "Qty",
           "colUnitPrice": "Unit price",
+          "colItemDiscount": "Item Discount",
           "colLineTotal": "Total",
           "subtotal": "Subtotal",
-          "discount": "Discount",
+          "discount": "Invoice discount",
           "total": "Total",
           "payments": "Payments",
           "voidReason2": "Void reason",
@@ -671,7 +673,9 @@
       "APPOINTMENT_START_IN_PAST": "The appointment cannot be in the past. Choose a future date and time (e.g. tomorrow 09:00).",
       "APPOINTMENT_NOT_EDITABLE": "This appointment cannot be edited. Only Pending or Confirmed appointments can be modified.",
       "INVALID_APPOINTMENT_STATUS": "Invalid appointment status.",
-      "INVALID_DATE_FORMAT": "Invalid date format."
+      "INVALID_DATE_FORMAT": "Invalid date format.",
+      "PASSWORD_TOO_WEAK": "Password is too weak. It must have at least 8 characters including uppercase, lowercase, digit, and special character.",
+      "PROFILE_NOT_EDITABLE_FOR_ADMIN": "Admin profile has no editable fields. You can only change your password."
     },
     "services": {
       "title": "Services",
@@ -870,6 +874,8 @@
       "today": "Today",
       "prev": "Previous week",
       "next": "Next week",
+      "prevDay": "Previous day",
+      "nextDay": "Next day",
       "allProfessionals": "All professionals",
       "filterByProfessional": "Filter by professional",
       "searchable": {
@@ -1589,6 +1595,25 @@
       "oneMeta": "Today · 2:00 PM",
       "twoTitle": "Deploy pipeline",
       "twoMeta": "Yesterday"
+    },
+    "userProfile": {
+      "title": "My profile",
+      "tabProfile": "Personal details",
+      "tabPassword": "Password",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "address": "Address",
+      "phone": "Phone",
+      "email": "Email",
+      "save": "Save changes",
+      "cancel": "Cancel",
+      "savedTitle": "Profile saved successfully",
+      "errorTitle": "Error saving profile",
+      "adminNoProfile": "Your admin account does not have a linked professional profile. You can only change your password.",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "changePassword": "Change password",
+      "passwordChangedTitle": "Password updated successfully"
     }
   }
 }

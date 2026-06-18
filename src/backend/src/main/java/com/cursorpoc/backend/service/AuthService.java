@@ -314,7 +314,7 @@ public class AuthService {
     activationTokenRepository.save(activationToken);
   }
 
-  private static void validatePasswordStrength(String password) {
+  public static void validatePasswordStrength(String password) {
     if (password == null || password.length() < 8) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_WEAK");
     }

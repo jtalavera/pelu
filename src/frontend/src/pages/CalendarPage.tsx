@@ -199,6 +199,22 @@ export default function CalendarPage() {
     colKey: (typeof DAY_KEYS)[number];
     slot: number;
   } | null>(null);
+  // Mobile single-day view (AC-9)
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches,
+  );
+  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => {
+    const today = new Date();
+    const jsDay = today.getDay();
+    return jsDay === 0 ? 6 : jsDay - 1; // 0=Mon..6=Sun
+  });
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -279,7 +295,30 @@ export default function CalendarPage() {
   // ── Navigation ──────────────────────────────────────────────────────────────
   const goPrev = () => setWeekStart((w) => addDays(w, -7));
   const goNext = () => setWeekStart((w) => addDays(w, 7));
-  const goToday = () => setWeekStart(startOfWeek(new Date()));
+  const goToday = () => {
+    setWeekStart(startOfWeek(new Date()));
+    const today = new Date();
+    const jsDay = today.getDay();
+    setSelectedDayIdx(jsDay === 0 ? 6 : jsDay - 1);
+  };
+  const goPrevDay = () => {
+    setSelectedDayIdx((idx) => {
+      if (idx === 0) {
+        setWeekStart((w) => addDays(w, -7));
+        return 6;
+      }
+      return idx - 1;
+    });
+  };
+  const goNextDay = () => {
+    setSelectedDayIdx((idx) => {
+      if (idx === 6) {
+        setWeekStart((w) => addDays(w, 7));
+        return 0;
+      }
+      return idx + 1;
+    });
+  };
 
   // ── Week days ───────────────────────────────────────────────────────────────
   const weekDays = DAY_KEYS.map((key, i) => ({
@@ -436,6 +475,11 @@ export default function CalendarPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   const weekLabel = `${formatDate(weekStart, locale)} – ${formatDate(addDays(weekStart, 6), locale)}`;
+  const mobileDayLabel = weekDays[selectedDayIdx]
+    ? `${weekDays[selectedDayIdx].label} ${formatDate(weekDays[selectedDayIdx].date, locale)}`
+    : "";
+  // On mobile, only render the selected day column
+  const visibleDays = isMobile ? [weekDays[selectedDayIdx]].filter(Boolean) : weekDays;
 
   const navBtnStyle: React.CSSProperties = {
     padding: "6px 10px",
@@ -509,26 +553,51 @@ export default function CalendarPage() {
           {t("femme.calendar.today")}
         </button>
 
-        {/* Week navigation */}
+        {/* Week / Day navigation */}
         <div data-tour="calendar-week-nav" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <button type="button" onClick={goPrev} aria-label={t("femme.calendar.prev")} style={navBtnStyle}>
-          ‹
-        </button>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: "var(--color-ink)",
-            minWidth: 160,
-            textAlign: "center",
-            flexShrink: 0,
-          }}
-        >
-          {weekLabel}
-        </span>
-        <button type="button" onClick={goNext} aria-label={t("femme.calendar.next")} style={navBtnStyle}>
-          ›
-        </button>
+          {isMobile ? (
+            <>
+              <button type="button" onClick={goPrevDay} aria-label={t("femme.calendar.prevDay")} style={navBtnStyle}>
+                ‹
+              </button>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--color-ink)",
+                  minWidth: 140,
+                  textAlign: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {mobileDayLabel}
+              </span>
+              <button type="button" onClick={goNextDay} aria-label={t("femme.calendar.nextDay")} style={navBtnStyle}>
+                ›
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={goPrev} aria-label={t("femme.calendar.prev")} style={navBtnStyle}>
+                ‹
+              </button>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--color-ink)",
+                  minWidth: 160,
+                  textAlign: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {weekLabel}
+              </span>
+              <button type="button" onClick={goNext} aria-label={t("femme.calendar.next")} style={navBtnStyle}>
+                ›
+              </button>
+            </>
+          )}
         </div>
 
         {/* New appointment — pushed right */}
@@ -586,7 +655,7 @@ export default function CalendarPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "52px repeat(7, 1fr)",
+              gridTemplateColumns: `52px repeat(${visibleDays.length}, 1fr)`,
               borderBottom: "var(--border-default)",
             }}
           >
@@ -596,7 +665,7 @@ export default function CalendarPage() {
                 background: "var(--color-stone)",
               }}
             />
-            {weekDays.map(({ key, label, date }, dayIdx) => (
+            {visibleDays.map(({ key, label, date }, dayIdx) => (
               <div
                 key={key}
                 style={{
@@ -605,7 +674,7 @@ export default function CalendarPage() {
                   fontSize: 11,
                   color: "var(--color-ink-3)",
                   background: "var(--color-stone)",
-                  borderRight: dayIdx < 6 ? "var(--border-default)" : "none",
+                  borderRight: dayIdx < visibleDays.length - 1 ? "var(--border-default)" : "none",
                 }}
               >
                 <div
@@ -653,7 +722,7 @@ export default function CalendarPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "52px repeat(7, 1fr)",
+                gridTemplateColumns: `52px repeat(${visibleDays.length}, 1fr)`,
                 height: GRID_HEIGHT,
               }}
             >
@@ -683,7 +752,7 @@ export default function CalendarPage() {
               </div>
 
               {/* Day columns */}
-              {weekDays.map(({ key, date }) => {
+              {visibleDays.map(({ key, date }) => {
                 const dayAppts = appointments
                   .filter((a) => isSameDay(a.startAt, date))
                   .filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
