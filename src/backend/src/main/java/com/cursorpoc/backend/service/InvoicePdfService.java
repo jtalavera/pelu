@@ -64,7 +64,7 @@ public class InvoicePdfService {
   // Measured column right-edges from panel left: Exenta ~8.40 cm, IVA 5 %
   // ~10.12 cm, IVA 10 % ~11.68 cm. Equal-width formula errors < 0.10 cm.
   private static final float TAX_COL_WIDTH_CM = 1.60f;
-  private static final float TAX_COL_10_ANCHOR_CM = 11.33f;
+  private static final float TAX_COL_10_ANCHOR_CM = 10.33f;
 
   private final BusinessProfileRepository businessProfileRepository;
   private final InvoiceRepository invoiceRepository;
@@ -177,8 +177,8 @@ public class InvoicePdfService {
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
         Element.ALIGN_LEFT, dateFmt.format(invoice.getIssuedAt()), fieldX, yFromTop(h, 3.05f), 0);
-    // Contado (POS): mark inside printed "CONTADO" box (~6.1 cm from panel edge).
-    cb.showTextAligned(Element.ALIGN_LEFT, "X", ox + cmToPt(5.75f), yFromTop(h, 3.05f), 0);
+    // Contado (POS): mark inside printed "CONTADO" box (~7.75 cm from panel edge).
+    cb.showTextAligned(Element.ALIGN_LEFT, "X", ox + cmToPt(7.75f), yFromTop(h, 3.05f), 0);
 
     String clientRuc = invoice.getClientRucOverride();
     if (clientRuc == null || clientRuc.isBlank()) {
@@ -212,15 +212,15 @@ public class InvoicePdfService {
     // HU-21: column headers (Cant. / Descripción / P. unit. / 10%) are
     // pre-printed on the form, so the PDF prints only the row data.
     // Column x-positions calibrated to production form (invoice_format.png):
-    // Cant. right ~0.66 cm, Desc left ~0.66 cm, P.Unit. right ~6.57 cm.
+    // Cant. right ~0.66 cm, Desc left ~1.0 cm, P.Unit. right ~5.22 cm.
     // Table top at ~5.22 cm from top so first data row lands at ~5.66 cm.
     float tableTop = yFromTop(h, 5.22f);
     float rowH = cmToPt(0.38f);
     float xCant = ox;
-    // Descripción starts just after the Cant. box divider (~0.66 cm).
-    float xDesc = ox + cmToPt(0.5f);
-    // Precio Unitario right-edge measured at ~6.57 cm from panel left.
-    float xPuAnchor = ox + cmToPt(6.22f);
+    // Descripción starts just after the Cant. box divider (~1.0 cm).
+    float xDesc = ox + cmToPt(1.0f);
+    // Precio Unitario right-edge at ~5.22 cm from panel left.
+    float xPuAnchor = ox + cmToPt(5.22f);
 
     int maxRows = 11;
     float yRow = tableTop - rowH * 1.15f;
