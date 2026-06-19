@@ -165,14 +165,15 @@ public class InvoicePdfService {
       throws Exception {
     float ox = panelOriginX + MARGIN_X_PT;
     float h = PAGE_HEIGHT_PT;
+    boolean isRightPanel = panelOriginX > 0;
 
     // --- Client block ---
     // Coordinates calibrated to the production pre-printed factura stock
     // (requirements/invoice_format.png, 23.5×14 cm, two panels).
     // Fecha / RUC value column starts at ~2.2 cm from panel edge.
     float fieldX = ox + cmToPt(2.2f);
-    // Nombre o Razón Social label is wider; value starts at ~3.25 cm.
-    float nameX = ox + cmToPt(3.25f);
+    // Nombre o Razón Social label is wider; value starts at ~3.25 cm (left) / ~3.75 cm (right).
+    float nameX = ox + cmToPt(isRightPanel ? 3.75f : 3.25f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
@@ -219,8 +220,9 @@ public class InvoicePdfService {
     float xCant = ox;
     // Descripción starts just after the Cant. box divider (~1.0 cm).
     float xDesc = ox + cmToPt(1.0f);
-    // Precio Unitario right-edge at ~5.72 cm from panel left.
-    float xPuAnchor = ox + cmToPt(5.72f);
+    // Precio Unitario right-edge at ~5.72 cm (left) / ~6.22 cm (right) from panel left.
+    float xPuAnchor = ox + cmToPt(isRightPanel ? 6.22f : 5.72f);
+    float taxExtraCm = isRightPanel ? 0.5f : 0f;
 
     int maxRows = 11;
     float yRow = tableTop - rowH * 1.15f;
@@ -243,7 +245,11 @@ public class InvoicePdfService {
         BigDecimal amount = dr.columnAmounts()[c];
         if (amount != null) {
           cb.showTextAligned(
-              Element.ALIGN_RIGHT, formatSignedMoneyGs(amount), taxColumnAnchorX(ox, c), yRow, 0);
+              Element.ALIGN_RIGHT,
+              formatSignedMoneyGs(amount),
+              taxColumnAnchorX(ox, c, taxExtraCm),
+              yRow,
+              0);
         }
       }
       cb.endText();
@@ -256,9 +262,9 @@ public class InvoicePdfService {
     // VALOR PARCIAL ~10.89 cm, TOTAL A PAGAR ~11.36 cm from form top.
     // Values right-aligned at the IVA 10% column right edge (taxColumnAnchorX
     // col 2) so the amounts land at the far-right of the totals rows.
-    float totalsAnchorX = taxColumnAnchorX(ox, 2);
+    float totalsAnchorX = taxColumnAnchorX(ox, 2, taxExtraCm);
     float yPartial = yFromTop(h, 10.89f);
-    float yTotal = yFromTop(h, 11.36f);
+    float yTotal = yFromTop(h, 12.86f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
@@ -276,7 +282,7 @@ public class InvoicePdfService {
     // Measured box right-edges: IVA 5% ~3.86 cm, IVA 10% ~7.78 cm (from panel left).
     // The TOTAL IVA box is pre-printed and left blank (no corresponding field).
     cb.setFontAndSize(bf, 7f);
-    float yIva = yFromTop(h, 12.01f);
+    float yIva = yFromTop(h, 13.76f);
     BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
     BigDecimal iva5 = computeIvaByRate(invoice, BigDecimal.valueOf(5));
     cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva10), ox + cmToPt(7.43f), yIva, 0);
@@ -352,9 +358,9 @@ public class InvoicePdfService {
   }
 
   /** Right-edge X (absolute) where amounts in tax column {@code col} are right-aligned. */
-  private static float taxColumnAnchorX(float ox, int col) {
+  private static float taxColumnAnchorX(float ox, int col, float extraOffsetCm) {
     float fromTenColumnCm = (2 - col) * TAX_COL_WIDTH_CM;
-    return ox + cmToPt(TAX_COL_10_ANCHOR_CM - fromTenColumnCm);
+    return ox + cmToPt(TAX_COL_10_ANCHOR_CM + extraOffsetCm - fromTenColumnCm);
   }
 
   /**
