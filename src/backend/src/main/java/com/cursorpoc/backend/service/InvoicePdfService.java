@@ -4,7 +4,6 @@ import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
-import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
@@ -268,8 +267,8 @@ public class InvoicePdfService {
     }
 
     // --- Totals block ---
-    // Per-column subtotals row at ~11.89 cm from form top (Exenta, IVA 5%, IVA 10%).
-    float yPartial = yFromTop(h, 11.89f);
+    // Per-column subtotals row at ~12.19 cm from form top (Exenta, IVA 5%, IVA 10%).
+    float yPartial = yFromTop(h, 12.19f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     for (int c = 0; c < 3; c++) {
@@ -294,24 +293,7 @@ public class InvoicePdfService {
       cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva5), ox + cmToPt(3.51f), yIva, 0);
     }
     BigDecimal totalIva = iva5.add(iva10);
-    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(totalIva), ox + cmToPt(10.23f), yIva, 0);
-    cb.endText();
-
-    // --- Payments (small, under totals) ---
-    // HU-21: short method labels (Efec./Deb./Cred./Transf./Otro) removed; the
-    // amount is enough alongside the pre-printed payment-method labels.
-    // Payment amounts row calibrated to ~12.56 cm from form top.
-    float yPay = yFromTop(h, 12.56f);
-    StringBuilder pay = new StringBuilder();
-    for (InvoicePaymentAllocation p : invoice.getPaymentAllocations()) {
-      if (!pay.isEmpty()) {
-        pay.append("  ");
-      }
-      pay.append(formatMoneyGs(p.getAmount()));
-    }
-    cb.beginText();
-    cb.setFontAndSize(bf, 6.5f);
-    cb.showTextAligned(Element.ALIGN_LEFT, truncate(pay.toString(), 72), ox, yPay, 0);
+    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(totalIva), ox + cmToPt(10.53f), yIva, 0);
     cb.endText();
 
     // HU-21: bottom-of-panel "COPIA: ARCHIVO TRIBUTARIO" / "ORIGINAL:
