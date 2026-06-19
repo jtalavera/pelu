@@ -199,14 +199,14 @@ public class InvoicePdfService {
     }
 
     // Dirección row (y ~4.63 cm) — Teléfono value starts after the pre-printed
-    // "Teléfono:" label (~5.8 cm from panel edge).
+    // "Teléfono:" label (~7.8 cm from panel edge).
     String phone = "";
     Client cl = invoice.getClient();
     if (cl != null && cl.getPhone() != null && !cl.getPhone().isBlank()) {
       phone = cl.getPhone();
     }
     cb.showTextAligned(
-        Element.ALIGN_LEFT, truncate(phone, 22), ox + cmToPt(5.8f), yFromTop(h, 4.63f), 0);
+        Element.ALIGN_LEFT, truncate(phone, 22), ox + cmToPt(7.8f), yFromTop(h, 4.63f), 0);
     cb.endText();
 
     // --- Detail table (variable rows only) ---
@@ -224,11 +224,21 @@ public class InvoicePdfService {
     float xPuAnchor = ox + cmToPt(isRightPanel ? 6.22f : 5.72f);
     float taxExtraCm = isRightPanel ? 0.5f : 0f;
 
+    List<DetailRow> detailRows = buildDetailRows(invoice);
+    BigDecimal[] colSubtotals = {BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
+    for (DetailRow dr : detailRows) {
+      for (int c = 0; c < 3; c++) {
+        if (dr.columnAmounts()[c] != null) {
+          colSubtotals[c] = colSubtotals[c].add(dr.columnAmounts()[c]);
+        }
+      }
+    }
+
     int maxRows = 11;
     float yRow = tableTop - rowH * 1.15f;
     cb.setFontAndSize(bf, TABLE_PT);
     int row = 0;
-    for (DetailRow dr : buildDetailRows(invoice)) {
+    for (DetailRow dr : detailRows) {
       if (row >= maxRows) {
         break;
       }
@@ -258,29 +268,23 @@ public class InvoicePdfService {
     }
 
     // --- Totals block ---
-    // Row y positions calibrated to production form (invoice_format.png):
-    // VALOR PARCIAL ~10.89 cm, TOTAL A PAGAR ~11.36 cm from form top.
-    // Values right-aligned at the IVA 10% column right edge (taxColumnAnchorX
-    // col 2) so the amounts land at the far-right of the totals rows.
-    float totalsAnchorX = taxColumnAnchorX(ox, 2, taxExtraCm);
-    float yPartial = yFromTop(h, 10.89f);
-    float yTotal = yFromTop(h, 12.86f);
+    // Per-column subtotals row at ~11.89 cm from form top (Exenta, IVA 5%, IVA 10%).
+    float yPartial = yFromTop(h, 11.89f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
-    cb.showTextAligned(
-        Element.ALIGN_RIGHT, formatMoneyGs(invoice.getSubtotal()), totalsAnchorX, yPartial, 0);
+    for (int c = 0; c < 3; c++) {
+      if (colSubtotals[c].compareTo(BigDecimal.ZERO) != 0) {
+        cb.showTextAligned(
+            Element.ALIGN_RIGHT,
+            formatSignedMoneyGs(colSubtotals[c]),
+            taxColumnAnchorX(ox, c, taxExtraCm),
+            yPartial,
+            0);
+      }
+    }
 
-    // HU-29 AC6: per-item and global discounts are now printed as dedicated
-    // detail rows (above), so the old single discount label here is gone.
-
-    cb.setFontAndSize(bfBold, 9f);
-    cb.showTextAligned(
-        Element.ALIGN_RIGHT, formatMoneyGs(invoice.getTotal()), totalsAnchorX, yTotal, 0);
-
-    // IVA liquidation row (LIQUIDACIÓN DEL IVA) at ~12.01 cm from top.
-    // Pre-printed row: "... (5%) [box] (10%) [box] TOTAL IVA: [box]"
-    // Measured box right-edges: IVA 5% ~3.86 cm, IVA 10% ~7.78 cm (from panel left).
-    // The TOTAL IVA box is pre-printed and left blank (no corresponding field).
+    // IVA liquidation row at ~13.76 cm from top.
+    // TOTAL IVA (IVA 5% + IVA 10%) printed 2.8 cm right of the IVA 10% field.
     cb.setFontAndSize(bf, 7f);
     float yIva = yFromTop(h, 13.76f);
     BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
@@ -289,6 +293,8 @@ public class InvoicePdfService {
     if (iva5.compareTo(BigDecimal.ZERO) > 0) {
       cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva5), ox + cmToPt(3.51f), yIva, 0);
     }
+    BigDecimal totalIva = iva5.add(iva10);
+    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(totalIva), ox + cmToPt(10.23f), yIva, 0);
     cb.endText();
 
     // --- Payments (small, under totals) ---
