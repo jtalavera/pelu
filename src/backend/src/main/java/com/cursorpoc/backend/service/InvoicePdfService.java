@@ -213,8 +213,8 @@ public class InvoicePdfService {
     // pre-printed on the form, so the PDF prints only the row data.
     // Column x-positions calibrated to production form (invoice_format.png):
     // Cant. right ~0.66 cm, Desc left ~1.0 cm, P.Unit. right ~5.72 cm.
-    // Table top at ~5.22 cm from top so first data row lands at ~5.66 cm.
-    float tableTop = yFromTop(h, 5.22f);
+    // Table top at ~5.72 cm from top so first data row lands at ~6.16 cm.
+    float tableTop = yFromTop(h, 5.72f);
     float rowH = cmToPt(0.38f);
     float xCant = ox;
     // Descripción starts just after the Cant. box divider (~1.0 cm).
