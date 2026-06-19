@@ -58,13 +58,13 @@ public class InvoicePdfService {
   private static final float TABLE_PT = 7.5f;
 
   // HU-29 AC5/AC6: the detail table has three equal-width tax columns —
-  // Exenta (leftmost), IVA 5 %, and IVA 10 % (rightmost). The IVA 10 % column
-  // keeps its historical right-edge anchor (x10 + 0.85 cm = 9.90 cm from the
-  // panel origin); IVA 5 % and Exenta are placed one and two column widths to
-  // its left. The width is an estimate — tune against the physical pre-printed
-  // form if amounts don't line up with the printed column boxes.
-  private static final float TAX_COL_WIDTH_CM = 1.5f;
-  private static final float TAX_COL_10_ANCHOR_CM = 9.9f;
+  // Exenta (leftmost), IVA 5 %, and IVA 10 % (rightmost). Column widths and
+  // anchors are calibrated to the production pre-printed factura stock
+  // (requirements/invoice_format.png, 23.5 x 14 cm, ~552 px/cm scan).
+  // Measured column right-edges from panel left: Exenta ~8.40 cm, IVA 5 %
+  // ~10.12 cm, IVA 10 % ~11.68 cm. Equal-width formula errors < 0.10 cm.
+  private static final float TAX_COL_WIDTH_CM = 1.60f;
+  private static final float TAX_COL_10_ANCHOR_CM = 11.33f;
 
   private final BusinessProfileRepository businessProfileRepository;
   private final InvoiceRepository invoiceRepository;
@@ -164,19 +164,21 @@ public class InvoicePdfService {
       DateTimeFormatter dateFmt)
       throws Exception {
     float ox = panelOriginX + MARGIN_X_PT;
-    float innerW = PANEL_WIDTH_PT - 2 * MARGIN_X_PT;
     float h = PAGE_HEIGHT_PT;
 
     // --- Client block ---
-    // HU-21: RUC and client name are aligned to the same x-coordinate as the
-    // date field, so they line up vertically with the printed "Fecha" box.
+    // Coordinates calibrated to the production pre-printed factura stock
+    // (requirements/invoice_format.png, 23.5×14 cm, two panels).
+    // Fecha / RUC value column starts at ~2.2 cm from panel edge.
     float fieldX = ox + cmToPt(2.2f);
+    // Nombre o Razón Social label is wider; value starts at ~3.75 cm.
+    float nameX = ox + cmToPt(3.75f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
         Element.ALIGN_LEFT, dateFmt.format(invoice.getIssuedAt()), fieldX, yFromTop(h, 3.05f), 0);
-    // Contado (POS): mark near printed “CONTADO”
-    cb.showTextAligned(Element.ALIGN_LEFT, "X", ox + cmToPt(5.6f), yFromTop(h, 3.05f), 0);
+    // Contado (POS): mark inside printed "CONTADO" box (~6.1 cm from panel edge).
+    cb.showTextAligned(Element.ALIGN_LEFT, "X", ox + cmToPt(5.75f), yFromTop(h, 3.05f), 0);
 
     String clientRuc = invoice.getClientRucOverride();
     if (clientRuc == null || clientRuc.isBlank()) {
@@ -192,27 +194,33 @@ public class InvoicePdfService {
 
     String name = invoice.getClientDisplayName();
     if (name != null && !name.isBlank()) {
-      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), fieldX, yFromTop(h, 4.22f), 0);
+      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), nameX, yFromTop(h, 4.11f), 0);
     }
 
+    // Dirección row (y ~4.63 cm) — Teléfono value starts after the pre-printed
+    // "Teléfono:" label (~5.8 cm from panel edge).
     String phone = "";
     Client cl = invoice.getClient();
     if (cl != null && cl.getPhone() != null && !cl.getPhone().isBlank()) {
       phone = cl.getPhone();
     }
     cb.showTextAligned(
-        Element.ALIGN_LEFT, truncate(phone, 22), ox + cmToPt(6.2f), yFromTop(h, 4.82f), 0);
+        Element.ALIGN_LEFT, truncate(phone, 22), ox + cmToPt(5.8f), yFromTop(h, 4.63f), 0);
     cb.endText();
 
     // --- Detail table (variable rows only) ---
     // HU-21: column headers (Cant. / Descripción / P. unit. / 10%) are
     // pre-printed on the form, so the PDF prints only the row data.
-    float tableTop = yFromTop(h, 5.55f);
+    // Column x-positions calibrated to production form (invoice_format.png):
+    // Cant. right ~0.66 cm, Desc left ~0.66 cm, P.Unit. right ~6.57 cm.
+    // Table top at ~5.22 cm from top so first data row lands at ~5.66 cm.
+    float tableTop = yFromTop(h, 5.22f);
     float rowH = cmToPt(0.38f);
     float xCant = ox;
-    float xDesc = ox + cmToPt(0.85f);
-    float xPu = ox + cmToPt(6.35f);
-    float x10 = ox + cmToPt(9.05f);
+    // Descripción starts just after the Cant. box divider (~0.66 cm).
+    float xDesc = ox + cmToPt(0.5f);
+    // Precio Unitario right-edge measured at ~6.57 cm from panel left.
+    float xPuAnchor = ox + cmToPt(6.22f);
 
     int maxRows = 11;
     float yRow = tableTop - rowH * 1.15f;
@@ -225,12 +233,11 @@ public class InvoicePdfService {
       cb.beginText();
       if (dr.quantity() != null) {
         cb.showTextAligned(
-            Element.ALIGN_RIGHT, String.valueOf(dr.quantity()), xCant + cmToPt(0.65f), yRow, 0);
+            Element.ALIGN_RIGHT, String.valueOf(dr.quantity()), xCant + cmToPt(0.35f), yRow, 0);
       }
       cb.showTextAligned(Element.ALIGN_LEFT, truncate(dr.description(), 36), xDesc, yRow, 0);
       if (dr.unitPrice() != null) {
-        cb.showTextAligned(
-            Element.ALIGN_RIGHT, formatMoneyGs(dr.unitPrice()), xPu + cmToPt(1.35f), yRow, 0);
+        cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(dr.unitPrice()), xPuAnchor, yRow, 0);
       }
       for (int c = 0; c < 3; c++) {
         BigDecimal amount = dr.columnAmounts()[c];
@@ -245,40 +252,44 @@ public class InvoicePdfService {
     }
 
     // --- Totals block ---
-    float yPartial = yFromTop(h, 10.05f);
-    float yTotal = yFromTop(h, 10.75f);
-    float yIva = yFromTop(h, 11.45f);
+    // Row y positions calibrated to production form (invoice_format.png):
+    // VALOR PARCIAL ~10.89 cm, TOTAL A PAGAR ~11.36 cm from form top.
+    // Values right-aligned at the IVA 10% column right edge (taxColumnAnchorX
+    // col 2) so the amounts land at the far-right of the totals rows.
+    float totalsAnchorX = taxColumnAnchorX(ox, 2);
+    float yPartial = yFromTop(h, 10.89f);
+    float yTotal = yFromTop(h, 11.36f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
-        Element.ALIGN_RIGHT,
-        formatMoneyGs(invoice.getSubtotal()),
-        x10 + cmToPt(0.85f),
-        yPartial,
-        0);
+        Element.ALIGN_RIGHT, formatMoneyGs(invoice.getSubtotal()), totalsAnchorX, yPartial, 0);
 
     // HU-29 AC6: per-item and global discounts are now printed as dedicated
     // detail rows (above), so the old single discount label here is gone.
 
     cb.setFontAndSize(bfBold, 9f);
     cb.showTextAligned(
-        Element.ALIGN_RIGHT, formatMoneyGs(invoice.getTotal()), x10 + cmToPt(0.85f), yTotal, 0);
+        Element.ALIGN_RIGHT, formatMoneyGs(invoice.getTotal()), totalsAnchorX, yTotal, 0);
 
-    // IVA liquidation: 10 % in its column, 5 % in the column to its left.
+    // IVA liquidation row (LIQUIDACIÓN DEL IVA) at ~12.01 cm from top.
+    // Pre-printed row: "... (5%) [box] (10%) [box] TOTAL IVA: [box]"
+    // Measured box right-edges: IVA 5% ~3.86 cm, IVA 10% ~7.78 cm (from panel left).
+    // The TOTAL IVA box is pre-printed and left blank (no corresponding field).
     cb.setFontAndSize(bf, 7f);
+    float yIva = yFromTop(h, 12.01f);
     BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
     BigDecimal iva5 = computeIvaByRate(invoice, BigDecimal.valueOf(5));
-    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva10), taxColumnAnchorX(ox, 2), yIva, 0);
+    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva10), ox + cmToPt(7.43f), yIva, 0);
     if (iva5.compareTo(BigDecimal.ZERO) > 0) {
-      cb.showTextAligned(
-          Element.ALIGN_RIGHT, formatMoneyGs(iva5), taxColumnAnchorX(ox, 1), yIva, 0);
+      cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva5), ox + cmToPt(3.51f), yIva, 0);
     }
     cb.endText();
 
     // --- Payments (small, under totals) ---
     // HU-21: short method labels (Efec./Deb./Cred./Transf./Otro) removed; the
     // amount is enough alongside the pre-printed payment-method labels.
-    float yPay = yFromTop(h, 12.05f);
+    // Payment amounts row calibrated to ~12.56 cm from form top.
+    float yPay = yFromTop(h, 12.56f);
     StringBuilder pay = new StringBuilder();
     for (InvoicePaymentAllocation p : invoice.getPaymentAllocations()) {
       if (!pay.isEmpty()) {
@@ -297,7 +308,7 @@ public class InvoicePdfService {
   }
 
   /**
-   * Visible “Descripción” on paper: service catalog name when linked; otherwise stored line text.
+   * Visible "Descripción" on paper: service catalog name when linked; otherwise stored line text.
    */
   static String lineDescriptionForPrint(InvoiceLine line) {
     if (line.getSalonService() != null && line.getSalonService().getName() != null) {
