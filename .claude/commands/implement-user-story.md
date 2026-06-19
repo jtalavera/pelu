@@ -90,5 +90,6 @@ PR body must include:
 - A **Summary** section (bullet list of what was built, referencing acceptance criteria)
 - A **Test plan** section (checklist of manual + automated tests)
 - The footer: Generated with Claude Code
+- If the requirement was read from a github issue, the PR must be linked to the issue.
 
 Return the PR URL when done.
