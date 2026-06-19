@@ -650,7 +650,7 @@
       "INVOICE_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "El rango de fechas no puede superar 31 días (incluidos).",
       "INVOICE_NOT_FOUND": "Factura no encontrada.",
-      "BUSINESS_RUC_REQUIRED_FOR_PDF": "Se necesita un RUC de negocio válido para generar facturas en PDF.",
+      "BUSINESS_RUC_REQUIRED_FOR_PDF": "Configurá el RUC de tu negocio en Configuración antes de generar facturas en PDF.",
       "INVOICE_PDF_ONLY_FOR_ISSUED": "El PDF de factura solo está disponible para facturas emitidas.",
       "BUSINESS_PROFILE_NOT_FOUND": "Perfil del negocio no encontrado.",
       "INVALID_REQUEST": "La solicitud no es válida. Revisá los datos ingresados.",

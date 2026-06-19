@@ -15,9 +15,8 @@ import {
   Text,
   Textarea,
 } from "@design-system";
-import { apiBaseUrl } from "../api/baseUrl";
-import { authHeaders } from "../api/authHeaders";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
+import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
@@ -210,6 +209,7 @@ function InvoiceDetailModal({
   const [voiding, setVoiding] = useState(false);
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidSuccess, setVoidSuccess] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,23 +230,13 @@ function InvoiceDetailModal({
     };
   }, [invoiceId, t]);
 
-  function handleDownloadPdf() {
-    const url = `${apiBaseUrl()}/api/invoices/${invoiceId}/pdf`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invoice-${invoiceId}.pdf`;
-    const headers = authHeaders({ json: false });
-    fetch(url, { headers })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const blobUrl = URL.createObjectURL(blob);
-        a.href = blobUrl;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      })
-      .catch(() => {});
+  async function handleDownloadPdf() {
+    setPdfError(null);
+    try {
+      await downloadInvoicePdf(invoiceId);
+    } catch (err) {
+      setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    }
   }
 
   async function handleVoid(e: React.FormEvent) {
@@ -313,6 +303,11 @@ function InvoiceDetailModal({
         {voidSuccess && (
           <Alert variant="success" title={t("femme.billing.history.detail.voidSuccess")}>
             {t("femme.billing.history.detail.voidSuccess")}
+          </Alert>
+        )}
+        {pdfError && (
+          <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+            {pdfError}
           </Alert>
         )}
         {invoice && (
@@ -917,6 +912,7 @@ function NewInvoiceTab({
   const [paymentErrors, setPaymentErrors] = useState<Record<number, string>>({});
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
   const [clientProfileSyncWarning, setClientProfileSyncWarning] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   function handleClientSelectionChange(sel: ClientSelection) {
     setClientSelection(sel);
@@ -1341,23 +1337,14 @@ function NewInvoiceTab({
     }
   }
 
-  function handleDownloadLastPdf() {
+  async function handleDownloadLastPdf() {
     if (!lastInvoiceId) return;
-    const url = `${apiBaseUrl()}/api/invoices/${lastInvoiceId}/pdf`;
-    const headers = authHeaders({ json: false });
-    fetch(url, { headers })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const a = document.createElement("a");
-        const blobUrl = URL.createObjectURL(blob);
-        a.href = blobUrl;
-        a.download = `invoice-${lastInvoiceId}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      })
-      .catch(() => {});
+    setPdfError(null);
+    try {
+      await downloadInvoicePdf(lastInvoiceId);
+    } catch (err) {
+      setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    }
   }
 
   return (
@@ -1374,6 +1361,11 @@ function NewInvoiceTab({
       {submitError && (
         <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
           {submitError}
+        </Alert>
+      )}
+      {pdfError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {pdfError}
         </Alert>
       )}
       {successInvoiceNumber && (

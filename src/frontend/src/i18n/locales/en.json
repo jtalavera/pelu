@@ -648,7 +648,7 @@
       "INVOICE_LIST_INVALID_RANGE": "The start date must be before the end date.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "The date range cannot exceed 31 days (inclusive).",
       "INVOICE_NOT_FOUND": "Invoice not found.",
-      "BUSINESS_RUC_REQUIRED_FOR_PDF": "A valid business RUC is required to generate invoice PDFs.",
+      "BUSINESS_RUC_REQUIRED_FOR_PDF": "Configure your business RUC in Settings before generating invoice PDFs.",
       "INVOICE_PDF_ONLY_FOR_ISSUED": "Invoice PDF is only available for issued invoices.",
       "BUSINESS_PROFILE_NOT_FOUND": "Business profile not found.",
       "INVALID_REQUEST": "The request is invalid. Please review your input.",
