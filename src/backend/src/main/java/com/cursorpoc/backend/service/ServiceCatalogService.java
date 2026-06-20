@@ -27,7 +27,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class ServiceCatalogService {
 
   private static final Set<String> ALLOWED_CATEGORY_ACCENTS =
-      Set.of("rose", "mauve", "success", "warning", "danger", "stone");
+      Set.of(
+          "rose", "coral", "fuchsia", "violet", "indigo", "sky", "teal", "lime", "amber", "mauve",
+          "success", "warning", "danger", "stone");
 
   private final TenantRepository tenantRepository;
   private final ServiceCategoryRepository serviceCategoryRepository;

@@ -1,11 +1,14 @@
 /**
- * E2E tests for the 6 high-priority GitHub issues:
+ * E2E tests for high-priority GitHub issues:
  *   #37 — RUC warning on Nuevo comprobante
+ *   #41 — Split "Descuento en Ítem" into "Tipo Dto." + "Valor Dto." in comprobante popup
+ *   #42 — User profile / change-password dialog labels were raw i18n keys
  *   #43 — Salon RUC snapshotted on the invoice (business_ruc field)
  *   #46 — Default IVA 10% when creating a new service
  *   #47 — Invoice to a different name/RUC without mutating the client
  *   #48 — "Ver" comprobante popup in Client History
  *   #49 — More vivid category colors shown in table swatches
+ *   #52 — Error al asignar color de categoría (palette mismatch, backend allow-list expanded)
  */
 
 import { expect, test } from "@playwright/test";
@@ -272,6 +275,90 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
     `/api/invoices/${invoice.id}`,
   );
   expect(detail.businessRuc).toBe(salonRuc);
+});
+
+// ─── Issue #52 ────────────────────────────────────────────────────────────────
+
+test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no lanza error", async ({
+  page,
+}) => {
+  await loginAsDemo(page);
+  await page.goto("/app/services");
+  await page.getByRole("button", { name: "Categories", exact: true }).click();
+
+  // Create a category first with default color
+  const catName = `TealCat52 ${Date.now()}`;
+  await page.getByRole("button", { name: "+ New category" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Name").fill(catName);
+  // Pick a color that was previously rejected by the backend (teal)
+  await dialog.getByRole("button", { name: /teal/i }).click();
+  await dialog.getByRole("button", { name: "Save" }).click();
+
+  // Dialog should close on success (no error alert)
+  await expect(dialog).not.toBeVisible({ timeout: 10_000 });
+
+  // The new category should appear in the list
+  await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
+
+  // Now edit it and pick another previously-rejected color (sky)
+  // The category row itself has aria-label "Edit category <name>"
+  await page.getByRole("button", { name: `Edit category ${catName}` }).click();
+  const editDialog = page.getByRole("dialog");
+  await expect(editDialog).toBeVisible();
+  await editDialog.getByRole("button", { name: /sky/i }).click();
+  await editDialog.getByRole("button", { name: "Save" }).click();
+
+  // Dialog should close on success (no error alert)
+  await expect(editDialog).not.toBeVisible({ timeout: 10_000 });
+
+  // Category should still appear in the list
+  await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
+});
+
+// ─── Issue #42 ────────────────────────────────────────────────────────────────
+
+test("Issue #42 · 'Configuración del usuario' muestra etiquetas traducidas, no claves i18n", async ({
+  page,
+}) => {
+  await loginAsDemo(page);
+  await page.goto("/app");
+  // Open the user menu via aria-label "Open user menu", then click "User settings"
+  await page.getByRole("button", { name: "Open user menu" }).click();
+  await page.getByText("User settings", { exact: true }).click();
+
+  const modal = page.getByRole("dialog");
+  await expect(modal).toBeVisible({ timeout: 10_000 });
+
+  // The modal title should be translated ("My profile"), not a raw key
+  await expect(modal.getByText("My profile")).toBeVisible();
+  // No raw i18n key strings anywhere in the modal
+  await expect(modal.getByText(/femme\.userProfile\./)).toHaveCount(0);
+  await expect(modal.getByText(/app\.userProfile\./)).toHaveCount(0);
+});
+
+test("Issue #42 · 'Cambiar contraseña' muestra etiquetas traducidas, no claves i18n", async ({
+  page,
+}) => {
+  await loginAsDemo(page);
+  await page.goto("/app");
+  // Open "Change password" directly from the user menu
+  await page.getByRole("button", { name: "Open user menu" }).click();
+  await page.getByText("Change password", { exact: true }).click();
+
+  const modal = page.getByRole("dialog");
+  await expect(modal).toBeVisible({ timeout: 10_000 });
+
+  // Password tab, labels and submit button should show translated text
+  await expect(modal.getByRole("tab", { name: "Password" })).toBeVisible();
+  await expect(modal.getByLabel("New password")).toBeVisible();
+  await expect(modal.getByLabel("Confirm password")).toBeVisible();
+  await expect(modal.getByRole("button", { name: "Change password" })).toBeVisible();
+
+  // No raw i18n key strings anywhere in the modal
+  await expect(modal.getByText(/femme\.userProfile\./)).toHaveCount(0);
+  await expect(modal.getByText(/app\.userProfile\./)).toHaveCount(0);
 });
 
 // ─── Issue #48 ────────────────────────────────────────────────────────────────

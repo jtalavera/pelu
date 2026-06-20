@@ -65,9 +65,9 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(page.getByText("GABRIELA", { exact: true })).toHaveCount(0);
   });
 
-  // AC-3 — "Descuento en Ítem" column in Ver popup
+  // AC-3 — Columnas "Tipo Dto." y "Valor Dto." en popup Ver (split from "Descuento en Ítem")
   // AC-4 — "Descuento" renamed to "Invoice discount" / "Descuento sobre factura"
-  test("HU-30 · 3+4 columna de descuento por ítem en popup Ver y renom descuento de factura", async ({
+  test("HU-30 · 3+4 columnas Tipo/Valor Dto en popup Ver y renom descuento de factura", async ({
     page,
     request,
   }) => {
@@ -77,8 +77,11 @@ test.describe("HU-30 · Fixes varios", () => {
     await ensureCashSessionOpenApi(request, token);
     const seed = await seedCategoryServiceProfessional(request, token);
 
-    // Create an invoice with a per-item discount AND a global discount
-    const inv = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+    // Create an invoice with:
+    //   line 1: PERCENT discount 10% on unitPrice 10000 → discount = 1.000, lineTotal = 9.000
+    //   line 2: FIXED discount 500 on unitPrice 5000 → discount = 500, lineTotal = 4.500
+    // Plus a global 5% discount
+    await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
       clientId: null,
       clientDisplayName: `E2E HU30 Discount ${Date.now()}`,
       clientRucOverride: null,
@@ -93,8 +96,16 @@ test.describe("HU-30 · Fixes varios", () => {
           discountType: "PERCENT",
           discountValue: 10,
         },
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 5000,
+          discountType: "FIXED",
+          discountValue: 500,
+        },
       ],
-      payments: [{ method: "CASH", amount: 8550 }],
+      payments: [{ method: "CASH", amount: 12825 }],
     });
 
     await loginAsDemo(page);
@@ -111,8 +122,19 @@ test.describe("HU-30 · Fixes varios", () => {
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible({ timeout: 15_000 });
 
-    // AC-3: "Item Discount" column header exists in the items table
-    await expect(modal.getByText("Item Discount")).toBeVisible();
+    // AC-3: Two new split column headers replace the old "Item Discount" single column
+    await expect(modal.getByText("Discount Type")).toBeVisible();
+    await expect(modal.getByText("Discount Value")).toBeVisible();
+    // Old unified header should no longer exist
+    await expect(modal.getByText("Item Discount", { exact: true })).toHaveCount(0);
+
+    // PERCENT line: Tipo Dto. = "10%", Valor Dto. = "1.000" (dot-separator, no decimals)
+    await expect(modal.getByText("10%")).toBeVisible();
+    await expect(modal.getByText("1.000")).toBeVisible();
+
+    // FIXED line: Tipo Dto. = "Fixed amount", Valor Dto. = "500" (no thousands sep needed)
+    await expect(modal.getByText("Fixed amount")).toBeVisible();
+    await expect(modal.getByText("500")).toBeVisible();
 
     // AC-4: "Invoice discount" label (not plain "Discount")
     await expect(modal.getByText("Invoice discount")).toBeVisible();

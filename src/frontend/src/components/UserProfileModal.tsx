@@ -139,7 +139,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
     <Modal
       open
       onClose={onClose}
-      title={t("femme.userProfile.title")}
+      title={t("app.userProfile.title")}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Tabs */}
@@ -152,7 +152,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
               style={tabStyle("profile")}
               onClick={() => setActiveTab("profile")}
             >
-              {t("femme.userProfile.tabProfile")}
+              {t("app.userProfile.tabProfile")}
             </button>
           )}
           <button
@@ -162,7 +162,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
             style={tabStyle("password")}
             onClick={() => setActiveTab("password")}
           >
-            {t("femme.userProfile.tabPassword")}
+            {t("app.userProfile.tabPassword")}
           </button>
         </div>
 
@@ -171,19 +171,19 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
           <form onSubmit={(e) => void handleProfileSave(e)} noValidate>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {profileError && (
-                <Alert variant="destructive" title={t("femme.userProfile.errorTitle")}>
+                <Alert variant="destructive" title={t("app.userProfile.errorTitle")}>
                   {profileError}
                 </Alert>
               )}
               {profileSuccess && (
-                <Alert variant="success" title={t("femme.userProfile.savedTitle")}>
-                  {t("femme.userProfile.savedTitle")}
+                <Alert variant="success" title={t("app.userProfile.savedTitle")}>
+                  {t("app.userProfile.savedTitle")}
                 </Alert>
               )}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <Label htmlFor="profile-first-name">{t("femme.userProfile.firstName")}</Label>
+                  <Label htmlFor="profile-first-name">{t("app.userProfile.firstName")}</Label>
                   <Input
                     id="profile-first-name"
                     value={firstName}
@@ -191,7 +191,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
                   />
                 </div>
                 <div>
-                  <Label htmlFor="profile-last-name">{t("femme.userProfile.lastName")}</Label>
+                  <Label htmlFor="profile-last-name">{t("app.userProfile.lastName")}</Label>
                   <Input
                     id="profile-last-name"
                     value={lastName}
@@ -201,7 +201,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
               </div>
 
               <div>
-                <Label htmlFor="profile-address">{t("femme.userProfile.address")}</Label>
+                <Label htmlFor="profile-address">{t("app.userProfile.address")}</Label>
                 <Input
                   id="profile-address"
                   value={address}
@@ -210,7 +210,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
               </div>
 
               <div>
-                <Label htmlFor="profile-phone">{t("femme.userProfile.phone")}</Label>
+                <Label htmlFor="profile-phone">{t("app.userProfile.phone")}</Label>
                 <Input
                   id="profile-phone"
                   type="tel"
@@ -220,7 +220,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
               </div>
 
               <div>
-                <Label htmlFor="profile-email">{t("femme.userProfile.email")}</Label>
+                <Label htmlFor="profile-email">{t("app.userProfile.email")}</Label>
                 <Input
                   id="profile-email"
                   type="email"
@@ -280,10 +280,10 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <Button type="button" variant="secondary" onClick={onClose}>
-                  {t("femme.userProfile.cancel")}
+                  {t("app.userProfile.cancel")}
                 </Button>
                 <Button type="submit" disabled={profileSaving}>
-                  {profileSaving ? <Spinner size="sm" /> : t("femme.userProfile.save")}
+                  {profileSaving ? <Spinner size="sm" /> : t("app.userProfile.save")}
                 </Button>
               </div>
             </div>
@@ -292,7 +292,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
 
         {/* Degraded admin view — only show password tab (no profile) */}
         {activeTab === "profile" && !hasProfile && (
-          <Text variant="muted">{t("femme.userProfile.adminNoProfile")}</Text>
+          <Text variant="muted">{t("app.userProfile.adminNoProfile")}</Text>
         )}
 
         {/* Password tab */}
@@ -300,13 +300,13 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
           <form onSubmit={(e) => void handlePasswordSave(e)} noValidate>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {passwordError && (
-                <Alert variant="destructive" title={t("femme.userProfile.errorTitle")}>
+                <Alert variant="destructive" title={t("app.userProfile.errorTitle")}>
                   {passwordError}
                 </Alert>
               )}
               {passwordSuccess && (
-                <Alert variant="success" title={t("femme.userProfile.passwordChangedTitle")}>
-                  {t("femme.userProfile.passwordChangedTitle")}
+                <Alert variant="success" title={t("app.userProfile.passwordChangedTitle")}>
+                  {t("app.userProfile.passwordChangedTitle")}
                 </Alert>
               )}
 
@@ -316,7 +316,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
 
               <div>
                 <Label htmlFor="profile-new-password">
-                  {t("femme.userProfile.newPassword")}
+                  {t("app.userProfile.newPassword")}
                 </Label>
                 <Input
                   id="profile-new-password"
@@ -329,7 +329,7 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
 
               <div>
                 <Label htmlFor="profile-confirm-password">
-                  {t("femme.userProfile.confirmPassword")}
+                  {t("app.userProfile.confirmPassword")}
                 </Label>
                 <Input
                   id="profile-confirm-password"
@@ -341,10 +341,10 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <Button type="button" variant="secondary" onClick={onClose}>
-                  {t("femme.userProfile.cancel")}
+                  {t("app.userProfile.cancel")}
                 </Button>
                 <Button type="submit" disabled={passwordSaving}>
-                  {passwordSaving ? <Spinner size="sm" /> : t("femme.userProfile.changePassword")}
+                  {passwordSaving ? <Spinner size="sm" /> : t("app.userProfile.changePassword")}
                 </Button>
               </div>
             </div>
