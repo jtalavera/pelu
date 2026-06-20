@@ -63,6 +63,33 @@ function capitalize(s: string): string {
     .join("");
 }
 
+/** Label for "Tipo Dto." column: shows "20%" for PERCENT or an i18n key resolved externally for FIXED. */
+function discountTypeLabel(type: string, value: string | null): string {
+  if (!type || type === "NONE") return "—";
+  if (type === "PERCENT") {
+    if (value == null || value === "") return "0%";
+    return `${String(value).trim()}%`;
+  }
+  // FIXED — caller is responsible for substituting the translated "Monto fijo" text
+  return "FIXED";
+}
+
+/** Monetary discount amount for "Valor Dto." column, derived from unitPrice * qty - lineTotal. */
+function discountMonetaryAmount(line: {
+  discountType?: string | null;
+  unitPrice: string;
+  quantity: number;
+  lineTotal: string;
+}): string | null {
+  if (!line.discountType || line.discountType === "NONE") return null;
+  const gross = Number(line.unitPrice) * line.quantity;
+  const net = Number(line.lineTotal);
+  const amount = gross - net;
+  if (amount <= 0) return null;
+  return String(amount);
+}
+
+/** Used for the invoice-level discount label in the totals section. */
 function discountLabel(type: string, value: string | null): string {
   if (!type || type === "NONE") return "";
   if (type === "PERCENT") {
@@ -236,7 +263,8 @@ export function InvoiceDetailModal({
                       <th className="px-3 py-2 text-left">{t("femme.billing.history.detail.colDescription")}</th>
                       <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colQty")}</th>
                       <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colUnitPrice")}</th>
-                      <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colItemDiscount")}</th>
+                      <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colItemDiscountType")}</th>
+                      <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colItemDiscountValue")}</th>
                       <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colLineTotal")}</th>
                     </tr>
                   </thead>
@@ -247,9 +275,14 @@ export function InvoiceDetailModal({
                         <td className="px-3 py-2 text-right">{l.quantity}</td>
                         <td className="px-3 py-2 text-right">{formatAmountDecimal(l.unitPrice)}</td>
                         <td className="px-3 py-2 text-right">
-                          {l.discountType && l.discountType !== "NONE"
-                            ? discountLabel(l.discountType, l.discountValue ?? null)
-                            : "—"}
+                          {(() => {
+                            const label = discountTypeLabel(l.discountType ?? "", l.discountValue ?? null);
+                            if (label === "FIXED") return t("femme.billing.history.detail.fixedAmount");
+                            return label;
+                          })()}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {formatAmountDecimal(discountMonetaryAmount(l), "—")}
                         </td>
                         <td className="px-3 py-2 text-right">{formatAmountDecimal(l.lineTotal)}</td>
                       </tr>
