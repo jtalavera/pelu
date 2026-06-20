@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
+import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
@@ -54,6 +55,7 @@ public class InvoiceService {
   private final ClientRepository clientRepository;
   private final TenantRepository tenantRepository;
   private final SalonServiceRepository salonServiceRepository;
+  private final BusinessProfileRepository businessProfileRepository;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -61,13 +63,15 @@ public class InvoiceService {
       FiscalStampRepository fiscalStampRepository,
       ClientRepository clientRepository,
       TenantRepository tenantRepository,
-      SalonServiceRepository salonServiceRepository) {
+      SalonServiceRepository salonServiceRepository,
+      BusinessProfileRepository businessProfileRepository) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
     this.clientRepository = clientRepository;
     this.tenantRepository = tenantRepository;
     this.salonServiceRepository = salonServiceRepository;
+    this.businessProfileRepository = businessProfileRepository;
   }
 
   @Transactional
@@ -142,6 +146,11 @@ public class InvoiceService {
     if (request.clientRucOverride() != null && !request.clientRucOverride().isBlank()) {
       invoice.setClientRucOverride(request.clientRucOverride().trim());
     }
+
+    // Snapshot the salon RUC at issue time so PDF reprints remain faithful
+    businessProfileRepository
+        .findByTenantId(tenantId)
+        .ifPresent(bp -> invoice.setBusinessRuc(bp.getRuc()));
 
     // 5. Lines
     if (request.lines() == null || request.lines().isEmpty()) {
@@ -453,6 +462,7 @@ public class InvoiceService {
         i.getClient() != null ? i.getClient().getId() : null,
         i.getClientDisplayName(),
         i.getClientRucOverride(),
+        i.getBusinessRuc(),
         i.getStatus().name(),
         i.getSubtotal(),
         i.getDiscountType() != null ? i.getDiscountType().name() : DiscountType.NONE.name(),

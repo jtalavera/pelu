@@ -11,6 +11,7 @@ import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
@@ -47,6 +48,7 @@ class InvoiceServiceTest {
   @Mock private ClientRepository clientRepository;
   @Mock private TenantRepository tenantRepository;
   @Mock private SalonServiceRepository salonServiceRepository;
+  @Mock private BusinessProfileRepository businessProfileRepository;
 
   @InjectMocks private InvoiceService invoiceService;
 
