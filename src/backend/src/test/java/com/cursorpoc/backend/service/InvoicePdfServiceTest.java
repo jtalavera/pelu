@@ -14,7 +14,6 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
-import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.parser.PdfTextExtractor;
@@ -30,10 +29,7 @@ class InvoicePdfServiceTest {
   private InvoicePdfService newService() {
     FemmeTimeProperties time = new FemmeTimeProperties();
     return new InvoicePdfService(
-        mock(BusinessProfileRepository.class),
-        mock(InvoiceRepository.class),
-        mock(BusinessProfileService.class),
-        time);
+        mock(InvoiceRepository.class), mock(BusinessProfileService.class), time);
   }
 
   private Invoice baseInvoice(List<InvoiceLine> lines, List<InvoicePaymentAllocation> payments) {

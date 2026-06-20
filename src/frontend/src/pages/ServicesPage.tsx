@@ -148,11 +148,12 @@ export default function ServicesPage() {
     void load();
   }, [load]);
 
-  // When taxes finish loading while a new-service dialog is already open, auto-select first active tax
+  // When taxes finish loading while a new-service dialog is already open, auto-select IVA 10%
   useEffect(() => {
     if (serviceModalOpen && !serviceEditing && serviceTaxId === "" && taxes.length > 0) {
-      const firstActiveTax = taxes.find((tx) => tx.active);
-      if (firstActiveTax) setServiceTaxId(String(firstActiveTax.id));
+      const defaultTax =
+        taxes.find((tx) => tx.active && tx.rate === 10) ?? taxes.find((tx) => tx.active);
+      if (defaultTax) setServiceTaxId(String(defaultTax.id));
     }
   }, [taxes, serviceModalOpen, serviceEditing, serviceTaxId]);
 
@@ -218,11 +219,12 @@ export default function ServicesPage() {
   }
 
   function openNewService() {
-    const firstActiveTax = taxes.find((tx) => tx.active);
+    const defaultTax =
+      taxes.find((tx) => tx.active && tx.rate === 10) ?? taxes.find((tx) => tx.active);
     setServiceEditing(null);
     setServiceName("");
     setServiceCategoryId(activeCategories[0]?.id ? String(activeCategories[0].id) : "");
-    setServiceTaxId(firstActiveTax ? String(firstActiveTax.id) : "");
+    setServiceTaxId(defaultTax ? String(defaultTax.id) : "");
     setServicePrice("");
     setServiceDuration("");
     setServiceFieldError(null);
@@ -1117,7 +1119,7 @@ export default function ServicesPage() {
                     type="button"
                     className="flex min-h-11 min-w-11 items-center justify-center rounded-md border-2 p-1 transition-colors"
                     style={{
-                      borderColor: selected ? "var(--color-rose-md)" : "var(--color-stone-md)",
+                      borderColor: selected ? sw.color : "var(--color-stone-md)",
                       background: "var(--color-white)",
                     }}
                     aria-pressed={selected}
@@ -1125,12 +1127,14 @@ export default function ServicesPage() {
                     onClick={() => setCategoryAccentKey(key)}
                   >
                     <span
-                      className="block size-8 rounded-sm"
-                      style={{
-                        background: sw.bg,
-                        boxShadow: "inset 0 0 0 0.5px var(--color-stone-md)",
-                      }}
-                    />
+                      className="flex size-8 items-center justify-center rounded-sm"
+                      style={{ background: sw.bg }}
+                    >
+                      <span
+                        className="block rounded-sm"
+                        style={{ width: 14, height: 14, background: sw.color }}
+                      />
+                    </span>
                   </button>
                 );
               })}

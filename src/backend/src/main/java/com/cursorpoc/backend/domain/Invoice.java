@@ -51,6 +51,9 @@ public class Invoice {
   @Column(name = "client_ruc_override", length = 32)
   private String clientRucOverride;
 
+  @Column(name = "business_ruc", length = 32)
+  private String businessRuc;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private InvoiceStatus status;
@@ -147,6 +150,14 @@ public class Invoice {
 
   public void setClientRucOverride(String clientRucOverride) {
     this.clientRucOverride = clientRucOverride;
+  }
+
+  public String getBusinessRuc() {
+    return businessRuc;
+  }
+
+  public void setBusinessRuc(String businessRuc) {
+    this.businessRuc = businessRuc;
   }
 
   public InvoiceStatus getStatus() {

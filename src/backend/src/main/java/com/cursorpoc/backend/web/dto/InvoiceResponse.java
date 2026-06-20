@@ -12,6 +12,7 @@ public record InvoiceResponse(
     Long clientId,
     String clientDisplayName,
     String clientRucOverride,
+    String businessRuc,
     String status,
     BigDecimal subtotal,
     String discountType,

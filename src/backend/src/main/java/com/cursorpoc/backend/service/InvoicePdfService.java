@@ -7,7 +7,6 @@ import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
-import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
@@ -65,17 +64,14 @@ public class InvoicePdfService {
   private static final float TAX_COL_WIDTH_CM = 1.60f;
   private static final float TAX_COL_10_ANCHOR_CM = 10.83f;
 
-  private final BusinessProfileRepository businessProfileRepository;
   private final InvoiceRepository invoiceRepository;
   private final BusinessProfileService businessProfileService;
   private final FemmeTimeProperties timeProperties;
 
   public InvoicePdfService(
-      BusinessProfileRepository businessProfileRepository,
       InvoiceRepository invoiceRepository,
       BusinessProfileService businessProfileService,
       FemmeTimeProperties timeProperties) {
-    this.businessProfileRepository = businessProfileRepository;
     this.invoiceRepository = invoiceRepository;
     this.businessProfileService = businessProfileService;
     this.timeProperties = timeProperties;
@@ -115,10 +111,6 @@ public class InvoicePdfService {
     for (InvoiceLine line : invoice.getLines()) {
       Hibernate.initialize(line.getSalonService());
     }
-    businessProfileRepository
-        .findByTenantId(tenantId)
-        .orElseThrow(
-            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "BUSINESS_PROFILE_NOT_FOUND"));
     return renderPdf(invoice);
   }
 

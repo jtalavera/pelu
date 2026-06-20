@@ -22,6 +22,7 @@ import { listInvoicesByClientId, type InvoiceListItem } from "../api/invoices";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
@@ -148,6 +149,7 @@ export default function ClientDetailPage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyAppointments, setHistoryAppointments] = useState<Appointment[] | null>(null);
   const [historyInvoices, setHistoryInvoices] = useState<InvoiceListItem[] | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -558,9 +560,10 @@ export default function ClientDetailPage() {
                             <th className="py-2 pr-2 font-medium">
                               {t("femme.billing.history.colTotal")}
                             </th>
-                            <th className="py-2 font-medium">
+                            <th className="py-2 pr-2 font-medium">
                               {t("femme.clients.colStatus")}
                             </th>
+                            <th className="py-2 font-medium" />
                           </tr>
                         </thead>
                         <tbody>
@@ -578,8 +581,17 @@ export default function ClientDetailPage() {
                               <td className="py-2 pr-2 align-top">
                                 {formatAmountDecimal(inv.total)}
                               </td>
-                              <td className="py-2 align-top">
+                              <td className="py-2 pr-2 align-top">
                                 <HistoryInvoiceStatusPill status={inv.status} />
+                              </td>
+                              <td className="py-2 align-top text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedInvoiceId(inv.id)}
+                                >
+                                  {t("femme.billing.history.viewDetail")}
+                                </Button>
                               </td>
                             </tr>
                           ))}
@@ -607,6 +619,14 @@ export default function ClientDetailPage() {
           onConfirm={() => void confirmDeactivate()}
         />
       ) : null}
+
+      {selectedInvoiceId !== null && (
+        <InvoiceDetailModal
+          invoiceId={selectedInvoiceId}
+          onClose={() => setSelectedInvoiceId(null)}
+          allowVoid={false}
+        />
+      )}
     </div>
   );
 }
