@@ -46,15 +46,22 @@ BEGIN
   CREATE INDEX ix_tour_state_user ON app_user_tour_state(user_id);
 END;
 
--- Seed default tax types for the demo tenant (tenant id = 1)
-IF NOT EXISTS (SELECT 1 FROM taxes WHERE tenant_id = 1)
+-- Seed default tax types and backfill services for the demo tenant (tenant id = 1).
+-- Guarded by tenant existence: on a fresh DB the tenant row is created at runtime by
+-- FemmeDataInitializer (which runs after Flyway), so this seed is skipped here and the
+-- initializer seeds the taxes instead. This keeps the migration order-independent and
+-- avoids the fk_taxes_tenant FK violation on a clean database.
+IF EXISTS (SELECT 1 FROM tenants WHERE id = 1)
 BEGIN
-  INSERT INTO taxes (tenant_id, name, rate, active) VALUES
-    (1, N'IVA 10%', 10.00, 1),
-    (1, N'IVA 5%',   5.00, 1),
-    (1, N'Exento',   0.00, 1);
-END;
+  IF NOT EXISTS (SELECT 1 FROM taxes WHERE tenant_id = 1)
+  BEGIN
+    INSERT INTO taxes (tenant_id, name, rate, active) VALUES
+      (1, N'IVA 10%', 10.00, 1),
+      (1, N'IVA 5%',   5.00, 1),
+      (1, N'Exento',   0.00, 1);
+  END;
 
--- Backfill existing services of tenant 1 to IVA 10% (the first tax above).
--- Uses EXEC to avoid compile-time column validation before ALTER TABLE above commits.
-EXEC('UPDATE services SET tax_id = (SELECT TOP 1 id FROM taxes WHERE tenant_id = 1 AND rate = 10.00) WHERE tenant_id = 1 AND tax_id IS NULL');
+  -- Backfill existing services of tenant 1 to IVA 10% (the first tax above).
+  -- Uses EXEC to avoid compile-time column validation before ALTER TABLE above commits.
+  EXEC('UPDATE services SET tax_id = (SELECT TOP 1 id FROM taxes WHERE tenant_id = 1 AND rate = 10.00) WHERE tenant_id = 1 AND tax_id IS NULL');
+END;
