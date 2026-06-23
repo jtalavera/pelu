@@ -376,12 +376,6 @@ export default function ProfessionalsPage() {
     setScheduleSaveError(null);
     if (!savedProfessional) return;
 
-    const activeDays = schedules.filter((s) => s.active);
-    if (activeDays.length === 0) {
-      setScheduleErrors({ schedules: t("femme.professionals.form.scheduleNoDaysSelected") });
-      return;
-    }
-
     const normalized: Array<{ dayOfWeek: number; startTime: string; endTime: string }> = [];
     for (const d of DAYS) {
       const row = schedules.find((s) => s.dayOfWeek === d.value);

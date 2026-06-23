@@ -36,6 +36,10 @@ export {
 } from "./components/DataTable";
 export { Drawer, type DrawerProps } from "./components/Drawer";
 export {
+  FloatingDropdown,
+  type FloatingDropdownProps,
+} from "./components/FloatingDropdown";
+export {
   IconSearch,
   IconUser,
   IconChevronRight,

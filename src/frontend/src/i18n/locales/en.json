@@ -862,7 +862,6 @@
         "scheduleInvalid": "Invalid time. Use HH:MM (e.g. 09:00).",
         "scheduleRangeInvalid": "Invalid range. Start must be before end (e.g. 09:00–17:00).",
         "scheduleDayActive": "Working day",
-        "scheduleNoDaysSelected": "Select at least one working day.",
         "pin": "PIN (4–7 digits, optional)",
         "pinPlaceholder": "e.g. 1234",
         "pinMaskPlaceholder": "••••••",
