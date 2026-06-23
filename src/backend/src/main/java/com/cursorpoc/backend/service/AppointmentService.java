@@ -15,9 +15,15 @@ import com.cursorpoc.backend.web.dto.AppointmentCreateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentResponse;
 import com.cursorpoc.backend.web.dto.AppointmentStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentUpdateRequest;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +54,9 @@ public class AppointmentService {
     this.clientRepository = clientRepository;
   }
 
+  /** Maximum months of history returned by the client history endpoint. */
+  public static final int CLIENT_HISTORY_MONTHS = 6;
+
   @Transactional(readOnly = true)
   public List<AppointmentResponse> list(
       long tenantId, Instant from, Instant to, Long professionalId, Long clientId) {
@@ -56,6 +65,31 @@ public class AppointmentService {
         .stream()
         .map(this::toResponse)
         .toList();
+  }
+
+  /**
+   * Returns a paged list of past appointments for a specific client within the last {@value
+   * CLIENT_HISTORY_MONTHS} months, ordered by startAt DESC.
+   */
+  @Transactional(readOnly = true)
+  public PageResponse<AppointmentResponse> listClientHistory(
+      long tenantId, long clientId, int page, int size) {
+    ZoneId zone = ZoneId.systemDefault();
+    Instant now = Instant.now();
+    Instant sixMonthsAgo =
+        LocalDate.now(zone).minusMonths(CLIENT_HISTORY_MONTHS).atStartOfDay(zone).toInstant();
+    PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
+    Page<Appointment> apptPage =
+        appointmentRepository.findClientHistoryPaged(
+            tenantId, clientId, sixMonthsAgo, now, pageable);
+    List<AppointmentResponse> content =
+        apptPage.getContent().stream().map(this::toResponse).collect(Collectors.toList());
+    return new PageResponse<>(
+        content,
+        apptPage.getNumber(),
+        apptPage.getSize(),
+        apptPage.getTotalElements(),
+        apptPage.getTotalPages());
   }
 
   @Transactional(readOnly = true)

@@ -468,6 +468,7 @@
         "rangeErrorIncomplete": "Select both a start and end date.",
         "rangeErrorInvalidOrder": "The start date must be before the end date.",
         "rangeErrorTooLong": "The date range cannot exceed 31 days (inclusive).",
+        "rangeErrorTooOld": "The start date cannot be more than 6 months in the past.",
         "viewDetail": "View",
         "detail": {
           "title": "Invoice #{{number}}",
@@ -649,6 +650,7 @@
       "INVOICE_LIST_RANGE_INCOMPLETE": "Both start and end dates are required.",
       "INVOICE_LIST_INVALID_RANGE": "The start date must be before the end date.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "The date range cannot exceed 31 days (inclusive).",
+      "INVOICE_LIST_RANGE_TOO_OLD": "The start date cannot be more than 6 months in the past.",
       "INVOICE_NOT_FOUND": "Invoice not found.",
       "BUSINESS_RUC_REQUIRED_FOR_PDF": "Configure your business RUC in Settings before generating invoice PDFs.",
       "INVOICE_PDF_ONLY_FOR_ISSUED": "Invoice PDF is only available for issued invoices.",
@@ -678,6 +680,12 @@
       "INVALID_DATE_FORMAT": "Invalid date format.",
       "PASSWORD_TOO_WEAK": "Password is too weak. It must have at least 8 characters including uppercase, lowercase, digit, and special character.",
       "PROFILE_NOT_EDITABLE_FOR_ADMIN": "Admin profile has no editable fields. You can only change your password."
+    },
+    "pagination": {
+      "rowsPerPage": "Rows per page:",
+      "showingRange": "{{from}}–{{to}} of {{total}}",
+      "previous": "Previous",
+      "next": "Next"
     },
     "services": {
       "title": "Services",

@@ -468,6 +468,7 @@
         "rangeErrorIncomplete": "Elegí fecha desde y hasta.",
         "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
         "rangeErrorTooLong": "El rango de fechas no puede superar 31 días (incluidos).",
+        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses.",
         "viewDetail": "Ver",
         "detail": {
           "title": "Comprobante #{{number}}",
@@ -651,6 +652,7 @@
       "INVOICE_LIST_RANGE_INCOMPLETE": "Tenés que indicar fecha desde y fecha hasta.",
       "INVOICE_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "El rango de fechas no puede superar 31 días (incluidos).",
+      "INVOICE_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 6 meses.",
       "INVOICE_NOT_FOUND": "Factura no encontrada.",
       "BUSINESS_RUC_REQUIRED_FOR_PDF": "Configurá el RUC de tu negocio en Configuración antes de generar facturas en PDF.",
       "INVOICE_PDF_ONLY_FOR_ISSUED": "El PDF de factura solo está disponible para facturas emitidas.",
@@ -678,6 +680,12 @@
       "INVALID_DATE_FORMAT": "Formato de fecha inválido.",
       "PASSWORD_TOO_WEAK": "La contraseña es demasiado débil. Debe tener al menos 8 caracteres con mayúscula, minúscula, dígito y carácter especial.",
       "PROFILE_NOT_EDITABLE_FOR_ADMIN": "El perfil de administrador no tiene campos editables. Solo podés cambiar tu contraseña."
+    },
+    "pagination": {
+      "rowsPerPage": "Filas por página:",
+      "showingRange": "{{from}}–{{to}} de {{total}}",
+      "previous": "Anterior",
+      "next": "Siguiente"
     },
     "services": {
       "title": "Servicios",

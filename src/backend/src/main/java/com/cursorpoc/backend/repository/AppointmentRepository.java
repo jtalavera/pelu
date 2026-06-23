@@ -5,6 +5,8 @@ import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -52,6 +54,24 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       @Param("to") Instant to,
       @Param("professionalId") Long professionalId,
       @Param("clientId") Long clientId);
+
+  /**
+   * Paged past appointments for a specific client within {@code [from, to)}, newest first. Used by
+   * the client history "Anteriores" table (issue #59).
+   */
+  @Query(
+      """
+      SELECT a FROM Appointment a WHERE a.tenant.id = :tenantId
+      AND a.client.id = :clientId
+      AND a.startAt >= :from AND a.startAt < :to
+      ORDER BY a.startAt DESC
+      """)
+  Page<Appointment> findClientHistoryPaged(
+      @Param("tenantId") Long tenantId,
+      @Param("clientId") Long clientId,
+      @Param("from") Instant from,
+      @Param("to") Instant to,
+      Pageable pageable);
 
   long countByTenant_IdAndStatus(Long tenantId, AppointmentStatus status);
 

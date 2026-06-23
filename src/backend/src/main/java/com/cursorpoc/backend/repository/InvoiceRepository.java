@@ -6,6 +6,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,14 +29,34 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
       AND (:status IS NULL OR i.status = :status)
+      AND (:q IS NULL OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%')))
       ORDER BY i.issuedAt DESC
       """)
-  List<Invoice> findByTenantWithFilters(
+  Page<Invoice> findByTenantWithFiltersPaged(
       @Param("tenantId") Long tenantId,
       @Param("fromDate") Instant fromDate,
       @Param("toDate") Instant toDate,
       @Param("clientId") Long clientId,
-      @Param("status") InvoiceStatus status);
+      @Param("status") InvoiceStatus status,
+      @Param("q") String q,
+      Pageable pageable);
+
+  @Query(
+      """
+      SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
+      WHERE i.tenant.id = :tenantId
+      AND i.status = 'ISSUED'
+      AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
+      AND (:toDate IS NULL OR i.issuedAt <= :toDate)
+      AND (:clientId IS NULL OR i.client.id = :clientId)
+      AND (:q IS NULL OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%')))
+      """)
+  BigDecimal sumIssuedTotalWithFilters(
+      @Param("tenantId") Long tenantId,
+      @Param("fromDate") Instant fromDate,
+      @Param("toDate") Instant toDate,
+      @Param("clientId") Long clientId,
+      @Param("q") String q);
 
   @Query(
       """

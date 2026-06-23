@@ -218,10 +218,19 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
           issuedAt: "2026-04-09T11:00:00Z",
         },
       ];
+      const pagedInvoices = {
+        content: invoices,
+        page: 0,
+        size: 10,
+        totalElements: invoices.length,
+        totalPages: 1,
+        issuedTotal: 50000,
+      };
+      const emptyPaged = { content: [], page: 0, size: 10, totalElements: 0, totalPages: 0, issuedTotal: 0 };
       femmeJson
         .mockResolvedValueOnce(openSession)
-        .mockResolvedValueOnce([])
-        .mockResolvedValue(invoices);
+        .mockResolvedValueOnce(emptyPaged)
+        .mockResolvedValue(pagedInvoices);
 
       renderPage();
       await screen.findAllByText(/cash register is open/i);

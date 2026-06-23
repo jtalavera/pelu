@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,11 +9,14 @@ import {
   Heading,
   Input,
   Label,
+  PageSizeSelect,
+  Pagination,
   Select,
   Spinner,
   Text,
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
+import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
@@ -30,7 +33,6 @@ import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatDecimalGs, formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
-import { filterByListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { billingSteps, registerBillingTabSwitcher } from "../tour/steps/billing";
@@ -61,19 +63,6 @@ type CashSessionCloseResponse = {
   invoiceCount: number;
   paymentSummary: Array<{ method: string; total: string }>;
 };
-
-type InvoiceListItem = {
-  id: number;
-  invoiceNumber: number;
-  invoiceNumberFormatted: string;
-  clientDisplayName: string;
-  status: string;
-  total: string;
-  issuedAt: string;
-  servicesSummary?: string | null;
-  paymentMethodsSummary?: string | null;
-};
-
 
 type InvoiceLineForm = {
   serviceId: string;
@@ -173,17 +162,23 @@ function paymentMethodsLabel(
     .join(" + ");
 }
 
-/** Local calendar dates: yesterday through today (two inclusive days). */
+/** Local calendar dates: 6 months ago through today. */
 function getDefaultInvoiceHistoryDateRange(): { from: string; to: string } {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const d = now.getDate();
-  const today = new Date(y, m, d);
-  const yesterday = new Date(y, m, d - 1);
-  const fmt = (dt: Date) =>
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  const fmtYmd = (dt: Date) =>
     `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  return { from: fmt(yesterday), to: fmt(today) };
+  return { from: fmtYmd(sixMonthsAgo), to: fmtYmd(today) };
+}
+
+function isFromOlderThan6Months(fromYmd: string): boolean {
+  const [fy, fm, fd] = fromYmd.split("-").map(Number);
+  const fromDate = new Date(fy, fm - 1, fd);
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+  return fromDate < sixMonthsAgo;
 }
 
 function localDateYmdToIsoStart(ymd: string): string {
@@ -196,15 +191,7 @@ function localDateYmdToIsoEnd(ymd: string): string {
   return new Date(yy, mm - 1, dd, 23, 59, 59, 999).toISOString();
 }
 
-function inclusiveLocalDaysBetween(fromYmd: string, toYmd: string): number {
-  const [fy, fm, fd] = fromYmd.split("-").map(Number);
-  const [ty, tm, td] = toYmd.split("-").map(Number);
-  const a = new Date(fy, fm - 1, fd).getTime();
-  const b = new Date(ty, tm - 1, td).getTime();
-  return Math.floor((b - a) / 86400000) + 1;
-}
-
-/** null = valid; otherwise an i18n key under femme.billing.history.rangeError* */
+/** null = valid; otherwise an i18n key suffix under femme.billing.history.rangeError* */
 function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
   if (!from.trim() || !to.trim()) {
     return "incomplete";
@@ -212,8 +199,8 @@ function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
   if (from > to) {
     return "invalidOrder";
   }
-  if (inclusiveLocalDaysBetween(from, to) > 31) {
-    return "tooLong";
+  if (isFromOlderThan6Months(from)) {
+    return "tooOld";
   }
   return null;
 }
@@ -223,7 +210,7 @@ function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
 function InvoiceHistoryTab() {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
-  const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
+  const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dateRangeError, setDateRangeError] = useState<string | null>(null);
@@ -231,28 +218,32 @@ function InvoiceHistoryTab() {
   const [filterTo, setFilterTo] = useState(() => getDefaultInvoiceHistoryDateRange().to);
   const [filterStatus, setFilterStatus] = useState("");
   const [listTextQuery, setListTextQuery] = useState("");
+  const [pageNum, setPageNum] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadInvoices = useCallback(
-    async (from: string, to: string, status: string) => {
+    async (from: string, to: string, status: string, q: string, page: number, size: number) => {
       setLoadError(null);
       setDateRangeError(null);
       const rangeErr = invoiceHistoryRangeErrorKey(from, to);
       if (rangeErr) {
         setDateRangeError(t(`femme.billing.history.rangeError${capitalize(rangeErr)}`));
-        setInvoices([]);
+        setInvoicePage(null);
         return;
       }
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        params.set("from", localDateYmdToIsoStart(from));
-        params.set("to", localDateYmdToIsoEnd(to));
-        if (status) params.set("status", status);
-        const qs = params.toString();
-        const data = await femmeJson<InvoiceListItem[] | null>(`/api/invoices?${qs}`);
-        setInvoices(Array.isArray(data) ? data : []);
+        const data = await listInvoicesPaged({
+          from: localDateYmdToIsoStart(from),
+          to: localDateYmdToIsoEnd(to),
+          status: status || undefined,
+          q: q || undefined,
+          page,
+          size,
+        });
+        setInvoicePage(data);
       } catch (err) {
         setLoadError(translateApiError(err, t, "femme.billing.history.loadError"));
       } finally {
@@ -265,24 +256,12 @@ function InvoiceHistoryTab() {
   useEffect(() => {
     if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     filterDebounceRef.current = setTimeout(() => {
-      void loadInvoices(filterFrom, filterTo, filterStatus);
+      void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
     }, 350);
     return () => {
       if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     };
-  }, [filterFrom, filterTo, filterStatus, loadInvoices]);
-
-  const filteredInvoices = useMemo(
-    () =>
-      filterByListQuery(invoices, listTextQuery, (inv) => [
-        inv.invoiceNumberFormatted,
-        inv.clientDisplayName ?? "",
-        inv.servicesSummary ?? "",
-        inv.paymentMethodsSummary ?? "",
-        String(inv.total ?? ""),
-      ]),
-    [invoices, listTextQuery],
-  );
+  }, [filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, loadInvoices]);
 
   function handleClear() {
     const d = getDefaultInvoiceHistoryDateRange();
@@ -291,7 +270,19 @@ function InvoiceHistoryTab() {
     setFilterStatus("");
     setListTextQuery("");
     setDateRangeError(null);
+    setPageNum(0);
   }
+
+  function handleFilterChange(cb: () => void) {
+    cb();
+    setPageNum(0);
+  }
+
+  const invoices = invoicePage?.content ?? [];
+  const totalElements = invoicePage?.totalElements ?? 0;
+  const totalPages = invoicePage?.totalPages ?? 0;
+  const showingFrom = totalElements === 0 ? 0 : pageNum * pageSize + 1;
+  const showingTo = Math.min((pageNum + 1) * pageSize, totalElements);
 
   return (
     <div className="flex flex-col gap-4">
@@ -303,7 +294,7 @@ function InvoiceHistoryTab() {
         <ListSearchField
           id="invoice-history-text-filter"
           value={listTextQuery}
-          onChange={setListTextQuery}
+          onChange={(v) => handleFilterChange(() => setListTextQuery(v))}
           label={t("femme.listFilter.label")}
           placeholder={t("femme.listFilter.placeholder")}
           className="w-full min-w-0 sm:max-w-[min(100%,280px)]"
@@ -319,7 +310,7 @@ function InvoiceHistoryTab() {
               id="filter-from"
               type="date"
               value={filterFrom}
-              onChange={(e) => setFilterFrom(e.target.value)}
+              onChange={(e) => handleFilterChange(() => setFilterFrom(e.target.value))}
             />
           </div>
           <div className="flex flex-col gap-1 min-w-[140px]">
@@ -328,7 +319,7 @@ function InvoiceHistoryTab() {
               id="filter-to"
               type="date"
               value={filterTo}
-              onChange={(e) => setFilterTo(e.target.value)}
+              onChange={(e) => handleFilterChange(() => setFilterTo(e.target.value))}
             />
           </div>
           <div className="flex flex-col gap-1 min-w-[140px]">
@@ -336,7 +327,7 @@ function InvoiceHistoryTab() {
             <Select
               id="filter-status"
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e) => handleFilterChange(() => setFilterStatus(e.target.value))}
             >
               <option value="">{t("femme.billing.history.filterStatusAll")}</option>
               <option value="ISSUED">{t("femme.billing.history.statusIssued")}</option>
@@ -350,7 +341,7 @@ function InvoiceHistoryTab() {
             type="button"
             variant="primary"
             size="sm"
-            onClick={() => void loadInvoices(filterFrom, filterTo, filterStatus)}
+            onClick={() => void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize)}
             disabled={loading}
           >
             {t("femme.billing.history.refresh")}
@@ -378,8 +369,6 @@ function InvoiceHistoryTab() {
         </div>
       ) : dateRangeError ? null : invoices.length === 0 ? (
         <Text variant="muted">{t("femme.billing.history.empty")}</Text>
-      ) : filteredInvoices.length === 0 ? (
-        <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
       ) : (
         <div
           style={{
@@ -432,7 +421,7 @@ function InvoiceHistoryTab() {
                 </tr>
               </thead>
               <tbody>
-                {filteredInvoices.map((inv) => (
+                {invoices.map((inv) => (
                   <tr
                     key={inv.id}
                     style={{
@@ -481,6 +470,23 @@ function InvoiceHistoryTab() {
               </tbody>
             </table>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-default)]">
+            <PageSizeSelect
+              value={pageSize}
+              onChange={(s) => { setPageSize(s); setPageNum(0); }}
+              label={t("femme.pagination.rowsPerPage")}
+            />
+            <Text variant="small" className="text-[var(--color-ink-3)]">
+              {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: totalElements })}
+            </Text>
+            <Pagination
+              page={pageNum + 1}
+              pageCount={totalPages}
+              onPageChange={(p) => setPageNum(p - 1)}
+              previousLabel={t("femme.pagination.previous")}
+              nextLabel={t("femme.pagination.next")}
+            />
+          </div>
         </div>
       )}
       </div>
@@ -491,7 +497,7 @@ function InvoiceHistoryTab() {
           onClose={() => setSelectedInvoiceId(null)}
           onVoided={() => {
             setSelectedInvoiceId(null);
-            void loadInvoices(filterFrom, filterTo, filterStatus);
+            void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
           }}
         />
       )}
@@ -1427,53 +1433,51 @@ function CashSessionTab({
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeResult, setCloseResult] = useState<CashSessionCloseResponse | null>(null);
 
-  const [todayInvoices, setTodayInvoices] = useState<InvoiceListItem[]>([]);
+  const [todayPage, setTodayPage] = useState<PagedInvoicesResponse | null>(null);
   const [todayLoading, setTodayLoading] = useState(false);
   const [sessionListQuery, setSessionListQuery] = useState("");
+  const [todayPageNum, setTodayPageNum] = useState(0);
+  const [todayPageSize, setTodayPageSize] = useState(10);
   const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
-  const loadTodayInvoices = useCallback(async () => {
-    if (!currentSession) {
-      setTodayInvoices([]);
-      return;
-    }
-    setTodayLoading(true);
-    try {
-      const { from, to } = todayRangeIso();
-      const qs = new URLSearchParams();
-      qs.set("from", from);
-      qs.set("to", to);
-      const data = await femmeJson<InvoiceListItem[]>(`/api/invoices?${qs.toString()}`);
-      setTodayInvoices(Array.isArray(data) ? data : []);
-    } catch {
-      setTodayInvoices([]);
-    } finally {
-      setTodayLoading(false);
-    }
-  }, [currentSession]);
-
-  useEffect(() => {
-    void loadTodayInvoices();
-  }, [loadTodayInvoices, refreshTrigger, currentSession?.id]);
-
-  const visibleTodayInvoices = useMemo(
-    () =>
-      filterByListQuery(todayInvoices, sessionListQuery, (inv) => [
-        inv.invoiceNumberFormatted,
-        inv.clientDisplayName ?? "",
-        inv.servicesSummary ?? "",
-        inv.paymentMethodsSummary ?? "",
-        String(inv.total ?? ""),
-      ]),
-    [todayInvoices, sessionListQuery],
+  const loadTodayInvoices = useCallback(
+    async (q: string, page: number, size: number) => {
+      if (!currentSession) {
+        setTodayPage(null);
+        return;
+      }
+      setTodayLoading(true);
+      try {
+        const { from, to } = todayRangeIso();
+        const data = await listInvoicesPaged({
+          from,
+          to,
+          q: q || undefined,
+          page,
+          size,
+        });
+        setTodayPage(data);
+      } catch {
+        setTodayPage(null);
+      } finally {
+        setTodayLoading(false);
+      }
+    },
+    [currentSession],
   );
 
-  const dayTotalIssued = useMemo(() => {
-    return visibleTodayInvoices
-      .filter((i) => i.status === "ISSUED")
-      .reduce((acc, i) => acc + (Number(i.total) || 0), 0);
-  }, [visibleTodayInvoices]);
+  useEffect(() => {
+    void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadTodayInvoices, refreshTrigger, currentSession?.id, sessionListQuery, todayPageNum, todayPageSize]);
+
+  const visibleTodayInvoices = todayPage?.content ?? [];
+  const dayTotalIssued = todayPage?.issuedTotal ?? 0;
+  const todayTotalElements = todayPage?.totalElements ?? 0;
+  const todayTotalPages = todayPage?.totalPages ?? 0;
+  const todayShowingFrom = todayTotalElements === 0 ? 0 : todayPageNum * todayPageSize + 1;
+  const todayShowingTo = Math.min((todayPageNum + 1) * todayPageSize, todayTotalElements);
 
   async function handleOpenSession(e: React.FormEvent) {
     e.preventDefault();
@@ -1933,7 +1937,7 @@ function CashSessionTab({
             <ListSearchField
               id="billing-session-today-filter"
               value={sessionListQuery}
-              onChange={setSessionListQuery}
+              onChange={(v) => { setSessionListQuery(v); setTodayPageNum(0); }}
               label={t("femme.listFilter.label")}
               placeholder={t("femme.listFilter.placeholder")}
             />
@@ -1944,11 +1948,10 @@ function CashSessionTab({
               <Spinner size="sm" />
               <Text>{t("femme.billing.session.loadingToday")}</Text>
             </div>
-          ) : todayInvoices.length === 0 ? (
+          ) : todayTotalElements === 0 ? (
             <Text variant="muted">{t("femme.billing.session.emptyToday")}</Text>
-          ) : visibleTodayInvoices.length === 0 ? (
-            <Text variant="muted">{t("femme.listFilter.noMatches")}</Text>
           ) : (
+            <>
             <div style={{ overflowX: "auto", margin: "0 -16px" }}>
               <table
                 style={{
@@ -2053,6 +2056,24 @@ function CashSessionTab({
                 </tbody>
               </table>
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <PageSizeSelect
+                value={todayPageSize}
+                onChange={(s) => { setTodayPageSize(s); setTodayPageNum(0); }}
+                label={t("femme.pagination.rowsPerPage")}
+              />
+              <Text variant="small" className="text-[var(--color-ink-3)]">
+                {t("femme.pagination.showingRange", { from: todayShowingFrom, to: todayShowingTo, total: todayTotalElements })}
+              </Text>
+              <Pagination
+                page={todayPageNum + 1}
+                pageCount={todayTotalPages}
+                onPageChange={(p) => setTodayPageNum(p - 1)}
+                previousLabel={t("femme.pagination.previous")}
+                nextLabel={t("femme.pagination.next")}
+              />
+            </div>
+            </>
           )}
         </div>
       )}
@@ -2063,7 +2084,7 @@ function CashSessionTab({
           onClose={() => setSelectedInvoiceId(null)}
           onVoided={() => {
             setSelectedInvoiceId(null);
-            void loadTodayInvoices();
+            void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize);
             onSessionChanged();
           }}
         />

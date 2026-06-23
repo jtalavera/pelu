@@ -27,7 +27,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -326,44 +325,56 @@ class InvoiceServiceTest {
   }
 
   @Test
-  void resolveInvoiceListRange_rejectsOver31InclusiveDays() {
+  void resolveInvoiceListRange_rejectsFromOlderThan6Months() {
     ZoneId z = ZoneId.systemDefault();
-    Instant from = LocalDate.of(2025, 1, 1).atStartOfDay(z).toInstant();
-    Instant to = LocalDate.of(2025, 2, 1).atTime(23, 59, 59, 999_000_000).atZone(z).toInstant();
+    // A date well outside the 6-month window
+    Instant from = LocalDate.now(z).minusMonths(7).atStartOfDay(z).toInstant();
+    Instant to =
+        LocalDate.now(z)
+            .minusMonths(7)
+            .plusDays(5)
+            .atTime(23, 59, 59, 999_000_000)
+            .atZone(z)
+            .toInstant();
     assertThatThrownBy(() -> InvoiceService.resolveInvoiceListRange(from, to, null))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(
             e -> {
               ResponseStatusException r = (ResponseStatusException) e;
-              assertThat(r.getReason()).isEqualTo("INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH");
+              assertThat(r.getReason()).isEqualTo("INVOICE_LIST_RANGE_TOO_OLD");
             });
   }
 
   @Test
-  void resolveInvoiceListRange_allows31InclusiveCalendarDays() {
+  void resolveInvoiceListRange_allowsRecentDates() {
     ZoneId z = ZoneId.systemDefault();
-    Instant from = LocalDate.of(2025, 1, 1).atStartOfDay(z).toInstant();
-    Instant to = LocalDate.of(2025, 1, 31).atTime(23, 59, 59, 999_000_000).atZone(z).toInstant();
+    // Dates within the last month are always allowed
+    Instant from = LocalDate.now(z).minusDays(7).atStartOfDay(z).toInstant();
+    Instant to = LocalDate.now(z).atTime(23, 59, 59, 999_000_000).atZone(z).toInstant();
     Instant[] r = InvoiceService.resolveInvoiceListRange(from, to, null);
     assertThat(r[0]).isEqualTo(from);
     assertThat(r[1]).isEqualTo(to);
   }
 
   @Test
-  void resolveInvoiceListRange_defaultIsTwoLocalDays() {
+  void resolveInvoiceListRange_defaultIsLast6Months() {
     Instant[] r = InvoiceService.resolveInvoiceListRange(null, null, null);
     ZoneId z = ZoneId.systemDefault();
     LocalDate d0 = r[0].atZone(z).toLocalDate();
     LocalDate d1 = r[1].atZone(z).toLocalDate();
-    long inclusive = ChronoUnit.DAYS.between(d0, d1) + 1;
-    assertThat(inclusive).isEqualTo(2L);
+    // Default from = 6 months ago (start of that day), to = today end
+    assertThat(d0).isEqualTo(LocalDate.now(z).minusMonths(InvoiceService.MAX_INVOICE_LIST_MONTHS));
+    assertThat(d1).isEqualTo(LocalDate.now(z));
   }
 
   @Test
-  void resolveInvoiceListRange_withClientIdAndNoDates_returnsNullNull() {
+  void resolveInvoiceListRange_withClientIdAndNoDates_defaultsToLast6Months() {
     Instant[] r = InvoiceService.resolveInvoiceListRange(null, null, 42L);
-    assertThat(r[0]).isNull();
-    assertThat(r[1]).isNull();
+    ZoneId z = ZoneId.systemDefault();
+    assertThat(r[0]).isNotNull();
+    assertThat(r[1]).isNotNull();
+    LocalDate d0 = r[0].atZone(z).toLocalDate();
+    assertThat(d0).isEqualTo(LocalDate.now(z).minusMonths(InvoiceService.MAX_INVOICE_LIST_MONTHS));
   }
 
   private Invoice buildIssuedInvoice() {

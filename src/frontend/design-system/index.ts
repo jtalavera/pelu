@@ -62,6 +62,7 @@ export {
   type NavbarProps,
   type NavbarLinkProps,
 } from "./components/Navbar";
+export { PageSizeSelect, type PageSizeSelectProps } from "./components/PageSizeSelect";
 export { Pagination, type PaginationProps } from "./components/Pagination";
 export { Progress, type ProgressProps } from "./components/Progress";
 export { Radio, RadioGroup, type RadioProps, type RadioGroupProps } from "./components/Radio";

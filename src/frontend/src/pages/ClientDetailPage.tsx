@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,6 +9,8 @@ import {
   Heading,
   Input,
   Label,
+  PageSizeSelect,
+  Pagination,
   Spinner,
   Tabs,
   TabsContent,
@@ -17,8 +19,13 @@ import {
   Text,
 } from "@design-system";
 import { femmeJson, femmePutJson, femmePostJson } from "../api/femmeClient";
-import { listAppointments, type Appointment } from "../api/appointments";
-import { listInvoicesByClientId, type InvoiceListItem } from "../api/invoices";
+import {
+  listAppointments,
+  listClientAppointmentHistory,
+  type Appointment,
+  type PageResponse,
+} from "../api/appointments";
+import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -52,35 +59,6 @@ function formatHistoryDateTime(iso: string, locale: string): string {
   }
 }
 
-function clientAppointmentsTimeRange(): { from: string; to: string } {
-  const from = new Date();
-  from.setFullYear(from.getFullYear() - 3);
-  from.setHours(0, 0, 0, 0);
-  const to = new Date();
-  to.setFullYear(to.getFullYear() + 3);
-  to.setHours(23, 59, 59, 999);
-  return { from: from.toISOString(), to: to.toISOString() };
-}
-
-function splitAppointmentsByTime(appointments: Appointment[]): {
-  upcoming: Appointment[];
-  past: Appointment[];
-} {
-  const t = Date.now();
-  const upcoming: Appointment[] = [];
-  const past: Appointment[] = [];
-  for (const a of appointments) {
-    const s = new Date(a.startAt).getTime();
-    if (s >= t) {
-      upcoming.push(a);
-    } else {
-      past.push(a);
-    }
-  }
-  upcoming.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-  past.sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
-  return { upcoming, past };
-}
 
 function HistoryInvoiceStatusPill({ status }: { status: string }) {
   const { t } = useTranslation();
@@ -147,8 +125,18 @@ export default function ClientDetailPage() {
 
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyAppointments, setHistoryAppointments] = useState<Appointment[] | null>(null);
-  const [historyInvoices, setHistoryInvoices] = useState<InvoiceListItem[] | null>(null);
+  // Upcoming appointments (unmodified — small list fetched via existing endpoint)
+  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[] | null>(null);
+  // Past appointments — paginated via /api/appointments/history
+  const [pastApptPage, setPastApptPage] = useState<PageResponse<Appointment> | null>(null);
+  const [pastApptPageNum, setPastApptPageNum] = useState(0);
+  const [pastApptPageSize, setPastApptPageSize] = useState(10);
+  const [pastApptLoading, setPastApptLoading] = useState(false);
+  // Client invoices — paginated via /api/invoices
+  const [invoicesPage, setInvoicesPage] = useState<PagedInvoicesResponse | null>(null);
+  const [invoicePageNum, setInvoicePageNum] = useState(0);
+  const [invoicePageSize, setInvoicePageSize] = useState(10);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -173,34 +161,45 @@ export default function ClientDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    setHistoryAppointments(null);
-    setHistoryInvoices(null);
+    setUpcomingAppointments(null);
+    setPastApptPage(null);
+    setPastApptPageNum(0);
+    setInvoicesPage(null);
+    setInvoicePageNum(0);
     setHistoryError(null);
   }, [id]);
 
   const clientIdNum = id ? Number(id) : NaN;
 
+  // Initial history load: upcoming appointments (unchanged) + first page of past + invoices
   useEffect(() => {
     if (tab !== "history" || !id || Number.isNaN(clientIdNum)) return;
     let cancelled = false;
     (async () => {
       setHistoryLoading(true);
       setHistoryError(null);
-      const range = clientAppointmentsTimeRange();
+      // Upcoming: from now to +6 months
+      const now = new Date();
+      const futureEnd = new Date(now);
+      futureEnd.setMonth(futureEnd.getMonth() + 6);
+      futureEnd.setHours(23, 59, 59, 999);
       try {
-        const [inv, appts] = await Promise.all([
-          listInvoicesByClientId(clientIdNum),
-          listAppointments(range.from, range.to, null, clientIdNum),
+        const [upcoming, pastPage, invPage] = await Promise.all([
+          listAppointments(now.toISOString(), futureEnd.toISOString(), null, clientIdNum),
+          listClientAppointmentHistory(clientIdNum, 0, pastApptPageSize),
+          listInvoicesPaged({ clientId: clientIdNum, page: 0, size: invoicePageSize }),
         ]);
         if (!cancelled) {
-          setHistoryInvoices(inv);
-          setHistoryAppointments(appts);
+          setUpcomingAppointments(upcoming);
+          setPastApptPage(pastPage);
+          setInvoicesPage(invPage);
         }
       } catch (e) {
         if (!cancelled) {
           setHistoryError(translateApiError(e, t, "femme.clients.historyLoadError"));
-          setHistoryInvoices(null);
-          setHistoryAppointments(null);
+          setUpcomingAppointments(null);
+          setPastApptPage(null);
+          setInvoicesPage(null);
         }
       } finally {
         if (!cancelled) setHistoryLoading(false);
@@ -209,15 +208,35 @@ export default function ClientDetailPage() {
     return () => {
       cancelled = true;
     };
+    // pastApptPageSize / invoicePageSize intentionally excluded — they're for the sub-table effects below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, id, clientIdNum, t]);
 
-  const apptUpcomingPast = useMemo(
-    () =>
-      historyAppointments != null
-        ? splitAppointmentsByTime(historyAppointments)
-        : { upcoming: [] as Appointment[], past: [] as Appointment[] },
-    [historyAppointments],
-  );
+  // Re-fetch past appointments when page/size changes
+  useEffect(() => {
+    if (tab !== "history" || !id || Number.isNaN(clientIdNum) || pastApptPage === null) return;
+    let cancelled = false;
+    setPastApptLoading(true);
+    void listClientAppointmentHistory(clientIdNum, pastApptPageNum, pastApptPageSize).then(
+      (p) => { if (!cancelled) { setPastApptPage(p); setPastApptLoading(false); } },
+      () => { if (!cancelled) setPastApptLoading(false); },
+    );
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pastApptPageNum, pastApptPageSize]);
+
+  // Re-fetch invoices when page/size changes
+  useEffect(() => {
+    if (tab !== "history" || !id || Number.isNaN(clientIdNum) || invoicesPage === null) return;
+    let cancelled = false;
+    setInvoicesLoading(true);
+    void listInvoicesPaged({ clientId: clientIdNum, page: invoicePageNum, size: invoicePageSize }).then(
+      (p) => { if (!cancelled) { setInvoicesPage(p); setInvoicesLoading(false); } },
+      () => { if (!cancelled) setInvoicesLoading(false); },
+    );
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoicePageNum, invoicePageSize]);
 
   async function saveClient() {
     setFieldError(null);
@@ -471,19 +490,19 @@ export default function ClientDetailPage() {
                   <Heading as="h2" className="mb-3 text-base">
                     {t("femme.clients.appointments")}
                   </Heading>
-                  {historyAppointments == null ? null : (
+                  {upcomingAppointments == null && pastApptPage == null ? null : (
                     <div className="flex flex-col gap-4">
                       <div>
                         <Text className="mb-2 text-sm font-medium">
                           {t("femme.clients.historyUpcoming")}
                         </Text>
-                        {apptUpcomingPast.upcoming.length === 0 ? (
+                        {!upcomingAppointments || upcomingAppointments.length === 0 ? (
                           <Text variant="muted" className="text-sm">
                             {t("femme.clients.noAppointments")}
                           </Text>
                         ) : (
                           <ul className="flex flex-col gap-2" role="list">
-                            {apptUpcomingPast.upcoming.map((a) => (
+                            {upcomingAppointments.map((a) => (
                               <li
                                 key={a.id}
                                 className="flex flex-col gap-1 rounded-md border border-[var(--color-border)]/60 p-3 sm:flex-row sm:items-center sm:justify-between"
@@ -509,32 +528,59 @@ export default function ClientDetailPage() {
                         <Text className="mb-2 text-sm font-medium">
                           {t("femme.clients.historyPast")}
                         </Text>
-                        {apptUpcomingPast.past.length === 0 ? (
+                        {pastApptLoading ? (
+                          <Spinner size="sm" />
+                        ) : pastApptPage == null || pastApptPage.totalElements === 0 ? (
                           <Text variant="muted" className="text-sm">
                             {t("femme.clients.noAppointments")}
                           </Text>
                         ) : (
-                          <ul className="flex flex-col gap-2" role="list">
-                            {apptUpcomingPast.past.map((a) => (
-                              <li
-                                key={a.id}
-                                className="flex flex-col gap-1 rounded-md border border-[var(--color-border)]/60 p-3 sm:flex-row sm:items-center sm:justify-between"
-                              >
-                                <div>
-                                  <Text className="font-medium">
-                                    {a.serviceName}
-                                  </Text>
-                                  <Text variant="muted" className="text-sm">
-                                    {formatHistoryDateTime(a.startAt, dateLocale)} ·{" "}
-                                    {a.professionalName}
-                                  </Text>
-                                </div>
-                                <div className="self-start sm:self-center">
-                                  <StatusBadge status={a.status} />
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                          <>
+                            <ul className="flex flex-col gap-2" role="list">
+                              {pastApptPage.content.map((a) => (
+                                <li
+                                  key={a.id}
+                                  className="flex flex-col gap-1 rounded-md border border-[var(--color-border)]/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                  <div>
+                                    <Text className="font-medium">
+                                      {a.serviceName}
+                                    </Text>
+                                    <Text variant="muted" className="text-sm">
+                                      {formatHistoryDateTime(a.startAt, dateLocale)} ·{" "}
+                                      {a.professionalName}
+                                    </Text>
+                                  </div>
+                                  <div className="self-start sm:self-center">
+                                    <StatusBadge status={a.status} />
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                              <PageSizeSelect
+                                value={pastApptPageSize}
+                                label={t("femme.pagination.rowsPerPage")}
+                                onChange={(s) => { setPastApptPageSize(s); setPastApptPageNum(0); }}
+                              />
+                              <Text variant="muted" className="text-sm">
+                                {t("femme.pagination.showingRange", {
+                                  from: pastApptPageNum * pastApptPageSize + 1,
+                                  to: Math.min((pastApptPageNum + 1) * pastApptPageSize, pastApptPage.totalElements),
+                                  total: pastApptPage.totalElements,
+                                })}
+                              </Text>
+                              {pastApptPage.totalPages > 1 && (
+                                <Pagination
+                                  page={pastApptPageNum + 1}
+                                  pageCount={pastApptPage.totalPages}
+                                  onPageChange={(p) => setPastApptPageNum(p - 1)}
+                                  previousLabel={t("femme.pagination.previous")}
+                                  nextLabel={t("femme.pagination.next")}
+                                />
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -544,60 +590,87 @@ export default function ClientDetailPage() {
                   <Heading as="h2" className="mb-3 text-base">
                     {t("femme.clients.invoices")}
                   </Heading>
-                  {historyInvoices == null || historyInvoices.length === 0 ? (
+                  {invoicesLoading ? (
+                    <Spinner size="sm" />
+                  ) : invoicesPage == null || invoicesPage.totalElements === 0 ? (
                     <Text variant="muted">{t("femme.clients.noInvoices")}</Text>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[320px] text-left text-sm">
-                        <thead>
-                          <tr className="border-b text-xs text-[var(--color-ink-2)]">
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.billing.history.colNumber")}
-                            </th>
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.billing.history.colDate")}
-                            </th>
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.billing.history.colTotal")}
-                            </th>
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.clients.colStatus")}
-                            </th>
-                            <th className="py-2 font-medium" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {historyInvoices.map((inv) => (
-                            <tr
-                              key={inv.id}
-                              className="border-b border-[var(--color-border)]/60"
-                            >
-                              <td className="py-2 pr-2 align-top font-mono text-xs">
-                                {inv.invoiceNumberFormatted}
-                              </td>
-                              <td className="py-2 pr-2 align-top">
-                                {formatHistoryDateTime(inv.issuedAt, dateLocale)}
-                              </td>
-                              <td className="py-2 pr-2 align-top">
-                                {formatAmountDecimal(inv.total)}
-                              </td>
-                              <td className="py-2 pr-2 align-top">
-                                <HistoryInvoiceStatusPill status={inv.status} />
-                              </td>
-                              <td className="py-2 align-top text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSelectedInvoiceId(inv.id)}
-                                >
-                                  {t("femme.billing.history.viewDetail")}
-                                </Button>
-                              </td>
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[320px] text-left text-sm">
+                          <thead>
+                            <tr className="border-b text-xs text-[var(--color-ink-2)]">
+                              <th className="py-2 pr-2 font-medium">
+                                {t("femme.billing.history.colNumber")}
+                              </th>
+                              <th className="py-2 pr-2 font-medium">
+                                {t("femme.billing.history.colDate")}
+                              </th>
+                              <th className="py-2 pr-2 font-medium">
+                                {t("femme.billing.history.colTotal")}
+                              </th>
+                              <th className="py-2 pr-2 font-medium">
+                                {t("femme.clients.colStatus")}
+                              </th>
+                              <th className="py-2 font-medium" />
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {invoicesPage.content.map((inv) => (
+                              <tr
+                                key={inv.id}
+                                className="border-b border-[var(--color-border)]/60"
+                              >
+                                <td className="py-2 pr-2 align-top font-mono text-xs">
+                                  {inv.invoiceNumberFormatted}
+                                </td>
+                                <td className="py-2 pr-2 align-top">
+                                  {formatHistoryDateTime(inv.issuedAt, dateLocale)}
+                                </td>
+                                <td className="py-2 pr-2 align-top">
+                                  {formatAmountDecimal(inv.total)}
+                                </td>
+                                <td className="py-2 pr-2 align-top">
+                                  <HistoryInvoiceStatusPill status={inv.status} />
+                                </td>
+                                <td className="py-2 align-top text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedInvoiceId(inv.id)}
+                                  >
+                                    {t("femme.billing.history.viewDetail")}
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <PageSizeSelect
+                          value={invoicePageSize}
+                          label={t("femme.pagination.rowsPerPage")}
+                          onChange={(s) => { setInvoicePageSize(s); setInvoicePageNum(0); }}
+                        />
+                        <Text variant="muted" className="text-sm">
+                          {t("femme.pagination.showingRange", {
+                            from: invoicePageNum * invoicePageSize + 1,
+                            to: Math.min((invoicePageNum + 1) * invoicePageSize, invoicesPage.totalElements),
+                            total: invoicesPage.totalElements,
+                          })}
+                        </Text>
+                        {invoicesPage.totalPages > 1 && (
+                          <Pagination
+                            page={invoicePageNum + 1}
+                            pageCount={invoicesPage.totalPages}
+                            onPageChange={(p) => setInvoicePageNum(p - 1)}
+                            previousLabel={t("femme.pagination.previous")}
+                            nextLabel={t("femme.pagination.next")}
+                          />
+                        )}
+                      </div>
+                    </>
                   )}
                 </Card>
               </>
