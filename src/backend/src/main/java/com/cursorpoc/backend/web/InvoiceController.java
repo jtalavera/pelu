@@ -3,12 +3,11 @@ package com.cursorpoc.backend.web;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.InvoiceService;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
-import com.cursorpoc.backend.web.dto.InvoiceListItemResponse;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
+import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import jakarta.validation.Valid;
 import java.time.Instant;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -47,20 +46,26 @@ public class InvoiceController {
   }
 
   @GetMapping
-  public ResponseEntity<List<InvoiceListItemResponse>> list(
+  public ResponseEntity<PagedInvoicesResponse> list(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @RequestParam(required = false) String from,
       @RequestParam(required = false) String to,
       @RequestParam(required = false) Long clientId,
-      @RequestParam(required = false) String status) {
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
     requirePrincipal(principal);
-    log.info("GET /api/invoices tenantId={}", principal.getTenantId());
+    log.info("GET /api/invoices tenantId={} page={} size={}", principal.getTenantId(), page, size);
     Instant fromInstant = from != null ? Instant.parse(from) : null;
     Instant toInstant = to != null ? Instant.parse(to) : null;
-    List<InvoiceListItemResponse> response =
+    PagedInvoicesResponse response =
         invoiceService.listInvoices(
-            principal.getTenantId(), fromInstant, toInstant, clientId, status);
-    log.info("GET /api/invoices tenantId={} status=200", principal.getTenantId());
+            principal.getTenantId(), fromInstant, toInstant, clientId, status, q, page, size);
+    log.info(
+        "GET /api/invoices tenantId={} status=200 total={}",
+        principal.getTenantId(),
+        response.totalElements());
     return ResponseEntity.ok(response);
   }
 

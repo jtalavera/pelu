@@ -1,5 +1,13 @@
 import { femmeJson, femmePostJson, femmePutJson, femmePatchJson } from "./femmeClient";
 
+export type PageResponse<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 export type AppointmentStatus =
   | "PENDING"
   | "CONFIRMED"
@@ -75,6 +83,23 @@ export function updateAppointmentStatus(
 
 export function updateAppointment(id: number, req: AppointmentUpdateRequest): Promise<Appointment> {
   return femmePutJson<Appointment>(`/api/appointments/${id}`, req);
+}
+
+/**
+ * Paged client appointment history — past appointments within the last 6 months,
+ * newest first. Uses `GET /api/appointments/history`.
+ */
+export function listClientAppointmentHistory(
+  clientId: number,
+  page: number,
+  size: number,
+): Promise<PageResponse<Appointment>> {
+  const params = new URLSearchParams({
+    clientId: String(clientId),
+    page: String(page),
+    size: String(size),
+  });
+  return femmeJson<PageResponse<Appointment>>(`/api/appointments/history?${params.toString()}`);
 }
 
 export const EDITABLE_STATUSES: AppointmentStatus[] = ["PENDING", "CONFIRMED"];

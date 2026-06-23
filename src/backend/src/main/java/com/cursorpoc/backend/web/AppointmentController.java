@@ -7,9 +7,12 @@ import com.cursorpoc.backend.web.dto.AppointmentCreateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentResponse;
 import com.cursorpoc.backend.web.dto.AppointmentStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentUpdateRequest;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,10 +31,35 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/appointments")
 public class AppointmentController {
 
+  private static final Logger log = LoggerFactory.getLogger(AppointmentController.class);
+
   private final AppointmentService appointmentService;
 
   public AppointmentController(AppointmentService appointmentService) {
     this.appointmentService = appointmentService;
+  }
+
+  /** Paged client appointment history (past, ≤6 months). Used by the client detail page. */
+  @GetMapping("/history")
+  public PageResponse<AppointmentResponse> history(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam Long clientId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
+    requirePrincipal(principal);
+    log.info(
+        "GET /api/appointments/history tenantId={} clientId={} page={} size={}",
+        principal.getTenantId(),
+        clientId,
+        page,
+        size);
+    PageResponse<AppointmentResponse> response =
+        appointmentService.listClientHistory(principal.getTenantId(), clientId, page, size);
+    log.info(
+        "GET /api/appointments/history tenantId={} status=200 total={}",
+        principal.getTenantId(),
+        response.totalElements());
+    return response;
   }
 
   @GetMapping

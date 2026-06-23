@@ -47,6 +47,23 @@ function renderPage(clientId = "1") {
   );
 }
 
+const emptyPagedInvoices = {
+  content: [],
+  page: 0,
+  size: 10,
+  totalElements: 0,
+  totalPages: 0,
+  issuedTotal: 0,
+};
+
+const emptyPagedAppointments = {
+  content: [],
+  page: 0,
+  size: 10,
+  totalElements: 0,
+  totalPages: 0,
+};
+
 function defaultFemmeJsonImpl(url: unknown) {
   const s = String(url);
   if (s.startsWith("/api/clients/") && !s.includes("?")) {
@@ -60,7 +77,13 @@ function defaultFemmeJsonImpl(url: unknown) {
       visitCount: 3,
     });
   }
-  if (s.startsWith("/api/invoices?") || s.startsWith("/api/appointments?")) {
+  if (s.startsWith("/api/invoices?")) {
+    return Promise.resolve(emptyPagedInvoices);
+  }
+  if (s.startsWith("/api/appointments/history?")) {
+    return Promise.resolve(emptyPagedAppointments);
+  }
+  if (s.startsWith("/api/appointments?")) {
     return Promise.resolve([]);
   }
   return Promise.reject(new Error(`unmocked: ${s}`));
@@ -208,8 +231,11 @@ describe("ClientDetailPage", () => {
           },
         ]);
       }
+      if (s.startsWith("/api/appointments/history?")) {
+        return Promise.resolve(emptyPagedAppointments);
+      }
       if (s.startsWith("/api/invoices?")) {
-        return Promise.resolve([]);
+        return Promise.resolve(emptyPagedInvoices);
       }
       return defaultFemmeJsonImpl(url);
     });
