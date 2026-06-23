@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, Label, Spinner, Text } from "@design-system";
+import { Button, FloatingDropdown, Input, Label, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { formatIntegerGs } from "../lib/formatMoney";
 
@@ -54,6 +54,7 @@ export function ServiceSearchField({
   const [open, setOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (value) {
@@ -63,9 +64,14 @@ export function ServiceSearchField({
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+      const target = e.target as Node;
+      if (
+        containerRef.current?.contains(target) ||
+        panelRef.current?.contains(target)
+      ) {
+        return;
       }
+      setOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -152,12 +158,12 @@ export function ServiceSearchField({
         ) : null}
       </div>
 
-      {showDropdown ? (
+      <FloatingDropdown anchorRef={containerRef} open={showDropdown} ref={panelRef}>
         <ul
           id={`${inputId}-listbox`}
           role="listbox"
           aria-label={labelText}
-          className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
         >
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">
@@ -200,7 +206,7 @@ export function ServiceSearchField({
             );
           })}
         </ul>
-      ) : null}
+      </FloatingDropdown>
     </div>
   );
 }

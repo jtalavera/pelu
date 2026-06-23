@@ -13,6 +13,7 @@
  *   #51 — Lista de clientes en formulario: dropdown floats over the form
  *   #52 — Error al asignar color de categoría (palette mismatch, backend allow-list expanded)
  *   #55 — Descripción de monto total en factura: amount-in-words on PDF
+ *   #58 — Campo de listas quedan detrás del formulario: all dropdowns float above the form
  */
 
 import { expect, test } from "@playwright/test";
@@ -658,4 +659,124 @@ test("Issue #55 · PDF de comprobante contiene monto total en letras en español
   // In CP1252 "í" = 0xED; converting the buffer to latin1 preserves byte values.
   const pdfLatin1 = buf.toString("latin1");
   expect(pdfLatin1).toContain("cincuenta mil");
+});
+
+// ─── Issue #58 ────────────────────────────────────────────────────────────────
+
+test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (portal)", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await ensureCashSessionOpenApi(request, token);
+
+  await loginAsDemo(page);
+  await ensureCashSessionOpen(page);
+  await page.getByRole("tab", { name: "New Invoice" }).click();
+
+  // Capture position of a stable button below the service field before opening dropdown
+  const submitBtn = page.getByRole("button", { name: "Issue invoice" });
+  await expect(submitBtn).toBeVisible({ timeout: 10_000 });
+  const boxBefore = await submitBtn.boundingBox();
+  expect(boxBefore).not.toBeNull();
+
+  // Open the service search dropdown (combobox aria-label="Service")
+  const serviceInput = page.getByRole("combobox", { name: "Service" }).first();
+  await expect(serviceInput).toBeVisible({ timeout: 10_000 });
+  await serviceInput.click();
+
+  // The listbox renders in a portal — query from page root
+  const listbox = page.getByRole("listbox", { name: "Service" });
+  await expect(listbox).toBeVisible({ timeout: 10_000 });
+
+  // The listbox's portal wrapper must be fixed-positioned
+  const parentPosition = await listbox.evaluate(
+    (el) => (el.parentElement as HTMLElement | null)?.style?.position ?? "",
+  );
+  expect(parentPosition).toBe("fixed");
+
+  // Submit button must not have moved (dropdown did not push layout down)
+  const boxAfter = await submitBtn.boundingBox();
+  expect(boxAfter).not.toBeNull();
+  expect(boxAfter!.y).toBeCloseTo(boxBefore!.y, 0);
+});
+
+test("Issue #58 · TimeCombobox en formulario de turno flota sobre el formulario (portal)", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await seedCategoryServiceProfessional(request, token);
+
+  await loginAsDemo(page);
+  await page.goto("/app/calendar");
+  await page.getByRole("button", { name: "New appointment" }).first().click();
+
+  const dlg = page.getByRole("dialog");
+  await expect(dlg).toBeVisible({ timeout: 10_000 });
+
+  // Capture position of Save button before opening time dropdown
+  const saveBtn = dlg.getByRole("button", { name: "Save" });
+  const boxBefore = await saveBtn.boundingBox();
+  expect(boxBefore).not.toBeNull();
+
+  // Open the start-time combobox
+  const timeCombobox = dlg.getByRole("combobox", { name: /start time/i });
+  await expect(timeCombobox).toBeVisible({ timeout: 10_000 });
+  await timeCombobox.click();
+
+  // The listbox renders in a portal — query from page root
+  const listbox = page.locator('[role="listbox"]').first();
+  await expect(listbox).toBeVisible({ timeout: 10_000 });
+
+  // The listbox wrapper must be fixed-positioned (portal-rendered)
+  const parentPosition = await listbox.evaluate(
+    (el) => (el.parentElement as HTMLElement | null)?.style?.position ?? "",
+  );
+  expect(parentPosition).toBe("fixed");
+
+  // Save button must not have moved
+  const boxAfter = await saveBtn.boundingBox();
+  expect(boxAfter).not.toBeNull();
+  expect(boxAfter!.y).toBeCloseTo(boxBefore!.y, 0);
+});
+
+test("Issue #58 · LocalizedDateInput en formulario de turno flota sobre el formulario (portal)", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await seedCategoryServiceProfessional(request, token);
+
+  await loginAsDemo(page);
+  await page.goto("/app/calendar");
+  await page.getByRole("button", { name: "New appointment" }).first().click();
+
+  const dlg = page.getByRole("dialog");
+  await expect(dlg).toBeVisible({ timeout: 10_000 });
+
+  // Capture position of Save button before opening date picker
+  const saveBtn = dlg.getByRole("button", { name: "Save" });
+  const boxBefore = await saveBtn.boundingBox();
+  expect(boxBefore).not.toBeNull();
+
+  // Open the date picker by clicking the date combobox (id="form-date", no aria-label)
+  const dateCombobox = page.locator("#form-date");
+  await expect(dateCombobox).toBeVisible({ timeout: 10_000 });
+  await dateCombobox.click();
+
+  // The calendar dialog renders in a portal — query from page root
+  const calendar = page.getByRole("dialog", { name: "Calendar" }).last();
+  await expect(calendar).toBeVisible({ timeout: 10_000 });
+
+  // The calendar's portal wrapper must be fixed-positioned
+  const parentPosition = await calendar.evaluate(
+    (el) => (el.parentElement as HTMLElement | null)?.style?.position ?? "",
+  );
+  expect(parentPosition).toBe("fixed");
+
+  // Save button must not have moved
+  const boxAfter = await saveBtn.boundingBox();
+  expect(boxAfter).not.toBeNull();
+  expect(boxAfter!.y).toBeCloseTo(boxBefore!.y, 0);
 });
