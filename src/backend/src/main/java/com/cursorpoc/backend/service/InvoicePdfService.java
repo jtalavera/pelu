@@ -289,7 +289,7 @@ public class InvoicePdfService {
     cb.endText();
 
     // Issue #55: amount-in-words for the Monto total.
-    // Positioned 0.5 cm above the IVA row (yFromTop(h, 13.26)) and 1.5 cm to
+    // Positioned 0.8 cm above the IVA row (yFromTop(h, 12.96)) and 1.5 cm to
     // the right of the item-description column start (ox + cmToPt(1.0) + cmToPt(1.5)).
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
@@ -297,7 +297,7 @@ public class InvoicePdfService {
         Element.ALIGN_LEFT,
         SpanishNumberToWords.guaranies(invoice.getTotal()),
         ox + cmToPt(2.5f),
-        yFromTop(h, 13.26f),
+        yFromTop(h, 12.96f),
         0);
     cb.endText();
 
