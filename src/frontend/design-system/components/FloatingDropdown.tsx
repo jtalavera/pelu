@@ -10,11 +10,17 @@ import { createPortal } from "react-dom";
 export type FloatingDropdownProps = {
   /**
    * Ref attached to the trigger/container element whose bounding rect is used
-   * to position the floating panel (left edge, width, and below the bottom).
+   * to position the floating panel (left edge and below the bottom).
    */
   anchorRef: React.RefObject<HTMLElement | null>;
   /** Whether the dropdown is currently open. */
   open: boolean;
+  /**
+   * Fixed pixel width for the panel. Defaults to the anchor element's width.
+   * Use this for pickers (e.g. a calendar) that need a fixed size unrelated
+   * to the trigger width.
+   */
+  width?: number;
   children: ReactNode;
 };
 
@@ -48,7 +54,7 @@ export type FloatingDropdownProps = {
  * Closing the dropdown (Escape / outside click) is the caller's responsibility.
  */
 export const FloatingDropdown = forwardRef<HTMLDivElement, FloatingDropdownProps>(
-  function FloatingDropdown({ anchorRef, open, children }, ref) {
+  function FloatingDropdown({ anchorRef, open, width: fixedWidth, children }, ref) {
     const [position, setPosition] = useState<{
       top: number;
       left: number;
@@ -61,9 +67,9 @@ export const FloatingDropdown = forwardRef<HTMLDivElement, FloatingDropdownProps
       setPosition({
         top: rect.bottom + 4,
         left: rect.left,
-        width: rect.width,
+        width: fixedWidth ?? rect.width,
       });
-    }, [anchorRef]);
+    }, [anchorRef, fixedWidth]);
 
     useLayoutEffect(() => {
       if (!open) {
@@ -91,7 +97,8 @@ export const FloatingDropdown = forwardRef<HTMLDivElement, FloatingDropdownProps
           top: position.top,
           left: position.left,
           width: position.width,
-          zIndex: 50,
+          // 1100 keeps the panel above modals (z-[1000]) and drawers.
+          zIndex: 1100,
         }}
       >
         {children}

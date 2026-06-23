@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { cn } from "../lib/cn";
+import { FloatingDropdown } from "./FloatingDropdown";
 
 export type TimeComboboxProps = {
   id: string;
@@ -90,11 +91,12 @@ export const TimeCombobox = forwardRef<HTMLInputElement, TimeComboboxProps>(
     }, [options, query]);
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
       function onDocMouseDown(e: MouseEvent) {
-        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-          setOpen(false);
-        }
+        const target = e.target as Node;
+        if (containerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+        setOpen(false);
       }
       document.addEventListener("mousedown", onDocMouseDown);
       return () => document.removeEventListener("mousedown", onDocMouseDown);
@@ -183,11 +185,11 @@ export const TimeCombobox = forwardRef<HTMLInputElement, TimeComboboxProps>(
               "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/20 dark:border-red-500 dark:focus-visible:ring-red-500/30",
           )}
         />
-        {open && !disabled ? (
+        <FloatingDropdown anchorRef={containerRef} open={open && !disabled} ref={panelRef}>
           <ul
             id={listId}
             role="listbox"
-            className="absolute z-50 mt-1 max-h-60 w-full min-w-[8rem] overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+            className="max-h-60 w-full min-w-[8rem] overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
           >
             {filtered.length === 0 ? (
               <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
@@ -218,7 +220,7 @@ export const TimeCombobox = forwardRef<HTMLInputElement, TimeComboboxProps>(
               })
             )}
           </ul>
-        ) : null}
+        </FloatingDropdown>
       </div>
     );
   },

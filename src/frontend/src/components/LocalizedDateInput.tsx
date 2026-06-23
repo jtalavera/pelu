@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@design-system";
+import { FloatingDropdown, cn } from "@design-system";
 import { getDateLocale } from "../i18n/dateLocale";
 
 export type LocalizedDateInputProps = {
@@ -62,12 +62,13 @@ export const LocalizedDateInput = forwardRef<HTMLInputElement, LocalizedDateInpu
     }, [value, mode]);
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
       function onDocMouseDown(e: MouseEvent) {
-        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-          setOpen(false);
-          setText(formatIsoForDisplay(value, mode));
-        }
+        const target = e.target as Node;
+        if (containerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+        setOpen(false);
+        setText(formatIsoForDisplay(value, mode));
       }
       document.addEventListener("mousedown", onDocMouseDown);
       return () => document.removeEventListener("mousedown", onDocMouseDown);
@@ -196,11 +197,11 @@ export const LocalizedDateInput = forwardRef<HTMLInputElement, LocalizedDateInpu
               "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/20 dark:border-red-500 dark:focus-visible:ring-red-500/30",
           )}
         />
-        {open && !disabled ? (
+        <FloatingDropdown anchorRef={containerRef} open={open && !disabled} ref={panelRef} width={288}>
           <div
             role="dialog"
             aria-label={t("femme.localizedDateInput.dialogLabel")}
-            className="absolute z-50 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+            className="rounded-md border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900"
           >
             <div className="mb-2 flex items-center justify-between">
               <button
@@ -254,7 +255,7 @@ export const LocalizedDateInput = forwardRef<HTMLInputElement, LocalizedDateInpu
               })}
             </div>
           </div>
-        ) : null}
+        </FloatingDropdown>
       </div>
     );
   },
