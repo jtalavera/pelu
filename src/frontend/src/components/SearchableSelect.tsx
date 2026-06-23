@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Input, Label, cn } from "@design-system";
+import { Button, FloatingDropdown, Input, Label, cn } from "@design-system";
 
 export type SearchableSelectOption<T extends string | number> = {
   value: T;
@@ -45,6 +45,8 @@ export function SearchableSelect<T extends string | number>({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  // Ref to the portaled floating panel so outside-click logic can exclude it.
+  const panelRef = useRef<HTMLDivElement>(null);
   const listId = `${id}-listbox`;
 
   const allRows: SearchableSelectOption<T | "">[] = useMemo(() => {
@@ -62,9 +64,14 @@ export function SearchableSelect<T extends string | number>({
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+      const target = e.target as Node;
+      if (
+        containerRef.current?.contains(target) ||
+        panelRef.current?.contains(target)
+      ) {
+        return;
       }
+      setOpen(false);
     }
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
@@ -149,12 +156,12 @@ export function SearchableSelect<T extends string | number>({
             "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/20 dark:border-red-500 dark:focus-visible:ring-red-500/30",
         )}
       />
-      {showDropdown ? (
+      <FloatingDropdown anchorRef={containerRef} open={showDropdown} ref={panelRef}>
         <ul
           id={listId}
           role="listbox"
           aria-label={label}
-          className="absolute z-50 mt-1 w-full min-w-[12rem] rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
+          className="w-full min-w-[12rem] rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
         >
           {filtered.length === 0 ? (
             <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400" role="alert">
@@ -192,7 +199,7 @@ export function SearchableSelect<T extends string | number>({
             })
           )}
         </ul>
-      ) : null}
+      </FloatingDropdown>
     </div>
   );
 }

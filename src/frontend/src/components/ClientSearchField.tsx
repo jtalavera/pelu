@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, Label, Spinner, Text } from "@design-system";
+import { Button, FloatingDropdown, Input, Label, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 
 type Client = {
@@ -49,6 +49,8 @@ export function ClientSearchField({
   const [open, setOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Ref to the portaled floating panel so outside-click logic can exclude it.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Sync from selection only when a concrete selection is set (not when cleared — user may be typing).
   useEffect(() => {
@@ -59,12 +61,17 @@ export function ClientSearchField({
     }
   }, [value, t]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (both the container and the floating panel).
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+      const target = e.target as Node;
+      if (
+        containerRef.current?.contains(target) ||
+        panelRef.current?.contains(target)
+      ) {
+        return;
       }
+      setOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -160,12 +167,12 @@ export function ClientSearchField({
         </Text>
       ) : null}
 
-      {showDropdown ? (
+      <FloatingDropdown anchorRef={containerRef} open={showDropdown} ref={panelRef}>
         <ul
           id={`${inputId}-listbox`}
           role="listbox"
           aria-label={labelText}
-          className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
         >
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">
@@ -229,7 +236,7 @@ export function ClientSearchField({
             </Button>
           </li>
         </ul>
-      ) : null}
+      </FloatingDropdown>
     </div>
   );
 }

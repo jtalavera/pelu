@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.FeatureFlag;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Professional;
+import com.cursorpoc.backend.domain.ProfessionalSchedule;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
 import com.cursorpoc.backend.domain.Tax;
@@ -16,12 +17,14 @@ import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -45,6 +48,7 @@ public class FemmeDataInitializer {
   private final ServiceCategoryRepository serviceCategoryRepository;
   private final SalonServiceRepository salonServiceRepository;
   private final ProfessionalRepository professionalRepository;
+  private final ProfessionalScheduleRepository professionalScheduleRepository;
   private final TaxRepository taxRepository;
   private final FemmeSystemAdminProperties systemAdminProperties;
   private final PasswordEncoder passwordEncoder;
@@ -58,6 +62,7 @@ public class FemmeDataInitializer {
       ServiceCategoryRepository serviceCategoryRepository,
       SalonServiceRepository salonServiceRepository,
       ProfessionalRepository professionalRepository,
+      ProfessionalScheduleRepository professionalScheduleRepository,
       TaxRepository taxRepository,
       FemmeSystemAdminProperties systemAdminProperties,
       PasswordEncoder passwordEncoder) {
@@ -69,6 +74,7 @@ public class FemmeDataInitializer {
     this.serviceCategoryRepository = serviceCategoryRepository;
     this.salonServiceRepository = salonServiceRepository;
     this.professionalRepository = professionalRepository;
+    this.professionalScheduleRepository = professionalScheduleRepository;
     this.taxRepository = taxRepository;
     this.systemAdminProperties = systemAdminProperties;
     this.passwordEncoder = passwordEncoder;
@@ -248,6 +254,17 @@ public class FemmeDataInitializer {
       professional.setActive(true);
       professional.setSystemAccessAllowed(false);
       professionalRepository.save(professional);
+      // Issue #39: seed Mon-Sat (days 1-6) 09:00-19:00 for every active professional.
+      LocalTime start = LocalTime.of(9, 0);
+      LocalTime end = LocalTime.of(19, 0);
+      for (short day = 1; day <= 6; day++) {
+        ProfessionalSchedule schedule = new ProfessionalSchedule();
+        schedule.setProfessional(professional);
+        schedule.setDayOfWeek(day);
+        schedule.setStartTime(start);
+        schedule.setEndTime(end);
+        professionalScheduleRepository.save(schedule);
+      }
     }
 
     log.info(

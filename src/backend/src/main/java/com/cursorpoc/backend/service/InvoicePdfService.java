@@ -288,6 +288,19 @@ public class InvoicePdfService {
     cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(totalIva), ox + cmToPt(10.53f), yIva, 0);
     cb.endText();
 
+    // Issue #55: amount-in-words for the Monto total.
+    // Positioned 0.5 cm above the IVA row (yFromTop(h, 13.26)) and 1.5 cm to
+    // the right of the item-description column start (ox + cmToPt(1.0) + cmToPt(1.5)).
+    cb.beginText();
+    cb.setFontAndSize(bf, BODY_PT);
+    cb.showTextAligned(
+        Element.ALIGN_LEFT,
+        SpanishNumberToWords.guaranies(invoice.getTotal()),
+        ox + cmToPt(2.5f),
+        yFromTop(h, 13.26f),
+        0);
+    cb.endText();
+
     // HU-21: bottom-of-panel "COPIA: ARCHIVO TRIBUTARIO" / "ORIGINAL:
     // ADQUIRENTE" labels removed; the panel footer is left blank because
     // the printed form already differentiates the two copies.

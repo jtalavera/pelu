@@ -862,7 +862,6 @@
         "scheduleInvalid": "Hora inválida. Usá HH:MM (ej.: 09:00).",
         "scheduleRangeInvalid": "Rango inválido. La hora de inicio debe ser anterior a la de fin (ej.: 09:00–17:00).",
         "scheduleDayActive": "Día de atención",
-        "scheduleNoDaysSelected": "Marcá al menos un día de atención.",
         "pin": "PIN (4–7 dígitos, opcional)",
         "pinPlaceholder": "ej.: 1234",
         "pinMaskPlaceholder": "••••••",

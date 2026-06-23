@@ -287,6 +287,27 @@ class InvoicePdfServiceTest {
     assertThat(text).contains("Dto.");
   }
 
+  /** Issue #55: the PDF must contain the grand total spelled out in Spanish. */
+  @Test
+  void renderPdf_containsAmountInWords() throws Exception {
+    InvoicePdfService svc = newService();
+
+    InvoiceLine line = new InvoiceLine();
+    line.setDescription("Corte");
+    line.setQuantity(1);
+    line.setUnitPrice(new BigDecimal("150000"));
+    line.setLineTotal(new BigDecimal("150000"));
+
+    Invoice invoice = baseInvoice(List.of(line), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("150000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("150000"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+    String text = extractText(pdf);
+    // "ciento cincuenta mil guaraníes" must appear on both copies (two panels)
+    assertThat(text).contains("ciento cincuenta mil");
+  }
+
   @Test
   void lineDescriptionForPrint_usesServiceNameWhenLinked() {
     SalonService svc = new SalonService();

@@ -1,6 +1,8 @@
 /**
  * E2E tests for high-priority GitHub issues:
  *   #37 — RUC warning on Nuevo comprobante
+ *   #39 — Cambios en base semilla: active professionals get Mon-Sat 09:00-19:00
+ *   #40 — Validación en Horario de profesionales: allow zero attention days
  *   #41 — Split "Descuento en Ítem" into "Tipo Dto." + "Valor Dto." in comprobante popup
  *   #42 — User profile / change-password dialog labels were raw i18n keys
  *   #43 — Salon RUC snapshotted on the invoice (business_ruc field)
@@ -8,11 +10,14 @@
  *   #47 — Invoice to a different name/RUC without mutating the client
  *   #48 — "Ver" comprobante popup in Client History
  *   #49 — More vivid category colors shown in table swatches
+ *   #51 — Lista de clientes en formulario: dropdown floats over the form
  *   #52 — Error al asignar color de categoría (palette mismatch, backend allow-list expanded)
+ *   #55 — Descripción de monto total en factura: amount-in-words on PDF
  */
 
 import { expect, test } from "@playwright/test";
 import {
+  API_BASE,
   apiGetJson,
   apiPostJson,
   apiPutJson,
@@ -25,6 +30,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { professionalFormDialog } from "../fixtures/ui";
 
 test.describe.configure({ mode: "serial" });
 
@@ -419,4 +425,237 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
 
   // "Anular" (void) button must NOT appear — view-only mode
   await expect(modal.getByRole("button", { name: /anular|void/i })).not.toBeVisible();
+});
+
+// ─── Issue #39 ────────────────────────────────────────────────────────────────
+
+test("Issue #39 · profesionales semilla tienen horario Lun-Sáb 09:00-19:00 tras reset", async ({
+  request,
+}) => {
+  // Reset seed to get a fresh state
+  const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
+  expect(resetRes.ok()).toBeTruthy();
+
+  const token = await loginAsDemoApi(request);
+
+  // Fetch all professionals
+  const professionals = await apiGetJson<Array<{ id: number; active: boolean; fullName: string }>>(
+    request,
+    token,
+    "/api/professionals",
+  );
+  const activeProfessionals = professionals.filter((p) => p.active);
+  expect(activeProfessionals.length).toBeGreaterThan(0);
+
+  // Each active professional must have 6 schedule rows (Mon=1 to Sat=6, 09:00-19:00)
+  for (const prof of activeProfessionals) {
+    const detail = await apiGetJson<{
+      id: number;
+      schedules: Array<{ dayOfWeek: number; startTime: string; endTime: string }>;
+    }>(request, token, `/api/professionals/${prof.id}`);
+
+    const schedules = detail.schedules ?? [];
+    expect(
+      schedules.length,
+      `${prof.fullName} should have 6 schedule rows`,
+    ).toBe(6);
+
+    const days = schedules.map((s) => s.dayOfWeek).sort();
+    expect(days).toEqual([1, 2, 3, 4, 5, 6]); // Mon-Sat
+
+    for (const s of schedules) {
+      expect(s.startTime, `${prof.fullName} day ${s.dayOfWeek} startTime`).toBe("09:00:00");
+      expect(s.endTime, `${prof.fullName} day ${s.dayOfWeek} endTime`).toBe("19:00:00");
+    }
+  }
+});
+
+// ─── Issue #40 ────────────────────────────────────────────────────────────────
+
+test("Issue #40 · guardar horario con cero días seleccionados no lanza error", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  // Create a professional with no schedule yet
+  const created = await apiPostJson<{ id: number }>(request, token, "/api/professionals", {
+    fullName: `E2E HP40 ${Date.now()}`,
+    phone: null,
+    email: null,
+    photoDataUrl: null,
+  });
+
+  await loginAsDemo(page);
+  await page.goto("/app/professionals");
+
+  // Open "Edit schedule" via kebab menu
+  await expect(page.getByTestId(`professionals-row-${created.id}-trigger`)).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.getByTestId(`professionals-row-${created.id}-trigger`).click();
+  await page.getByRole("menuitem", { name: "Edit schedule" }).click();
+
+  const dlg = professionalFormDialog(page);
+  await expect(dlg.getByRole("tab", { name: "Schedule" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+    { timeout: 10_000 },
+  );
+
+  // Ensure no day is checked
+  const monCheckbox = dlg.getByTestId("prof-day-mon-active");
+  await expect(monCheckbox).toBeVisible();
+  if (await monCheckbox.isChecked()) {
+    await monCheckbox.uncheck();
+  }
+  // Uncheck all days (tue-sun)
+  for (const key of ["tue", "wed", "thu", "fri", "sat", "sun"]) {
+    const cb = dlg.getByTestId(`prof-day-${key}-active`);
+    if (await cb.isChecked()) {
+      await cb.uncheck();
+    }
+  }
+
+  // Save — must succeed without any error
+  const scheduleResp = page.waitForResponse(
+    (r) =>
+      r.url().includes(`/api/professionals/${created.id}/schedules`) &&
+      r.request().method() === "PUT",
+  );
+  await dlg.getByRole("button", { name: /save schedule/i }).click();
+  const resp = await scheduleResp;
+  expect(resp.ok(), await resp.text()).toBeTruthy();
+
+  // Dialog should close (no error left it open)
+  await expect(dlg).not.toBeVisible({ timeout: 10_000 });
+});
+
+// ─── Issue #51 ────────────────────────────────────────────────────────────────
+
+test("Issue #51 · dropdown de clientes en formulario de factura flota sobre el formulario", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await ensureCashSessionOpenApi(request, token);
+
+  await loginAsDemo(page);
+  await ensureCashSessionOpen(page);
+  await page.getByRole("tab", { name: "New Invoice" }).click();
+
+  // Trigger the client search dropdown
+  const clientInput = page.getByLabel("Search or select client");
+  await expect(clientInput).toBeVisible({ timeout: 10_000 });
+
+  // Capture the submit button's bounding box BEFORE opening the dropdown
+  const submitBtn = page.getByRole("button", { name: "Issue invoice" });
+  const boxBefore = await submitBtn.boundingBox();
+  expect(boxBefore).not.toBeNull();
+
+  // Open the dropdown
+  await clientInput.click();
+  const listbox = page.getByRole("listbox", { name: "Search or select client" });
+  await expect(listbox).toBeVisible({ timeout: 10_000 });
+
+  // The dropdown's parent wrapper must be fixed-positioned (portal-rendered).
+  const parentPosition = await listbox.evaluate(
+    (el) => (el.parentElement as HTMLElement | null)?.style?.position ?? "",
+  );
+  expect(parentPosition).toBe("fixed");
+
+  // The submit button must not have moved (form height unchanged by the dropdown).
+  const boxAfter = await submitBtn.boundingBox();
+  expect(boxAfter).not.toBeNull();
+  expect(boxAfter!.y).toBeCloseTo(boxBefore!.y, 0);
+});
+
+test("Issue #51 · dropdown de clientes en formulario de turno flota sobre el formulario", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await seedCategoryServiceProfessional(request, token);
+
+  await loginAsDemo(page);
+  await page.goto("/app/calendar");
+  await page.getByRole("button", { name: "New appointment" }).first().click();
+
+  const dlg = page.getByRole("dialog");
+  await expect(dlg).toBeVisible({ timeout: 10_000 });
+
+  // Capture the Save button's position BEFORE opening the client dropdown
+  const saveBtn = dlg.getByRole("button", { name: "Save" });
+  const boxBefore = await saveBtn.boundingBox();
+  expect(boxBefore).not.toBeNull();
+
+  // Open the client SearchableSelect (accessible name "Client")
+  const clientCombobox = dlg.getByRole("combobox", { name: "Client", exact: true });
+  await expect(clientCombobox).toBeVisible({ timeout: 10_000 });
+  await clientCombobox.click();
+
+  const listbox = page.getByRole("listbox", { name: "Client", exact: true });
+  await expect(listbox).toBeVisible({ timeout: 10_000 });
+
+  // The dropdown's parent wrapper must be fixed-positioned (portal-rendered).
+  const parentPosition = await listbox.evaluate(
+    (el) => (el.parentElement as HTMLElement | null)?.style?.position ?? "",
+  );
+  expect(parentPosition).toBe("fixed");
+
+  // The Save button must not have moved.
+  const boxAfter = await saveBtn.boundingBox();
+  expect(boxAfter).not.toBeNull();
+  expect(boxAfter!.y).toBeCloseTo(boxBefore!.y, 0);
+});
+
+// ─── Issue #55 ────────────────────────────────────────────────────────────────
+
+test("Issue #55 · PDF de comprobante contiene monto total en letras en español", async ({
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await apiPutJson(request, token, "/api/business-profile", {
+    businessName: "Demo salon",
+    ruc: "80000005-6",
+    address: null,
+    phone: null,
+    contactEmail: null,
+    logoDataUrl: null,
+  });
+  await ensureActiveFiscalStampForInvoices(request, token);
+  await ensureCashSessionOpenApi(request, token);
+
+  // Issue an invoice with a known total (50.000 Gs → "cincuenta mil guaraníes")
+  const inv = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+    clientId: null,
+    clientDisplayName: "E2E HP55",
+    clientRucOverride: null,
+    discountType: null,
+    discountValue: null,
+    lines: [
+      {
+        serviceId: null,
+        description: "HP55 service",
+        quantity: 1,
+        unitPrice: 50000,
+        discountType: null,
+        discountValue: null,
+      },
+    ],
+    payments: [{ method: "CASH", amount: 50000 }],
+  });
+
+  // Download the PDF
+  const pdfRes = await request.get(`${API_BASE}/api/invoices/${inv.id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(pdfRes.ok(), await pdfRes.text()).toBeTruthy();
+
+  const buf = await pdfRes.body();
+  // Valid PDF starts with %PDF
+  expect(buf.slice(0, 4).toString("latin1")).toBe("%PDF");
+  // The amount-in-words for 50000 Gs is "cincuenta mil guaraníes".
+  // In CP1252 "í" = 0xED; converting the buffer to latin1 preserves byte values.
+  const pdfLatin1 = buf.toString("latin1");
+  expect(pdfLatin1).toContain("cincuenta mil");
 });
