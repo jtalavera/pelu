@@ -162,15 +162,17 @@ public class InvoicePdfService {
     // Coordinates calibrated to the production pre-printed factura stock
     // (requirements/invoice_format.png, 23.5×14 cm, two panels).
     // Fecha / RUC value column starts at ~2.2 cm from panel edge.
-    float fieldX = ox + cmToPt(2.2f);
-    // Nombre o Razón Social label is wider; value starts at ~3.25 cm (left) / ~3.75 cm (right).
-    float nameX = ox + cmToPt(isRightPanel ? 3.75f : 3.25f);
+    float fieldX = ox + cmToPt(isRightPanel ? -0.4f : 1.0f);
+    // Nombre o Razón Social label is wider; value starts at ~2.85 cm (left) / ~1.45 cm (right).
+    float nameX = ox + cmToPt(isRightPanel ? 1.45f : 2.85f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
         Element.ALIGN_LEFT, dateFmt.format(invoice.getIssuedAt()), fieldX, yFromTop(h, 3.05f), 0);
-    // Contado (POS): mark inside printed "CONTADO" box (~8.25 cm from panel edge).
-    cb.showTextAligned(Element.ALIGN_LEFT, "X", ox + cmToPt(8.25f), yFromTop(h, 3.05f), 0);
+    // Contado (POS): mark inside printed "CONTADO" box (~7.05 cm left / ~5.65 cm right from panel
+    // edge).
+    cb.showTextAligned(
+        Element.ALIGN_LEFT, "X", ox + cmToPt(isRightPanel ? 5.65f : 7.05f), yFromTop(h, 3.05f), 0);
 
     String clientRuc = invoice.getClientRucOverride();
     if (clientRuc == null || clientRuc.isBlank()) {
@@ -186,7 +188,7 @@ public class InvoicePdfService {
 
     String name = invoice.getClientDisplayName();
     if (name != null && !name.isBlank()) {
-      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), nameX, yFromTop(h, 4.11f), 0);
+      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), nameX, yFromTop(h, 4.01f), 0);
     }
 
     // Dirección row (y ~4.63 cm) — Teléfono value starts after the pre-printed
@@ -206,14 +208,14 @@ public class InvoicePdfService {
     // Column x-positions calibrated to production form (invoice_format.png):
     // Cant. right ~0.66 cm, Desc left ~1.0 cm, P.Unit. right ~5.72 cm.
     // Table top at ~5.72 cm from top so first data row lands at ~6.16 cm.
-    float tableTop = yFromTop(h, 5.72f);
+    float tableTop = yFromTop(h, 5.27f);
     float rowH = cmToPt(0.38f);
-    float xCant = ox;
-    // Descripción starts just after the Cant. box divider (~1.0 cm).
-    float xDesc = ox + cmToPt(1.0f);
-    // Precio Unitario right-edge at ~5.72 cm (left) / ~6.22 cm (right) from panel left.
-    float xPuAnchor = ox + cmToPt(isRightPanel ? 6.22f : 5.72f);
-    float taxExtraCm = isRightPanel ? 0.5f : 0f;
+    float xCant = isRightPanel ? ox - cmToPt(1.5f) : ox;
+    // Descripción starts at ~0.8 cm (left) / ~-0.5 cm (right) from panel origin.
+    float xDesc = ox + cmToPt(isRightPanel ? -0.5f : 0.8f);
+    // Precio Unitario right-edge at ~5.12 cm (left) / ~3.82 cm (right) from panel left.
+    float xPuAnchor = ox + cmToPt(isRightPanel ? 3.82f : 5.12f);
+    float taxExtraCm = isRightPanel ? -0.8f : -1.3f;
 
     List<DetailRow> detailRows = buildDetailRows(invoice);
     BigDecimal[] colSubtotals = {BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
@@ -259,8 +261,8 @@ public class InvoicePdfService {
     }
 
     // --- Totals block ---
-    // Per-column subtotals row at ~12.19 cm from form top (Exenta, IVA 5%, IVA 10%).
-    float yPartial = yFromTop(h, 12.19f);
+    // Per-column subtotals row at ~10.89 cm from form top (Exenta, IVA 5%, IVA 10%).
+    float yPartial = yFromTop(h, 10.89f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     for (int c = 0; c < 3; c++) {
@@ -274,30 +276,43 @@ public class InvoicePdfService {
       }
     }
 
-    // IVA liquidation row at ~13.76 cm from top.
+    // IVA liquidation row at ~12.26 cm from top.
     // TOTAL IVA (IVA 5% + IVA 10%) printed 2.8 cm right of the IVA 10% field.
     cb.setFontAndSize(bf, 7f);
-    float yIva = yFromTop(h, 13.76f);
+    float yIva = yFromTop(h, 12.26f);
     BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
     BigDecimal iva5 = computeIvaByRate(invoice, BigDecimal.valueOf(5));
-    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva10), ox + cmToPt(7.43f), yIva, 0);
+    cb.showTextAligned(
+        Element.ALIGN_RIGHT,
+        formatMoneyGs(iva10),
+        ox + cmToPt(isRightPanel ? 5.83f : 7.43f),
+        yIva,
+        0);
     if (iva5.compareTo(BigDecimal.ZERO) > 0) {
-      cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(iva5), ox + cmToPt(3.51f), yIva, 0);
+      cb.showTextAligned(
+          Element.ALIGN_RIGHT,
+          formatMoneyGs(iva5),
+          ox + cmToPt(isRightPanel ? 1.91f : 3.51f),
+          yIva,
+          0);
     }
     BigDecimal totalIva = iva5.add(iva10);
-    cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(totalIva), ox + cmToPt(10.53f), yIva, 0);
+    cb.showTextAligned(
+        Element.ALIGN_RIGHT,
+        formatMoneyGs(totalIva),
+        ox + cmToPt(isRightPanel ? 8.93f : 10.53f),
+        yIva,
+        0);
     cb.endText();
 
     // Issue #55: amount-in-words for the Monto total.
-    // Positioned 0.8 cm above the IVA row (yFromTop(h, 12.96)) and 1.5 cm to
-    // the right of the item-description column start (ox + cmToPt(1.0) + cmToPt(1.5)).
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
         Element.ALIGN_LEFT,
         SpanishNumberToWords.guaranies(invoice.getTotal()),
-        ox + cmToPt(2.5f),
-        yFromTop(h, 12.96f),
+        ox + cmToPt(isRightPanel ? 0.9f : 2.5f),
+        yFromTop(h, 11.46f),
         0);
     cb.endText();
 
