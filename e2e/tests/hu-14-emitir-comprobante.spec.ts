@@ -426,14 +426,10 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await expect(issueBtn).toBeDisabled();
 
-    // Add item with valid price → still disabled (no payment)
+    // Add item with valid price → CASH payment auto-fills → button enabled
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
     await expect(page.locator("#line-price-0")).toHaveValue("5.000");
-    await expect(issueBtn).toBeDisabled();
-
-    // Add payment → now enabled
-    await page.locator("#pay-amount-0").fill("5000");
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
     await expect(issueBtn).toBeEnabled();
   });

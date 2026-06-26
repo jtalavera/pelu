@@ -845,3 +845,32 @@ test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra 
   // The amount must remain unchanged
   await expect(amountField).toHaveValue("50.000");
 });
+
+// ─── Issue #66 ────────────────────────────────────────────────────────────────
+
+test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin ingresar monto manualmente)", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await ensureCashSessionOpenApi(request, token);
+  const seed = await seedCategoryServiceProfessional(request, token);
+  const client = await seedClient(request, token, `E2E I66 ${Date.now()}`);
+
+  await loginAsDemo(page);
+  await ensureCashSessionOpen(page);
+  await page.getByRole("tab", { name: "New Invoice" }).click();
+
+  const issueBtn = page.getByRole("button", { name: "Issue invoice" });
+  await expect(issueBtn).toBeDisabled({ timeout: 10_000 });
+
+  // Select client
+  await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
+  await page.getByRole("button", { name: client.fullName, exact: false }).click();
+  await expect(issueBtn).toBeDisabled();
+
+  // Select service — the CASH amount auto-fills and the button must enable
+  await pickServiceLine(page, seed.serviceFullName, 0);
+  await expect(page.locator("#pay-amount-0")).not.toHaveValue("", { timeout: 5_000 });
+  await expect(issueBtn).toBeEnabled({ timeout: 5_000 });
+});
