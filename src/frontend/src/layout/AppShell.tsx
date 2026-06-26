@@ -136,11 +136,6 @@ const BellIcon = () => (
   </svg>
 );
 
-const SearchIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-  </svg>
-);
 
 interface MenuItemProps {
   onClick: () => void;
@@ -266,44 +261,6 @@ function AppShellInner() {
           {t("femme.appName")}
         </span>
 
-        {/* Search */}
-        <div data-tour="topbar-search" style={{ flex: 1, maxWidth: 340, position: "relative" }}>
-          <span
-            style={{
-              position: "absolute",
-              left: 9,
-              top: "50%",
-              transform: "translateY(-50%)",
-              pointerEvents: "none",
-              color: "var(--color-ink-3)",
-              display: "flex",
-            }}
-          >
-            <SearchIcon />
-          </span>
-          <input
-            type="search"
-            placeholder={t("femme.topbar.searchPlaceholder")}
-            aria-label={t("femme.topbar.searchPlaceholder")}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "7px 10px 7px 32px",
-              border: "var(--border-default)",
-              borderRadius: "var(--radius-md)",
-              fontSize: 12,
-              background: "var(--color-stone)",
-              color: "var(--color-ink)",
-              outline: "none",
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "var(--color-rose)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "";
-            }}
-          />
-        </div>
 
         {/* Right zone */}
         <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>

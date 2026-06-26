@@ -644,6 +644,25 @@ function NewInvoiceTab({
   );
   const remaining = total - assignedPayments;
 
+  // When the invoice total changes (due to service/discount edits), auto-fill
+  // any CASH payment row with the amount needed to cover the remaining balance.
+  // Watching `total` (not `remaining`) avoids a circular dependency: setting
+  // the CASH amount would change `remaining`, re-firing the effect forever.
+  useEffect(() => {
+    if (total <= 0) return;
+    setPayments((prev) => {
+      const nonCashTotal = prev
+        .filter((p) => p.method !== "CASH")
+        .reduce((acc, p) => acc + parseMaskedMoney(p.amount), 0);
+      const cashFill = Math.max(0, total - nonCashTotal);
+      return prev.map((p) =>
+        p.method === "CASH"
+          ? { ...p, amount: cashFill > 0 ? maskMoneyInput(cashFill.toFixed(0)) : "" }
+          : p,
+      );
+    });
+  }, [total]);
+
   /**
    * Whether all mandatory fields are filled to enable the "Emit" button:
    *   1. A client is selected from the directory OR marked as occasional.

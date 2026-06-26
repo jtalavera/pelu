@@ -132,7 +132,6 @@
       "loading": "Validando enlace…"
     },
     "topbar": {
-      "searchPlaceholder": "Buscar clientes, turnos…",
       "notifications": "Notificaciones",
       "userMenuTriggerAria": "Abrir menú de usuario",
       "userMenuUserSettings": "Configuración del usuario",
@@ -998,7 +997,6 @@
         "settings": { "title": "Configuración", "content": "Configurá el perfil del negocio, el logo, el RUC y los timbrados fiscales." }
       },
       "topbar": {
-        "search": { "title": "Búsqueda global", "content": "Encontrá rápidamente un cliente, turno o registro desde cualquier pantalla." },
         "theme": { "title": "Tema", "content": "Cambiá entre modo claro y oscuro según tu preferencia." },
         "lang": { "title": "Idioma", "content": "Cambiá el idioma de la app entre español e inglés." },
         "notifications": { "title": "Notificaciones", "content": "Consultá las alertas y recordatorios recientes del salón." },

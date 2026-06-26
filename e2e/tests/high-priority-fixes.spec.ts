@@ -780,3 +780,68 @@ test("Issue #58 · LocalizedDateInput en formulario de turno flota sobre el form
   expect(boxAfter).not.toBeNull();
   expect(boxAfter!.y).toBeCloseTo(boxBefore!.y, 0);
 });
+
+// ─── Issue #64 ────────────────────────────────────────────────────────────────
+
+test("Issue #64 · buscador del topbar no es visible en ninguna página", async ({ page }) => {
+  await loginAsDemo(page);
+  await page.goto("/app");
+
+  await expect(page.locator("[data-tour='topbar-search']")).not.toBeVisible();
+  await expect(page.locator("header input[type='search']")).not.toBeVisible();
+});
+
+// ─── Issue #63 ────────────────────────────────────────────────────────────────
+
+test("Issue #63 · al ingresar un servicio al comprobante, el monto Efectivo se autorellena", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await ensureCashSessionOpenApi(request, token);
+  const seed = await seedCategoryServiceProfessional(request, token);
+
+  await loginAsDemo(page);
+  await ensureCashSessionOpen(page);
+  await page.getByRole("tab", { name: "New Invoice" }).click();
+
+  // The CASH amount field starts empty
+  const amountField = page.locator("#pay-amount-0");
+  await expect(amountField).toBeVisible({ timeout: 10_000 });
+  await expect(amountField).toHaveValue("");
+
+  // Pick a service and enter a unit price
+  await pickServiceLine(page, seed.serviceFullName, 0);
+  await page.locator("#line-price-0").fill("50000");
+  await page.locator("#line-price-0").press("Tab");
+
+  // The CASH amount should auto-populate with 50.000 (dot separator, no decimals)
+  await expect(amountField).toHaveValue("50.000");
+});
+
+test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra el monto", async ({
+  page,
+  request,
+}) => {
+  const token = await loginAsDemoApi(request);
+  await ensureCashSessionOpenApi(request, token);
+  const seed = await seedCategoryServiceProfessional(request, token);
+
+  await loginAsDemo(page);
+  await ensureCashSessionOpen(page);
+  await page.getByRole("tab", { name: "New Invoice" }).click();
+
+  // Fill in a service so the CASH amount auto-populates
+  await pickServiceLine(page, seed.serviceFullName, 0);
+  await page.locator("#line-price-0").fill("50000");
+  await page.locator("#line-price-0").press("Tab");
+
+  const amountField = page.locator("#pay-amount-0");
+  await expect(amountField).toHaveValue("50.000");
+
+  // Change the payment method from CASH to TRANSFER
+  await page.locator("#pay-method-0").selectOption("TRANSFER");
+
+  // The amount must remain unchanged
+  await expect(amountField).toHaveValue("50.000");
+});
