@@ -132,7 +132,6 @@
       "loading": "Validating link…"
     },
     "topbar": {
-      "searchPlaceholder": "Search clients, appointments…",
       "notifications": "Notifications",
       "userMenuTriggerAria": "Open user menu",
       "userMenuUserSettings": "User settings",
@@ -998,7 +997,6 @@
         "settings": { "title": "Settings", "content": "Configure your business profile, logo, RUC, and fiscal stamps." }
       },
       "topbar": {
-        "search": { "title": "Global search", "content": "Quickly find a client, appointment, or record from anywhere in the app." },
         "theme": { "title": "Theme", "content": "Switch between light and dark mode to suit your working environment." },
         "lang": { "title": "Language", "content": "Change the app language between Spanish and English." },
         "notifications": { "title": "Notifications", "content": "See recent alerts and reminders for your salon." },

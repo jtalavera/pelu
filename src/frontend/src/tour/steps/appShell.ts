@@ -60,12 +60,7 @@ export const appShellSteps: FemmeTourStepDef[] = [
     placement: "right",
     roles: ["ADMIN"],
   },
-  {
-    target: "[data-tour='topbar-search']",
-    titleKey: "femme.tour.topbar.search.title",
-    contentKey: "femme.tour.topbar.search.content",
-    placement: "bottom",
-  },
+
   {
     target: "[data-tour='topbar-theme']",
     titleKey: "femme.tour.topbar.theme.title",
