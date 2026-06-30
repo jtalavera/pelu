@@ -32,37 +32,103 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Invoice PDF for continuous / pre-printed stock: sheet 23.5 cm × 14 cm, two identical copies side
- * by side (~11.75 cm each). Coordinates target blank fields on a typical Paraguayan factura form;
- * only variable data is drawn (no duplicate letterhead).
+ * Invoice PDF for continuous / pre-printed stock: sheet 756×424 pt (≈26.67×14.96 cm), two identical
+ * copies side by side. Coordinates match requirements/factura_vieja_femme.pdf exactly so that
+ * variable data lands in the correct blank fields of the physical pre-printed form. Only variable
+ * data is drawn (no letterhead, invoice number, timbrado, or copy labels — those are pre-printed).
  */
 @Service
 public class InvoicePdfService {
 
-  private static final float CM_PER_INCH = 2.54f;
-  private static final float PT_PER_INCH = 72f;
+  /**
+   * Sheet width: 756 pt ≈ 26.67 cm (landscape). Matches factura_vieja_femme.pdf MediaBox [0 0 424
+   * 756] + /Rotate 90.
+   */
+  static final float PAGE_WIDTH_PT = 756f;
 
-  /** Sheet width: 23.5 cm (horizontal). */
-  private static final float PAGE_WIDTH_PT = (23.5f * PT_PER_INCH) / CM_PER_INCH;
+  /** Sheet height: 424 pt ≈ 14.96 cm. */
+  static final float PAGE_HEIGHT_PT = 424f;
 
-  /** Sheet height: 14 cm (vertical). */
-  private static final float PAGE_HEIGHT_PT = (14f * PT_PER_INCH) / CM_PER_INCH;
-
-  /** Half sheet = one invoice panel. */
-  private static final float PANEL_WIDTH_PT = PAGE_WIDTH_PT / 2f;
-
-  private static final float MARGIN_X_PT = cmToPt(0.35f);
+  /** Body font size (client block, subtotals, IVA row, amount in words). */
   private static final float BODY_PT = 8f;
-  private static final float TABLE_PT = 7.5f;
 
-  // HU-29 AC5/AC6: the detail table has three equal-width tax columns —
-  // Exenta (leftmost), IVA 5 %, and IVA 10 % (rightmost). Column widths and
-  // anchors are calibrated to the production pre-printed factura stock
-  // (requirements/invoice_format.png, 23.5 x 14 cm, ~552 px/cm scan).
-  // Measured column right-edges from panel left: Exenta ~8.40 cm, IVA 5 %
-  // ~10.12 cm, IVA 10 % ~11.68 cm. Equal-width formula errors < 0.10 cm.
-  private static final float TAX_COL_WIDTH_CM = 1.60f;
-  private static final float TAX_COL_10_ANCHOR_CM = 10.83f;
+  /** Detail row font size. */
+  private static final float TABLE_PT = 7f;
+
+  /**
+   * Width in points of each tax column (Exenta / IVA 5% / IVA 10%). Columns step left from the
+   * IVA-10% anchor by this amount per column index. Calibrated to
+   * requirements/factura_vieja_femme.pdf.
+   */
+  private static final float TAX_COL_WIDTH_PT = 45f;
+
+  // ---------------------------------------------------------------------------
+  // Per-panel absolute coordinates (bottom-left origin, points).
+  // Measured from requirements/factura_vieja_femme.pdf — the authoritative layout.
+  // Left panel: x ≈ 1–254.   Right panel: x ≈ 314–584.
+  // ---------------------------------------------------------------------------
+
+  // --- Client block ---
+  static final float L_X_DATE = 29f;
+  static final float L_Y_DATE = 335.7f;
+  static final float L_X_CONTADO = 213.83f;
+  static final float L_Y_CONTADO = 329.37f;
+  static final float L_X_RUC = 24f;
+  static final float L_Y_RUC = 320.7f;
+  static final float L_X_NAME = 80f;
+  static final float L_Y_NAME = 309.7f;
+
+  static final float R_X_DATE = 341f;
+  static final float R_Y_DATE = 336.7f;
+  static final float R_X_CONTADO = 540.83f;
+  static final float R_Y_CONTADO = 342.37f;
+  static final float R_X_RUC = 353f;
+  static final float R_Y_RUC = 321.7f;
+  static final float R_X_NAME = 400f;
+  static final float R_Y_NAME = 307.7f;
+
+  // --- Detail table ---
+  // Left panel: quantity LEFT at 25.11; description CENTER-aligned at center x=76.5;
+  //             unit price CENTER-aligned at center x=149.5; IVA-10% column LEFT at 254.
+  // Right panel: quantity LEFT at 314; description LEFT at 339;
+  //              unit price LEFT at 434; IVA-10% column LEFT at 554.
+  // Both panels: first data row y=256.54, step −13 pt per row.
+  static final float L_X_QTY = 25.11f;
+  static final float L_X_DESC_CENTER = 76.5f; // ALIGN_CENTER center point
+  static final float L_X_UNIT_CENTER = 149.5f; // ALIGN_CENTER center point
+  static final float L_X_TAX_COL10 = 254f; // IVA-10% left-edge anchor
+
+  static final float R_X_QTY = 314f;
+  static final float R_X_DESC = 339f; // ALIGN_LEFT
+  static final float R_X_UNIT = 434f; // ALIGN_LEFT
+  static final float R_X_TAX_COL10 = 554f;
+
+  static final float TABLE_FIRST_ROW_Y = 256.54f;
+  private static final float ROW_STEP_PT = 13f;
+  private static final int MAX_ROWS = 11;
+
+  // --- Subtotals row ---
+  static final float L_Y_SUBTOTALS = 114.7f;
+  static final float R_Y_SUBTOTALS = 109.73f;
+
+  // --- Amount in words ---
+  static final float L_X_WORDS = 1f;
+  static final float L_Y_WORDS = 86.87f;
+  static final float R_X_WORDS = 351f;
+  static final float R_Y_WORDS = 84.87f;
+
+  // --- IVA liquidation row ---
+  // IVA 5% anchor is not present in the reference sample (all items were IVA 10%);
+  // it is estimated at ~88 pt left of the IVA-10% anchor.
+  static final float L_X_IVA5 = 76f;
+  static final float L_X_IVA10 = 164f;
+  static final float L_X_TOTAL_IVA = 253f;
+  static final float L_Y_IVA = 74.7f;
+
+  static final float R_X_IVA5 = 374f;
+  static final float R_X_IVA10 = 462f;
+  static final float R_X_TOTAL_IVA = 550f;
+  static final float R_Y_IVA = 76.7f;
 
   private final InvoiceRepository invoiceRepository;
   private final BusinessProfileService businessProfileService;
@@ -75,15 +141,6 @@ public class InvoicePdfService {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileService = businessProfileService;
     this.timeProperties = timeProperties;
-  }
-
-  private static float cmToPt(float cm) {
-    return (cm * PT_PER_INCH) / CM_PER_INCH;
-  }
-
-  /** PDF Y from bottom, given distance from physical top of page (cm). */
-  private static float yFromTop(float pageHeightPt, float cmFromTop) {
-    return pageHeightPt - cmToPt(cmFromTop);
   }
 
   @Transactional(readOnly = true)
@@ -129,12 +186,10 @@ public class InvoicePdfService {
       document.open();
 
       BaseFont bf = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-      BaseFont bfBold =
-          BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
 
       PdfContentByte cb = writer.getDirectContent();
-      drawPanel(cb, bf, bfBold, 0f, invoice, dateFmt);
-      drawPanel(cb, bf, bfBold, PANEL_WIDTH_PT, invoice, dateFmt);
+      drawPanel(cb, bf, true, invoice, dateFmt);
+      drawPanel(cb, bf, false, invoice, dateFmt);
 
       document.close();
       return baos.toByteArray();
@@ -146,33 +201,48 @@ public class InvoicePdfService {
     }
   }
 
+  /**
+   * Draws one copy of the invoice onto {@code cb}. {@code isLeft=true} draws the left panel (x ≈
+   * 1–254); {@code isLeft=false} draws the right panel (x ≈ 314–584). Absolute coordinates are
+   * taken directly from requirements/factura_vieja_femme.pdf.
+   */
   private void drawPanel(
-      PdfContentByte cb,
-      BaseFont bf,
-      BaseFont bfBold,
-      float panelOriginX,
-      Invoice invoice,
-      DateTimeFormatter dateFmt)
+      PdfContentByte cb, BaseFont bf, boolean isLeft, Invoice invoice, DateTimeFormatter dateFmt)
       throws Exception {
-    float ox = panelOriginX + MARGIN_X_PT;
-    float h = PAGE_HEIGHT_PT;
-    boolean isRightPanel = panelOriginX > 0;
+
+    // Pick per-panel coordinate set
+    float xDate = isLeft ? L_X_DATE : R_X_DATE;
+    float yDate = isLeft ? L_Y_DATE : R_Y_DATE;
+    float xContado = isLeft ? L_X_CONTADO : R_X_CONTADO;
+    float yContado = isLeft ? L_Y_CONTADO : R_Y_CONTADO;
+    float xRuc = isLeft ? L_X_RUC : R_X_RUC;
+    float yRuc = isLeft ? L_Y_RUC : R_Y_RUC;
+    float xName = isLeft ? L_X_NAME : R_X_NAME;
+    float yName = isLeft ? L_Y_NAME : R_Y_NAME;
+
+    float xQty = isLeft ? L_X_QTY : R_X_QTY;
+    // Left: descriptions/unit prices are CENTER-aligned at a fixed center point.
+    // Right: they are LEFT-aligned at a fixed left edge.
+    float xDescAnchor = isLeft ? L_X_DESC_CENTER : R_X_DESC;
+    float xUnitAnchor = isLeft ? L_X_UNIT_CENTER : R_X_UNIT;
+    float xTaxCol10 = isLeft ? L_X_TAX_COL10 : R_X_TAX_COL10;
+    int descAlign = isLeft ? Element.ALIGN_CENTER : Element.ALIGN_LEFT;
+    int unitAlign = isLeft ? Element.ALIGN_CENTER : Element.ALIGN_LEFT;
+
+    float ySubtotals = isLeft ? L_Y_SUBTOTALS : R_Y_SUBTOTALS;
+    float xWords = isLeft ? L_X_WORDS : R_X_WORDS;
+    float yWords = isLeft ? L_Y_WORDS : R_Y_WORDS;
+    float xIva5 = isLeft ? L_X_IVA5 : R_X_IVA5;
+    float xIva10 = isLeft ? L_X_IVA10 : R_X_IVA10;
+    float xTotalIva = isLeft ? L_X_TOTAL_IVA : R_X_TOTAL_IVA;
+    float yIva = isLeft ? L_Y_IVA : R_Y_IVA;
 
     // --- Client block ---
-    // Coordinates calibrated to the production pre-printed factura stock
-    // (requirements/invoice_format.png, 23.5×14 cm, two panels).
-    // Fecha / RUC value column starts at ~2.2 cm from panel edge.
-    float fieldX = ox + cmToPt(isRightPanel ? -0.4f : 1.0f);
-    // Nombre o Razón Social label is wider; value starts at ~2.85 cm (left) / ~1.45 cm (right).
-    float nameX = ox + cmToPt(isRightPanel ? 1.45f : 2.85f);
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
-    cb.showTextAligned(
-        Element.ALIGN_LEFT, dateFmt.format(invoice.getIssuedAt()), fieldX, yFromTop(h, 3.05f), 0);
-    // Contado (POS): mark inside printed "CONTADO" box (~7.05 cm left / ~5.65 cm right from panel
-    // edge).
-    cb.showTextAligned(
-        Element.ALIGN_LEFT, "X", ox + cmToPt(isRightPanel ? 5.65f : 7.05f), yFromTop(h, 3.05f), 0);
+    cb.showTextAligned(Element.ALIGN_LEFT, dateFmt.format(invoice.getIssuedAt()), xDate, yDate, 0);
+    // Contado (POS): mark "X" inside the pre-printed "CONTADO" checkbox.
+    cb.showTextAligned(Element.ALIGN_LEFT, "X", xContado, yContado, 0);
 
     String clientRuc = invoice.getClientRucOverride();
     if (clientRuc == null || clientRuc.isBlank()) {
@@ -182,41 +252,17 @@ public class InvoicePdfService {
       }
     }
     if (clientRuc != null && !clientRuc.isBlank()) {
-      cb.showTextAligned(
-          Element.ALIGN_LEFT, truncate(clientRuc, 28), fieldX, yFromTop(h, 3.62f), 0);
+      cb.showTextAligned(Element.ALIGN_LEFT, truncate(clientRuc, 28), xRuc, yRuc, 0);
     }
 
     String name = invoice.getClientDisplayName();
     if (name != null && !name.isBlank()) {
-      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), nameX, yFromTop(h, 4.01f), 0);
+      cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), xName, yName, 0);
     }
-
-    // Dirección row (y ~4.63 cm) — Teléfono value starts after the pre-printed
-    // "Teléfono:" label (~7.8 cm from panel edge).
-    String phone = "";
-    Client cl = invoice.getClient();
-    if (cl != null && cl.getPhone() != null && !cl.getPhone().isBlank()) {
-      phone = cl.getPhone();
-    }
-    cb.showTextAligned(
-        Element.ALIGN_LEFT, truncate(phone, 22), ox + cmToPt(7.8f), yFromTop(h, 4.63f), 0);
     cb.endText();
 
-    // --- Detail table (variable rows only) ---
-    // HU-21: column headers (Cant. / Descripción / P. unit. / 10%) are
-    // pre-printed on the form, so the PDF prints only the row data.
-    // Column x-positions calibrated to production form (invoice_format.png):
-    // Cant. right ~0.66 cm, Desc left ~1.0 cm, P.Unit. right ~5.72 cm.
-    // Table top at ~5.72 cm from top so first data row lands at ~6.16 cm.
-    float tableTop = yFromTop(h, 5.27f);
-    float rowH = cmToPt(0.38f);
-    float xCant = isRightPanel ? ox - cmToPt(1.5f) : ox;
-    // Descripción starts at ~0.8 cm (left) / ~-0.5 cm (right) from panel origin.
-    float xDesc = ox + cmToPt(isRightPanel ? -0.5f : 0.8f);
-    // Precio Unitario right-edge at ~5.12 cm (left) / ~3.82 cm (right) from panel left.
-    float xPuAnchor = ox + cmToPt(isRightPanel ? 3.82f : 5.12f);
-    float taxExtraCm = isRightPanel ? -0.8f : -1.3f;
-
+    // --- Detail table ---
+    // Column headers (Cant. / Descripción / P. unit. / 10%) are pre-printed; only row data drawn.
     List<DetailRow> detailRows = buildDetailRows(invoice);
     BigDecimal[] colSubtotals = {BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
     for (DetailRow dr : detailRows) {
@@ -227,98 +273,65 @@ public class InvoicePdfService {
       }
     }
 
-    int maxRows = 11;
-    float yRow = tableTop - rowH * 1.15f;
+    float yRow = TABLE_FIRST_ROW_Y;
     cb.setFontAndSize(bf, TABLE_PT);
     int row = 0;
     for (DetailRow dr : detailRows) {
-      if (row >= maxRows) {
+      if (row >= MAX_ROWS) {
         break;
       }
       cb.beginText();
       if (dr.quantity() != null) {
-        cb.showTextAligned(
-            Element.ALIGN_RIGHT, String.valueOf(dr.quantity()), xCant + cmToPt(0.35f), yRow, 0);
+        cb.showTextAligned(Element.ALIGN_LEFT, String.valueOf(dr.quantity()), xQty, yRow, 0);
       }
-      cb.showTextAligned(Element.ALIGN_LEFT, truncate(dr.description(), 36), xDesc, yRow, 0);
+      cb.showTextAligned(descAlign, truncate(dr.description(), 36), xDescAnchor, yRow, 0);
       if (dr.unitPrice() != null) {
-        cb.showTextAligned(Element.ALIGN_RIGHT, formatMoneyGs(dr.unitPrice()), xPuAnchor, yRow, 0);
+        cb.showTextAligned(unitAlign, formatMoneyGs(dr.unitPrice()), xUnitAnchor, yRow, 0);
       }
       for (int c = 0; c < 3; c++) {
         BigDecimal amount = dr.columnAmounts()[c];
         if (amount != null) {
-          cb.showTextAligned(
-              Element.ALIGN_RIGHT,
-              formatSignedMoneyGs(amount),
-              taxColumnAnchorX(ox, c, taxExtraCm),
-              yRow,
-              0);
+          float xTax = xTaxCol10 - (2 - c) * TAX_COL_WIDTH_PT;
+          cb.showTextAligned(Element.ALIGN_LEFT, formatSignedMoneyGs(amount), xTax, yRow, 0);
         }
       }
       cb.endText();
-      yRow -= rowH;
+      yRow -= ROW_STEP_PT;
       row++;
     }
 
-    // --- Totals block ---
-    // Per-column subtotals row at ~10.89 cm from form top (Exenta, IVA 5%, IVA 10%).
-    float yPartial = yFromTop(h, 10.89f);
+    // --- Subtotals row ---
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     for (int c = 0; c < 3; c++) {
       if (colSubtotals[c].compareTo(BigDecimal.ZERO) != 0) {
+        float xTax = xTaxCol10 - (2 - c) * TAX_COL_WIDTH_PT;
         cb.showTextAligned(
-            Element.ALIGN_RIGHT,
-            formatSignedMoneyGs(colSubtotals[c]),
-            taxColumnAnchorX(ox, c, taxExtraCm),
-            yPartial,
-            0);
+            Element.ALIGN_LEFT, formatSignedMoneyGs(colSubtotals[c]), xTax, ySubtotals, 0);
       }
     }
 
-    // IVA liquidation row at ~12.26 cm from top.
-    // TOTAL IVA (IVA 5% + IVA 10%) printed 2.8 cm right of the IVA 10% field.
-    cb.setFontAndSize(bf, 7f);
-    float yIva = yFromTop(h, 12.26f);
+    // --- IVA liquidation row ---
+    cb.setFontAndSize(bf, BODY_PT);
     BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
     BigDecimal iva5 = computeIvaByRate(invoice, BigDecimal.valueOf(5));
-    cb.showTextAligned(
-        Element.ALIGN_RIGHT,
-        formatMoneyGs(iva10),
-        ox + cmToPt(isRightPanel ? 5.83f : 7.43f),
-        yIva,
-        0);
+    cb.showTextAligned(Element.ALIGN_LEFT, formatMoneyGs(iva10), xIva10, yIva, 0);
     if (iva5.compareTo(BigDecimal.ZERO) > 0) {
-      cb.showTextAligned(
-          Element.ALIGN_RIGHT,
-          formatMoneyGs(iva5),
-          ox + cmToPt(isRightPanel ? 1.91f : 3.51f),
-          yIva,
-          0);
+      cb.showTextAligned(Element.ALIGN_LEFT, formatMoneyGs(iva5), xIva5, yIva, 0);
     }
     BigDecimal totalIva = iva5.add(iva10);
-    cb.showTextAligned(
-        Element.ALIGN_RIGHT,
-        formatMoneyGs(totalIva),
-        ox + cmToPt(isRightPanel ? 8.93f : 10.53f),
-        yIva,
-        0);
+    cb.showTextAligned(Element.ALIGN_LEFT, formatMoneyGs(totalIva), xTotalIva, yIva, 0);
     cb.endText();
 
-    // Issue #55: amount-in-words for the Monto total.
+    // --- Amount in words ---
     cb.beginText();
     cb.setFontAndSize(bf, BODY_PT);
     cb.showTextAligned(
-        Element.ALIGN_LEFT,
-        SpanishNumberToWords.guaranies(invoice.getTotal()),
-        ox + cmToPt(isRightPanel ? 0.9f : 2.5f),
-        yFromTop(h, 11.46f),
-        0);
+        Element.ALIGN_LEFT, SpanishNumberToWords.guaranies(invoice.getTotal()), xWords, yWords, 0);
     cb.endText();
 
-    // HU-21: bottom-of-panel "COPIA: ARCHIVO TRIBUTARIO" / "ORIGINAL:
-    // ADQUIRENTE" labels removed; the panel footer is left blank because
-    // the printed form already differentiates the two copies.
+    // HU-21: "COPIA: ARCHIVO TRIBUTARIO" / "ORIGINAL: ADQUIRENTE" labels not drawn;
+    // the physical form already differentiates the two copies.
   }
 
   /**
@@ -329,18 +342,6 @@ public class InvoicePdfService {
       return line.getSalonService().getName().trim();
     }
     return line.getDescription() != null ? line.getDescription().trim() : "";
-  }
-
-  private static String formatInvoiceNumber(int number) {
-    return String.format("%07d", number);
-  }
-
-  private static String discountLabel(com.cursorpoc.backend.domain.enums.DiscountType type) {
-    return switch (type) {
-      case PERCENT -> "%";
-      case FIXED -> "Gs.";
-      case NONE -> "";
-    };
   }
 
   /**
@@ -363,12 +364,6 @@ public class InvoicePdfService {
       return 1;
     }
     return 0;
-  }
-
-  /** Right-edge X (absolute) where amounts in tax column {@code col} are right-aligned. */
-  private static float taxColumnAnchorX(float ox, int col, float extraOffsetCm) {
-    float fromTenColumnCm = (2 - col) * TAX_COL_WIDTH_CM;
-    return ox + cmToPt(TAX_COL_10_ANCHOR_CM + extraOffsetCm - fromTenColumnCm);
   }
 
   /**

@@ -6,6 +6,25 @@ name: Deploy Azure
 
 on:
   workflow_call:
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      GHCR_USERNAME:
+        required: false
+      GHCR_READ_PACKAGES_PAT:
+        required: false
+      AZURE_CONTAINER_APP_NAME:
+        required: true
+      AZURE_RESOURCE_GROUP_NAME:
+        required: true
+      VITE_API_BASE_URL:
+        required: true
+      AZURE_STATIC_WEB_APPS_API_TOKEN:
+        required: true
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +46,7 @@ jobs:
     steps:
       # Same commit as the caller (push to main from CI) or the branch chosen for workflow_dispatch.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set image tag (lowercase)
         run: |
@@ -35,7 +54,7 @@ jobs:
           echo "IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
           java-version: "21"
@@ -50,17 +69,17 @@ jobs:
         run: chmod +x gradlew && ./gradlew bootJar --no-daemon -x test
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: src/backend
           file: src/backend/Dockerfile
@@ -70,7 +89,7 @@ jobs:
             ${{ env.IMAGE_NAME_LOWER }}:latest
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -124,7 +143,7 @@ jobs:
           exit 1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: npm
