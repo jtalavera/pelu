@@ -229,7 +229,13 @@ function InvoiceHistoryTab() {
       setDateRangeError(null);
       const rangeErr = invoiceHistoryRangeErrorKey(from, to);
       if (rangeErr) {
-        setDateRangeError(t(`femme.billing.history.rangeError${capitalize(rangeErr)}`));
+        // `rangeErr` is camelCase (e.g. "tooOld"); only upper-case the first letter so
+        // the i18n key keeps its casing (rangeErrorTooOld). `capitalize` is for SNAKE_CASE.
+        setDateRangeError(
+          t(
+            `femme.billing.history.rangeError${rangeErr.charAt(0).toUpperCase()}${rangeErr.slice(1)}`,
+          ),
+        );
         setInvoicePage(null);
         return;
       }

@@ -24,13 +24,15 @@ test.describe("HU-26 · Fixes varios UX general", () => {
     await expect(dlg).toBeVisible();
     const timeInput = dlg.getByTestId("appointment-time-input");
     await timeInput.focus();
+    // The time listbox renders in a body-level portal (FloatingDropdown), so its
+    // options are not descendants of the appointment dialog — assert at page level.
     // First option must be 06:00
-    await expect(dlg.getByTestId("form-time-option-06:00")).toBeVisible();
+    await expect(page.getByTestId("form-time-option-06:00")).toBeVisible();
     // Last option must be 20:00
-    await expect(dlg.getByTestId("form-time-option-20:00")).toBeVisible();
+    await expect(page.getByTestId("form-time-option-20:00")).toBeVisible();
     // Options outside the range must not exist
-    await expect(dlg.getByTestId("form-time-option-05:45")).not.toBeVisible();
-    await expect(dlg.getByTestId("form-time-option-20:15")).not.toBeVisible();
+    await expect(page.getByTestId("form-time-option-05:45")).not.toBeVisible();
+    await expect(page.getByTestId("form-time-option-20:15")).not.toBeVisible();
   });
 
   // Req 3: Professionals schedule defaults to 09:00–19:00

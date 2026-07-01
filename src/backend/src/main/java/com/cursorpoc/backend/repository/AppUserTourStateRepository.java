@@ -10,4 +10,6 @@ public interface AppUserTourStateRepository extends JpaRepository<AppUserTourSta
   List<AppUserTourState> findByUser_Id(Long userId);
 
   Optional<AppUserTourState> findByUser_IdAndTourKey(Long userId, String tourKey);
+
+  long deleteByUser_Tenant_Id(Long tenantId);
 }
