@@ -337,7 +337,7 @@ public class FemmeDataInitializer {
         service.setCategory(productosCategory);
         service.setTax(defaultTax);
         service.setName(name);
-        service.setPriceMinor(FemmeSalonCatalogBootstrapData.DEFAULT_PRICE_MINOR);
+        service.setPriceMinor(BigDecimal.ZERO);
         service.setDurationMinutes(FemmeSalonCatalogBootstrapData.DEFAULT_SERVICE_DURATION_MINUTES);
         service.setActive(true);
         salonServiceRepository.save(service);
