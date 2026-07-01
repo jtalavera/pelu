@@ -6,15 +6,22 @@ import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
 import ProfessionalsPage from "./ProfessionalsPage";
 
-const femmeJson = vi.fn();
 const femmePostJson = vi.fn();
 const femmePutJson = vi.fn();
+const listProfessionalsPaged = vi.fn();
 
 vi.mock("../api/femmeClient", () => ({
-  femmeJson: (...args: unknown[]) => femmeJson(...args),
   femmePostJson: (...args: unknown[]) => femmePostJson(...args),
   femmePutJson: (...args: unknown[]) => femmePutJson(...args),
 }));
+
+vi.mock("../api/professionals", () => ({
+  listProfessionalsPaged: (...args: unknown[]) => listProfessionalsPaged(...args),
+}));
+
+function makePageResponse(items: unknown[]) {
+  return { content: items, page: 0, size: 10, totalElements: items.length, totalPages: 1 };
+}
 
 const PROFESSIONAL = {
   id: 1,
@@ -46,7 +53,7 @@ function getFirst(role: string, name: RegExp | string) {
 describe("ProfessionalsPage", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("en");
-    femmeJson.mockReset();
+    listProfessionalsPaged.mockReset();
     femmePostJson.mockReset();
     femmePutJson.mockReset();
   });
@@ -56,7 +63,7 @@ describe("ProfessionalsPage", () => {
   });
 
   it("loads professionals and shows actions", async () => {
-    femmeJson.mockResolvedValue([PROFESSIONAL]);
+    listProfessionalsPaged.mockResolvedValue(makePageResponse([PROFESSIONAL]));
     renderPage();
     expect(await screen.findAllByRole("heading", { name: /professionals/i })).toBeTruthy();
     expect(await screen.findByText(/ana gomez/i)).toBeTruthy();
@@ -64,9 +71,9 @@ describe("ProfessionalsPage", () => {
   });
 
   it("shows Activate inside the kebab menu for inactive professionals and calls activate API on confirm", async () => {
-    femmeJson
-      .mockResolvedValueOnce([INACTIVE_PROFESSIONAL])
-      .mockResolvedValueOnce([{ ...INACTIVE_PROFESSIONAL, active: true }]);
+    listProfessionalsPaged
+      .mockResolvedValueOnce(makePageResponse([INACTIVE_PROFESSIONAL]))
+      .mockResolvedValueOnce(makePageResponse([{ ...INACTIVE_PROFESSIONAL, active: true }]));
     femmePostJson.mockResolvedValue({ ...INACTIVE_PROFESSIONAL, active: true });
     renderPage();
 
@@ -86,11 +93,13 @@ describe("ProfessionalsPage", () => {
     await waitFor(() => {
       expect(femmePostJson).toHaveBeenCalledWith("/api/professionals/1/activate", {});
     });
-    expect(femmeJson.mock.calls.length).toBeGreaterThanOrEqual(2);
+    await waitFor(() => {
+      expect(listProfessionalsPaged.mock.calls.length).toBeGreaterThanOrEqual(2);
+    }, { timeout: 2000 });
   });
 
   it("shows Details tab first and Schedule tab is disabled for new professional", async () => {
-    femmeJson.mockResolvedValue([]);
+    listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     renderPage();
     await screen.findAllByRole("heading", { name: /professionals/i });
 
@@ -106,7 +115,7 @@ describe("ProfessionalsPage", () => {
   });
 
   it("validates full name is required on Details tab", async () => {
-    femmeJson.mockResolvedValue([]);
+    listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     renderPage();
     await screen.findAllByRole("heading", { name: /professionals/i });
 
@@ -119,7 +128,7 @@ describe("ProfessionalsPage", () => {
   });
 
   it("Details tab uses a file input for photo with image accept (HU-20)", async () => {
-    femmeJson.mockResolvedValue([]);
+    listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     renderPage();
     await screen.findAllByRole("heading", { name: /professionals/i });
 
@@ -132,7 +141,7 @@ describe("ProfessionalsPage", () => {
   });
 
   it("unlocks Schedule tab after saving details", async () => {
-    femmeJson.mockResolvedValue([]);
+    listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     femmePostJson.mockResolvedValue(PROFESSIONAL);
     femmePutJson.mockResolvedValue(PROFESSIONAL);
     renderPage();

@@ -2,6 +2,7 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ServiceCatalogService;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ServiceResponse;
 import com.cursorpoc.backend.web.dto.ServiceUpsertRequest;
 import jakarta.validation.Valid;
@@ -43,6 +44,37 @@ public class SalonServiceController {
     }
     return serviceCatalogService.listServices(
         principal.getTenantId(), Optional.ofNullable(categoryId), q);
+  }
+
+  @GetMapping("/page")
+  public PageResponse<ServiceResponse> listPaged(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(name = "categoryId", required = false) Long categoryId,
+      @RequestParam(name = "q", required = false) String q,
+      @RequestParam(name = "active", required = false) Boolean active,
+      @RequestParam(name = "page", defaultValue = "0") int page,
+      @RequestParam(name = "size", defaultValue = "10") int size) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info(
+        "GET /api/services/page tenantId={} page={} size={}", principal.getTenantId(), page, size);
+    try {
+      PageResponse<ServiceResponse> response =
+          serviceCatalogService.listServicesPaged(
+              principal.getTenantId(), Optional.ofNullable(categoryId), q, active, page, size);
+      log.info(
+          "GET /api/services/page tenantId={} status=200 total={}",
+          principal.getTenantId(),
+          response.totalElements());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/services/page tenantId={} status={}",
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 
   @PostMapping

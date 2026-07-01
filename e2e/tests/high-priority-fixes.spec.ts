@@ -143,6 +143,10 @@ test("Issue #49 · servicio hereda el color de su categoría en la tabla", async
   await loginAsDemo(page);
   await page.goto("/app/services");
 
+  // Search by name so it lands on page 1 regardless of total service count (server-side pagination)
+  await page.getByPlaceholder(/search by name/i).fill(svcName);
+  await page.waitForTimeout(600);
+
   // The service card for TealSvc should show a non-gray icon
   const card = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
   await expect(card).toBeVisible();
