@@ -327,7 +327,7 @@ public class FemmeDataInitializer {
         if (line.isBlank()) {
           continue;
         }
-        String name = line.split(",", -1)[0].trim();
+        String name = line.split(",", -1)[0].trim().replace("\"", "");
         if (name.isEmpty() || existingNames.contains(name)) {
           skipped++;
           continue;
