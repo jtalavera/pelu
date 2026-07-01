@@ -130,13 +130,14 @@ jobs:
     name: Deploy to v2-test
     needs: [frontend, backend, sast]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    environment: v2-test
     permissions:
       contents: read
       actions: read
       id-token: write
       packages: write
     uses: ./.github/workflows/deploy-azure.yml
+    with:
+      environment: v2-test
     secrets: inherit
 
   # Deploys to v2-production on push to main (runs alongside the v1 ci.yml deploy during migration).
@@ -145,13 +146,14 @@ jobs:
     name: Deploy to v2-production
     needs: [frontend, backend, sast]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: v2-production
     permissions:
       contents: read
       actions: read
       id-token: write
       packages: write
     uses: ./.github/workflows/deploy-azure.yml
+    with:
+      environment: v2-production
     secrets: inherit
 
   # Manual dispatch: deploy to whichever environment was chosen.
@@ -159,11 +161,12 @@ jobs:
     name: Deploy (manual dispatch)
     needs: [frontend, backend, sast]
     if: github.event_name == 'workflow_dispatch'
-    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       actions: read
       id-token: write
       packages: write
     uses: ./.github/workflows/deploy-azure.yml
+    with:
+      environment: ${{ inputs.environment }}
     secrets: inherit

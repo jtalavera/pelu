@@ -6,6 +6,12 @@ name: Deploy Azure
 
 on:
   workflow_call:
+    inputs:
+      environment:
+        description: "GitHub Environment name (e.g. v2-test, v2-production). Leave empty for repo-level secrets."
+        required: false
+        type: string
+        default: ""
     secrets:
       AZURE_CLIENT_ID:
         required: true
@@ -41,6 +47,7 @@ jobs:
   deploy:
     name: Deploy to Azure (GHCR + Container App + SWA)
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository }}
     steps:
