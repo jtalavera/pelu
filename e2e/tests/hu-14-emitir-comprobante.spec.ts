@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
   API_BASE,
-  apiGetJson,
   apiPostJson,
   apiPutJson,
   ensureActiveFiscalStampForInvoices,
@@ -334,47 +333,12 @@ test.describe("HU-14 · Emitir comprobante", () => {
     expect(text.includes("\n"), "dropdown row should be a single line of text").toBe(false);
   });
 
-  test("HU-25 · factura con edición de nombre/RUC actualiza el cliente en el directorio", async ({
-    page,
-    request,
-  }) => {
-    const token = await loginAsDemoApi(request);
-    const seed = await seedCategoryServiceProfessional(request, token);
-    const suffix = Date.now();
-    const origName = `E2E Sync ${suffix}`;
-    const updatedName = `E2E Sync Upd ${suffix}`;
-    const newRuc = "80000010-1";
-    const client = await apiPostJson<{
-      id: number;
-      fullName: string;
-      ruc: string | null;
-    }>(request, token, "/api/clients", {
-      fullName: origName,
-      phone: null,
-      email: null,
-      ruc: null,
-    });
-
-    await loginAsDemo(page);
-    await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
-    await page.getByLabel("Search or select client").fill(origName.slice(0, 8));
-    await page.getByRole("button", { name: origName, exact: false }).click();
-    await page.getByLabel("Client display name").fill(updatedName);
-    await page.getByLabel(/Client RUC/i).fill(newRuc);
-    await page.locator("#billing-line-svc-0").fill(seed.serviceFullName.slice(0, 12));
-    await page.getByRole("button", { name: seed.serviceFullName, exact: false }).click();
-    await page.locator("#pay-amount-0").fill("50000");
-    await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
-    await clickIssueInvoiceAndExpectSuccess(page);
-
-    const saved = await apiGetJson<{
-      fullName: string;
-      ruc: string | null;
-    }>(request, token, `/api/clients/${client.id}`);
-    expect(saved.fullName).toBe(updatedName);
-    expect(saved.ruc).toBe(newRuc);
-  });
+  // NOTE: The former HU-25 test "factura con edición de nombre/RUC actualiza el cliente
+  // en el directorio" was removed. Its behaviour (syncing the edited invoice name/RUC back
+  // to the client directory, HU-25 AC2) was deliberately reversed by issue #47 ("remove
+  // client profile sync write-back; invoice name/RUC stays isolated"). The current
+  // behaviour is covered by "Issue #47 · ... no modifica el perfil del cliente" in
+  // high-priority-fixes.spec.ts.
 
   test("HU-14 · 11+12 máscara de miles en Precio Unitario y Monto", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);

@@ -166,19 +166,22 @@ test.describe("HU-28 · Fixes varios", () => {
       token,
       "/api/taxes",
     );
-    const activeTax = taxes.find((t) => t.active);
-    expect(activeTax).toBeTruthy();
+    // Issue #46 refined HU-28 AC7: the new-service dialog defaults to IVA 10% when
+    // an active 10% tax exists, otherwise to the first active tax.
+    const defaultTax =
+      taxes.find((t) => t.active && t.rate === 10) ?? taxes.find((t) => t.active);
+    expect(defaultTax).toBeTruthy();
 
     await loginAsDemo(page);
     await page.goto("/app/services");
     await page.getByRole("button", { name: /\+ Nuevo servicio|\+ New service/ }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 5_000 });
-    // The tax select must exist and default to first active tax
+    // The tax select must exist and default to IVA 10% (or first active as fallback)
     const taxSelect = dialog.getByLabel(/Tipo de impuesto|Tax type/);
     await expect(taxSelect).toBeVisible();
     const selectedValue = await taxSelect.inputValue();
-    expect(selectedValue).toBe(String(activeTax!.id));
+    expect(selectedValue).toBe(String(defaultTax!.id));
   });
 
   // AC8 — Per-line discount in billing invoice

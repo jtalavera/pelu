@@ -4,6 +4,7 @@ import com.cursorpoc.backend.bootstrap.FemmeDataInitializer;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.AppUserTourStateRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
@@ -47,6 +48,7 @@ public class SeedResetService {
   private final InvoiceRepository invoiceRepository;
   private final CashSessionRepository cashSessionRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
+  private final AppUserTourStateRepository appUserTourStateRepository;
   private final FemmeDataInitializer femmeDataInitializer;
 
   public SeedResetService(
@@ -65,6 +67,7 @@ public class SeedResetService {
       InvoiceRepository invoiceRepository,
       CashSessionRepository cashSessionRepository,
       PasswordResetTokenRepository passwordResetTokenRepository,
+      AppUserTourStateRepository appUserTourStateRepository,
       FemmeDataInitializer femmeDataInitializer) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
@@ -81,6 +84,7 @@ public class SeedResetService {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
+    this.appUserTourStateRepository = appUserTourStateRepository;
     this.femmeDataInitializer = femmeDataInitializer;
   }
 
@@ -138,6 +142,10 @@ public class SeedResetService {
 
     businessProfileRepository.deleteById(DEMO_TENANT_ID);
     log.info("Deleted business_profile for tenant id={}", DEMO_TENANT_ID);
+
+    // Must run before deleting app_users: app_user_tour_state has a FK to app_users.
+    long deletedTourState = appUserTourStateRepository.deleteByUser_Tenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} app_user_tour_state", deletedTourState);
 
     long deletedUsers = appUserRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_users", deletedUsers);

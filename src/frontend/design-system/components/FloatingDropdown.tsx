@@ -2,6 +2,7 @@ import {
   forwardRef,
   useCallback,
   useLayoutEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -53,27 +54,35 @@ export type FloatingDropdownProps = {
  *
  * Closing the dropdown (Escape / outside click) is the caller's responsibility.
  */
+/** Gap (px) between the anchor and the floating panel, and the minimum viewport inset. */
+const GAP = 4;
+
 export const FloatingDropdown = forwardRef<HTMLDivElement, FloatingDropdownProps>(
   function FloatingDropdown({ anchorRef, open, width: fixedWidth, children }, ref) {
-    const [position, setPosition] = useState<{
+    const panelRef = useRef<HTMLDivElement | null>(null);
+    const [anchorRect, setAnchorRect] = useState<{
       top: number;
+      bottom: number;
       left: number;
       width: number;
     } | null>(null);
+    /** Measured panel height; drives the flip/clamp decision below. */
+    const [panelHeight, setPanelHeight] = useState(0);
 
     const updatePosition = useCallback(() => {
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPosition({
-        top: rect.bottom + 4,
+      setAnchorRect({
+        top: rect.top,
+        bottom: rect.bottom,
         left: rect.left,
-        width: fixedWidth ?? rect.width,
+        width: rect.width,
       });
-    }, [anchorRef, fixedWidth]);
+    }, [anchorRef]);
 
     useLayoutEffect(() => {
       if (!open) {
-        setPosition(null);
+        setAnchorRect(null);
         return;
       }
       updatePosition();
@@ -87,16 +96,50 @@ export const FloatingDropdown = forwardRef<HTMLDivElement, FloatingDropdownProps
       };
     }, [open, updatePosition]);
 
-    if (!open || !position) return null;
+    // Measure the panel once it renders (and whenever its content resizes) so we
+    // can keep it inside the viewport.
+    useLayoutEffect(() => {
+      if (!open) {
+        setPanelHeight(0);
+        return;
+      }
+      const el = panelRef.current;
+      if (!el) return;
+      const measure = () => setPanelHeight(el.offsetHeight);
+      measure();
+      // ResizeObserver is absent in some test environments (jsdom); a one-time
+      // measure above is enough there.
+      if (typeof ResizeObserver === "undefined") return;
+      const observer = new ResizeObserver(measure);
+      observer.observe(el);
+      return () => observer.disconnect();
+    }, [open, anchorRect]);
+
+    if (!open || !anchorRect) return null;
+
+    const width = fixedWidth ?? anchorRect.width;
+    const viewportHeight = window.innerHeight;
+    // Default: open below the anchor. If the panel would overflow the bottom edge,
+    // flip it above the anchor when there is room, otherwise clamp it into view so
+    // its options are always reachable (e.g. a service field low on a long page).
+    let top = anchorRect.bottom + GAP;
+    if (panelHeight > 0 && top + panelHeight > viewportHeight - GAP) {
+      const flippedTop = anchorRect.top - GAP - panelHeight;
+      top = flippedTop >= GAP ? flippedTop : Math.max(GAP, viewportHeight - panelHeight - GAP);
+    }
 
     return createPortal(
       <div
-        ref={ref}
+        ref={(node) => {
+          panelRef.current = node;
+          if (typeof ref === "function") ref(node);
+          else if (ref) ref.current = node;
+        }}
         style={{
           position: "fixed",
-          top: position.top,
-          left: position.left,
-          width: position.width,
+          top,
+          left: anchorRect.left,
+          width,
           // 1100 keeps the panel above modals (z-[1000]) and drawers.
           zIndex: 1100,
         }}

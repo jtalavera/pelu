@@ -16,6 +16,7 @@
  *   #58 — Campo de listas quedan detrás del formulario: all dropdowns float above the form
  */
 
+import zlib from "node:zlib";
 import { expect, test } from "@playwright/test";
 import {
   API_BASE,
@@ -34,6 +35,26 @@ import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/
 import { professionalFormDialog } from "../fixtures/ui";
 
 test.describe.configure({ mode: "serial" });
+
+/**
+ * Extracts searchable text from a PDF buffer. The invoice PDF stores its text in
+ * FlateDecode-compressed streams, so we inflate each `stream…endstream` block and
+ * append it to the raw (latin1) text. latin1 preserves byte values 1:1.
+ */
+function extractPdfText(pdf: Buffer): string {
+  const raw = pdf.toString("latin1");
+  let text = raw;
+  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    try {
+      text += "\n" + zlib.inflateSync(Buffer.from(m[1], "latin1")).toString("latin1");
+    } catch {
+      // Not a zlib stream (e.g. image data) — skip.
+    }
+  }
+  return text;
+}
 
 async function setBusinessRuc(
   request: import("@playwright/test").APIRequestContext,
@@ -416,8 +437,8 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
   await page.goto(`/app/clients/${client.id}`);
   await page.getByRole("tab", { name: "History" }).click();
 
-  // The comprobantes section should show the "Ver" / "View" button
-  const verBtn = page.getByRole("button", { name: /ver|view detail/i }).first();
+  // The comprobantes section should show the "View" (femme.billing.history.viewDetail) button
+  const verBtn = page.getByRole("button", { name: /view/i }).first();
   await expect(verBtn).toBeVisible({ timeout: 15_000 });
   await verBtn.click();
 
@@ -425,8 +446,9 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
   const modal = page.getByRole("dialog");
   await expect(modal).toBeVisible({ timeout: 10_000 });
 
-  // Modal should show the invoice amount (50.000 format — dot separator, no decimals)
-  await expect(modal.getByText(/50\.000/)).toBeVisible({ timeout: 10_000 });
+  // Modal should show the invoice amount (50.000 format — dot separator, no decimals).
+  // The amount appears in several cells/spans, so assert the first is visible.
+  await expect(modal.getByText(/50\.000/).first()).toBeVisible({ timeout: 10_000 });
 
   // "Anular" (void) button must NOT appear — view-only mode
   await expect(modal.getByRole("button", { name: /anular|void/i })).not.toBeVisible();
@@ -443,23 +465,22 @@ test("Issue #39 · profesionales semilla tienen horario Lun-Sáb 09:00-19:00 tra
 
   const token = await loginAsDemoApi(request);
 
-  // Fetch all professionals
-  const professionals = await apiGetJson<Array<{ id: number; active: boolean; fullName: string }>>(
-    request,
-    token,
-    "/api/professionals",
-  );
+  // Fetch all professionals. The list endpoint already returns each professional's
+  // schedules (there is no GET /api/professionals/{id} endpoint — only the list and /page).
+  const professionals = await apiGetJson<
+    Array<{
+      id: number;
+      active: boolean;
+      fullName: string;
+      schedules: Array<{ dayOfWeek: number; startTime: string; endTime: string }>;
+    }>
+  >(request, token, "/api/professionals");
   const activeProfessionals = professionals.filter((p) => p.active);
   expect(activeProfessionals.length).toBeGreaterThan(0);
 
   // Each active professional must have 6 schedule rows (Mon=1 to Sat=6, 09:00-19:00)
   for (const prof of activeProfessionals) {
-    const detail = await apiGetJson<{
-      id: number;
-      schedules: Array<{ dayOfWeek: number; startTime: string; endTime: string }>;
-    }>(request, token, `/api/professionals/${prof.id}`);
-
-    const schedules = detail.schedules ?? [];
+    const schedules = prof.schedules ?? [];
     expect(
       schedules.length,
       `${prof.fullName} should have 6 schedule rows`,
@@ -659,10 +680,10 @@ test("Issue #55 · PDF de comprobante contiene monto total en letras en español
   const buf = await pdfRes.body();
   // Valid PDF starts with %PDF
   expect(buf.slice(0, 4).toString("latin1")).toBe("%PDF");
-  // The amount-in-words for 50000 Gs is "cincuenta mil guaraníes".
-  // In CP1252 "í" = 0xED; converting the buffer to latin1 preserves byte values.
-  const pdfLatin1 = buf.toString("latin1");
-  expect(pdfLatin1).toContain("cincuenta mil");
+  // The amount-in-words for 50000 Gs is "cincuenta mil guaraníes". The text lives in a
+  // FlateDecode-compressed stream, so inflate the PDF streams before searching.
+  const pdfText = extractPdfText(buf);
+  expect(pdfText).toContain("cincuenta mil");
 });
 
 // ─── Issue #58 ────────────────────────────────────────────────────────────────
@@ -724,8 +745,8 @@ test("Issue #58 · TimeCombobox en formulario de turno flota sobre el formulario
   const boxBefore = await saveBtn.boundingBox();
   expect(boxBefore).not.toBeNull();
 
-  // Open the start-time combobox
-  const timeCombobox = dlg.getByRole("combobox", { name: /start time/i });
+  // Open the appointment time combobox (labelled "Time")
+  const timeCombobox = dlg.getByRole("combobox", { name: /^time$/i });
   await expect(timeCombobox).toBeVisible({ timeout: 10_000 });
   await timeCombobox.click();
 
