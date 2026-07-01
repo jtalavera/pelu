@@ -244,11 +244,23 @@ resource "azurerm_container_app" "backend" {
       cpu    = 0.25
       memory = "0.5Gi"
 
-      # Passwordless SQL: no username/password env vars.
-      # The JDBC driver acquires a token from the managed identity endpoint.
+      # Passwordless SQL via managed identity.
+      # The MSSQL JDBC driver rejects any non-empty password when
+      # Authentication=ActiveDirectoryMSI is set, so explicitly blank both vars
+      # to override the local-dev defaults in application.properties.
       env {
         name  = "SPRING_DATASOURCE_URL"
         value = local.jdbc_url
+      }
+
+      env {
+        name  = "SPRING_DATASOURCE_USERNAME"
+        value = ""
+      }
+
+      env {
+        name  = "SPRING_DATASOURCE_PASSWORD"
+        value = ""
       }
 
       env {
