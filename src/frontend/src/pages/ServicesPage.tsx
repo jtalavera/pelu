@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
@@ -10,12 +10,15 @@ import {
   KebabMenu,
   Label,
   Modal,
+  Pagination,
+  PageSizeSelect,
   Select,
   Spinner,
   Text,
 } from "@design-system";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { listServicesPaged } from "../api/services";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
@@ -109,6 +112,17 @@ export default function ServicesPage() {
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
   const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
 
+  // ── Server-side pagination for services tab ──────────────────────────────
+  type SvcPage = { content: SalonService[]; page: number; size: number; totalElements: number; totalPages: number };
+  const [svcPageData, setSvcPageData] = useState<SvcPage | null>(null);
+  const [svcPageLoading, setSvcPageLoading] = useState(false);
+  const [svcPage, setSvcPage] = useState(0); // 0-based
+  const [svcPageSize, setSvcPageSize] = useState(10);
+  const [svcReloadTick, setSvcReloadTick] = useState(0);
+  const svcDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [serviceSearchQuery, setServiceSearchQuery] = useState("");
+  // ─────────────────────────────────────────────────────────────────────────
+
   const activeCategories = useMemo(() => categories.filter((c) => c.active), [categories]);
 
   /** Active categories plus the current service's category when editing (so inactive category still appears). */
@@ -157,12 +171,54 @@ export default function ServicesPage() {
     }
   }, [taxes, serviceModalOpen, serviceEditing, serviceTaxId]);
 
+  // ── Paged services loader ─────────────────────────────────────────────────
+  const loadPagedServices = useCallback(
+    async (
+      categoryId: string,
+      status: "all" | "active" | "inactive",
+      q: string,
+      page: number,
+      size: number,
+    ) => {
+      setSvcPageLoading(true);
+      try {
+        const data = await listServicesPaged<SalonService>({
+          categoryId: categoryId !== "all" ? Number(categoryId) : undefined,
+          active: status === "all" ? undefined : status === "active",
+          q: q.trim() || undefined,
+          page,
+          size,
+        });
+        setSvcPageData(data);
+      } catch (err) {
+        setError(translateApiError(err, t, "femme.services.loadError"));
+      } finally {
+        setSvcPageLoading(false);
+      }
+    },
+    [t],
+  );
+
+  useEffect(() => {
+    if (svcDebounceRef.current) clearTimeout(svcDebounceRef.current);
+    svcDebounceRef.current = setTimeout(() => {
+      void loadPagedServices(categoryFilterId, serviceStatusFilter, serviceSearchQuery, svcPage, svcPageSize);
+    }, 350);
+    return () => {
+      if (svcDebounceRef.current) clearTimeout(svcDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryFilterId, serviceStatusFilter, serviceSearchQuery, svcPage, svcPageSize, svcReloadTick, loadPagedServices]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   function handleCategoryPill(val: string) {
     setCategoryFilterId(val);
+    setSvcPage(0);
   }
 
   function handleServiceStatusPill(val: "all" | "active" | "inactive") {
     setServiceStatusFilter(val);
+    setSvcPage(0);
   }
 
   function openNewCategory() {
@@ -194,6 +250,7 @@ export default function ServicesPage() {
       }
       setCategoryModalOpen(false);
       await load();
+      setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setCategorySaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -211,6 +268,7 @@ export default function ServicesPage() {
     try {
       await femmePostJson(`/api/service-categories/${c.id}/activate`, {});
       await load();
+      setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -265,6 +323,7 @@ export default function ServicesPage() {
       }
       setServiceModalOpen(false);
       await load();
+      setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -281,6 +340,7 @@ export default function ServicesPage() {
     try {
       await femmePostJson(`/api/services/${s.id}/activate`, {});
       await load();
+      setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
     }
@@ -297,6 +357,7 @@ export default function ServicesPage() {
       );
       setServiceEditing(updated);
       await load();
+      setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -318,6 +379,7 @@ export default function ServicesPage() {
         await femmePostJson<SalonService>(`/api/services/${target.item.id}/deactivate`, {});
       }
       await load();
+      setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
     }
@@ -340,34 +402,13 @@ export default function ServicesPage() {
     [t],
   );
 
-  const baseFilteredByCategory = useMemo(() => {
-    if (categoryFilterId === "all") return services;
-    return services.filter((s) => String(s.categoryId) === categoryFilterId);
-  }, [services, categoryFilterId]);
-
-  const displayedServices = useMemo(() => {
-    const list = baseFilteredByCategory;
-    if (serviceStatusFilter === "active") {
-      return list.filter((s) => s.active);
-    }
-    if (serviceStatusFilter === "inactive") {
-      return list.filter((s) => !s.active);
-    }
-    const active = list.filter((s) => s.active);
-    const inactive = list.filter((s) => !s.active);
-    return [...active, ...inactive];
-  }, [baseFilteredByCategory, serviceStatusFilter]);
-
-  const serviceFilterFields = useMemo(() => ["name", "categoryName"] as (keyof SalonService)[], []);
-  const {
-    query: serviceSearchQuery,
-    setQuery: setServiceSearchQuery,
-    filtered: servicesTextFiltered,
-    highlight: highlightService,
-  } = useFilteredList<SalonService>({
-    items: displayedServices,
-    fields: serviceFilterFields,
-  });
+  // Services tab is now server-side paginated; svcPageData holds the current page.
+  // The `services` state (full list) is kept for the categories-tab service count badge.
+  const svcContent = svcPageData?.content ?? [];
+  const svcTotalElements = svcPageData?.totalElements ?? 0;
+  const svcTotalPages = svcPageData?.totalPages ?? 1;
+  const svcShowingFrom = svcTotalElements === 0 ? 0 : svcPage * svcPageSize + 1;
+  const svcShowingTo = Math.min((svcPage + 1) * svcPageSize, svcTotalElements);
 
   const categoryFilterFields = useMemo(() => ["name"] as (keyof ServiceCategory)[], []);
   const {
@@ -430,15 +471,6 @@ export default function ServicesPage() {
         return a.active ? -1 : 1;
       }),
     [categoriesTextFiltered],
-  );
-
-  const serviciosOrdenados = useMemo(
-    () =>
-      [...servicesTextFiltered].sort((a, b) => {
-        if (a.active === b.active) return 0;
-        return a.active ? -1 : 1;
-      }),
-    [servicesTextFiltered],
   );
 
   if (loading) {
@@ -557,6 +589,7 @@ export default function ServicesPage() {
 
       {/* ── Services tab ── */}
       {tab === "services" && (
+        <div>
         <div data-tour="services-list">
           {/* Toolbar */}
           <div
@@ -572,10 +605,10 @@ export default function ServicesPage() {
               data-tour="services-search"
               id="services-list-filter"
               value={serviceSearchQuery}
-              onChange={setServiceSearchQuery}
+              onChange={(q) => { setServiceSearchQuery(q); setSvcPage(0); }}
               placeholder={t("femme.services.services.searchInlinePlaceholder")}
-              resultCount={servicesTextFiltered.length}
-              totalCount={displayedServices.length}
+              resultCount={svcTotalElements}
+              totalCount={services.length}
               maxWidth={480}
               style={{ flex: 1 }}
             />
@@ -622,7 +655,13 @@ export default function ServicesPage() {
           </div>
 
           {/* Service cards */}
-          {services.length === 0 && (
+          {svcPageLoading && !svcPageData && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "20px 0" }}>
+              <Spinner size="sm" />
+              <Text>{t("femme.services.loading")}</Text>
+            </div>
+          )}
+          {!svcPageLoading && svcTotalElements === 0 && services.length === 0 && (
             <div
               style={{
                 padding: "20px 0",
@@ -634,7 +673,7 @@ export default function ServicesPage() {
               {t("femme.services.services.emptyBody")}
             </div>
           )}
-          {services.length > 0 && displayedServices.length === 0 && (
+          {!svcPageLoading && svcTotalElements === 0 && services.length > 0 && (
             <div
               style={{
                 padding: "20px 0",
@@ -646,23 +685,11 @@ export default function ServicesPage() {
               {t("femme.listFilter.noMatches")}
             </div>
           )}
-          {services.length > 0 && displayedServices.length > 0 && servicesTextFiltered.length === 0 && (
-            <div
-              style={{
-                padding: "20px 0",
-                textAlign: "center",
-                fontSize: 12,
-                color: "var(--color-ink-3)",
-              }}
-            >
-              {t("femme.listFilter.noMatches")}
-            </div>
-          )}
-          {serviciosOrdenados.map((s, index) => {
+          {svcContent.map((s, index) => {
             const ic = categoryAccentStyle(s.categoryAccentKey);
             const hk = `svc-${s.id}`;
             const isHov = hoveredCardKey === hk;
-            const anterior = serviciosOrdenados[index - 1];
+            const anterior = svcContent[index - 1];
             const hayCambioDeEstado =
               index > 0 &&
               anterior.active === true &&
@@ -779,13 +806,13 @@ export default function ServicesPage() {
                           gap: 6,
                         }}
                       >
-                        {highlightService(s.name)}
+                        {s.name}
                       </div>
                       <div
                         className="card-meta"
                         style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 1 }}
                       >
-                        {highlightService(s.categoryName)} · {s.durationMinutes} min
+                        {s.categoryName} · {s.durationMinutes} min
                       </div>
                     </div>
 
@@ -848,6 +875,28 @@ export default function ServicesPage() {
             );
           })}
         </div>
+        {/* ── Pagination footer ── */}
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+          style={{ borderTop: "var(--border-default)", marginTop: 8 }}
+        >
+          <PageSizeSelect
+            value={svcPageSize}
+            onChange={(s) => { setSvcPageSize(s); setSvcPage(0); }}
+            label={t("femme.pagination.rowsPerPage")}
+          />
+          <Text variant="small" className="text-[var(--color-ink-3)]">
+            {t("femme.pagination.showingRange", { from: svcShowingFrom, to: svcShowingTo, total: svcTotalElements })}
+          </Text>
+          <Pagination
+            page={svcPage + 1}
+            pageCount={Math.max(1, svcTotalPages)}
+            onPageChange={(p) => setSvcPage(p - 1)}
+            previousLabel={t("femme.pagination.previous")}
+            nextLabel={t("femme.pagination.next")}
+          />
+        </div>
+      </div>
       )}
 
       {/* ── Categories tab ── */}

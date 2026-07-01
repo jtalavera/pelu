@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalScheduleRequest;
 import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
@@ -14,6 +15,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +46,24 @@ public class ProfessionalDirectoryService {
     return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
         .map(p -> toResponse(p, schedulesFor(p.getId())))
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public PageResponse<ProfessionalResponse> listPaged(long tenantId, String q, int page, int size) {
+    String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
+    PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
+    Page<Professional> result =
+        professionalRepository.findByTenantFilteredPaged(tenantId, qTrimmed, pageable);
+    List<ProfessionalResponse> content =
+        result.getContent().stream()
+            .map(p -> toResponse(p, schedulesFor(p.getId())))
+            .collect(Collectors.toList());
+    return new PageResponse<>(
+        content,
+        result.getNumber(),
+        result.getSize(),
+        result.getTotalElements(),
+        result.getTotalPages());
   }
 
   @Transactional
