@@ -33,6 +33,10 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await expect(svcDialog.getByLabel("Price")).toHaveValue("50.000");
     await svcDialog.getByLabel("Duration (minutes)").fill("45");
     await svcDialog.getByRole("button", { name: "Save" }).click();
+    await expect(svcDialog).not.toBeVisible();
+    // Search by name so the new service is on page 1 regardless of total count (server-side pagination)
+    await page.getByPlaceholder(/search by name/i).fill(svcName);
+    await page.waitForTimeout(600);
     await expect(page.getByText(svcName, { exact: true }).first()).toBeVisible();
     const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
     await expect(svcRow.getByText("Gs. 50.000", { exact: true })).toBeVisible();

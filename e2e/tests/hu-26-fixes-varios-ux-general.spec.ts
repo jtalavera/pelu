@@ -59,6 +59,10 @@ test.describe("HU-26 · Fixes varios UX general", () => {
     await loginAsDemo(page);
     await page.goto("/app/services");
 
+    // Search by service name so it lands on page 1 regardless of total count (server-side pagination)
+    await page.getByPlaceholder(/search by name/i).fill(seed.serviceFullName);
+    await page.waitForTimeout(600);
+
     const row = page.getByTestId(`svc-row-${seed.serviceId}`);
     await expect(row).toBeVisible({ timeout: 15_000 });
     // Service price in list must use dot separator with Gs. prefix, no decimals (seeded price = 50.000)
