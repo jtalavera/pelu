@@ -28,6 +28,9 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
+  id-token: write
+  packages: write
 
 jobs:
   frontend:
