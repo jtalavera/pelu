@@ -11,6 +11,8 @@ public interface ServiceCategoryRepository extends JpaRepository<ServiceCategory
 
   Optional<ServiceCategory> findByIdAndTenant_Id(Long id, Long tenantId);
 
+  Optional<ServiceCategory> findByNameAndTenant_Id(String name, Long tenantId);
+
   long countByTenant_Id(Long tenantId);
 
   long deleteByTenant_Id(Long tenantId);

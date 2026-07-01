@@ -144,6 +144,7 @@ public class SeedResetService {
 
     femmeDataInitializer.seedDemoTenantData(tenant);
     femmeDataInitializer.seedCatalogIfEmpty(tenant);
+    femmeDataInitializer.seedProductsFromCsv(tenant);
 
     log.info("POST /api/admin/seed/reset tenantId={} — reset complete", DEMO_TENANT_ID);
   }
