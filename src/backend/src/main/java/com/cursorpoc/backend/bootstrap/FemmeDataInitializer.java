@@ -22,17 +22,24 @@ import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -108,6 +115,8 @@ public class FemmeDataInitializer {
       }
 
       tenantRepository.findFirstByOrderByIdAsc().ifPresent(tenant -> seedCatalogIfEmpty(tenant));
+
+      tenantRepository.findFirstByOrderByIdAsc().ifPresent(tenant -> seedProductsFromCsv(tenant));
 
       var systemEmail = systemAdminProperties.getEmail().trim().toLowerCase();
       if (appUserRepository.findByEmail(systemEmail).isEmpty()) {
@@ -273,5 +282,72 @@ public class FemmeDataInitializer {
         FemmeSalonCatalogBootstrapData.CATEGORY_NAMES.size(),
         FemmeSalonCatalogBootstrapData.SERVICES.size(),
         FemmeSalonCatalogBootstrapData.PROFESSIONALS.size());
+  }
+
+  public void seedProductsFromCsv(Tenant tenant) {
+    Long tenantId = tenant.getId();
+    if (tenantId == null) {
+      return;
+    }
+
+    ServiceCategory productosCategory =
+        serviceCategoryRepository
+            .findByNameAndTenant_Id("Productos", tenantId)
+            .orElseGet(
+                () -> {
+                  ServiceCategory cat = new ServiceCategory();
+                  cat.setTenant(tenant);
+                  cat.setName("Productos");
+                  cat.setActive(true);
+                  cat.setAccentKey("stone");
+                  serviceCategoryRepository.save(cat);
+                  log.info("Created 'Productos' service category for tenant id={}", tenantId);
+                  return cat;
+                });
+
+    Tax defaultTax = seedDefaultTaxesIfAbsent(tenant);
+
+    Set<String> existingNames = new HashSet<>();
+    salonServiceRepository.findByTenant_IdOrderByNameAsc(tenantId).stream()
+        .filter(s -> s.getCategory().getId().equals(productosCategory.getId()))
+        .forEach(s -> existingNames.add(s.getName()));
+
+    ClassPathResource csv = new ClassPathResource("seed/articulos_normalizado.csv");
+    int seeded = 0;
+    int skipped = 0;
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(csv.getInputStream(), StandardCharsets.UTF_8))) {
+      String line = reader.readLine();
+      // Strip UTF-8 BOM if present
+      if (line != null && line.startsWith("﻿")) {
+        line = line.substring(1);
+      }
+      // skip header line, now read data rows
+      while ((line = reader.readLine()) != null) {
+        if (line.isBlank()) {
+          continue;
+        }
+        String name = line.split(",", -1)[0].trim();
+        if (name.isEmpty() || existingNames.contains(name)) {
+          skipped++;
+          continue;
+        }
+        SalonService service = new SalonService();
+        service.setTenant(tenant);
+        service.setCategory(productosCategory);
+        service.setTax(defaultTax);
+        service.setName(name);
+        service.setPriceMinor(FemmeSalonCatalogBootstrapData.DEFAULT_PRICE_MINOR);
+        service.setDurationMinutes(FemmeSalonCatalogBootstrapData.DEFAULT_SERVICE_DURATION_MINUTES);
+        service.setActive(true);
+        salonServiceRepository.save(service);
+        existingNames.add(name);
+        seeded++;
+      }
+    } catch (IOException e) {
+      log.error("Failed to read product seed CSV: {}", e.getMessage());
+      return;
+    }
+    log.info("Product CSV seed for tenant id={}: seeded={}, skipped={}", tenantId, seeded, skipped);
   }
 }
