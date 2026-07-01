@@ -5,8 +5,8 @@ subscription_id = "677a6eab-1283-48ee-a110-f40cf4a6df42"
 
 environment         = "test"
 name_prefix         = "femme"
-location            = "eastus2"
-sql_server_location = "centralus"
+location            = "centralus"
+sql_server_location = ""
 
 # Operator IP allowed through the SQL firewall for manual admin tasks.
 deployer_ip = "181.91.85.175"

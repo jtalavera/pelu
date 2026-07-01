@@ -5,8 +5,8 @@ subscription_id = "9e394b80-19d1-4187-8382-31d052ffd540"
 
 environment         = "prod"
 name_prefix         = "femme"
-location            = "eastus2"
-sql_server_location = "centralus"
+location            = "centralus"
+sql_server_location = ""
 
 # Operator IP allowed through the SQL firewall for manual admin tasks.
 deployer_ip = "181.91.85.175"  # TODO: update if the prod deployer machine has a different IP
