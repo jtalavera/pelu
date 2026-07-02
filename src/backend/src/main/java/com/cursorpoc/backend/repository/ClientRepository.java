@@ -11,6 +11,8 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
   Optional<Client> findByIdAndTenant_Id(Long id, Long tenantId);
 
+  List<Client> findByTenant_Id(Long tenantId);
+
   @Query(
       """
       SELECT c FROM Client c WHERE c.tenant.id = :tenantId
