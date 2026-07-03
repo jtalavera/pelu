@@ -7,7 +7,11 @@ import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,13 +28,36 @@ public class ClientService {
     this.tenantRepository = tenantRepository;
   }
 
-  public List<ClientResponse> search(long tenantId, String q) {
-    String normalized = q == null ? "" : q.trim();
-    String phone = normalized.isEmpty() ? null : normalized;
-    String ruc = normalized.isEmpty() ? null : normalized;
-    return clientRepository.search(tenantId, normalized, phone, ruc).stream()
+  public List<ClientResponse> search(
+      long tenantId, String q, Boolean active, Boolean withRuc, Boolean isNew) {
+    return clientRepository
+        .findByTenantFilteredPaged(
+            tenantId, normalizeQuery(q), active, withRuc, isNew, Pageable.unpaged())
+        .getContent()
+        .stream()
         .map(ClientService::toResponse)
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public PageResponse<ClientResponse> searchPaged(
+      long tenantId, String q, Boolean active, Boolean withRuc, Boolean isNew, int page, int size) {
+    PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
+    Page<Client> result =
+        clientRepository.findByTenantFilteredPaged(
+            tenantId, normalizeQuery(q), active, withRuc, isNew, pageable);
+    List<ClientResponse> content =
+        result.getContent().stream().map(ClientService::toResponse).toList();
+    return new PageResponse<>(
+        content,
+        result.getNumber(),
+        result.getSize(),
+        result.getTotalElements(),
+        result.getTotalPages());
+  }
+
+  private static String normalizeQuery(String q) {
+    return (q != null && !q.isBlank()) ? q.trim() : null;
   }
 
   @Transactional

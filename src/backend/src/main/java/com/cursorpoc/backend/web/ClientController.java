@@ -4,6 +4,7 @@ import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ClientService;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.slf4j.Logger;
@@ -35,14 +36,49 @@ public class ClientController {
   @GetMapping
   public List<ClientResponse> search(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
-      @RequestParam(name = "q", required = false) String q) {
+      @RequestParam(name = "q", required = false) String q,
+      @RequestParam(name = "active", required = false) Boolean active,
+      @RequestParam(name = "withRuc", required = false) Boolean withRuc,
+      @RequestParam(name = "isNew", required = false) Boolean isNew) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     log.info("GET /api/clients tenantId={}", principal.getTenantId());
-    List<ClientResponse> result = clientService.search(principal.getTenantId(), q);
+    List<ClientResponse> result =
+        clientService.search(principal.getTenantId(), q, active, withRuc, isNew);
     log.info("GET /api/clients tenantId={} status=200", principal.getTenantId());
     return result;
+  }
+
+  @GetMapping("/page")
+  public PageResponse<ClientResponse> searchPaged(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(name = "q", required = false) String q,
+      @RequestParam(name = "active", required = false) Boolean active,
+      @RequestParam(name = "withRuc", required = false) Boolean withRuc,
+      @RequestParam(name = "isNew", required = false) Boolean isNew,
+      @RequestParam(name = "page", defaultValue = "0") int page,
+      @RequestParam(name = "size", defaultValue = "10") int size) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info(
+        "GET /api/clients/page tenantId={} page={} size={}", principal.getTenantId(), page, size);
+    try {
+      PageResponse<ClientResponse> response =
+          clientService.searchPaged(principal.getTenantId(), q, active, withRuc, isNew, page, size);
+      log.info(
+          "GET /api/clients/page tenantId={} status=200 total={}",
+          principal.getTenantId(),
+          response.totalElements());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/clients/page tenantId={} status={}",
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 
   @GetMapping("/{id}")

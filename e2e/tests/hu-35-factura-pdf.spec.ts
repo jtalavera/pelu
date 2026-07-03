@@ -97,9 +97,11 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     await downloadBtn.click();
 
-    // A destructive alert must appear with the RUC-required message
+    // A destructive alert must appear with the RUC-required message.
+    // Match the exact copy (not just "RUC"): the fiscal-config banner also
+    // mentions RUC and trips strict mode when earlier tests leave it visible.
     await expect(
-      page.getByRole("alert").filter({ hasText: "RUC" }),
+      page.getByRole("alert").filter({ hasText: "Add a valid business RUC" }),
     ).toBeVisible({ timeout: 10_000 });
 
     // No file should have been downloaded (no corrupt PDF)
