@@ -281,4 +281,79 @@ test.describe("Issue #77 · Services and billing history searches are global", (
       timeout: 10_000,
     });
   });
+
+  test("#77-5c · billing history search by invoice number finds an invoice beyond page 1", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const tag = `I77N${Date.now()}`;
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    const cat = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+      name: `I77N Cat ${Date.now()}`,
+      accentKey: "rose",
+    });
+    const svc = await apiPostJson<{ id: number }>(request, token, "/api/services", {
+      name: `I77N Svc ${Date.now()}`,
+      categoryId: cat.id,
+      priceMinor: 5000,
+      durationMinutes: 30,
+    });
+    const clientName = `${tag} Cliente`;
+    const client = await seedClient(request, token, clientName);
+
+    const issueInvoice = (clientId: number | null) =>
+      apiPostJson<{ id: number; invoiceNumberFormatted: string }>(
+        request,
+        token,
+        "/api/invoices",
+        {
+          clientId,
+          clientDisplayName: clientId === null ? "CONSUMIDOR FINAL" : null,
+          clientRucOverride: null,
+          discountType: null,
+          discountValue: null,
+          lines: [
+            {
+              serviceId: svc.id,
+              description: "Servicio test",
+              quantity: 1,
+              unitPrice: 5000,
+              discountType: null,
+              discountValue: null,
+            },
+          ],
+          payments: [{ method: "CASH", amount: 5000 }],
+        },
+      );
+
+    // Target invoice first, then 11 newer ones → target lands beyond page 1.
+    const target = await issueInvoice(client.id);
+    for (let i = 0; i < 11; i++) {
+      await issueInvoice(null);
+    }
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.waitForTimeout(600);
+    await expect(page.getByText(target.invoiceNumberFormatted, { exact: true })).toHaveCount(0);
+
+    // Full zero-padded number (as displayed) must find the invoice via exact match.
+    await page.locator("#invoice-history-text-filter").fill(target.invoiceNumberFormatted);
+    await page.waitForTimeout(600);
+    await expect(
+      page.getByText(target.invoiceNumberFormatted, { exact: true }).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Unpadded digits (as a user would naturally type them) must also match.
+    const unpadded = String(Number(target.invoiceNumberFormatted));
+    await page.locator("#invoice-history-text-filter").fill(unpadded);
+    await page.waitForTimeout(600);
+    await expect(
+      page.getByText(target.invoiceNumberFormatted, { exact: true }).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
 });
