@@ -33,6 +33,8 @@ import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
+import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
+import { isValidEmail } from "../lib/validateEmail";
 import { validateRuc } from "../lib/validateRuc";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
@@ -114,6 +116,8 @@ export default function ClientDetailPage() {
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
     ruc?: string;
+    phone?: string;
+    email?: string;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -249,6 +253,12 @@ export default function ClientDetailPage() {
     }
     if (ruc.trim() && !validateRuc(ruc)) {
       nextErr.ruc = t("femme.clients.rucInvalid");
+    }
+    if (phone.trim() && !isCompleteParaguayPhone(phone.trim())) {
+      nextErr.phone = t("femme.clients.phoneInvalid");
+    }
+    if (email.trim() && !isValidEmail(email.trim())) {
+      nextErr.email = t("femme.clients.emailInvalid");
     }
     if (Object.keys(nextErr).length > 0) {
       setFieldError(nextErr);
@@ -415,10 +425,28 @@ export default function ClientDetailPage() {
                 <Label htmlFor="detail-phone">{t("femme.clients.phone")}</Label>
                 <Input
                   id="detail-phone"
-                  value={phone}
-                  onChange={(e) => { setPhone(e.target.value); setSaveSuccess(false); }}
                   inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(formatParaguayPhone(e.target.value));
+                    setSaveSuccess(false);
+                    setFieldError((prev) => (prev ? { ...prev, phone: undefined } : prev));
+                  }}
+                  onBlur={() => {
+                    const trimmed = phone.trim();
+                    if (trimmed && !isCompleteParaguayPhone(trimmed)) {
+                      setFieldError((prev) => ({
+                        ...(prev ?? {}),
+                        phone: t("femme.clients.phoneInvalid"),
+                      }));
+                    }
+                  }}
+                  placeholder={t("femme.clients.phonePlaceholder")}
+                  aria-invalid={fieldError?.phone ? "true" : "false"}
+                  aria-describedby={fieldError?.phone ? "detail-phone-err" : undefined}
                 />
+                <FieldValidationError id="detail-phone-err">{fieldError?.phone}</FieldValidationError>
               </div>
 
               <div>
@@ -426,9 +454,28 @@ export default function ClientDetailPage() {
                 <Input
                   id="detail-email"
                   type="email"
+                  inputMode="email"
+                  autoComplete="email"
                   value={email}
-                  onChange={(e) => { setEmail(e.target.value); setSaveSuccess(false); }}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setSaveSuccess(false);
+                    setFieldError((prev) => (prev ? { ...prev, email: undefined } : prev));
+                  }}
+                  onBlur={() => {
+                    const trimmed = email.trim();
+                    if (trimmed && !isValidEmail(trimmed)) {
+                      setFieldError((prev) => ({
+                        ...(prev ?? {}),
+                        email: t("femme.clients.emailInvalid"),
+                      }));
+                    }
+                  }}
+                  placeholder={t("femme.clients.emailPlaceholder")}
+                  aria-invalid={fieldError?.email ? "true" : "false"}
+                  aria-describedby={fieldError?.email ? "detail-email-err" : undefined}
                 />
+                <FieldValidationError id="detail-email-err">{fieldError?.email}</FieldValidationError>
               </div>
 
               <div>
