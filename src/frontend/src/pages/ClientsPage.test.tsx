@@ -128,6 +128,48 @@ describe("ClientsPage", () => {
     expect(await screen.findByText(/invalid ruc/i)).toBeTruthy();
   });
 
+  it("formats the phone field with the Paraguay mask while typing", async () => {
+    femmeJson.mockResolvedValue(pageOf([]));
+    renderPage();
+    await screen.findByRole("heading", { name: /clients/i });
+    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    const phoneField = form.getByLabelText(/^phone$/i) as HTMLInputElement;
+    await userEvent.click(phoneField);
+    await userEvent.keyboard("0981123456");
+    expect(phoneField.value).toBe("(0981) 123-456");
+  });
+
+  it("blocks save when the phone has fewer than 10 digits", async () => {
+    femmeJson.mockResolvedValue(pageOf([]));
+    renderPage();
+    await screen.findByRole("heading", { name: /clients/i });
+    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
+    await userEvent.click(form.getByLabelText(/^phone$/i));
+    await userEvent.keyboard("0981123");
+    await userEvent.click(form.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/enter all 10 digits/i)).toBeTruthy();
+    expect(femmePostJson).not.toHaveBeenCalled();
+  });
+
+  it("blocks save when the email is invalid", async () => {
+    femmeJson.mockResolvedValue(pageOf([]));
+    renderPage();
+    await screen.findByRole("heading", { name: /clients/i });
+    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
+    await userEvent.type(form.getByLabelText(/^email$/i), "@no-prefix.com");
+    await userEvent.click(form.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/enter a valid email/i)).toBeTruthy();
+    expect(femmePostJson).not.toHaveBeenCalled();
+  });
+
   it("saves client successfully and reloads", async () => {
     femmeJson.mockResolvedValue(pageOf([]));
     femmePostJson.mockResolvedValue({ ...sampleClient });

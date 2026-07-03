@@ -103,4 +103,32 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await expect(page.getByText("No rows match your filter.")).toBeVisible();
     await page.getByPlaceholder("Search by name or category…").clear();
   });
+
+  test("Issue #68 · filtros de categoría aparecen antes que los de estado, y el botón 'Todos' dice 'All statuses'", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/services");
+
+    const filtersContainer = page.locator('[data-tour="services-filters"]');
+    await expect(filtersContainer).toBeVisible();
+
+    // The status "all" filter must read "All statuses", not just "All"
+    await expect(
+      filtersContainer.getByRole("button", { name: "All statuses", exact: true }),
+    ).toBeVisible();
+
+    // Category filter buttons must render before the status filter group in DOM order
+    const catBeforeStatus = await filtersContainer.evaluate((container) => {
+      const catBtn = Array.from(container.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "All categories",
+      );
+      const statusGroup = container.querySelector('[role="group"]');
+      if (!catBtn || !statusGroup) return false;
+      return (
+        (catBtn.compareDocumentPosition(statusGroup) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      );
+    });
+    expect(catBeforeStatus).toBe(true);
+  });
 });
