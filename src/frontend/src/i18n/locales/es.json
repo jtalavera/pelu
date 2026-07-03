@@ -712,7 +712,7 @@
         "label": "Categoría",
         "allCategories": "Todas las categorías",
         "statusLabel": "Estado",
-        "statusAll": "Todos",
+        "statusAll": "Todos los estados",
         "statusActive": "Solo activos",
         "statusInactive": "Solo inactivos"
       },
