@@ -151,8 +151,8 @@ public class SeedResetService {
     log.info("Deleted {} app_users", deletedUsers);
 
     femmeDataInitializer.seedDemoTenantData(tenant);
-    femmeDataInitializer.seedCatalogIfEmpty(tenant);
-    femmeDataInitializer.seedProductsFromCsv(tenant);
+    femmeDataInitializer.seedCatalogFromCsv(tenant);
+    femmeDataInitializer.seedClientsFromCsv(tenant);
 
     log.info("POST /api/admin/seed/reset tenantId={} — reset complete", DEMO_TENANT_ID);
   }
