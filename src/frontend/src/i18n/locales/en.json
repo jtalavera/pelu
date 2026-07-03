@@ -26,6 +26,7 @@
     }
   },
   "femme": {
+    "appTitle": "Saloon Management",
     "listFilter": {
       "label": "Filter list",
       "placeholder": "Type to filter…",

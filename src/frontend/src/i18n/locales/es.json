@@ -26,6 +26,7 @@
     }
   },
   "femme": {
+    "appTitle": "Gestión Peluquería",
     "listFilter": {
       "label": "Filtrar lista",
       "placeholder": "Escriba para filtrar…",
