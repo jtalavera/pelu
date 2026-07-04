@@ -93,9 +93,8 @@ public class InvoicePdfService {
   //             x=149.5; IVA-10% column LEFT at 254.
   // Right panel: quantity LEFT at 314; description LEFT at 339;
   //              unit price LEFT at 434; IVA-10% column LEFT at 554.
-  // Both panels: first data row y=256.54, step −13 pt per row. Issue #86: a description longer
-  // than DESC_MAX_CHARS_PER_LINE wraps onto the row's next physical line, consuming an extra row
-  // slot; quantity/unit price/tax amount always stay on the row's first (top) line.
+  // Both panels: first data row y=256.54, step −13 pt per row. Issue #90: a description longer
+  // than DESC_MAX_CHARS_PER_LINE is truncated to that length (single line); it never wraps.
   static final float L_X_QTY = 25.11f;
   static final float L_X_DESC_LEFT = 50.11f; // ALIGN_LEFT (Issue #86)
   static final float L_X_UNIT_CENTER = 149.5f; // ALIGN_CENTER center point
@@ -110,11 +109,8 @@ public class InvoicePdfService {
   static final float ROW_STEP_PT = 13f;
   static final int MAX_ROWS = 11;
 
-  /** Issue #86: max characters per printed description line before wrapping. */
+  /** Issue #90: max characters printed for a detail row description; longer text is truncated. */
   static final int DESC_MAX_CHARS_PER_LINE = 18;
-
-  /** Issue #86: max physical print-lines a single description may occupy. */
-  static final int DESC_MAX_LINES = 2;
 
   // --- Subtotals row ---
   static final float L_Y_SUBTOTALS = 114.7f;
@@ -302,11 +298,9 @@ public class InvoicePdfService {
 
     float yRow = TABLE_FIRST_ROW_Y;
     cb.setFontAndSize(bf, TABLE_PT);
-    int rowSlotsUsed = 0;
+    int rowsDrawn = 0;
     for (DetailRow dr : detailRows) {
-      List<String> descLines = descriptionLines(dr.description());
-      int slotsNeeded = descLines.size();
-      if (rowSlotsUsed + slotsNeeded > MAX_ROWS) {
+      if (rowsDrawn >= MAX_ROWS) {
         break;
       }
       float yTop = yRow;
@@ -314,13 +308,7 @@ public class InvoicePdfService {
       if (dr.quantity() != null) {
         cb.showTextAligned(Element.ALIGN_LEFT, String.valueOf(dr.quantity()), xQty, yTop, 0);
       }
-      // Issue #86: description lines step downward per wrapped line; every other field on the
-      // row stays pinned to yTop (the row's first/top line) regardless of how many lines wrap.
-      float yDesc = yTop;
-      for (String line : descLines) {
-        cb.showTextAligned(descAlign, line, xDescAnchor, yDesc, 0);
-        yDesc -= ROW_STEP_PT;
-      }
+      cb.showTextAligned(descAlign, truncatedDescription(dr.description()), xDescAnchor, yTop, 0);
       if (dr.unitPrice() != null) {
         cb.showTextAligned(unitAlign, formatMoneyGs(dr.unitPrice()), xUnitAnchor, yTop, 0);
       }
@@ -332,8 +320,8 @@ public class InvoicePdfService {
         }
       }
       cb.endText();
-      yRow -= ROW_STEP_PT * slotsNeeded;
-      rowSlotsUsed += slotsNeeded;
+      yRow -= ROW_STEP_PT;
+      rowsDrawn++;
     }
 
     // --- Subtotals row ---
@@ -381,59 +369,11 @@ public class InvoicePdfService {
   }
 
   /**
-   * Issue #86: the printable lines for a detail row's description, wrapped at {@link
-   * #DESC_MAX_CHARS_PER_LINE} chars and capped at {@link #DESC_MAX_LINES} lines. The overall {@code
-   * DESC_MAX_CHARS_PER_LINE * DESC_MAX_LINES} budget is enforced first via {@link #truncate},
-   * matching the original single-line 36-char cap. In the rare case where greedy word-wrap of a
-   * string already within that budget still needs more than {@code DESC_MAX_LINES} lines
-   * (word-boundary packing loss), lines beyond the first are collapsed into one final truncated
-   * line.
+   * Issue #90: a detail row's printable description, truncated to {@link #DESC_MAX_CHARS_PER_LINE}
+   * chars — it is never wrapped onto a second line.
    */
-  static List<String> descriptionLines(String description) {
-    String budgeted = truncate(description, DESC_MAX_CHARS_PER_LINE * DESC_MAX_LINES);
-    List<String> lines = wrapDescription(budgeted, DESC_MAX_CHARS_PER_LINE);
-    if (lines.size() <= DESC_MAX_LINES) {
-      return lines;
-    }
-    String rest = String.join(" ", lines.subList(1, lines.size()));
-    return List.of(lines.get(0), truncate(rest, DESC_MAX_CHARS_PER_LINE));
-  }
-
-  /**
-   * Issue #86: greedy word-wrap of {@code text} into lines of at most {@code maxCharsPerLine}
-   * characters, breaking at whitespace. A single word longer than {@code maxCharsPerLine} is
-   * hard-broken into fixed-size chunks. Returns {@code [""]} for null/blank input.
-   */
-  static List<String> wrapDescription(String text, int maxCharsPerLine) {
-    List<String> lines = new ArrayList<>();
-    if (text == null || text.isBlank()) {
-      lines.add("");
-      return lines;
-    }
-    StringBuilder current = new StringBuilder();
-    for (String word : text.trim().split("\\s+")) {
-      while (word.length() > maxCharsPerLine) {
-        if (current.length() > 0) {
-          lines.add(current.toString());
-          current.setLength(0);
-        }
-        lines.add(word.substring(0, maxCharsPerLine));
-        word = word.substring(maxCharsPerLine);
-      }
-      if (current.length() == 0) {
-        current.append(word);
-      } else if (current.length() + 1 + word.length() <= maxCharsPerLine) {
-        current.append(' ').append(word);
-      } else {
-        lines.add(current.toString());
-        current.setLength(0);
-        current.append(word);
-      }
-    }
-    if (current.length() > 0 || lines.isEmpty()) {
-      lines.add(current.toString());
-    }
-    return lines;
+  static String truncatedDescription(String description) {
+    return truncate(description, DESC_MAX_CHARS_PER_LINE);
   }
 
   /**
@@ -491,9 +431,11 @@ public class InvoicePdfService {
         rows.add(
             new DetailRow(
                 null,
-                lineDescriptionForPrint(line)
+                // Issue #90: discount data printed before the item description (e.g. "Dto. 10%
+                // PINTURA DE MANOS"), not after.
+                lineDiscountDescription(line.getDiscountType(), line.getDiscountValue())
                     + " "
-                    + lineDiscountDescription(line.getDiscountType(), line.getDiscountValue()),
+                    + lineDescriptionForPrint(line),
                 null,
                 discAmounts));
       }
