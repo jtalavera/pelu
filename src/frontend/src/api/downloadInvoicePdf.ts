@@ -19,9 +19,16 @@ export async function downloadInvoicePdf(invoiceId: number): Promise<void> {
   const blobUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = blobUrl;
-  a.download = `invoice-${invoiceId}.pdf`;
+  a.download = filenameFromContentDisposition(res.headers.get("Content-Disposition")) ?? `invoice-${invoiceId}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(blobUrl);
+}
+
+/** Extracts the `filename="..."` value the backend proposes (issue #84), e.g. "FACTURA-20260703-12345678-0000007.pdf". */
+function filenameFromContentDisposition(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null;
+  const match = contentDisposition.match(/filename="?([^"]+)"?/);
+  return match ? match[1] : null;
 }

@@ -14,8 +14,13 @@ export async function pickServiceLine(
   await page.getByRole("button", { name: serviceFullName, exact: false }).click();
 }
 
-/** Waits for POST /api/invoices success and the success alert (title "Invoice issued"). */
-export async function clickIssueInvoiceAndExpectSuccess(page: Page) {
+/**
+ * Waits for POST /api/invoices success and the success alert (title "Invoice issued").
+ * Returns the created invoice's id and formatted number from the response body.
+ */
+export async function clickIssueInvoiceAndExpectSuccess(
+  page: Page,
+): Promise<{ id: number; invoiceNumberFormatted: string }> {
   const [res] = await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -31,4 +36,24 @@ export async function clickIssueInvoiceAndExpectSuccess(page: Page) {
   await expect(page.getByRole("alert").filter({ hasText: "Invoice issued" })).toBeVisible({
     timeout: 15_000,
   });
+  return res.json();
+}
+
+/**
+ * Expected invoice PDF filename per issue #84: FACTURA-<yyyymmdd>-<timbrado>-<numero>.pdf, where
+ * the date is the emission date rendered in the business timezone (America/Asuncion).
+ */
+export function expectedInvoiceFilename(
+  issuedAtIso: string,
+  fiscalStampNumber: string,
+  invoiceNumberFormatted: string,
+): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Asuncion",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(issuedAtIso));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value;
+  return `FACTURA-${get("year")}${get("month")}${get("day")}-${fiscalStampNumber}-${invoiceNumberFormatted}.pdf`;
 }

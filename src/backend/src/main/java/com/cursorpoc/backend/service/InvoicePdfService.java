@@ -144,7 +144,7 @@ public class InvoicePdfService {
   }
 
   @Transactional(readOnly = true)
-  public byte[] buildInvoicePdf(long invoiceId, long tenantId) {
+  public InvoicePdfResult buildInvoicePdf(long invoiceId, long tenantId) {
     if (!businessProfileService.isRucReadyForInvoicing(tenantId)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "BUSINESS_RUC_REQUIRED_FOR_PDF");
     }
@@ -168,7 +168,24 @@ public class InvoicePdfService {
     for (InvoiceLine line : invoice.getLines()) {
       Hibernate.initialize(line.getSalonService());
     }
-    return renderPdf(invoice);
+    return new InvoicePdfResult(renderPdf(invoice), buildFilename(invoice));
+  }
+
+  /** Result of building an invoice PDF: the rendered bytes and the proposed download filename. */
+  public record InvoicePdfResult(byte[] bytes, String filename) {}
+
+  /**
+   * Issue #84: proposed filename for the invoice PDF, in the format {@code
+   * FACTURA-<yyyymmdd>-<timbrado>-<numero de comprobante>.pdf}, where the emission date is rendered
+   * in the tenant's business timezone (same zone used to print the date on the PDF).
+   */
+  String buildFilename(Invoice invoice) {
+    DateTimeFormatter fileDateFmt =
+        DateTimeFormatter.ofPattern("yyyyMMdd").withZone(timeProperties.zoneId());
+    String date = fileDateFmt.format(invoice.getIssuedAt());
+    String stampNumber = invoice.getFiscalStamp().getStampNumber();
+    String invoiceNumber = String.format("%07d", invoice.getInvoiceNumber());
+    return "FACTURA-" + date + "-" + stampNumber + "-" + invoiceNumber + ".pdf";
   }
 
   byte[] renderPdf(Invoice invoice) {
