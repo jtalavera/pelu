@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loginAs } from "../fixtures/auth";
+import { DEMO_EMAIL, DEMO_PASSWORD, loginAs } from "../fixtures/auth";
 import { apiBaseUrl } from "../fixtures/api";
 
 /** Gets an admin JWT for direct API calls. */
@@ -7,7 +7,7 @@ async function adminToken(baseUrl: string): Promise<string> {
   const res = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "admin@demo.com", password: "Demo123!" }),
+    body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD }),
   });
   if (!res.ok) throw new Error(`Admin login failed: ${res.status}`);
   const data = (await res.json()) as { accessToken: string };

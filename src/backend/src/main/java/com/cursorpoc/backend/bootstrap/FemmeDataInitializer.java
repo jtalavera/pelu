@@ -152,10 +152,10 @@ public class FemmeDataInitializer {
   }
 
   public void seedDemoTenantData(Tenant tenant) {
-    if (appUserRepository.findByEmail("admin@demo.com").isEmpty()) {
+    if (appUserRepository.findByEmail("isabelzymanscki@gmail.com").isEmpty()) {
       AppUser user = new AppUser();
       user.setTenant(tenant);
-      user.setEmail("admin@demo.com");
+      user.setEmail("isabelzymanscki@gmail.com");
       user.setPasswordHash(passwordEncoder.encode("Demo123!"));
       user.setRole(UserRole.ADMIN);
       appUserRepository.save(user);
@@ -184,7 +184,7 @@ public class FemmeDataInitializer {
     }
 
     log.info(
-        "Seeded demo admin user admin@demo.com (password Demo123!) on tenant id={}",
+        "Seeded demo admin user isabelzymanscki@gmail.com (password Demo123!) on tenant id={}",
         tenant.getId());
   }
 

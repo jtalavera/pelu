@@ -41,7 +41,7 @@ Cada criterio es verificable mediante prueba manual o automatizada (UI, API o am
 - **Frontend:** `LoginPage` (`/login`), `ForgotPasswordPage` (`/forgot-password`); JWT almacenado en `sessionStorage` (`accessToken`).
 - **API:** `POST /api/auth/login`, `POST /api/auth/forgot-password`, reset vía `POST /api/auth/reset-password` (en desarrollo el enlace se loguea, no hay envío SMTP en MVP).
 - **Sesión:** TTL del access token `app.femme.jwt.access-token-ttl-seconds` (por defecto 28800 s = 8 h). La expiración no forma parte de los criterios de aceptación verificables en e2e sin mocks de tiempo.
-- **Usuario demo:** `admin@demo.com` / `Demo123!` (`FemmeDataInitializer`, no aplica al perfil `test`).
+- **Usuario demo:** `isabelzymanscki@gmail.com` / `Demo123!` (`FemmeDataInitializer`, no aplica al perfil `test`).
 - **E2E:** `e2e/tests/hu-01-iniciar-sesion.spec.ts`.
 
 ---

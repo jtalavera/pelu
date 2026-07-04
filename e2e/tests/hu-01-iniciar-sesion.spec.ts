@@ -34,7 +34,7 @@ test.describe("HU-01 · Iniciar sesión", () => {
     page,
   }) => {
     await page.goto("/forgot-password");
-    await page.getByLabel("Email").fill("admin@demo.com");
+    await page.getByLabel("Email").fill(DEMO_EMAIL);
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(
       page.getByText(

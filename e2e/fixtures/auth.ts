@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 /** Seeded by `FemmeDataInitializer` for non-`test` profiles (including `e2e`). */
-export const DEMO_EMAIL = "admin@demo.com";
+export const DEMO_EMAIL = "isabelzymanscki@gmail.com";
 export const DEMO_PASSWORD = "Demo123!";
 
 /**
