@@ -401,6 +401,70 @@ class InvoicePdfServiceTest {
     assertThat(InvoicePdfService.lineDescriptionForPrint(line)).isEqualTo("Ítem manual");
   }
 
+  // ─── Issue #86: description wrapping ──────────────────────────────────────
+
+  @Test
+  void wrapDescription_shortTextFitsOnOneLine() {
+    assertThat(InvoicePdfService.wrapDescription("Corte", 18)).containsExactly("Corte");
+  }
+
+  @Test
+  void wrapDescription_exactlyMaxCharsStaysOnOneLine() {
+    String eighteenChars = "Tintura pelo corto"; // 18 chars exactly
+    assertThat(eighteenChars).hasSize(18);
+    assertThat(InvoicePdfService.wrapDescription(eighteenChars, 18)).containsExactly(eighteenChars);
+  }
+
+  /** Issue #86's own motivating example: the legacy PDF silently dropped "mediano" entirely. */
+  @Test
+  void wrapDescription_breaksAtSpaceWhenExceedingMax() {
+    assertThat(InvoicePdfService.wrapDescription("Tintura pelo mediano", 18))
+        .containsExactly("Tintura pelo", "mediano");
+  }
+
+  @Test
+  void wrapDescription_hardBreaksWordLongerThanMaxWithNoSpaces() {
+    String word = "A".repeat(25);
+    assertThat(InvoicePdfService.wrapDescription(word, 18))
+        .containsExactly("A".repeat(18), "A".repeat(7));
+  }
+
+  @Test
+  void wrapDescription_packsMultipleShortWordsGreedily() {
+    assertThat(InvoicePdfService.wrapDescription("ab cd efgh ij", 10))
+        .containsExactly("ab cd efgh", "ij");
+  }
+
+  @Test
+  void wrapDescription_nullOrBlank_returnsSingleEmptyLine() {
+    assertThat(InvoicePdfService.wrapDescription(null, 18)).containsExactly("");
+    assertThat(InvoicePdfService.wrapDescription("   ", 18)).containsExactly("");
+  }
+
+  @Test
+  void descriptionLines_capsAtTwoLinesEvenWithPathologicalWordPacking() {
+    // Three 9-char words: any two together (9+1+9=19) exceed 18, forcing a naive
+    // greedy wrap into 3 lines even though the whole string is only 29 chars (<=36 budget).
+    String pathological = "A".repeat(9) + " " + "B".repeat(9) + " " + "C".repeat(9);
+    assertThat(InvoicePdfService.wrapDescription(pathological, 18)).hasSize(3);
+
+    List<String> lines = InvoicePdfService.descriptionLines(pathological);
+    assertThat(lines).hasSize(2);
+    assertThat(lines.get(0)).isEqualTo("A".repeat(9));
+    assertThat(lines.get(1)).endsWith(".");
+  }
+
+  @Test
+  void descriptionLines_appliesThirtySixCharTotalBudgetBeforeWrapping() {
+    // Without the 36-char pre-truncation, a 50-char word would hard-break into 3 lines
+    // (18+18+14); the budget caps it at 36 chars first, yielding exactly 2 lines.
+    String longWord = "X".repeat(50);
+    List<String> lines = InvoicePdfService.descriptionLines(longWord);
+    assertThat(lines).hasSize(2);
+    assertThat(lines.get(0)).isEqualTo("X".repeat(18));
+    assertThat(lines.get(1)).isEqualTo("X".repeat(17) + ".");
+  }
+
   // ─── Layout / coordinate tests (calibrated to factura_vieja_femme.pdf) ────
 
   /**
@@ -578,6 +642,139 @@ class InvoicePdfServiceTest {
     assertThat(wordsPos).hasSizeGreaterThanOrEqualTo(2);
     assertThat((double) wordsPos.get(1)[0]).isCloseTo(InvoicePdfService.R_X_WORDS, within(1.0));
     assertThat((double) wordsPos.get(1)[1]).isCloseTo(InvoicePdfService.R_Y_WORDS, within(1.0));
+  }
+
+  // ─── Issue #86: left-panel description alignment + wrapping ─────────────────
+
+  /** Issue #86 AC1: left-panel description must be LEFT-aligned, not centered. */
+  @Test
+  void renderPdf_leftPanelDescriptionIsLeftAlignedNotCentered() throws Exception {
+    InvoiceLine item = line("Corte", 1, "100000", "10", DiscountType.NONE, null, "100000");
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("100000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("100000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    List<float[]> descPos = findTextPositions(pdf, "Corte");
+    assertThat(descPos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) descPos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_DESC_LEFT, within(1.0));
+    assertThat((double) descPos.get(0)[1])
+        .isCloseTo(InvoicePdfService.TABLE_FIRST_ROW_Y, within(1.0));
+  }
+
+  /** Issue #86 AC2: a description over 18 chars wraps onto a second line at the word boundary. */
+  @Test
+  void renderPdf_leftPanelLongDescriptionWrapsToTwoLines() throws Exception {
+    InvoiceLine item =
+        line("Tintura pelo mediano", 1, "250000", "10", DiscountType.NONE, null, "250000");
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("250000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("250000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+
+    List<float[]> line1Pos = findTextPositions(pdf, "Tintura pelo");
+    assertThat(line1Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) line1Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_DESC_LEFT, within(1.0));
+    assertThat((double) line1Pos.get(0)[1])
+        .isCloseTo(InvoicePdfService.TABLE_FIRST_ROW_Y, within(1.0));
+
+    List<float[]> line2Pos = findTextPositions(pdf, "mediano");
+    assertThat(line2Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) line2Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_DESC_LEFT, within(1.0));
+    assertThat((double) line2Pos.get(0)[1])
+        .isCloseTo(
+            InvoicePdfService.TABLE_FIRST_ROW_Y - InvoicePdfService.ROW_STEP_PT, within(1.0));
+  }
+
+  /**
+   * Issue #86 AC2: when a description wraps to 2 lines, quantity/unit price/tax amount stay pinned
+   * to the row's top line — they must NOT shift down to some midpoint between the two description
+   * lines.
+   */
+  @Test
+  void renderPdf_wrappedDescriptionRowKeepsQtyUnitAndTaxAmountTopAligned() throws Exception {
+    InvoiceLine item =
+        line("Tintura pelo mediano", 1, "250000", "10", DiscountType.NONE, null, "250000");
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("250000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("250000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+
+    List<float[]> qtyPos = findTextPositions(pdf, "1");
+    boolean qtyTopAligned =
+        qtyPos.stream()
+            .anyMatch(
+                p ->
+                    Math.abs(p[0] - InvoicePdfService.L_X_QTY) < 1.5
+                        && Math.abs(p[1] - InvoicePdfService.TABLE_FIRST_ROW_Y) < 1.5);
+    assertThat(qtyTopAligned).as("quantity should stay at the row's top line").isTrue();
+
+    List<float[]> taxPos = findTextPositions(pdf, "250.000");
+    boolean taxTopAligned =
+        taxPos.stream()
+            .anyMatch(
+                p ->
+                    Math.abs(p[0] - InvoicePdfService.L_X_TAX_COL10) < 1.5
+                        && Math.abs(p[1] - InvoicePdfService.TABLE_FIRST_ROW_Y) < 1.5);
+    assertThat(taxTopAligned).as("IVA-10% amount should stay at the row's top line").isTrue();
+  }
+
+  /** Issue #86 AC2: the item after a wrapped (2-line) row starts two physical row slots below. */
+  @Test
+  void renderPdf_nextItemAfterWrappedRowStartsTwoSlotsBelow() throws Exception {
+    InvoiceLine wrapped =
+        line("Tintura pelo mediano", 1, "250000", "10", DiscountType.NONE, null, "250000");
+    InvoiceLine next = line("Corte", 3, "10000", "10", DiscountType.NONE, null, "30000");
+    Invoice invoice = baseInvoice(List.of(wrapped, next), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("280000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("280000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    float expectedY = InvoicePdfService.TABLE_FIRST_ROW_Y - 2 * InvoicePdfService.ROW_STEP_PT;
+
+    List<float[]> nextQtyPos = findTextPositions(pdf, "3");
+    boolean found =
+        nextQtyPos.stream()
+            .anyMatch(
+                p ->
+                    Math.abs(p[0] - InvoicePdfService.L_X_QTY) < 1.5
+                        && Math.abs(p[1] - expectedY) < 1.5);
+    assertThat(found).as("second item should start 2 row-slots below the first").isTrue();
+
+    List<float[]> nextDescPos = findTextPositions(pdf, "Corte");
+    boolean descFound =
+        nextDescPos.stream()
+            .anyMatch(
+                p ->
+                    Math.abs(p[0] - InvoicePdfService.L_X_DESC_LEFT) < 1.5
+                        && Math.abs(p[1] - expectedY) < 1.5);
+    assertThat(descFound).as("second item's description should start 2 row-slots below").isTrue();
+  }
+
+  /**
+   * Issue #86: a wrapped row consumes 2 physical row slots out of the {@code MAX_ROWS} budget, so
+   * fewer subsequent items fit than if every row were single-line.
+   */
+  @Test
+  void renderPdf_maxRowsBudgetAccountsForWrappedRowSlots() throws Exception {
+    List<InvoiceLine> lines = new ArrayList<>();
+    lines.add(line("Tintura pelo mediano", 1, "250000", "10", DiscountType.NONE, null, "250000"));
+    for (int i = 1; i <= 10; i++) {
+      lines.add(
+          line(String.format("Item%02d", i), 1, "1000", "10", DiscountType.NONE, null, "1000"));
+    }
+    Invoice invoice = baseInvoice(lines, List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("260000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("260000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    String text = extractText(pdf);
+
+    // Wrapped item (2 slots) + Item01..Item09 (9 slots) = 11 slots = MAX_ROWS; Item10 overflows.
+    assertThat(text).contains("Item09");
+    assertThat(text).doesNotContain("Item10");
   }
 
   /**
