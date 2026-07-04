@@ -38,6 +38,16 @@ const sampleClient = {
   visitCount: 3,
 };
 
+function pageOf(clients: (typeof sampleClient)[]) {
+  return {
+    content: clients,
+    page: 0,
+    size: 10,
+    totalElements: clients.length,
+    totalPages: clients.length === 0 ? 0 : 1,
+  };
+}
+
 describe("ClientsPage", () => {
   beforeEach(() => {
     void i18n.changeLanguage("en");
@@ -50,14 +60,14 @@ describe("ClientsPage", () => {
   });
 
   it("shows heading and new client button after loading", async () => {
-    femmeJson.mockResolvedValue([sampleClient]);
+    femmeJson.mockResolvedValue(pageOf([sampleClient]));
     renderPage();
     expect(await screen.findByRole("heading", { name: /clients/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /new client/i })).toBeTruthy();
   });
 
   it("renders client list with name and visit count", async () => {
-    femmeJson.mockResolvedValue([sampleClient]);
+    femmeJson.mockResolvedValue(pageOf([sampleClient]));
     renderPage();
     expect(await screen.findByText("Ana García")).toBeTruthy();
     expect(screen.getByText(/3 visit/i)).toBeTruthy();
@@ -65,13 +75,13 @@ describe("ClientsPage", () => {
   });
 
   it("shows empty state when no clients", async () => {
-    femmeJson.mockResolvedValue([]);
+    femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     expect(await screen.findByText(/no clients yet/i)).toBeTruthy();
   });
 
   it("search form submit triggers API call", async () => {
-    femmeJson.mockResolvedValue([]);
+    femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     const input = screen.getByLabelText(/search/i);
@@ -81,7 +91,7 @@ describe("ClientsPage", () => {
   });
 
   it("opens modal and shows form fields when new client button clicked", async () => {
-    femmeJson.mockResolvedValue([]);
+    femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     await userEvent.click(screen.getByRole("button", { name: /new client/i }));
@@ -94,7 +104,7 @@ describe("ClientsPage", () => {
   });
 
   it("validates required full name field", async () => {
-    femmeJson.mockResolvedValue([]);
+    femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     await userEvent.click(screen.getByRole("button", { name: /new client/i }));
@@ -105,7 +115,7 @@ describe("ClientsPage", () => {
   });
 
   it("validates invalid RUC format", async () => {
-    femmeJson.mockResolvedValue([]);
+    femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
     await userEvent.click(screen.getByRole("button", { name: /new client/i }));
@@ -118,8 +128,50 @@ describe("ClientsPage", () => {
     expect(await screen.findByText(/invalid ruc/i)).toBeTruthy();
   });
 
+  it("formats the phone field with the Paraguay mask while typing", async () => {
+    femmeJson.mockResolvedValue(pageOf([]));
+    renderPage();
+    await screen.findByRole("heading", { name: /clients/i });
+    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    const phoneField = form.getByLabelText(/^phone$/i) as HTMLInputElement;
+    await userEvent.click(phoneField);
+    await userEvent.keyboard("0981123456");
+    expect(phoneField.value).toBe("(0981) 123-456");
+  });
+
+  it("blocks save when the phone has fewer than 10 digits", async () => {
+    femmeJson.mockResolvedValue(pageOf([]));
+    renderPage();
+    await screen.findByRole("heading", { name: /clients/i });
+    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
+    await userEvent.click(form.getByLabelText(/^phone$/i));
+    await userEvent.keyboard("0981123");
+    await userEvent.click(form.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/enter all 10 digits/i)).toBeTruthy();
+    expect(femmePostJson).not.toHaveBeenCalled();
+  });
+
+  it("blocks save when the email is invalid", async () => {
+    femmeJson.mockResolvedValue(pageOf([]));
+    renderPage();
+    await screen.findByRole("heading", { name: /clients/i });
+    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog);
+    await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
+    await userEvent.type(form.getByLabelText(/^email$/i), "@no-prefix.com");
+    await userEvent.click(form.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/enter a valid email/i)).toBeTruthy();
+    expect(femmePostJson).not.toHaveBeenCalled();
+  });
+
   it("saves client successfully and reloads", async () => {
-    femmeJson.mockResolvedValue([]);
+    femmeJson.mockResolvedValue(pageOf([]));
     femmePostJson.mockResolvedValue({ ...sampleClient });
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
@@ -133,7 +185,7 @@ describe("ClientsPage", () => {
   });
 
   it("shows kebab menu with Edit information and Deactivate client for active clients", async () => {
-    femmeJson.mockResolvedValue([sampleClient]);
+    femmeJson.mockResolvedValue(pageOf([sampleClient]));
     renderPage();
     await screen.findByText("Ana García");
     const trigger = screen.getByTestId(`clients-row-${sampleClient.id}-trigger`);
@@ -145,10 +197,9 @@ describe("ClientsPage", () => {
   });
 
   it("list with filter All includes both active and inactive clients", async () => {
-    femmeJson.mockResolvedValue([
-      sampleClient,
-      { ...sampleClient, id: 2, fullName: "Bob", active: false },
-    ]);
+    femmeJson.mockResolvedValue(
+      pageOf([sampleClient, { ...sampleClient, id: 2, fullName: "Bob", active: false }]),
+    );
     renderPage();
     await screen.findByText("Ana García");
     expect(screen.getByText("Bob")).toBeTruthy();
@@ -156,7 +207,7 @@ describe("ClientsPage", () => {
   });
 
   it("inactive clients show inactive badge and a Reactivate item in the kebab menu (no Deactivate)", async () => {
-    femmeJson.mockResolvedValue([{ ...sampleClient, active: false }]);
+    femmeJson.mockResolvedValue(pageOf([{ ...sampleClient, active: false }]));
     renderPage();
     await screen.findByText("Ana García");
     expect(screen.getByText(/inactive/i)).toBeTruthy();

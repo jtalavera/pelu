@@ -55,6 +55,9 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     await dlg
       .getByRole("button", { name: "Save schedule" })
       .evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
+    // The list is server-side paginated (HU-32); search for the new professional so it
+    // is not missed on a later page as professionals accumulate.
+    await page.locator("#professionals-inline-search").fill(name);
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
   });
 

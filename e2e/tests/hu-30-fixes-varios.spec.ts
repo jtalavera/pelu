@@ -110,7 +110,7 @@ test.describe("HU-30 · Fixes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Invoice History" }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await page.waitForResponse(
       (r) => r.url().includes("/api/invoices") && r.request().method() === "GET",
     );
@@ -132,9 +132,10 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(modal.getByText("10%")).toBeVisible();
     await expect(modal.getByText("1.000")).toBeVisible();
 
-    // FIXED line: Tipo Dto. = "Fixed amount", Valor Dto. = "500" (no thousands sep needed)
+    // FIXED line: Tipo Dto. = "Fixed amount", Valor Dto. = "500" (no thousands sep needed).
+    // Exact match avoids also matching "4.500" / "13.500" elsewhere in the modal.
     await expect(modal.getByText("Fixed amount")).toBeVisible();
-    await expect(modal.getByText("500")).toBeVisible();
+    await expect(modal.getByText("500", { exact: true })).toBeVisible();
 
     // AC-4: "Invoice discount" label (not plain "Discount")
     await expect(modal.getByText("Invoice discount")).toBeVisible();
@@ -211,11 +212,14 @@ test.describe("HU-30 · Fixes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Invoice History" }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await page.waitForResponse((r) => r.url().includes("/api/invoices") && r.request().method() === "GET");
 
-    // Table should be present (Clientes-style card)
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 20_000 });
+    // Table should be present (Clientes-style card). Billing keeps all tabs mounted
+    // (hidden via `hidden`), so scope to the visible (History) tab's table.
+    await expect(page.locator("table").filter({ visible: true }).first()).toBeVisible({
+      timeout: 20_000,
+    });
 
     // The "View" action button should still work (open the detail modal)
     await page.getByRole("button", { name: "View" }).first().click();
@@ -229,43 +233,48 @@ test.describe("HU-30 · Fixes varios", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    const seed = await seedCategoryServiceProfessional(request, token);
+    // Create a professional WITH an email and no system access: enabling access on a
+    // professional with an email is what triggers the grant-access request (professionals
+    // without an email cannot be granted access).
+    const uniq = Date.now();
+    const profName = `E2E HU30 Grant ${uniq}`;
+    await apiPostJson<{ id: number }>(request, token, "/api/professionals", {
+      fullName: profName,
+      email: `hu30grant${uniq}@test.com`,
+    });
 
     await loginAsDemo(page);
     await page.goto("/app/professionals");
 
-    // Capture the grant-access request and assert Accept-Language header
-    const grantAccessRequestPromise = page.waitForRequest(
-      (req) =>
-        req.url().includes("/api/professionals/") &&
-        req.url().includes("/grant-access") &&
-        req.method() === "POST",
-      { timeout: 20_000 },
-    );
+    // Locate the professional via the inline search (list is server-side paginated), then
+    // click its row to open the edit dialog. Data rows are <tr> elements (CSS `tr`); their
+    // a11y role is "button", so getByRole("row") does not match them.
+    await page.locator("#professionals-inline-search").fill(profName);
+    const row = page.locator("tr").filter({ hasText: profName }).first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
 
-    // Set system access on the first professional via the UI
-    const firstKebab = page.getByRole("button", { name: "Actions" }).first();
-    await expect(firstKebab).toBeVisible({ timeout: 15_000 });
-    await firstKebab.click();
-    const editItem = page.getByRole("menuitem", { name: /Edit details|Editar/ }).first();
-    await editItem.click();
+    // Enable system access in the edit dialog.
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    const accessToggle = dialog.locator("#prof-system-access");
+    await expect(accessToggle).toBeVisible({ timeout: 10_000 });
+    await accessToggle.check();
 
-    // Enable system access in the edit panel
-    const accessToggle = page.getByLabel(/system access|acceso/i);
-    if (await accessToggle.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      const wasChecked = await accessToggle.isChecked();
-      if (!wasChecked) {
-        await accessToggle.check();
-        // Save
-        await page.getByRole("button", { name: /Save|Guardar/ }).click();
-        // Grant-access should fire; wait for it
-        const grantReq = await grantAccessRequestPromise;
-        const acceptLang = grantReq.headers()["accept-language"];
-        expect(acceptLang).toBeTruthy();
-        expect(["en", "es"]).toContain(acceptLang?.split(",")[0]?.split(";")[0]?.trim() ?? "");
-      }
-    }
-    // Pass unconditionally if grant-access was not fired (professional may already have access)
+    // Saving with access enabled fires the grant-access request; assert its Accept-Language.
+    const [grantReq] = await Promise.all([
+      page.waitForRequest(
+        (req) =>
+          req.url().includes("/api/professionals/") &&
+          req.url().includes("/grant-access") &&
+          req.method() === "POST",
+        { timeout: 20_000 },
+      ),
+      dialog.getByRole("button", { name: "Save and set schedule" }).click(),
+    ]);
+    const acceptLang = grantReq.headers()["accept-language"];
+    expect(acceptLang).toBeTruthy();
+    expect(["en", "es"]).toContain(acceptLang?.split(",")[0]?.split(";")[0]?.trim() ?? "");
   });
 
   // AC-9 — Calendar is responsive on mobile (single-day view)
@@ -292,8 +301,9 @@ test.describe("HU-30 · Fixes varios", () => {
     await nextDayBtn.click();
     await expect(dayCols).toHaveCount(1);
 
-    // "New appointment" button should still work
-    await expect(page.getByRole("button", { name: "New appointment" })).toBeVisible();
+    // "New appointment" button should still work (toolbar + per-day-column buttons both
+    // expose this name on mobile, so assert the first).
+    await expect(page.getByRole("button", { name: "New appointment" }).first()).toBeVisible();
   });
 
   // AC-10 — "Configuración de usuario" opens profile modal (not navigate to settings)

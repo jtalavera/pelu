@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { SearchInput } from "../components/ui/SearchInput";
-import { useFilteredList } from "../hooks/useFilteredList";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -9,6 +8,8 @@ import {
   KebabMenu,
   Label,
   Modal,
+  Pagination,
+  PageSizeSelect,
   Spinner,
   Tabs,
   TabsContent,
@@ -17,9 +18,10 @@ import {
   Text,
   TimeCombobox,
 } from "@design-system";
-import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
-import { grantProfessionalAccess, revokeProfessionalAccess } from "../api/professionalAccess";
+import { femmePostJson, femmePutJson } from "../api/femmeClient";
+import { listProfessionalsPaged } from "../api/professionals";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
+import { grantProfessionalAccess, revokeProfessionalAccess } from "../api/professionalAccess";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
@@ -140,9 +142,18 @@ export default function ProfessionalsPage() {
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   useTour("professionals", professionalsSteps, undefined, guidedTourEnabled);
 
-  const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [professionals, setProfessionals] = useState<Professional[]>([]);
+
+  // ── Server-side pagination ─────────────────────────────────────────────────
+  type ProfPage = { content: Professional[]; page: number; size: number; totalElements: number; totalPages: number };
+  const [profPageData, setProfPageData] = useState<ProfPage | null>(null);
+  const [profPageLoading, setProfPageLoading] = useState(true);
+  const [listQuery, setListQuery] = useState("");
+  const [profPage, setProfPage] = useState(0); // 0-based
+  const [profPageSize, setProfPageSize] = useState(10);
+  const [profReloadTick, setProfReloadTick] = useState(0);
+  const profDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -192,28 +203,36 @@ export default function ProfessionalsPage() {
 
   const daysByValue = useMemo(() => new Map(DAYS.map((d) => [d.value, d.key] as const)), []);
 
-  const { query: listQuery, setQuery: setListQuery, filtered: visibleProfessionals, highlight } =
-    useFilteredList<Professional>({
-      items: professionals,
-      fields: ["fullName", "phone", "email"],
-    });
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setPageError(null);
-    try {
-      const res = await femmeJson<Professional[]>("/api/professionals");
-      setProfessionals(Array.isArray(res) ? res : []);
-    } catch {
-      setPageError(t("femme.professionals.loadError"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+  const loadPagedProfessionals = useCallback(
+    async (q: string, page: number, size: number) => {
+      setProfPageLoading(true);
+      setPageError(null);
+      try {
+        const data = await listProfessionalsPaged<Professional>({
+          q: q.trim() || undefined,
+          page,
+          size,
+        });
+        setProfPageData(data);
+      } catch (err) {
+        setPageError(translateApiError(err, t, "femme.professionals.loadError"));
+      } finally {
+        setProfPageLoading(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (profDebounceRef.current) clearTimeout(profDebounceRef.current);
+    profDebounceRef.current = setTimeout(() => {
+      void loadPagedProfessionals(listQuery, profPage, profPageSize);
+    }, 350);
+    return () => {
+      if (profDebounceRef.current) clearTimeout(profDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listQuery, profPage, profPageSize, profReloadTick, loadPagedProfessionals]);
 
   function resetDetailForm(p: Professional | null) {
     setFullName(p?.fullName ?? "");
@@ -328,7 +347,7 @@ export default function ProfessionalsPage() {
         if (!email.trim()) {
           setDetailSaveError(t("femme.professionals.form.systemAccessNoEmail"));
           setSavedProfessional(saved);
-          await load();
+          setProfReloadTick((n) => n + 1);
           setDetailSaving(false);
           return;
         }
@@ -350,7 +369,7 @@ export default function ProfessionalsPage() {
       setDetailErrors(null);
       setPin("");
       setPinTouched(false);
-      await load();
+      setProfReloadTick((n) => n + 1);
       setTab("schedule");
     } catch (e) {
       const rawCode = parseApiErrorMessage(e);
@@ -406,7 +425,7 @@ export default function ProfessionalsPage() {
         normalized,
       );
       setSavedProfessional(saved);
-      await load();
+      setProfReloadTick((n) => n + 1);
       closeModal();
     } catch (e) {
       setScheduleSaveError(translateApiError(e, t, "femme.professionals.saveError"));
@@ -476,7 +495,7 @@ export default function ProfessionalsPage() {
     setDeactivateTarget(null);
     try {
       await femmePostJson<Professional>(`/api/professionals/${p.id}/deactivate`, {});
-      await load();
+      setProfReloadTick((n) => n + 1);
     } catch (e) {
       setPageError(translateApiError(e, t, "femme.professionals.saveError"));
     }
@@ -492,7 +511,7 @@ export default function ProfessionalsPage() {
     setActivateTarget(null);
     try {
       await femmePostJson<Professional>(`/api/professionals/${p.id}/activate`, {});
-      await load();
+      setProfReloadTick((n) => n + 1);
     } catch (e) {
       setPageError(translateApiError(e, t, "femme.professionals.saveError"));
     }
@@ -500,7 +519,13 @@ export default function ProfessionalsPage() {
 
   const scheduleDisabled = !savedProfessional;
 
-  if (loading) {
+  const profContent = profPageData?.content ?? [];
+  const profTotalElements = profPageData?.totalElements ?? 0;
+  const profTotalPages = profPageData?.totalPages ?? 1;
+  const profShowingFrom = profTotalElements === 0 ? 0 : profPage * profPageSize + 1;
+  const profShowingTo = Math.min((profPage + 1) * profPageSize, profTotalElements);
+
+  if (profPageLoading && !profPageData) {
     return (
       <div style={{ display: "flex", minHeight: "40vh", alignItems: "center", justifyContent: "center", gap: 12 }}>
         <Spinner size="lg" />
@@ -579,10 +604,10 @@ export default function ProfessionalsPage() {
         <SearchInput
           id="professionals-inline-search"
           value={listQuery}
-          onChange={setListQuery}
+          onChange={(q) => { setListQuery(q); setProfPage(0); }}
           placeholder={t("femme.professionals.searchInlinePlaceholder")}
-          resultCount={visibleProfessionals.length}
-          totalCount={professionals.length}
+          resultCount={profTotalElements}
+          totalCount={profTotalElements}
         />
       </div>
 
@@ -615,7 +640,7 @@ export default function ProfessionalsPage() {
               </tr>
             </thead>
             <tbody>
-              {professionals.length === 0 ? (
+              {profTotalElements === 0 && !listQuery ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -629,7 +654,7 @@ export default function ProfessionalsPage() {
                     {t("femme.professionals.emptyBody")}
                   </td>
                 </tr>
-              ) : visibleProfessionals.length === 0 ? (
+              ) : profTotalElements === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -644,7 +669,7 @@ export default function ProfessionalsPage() {
                   </td>
                 </tr>
               ) : (
-                visibleProfessionals.map((p, idx) => {
+                profContent.map((p, idx) => {
                   const av = profAvatar(idx);
                   const isHov = hoveredId === p.id;
                   const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
@@ -697,7 +722,7 @@ export default function ProfessionalsPage() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {highlight(p.fullName) as ReactNode}
+                              {p.fullName}
                             </div>
                             {p.schedules.filter((s) => s.startTime && s.endTime).length > 0 ? (
                               <div style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
@@ -717,7 +742,7 @@ export default function ProfessionalsPage() {
                       </td>
 
                       <td style={{ ...tdStyle, color: p.phone ? "var(--color-ink)" : "var(--color-ink-3)" }}>
-                        {p.phone ? (highlight(p.phone) as ReactNode) : "—"}
+                        {p.phone ?? "—"}
                       </td>
 
                       <td
@@ -729,7 +754,7 @@ export default function ProfessionalsPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {p.email ? (highlight(p.email) as ReactNode) : "—"}
+                        {p.email ?? "—"}
                       </td>
 
                       <td style={tdStyle}>
@@ -800,6 +825,28 @@ export default function ProfessionalsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* ── Pagination footer ── */}
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+          style={{ borderTop: "var(--border-default)" }}
+        >
+          <PageSizeSelect
+            value={profPageSize}
+            onChange={(s) => { setProfPageSize(s); setProfPage(0); }}
+            label={t("femme.pagination.rowsPerPage")}
+          />
+          <Text variant="small" className="text-[var(--color-ink-3)]">
+            {t("femme.pagination.showingRange", { from: profShowingFrom, to: profShowingTo, total: profTotalElements })}
+          </Text>
+          <Pagination
+            page={profPage + 1}
+            pageCount={Math.max(1, profTotalPages)}
+            onPageChange={(p) => setProfPage(p - 1)}
+            previousLabel={t("femme.pagination.previous")}
+            nextLabel={t("femme.pagination.next")}
+          />
         </div>
       </div>
 

@@ -92,8 +92,10 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await page.getByRole("button", { name: /New appointment/ }).first().click();
     const dlg = bookingAppointmentDialog(page);
     // Localized date input renders a combobox; the popover dialog "Calendar" appears on focus.
+    // The popover renders in a body-level portal (FloatingDropdown), so it is not a
+    // descendant of the appointment dialog — assert it at the page level.
     await dlg.getByRole("combobox", { name: /^Date$/ }).click();
-    await expect(dlg.getByRole("dialog", { name: "Calendar", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Calendar", exact: true }).first()).toBeVisible();
   });
 
   test("HU-25 / HU-19 hover en tarjeta de turno puede agrandar el bloque (texto largo)", async ({

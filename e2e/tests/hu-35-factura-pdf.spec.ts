@@ -74,8 +74,12 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
 
-    // Issue invoice via UI to get the success alert with "Download PDF" button
+    // Issue invoice via UI to get the success alert with "Download PDF" button.
+    // A client (here an occasional one) is required for the Issue button to enable.
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
+    await page.getByLabel("Client display name").fill("E2E HU35 sin RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
@@ -93,9 +97,11 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     await downloadBtn.click();
 
-    // A destructive alert must appear with the RUC-required message
+    // A destructive alert must appear with the RUC-required message.
+    // Match the exact copy (not just "RUC"): the fiscal-config banner also
+    // mentions RUC and trips strict mode when earlier tests leave it visible.
     await expect(
-      page.getByRole("alert").filter({ hasText: "RUC" }),
+      page.getByRole("alert").filter({ hasText: "Add a valid business RUC" }),
     ).toBeVisible({ timeout: 10_000 });
 
     // No file should have been downloaded (no corrupt PDF)
@@ -161,8 +167,11 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
 
-    // Issue invoice via UI
+    // Issue invoice via UI. A client (occasional) is required to enable the Issue button.
     await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
+    await page.getByLabel("Client display name").fill("E2E HU35 con RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");

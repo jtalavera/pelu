@@ -141,14 +141,17 @@ test.describe("HU-29 · Fixes varios", () => {
     expect(buf.slice(0, 4).toString("latin1")).toBe("%PDF");
   });
 
-  // AC7 — seed: GABRIELA present, ISABEL ZYMANSCKI / MERCEDES AQUINO removed (fresh seed).
+  // AC7 — seed: ISABEL ZYMANSCKI / MERCEDES AQUINO removed. (GABRIELA was added by
+  // HU-29 but later removed by HU-30 AC2, which owns that assertion — see
+  // "HU-30 · 2 GABRIELA eliminada de los datos semilla".)
   test("HU-29 · 7 datos semilla de profesionales actualizados", async ({ page, request }) => {
     await loginAsDemoApi(request);
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    await expect(page.getByText("GABRIELA", { exact: false }).first()).toBeVisible({
-      timeout: 20_000,
-    });
+    // Confirm the professionals page loaded before asserting the seed removals.
+    await expect(
+      page.getByRole("button", { name: "+ New professional" }),
+    ).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("ISABEL ZYMANSCKI", { exact: true })).toHaveCount(0);
     await expect(page.getByText("MERCEDES AQUINO", { exact: true })).toHaveCount(0);
   });
@@ -156,9 +159,12 @@ test.describe("HU-29 · Fixes varios", () => {
   // AC8 — table options menu overlays the table (rendered in a portal on document.body).
   test("HU-29 · 8 menú de opciones de tabla se superpone (portal)", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
-    const client = await seedClient(request, token, `E2E HU29 Kebab ${Date.now()}`);
+    const name = `E2E HU29 Kebab ${Date.now()}`;
+    const client = await seedClient(request, token, name);
     await loginAsDemo(page);
     await page.goto("/app/clients");
+    // Search by name so the new client is on page 1 regardless of total count (server-side pagination).
+    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name);
     const trigger = page.getByTestId(`clients-row-${client.id}-trigger`);
     await expect(trigger).toBeVisible({ timeout: 20_000 });
     await trigger.click();

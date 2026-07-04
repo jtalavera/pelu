@@ -148,6 +148,39 @@ describe("ClientDetailPage", () => {
     expect(await screen.findByText(/invalid ruc/i)).toBeTruthy();
   });
 
+  it("formats the phone field with the Paraguay mask while typing", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const phoneInput = screen.getByLabelText(/^phone$/i) as HTMLInputElement;
+    await userEvent.clear(phoneInput);
+    await userEvent.click(phoneInput);
+    await userEvent.keyboard("0981123456");
+    expect(phoneInput.value).toBe("(0981) 123-456");
+  });
+
+  it("blocks save when the phone has fewer than 10 digits", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const phoneInput = screen.getByLabelText(/^phone$/i);
+    await userEvent.clear(phoneInput);
+    await userEvent.click(phoneInput);
+    await userEvent.keyboard("0981123");
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/enter all 10 digits/i)).toBeTruthy();
+    expect(femmePutJson).not.toHaveBeenCalled();
+  });
+
+  it("blocks save when the email is invalid", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const emailInput = screen.getByLabelText(/^email$/i);
+    await userEvent.clear(emailInput);
+    await userEvent.type(emailInput, "@no-prefix.com");
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/enter a valid email/i)).toBeTruthy();
+    expect(femmePutJson).not.toHaveBeenCalled();
+  });
+
   it("saves successfully and updates client name", async () => {
     const updated = { ...sampleClient, fullName: "Ana Updated" };
     femmePutJson.mockResolvedValue(updated);

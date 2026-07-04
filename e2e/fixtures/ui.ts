@@ -107,8 +107,11 @@ export async function pickSearchableOption(
 export async function fillAppointmentDateIso(dialog: Locator, isoYmd: string): Promise<void> {
   const input = dialog.getByTestId("appointment-date-input");
   await input.click();
-  const monthNext = dialog.getByRole("button", { name: "Next month" });
-  const dayBtn = dialog.getByRole("button", { name: isoYmd, exact: true });
+  // The date popover renders in a body-level portal (FloatingDropdown), so it is
+  // NOT a descendant of the appointment dialog — scope its controls to the page.
+  const page = dialog.page();
+  const monthNext = page.getByRole("button", { name: "Next month" });
+  const dayBtn = page.getByRole("button", { name: isoYmd, exact: true });
   for (let i = 0; i < 14; i++) {
     const visible = await dayBtn.first().isVisible().catch(() => false);
     if (visible) break;

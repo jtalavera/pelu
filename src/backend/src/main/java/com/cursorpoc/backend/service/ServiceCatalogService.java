@@ -8,6 +8,7 @@ import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryUpsertRequest;
 import com.cursorpoc.backend.web.dto.ServiceResponse;
@@ -18,6 +19,9 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -113,6 +117,26 @@ public class ServiceCatalogService {
                 .thenComparing(SalonService::getName, String.CASE_INSENSITIVE_ORDER))
         .map(ServiceCatalogService::toServiceResponse)
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public PageResponse<ServiceResponse> listServicesPaged(
+      long tenantId, Optional<Long> categoryId, String q, Boolean active, int page, int size) {
+    String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
+    PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
+    Page<SalonService> result =
+        salonServiceRepository.findByTenantFilteredPaged(
+            tenantId, categoryId.orElse(null), active, qTrimmed, pageable);
+    List<ServiceResponse> content =
+        result.getContent().stream()
+            .map(ServiceCatalogService::toServiceResponse)
+            .collect(Collectors.toList());
+    return new PageResponse<>(
+        content,
+        result.getNumber(),
+        result.getSize(),
+        result.getTotalElements(),
+        result.getTotalPages());
   }
 
   @Transactional

@@ -26,6 +26,7 @@
     }
   },
   "femme": {
+    "appTitle": "Gestión Peluquería",
     "listFilter": {
       "label": "Filtrar lista",
       "placeholder": "Escriba para filtrar…",
@@ -558,9 +559,6 @@
       "colStatus": "Estado",
       "noRuc": "Sin RUC",
       "viewBtn": "Más…",
-      "paginationInfo": "Mostrando {{from}}–{{to}} de {{total}}",
-      "prevPage": "Ant.",
-      "nextPage": "Sig.",
       "emptySearch": "No se encontraron clientes.",
       "add": "Nuevo cliente",
       "addTitle": "Nuevo cliente",
@@ -570,7 +568,11 @@
       "fullName": "Nombre completo",
       "fullNameRequired": "Ingresá el nombre completo del cliente.",
       "phone": "Teléfono",
+      "phonePlaceholder": "(0981) 123-456",
+      "phoneInvalid": "Ingresá los 10 dígitos del teléfono. Formato esperado: (0981) 123-456.",
       "email": "Correo electrónico",
+      "emailPlaceholder": "ej.: ana@example.com",
+      "emailInvalid": "Ingresá un email válido (debe incluir @ y texto antes del @, ej.: ana@example.com).",
       "ruc": "RUC",
       "rucHint": "Formato: dígitos, guion, dígitos (ej.: 80000005-6). Dejalo vacío si no aplica.",
       "rucInvalid": "RUC inválido. Usá dígitos, un guion y dígitos (ej.: 80000005-6).",
@@ -710,7 +712,7 @@
         "label": "Categoría",
         "allCategories": "Todas las categorías",
         "statusLabel": "Estado",
-        "statusAll": "Todos",
+        "statusAll": "Todos los estados",
         "statusActive": "Solo activos",
         "statusInactive": "Solo inactivos"
       },

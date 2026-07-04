@@ -11,6 +11,8 @@ test.describe("HU-10 · Crear cliente", () => {
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
     await dlg.getByRole("button", { name: "Save" }).click();
+    // Search by name so the new client is on page 1 regardless of total count (server-side pagination).
+    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name);
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
   });
 

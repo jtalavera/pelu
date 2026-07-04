@@ -113,8 +113,9 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     const tbody = page.locator("table tbody");
     await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
 
-    // PageSizeSelect should be present
-    const select = page.getByLabel("Rows per page:");
+    // PageSizeSelect should be present. Billing keeps all tabs mounted (hidden via
+    // the `hidden` attribute), so scope to the visible (History) tab's control.
+    const select = page.getByLabel("Rows per page:").filter({ visible: true });
     await expect(select).toBeVisible();
     await expect(select).toHaveValue("10");
 
@@ -139,8 +140,11 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     const tbody = page.locator("table tbody");
     await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
 
-    // Range text should be present (e.g. "1–1 of 1" or "1–10 of N")
-    await expect(page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/)).toBeVisible();
+    // Range text should be present (e.g. "1–1 of 1" or "1–10 of N"). Scope to the
+    // visible tab since billing keeps all tabs mounted (hidden via `hidden`).
+    await expect(
+      page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/).filter({ visible: true }).first(),
+    ).toBeVisible();
   });
 
   test("#59-T4-5 · Historial prev/next with >10 invoices", async ({ page, request }) => {
@@ -259,8 +263,8 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
     await page.goto(`/app/clients/${client.id}`);
     await page.getByRole("tab", { name: /history/i }).click();
 
-    // The "Previous" section should be visible
-    await expect(page.getByText(/previous|anteriores/i).first()).toBeVisible({ timeout: 20_000 });
+    // The past-appointments section heading ("Past" / "Anteriores") should be visible
+    await expect(page.getByText(/past|anteriores/i).first()).toBeVisible({ timeout: 20_000 });
 
     // Even with 0 records, the pagination controls appear after the initial load
     // (empty state renders instead of table — just verify the section heading is visible)

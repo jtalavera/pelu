@@ -320,13 +320,14 @@ public class InvoiceService {
       }
     }
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
+    Integer qInvoiceNumber = parseInvoiceNumberQuery(qTrimmed);
     Pageable pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Invoice> invoicePage =
         invoiceRepository.findByTenantWithFiltersPaged(
-            tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, pageable);
+            tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, qInvoiceNumber, pageable);
     BigDecimal issuedTotal =
         invoiceRepository.sumIssuedTotalWithFilters(
-            tenantId, fromTo[0], fromTo[1], clientId, qTrimmed);
+            tenantId, fromTo[0], fromTo[1], clientId, qTrimmed, qInvoiceNumber);
     List<InvoiceListItemResponse> content =
         invoicePage.getContent().stream()
             .map(InvoiceService::toListItemDto)
@@ -500,5 +501,21 @@ public class InvoiceService {
 
   private static String formatInvoiceNumber(int number) {
     return String.format("%07d", number);
+  }
+
+  /**
+   * Lets an all-digit search (e.g. the exact "0000123" shown in the UI, with leading zeros) match
+   * the underlying int invoiceNumber even though the substring LIKE match against
+   * CAST(invoiceNumber AS string) only sees the unpadded digits.
+   */
+  private static Integer parseInvoiceNumberQuery(String qTrimmed) {
+    if (qTrimmed == null || !qTrimmed.matches("\\d+")) {
+      return null;
+    }
+    try {
+      return Integer.valueOf(qTrimmed);
+    } catch (NumberFormatException e) {
+      return null;
+    }
   }
 }

@@ -3,7 +3,10 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
@@ -19,6 +22,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -198,21 +204,68 @@ class ClientServiceTest {
   }
 
   @Test
-  void search_delegatesToRepository() {
+  void search_delegatesToRepository_unpaged() {
     Client c = buildClient(10L, "Ana García", "0981000001", null, null);
-    lenient().when(clientRepository.search(1L, "ana", "ana", "ana")).thenReturn(List.of(c));
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), eq("ana"), eq(null), eq(null), eq(null), eq(Pageable.unpaged())))
+        .thenReturn(new PageImpl<>(List.of(c)));
 
-    var results = clientService.search(1L, "ana");
+    var results = clientService.search(1L, "ana", null, null, null);
     assertThat(results).hasSize(1);
     assertThat(results.get(0).fullName()).isEqualTo("Ana García");
   }
 
   @Test
-  void search_emptyQuery_passesEmptyString() {
-    lenient().when(clientRepository.search(1L, "", null, null)).thenReturn(List.of());
+  void search_blankQuery_normalizedToNull() {
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), eq(null), eq(null), eq(null), eq(null), eq(Pageable.unpaged())))
+        .thenReturn(new PageImpl<>(List.of()));
 
-    var results = clientService.search(1L, null);
+    var results = clientService.search(1L, "   ", null, null, null);
     assertThat(results).isEmpty();
+  }
+
+  @Test
+  void searchPaged_trimsQuery_andPassesFilters() {
+    Client c = buildClient(10L, "Ana García", "0981000001", null, "80000005-6");
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), eq("ana"), eq(true), eq(true), eq(null), any(PageRequest.class)))
+        .thenReturn(new PageImpl<>(List.of(c), PageRequest.of(0, 10), 1));
+
+    var response = clientService.searchPaged(1L, "  ana ", true, true, null, 0, 10);
+
+    assertThat(response.content()).hasSize(1);
+    assertThat(response.content().get(0).fullName()).isEqualTo("Ana García");
+    assertThat(response.page()).isEqualTo(0);
+    assertThat(response.size()).isEqualTo(10);
+    assertThat(response.totalElements()).isEqualTo(1);
+    assertThat(response.totalPages()).isEqualTo(1);
+  }
+
+  @Test
+  void searchPaged_clampsSizeTo200() {
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), eq(null), eq(null), eq(null), eq(null), any(PageRequest.class)))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 200), 0));
+
+    clientService.searchPaged(1L, null, null, null, null, 0, 5000);
+
+    verify(clientRepository)
+        .findByTenantFilteredPaged(
+            eq(1L), eq(null), eq(null), eq(null), eq(null), eq(PageRequest.of(0, 200)));
+  }
+
+  @Test
+  void searchPaged_clampsSizeToAtLeastOne() {
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), eq(null), eq(null), eq(null), eq(null), any(PageRequest.class)))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 1), 0));
+
+    clientService.searchPaged(1L, null, null, null, null, 0, 0);
+
+    verify(clientRepository)
+        .findByTenantFilteredPaged(
+            eq(1L), eq(null), eq(null), eq(null), eq(null), eq(PageRequest.of(0, 1)));
   }
 
   @Test

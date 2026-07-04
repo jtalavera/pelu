@@ -33,6 +33,10 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await expect(svcDialog.getByLabel("Price")).toHaveValue("50.000");
     await svcDialog.getByLabel("Duration (minutes)").fill("45");
     await svcDialog.getByRole("button", { name: "Save" }).click();
+    await expect(svcDialog).not.toBeVisible();
+    // Search by name so the new service is on page 1 regardless of total count (server-side pagination)
+    await page.getByPlaceholder(/search by name/i).fill(svcName);
+    await page.waitForTimeout(600);
     await expect(page.getByText(svcName, { exact: true }).first()).toBeVisible();
     const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
     await expect(svcRow.getByText("Gs. 50.000", { exact: true })).toBeVisible();
@@ -98,5 +102,33 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await page.getByPlaceholder("Search by name or category…").fill("zzzznonexistent");
     await expect(page.getByText("No rows match your filter.")).toBeVisible();
     await page.getByPlaceholder("Search by name or category…").clear();
+  });
+
+  test("Issue #68 · filtros de categoría aparecen antes que los de estado, y el botón 'Todos' dice 'All statuses'", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/services");
+
+    const filtersContainer = page.locator('[data-tour="services-filters"]');
+    await expect(filtersContainer).toBeVisible();
+
+    // The status "all" filter must read "All statuses", not just "All"
+    await expect(
+      filtersContainer.getByRole("button", { name: "All statuses", exact: true }),
+    ).toBeVisible();
+
+    // Category filter buttons must render before the status filter group in DOM order
+    const catBeforeStatus = await filtersContainer.evaluate((container) => {
+      const catBtn = Array.from(container.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "All categories",
+      );
+      const statusGroup = container.querySelector('[role="group"]');
+      if (!catBtn || !statusGroup) return false;
+      return (
+        (catBtn.compareDocumentPosition(statusGroup) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      );
+    });
+    expect(catBeforeStatus).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.AuthService;
 import com.cursorpoc.backend.service.ProfessionalDirectoryService;
 import com.cursorpoc.backend.web.dto.GrantAccessResponse;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalScheduleRequest;
 import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
@@ -12,6 +13,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,12 +23,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/professionals")
 public class ProfessionalController {
+
+  private static final Logger log = LoggerFactory.getLogger(ProfessionalController.class);
 
   private final ProfessionalDirectoryService professionalDirectoryService;
   private final AuthService authService;
@@ -40,6 +46,35 @@ public class ProfessionalController {
   public List<ProfessionalResponse> list(@AuthenticationPrincipal FemmeUserPrincipal principal) {
     requirePrincipal(principal);
     return professionalDirectoryService.list(principal.getTenantId());
+  }
+
+  @GetMapping("/page")
+  public PageResponse<ProfessionalResponse> listPaged(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(name = "q", required = false) String q,
+      @RequestParam(name = "page", defaultValue = "0") int page,
+      @RequestParam(name = "size", defaultValue = "10") int size) {
+    requirePrincipal(principal);
+    log.info(
+        "GET /api/professionals/page tenantId={} page={} size={}",
+        principal.getTenantId(),
+        page,
+        size);
+    try {
+      PageResponse<ProfessionalResponse> response =
+          professionalDirectoryService.listPaged(principal.getTenantId(), q, page, size);
+      log.info(
+          "GET /api/professionals/page tenantId={} status=200 total={}",
+          principal.getTenantId(),
+          response.totalElements());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/professionals/page tenantId={} status={}",
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 
   @PostMapping

@@ -1,15 +1,29 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, KebabMenu, Label, Modal, Spinner, Text } from "@design-system";
-import { femmeJson, femmePostJson } from "../api/femmeClient";
+import {
+  Alert,
+  Button,
+  Input,
+  KebabMenu,
+  Label,
+  Modal,
+  PageSizeSelect,
+  Pagination,
+  Spinner,
+  Text,
+} from "@design-system";
+import { femmePostJson } from "../api/femmeClient";
+import { listClientsAll, listClientsPaged, type ClientListFilterParams } from "../api/clients";
+import type { PageResponse } from "../api/pagination";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchInput } from "../components/ui/SearchInput";
-import { useFilteredList } from "../hooks/useFilteredList";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
+import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
+import { isValidEmail } from "../lib/validateEmail";
 import { validateRuc } from "../lib/validateRuc";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
@@ -30,6 +44,13 @@ type Client = {
 };
 
 type FilterKey = "all" | "active" | "ruc" | "new";
+
+function pillFilterParams(filter: FilterKey): ClientListFilterParams {
+  if (filter === "active") return { active: true };
+  if (filter === "ruc") return { withRuc: true };
+  if (filter === "new") return { isNew: true };
+  return {};
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -70,8 +91,6 @@ function exportCsv(clients: Client[]) {
   URL.revokeObjectURL(url);
 }
 
-const PAGE_SIZE = 20;
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ClientsPage() {
@@ -84,10 +103,14 @@ export default function ClientsPage() {
 
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
-  const [clients, setClients]   = useState<Client[]>([]);
+  const [pageData, setPageData] = useState<PageResponse<Client> | null>(null);
 
   const [filter, setFilter]     = useState<FilterKey>("all");
-  const [page, setPage]         = useState(1);
+  const [listQuery, setListQuery] = useState("");
+  const [page, setPage]         = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [reloadTick, setReloadTick] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
@@ -98,27 +121,47 @@ export default function ClientsPage() {
   const [phone, setPhone]           = useState("");
   const [email, setEmail]           = useState("");
   const [ruc, setRuc]               = useState("");
-  const [fieldError, setFieldError] = useState<{ fullName?: string; ruc?: string } | null>(null);
+  const [fieldError, setFieldError] = useState<{
+    fullName?: string;
+    ruc?: string;
+    phone?: string;
+    email?: string;
+  } | null>(null);
   const [saveError, setSaveError]   = useState<string | null>(null);
   const [saving, setSaving]         = useState(false);
 
-  // ── Load all ────────────────────────────────────────────────────────────────
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await femmeJson<Client[]>("/api/clients");
-      setClients(Array.isArray(data) ? data : []);
-    } catch {
-      setError(t("femme.clients.loadError"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+  // ── Server-side filtered + paged loader ────────────────────────────────────
+  const loadPage = useCallback(
+    async (f: FilterKey, q: string, pageNum: number, size: number) => {
+      setError(null);
+      try {
+        const data = await listClientsPaged<Client>({
+          ...pillFilterParams(f),
+          q: q.trim() || undefined,
+          page: pageNum,
+          size,
+        });
+        setPageData(data);
+      } catch {
+        setError(t("femme.clients.loadError"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      void loadPage(filter, listQuery, page, pageSize);
+    }, 350);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [filter, listQuery, page, pageSize, reloadTick, loadPage]);
+
+  const reload = useCallback(() => setReloadTick((n) => n + 1), []);
 
   // Open "new client" from other flows (e.g. billing → create client)
   const [returnAfterCreate, setReturnAfterCreate] = useState<{
@@ -151,11 +194,6 @@ export default function ClientsPage() {
     }
   }, [location.state, location.pathname, navigate]);
 
-  // Reset page when filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [filter]);
-
   // ── New client modal ────────────────────────────────────────────────────────
   function openNew() {
     setFullName("");
@@ -173,6 +211,10 @@ export default function ClientsPage() {
     const nextErr: NonNullable<typeof fieldError> = {};
     if (!fullName.trim()) nextErr.fullName = t("femme.clients.fullNameRequired");
     if (ruc.trim() && !validateRuc(ruc)) nextErr.ruc = t("femme.clients.rucInvalid");
+    if (phone.trim() && !isCompleteParaguayPhone(phone.trim()))
+      nextErr.phone = t("femme.clients.phoneInvalid");
+    if (email.trim() && !isValidEmail(email.trim()))
+      nextErr.email = t("femme.clients.emailInvalid");
     if (Object.keys(nextErr).length > 0) {
       setFieldError(nextErr);
       return;
@@ -203,7 +245,7 @@ export default function ClientsPage() {
         });
         return;
       }
-      await load();
+      reload();
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
     } finally {
@@ -217,7 +259,7 @@ export default function ClientsPage() {
     try {
       await femmePostJson<Client>(`/api/clients/${deactivateTarget.id}/deactivate`, {});
       setDeactivateTarget(null);
-      await load();
+      reload();
     } catch (e) {
       setError(translateApiError(e, t, "femme.clients.saveError"));
       setDeactivateTarget(null);
@@ -227,45 +269,42 @@ export default function ClientsPage() {
   async function activateClientRow(client: Client) {
     try {
       await femmePostJson<Client>(`/api/clients/${client.id}/activate`, {});
-      await load();
+      reload();
     } catch (e) {
       setError(translateApiError(e, t, "femme.clients.saveError"));
     }
   }
 
-  // ── Filter pills + real-time search (client-side) + paginated ───────────────
-  const filteredByPills = useMemo(() => {
-    let list = clients;
-    if (filter === "active") list = list.filter((c) => c.active);
-    if (filter === "ruc") list = list.filter((c) => !!c.ruc);
-    if (filter === "new") {
-      const now = new Date();
-      list = list.filter((c) => {
-        if (c.createdAt) {
-          const d = new Date(c.createdAt);
-          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-        }
-        return c.visitCount === 0;
+  // ── Filter pills + search: applied server-side ──────────────────────────────
+  function handlePillChange(next: FilterKey) {
+    setFilter(next);
+    setPage(0);
+  }
+
+  function handleSearchChange(next: string) {
+    setListQuery(next);
+    setPage(0);
+  }
+
+  const pageClients = pageData?.content ?? [];
+  const totalElements = pageData?.totalElements ?? 0;
+  const totalPages = pageData?.totalPages ?? 0;
+  const hasActiveFilters = filter !== "all" || listQuery.trim().length > 0;
+  const showingFrom = totalElements === 0 ? 0 : page * pageSize + 1;
+  const showingTo = Math.min((page + 1) * pageSize, totalElements);
+
+  // Exports every client matching the current filters, not just the visible page
+  async function exportFilteredCsv() {
+    try {
+      const all = await listClientsAll<Client>({
+        ...pillFilterParams(filter),
+        q: listQuery.trim() || undefined,
       });
+      exportCsv(Array.isArray(all) ? all : []);
+    } catch {
+      setError(t("femme.clients.loadError"));
     }
-    return list;
-  }, [clients, filter]);
-
-  const { query: listQuery, setQuery: setListQuery, filtered: searchFiltered, highlight } =
-    useFilteredList<Client>({
-      items: filteredByPills,
-      fields: ["fullName", "phone", "email", "ruc"],
-    });
-
-  useEffect(() => {
-    setPage(1);
-  }, [listQuery]);
-
-  const totalPages = Math.max(1, Math.ceil(searchFiltered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageClients = searchFiltered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  const fromIdx = searchFiltered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
-  const toIdx = Math.min(safePage * PAGE_SIZE, searchFiltered.length);
+  }
 
   // ── Shared styles ───────────────────────────────────────────────────────────
   const primaryBtn: React.CSSProperties = {
@@ -346,11 +385,11 @@ export default function ClientsPage() {
             {t("femme.clients.title")}
           </h1>
           <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-            {t("femme.clients.subtitle", { count: clients.length })}
+            {t("femme.clients.subtitle", { count: totalElements })}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="button" style={ghostBtn} onClick={() => exportCsv(searchFiltered)}>
+          <button type="button" style={ghostBtn} onClick={() => void exportFilteredCsv()}>
             {t("femme.clients.export")}
           </button>
           <button data-tour="clients-new" type="button" style={primaryBtn} onClick={openNew}>
@@ -371,10 +410,10 @@ export default function ClientsPage() {
         <SearchInput
           id="clients-inline-search"
           value={listQuery}
-          onChange={setListQuery}
+          onChange={handleSearchChange}
           placeholder={t("femme.clients.searchInlinePlaceholder")}
-          resultCount={searchFiltered.length}
-          totalCount={filteredByPills.length}
+          resultCount={totalElements}
+          totalCount={totalElements}
         />
 
         {/* Filter pills */}
@@ -385,7 +424,7 @@ export default function ClientsPage() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setFilter(key)}
+                onClick={() => handlePillChange(key)}
                 aria-pressed={isActive}
                 style={{
                   padding: "5px 12px",
@@ -450,7 +489,7 @@ export default function ClientsPage() {
                       color: "var(--color-ink-3)",
                     }}
                   >
-                    {clients.length === 0 ? t("femme.clients.emptyTitle") : t("femme.clients.emptySearch")}
+                    {hasActiveFilters ? t("femme.clients.emptySearch") : t("femme.clients.emptyTitle")}
                   </td>
                 </tr>
               ) : (
@@ -503,7 +542,7 @@ export default function ClientsPage() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {highlight(client.fullName) as ReactNode}
+                              {client.fullName}
                             </div>
                             {client.email ? (
                               <div
@@ -515,7 +554,7 @@ export default function ClientsPage() {
                                   whiteSpace: "nowrap",
                                 }}
                               >
-                                {highlight(client.email) as ReactNode}
+                                {client.email}
                               </div>
                             ) : null}
                           </div>
@@ -523,7 +562,7 @@ export default function ClientsPage() {
                       </td>
 
                       <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                        {client.phone ? (highlight(client.phone) as ReactNode) : "—"}
+                        {client.phone ?? "—"}
                       </td>
 
                       <td style={tdStyle}>
@@ -535,7 +574,7 @@ export default function ClientsPage() {
                               color: "var(--color-ink-2)",
                             }}
                           >
-                            {highlight(client.ruc) as ReactNode}
+                            {client.ruc}
                           </span>
                         ) : (
                           <span style={{ color: "var(--color-ink-3)" }}>
@@ -614,88 +653,31 @@ export default function ClientsPage() {
           </table>
         </div>
 
-        {/* ── Pagination ── */}
-        {searchFiltered.length > 0 && (
-          <div
-            style={{
-              background: "var(--color-stone)",
-              borderTop: "var(--border-default)",
-              padding: "9px 12px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ fontSize: 11, color: "var(--color-ink-3)" }}>
-              {t("femme.clients.paginationInfo", {
-                from: fromIdx,
-                to: toIdx,
-                total: searchFiltered.length,
-              })}
-            </span>
-
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <button
-                type="button"
-                disabled={safePage === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                style={{
-                  padding: "3px 9px",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: 11,
-                  border: "var(--border-default)",
-                  background: "var(--color-white)",
-                  color: "var(--color-ink-2)",
-                  cursor: safePage === 1 ? "default" : "pointer",
-                  opacity: safePage === 1 ? 0.4 : 1,
-                }}
-              >
-                {t("femme.clients.prevPage")}
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPage(p)}
-                  style={{
-                    padding: "3px 9px",
-                    borderRadius: "var(--radius-sm)",
-                    fontSize: 11,
-                    border: p === safePage ? "1px solid var(--color-rose)" : "var(--border-default)",
-                    background: p === safePage ? "var(--color-rose)" : "var(--color-white)",
-                    color: p === safePage ? "var(--color-on-primary)" : "var(--color-ink-2)",
-                    cursor: "pointer",
-                    fontWeight: p === safePage ? 500 : 400,
-                    minWidth: 28,
-                  }}
-                >
-                  {p}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                disabled={safePage === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                style={{
-                  padding: "3px 9px",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: 11,
-                  border: "var(--border-default)",
-                  background: "var(--color-white)",
-                  color: "var(--color-ink-2)",
-                  cursor: safePage === totalPages ? "default" : "pointer",
-                  opacity: safePage === totalPages ? 0.4 : 1,
-                }}
-              >
-                {t("femme.clients.nextPage")}
-              </button>
-            </div>
-          </div>
-        )}
+        {/* ── Pagination footer ── */}
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 px-3 py-2"
+          style={{ background: "var(--color-stone)", borderTop: "var(--border-default)" }}
+        >
+          <PageSizeSelect
+            value={pageSize}
+            onChange={(s) => { setPageSize(s); setPage(0); }}
+            label={t("femme.pagination.rowsPerPage")}
+          />
+          <Text variant="small" className="text-[var(--color-ink-3)]">
+            {t("femme.pagination.showingRange", {
+              from: showingFrom,
+              to: showingTo,
+              total: totalElements,
+            })}
+          </Text>
+          <Pagination
+            page={page + 1}
+            pageCount={Math.max(1, totalPages)}
+            onPageChange={(p) => setPage(p - 1)}
+            previousLabel={t("femme.pagination.previous")}
+            nextLabel={t("femme.pagination.next")}
+          />
+        </div>
       </div>
 
       {/* ── New client modal ── */}
@@ -729,10 +711,27 @@ export default function ClientsPage() {
             <Label htmlFor="client-phone">{t("femme.clients.phone")}</Label>
             <Input
               id="client-phone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
               inputMode="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => {
+                setPhone(formatParaguayPhone(e.target.value));
+                setFieldError((prev) => (prev ? { ...prev, phone: undefined } : prev));
+              }}
+              onBlur={() => {
+                const trimmed = phone.trim();
+                if (trimmed && !isCompleteParaguayPhone(trimmed)) {
+                  setFieldError((prev) => ({
+                    ...(prev ?? {}),
+                    phone: t("femme.clients.phoneInvalid"),
+                  }));
+                }
+              }}
+              placeholder={t("femme.clients.phonePlaceholder")}
+              aria-invalid={fieldError?.phone ? "true" : "false"}
+              aria-describedby={fieldError?.phone ? "client-phone-err" : undefined}
             />
+            <FieldValidationError id="client-phone-err">{fieldError?.phone}</FieldValidationError>
           </div>
 
           <div>
@@ -740,9 +739,27 @@ export default function ClientsPage() {
             <Input
               id="client-email"
               type="email"
+              inputMode="email"
+              autoComplete="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setFieldError((prev) => (prev ? { ...prev, email: undefined } : prev));
+              }}
+              onBlur={() => {
+                const trimmed = email.trim();
+                if (trimmed && !isValidEmail(trimmed)) {
+                  setFieldError((prev) => ({
+                    ...(prev ?? {}),
+                    email: t("femme.clients.emailInvalid"),
+                  }));
+                }
+              }}
+              placeholder={t("femme.clients.emailPlaceholder")}
+              aria-invalid={fieldError?.email ? "true" : "false"}
+              aria-describedby={fieldError?.email ? "client-email-err" : undefined}
             />
+            <FieldValidationError id="client-email-err">{fieldError?.email}</FieldValidationError>
           </div>
 
           <div>

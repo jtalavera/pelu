@@ -1,4 +1,5 @@
 import { BrowserRouter } from "react-router-dom";
+import { SyncDocumentTitle } from "./components/SyncDocumentTitle";
 import { SyncHtmlLang } from "./components/SyncHtmlLang";
 import { ThemeContext } from "./context/ThemeContext";
 import { useTheme } from "./hooks/useTheme";
@@ -13,6 +14,7 @@ export function App() {
       <BrowserRouter>
         <TourProvider>
           <SyncHtmlLang />
+          <SyncDocumentTitle />
           <AppRoutes />
         </TourProvider>
       </BrowserRouter>

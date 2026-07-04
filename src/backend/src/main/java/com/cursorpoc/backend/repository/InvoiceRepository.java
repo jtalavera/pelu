@@ -29,7 +29,10 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
       AND (:status IS NULL OR i.status = :status)
-      AND (:q IS NULL OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%')))
+      AND (:q IS NULL
+           OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
+           OR (:qInvoiceNumber IS NOT NULL AND i.invoiceNumber = :qInvoiceNumber))
       ORDER BY i.issuedAt DESC
       """)
   Page<Invoice> findByTenantWithFiltersPaged(
@@ -39,6 +42,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("clientId") Long clientId,
       @Param("status") InvoiceStatus status,
       @Param("q") String q,
+      @Param("qInvoiceNumber") Integer qInvoiceNumber,
       Pageable pageable);
 
   @Query(
@@ -49,14 +53,18 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
-      AND (:q IS NULL OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%')))
+      AND (:q IS NULL
+           OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
+           OR (:qInvoiceNumber IS NOT NULL AND i.invoiceNumber = :qInvoiceNumber))
       """)
   BigDecimal sumIssuedTotalWithFilters(
       @Param("tenantId") Long tenantId,
       @Param("fromDate") Instant fromDate,
       @Param("toDate") Instant toDate,
       @Param("clientId") Long clientId,
-      @Param("q") String q);
+      @Param("q") String q,
+      @Param("qInvoiceNumber") Integer qInvoiceNumber);
 
   @Query(
       """
