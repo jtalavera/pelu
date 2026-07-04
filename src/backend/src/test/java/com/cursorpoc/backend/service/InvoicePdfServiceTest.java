@@ -599,6 +599,17 @@ class InvoicePdfServiceTest {
     assertThat(text).doesNotContain("0981-123456");
   }
 
+  // ─── Issue #84: invoice PDF filename ──────────────────────────────────────
+
+  /** Filename must be FACTURA-<yyyymmdd>-<timbrado>-<numero de comprobante>.pdf. */
+  @Test
+  void buildFilename_matchesRequiredFormat() {
+    InvoicePdfService svc = newService();
+    Invoice invoice = baseInvoice(List.of(singleLine()), List.of());
+
+    assertThat(svc.buildFilename(invoice)).isEqualTo("FACTURA-20260407-SET-1-0000007.pdf");
+  }
+
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   private static InvoiceLine singleLine() {
