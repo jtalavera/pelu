@@ -21,8 +21,8 @@ If a plain-text description was provided, treat it as the full spec and derive a
 ## 2 - Branch setup
 
 ```bash
-git checkout main
-git pull origin main
+git checkout develop
+git pull origin develop
 git checkout -b feat/<HU-ID>_<short-slug>
 ```
 
@@ -81,10 +81,12 @@ git push -u origin feat/<HU-ID>_<short-slug>
 
 ```bash
 gh pr create \
-  --base main \
+  --base develop \
   --title "feat(<HU-ID>): <summary>" \
   --body "..."
 ```
+
+Only target `--base main` if the user has explicitly asked for a PR into `main` (e.g. a release cut) — the default for a user story is `develop`.
 
 PR body must include:
 - A **Summary** section (bullet list of what was built, referencing acceptance criteria)

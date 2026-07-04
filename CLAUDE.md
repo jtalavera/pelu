@@ -135,7 +135,7 @@ Wire search/filter fields with `<form onSubmit>` + `type="submit"` button so pre
 
 ### Branching
 
-Trunk-based development off `main`. Branch names: `<type>/<issue-number>_short-description` (e.g. `feat/HU-07_agendar-turno`). Types: `feat`, `bugfix`, `chore`, `docs`, `refactor`, `test`.
+Gitflow: `develop` is the integration branch, `main` is the release branch. Cut feature/bugfix branches from `develop`, named `<type>/<issue-number>_short-description` (e.g. `feat/HU-07_agendar-turno`). Types: `feat`, `bugfix`, `chore`, `docs`, `refactor`, `test`. PRs from these branches target `develop`. Only open a PR into `main` when the user explicitly asks for one (e.g. a release cut).
 
 ### Automated tests
 EVERY acceptance criteria of EVERY user story MUST be covered by an automated test implemented with playwright.
