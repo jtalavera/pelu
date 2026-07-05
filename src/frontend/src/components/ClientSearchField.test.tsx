@@ -149,4 +149,27 @@ describe("ClientSearchField", () => {
     await screen.findByText("Ana García", {}, { timeout: 1000 });
     expect(screen.getByRole("button", { name: /create new client/i })).toBeTruthy();
   });
+
+  it("lists 'create new' and 'occasional client' before real client results", async () => {
+    femmeJson.mockResolvedValue(sampleClients);
+    const onCreateNew = vi.fn();
+    renderField(vi.fn(), null, onCreateNew);
+    const input = screen.getByRole("combobox");
+    await userEvent.click(input);
+    await screen.findByText("Ana García", {}, { timeout: 1000 });
+
+    const optionLabels = screen
+      .getAllByRole("option", { hidden: true })
+      .map((el) => el.textContent ?? "");
+    const buttonLabels = screen.getAllByRole("button").map((el) => el.textContent ?? "");
+    const createNewIdx = buttonLabels.findIndex((t) => /create new client/i.test(t));
+    const occasionalIdx = buttonLabels.findIndex((t) => /occasional client/i.test(t));
+    const firstClientIdx = buttonLabels.findIndex((t) => /Ana García/.test(t));
+
+    expect(createNewIdx).toBeGreaterThanOrEqual(0);
+    expect(occasionalIdx).toBeGreaterThanOrEqual(0);
+    expect(firstClientIdx).toBeGreaterThan(createNewIdx);
+    expect(firstClientIdx).toBeGreaterThan(occasionalIdx);
+    expect(optionLabels).toHaveLength(sampleClients.length);
+  });
 });
