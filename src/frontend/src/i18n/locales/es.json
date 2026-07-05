@@ -384,7 +384,6 @@
         "clientDisplayNamePlaceholder": "CONSUMIDOR FINAL",
         "clientRucOverride": "RUC del cliente (solo para esta factura)",
         "clientRucOverridePlaceholder": "ej.: 80000005-6",
-        "clientDisplayNameRequired": "Ingresá el nombre del cliente para este comprobante.",
         "clientProfileSyncTitle": "No se actualizó el perfil del cliente",
         "clientProfileSyncFailed": "El comprobante se guardó, pero no se pudo actualizar el perfil del cliente. Podés corregirlo en Clientes.",
         "linesSection": "Ítems",

@@ -675,15 +675,9 @@ function NewInvoiceTab({
    *   2. At least one service line with serviceId + valid unit price.
    *   3. At least one payment with method + valid positive amount.
    */
-  const hasClientData = (() => {
-    if (clientSelection?.type === "client") {
-      return clientDisplayName.trim().length > 0;
-    }
-    if (clientSelection?.type === "occasional") {
-      return true;
-    }
-    return false;
-  })();
+  // Issue #96: a selected client's name/RUC may be left blank on purpose (the PDF then prints
+  // "Sin nombre" and a blank RUC) — selecting a client or marking it occasional is enough.
+  const hasClientData = clientSelection?.type === "client" || clientSelection?.type === "occasional";
   const hasServiceLine = lines.some((l) => {
     const price = parseMaskedMoney(l.unitPrice);
     return l.serviceId.trim() !== "" && Number.isFinite(price) && price > 0;
@@ -884,9 +878,8 @@ function NewInvoiceTab({
     });
 
     if (clientSelection?.type === "client") {
-      if (!clientDisplayName.trim()) {
-        errors.push(t("femme.billing.invoice.clientDisplayNameRequired"));
-      }
+      // Issue #96: name/RUC may be left blank on purpose — the PDF then prints "Sin nombre"
+      // and a blank RUC instead of blocking submission.
       const rucTrim = clientRucOverride.trim();
       if (rucTrim && !validateRuc(rucTrim)) {
         errors.push(t("femme.clients.rucInvalid"));
@@ -915,7 +908,6 @@ function NewInvoiceTab({
       // Build an ordered list of candidate field IDs and focus the first with an error
       const firstErrorId = (() => {
         if (clientSelection?.type === "client") {
-          if (!clientDisplayName.trim()) return "client-display-name";
           if (clientRucOverride.trim() && !validateRuc(clientRucOverride.trim())) return "client-ruc";
         }
         for (let i = 0; i < lines.length; i++) {
