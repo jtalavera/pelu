@@ -71,7 +71,7 @@ public class ClientService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
-    if (phone != null && clientRepository.findByTenantIdAndPhone(tenantId, phone).isPresent()) {
+    if (phone != null && phoneDuplicateExists(tenantId, phone, null)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
     }
     if (email != null && clientRepository.findByTenantIdAndEmail(tenantId, email).isPresent()) {
@@ -127,7 +127,7 @@ public class ClientService {
 
     if (phone != null
         && !phone.equals(client.getPhone())
-        && clientRepository.findByTenantIdAndPhone(tenantId, phone).isPresent()) {
+        && phoneDuplicateExists(tenantId, phone, client.getId())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
     }
     if (email != null
@@ -176,6 +176,25 @@ public class ClientService {
   private static String blankToNull(String value) {
     if (value == null || value.isBlank()) return null;
     return value.trim();
+  }
+
+  /**
+   * Phone duplicate check compares digits only: clients may be created with formatted numbers (e.g.
+   * "(0981) 123-456") or raw digits (e.g. via API integrations), and both represent the same phone
+   * number.
+   */
+  private boolean phoneDuplicateExists(long tenantId, String phone, Long excludeClientId) {
+    String targetDigits = digitsOnly(phone);
+    if (targetDigits == null) return false;
+    return clientRepository.findByTenant_Id(tenantId).stream()
+        .filter(c -> excludeClientId == null || !c.getId().equals(excludeClientId))
+        .anyMatch(c -> targetDigits.equals(digitsOnly(c.getPhone())));
+  }
+
+  private static String digitsOnly(String value) {
+    if (value == null) return null;
+    String digits = value.replaceAll("\\D+", "");
+    return digits.isEmpty() ? null : digits;
   }
 
   static ClientResponse toResponse(Client c) {

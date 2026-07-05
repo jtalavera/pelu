@@ -10,6 +10,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import {
   bookingAppointmentDialog,
+  ensureCalendarShowsClientCard,
   fillAppointmentDateIso,
   fillAppointmentTime,
   localDatePlusDays,
@@ -49,7 +50,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     );
     await pickSearchableOption(page, "Client", client.fullName, new RegExp(client.fullName));
     await dlg.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: new RegExp(client.fullName) })).toBeVisible();
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
   });
 
   test("HU-07 · 4 estado inicial Pendiente en el detalle", async ({ page, request }) => {
@@ -145,6 +146,6 @@ test.describe("HU-07 · Agendar un turno", () => {
     );
     await pickSearchableOption(page, "Client", client.fullName, new RegExp(client.fullName));
     await dlg.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: new RegExp(client.fullName) })).toBeVisible();
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
   });
 });

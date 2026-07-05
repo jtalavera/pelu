@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createAppointmentApi, calendarVisibleWeekSlotIso, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { ensureCalendarShowsClientCard } from "../fixtures/ui";
 
 test.describe("HU-08 · Cambiar estado de un turno", () => {
   test("HU-08 · 1 y 2 cambiar estado desde detalle a Completado", async ({ page, request }) => {
@@ -16,6 +17,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
     await page.locator("#status-select").selectOption("COMPLETED");
@@ -36,6 +38,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
     await page.locator("#status-select").selectOption("CANCELLED");
@@ -58,6 +61,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
     await page.locator("#status-select").selectOption("COMPLETED");

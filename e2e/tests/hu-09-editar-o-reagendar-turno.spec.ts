@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { createAppointmentApi, calendarVisibleWeekSlotIso, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { bookingAppointmentDialog, fillAppointmentTime } from "../fixtures/ui";
+import {
+  bookingAppointmentDialog,
+  ensureCalendarShowsClientCard,
+  fillAppointmentTime,
+} from "../fixtures/ui";
 
 test.describe("HU-09 · Editar o reagendar turno", () => {
   test("HU-09 · 1 y 3 editar hora y ver cambio en la grilla", async ({ page, request }) => {
@@ -17,6 +21,7 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Edit appointment" }).click();
     const dlg = bookingAppointmentDialog(page);
@@ -38,6 +43,7 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
     await page.locator("#status-select").selectOption("COMPLETED");

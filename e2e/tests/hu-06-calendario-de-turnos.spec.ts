@@ -8,7 +8,7 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { pickSearchableOption } from "../fixtures/ui";
+import { ensureCalendarShowsClientCard, pickSearchableOption } from "../fixtures/ui";
 
 test.describe("HU-06 · Calendario de turnos", () => {
   test("HU-06 · 1 y · 3 vista semanal y navegación de semanas", async ({ page }) => {
@@ -43,6 +43,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar");
 
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     const appointmentButton = page.getByRole("button", { name: new RegExp(client.fullName) });
     await expect(appointmentButton).toBeVisible();
     await expect(appointmentButton.getByText(/E2E Svc /)).toBeVisible();
@@ -71,7 +72,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
     await pickSearchableOption(page, "Filter by professional", "E2E Prof B", /E2E Prof B/);
     await expect(page.getByRole("button", { name: client.fullName, exact: false })).toHaveCount(0);
     await pickSearchableOption(page, "Filter by professional", "All", /All professionals/);
-    await expect(page.getByRole("button", { name: client.fullName, exact: false })).toBeVisible();
+    await ensureCalendarShowsClientCard(page, client.fullName);
   });
 
   test("HU-06 · 5 clic en tarjeta abre detalle", async ({ page, request }) => {
@@ -87,6 +88,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    await ensureCalendarShowsClientCard(page, client.fullName);
     await page.getByRole("button", { name: client.fullName, exact: false }).click();
     await expect(page.getByRole("heading", { name: "Appointment detail" })).toBeVisible();
     await expect(page.getByText("Client", { exact: true })).toBeVisible();

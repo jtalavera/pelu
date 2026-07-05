@@ -11,7 +11,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
-import { pickSearchableOption } from "../fixtures/ui";
+import { ensureCalendarShowsAppointmentByTestId, pickSearchableOption } from "../fixtures/ui";
 
 test.describe("HU-28 · Fixes varios", () => {
   // AC1 — Login subtitle
@@ -273,7 +273,7 @@ test.describe("HU-28 · Fixes varios", () => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     // Create a PENDING appointment
-    await apiPostJson(request, token, "/api/appointments", {
+    const appt = await apiPostJson<{ id: number }>(request, token, "/api/appointments", {
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
       clientId: null,
@@ -281,9 +281,9 @@ test.describe("HU-28 · Fixes varios", () => {
     });
     await loginAsDemo(page);
     await page.goto("/app/calendar");
-    await expect(page.locator("[data-testid^='calendar-appt-']").first()).toBeVisible({ timeout: 15_000 });
+    await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
     // Check PENDING block has dotted border style (status is reflected via inline borderLeft style)
-    const pendingBlock = page.locator("[data-testid^='calendar-appt-']").first();
+    const pendingBlock = page.getByTestId(`calendar-appt-${appt.id}`);
     if (await pendingBlock.isVisible({ timeout: 3_000 }).catch(() => false)) {
       const borderStyle = await pendingBlock.evaluate(
         (el) => window.getComputedStyle(el).borderLeftStyle,
