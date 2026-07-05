@@ -337,7 +337,8 @@ class InvoicePdfServiceTest {
     // 2 item rows + 1 global discount row
     assertThat(rows).hasSize(3);
     InvoicePdfService.DetailRow global = rows.get(2);
-    assertThat(global.description()).contains("global");
+    // Issue #94: fixed-amount global discount prints a plain label, not "Dto. global Dto. .".
+    assertThat(global.description()).isEqualTo("Dto. global Monto fijo");
     BigDecimal sum = BigDecimal.ZERO;
     for (int c = 0; c < 3; c++) {
       if (global.columnAmounts()[c] != null) {
@@ -348,6 +349,24 @@ class InvoicePdfServiceTest {
     // 40/60 split of 1000 → 400 / 600
     assertThat(global.columnAmounts()[1]).isEqualByComparingTo("-400");
     assertThat(global.columnAmounts()[2]).isEqualByComparingTo("-600");
+  }
+
+  /**
+   * Issue #94: a percentage global discount prints "Dto. global X%", not a doubled "Dto." prefix.
+   */
+  @Test
+  void buildDetailRows_globalDiscountPercent_printsPercentageWithoutDoublePrefix() {
+    InvoiceLine iva10 = line("B", 1, "10000", "10", DiscountType.NONE, null, "10000");
+    Invoice invoice = mock(Invoice.class);
+    when(invoice.getLines()).thenReturn(List.of(iva10));
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("10000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("9000")); // global discount 1000 (10%)
+    when(invoice.getDiscountType()).thenReturn(DiscountType.PERCENT);
+    when(invoice.getDiscountValue()).thenReturn(new BigDecimal("10"));
+
+    List<InvoicePdfService.DetailRow> rows = InvoicePdfService.buildDetailRows(invoice);
+    InvoicePdfService.DetailRow global = rows.get(rows.size() - 1);
+    assertThat(global.description()).isEqualTo("Dto. global 10%");
   }
 
   @Test

@@ -112,6 +112,12 @@ public class InvoicePdfService {
   /** Issue #90: max characters printed for a detail row description; longer text is truncated. */
   static final int DESC_MAX_CHARS_PER_LINE = 18;
 
+  /**
+   * Issue #94: the global-discount row has no unit price, freeing up horizontal room before the tax
+   * columns — enough to print "Dto. global Monto fijo" (22 chars) without truncation.
+   */
+  static final int GLOBAL_DISCOUNT_DESC_MAX_CHARS = 24;
+
   // --- Subtotals row ---
   static final float L_Y_SUBTOTALS = 114.7f;
   static final float R_Y_SUBTOTALS = 109.73f;
@@ -308,7 +314,8 @@ public class InvoicePdfService {
       if (dr.quantity() != null) {
         cb.showTextAligned(Element.ALIGN_LEFT, String.valueOf(dr.quantity()), xQty, yTop, 0);
       }
-      cb.showTextAligned(descAlign, truncatedDescription(dr.description()), xDescAnchor, yTop, 0);
+      cb.showTextAligned(
+          descAlign, truncate(dr.description(), dr.maxDescChars()), xDescAnchor, yTop, 0);
       if (dr.unitPrice() != null) {
         cb.showTextAligned(unitAlign, formatMoneyGs(dr.unitPrice()), xUnitAnchor, yTop, 0);
       }
@@ -382,7 +389,16 @@ public class InvoicePdfService {
    * 5 %, 2 = IVA 10 %), with {@code null} for empty columns and negative values for discounts.
    */
   record DetailRow(
-      Integer quantity, String description, BigDecimal unitPrice, BigDecimal[] columnAmounts) {}
+      Integer quantity,
+      String description,
+      BigDecimal unitPrice,
+      BigDecimal[] columnAmounts,
+      int maxDescChars) {
+    DetailRow(
+        Integer quantity, String description, BigDecimal unitPrice, BigDecimal[] columnAmounts) {
+      this(quantity, description, unitPrice, columnAmounts, DESC_MAX_CHARS_PER_LINE);
+    }
+  }
 
   /** Tax column index for a line's snapshot rate: 2 = IVA 10 %, 1 = IVA 5 %, 0 = Exenta/other. */
   static int taxColumnIndex(BigDecimal taxRate) {
@@ -453,10 +469,10 @@ public class InvoicePdfService {
       rows.add(
           new DetailRow(
               null,
-              "Dto. global "
-                  + lineDiscountDescription(invoice.getDiscountType(), invoice.getDiscountValue()),
+              globalDiscountDescription(invoice.getDiscountType(), invoice.getDiscountValue()),
               null,
-              split));
+              split,
+              GLOBAL_DISCOUNT_DESC_MAX_CHARS));
     }
     return rows;
   }
@@ -470,6 +486,16 @@ public class InvoicePdfService {
       case PERCENT -> "Dto. " + value.stripTrailingZeros().toPlainString() + "%";
       case FIXED -> "Dto. " + formatMoneyGs(value) + " Gs.";
       case NONE -> "Dto.";
+    };
+  }
+
+  /** Issue #94: "Dto. global 10%" for PERCENT, "Dto. global Monto fijo" for FIXED. */
+  private static String globalDiscountDescription(DiscountType type, BigDecimal value) {
+    return switch (type) {
+      case PERCENT ->
+          "Dto. global " + (value != null ? value.stripTrailingZeros().toPlainString() : "0") + "%";
+      case FIXED -> "Dto. global Monto fijo";
+      case NONE -> "Dto. global";
     };
   }
 
