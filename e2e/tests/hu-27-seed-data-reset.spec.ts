@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { API_BASE, loginAsDemoApi } from "../fixtures/api";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "../fixtures/auth";
 
 test.describe("HU-27 · Seed data reset", () => {
   test.describe.configure({ mode: "serial" });
@@ -21,12 +22,12 @@ test.describe("HU-27 · Seed data reset", () => {
     expect(res.status()).not.toBe(403);
   });
 
-  test("HU-27 · AC3 admin@demo.com / Demo123! login works after reset", async ({ request }) => {
+  test("HU-27 · AC3 seeded admin login works after reset", async ({ request }) => {
     const res = await request.post(`${API_BASE}/api/admin/seed/reset`);
     expect(res.ok()).toBeTruthy();
 
     const loginRes = await request.post(`${API_BASE}/api/auth/login`, {
-      data: { email: "admin@demo.com", password: "Demo123!" },
+      data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
     });
     expect(loginRes.ok(), await loginRes.text()).toBeTruthy();
     const json = (await loginRes.json()) as { accessToken: string };

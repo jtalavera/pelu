@@ -8,7 +8,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
-import { loginAsDemo } from "../fixtures/auth";
+import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 import { ensureCalendarShowsAppointmentByTestId, pickSearchableOption } from "../fixtures/ui";
@@ -105,8 +105,8 @@ test.describe("HU-28 · Fixes varios", () => {
       localStorage.setItem("cursor_poc.i18n.language", "en");
     });
     await page.goto("/login");
-    await page.getByLabel("Email").fill("admin@demo.com");
-    await page.getByLabel("Password").fill("Demo123!");
+    await page.getByLabel("Email").fill(DEMO_EMAIL);
+    await page.getByLabel("Password").fill(DEMO_PASSWORD);
     const loginResp = page.waitForResponse((r) => {
       try { return new URL(r.url()).pathname.endsWith("/api/auth/login") && r.request().method() === "POST"; }
       catch { return false; }

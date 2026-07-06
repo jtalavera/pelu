@@ -1,4 +1,5 @@
 import { expect, type APIRequestContext } from "@playwright/test";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "./auth";
 
 /**
  * Backend origin for Playwright `request` calls.
@@ -14,7 +15,7 @@ export function apiBaseUrl(): string {
 
 export async function loginAsDemoApi(request: APIRequestContext): Promise<string> {
   const res = await request.post(`${API_BASE}/api/auth/login`, {
-    data: { email: "admin@demo.com", password: "Demo123!" },
+    data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
   });
   expect(res.ok(), await res.text()).toBeTruthy();
   const json = (await res.json()) as { accessToken: string };
