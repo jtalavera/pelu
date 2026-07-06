@@ -877,12 +877,15 @@ function NewInvoiceTab({
       }
     });
 
-    if (clientSelection?.type === "client") {
-      // Issue #96: name/RUC may be left blank on purpose — the PDF then prints "Sin nombre"
-      // and a blank RUC instead of blocking submission.
+    {
       const rucTrim = clientRucOverride.trim();
       if (rucTrim && !validateRuc(rucTrim)) {
         errors.push(t("femme.clients.rucInvalid"));
+      }
+      // Issue #101: name is required only when a RUC is provided; a blank RUC allows a blank
+      // name too (Issue #96: the PDF then prints "Sin nombre" for a selected client).
+      if (rucTrim && !clientDisplayName.trim()) {
+        errors.push(t("femme.billing.invoice.clientDisplayNameRequiredWithRuc"));
       }
     }
 
@@ -907,8 +910,10 @@ function NewInvoiceTab({
     if (!validationResult.ok) {
       // Build an ordered list of candidate field IDs and focus the first with an error
       const firstErrorId = (() => {
-        if (clientSelection?.type === "client") {
-          if (clientRucOverride.trim() && !validateRuc(clientRucOverride.trim())) return "client-ruc";
+        {
+          const rucTrim = clientRucOverride.trim();
+          if (rucTrim && !validateRuc(rucTrim)) return "client-ruc";
+          if (rucTrim && !clientDisplayName.trim()) return "client-display-name";
         }
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
