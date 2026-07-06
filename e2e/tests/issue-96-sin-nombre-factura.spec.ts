@@ -1,4 +1,3 @@
-import zlib from "node:zlib";
 import { expect, test } from "@playwright/test";
 import {
   apiBaseUrl,
@@ -12,36 +11,11 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
-
-/**
- * Decompresses the first FlateDecode content stream in a PDF and returns its raw operator text
- * (mirrors `InvoicePdfServiceTest.decodePdfContentStream` on the backend).
- */
-function decodePdfContentStream(pdf: Buffer): string {
-  const lf = Buffer.from("stream\n", "ascii");
-  const crlf = Buffer.from("stream\r\n", "ascii");
-  let start = pdf.indexOf(lf);
-  let headerLen = lf.length;
-  if (start < 0) {
-    start = pdf.indexOf(crlf);
-    headerLen = crlf.length;
-  }
-  if (start < 0) throw new Error("No stream marker found in PDF");
-  const contentStart = start + headerLen;
-  const end = Buffer.from("endstream", "ascii");
-  const contentEnd = pdf.indexOf(end, contentStart);
-  if (contentEnd < 0) throw new Error("No endstream marker found in PDF");
-  const compressed = pdf.subarray(contentStart, contentEnd);
-  return zlib.inflateSync(compressed).toString("latin1");
-}
-
-/** `true` when `searchText` is drawn as a `(searchText)Tj` operator in the PDF's first content stream. */
-function pdfContainsText(pdf: Buffer, searchText: string): boolean {
-  const stream = decodePdfContentStream(pdf);
-  const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\(${escaped}\\)Tj`).test(stream);
-}
+import {
+  clickIssueInvoiceAndExpectSuccess,
+  pdfContainsText,
+  pickServiceLine,
+} from "../fixtures/invoice";
 
 async function setBusinessRuc(request: import("@playwright/test").APIRequestContext, token: string) {
   await apiPutJson(request, token, "/api/business-profile", {

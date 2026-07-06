@@ -84,6 +84,7 @@ function decodePdfContentStream(pdf: Buffer): string {
 /** `true` when `searchText` is drawn as a `(searchText)Tj` operator in the PDF's first content stream. */
 export function pdfContainsText(pdf: Buffer, searchText: string): boolean {
   const stream = decodePdfContentStream(pdf);
-  const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\(${escaped}\\)Tj`).test(stream);
+  // Plain substring check — avoids building a RegExp from dynamic input (semgrep
+  // detect-non-literal-regexp / ReDoS): we only need a literal match, not a pattern.
+  return stream.includes(`(${searchText})Tj`);
 }
