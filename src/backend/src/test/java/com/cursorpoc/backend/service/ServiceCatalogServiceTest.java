@@ -145,6 +145,53 @@ class ServiceCatalogServiceTest {
     assertThat(service.listServices(1L, Optional.empty(), "color")).hasSize(1);
   }
 
+  /**
+   * Issue #95: "Servicios profesionales" items sort first, ahead of alphabetically earlier
+   * categories, both on initial load (empty query) and on search.
+   */
+  @Test
+  void listServices_priorityCategoryAlwaysSortsFirst() {
+    ServiceCategory catProfessional = new ServiceCategory();
+    catProfessional.setId(12L);
+    catProfessional.setTenant(tenant);
+    catProfessional.setName("Servicios profesionales");
+    catProfessional.setActive(true);
+
+    SalonService alphaFirst = new SalonService();
+    alphaFirst.setId(200L);
+    alphaFirst.setTenant(tenant);
+    alphaFirst.setCategory(catHair); // "Hair" sorts before "Servicios profesionales" alphabetically
+    alphaFirst.setName("Basic Cut");
+    alphaFirst.setPriceMinor(new BigDecimal("10000.00"));
+    alphaFirst.setDurationMinutes(30);
+    alphaFirst.setActive(true);
+
+    SalonService priority = new SalonService();
+    priority.setId(201L);
+    priority.setTenant(tenant);
+    priority.setCategory(catProfessional);
+    priority.setName("Corte premium");
+    priority.setPriceMinor(new BigDecimal("50000.00"));
+    priority.setDurationMinutes(60);
+    priority.setActive(true);
+
+    lenient()
+        .when(salonServiceRepository.findByTenant_IdOrderByNameAsc(1L))
+        .thenReturn(List.of(alphaFirst, priority));
+
+    var initialLoad = service.listServices(1L, Optional.empty(), "");
+    assertThat(initialLoad).hasSize(2);
+    assertThat(initialLoad.get(0).name()).isEqualTo("Corte premium");
+    assertThat(initialLoad.get(1).name()).isEqualTo("Basic Cut");
+
+    // Same ordering must hold when the user searches (a query matching both: "Basic Cut" / "Corte
+    // premium").
+    var searched = service.listServices(1L, Optional.empty(), "c");
+    assertThat(searched).hasSize(2);
+    assertThat(searched.get(0).name()).isEqualTo("Corte premium");
+    assertThat(searched.get(1).name()).isEqualTo("Basic Cut");
+  }
+
   @Test
   void createService_rejectsInactiveCategory() {
     assertThatThrownBy(

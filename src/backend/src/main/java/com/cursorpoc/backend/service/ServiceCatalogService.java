@@ -35,6 +35,12 @@ public class ServiceCatalogService {
           "rose", "coral", "fuchsia", "violet", "indigo", "sky", "teal", "lime", "amber", "mauve",
           "success", "warning", "danger", "stone");
 
+  /**
+   * Issue #95: items from this category always sort first in the invoice-form service picker, both
+   * on initial load and search, regardless of alphabetical order.
+   */
+  private static final String PRIORITY_CATEGORY_NAME = "Servicios profesionales";
+
   private final TenantRepository tenantRepository;
   private final ServiceCategoryRepository serviceCategoryRepository;
   private final SalonServiceRepository salonServiceRepository;
@@ -113,6 +119,9 @@ public class ServiceCatalogService {
                     || s.getCategory().getName().toLowerCase(Locale.ROOT).contains(qLower))
         .sorted(
             Comparator.comparing(
+                    (SalonService s) ->
+                        !PRIORITY_CATEGORY_NAME.equalsIgnoreCase(s.getCategory().getName()))
+                .thenComparing(
                     (SalonService s) -> s.getCategory().getName(), String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(SalonService::getName, String.CASE_INSENSITIVE_ORDER))
         .map(ServiceCatalogService::toServiceResponse)
