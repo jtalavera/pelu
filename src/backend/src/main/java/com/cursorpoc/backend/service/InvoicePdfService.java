@@ -341,9 +341,11 @@ public class InvoicePdfService {
     }
 
     // --- IVA liquidation row ---
+    // Issue #102: each column's IVA is computed from colSubtotals — the column's FINAL total,
+    // net of every discount (item-level and global) — not from a pre-global-discount snapshot.
     cb.setFontAndSize(bf, BODY_PT);
-    BigDecimal iva10 = computeIvaByRate(invoice, BigDecimal.valueOf(10));
-    BigDecimal iva5 = computeIvaByRate(invoice, BigDecimal.valueOf(5));
+    BigDecimal iva10 = computeIvaByRate(invoice, colSubtotals[2], BigDecimal.valueOf(10));
+    BigDecimal iva5 = computeIvaByRate(invoice, colSubtotals[1], BigDecimal.valueOf(5));
     cb.showTextAligned(Element.ALIGN_LEFT, formatMoneyGs(iva10), xIva10, yIva, 0);
     if (iva5.compareTo(BigDecimal.ZERO) > 0) {
       cb.showTextAligned(Element.ALIGN_LEFT, formatMoneyGs(iva5), xIva5, yIva, 0);
@@ -547,32 +549,34 @@ public class InvoicePdfService {
   }
 
   /**
-   * Sum of persisted tax amounts for lines whose tax rate equals {@code rate}, rounded to 0
-   * decimals. Falls back to the legacy total/11 formula for invoices that predate V11 (where
-   * taxAmount is null on all lines).
+   * Issue #102: IVA-incluido amount for a tax column, computed from {@code columnTotal} — that
+   * column's FINAL total, net of every discount (item-level and global) — via total * rate / (100 +
+   * rate). Falls back to the legacy total/11 formula for invoices that predate V11 (where taxAmount
+   * is null on all lines), matching the historical 10%-only default.
    */
-  private static BigDecimal computeIvaByRate(Invoice invoice, BigDecimal rate) {
-    if (invoice.getLines() == null || invoice.getLines().isEmpty()) {
-      return BigDecimal.ZERO;
-    }
-    boolean hasTaxData = invoice.getLines().stream().anyMatch(l -> l.getTaxAmount() != null);
+  private static BigDecimal computeIvaByRate(
+      Invoice invoice, BigDecimal columnTotal, BigDecimal rate) {
+    boolean hasTaxData =
+        invoice.getLines() != null
+            && invoice.getLines().stream().anyMatch(l -> l.getTaxAmount() != null);
     if (!hasTaxData) {
-      // Legacy invoice: fall back to IVA 10% = total / 11
       if (rate.compareTo(BigDecimal.valueOf(10)) == 0) {
         return vatTenFromTotal(invoice.getTotal());
       }
       return BigDecimal.ZERO;
     }
-    BigDecimal sum =
-        invoice.getLines().stream()
-            .filter(
-                l ->
-                    l.getTaxRate() != null
-                        && l.getTaxRate().compareTo(rate.setScale(4, RoundingMode.HALF_UP)) == 0
-                        && l.getTaxAmount() != null)
-            .map(InvoiceLine::getTaxAmount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-    return sum.setScale(0, RoundingMode.HALF_UP);
+    return ivaIncludedInTotal(columnTotal, rate);
+  }
+
+  /**
+   * Paraguay IVA-incluido: IVA = total * rate / (100 + rate), rounded HALF_UP to 0 decimals. E.g.
+   * rate=10 -> total/11; rate=5 -> total/21.
+   */
+  private static BigDecimal ivaIncludedInTotal(BigDecimal total, BigDecimal rate) {
+    if (total == null || total.compareTo(BigDecimal.ZERO) <= 0) {
+      return BigDecimal.ZERO;
+    }
+    return total.multiply(rate).divide(BigDecimal.valueOf(100).add(rate), 0, RoundingMode.HALF_UP);
   }
 
   /**

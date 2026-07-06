@@ -396,6 +396,87 @@ class InvoicePdfServiceTest {
     assertThat(text).contains("Dto.");
   }
 
+  /**
+   * Issue #102: reproduces the issue's own worked example — an 88.000 Gs. line (IVA 10%) with an
+   * 8.000 Gs. global discount bringing the total to 80.000 Gs. The IVA-10% summary must be
+   * 80.000/11 = 7.273 (the FINAL total), not 88.000/11 = 8.000 (the pre-discount subtotal, which
+   * happens to equal the line's stale persisted taxAmount).
+   */
+  @Test
+  void renderPdf_ivaSummary_usesFinalTotalNetOfGlobalDiscount() throws Exception {
+    InvoicePdfService svc = newService();
+    InvoiceLine item = new InvoiceLine();
+    item.setDescription("Corte");
+    item.setQuantity(1);
+    item.setUnitPrice(new BigDecimal("88000"));
+    item.setLineTotal(new BigDecimal("88000"));
+    item.setTaxRate(new BigDecimal("10.0000"));
+    item.setTaxAmount(new BigDecimal("8000")); // stale pre-discount snapshot: 88000/11
+
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("88000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("80000")); // after an 8.000 global discount
+    when(invoice.getDiscountType()).thenReturn(DiscountType.FIXED);
+    when(invoice.getDiscountValue()).thenReturn(new BigDecimal("8000"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+    List<float[]> iva10Pos = findTextPositions(pdf, "7.273");
+    assertThat(iva10Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) iva10Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_IVA10, within(1.0));
+    assertThat((double) iva10Pos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
+  }
+
+  /**
+   * Issue #102: mixed 10%/5% invoice with a proportional global discount — each bracket's IVA must
+   * be computed from its own post-discount column total (via total*rate/(100+rate): /11 for 10%,
+   * /21 for 5%), and the "Total IVA" field is their sum.
+   */
+  @Test
+  void renderPdf_ivaSummary_mixedBrackets_eachUsesOwnPostDiscountColumnTotal() throws Exception {
+    InvoicePdfService svc = newService();
+    InvoiceLine item10 = new InvoiceLine();
+    item10.setDescription("Corte");
+    item10.setQuantity(1);
+    item10.setUnitPrice(new BigDecimal("88000"));
+    item10.setLineTotal(new BigDecimal("88000"));
+    item10.setTaxRate(new BigDecimal("10.0000"));
+    item10.setTaxAmount(new BigDecimal("8000"));
+
+    InvoiceLine item5 = new InvoiceLine();
+    item5.setDescription("Producto");
+    item5.setQuantity(1);
+    item5.setUnitPrice(new BigDecimal("42000"));
+    item5.setLineTotal(new BigDecimal("42000"));
+    item5.setTaxRate(new BigDecimal("5.0000"));
+    item5.setTaxAmount(new BigDecimal("2000"));
+
+    Invoice invoice = baseInvoice(List.of(item10, item5), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("130000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("117000")); // 10% global discount (13.000)
+    when(invoice.getDiscountType()).thenReturn(DiscountType.PERCENT);
+    when(invoice.getDiscountValue()).thenReturn(new BigDecimal("10"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+
+    // Column totals after the proportional split: IVA10 column 79.200 (88000-8800), IVA5 column
+    // 37.800 (42000-4200) -> IVA10 = 79200/11 = 7.200, IVA5 = 37800/21 = 1.800, Total = 9.000.
+    List<float[]> iva10Pos = findTextPositions(pdf, "7.200");
+    assertThat(iva10Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) iva10Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_IVA10, within(1.0));
+    assertThat((double) iva10Pos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
+
+    List<float[]> iva5Pos = findTextPositions(pdf, "1.800");
+    assertThat(iva5Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) iva5Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_IVA5, within(1.0));
+    assertThat((double) iva5Pos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
+
+    List<float[]> totalIvaPos = findTextPositions(pdf, "9.000");
+    assertThat(totalIvaPos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) totalIvaPos.get(0)[0])
+        .isCloseTo(InvoicePdfService.L_X_TOTAL_IVA, within(1.0));
+    assertThat((double) totalIvaPos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
+  }
+
   /** Issue #55: the PDF must contain the grand total spelled out in Spanish. */
   @Test
   void renderPdf_containsAmountInWords() throws Exception {
