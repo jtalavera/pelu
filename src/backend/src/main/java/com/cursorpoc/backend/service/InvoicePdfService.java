@@ -68,43 +68,50 @@ public class InvoicePdfService {
   // ---------------------------------------------------------------------------
 
   // --- Client block ---
-  static final float L_X_DATE = 29f;
-  static final float L_Y_DATE = 335.7f;
-  static final float L_X_CONTADO = 213.83f;
-  static final float L_Y_CONTADO = 329.37f;
-  static final float L_X_RUC = 24f;
-  static final float L_Y_RUC = 320.7f;
-  static final float L_X_NAME = 80f;
-  static final float L_Y_NAME = 309.7f;
+  static final float L_X_DATE = -5.02f;
+  static final float L_Y_DATE = 347.04f;
+  static final float L_X_CONTADO = 196.82f;
+  static final float L_Y_CONTADO = 352.05f;
+  static final float L_X_RUC = -10.02f;
+  static final float L_Y_RUC = 334.87f;
+  static final float L_X_NAME = 54.49f;
+  static final float L_Y_NAME = 321.04f;
 
-  static final float R_X_DATE = 341f;
-  static final float R_Y_DATE = 336.7f;
-  static final float R_X_CONTADO = 540.83f;
-  static final float R_Y_CONTADO = 342.37f;
-  static final float R_X_RUC = 353f;
-  static final float R_Y_RUC = 321.7f;
-  static final float R_X_NAME = 400f;
-  static final float R_Y_NAME = 307.7f;
+  static final float R_X_DATE = 326.83f;
+  static final float R_Y_DATE = 350.87f;
+  static final float R_X_CONTADO = 529.49f;
+  static final float R_Y_CONTADO = 356.54f;
+  static final float R_X_RUC = 324.65f;
+  static final float R_Y_RUC = 335.87f;
+  static final float R_X_NAME = 385.83f;
+  static final float R_Y_NAME = 321.87f;
 
   // --- Detail table ---
-  // Left panel: quantity LEFT at 25.11; description LEFT at x=50.11 (Issue #86: mirrors the
-  //             right panel's +25pt qty->desc offset); unit price CENTER-aligned at center
-  //             x=149.5; IVA-10% column LEFT at 254.
-  // Right panel: quantity LEFT at 314; description LEFT at 339;
-  //              unit price LEFT at 434; IVA-10% column LEFT at 554.
-  // Both panels: first data row y=256.54, step −13 pt per row. Issue #90: a description longer
-  // than DESC_MAX_CHARS_PER_LINE is truncated to that length (single line); it never wraps.
-  static final float L_X_QTY = 25.11f;
-  static final float L_X_DESC_LEFT = 50.11f; // ALIGN_LEFT (Issue #86)
-  static final float L_X_UNIT_CENTER = 149.5f; // ALIGN_CENTER center point
-  static final float L_X_TAX_COL10 = 254f; // IVA-10% left-edge anchor
+  // Description is ALIGN_LEFT on both panels (Issue #86); unit price is CENTER-aligned on the
+  // left panel and LEFT-aligned on the right panel. IVA-10% column anchor is shared by every
+  // detail row and offset left/right by TAX_COL_WIDTH_PT to derive the Exenta/5% columns.
+  // Both panels: first data row shares TABLE_FIRST_ROW_Y, step −13 pt per row. Issue #90: a
+  // description longer than DESC_MAX_CHARS_PER_LINE is truncated to that length (never wraps).
+  static final float L_X_QTY = -25.91f;
+  static final float L_X_DESC_LEFT = -6.58f; // ALIGN_LEFT (Issue #86)
+  static final float L_X_UNIT_CENTER = 98.48f; // ALIGN_CENTER center point
+  static final float L_X_TAX_COL10 = 234.16f; // IVA-10% left-edge anchor
 
-  static final float R_X_QTY = 314f;
-  static final float R_X_DESC = 339f; // ALIGN_LEFT
-  static final float R_X_UNIT = 434f; // ALIGN_LEFT
-  static final float R_X_TAX_COL10 = 554f;
+  static final float R_X_QTY = 299.83f;
+  static final float R_X_DESC = 324.83f; // ALIGN_LEFT
+  static final float R_X_UNIT = 439.67f; // ALIGN_LEFT
+  static final float R_X_TAX_COL10 = 565.34f;
 
-  static final float TABLE_FIRST_ROW_Y = 256.54f;
+  /**
+   * Subtotals-row anchor for the IVA-10% column (a.k.a. "Monto total" — the merchandise value
+   * summed across all detail rows). Split from {@link #L_X_TAX_COL10}/{@link #R_X_TAX_COL10}
+   * because the subtotals row and the detail rows now require independent x-offsets.
+   */
+  static final float L_X_SUBTOTAL_TAX10 = 239.83f;
+
+  static final float R_X_SUBTOTAL_TAX10 = 565.34f;
+
+  static final float TABLE_FIRST_ROW_Y = 265.04f;
   static final float ROW_STEP_PT = 13f;
   static final int MAX_ROWS = 11;
 
@@ -118,27 +125,27 @@ public class InvoicePdfService {
   static final int GLOBAL_DISCOUNT_DESC_MAX_CHARS = 24;
 
   // --- Subtotals row ---
-  static final float L_Y_SUBTOTALS = 114.7f;
-  static final float R_Y_SUBTOTALS = 109.73f;
+  static final float L_Y_SUBTOTALS = 103.36f;
+  static final float R_Y_SUBTOTALS = 106.9f;
 
   // --- Amount in words ---
-  static final float L_X_WORDS = 1f;
-  static final float L_Y_WORDS = 86.87f;
-  static final float R_X_WORDS = 351f;
+  static final float L_X_WORDS = 29.35f;
+  static final float L_Y_WORDS = 81.2f;
+  static final float R_X_WORDS = 362.34f;
   static final float R_Y_WORDS = 84.87f;
 
   // --- IVA liquidation row ---
   // IVA 5% anchor is not present in the reference sample (all items were IVA 10%);
   // it is estimated at ~88 pt left of the IVA-10% anchor.
   static final float L_X_IVA5 = 76f;
-  static final float L_X_IVA10 = 164f;
-  static final float L_X_TOTAL_IVA = 253f;
-  static final float L_Y_IVA = 74.7f;
+  static final float L_X_IVA10 = 149.83f;
+  static final float L_X_TOTAL_IVA = 238.83f;
+  static final float L_Y_IVA = 63.36f;
 
   static final float R_X_IVA5 = 374f;
-  static final float R_X_IVA10 = 462f;
-  static final float R_X_TOTAL_IVA = 550f;
-  static final float R_Y_IVA = 76.7f;
+  static final float R_X_IVA10 = 479.01f;
+  static final float R_X_TOTAL_IVA = 567.01f;
+  static final float R_Y_IVA = 62.53f;
 
   private final InvoiceRepository invoiceRepository;
   private final BusinessProfileService businessProfileService;
@@ -254,6 +261,7 @@ public class InvoicePdfService {
     float xDescAnchor = isLeft ? L_X_DESC_LEFT : R_X_DESC;
     float xUnitAnchor = isLeft ? L_X_UNIT_CENTER : R_X_UNIT;
     float xTaxCol10 = isLeft ? L_X_TAX_COL10 : R_X_TAX_COL10;
+    float xSubtotalTax10 = isLeft ? L_X_SUBTOTAL_TAX10 : R_X_SUBTOTAL_TAX10;
     int descAlign = Element.ALIGN_LEFT;
     int unitAlign = isLeft ? Element.ALIGN_CENTER : Element.ALIGN_LEFT;
 
@@ -334,7 +342,7 @@ public class InvoicePdfService {
     cb.setFontAndSize(bf, BODY_PT);
     for (int c = 0; c < 3; c++) {
       if (colSubtotals[c].compareTo(BigDecimal.ZERO) != 0) {
-        float xTax = xTaxCol10 - (2 - c) * TAX_COL_WIDTH_PT;
+        float xTax = xSubtotalTax10 - (2 - c) * TAX_COL_WIDTH_PT;
         cb.showTextAligned(
             Element.ALIGN_LEFT, formatSignedMoneyGs(colSubtotals[c]), xTax, ySubtotals, 0);
       }

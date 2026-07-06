@@ -659,16 +659,16 @@ class InvoicePdfServiceTest {
         .as("IVA-10% amount should appear at left panel detail row x=254, y=256.54")
         .isTrue();
 
-    // Subtotal — LEFT-aligned at (L_X_TAX_COL10=254, L_Y_SUBTOTALS=114.7)
+    // Subtotal ("Monto total") — LEFT-aligned at (L_X_SUBTOTAL_TAX10, L_Y_SUBTOTALS)
     List<float[]> subtotalPos = findTextPositions(pdf, "100.000");
     boolean foundSubtotalLeft =
         subtotalPos.stream()
             .anyMatch(
                 p ->
-                    Math.abs(p[0] - InvoicePdfService.L_X_TAX_COL10) < 1.5
+                    Math.abs(p[0] - InvoicePdfService.L_X_SUBTOTAL_TAX10) < 1.5
                         && Math.abs(p[1] - InvoicePdfService.L_Y_SUBTOTALS) < 1.5);
     assertThat(foundSubtotalLeft)
-        .as("Subtotal should appear at left panel subtotals position x=254, y=114.7")
+        .as("Subtotal should appear at left panel subtotals anchor")
         .isTrue();
 
     // Amount in words — LEFT-aligned at (L_X_WORDS=1, L_Y_WORDS=86.87)
