@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
@@ -487,6 +488,37 @@ class InvoicePdfServiceTest {
     } finally {
       reader.close();
     }
+  }
+
+  /**
+   * Issue #96: a client is selected but display name and RUC are left blank — the PDF prints "Sin
+   * nombre" for the name and leaves the RUC blank, even though the selected client has a RUC on
+   * file (it must not be used as a fallback).
+   */
+  @Test
+  void renderPdf_clientSelectedBlankNameAndRuc_printsSinNombreAndOmitsClientRuc() throws Exception {
+    InvoicePdfService svc = newService();
+    InvoiceLine item = new InvoiceLine();
+    item.setDescription("Corte");
+    item.setQuantity(1);
+    item.setUnitPrice(new BigDecimal("50000"));
+    item.setLineTotal(new BigDecimal("50000"));
+    item.setTaxRate(new BigDecimal("10.0000"));
+
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getClientDisplayName()).thenReturn(null);
+    when(invoice.getClientRucOverride()).thenReturn(null);
+    Client client = new Client();
+    client.setRuc("80000005-6"); // has a profile RUC — must NOT be used as a fallback
+    when(invoice.getClient()).thenReturn(client);
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("50000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("50000"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+    String text = extractText(pdf);
+
+    assertThat(text).contains("Sin nombre");
+    assertThat(text).doesNotContain("80000005-6");
   }
 
   /**

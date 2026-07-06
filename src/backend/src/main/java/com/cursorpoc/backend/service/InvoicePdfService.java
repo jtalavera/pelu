@@ -1,7 +1,6 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
-import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.Tenant;
@@ -273,13 +272,9 @@ public class InvoicePdfService {
     // Contado (POS): mark "X" inside the pre-printed "CONTADO" checkbox.
     cb.showTextAligned(Element.ALIGN_LEFT, "X", xContado, yContado, 0);
 
+    // Issue #96: the client's profile RUC is never used as a fallback here — a blank override
+    // means the printed RUC stays blank, even if the selected client has one on file.
     String clientRuc = invoice.getClientRucOverride();
-    if (clientRuc == null || clientRuc.isBlank()) {
-      Client c = invoice.getClient();
-      if (c != null && c.getRuc() != null && !c.getRuc().isBlank()) {
-        clientRuc = c.getRuc();
-      }
-    }
     if (clientRuc != null && !clientRuc.isBlank()) {
       cb.showTextAligned(Element.ALIGN_LEFT, truncate(clientRuc, 28), xRuc, yRuc, 0);
     }
@@ -287,6 +282,9 @@ public class InvoicePdfService {
     String name = invoice.getClientDisplayName();
     if (name != null && !name.isBlank()) {
       cb.showTextAligned(Element.ALIGN_LEFT, truncate(name, 48), xName, yName, 0);
+    } else if (invoice.getClient() != null) {
+      // Issue #96: a client was selected but the display name was left blank.
+      cb.showTextAligned(Element.ALIGN_LEFT, "Sin nombre", xName, yName, 0);
     }
     cb.endText();
 

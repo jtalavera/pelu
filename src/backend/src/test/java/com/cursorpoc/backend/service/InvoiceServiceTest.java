@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.domain.CashSession;
+import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
@@ -113,6 +114,47 @@ class InvoiceServiceTest {
     // Verify stamp incremented
     assertThat(activeStamp.getNextEmissionNumber()).isEqualTo(2);
     assertThat(activeStamp.isLockedAfterInvoice()).isTrue();
+  }
+
+  /**
+   * Issue #96: a client is selected but display name and RUC are left blank — both must stay blank
+   * on the invoice (the PDF layer prints "Sin nombre" / a blank RUC), not silently fall back to the
+   * client's profile name/RUC.
+   */
+  @Test
+  void issueInvoice_clientSelectedBlankDisplayNameAndRuc_staysBlank() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    Client client = new Client();
+    client.setId(7L);
+    client.setTenant(tenant);
+    client.setFullName("Ana García");
+    client.setRuc("80000005-6");
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+
+    when(invoiceRepository.save(any(Invoice.class)))
+        .thenAnswer(
+            inv -> {
+              Invoice i = inv.getArgument(0);
+              i.setId(101L);
+              return i;
+            });
+
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var request =
+        new InvoiceCreateRequest(7L, "  ", "  ", null, null, List.of(line), List.of(payment));
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.clientId()).isEqualTo(7L);
+    assertThat(result.clientDisplayName()).isNull();
+    assertThat(result.clientRucOverride()).isNull();
   }
 
   @Test
