@@ -555,17 +555,18 @@ class InvoicePdfServiceTest {
   // ─── Layout / coordinate tests (calibrated to factura_vieja_femme.pdf) ────
 
   /**
-   * The generated PDF must use the 756×424 pt page size matching factura_vieja_femme.pdf (MediaBox
-   * [0 0 424 756] + /Rotate 90 ≈ 26.67×14.96 cm landscape).
+   * Issue #105: the generated PDF must use the real paper size, 660.47×396.85 pt (23.3×14 cm
+   * landscape).
    */
   @Test
-  void renderPdf_pageSizeIs756x424() throws Exception {
+  void renderPdf_pageSizeMatchesRealPaper() throws Exception {
     byte[] pdf = newService().renderPdf(baseInvoice(List.of(singleLine()), List.of()));
     PdfReader reader = new PdfReader(pdf);
     try {
       com.lowagie.text.Rectangle size = reader.getPageSize(1);
-      assertThat((double) size.getWidth()).isCloseTo(756.0, within(1.0));
-      assertThat((double) size.getHeight()).isCloseTo(424.0, within(1.0));
+      assertThat((double) size.getWidth()).isCloseTo(InvoicePdfService.PAGE_WIDTH_PT, within(1.0));
+      assertThat((double) size.getHeight())
+          .isCloseTo(InvoicePdfService.PAGE_HEIGHT_PT, within(1.0));
     } finally {
       reader.close();
     }
@@ -659,16 +660,16 @@ class InvoicePdfServiceTest {
         .as("IVA-10% amount should appear at left panel detail row x=254, y=256.54")
         .isTrue();
 
-    // Subtotal — LEFT-aligned at (L_X_TAX_COL10=254, L_Y_SUBTOTALS=114.7)
+    // Subtotal ("Monto total") — LEFT-aligned at (L_X_SUBTOTAL_TAX10, L_Y_SUBTOTALS)
     List<float[]> subtotalPos = findTextPositions(pdf, "100.000");
     boolean foundSubtotalLeft =
         subtotalPos.stream()
             .anyMatch(
                 p ->
-                    Math.abs(p[0] - InvoicePdfService.L_X_TAX_COL10) < 1.5
+                    Math.abs(p[0] - InvoicePdfService.L_X_SUBTOTAL_TAX10) < 1.5
                         && Math.abs(p[1] - InvoicePdfService.L_Y_SUBTOTALS) < 1.5);
     assertThat(foundSubtotalLeft)
-        .as("Subtotal should appear at left panel subtotals position x=254, y=114.7")
+        .as("Subtotal should appear at left panel subtotals anchor")
         .isTrue();
 
     // Amount in words — LEFT-aligned at (L_X_WORDS=1, L_Y_WORDS=86.87)

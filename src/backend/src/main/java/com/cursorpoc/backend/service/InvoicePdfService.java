@@ -31,22 +31,19 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Invoice PDF for continuous / pre-printed stock: sheet 756×424 pt (≈26.67×14.96 cm), two identical
- * copies side by side. Coordinates match requirements/factura_vieja_femme.pdf exactly so that
- * variable data lands in the correct blank fields of the physical pre-printed form. Only variable
- * data is drawn (no letterhead, invoice number, timbrado, or copy labels — those are pre-printed).
+ * Invoice PDF for continuous / pre-printed stock: sheet 660.47×396.85 pt (23.3×14 cm, the real
+ * paper size), two identical copies side by side. Field coordinates come directly from GitHub issue
+ * #105 (absolute cm from the paper's left/bottom edge), converted to points. Only variable data is
+ * drawn (no letterhead, invoice number, timbrado, or copy labels — those are pre-printed).
  */
 @Service
 public class InvoicePdfService {
 
-  /**
-   * Sheet width: 756 pt ≈ 26.67 cm (landscape). Matches factura_vieja_femme.pdf MediaBox [0 0 424
-   * 756] + /Rotate 90.
-   */
-  static final float PAGE_WIDTH_PT = 756f;
+  /** Sheet width: 660.47 pt ≈ 23.3 cm (landscape), the real paper width. */
+  static final float PAGE_WIDTH_PT = 660.47f;
 
-  /** Sheet height: 424 pt ≈ 14.96 cm. */
-  static final float PAGE_HEIGHT_PT = 424f;
+  /** Sheet height: 396.85 pt ≈ 14 cm, the real paper height. */
+  static final float PAGE_HEIGHT_PT = 396.85f;
 
   /** Body font size (client block, subtotals, IVA row, amount in words). */
   private static final float BODY_PT = 8f;
@@ -56,56 +53,62 @@ public class InvoicePdfService {
 
   /**
    * Width in points of each tax column (Exenta / IVA 5% / IVA 10%). Columns step left from the
-   * IVA-10% anchor by this amount per column index. Calibrated to
-   * requirements/factura_vieja_femme.pdf.
+   * IVA-10% anchor by this amount per column index. Proportionally rescaled from
+   * requirements/factura_vieja_femme.pdf for the real 21.2×14 cm paper size.
    */
-  private static final float TAX_COL_WIDTH_PT = 45f;
+  private static final float TAX_COL_WIDTH_PT = 35.77f;
 
   // ---------------------------------------------------------------------------
-  // Per-panel absolute coordinates (bottom-left origin, points).
-  // Measured from requirements/factura_vieja_femme.pdf — the authoritative layout.
-  // Left panel: x ≈ 1–254.   Right panel: x ≈ 314–584.
+  // Per-panel absolute coordinates (bottom-left origin, points). Values come directly from GitHub
+  // issue #105's field-position table (cm from the paper's left/bottom edge), converted to points.
   // ---------------------------------------------------------------------------
 
   // --- Client block ---
-  static final float L_X_DATE = 29f;
-  static final float L_Y_DATE = 335.7f;
-  static final float L_X_CONTADO = 213.83f;
-  static final float L_Y_CONTADO = 329.37f;
-  static final float L_X_RUC = 24f;
-  static final float L_Y_RUC = 320.7f;
-  static final float L_X_NAME = 80f;
-  static final float L_Y_NAME = 309.7f;
+  static final float L_X_DATE = 28.35f;
+  static final float L_Y_DATE = 306.14f;
+  static final float L_X_CONTADO = 209.76f;
+  static final float L_Y_CONTADO = 308.97f;
+  static final float L_X_RUC = 25.51f;
+  static final float L_Y_RUC = 291.97f;
+  static final float L_X_NAME = 85.04f;
+  static final float L_Y_NAME = 283.46f;
 
-  static final float R_X_DATE = 341f;
-  static final float R_Y_DATE = 336.7f;
-  static final float R_X_CONTADO = 540.83f;
-  static final float R_Y_CONTADO = 342.37f;
-  static final float R_X_RUC = 353f;
-  static final float R_Y_RUC = 321.7f;
-  static final float R_X_NAME = 400f;
-  static final float R_Y_NAME = 307.7f;
+  static final float R_X_DATE = 325.98f;
+  static final float R_Y_DATE = 306.14f;
+  static final float R_X_CONTADO = 507.4f;
+  static final float R_Y_CONTADO = 308.97f;
+  static final float R_X_RUC = 323.15f;
+  static final float R_Y_RUC = 291.97f;
+  static final float R_X_NAME = 382.68f;
+  static final float R_Y_NAME = 283.46f;
 
   // --- Detail table ---
-  // Left panel: quantity LEFT at 25.11; description LEFT at x=50.11 (Issue #86: mirrors the
-  //             right panel's +25pt qty->desc offset); unit price CENTER-aligned at center
-  //             x=149.5; IVA-10% column LEFT at 254.
-  // Right panel: quantity LEFT at 314; description LEFT at 339;
-  //              unit price LEFT at 434; IVA-10% column LEFT at 554.
-  // Both panels: first data row y=256.54, step −13 pt per row. Issue #90: a description longer
-  // than DESC_MAX_CHARS_PER_LINE is truncated to that length (single line); it never wraps.
-  static final float L_X_QTY = 25.11f;
-  static final float L_X_DESC_LEFT = 50.11f; // ALIGN_LEFT (Issue #86)
-  static final float L_X_UNIT_CENTER = 149.5f; // ALIGN_CENTER center point
-  static final float L_X_TAX_COL10 = 254f; // IVA-10% left-edge anchor
+  // Description is ALIGN_LEFT on both panels (Issue #86); unit price is CENTER-aligned on the
+  // left panel and LEFT-aligned on the right panel. IVA-10% column anchor is shared by every
+  // detail row and offset left/right by TAX_COL_WIDTH_PT to derive the Exenta/5% columns.
+  // Both panels: first data row shares TABLE_FIRST_ROW_Y, step −13 pt per row. Issue #90: a
+  // description longer than DESC_MAX_CHARS_PER_LINE is truncated to that length (never wraps).
+  static final float L_X_QTY = 11.34f;
+  static final float L_X_DESC_LEFT = 25.51f; // ALIGN_LEFT (Issue #86)
+  static final float L_X_UNIT_CENTER = 141.73f; // ALIGN_CENTER center point
+  static final float L_X_TAX_COL10 = 246.61f; // IVA-10% left-edge anchor
 
-  static final float R_X_QTY = 314f;
-  static final float R_X_DESC = 339f; // ALIGN_LEFT
-  static final float R_X_UNIT = 434f; // ALIGN_LEFT
-  static final float R_X_TAX_COL10 = 554f;
+  static final float R_X_QTY = 303.31f;
+  static final float R_X_DESC = 323.15f; // ALIGN_LEFT
+  static final float R_X_UNIT = 425.2f; // ALIGN_LEFT
+  static final float R_X_TAX_COL10 = 541.42f;
 
-  static final float TABLE_FIRST_ROW_Y = 256.54f;
-  static final float ROW_STEP_PT = 13f;
+  /**
+   * Subtotals-row anchor for the IVA-10% column (a.k.a. "Monto total" — the merchandise value
+   * summed across all detail rows). Split from {@link #L_X_TAX_COL10}/{@link #R_X_TAX_COL10}
+   * because the subtotals row and the detail rows now require independent x-offsets.
+   */
+  static final float L_X_SUBTOTAL_TAX10 = 246.61f;
+
+  static final float R_X_SUBTOTAL_TAX10 = 541.42f;
+
+  static final float TABLE_FIRST_ROW_Y = 235.27f;
+  static final float ROW_STEP_PT = 12.17f;
   static final int MAX_ROWS = 11;
 
   /** Issue #90: max characters printed for a detail row description; longer text is truncated. */
@@ -118,27 +121,25 @@ public class InvoicePdfService {
   static final int GLOBAL_DISCOUNT_DESC_MAX_CHARS = 24;
 
   // --- Subtotals row ---
-  static final float L_Y_SUBTOTALS = 114.7f;
-  static final float R_Y_SUBTOTALS = 109.73f;
+  static final float L_Y_SUBTOTALS = 87.87f;
+  static final float R_Y_SUBTOTALS = 87.87f;
 
   // --- Amount in words ---
-  static final float L_X_WORDS = 1f;
-  static final float L_Y_WORDS = 86.87f;
-  static final float R_X_WORDS = 351f;
-  static final float R_Y_WORDS = 84.87f;
+  static final float L_X_WORDS = 65.2f;
+  static final float L_Y_WORDS = 68.03f;
+  static final float R_X_WORDS = 362.83f;
+  static final float R_Y_WORDS = 68.03f;
 
   // --- IVA liquidation row ---
-  // IVA 5% anchor is not present in the reference sample (all items were IVA 10%);
-  // it is estimated at ~88 pt left of the IVA-10% anchor.
-  static final float L_X_IVA5 = 76f;
-  static final float L_X_IVA10 = 164f;
-  static final float L_X_TOTAL_IVA = 253f;
-  static final float L_Y_IVA = 74.7f;
+  static final float L_X_IVA5 = 99.21f;
+  static final float L_X_IVA10 = 164.41f;
+  static final float L_X_TOTAL_IVA = 249.45f;
+  static final float L_Y_IVA = 48.18f;
 
-  static final float R_X_IVA5 = 374f;
-  static final float R_X_IVA10 = 462f;
-  static final float R_X_TOTAL_IVA = 550f;
-  static final float R_Y_IVA = 76.7f;
+  static final float R_X_IVA5 = 396.85f;
+  static final float R_X_IVA10 = 456.38f;
+  static final float R_X_TOTAL_IVA = 541.42f;
+  static final float R_Y_IVA = 48.18f;
 
   private final InvoiceRepository invoiceRepository;
   private final BusinessProfileService businessProfileService;
@@ -212,7 +213,8 @@ public class InvoicePdfService {
       PdfWriter writer = PdfWriter.getInstance(document, baos);
       document.open();
 
-      BaseFont bf = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+      BaseFont bf =
+          BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
 
       PdfContentByte cb = writer.getDirectContent();
       drawPanel(cb, bf, true, invoice, dateFmt);
@@ -254,6 +256,7 @@ public class InvoicePdfService {
     float xDescAnchor = isLeft ? L_X_DESC_LEFT : R_X_DESC;
     float xUnitAnchor = isLeft ? L_X_UNIT_CENTER : R_X_UNIT;
     float xTaxCol10 = isLeft ? L_X_TAX_COL10 : R_X_TAX_COL10;
+    float xSubtotalTax10 = isLeft ? L_X_SUBTOTAL_TAX10 : R_X_SUBTOTAL_TAX10;
     int descAlign = Element.ALIGN_LEFT;
     int unitAlign = isLeft ? Element.ALIGN_CENTER : Element.ALIGN_LEFT;
 
@@ -334,7 +337,7 @@ public class InvoicePdfService {
     cb.setFontAndSize(bf, BODY_PT);
     for (int c = 0; c < 3; c++) {
       if (colSubtotals[c].compareTo(BigDecimal.ZERO) != 0) {
-        float xTax = xTaxCol10 - (2 - c) * TAX_COL_WIDTH_PT;
+        float xTax = xSubtotalTax10 - (2 - c) * TAX_COL_WIDTH_PT;
         cb.showTextAligned(
             Element.ALIGN_LEFT, formatSignedMoneyGs(colSubtotals[c]), xTax, ySubtotals, 0);
       }
