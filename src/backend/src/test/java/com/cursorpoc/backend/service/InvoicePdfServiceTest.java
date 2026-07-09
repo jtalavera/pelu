@@ -555,17 +555,18 @@ class InvoicePdfServiceTest {
   // ─── Layout / coordinate tests (calibrated to factura_vieja_femme.pdf) ────
 
   /**
-   * The generated PDF must use the 756×424 pt page size matching factura_vieja_femme.pdf (MediaBox
-   * [0 0 424 756] + /Rotate 90 ≈ 26.67×14.96 cm landscape).
+   * Issue #105: the generated PDF must use the real paper size, 660.47×396.85 pt (23.3×14 cm
+   * landscape).
    */
   @Test
-  void renderPdf_pageSizeIs756x424() throws Exception {
+  void renderPdf_pageSizeMatchesRealPaper() throws Exception {
     byte[] pdf = newService().renderPdf(baseInvoice(List.of(singleLine()), List.of()));
     PdfReader reader = new PdfReader(pdf);
     try {
       com.lowagie.text.Rectangle size = reader.getPageSize(1);
-      assertThat((double) size.getWidth()).isCloseTo(756.0, within(1.0));
-      assertThat((double) size.getHeight()).isCloseTo(424.0, within(1.0));
+      assertThat((double) size.getWidth()).isCloseTo(InvoicePdfService.PAGE_WIDTH_PT, within(1.0));
+      assertThat((double) size.getHeight())
+          .isCloseTo(InvoicePdfService.PAGE_HEIGHT_PT, within(1.0));
     } finally {
       reader.close();
     }
