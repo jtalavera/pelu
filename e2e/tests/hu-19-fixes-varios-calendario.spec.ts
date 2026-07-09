@@ -8,7 +8,7 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { bookingAppointmentDialog } from "../fixtures/ui";
+import { bookingAppointmentDialog, ensureCalendarShowsAppointmentByTestId } from "../fixtures/ui";
 
 test.describe("HU-19 · Fixes varios del calendario", () => {
   test("filtro de profesionales con placeholder de búsqueda", async ({ page }) => {
@@ -120,6 +120,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
     const card = page.getByTestId(`calendar-appt-${appt.id}`);
     await expect(card).toBeVisible();
     const h0 = (await card.boundingBox())!.height;

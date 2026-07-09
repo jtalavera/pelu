@@ -174,6 +174,31 @@ export function ClientSearchField({
           aria-label={labelText}
           className="w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
         >
+          {onCreateNew ? (
+            <li className="border-b border-[rgb(var(--color-border))]">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start rounded-none px-3 py-2 text-sm"
+                onClick={() => {
+                  setOpen(false);
+                  onCreateNew(query.trim());
+                }}
+              >
+                + {t("femme.clients.inlineSearch.createNew")}
+              </Button>
+            </li>
+          ) : null}
+          <li className="border-b border-[rgb(var(--color-border))]">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-start rounded-none px-3 py-2 text-sm"
+              onClick={selectOccasional}
+            >
+              {t("femme.clients.inlineSearch.occasional")}
+            </Button>
+          </li>
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">
               <Text variant="muted" className="text-sm">
@@ -210,31 +235,6 @@ export function ClientSearchField({
               </li>
             );
           })}
-          {onCreateNew ? (
-            <li className="border-t border-[rgb(var(--color-border))]">
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full justify-start rounded-none px-3 py-2 text-sm"
-                onClick={() => {
-                  setOpen(false);
-                  onCreateNew(query.trim());
-                }}
-              >
-                + {t("femme.clients.inlineSearch.createNew")}
-              </Button>
-            </li>
-          ) : null}
-          <li className="border-t border-[rgb(var(--color-border))]">
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full justify-start rounded-none px-3 py-2 text-sm"
-              onClick={selectOccasional}
-            >
-              {t("femme.clients.inlineSearch.occasional")}
-            </Button>
-          </li>
         </ul>
       </FloatingDropdown>
     </div>

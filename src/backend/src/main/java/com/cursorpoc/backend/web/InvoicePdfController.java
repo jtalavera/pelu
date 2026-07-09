@@ -29,9 +29,10 @@ public class InvoicePdfController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    byte[] bytes = invoicePdfService.buildInvoicePdf(id, principal.getTenantId());
+    InvoicePdfService.InvoicePdfResult result =
+        invoicePdfService.buildInvoicePdf(id, principal.getTenantId());
     return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"invoice-" + id + ".pdf\"")
-        .body(bytes);
+        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.filename() + "\"")
+        .body(result.bytes());
   }
 }

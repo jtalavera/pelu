@@ -62,9 +62,6 @@ class ClientServiceTest {
   @Test
   void create_withNameOnly_succeeds() {
     lenient()
-        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
-        .thenReturn(Optional.empty());
-    lenient()
         .when(clientRepository.findByTenantIdAndEmail(any(), any()))
         .thenReturn(Optional.empty());
     lenient()
@@ -84,9 +81,6 @@ class ClientServiceTest {
   @Test
   void create_trimsFullName() {
     lenient()
-        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
-        .thenReturn(Optional.empty());
-    lenient()
         .when(clientRepository.findByTenantIdAndEmail(any(), any()))
         .thenReturn(Optional.empty());
     lenient()
@@ -100,9 +94,6 @@ class ClientServiceTest {
 
   @Test
   void create_withValidRuc_succeeds() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
-        .thenReturn(Optional.empty());
     lenient()
         .when(clientRepository.findByTenantIdAndEmail(any(), any()))
         .thenReturn(Optional.empty());
@@ -130,9 +121,7 @@ class ClientServiceTest {
   @Test
   void create_duplicatePhone_throwsConflict() {
     Client existing = buildClient(2L, "Other", "0981000001", null, null);
-    lenient()
-        .when(clientRepository.findByTenantIdAndPhone(1L, "0981000001"))
-        .thenReturn(Optional.of(existing));
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
 
     assertThatThrownBy(
             () -> clientService.create(1L, new ClientRequest("New", "0981000001", null, null)))
@@ -144,11 +133,22 @@ class ClientServiceTest {
   }
 
   @Test
+  void create_duplicatePhone_differentFormatting_throwsConflict() {
+    Client existing = buildClient(2L, "Other", "0981000001", null, null);
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
+
+    assertThatThrownBy(
+            () -> clientService.create(1L, new ClientRequest("New", "(0981) 000-001", null, null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.CONFLICT));
+  }
+
+  @Test
   void create_duplicateEmail_throwsConflict() {
     Client existing = buildClient(2L, "Other", null, "a@b.com", null);
-    lenient()
-        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
-        .thenReturn(Optional.empty());
     lenient()
         .when(clientRepository.findByTenantIdAndEmail(1L, "a@b.com"))
         .thenReturn(Optional.of(existing));
@@ -165,9 +165,6 @@ class ClientServiceTest {
   @Test
   void create_duplicateRuc_throwsConflict() {
     Client existing = buildClient(2L, "Other", null, null, "80000005-6");
-    lenient()
-        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
-        .thenReturn(Optional.empty());
     lenient()
         .when(clientRepository.findByTenantIdAndEmail(any(), any()))
         .thenReturn(Optional.empty());
@@ -187,9 +184,6 @@ class ClientServiceTest {
   @Test
   void create_emptyPhoneAndEmail_treatedAsNull_noUniquenessCheck() {
     // blank strings → null → uniqueness not checked
-    lenient()
-        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
-        .thenReturn(Optional.empty());
     lenient()
         .when(clientRepository.findByTenantIdAndEmail(any(), any()))
         .thenReturn(Optional.empty());
@@ -294,9 +288,7 @@ class ClientServiceTest {
   void update_changesNameAndPhone() {
     Client c = buildClient(5L, "Old Name", "0981000000", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndPhone(1L, "0981999999"))
-        .thenReturn(Optional.empty());
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c));
     lenient()
         .when(clientRepository.findByTenantIdAndEmail(any(), any()))
         .thenReturn(Optional.empty());
@@ -315,9 +307,6 @@ class ClientServiceTest {
     Client c = buildClient(5L, "Ana", "0981000001", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
     lenient()
-        .when(clientRepository.findByTenantIdAndPhone(any(), any()))
-        .thenReturn(Optional.of(c));
-    lenient()
         .when(clientRepository.findByTenantIdAndEmail(any(), any()))
         .thenReturn(Optional.empty());
     lenient()
@@ -334,9 +323,7 @@ class ClientServiceTest {
     Client c = buildClient(5L, "Ana", "0981000001", null, null);
     Client other = buildClient(6L, "Other", "0981999999", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndPhone(1L, "0981999999"))
-        .thenReturn(Optional.of(other));
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c, other));
 
     assertThatThrownBy(
             () -> clientService.update(1L, 5L, new ClientRequest("Ana", "0981999999", null, null)))

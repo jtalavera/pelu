@@ -675,15 +675,9 @@ function NewInvoiceTab({
    *   2. At least one service line with serviceId + valid unit price.
    *   3. At least one payment with method + valid positive amount.
    */
-  const hasClientData = (() => {
-    if (clientSelection?.type === "client") {
-      return clientDisplayName.trim().length > 0;
-    }
-    if (clientSelection?.type === "occasional") {
-      return true;
-    }
-    return false;
-  })();
+  // Issue #96: a selected client's name/RUC may be left blank on purpose (the PDF then prints
+  // "Sin nombre" and a blank RUC) — selecting a client or marking it occasional is enough.
+  const hasClientData = clientSelection?.type === "client" || clientSelection?.type === "occasional";
   const hasServiceLine = lines.some((l) => {
     const price = parseMaskedMoney(l.unitPrice);
     return l.serviceId.trim() !== "" && Number.isFinite(price) && price > 0;
@@ -883,13 +877,15 @@ function NewInvoiceTab({
       }
     });
 
-    if (clientSelection?.type === "client") {
-      if (!clientDisplayName.trim()) {
-        errors.push(t("femme.billing.invoice.clientDisplayNameRequired"));
-      }
+    {
       const rucTrim = clientRucOverride.trim();
       if (rucTrim && !validateRuc(rucTrim)) {
         errors.push(t("femme.clients.rucInvalid"));
+      }
+      // Issue #101: name is required only when a RUC is provided; a blank RUC allows a blank
+      // name too (Issue #96: the PDF then prints "Sin nombre" for a selected client).
+      if (rucTrim && !clientDisplayName.trim()) {
+        errors.push(t("femme.billing.invoice.clientDisplayNameRequiredWithRuc"));
       }
     }
 
@@ -914,9 +910,10 @@ function NewInvoiceTab({
     if (!validationResult.ok) {
       // Build an ordered list of candidate field IDs and focus the first with an error
       const firstErrorId = (() => {
-        if (clientSelection?.type === "client") {
-          if (!clientDisplayName.trim()) return "client-display-name";
-          if (clientRucOverride.trim() && !validateRuc(clientRucOverride.trim())) return "client-ruc";
+        {
+          const rucTrim = clientRucOverride.trim();
+          if (rucTrim && !validateRuc(rucTrim)) return "client-ruc";
+          if (rucTrim && !clientDisplayName.trim()) return "client-display-name";
         }
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;

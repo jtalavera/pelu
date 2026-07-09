@@ -42,7 +42,14 @@ async function ensureLocatorVisibleByWeekNavigation(
   const maxAhead = opts?.maxAheadWeeks ?? 8;
   const maxBack = opts?.maxBackWeeks ?? 20;
   const target = () => locate();
-  if (await target().isVisible().catch(() => false)) return;
+  // `isVisible()` is a point-in-time check with no auto-wait, so give React a beat to
+  // paint after each navigation/fetch — otherwise the sweep races past the matching week.
+  const isNowVisible = (timeout: number) =>
+    target()
+      .waitFor({ state: "visible", timeout })
+      .then(() => true)
+      .catch(() => false);
+  if (await isNowVisible(500)) return;
 
   const nextWeek = page.getByRole("button", { name: "Next week", exact: true });
   const prevWeek = page.getByRole("button", { name: "Previous week", exact: true });
@@ -60,11 +67,11 @@ async function ensureLocatorVisibleByWeekNavigation(
 
   for (let i = 0; i < maxAhead; i++) {
     await clickNavAndAwaitGrid(nextWeek);
-    if (await target().isVisible().catch(() => false)) return;
+    if (await isNowVisible(1_500)) return;
   }
   for (let i = 0; i < maxBack; i++) {
     await clickNavAndAwaitGrid(prevWeek);
-    if (await target().isVisible().catch(() => false)) return;
+    if (await isNowVisible(1_500)) return;
   }
 
   await target().waitFor({ state: "visible", timeout: 8_000 });

@@ -68,7 +68,7 @@ Browser
 - Multi-tenant: tenant ID is embedded in the JWT and carried in request context throughout the backend.
 - Auth: Spring Security + JWT. Public routes: `/health`, `/swagger-ui.html`, `/v3/api-docs` (`SecurityConfig.java`).
 - DB migrations: Flyway (SQL Server format) in `src/main/resources/db/migration/`. Tests use H2 (MSSQL compat mode) with JPA `create-drop` — Flyway is disabled for `e2e` profile.
-- Demo seed: `FemmeDataInitializer` seeds tenant id=1, user `admin@demo.com` / `Demo123!` on first boot.
+- Demo seed: `FemmeDataInitializer` seeds tenant id=1, user `isabelzymanscki@gmail.com` / `Demo123!` on first boot.
 
 ### Frontend structure
 
@@ -135,7 +135,7 @@ Wire search/filter fields with `<form onSubmit>` + `type="submit"` button so pre
 
 ### Branching
 
-Trunk-based development off `main`. Branch names: `<type>/<issue-number>_short-description` (e.g. `feat/HU-07_agendar-turno`). Types: `feat`, `bugfix`, `chore`, `docs`, `refactor`, `test`.
+Gitflow: `develop` is the integration branch, `main` is the release branch. Cut feature/bugfix branches from `develop`, named `<type>/<issue-number>_short-description` (e.g. `feat/HU-07_agendar-turno`). Types: `feat`, `bugfix`, `chore`, `docs`, `refactor`, `test`. PRs from these branches target `develop`. Only open a PR into `main` when the user explicitly asks for one (e.g. a release cut).
 
 ### Automated tests
 EVERY acceptance criteria of EVERY user story MUST be covered by an automated test implemented with playwright.

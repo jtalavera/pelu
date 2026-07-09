@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  apiGetJson,
   apiPostJson,
   apiPutJson,
   ensureActiveFiscalStampForInvoices,
@@ -9,7 +10,26 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import {
+  clickIssueInvoiceAndExpectSuccess,
+  expectedInvoiceFilename,
+  pickServiceLine,
+} from "../fixtures/invoice";
+
+/** Fetches issuedAt + fiscalStampNumber for an invoice and builds its expected PDF filename (issue #84). */
+async function expectedFilenameForInvoice(
+  request: Parameters<typeof apiGetJson>[0],
+  token: string,
+  invoiceId: number,
+  invoiceNumberFormatted: string,
+): Promise<string> {
+  const detail = await apiGetJson<{ issuedAt: string; fiscalStampNumber: string }>(
+    request,
+    token,
+    `/api/invoices/${invoiceId}`,
+  );
+  return expectedInvoiceFilename(detail.issuedAt, detail.fiscalStampNumber, invoiceNumberFormatted);
+}
 
 test.describe.configure({ mode: "serial" });
 
@@ -175,7 +195,7 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
-    await clickIssueInvoiceAndExpectSuccess(page);
+    const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     // The success alert appears with "Download PDF" button
     const downloadBtn = page.getByRole("button", { name: "Download PDF" });
@@ -186,6 +206,15 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
       page.waitForEvent("download", { timeout: 20_000 }),
       downloadBtn.click(),
     ]);
+
+    // Issue #84: proposed filename must be FACTURA-<yyyymmdd>-<timbrado>-<numero>.pdf
+    const expectedFilename = await expectedFilenameForInvoice(
+      request,
+      token,
+      issued.id,
+      issued.invoiceNumberFormatted,
+    );
+    expect(download.suggestedFilename()).toBe(expectedFilename);
 
     const path = await download.path();
     expect(path).not.toBeNull();
@@ -231,6 +260,15 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
       page.waitForEvent("download", { timeout: 20_000 }),
       downloadBtn.click(),
     ]);
+
+    // Issue #84: proposed filename must be FACTURA-<yyyymmdd>-<timbrado>-<numero>.pdf
+    const expectedFilename = await expectedFilenameForInvoice(
+      request,
+      token,
+      inv.id,
+      inv.invoiceNumberFormatted,
+    );
+    expect(download.suggestedFilename()).toBe(expectedFilename);
 
     const path = await download.path();
     expect(path).not.toBeNull();

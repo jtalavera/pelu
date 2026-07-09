@@ -134,11 +134,13 @@ public class InvoiceService {
               .orElseThrow(
                   () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
       invoice.setClient(client);
-      // clientDisplayName is full name; clientRucOverride can override profile RUC
+      // clientDisplayName is full name; clientRucOverride can override profile RUC.
+      // Issue #96: a blank display name stays blank (PDF prints "Sin nombre") rather than
+      // silently falling back to the client's profile name.
       invoice.setClientDisplayName(
           request.clientDisplayName() != null && !request.clientDisplayName().isBlank()
               ? request.clientDisplayName().trim()
-              : client.getFullName());
+              : null);
     } else {
       invoice.setClientDisplayName(
           request.clientDisplayName() != null && !request.clientDisplayName().isBlank()

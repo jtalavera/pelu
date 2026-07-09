@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
@@ -305,6 +306,20 @@ class InvoicePdfServiceTest {
     assertThat(rows.get(1).description()).contains("Corte").contains("Dto.");
   }
 
+  /** Issue #90: a per-item discount description prints the discount data before the item name. */
+  @Test
+  void buildDetailRows_discountDescriptionPutsDiscountDataBeforeItemName() {
+    InvoiceLine l = line("Corte", 1, "10000", "10", DiscountType.PERCENT, "10", "9000");
+    Invoice invoice = mock(Invoice.class);
+    when(invoice.getLines()).thenReturn(List.of(l));
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("9000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("9000"));
+    when(invoice.getDiscountType()).thenReturn(DiscountType.NONE);
+
+    List<InvoicePdfService.DetailRow> rows = InvoicePdfService.buildDetailRows(invoice);
+    assertThat(rows.get(1).description()).isEqualTo("Dto. 10% Corte");
+  }
+
   /**
    * AC6: the global discount is split negatively across columns and sums exactly to the discount.
    */
@@ -323,7 +338,8 @@ class InvoicePdfServiceTest {
     // 2 item rows + 1 global discount row
     assertThat(rows).hasSize(3);
     InvoicePdfService.DetailRow global = rows.get(2);
-    assertThat(global.description()).contains("global");
+    // Issue #94: fixed-amount global discount prints a plain label, not "Dto. global Dto. .".
+    assertThat(global.description()).isEqualTo("Dto. global Monto fijo");
     BigDecimal sum = BigDecimal.ZERO;
     for (int c = 0; c < 3; c++) {
       if (global.columnAmounts()[c] != null) {
@@ -334,6 +350,24 @@ class InvoicePdfServiceTest {
     // 40/60 split of 1000 → 400 / 600
     assertThat(global.columnAmounts()[1]).isEqualByComparingTo("-400");
     assertThat(global.columnAmounts()[2]).isEqualByComparingTo("-600");
+  }
+
+  /**
+   * Issue #94: a percentage global discount prints "Dto. global X%", not a doubled "Dto." prefix.
+   */
+  @Test
+  void buildDetailRows_globalDiscountPercent_printsPercentageWithoutDoublePrefix() {
+    InvoiceLine iva10 = line("B", 1, "10000", "10", DiscountType.NONE, null, "10000");
+    Invoice invoice = mock(Invoice.class);
+    when(invoice.getLines()).thenReturn(List.of(iva10));
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("10000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("9000")); // global discount 1000 (10%)
+    when(invoice.getDiscountType()).thenReturn(DiscountType.PERCENT);
+    when(invoice.getDiscountValue()).thenReturn(new BigDecimal("10"));
+
+    List<InvoicePdfService.DetailRow> rows = InvoicePdfService.buildDetailRows(invoice);
+    InvoicePdfService.DetailRow global = rows.get(rows.size() - 1);
+    assertThat(global.description()).isEqualTo("Dto. global 10%");
   }
 
   @Test
@@ -360,6 +394,87 @@ class InvoicePdfServiceTest {
     byte[] pdf = svc.renderPdf(invoice);
     String text = extractText(pdf);
     assertThat(text).contains("Dto.");
+  }
+
+  /**
+   * Issue #102: reproduces the issue's own worked example — an 88.000 Gs. line (IVA 10%) with an
+   * 8.000 Gs. global discount bringing the total to 80.000 Gs. The IVA-10% summary must be
+   * 80.000/11 = 7.273 (the FINAL total), not 88.000/11 = 8.000 (the pre-discount subtotal, which
+   * happens to equal the line's stale persisted taxAmount).
+   */
+  @Test
+  void renderPdf_ivaSummary_usesFinalTotalNetOfGlobalDiscount() throws Exception {
+    InvoicePdfService svc = newService();
+    InvoiceLine item = new InvoiceLine();
+    item.setDescription("Corte");
+    item.setQuantity(1);
+    item.setUnitPrice(new BigDecimal("88000"));
+    item.setLineTotal(new BigDecimal("88000"));
+    item.setTaxRate(new BigDecimal("10.0000"));
+    item.setTaxAmount(new BigDecimal("8000")); // stale pre-discount snapshot: 88000/11
+
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("88000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("80000")); // after an 8.000 global discount
+    when(invoice.getDiscountType()).thenReturn(DiscountType.FIXED);
+    when(invoice.getDiscountValue()).thenReturn(new BigDecimal("8000"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+    List<float[]> iva10Pos = findTextPositions(pdf, "7.273");
+    assertThat(iva10Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) iva10Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_IVA10, within(1.0));
+    assertThat((double) iva10Pos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
+  }
+
+  /**
+   * Issue #102: mixed 10%/5% invoice with a proportional global discount — each bracket's IVA must
+   * be computed from its own post-discount column total (via total*rate/(100+rate): /11 for 10%,
+   * /21 for 5%), and the "Total IVA" field is their sum.
+   */
+  @Test
+  void renderPdf_ivaSummary_mixedBrackets_eachUsesOwnPostDiscountColumnTotal() throws Exception {
+    InvoicePdfService svc = newService();
+    InvoiceLine item10 = new InvoiceLine();
+    item10.setDescription("Corte");
+    item10.setQuantity(1);
+    item10.setUnitPrice(new BigDecimal("88000"));
+    item10.setLineTotal(new BigDecimal("88000"));
+    item10.setTaxRate(new BigDecimal("10.0000"));
+    item10.setTaxAmount(new BigDecimal("8000"));
+
+    InvoiceLine item5 = new InvoiceLine();
+    item5.setDescription("Producto");
+    item5.setQuantity(1);
+    item5.setUnitPrice(new BigDecimal("42000"));
+    item5.setLineTotal(new BigDecimal("42000"));
+    item5.setTaxRate(new BigDecimal("5.0000"));
+    item5.setTaxAmount(new BigDecimal("2000"));
+
+    Invoice invoice = baseInvoice(List.of(item10, item5), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("130000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("117000")); // 10% global discount (13.000)
+    when(invoice.getDiscountType()).thenReturn(DiscountType.PERCENT);
+    when(invoice.getDiscountValue()).thenReturn(new BigDecimal("10"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+
+    // Column totals after the proportional split: IVA10 column 79.200 (88000-8800), IVA5 column
+    // 37.800 (42000-4200) -> IVA10 = 79200/11 = 7.200, IVA5 = 37800/21 = 1.800, Total = 9.000.
+    List<float[]> iva10Pos = findTextPositions(pdf, "7.200");
+    assertThat(iva10Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) iva10Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_IVA10, within(1.0));
+    assertThat((double) iva10Pos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
+
+    List<float[]> iva5Pos = findTextPositions(pdf, "1.800");
+    assertThat(iva5Pos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) iva5Pos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_IVA5, within(1.0));
+    assertThat((double) iva5Pos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
+
+    List<float[]> totalIvaPos = findTextPositions(pdf, "9.000");
+    assertThat(totalIvaPos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) totalIvaPos.get(0)[0])
+        .isCloseTo(InvoicePdfService.L_X_TOTAL_IVA, within(1.0));
+    assertThat((double) totalIvaPos.get(0)[1]).isCloseTo(InvoicePdfService.L_Y_IVA, within(1.0));
   }
 
   /** Issue #55: the PDF must contain the grand total spelled out in Spanish. */
@@ -401,23 +516,91 @@ class InvoicePdfServiceTest {
     assertThat(InvoicePdfService.lineDescriptionForPrint(line)).isEqualTo("Ítem manual");
   }
 
+  // ─── Issue #90: description truncation (no wrapping) ──────────────────────
+
+  @Test
+  void truncatedDescription_shortTextUnchanged() {
+    assertThat(InvoicePdfService.truncatedDescription("Corte")).isEqualTo("Corte");
+  }
+
+  @Test
+  void truncatedDescription_exactlyEighteenCharsUnchanged() {
+    String eighteenChars = "Tintura pelo corto"; // 18 chars exactly
+    assertThat(eighteenChars).hasSize(18);
+    assertThat(InvoicePdfService.truncatedDescription(eighteenChars)).isEqualTo(eighteenChars);
+  }
+
+  /** Issue #90 AC1: text over 18 chars is cut, not wrapped onto a second line. */
+  @Test
+  void truncatedDescription_cutsTextLongerThanEighteenChars() {
+    String result = InvoicePdfService.truncatedDescription("Tintura pelo mediano");
+    assertThat(result).hasSize(18);
+    assertThat(result).isEqualTo("Tintura pelo medi.");
+  }
+
+  @Test
+  void truncatedDescription_nullOrBlank_returnsEmptyString() {
+    assertThat(InvoicePdfService.truncatedDescription(null)).isEmpty();
+    assertThat(InvoicePdfService.truncatedDescription("   ")).isEqualTo("   ");
+  }
+
+  /** Issue #90 AC2: discount-before-item-name descriptions are truncated the same way. */
+  @Test
+  void truncatedDescription_truncatesDiscountPlusItemNameCombination() {
+    String result = InvoicePdfService.truncatedDescription("Dto. 10% PINTURA DE MANOS");
+    assertThat(result).hasSize(18);
+    assertThat(result).startsWith("Dto. 10%");
+  }
+
   // ─── Layout / coordinate tests (calibrated to factura_vieja_femme.pdf) ────
 
   /**
-   * The generated PDF must use the 756×424 pt page size matching factura_vieja_femme.pdf (MediaBox
-   * [0 0 424 756] + /Rotate 90 ≈ 26.67×14.96 cm landscape).
+   * Issue #105: the generated PDF must use the real paper size, 660.47×396.85 pt (23.3×14 cm
+   * landscape).
    */
   @Test
-  void renderPdf_pageSizeIs756x424() throws Exception {
+  void renderPdf_pageSizeMatchesRealPaper() throws Exception {
     byte[] pdf = newService().renderPdf(baseInvoice(List.of(singleLine()), List.of()));
     PdfReader reader = new PdfReader(pdf);
     try {
       com.lowagie.text.Rectangle size = reader.getPageSize(1);
-      assertThat((double) size.getWidth()).isCloseTo(756.0, within(1.0));
-      assertThat((double) size.getHeight()).isCloseTo(424.0, within(1.0));
+      assertThat((double) size.getWidth()).isCloseTo(InvoicePdfService.PAGE_WIDTH_PT, within(1.0));
+      assertThat((double) size.getHeight())
+          .isCloseTo(InvoicePdfService.PAGE_HEIGHT_PT, within(1.0));
     } finally {
       reader.close();
     }
+  }
+
+  /**
+   * Issue #96: a client is selected but display name and RUC are left blank — the PDF prints "Sin
+   * nombre" for the name and leaves the RUC blank, even though the selected client has a RUC on
+   * file (it must not be used as a fallback).
+   */
+  @Test
+  void renderPdf_clientSelectedBlankNameAndRuc_printsSinNombreAndOmitsClientRuc() throws Exception {
+    InvoicePdfService svc = newService();
+    InvoiceLine item = new InvoiceLine();
+    item.setDescription("Corte");
+    item.setQuantity(1);
+    item.setUnitPrice(new BigDecimal("50000"));
+    item.setLineTotal(new BigDecimal("50000"));
+    item.setTaxRate(new BigDecimal("10.0000"));
+
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getClientDisplayName()).thenReturn(null);
+    when(invoice.getClientRucOverride()).thenReturn(null);
+    Client client = new Client();
+    client.setRuc("80000005-6"); // has a profile RUC — must NOT be used as a fallback
+    when(invoice.getClient()).thenReturn(client);
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("50000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("50000"));
+
+    byte[] pdf = svc.renderPdf(invoice);
+    String text = extractText(pdf);
+
+    assertThat(text).contains("Sin nombre");
+    assertThat(text).doesNotContain("80000005-6");
   }
 
   /**
@@ -477,16 +660,16 @@ class InvoicePdfServiceTest {
         .as("IVA-10% amount should appear at left panel detail row x=254, y=256.54")
         .isTrue();
 
-    // Subtotal — LEFT-aligned at (L_X_TAX_COL10=254, L_Y_SUBTOTALS=114.7)
+    // Subtotal ("Monto total") — LEFT-aligned at (L_X_SUBTOTAL_TAX10, L_Y_SUBTOTALS)
     List<float[]> subtotalPos = findTextPositions(pdf, "100.000");
     boolean foundSubtotalLeft =
         subtotalPos.stream()
             .anyMatch(
                 p ->
-                    Math.abs(p[0] - InvoicePdfService.L_X_TAX_COL10) < 1.5
+                    Math.abs(p[0] - InvoicePdfService.L_X_SUBTOTAL_TAX10) < 1.5
                         && Math.abs(p[1] - InvoicePdfService.L_Y_SUBTOTALS) < 1.5);
     assertThat(foundSubtotalLeft)
-        .as("Subtotal should appear at left panel subtotals position x=254, y=114.7")
+        .as("Subtotal should appear at left panel subtotals anchor")
         .isTrue();
 
     // Amount in words — LEFT-aligned at (L_X_WORDS=1, L_Y_WORDS=86.87)
@@ -580,6 +763,113 @@ class InvoicePdfServiceTest {
     assertThat((double) wordsPos.get(1)[1]).isCloseTo(InvoicePdfService.R_Y_WORDS, within(1.0));
   }
 
+  // ─── Issue #86: left-panel description alignment + wrapping ─────────────────
+
+  /** Issue #86 AC1: left-panel description must be LEFT-aligned, not centered. */
+  @Test
+  void renderPdf_leftPanelDescriptionIsLeftAlignedNotCentered() throws Exception {
+    InvoiceLine item = line("Corte", 1, "100000", "10", DiscountType.NONE, null, "100000");
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("100000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("100000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    List<float[]> descPos = findTextPositions(pdf, "Corte");
+    assertThat(descPos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) descPos.get(0)[0]).isCloseTo(InvoicePdfService.L_X_DESC_LEFT, within(1.0));
+    assertThat((double) descPos.get(0)[1])
+        .isCloseTo(InvoicePdfService.TABLE_FIRST_ROW_Y, within(1.0));
+  }
+
+  /** Issue #90 AC1: a description over 18 chars is truncated to one line, not wrapped. */
+  @Test
+  void renderPdf_leftPanelLongDescriptionIsTruncatedToOneLine() throws Exception {
+    InvoiceLine item =
+        line("Tintura pelo mediano", 1, "250000", "10", DiscountType.NONE, null, "250000");
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("250000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("250000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    String text = extractText(pdf);
+
+    assertThat(text).doesNotContain("Tintura pelo mediano");
+    assertThat(text).doesNotContain("mediano");
+
+    List<float[]> truncatedPos = findTextPositions(pdf, "Tintura pelo medi.");
+    assertThat(truncatedPos).hasSizeGreaterThanOrEqualTo(2);
+    assertThat((double) truncatedPos.get(0)[0])
+        .isCloseTo(InvoicePdfService.L_X_DESC_LEFT, within(1.0));
+    assertThat((double) truncatedPos.get(0)[1])
+        .isCloseTo(InvoicePdfService.TABLE_FIRST_ROW_Y, within(1.0));
+  }
+
+  /** Issue #90: the item after a truncated (still single-line) row starts one row slot below. */
+  @Test
+  void renderPdf_nextItemAfterLongDescriptionStartsOneSlotBelow() throws Exception {
+    InvoiceLine longDesc =
+        line("Tintura pelo mediano", 1, "250000", "10", DiscountType.NONE, null, "250000");
+    InvoiceLine next = line("Corte", 3, "10000", "10", DiscountType.NONE, null, "30000");
+    Invoice invoice = baseInvoice(List.of(longDesc, next), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("280000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("280000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    float expectedY = InvoicePdfService.TABLE_FIRST_ROW_Y - InvoicePdfService.ROW_STEP_PT;
+
+    List<float[]> nextQtyPos = findTextPositions(pdf, "3");
+    boolean found =
+        nextQtyPos.stream()
+            .anyMatch(
+                p ->
+                    Math.abs(p[0] - InvoicePdfService.L_X_QTY) < 1.5
+                        && Math.abs(p[1] - expectedY) < 1.5);
+    assertThat(found).as("second item should start 1 row-slot below the first").isTrue();
+
+    List<float[]> nextDescPos = findTextPositions(pdf, "Corte");
+    boolean descFound =
+        nextDescPos.stream()
+            .anyMatch(
+                p ->
+                    Math.abs(p[0] - InvoicePdfService.L_X_DESC_LEFT) < 1.5
+                        && Math.abs(p[1] - expectedY) < 1.5);
+    assertThat(descFound).as("second item's description should start 1 row-slot below").isTrue();
+  }
+
+  /** MAX_ROWS caps the detail table at 11 rows; a 12th item does not fit and is dropped. */
+  @Test
+  void renderPdf_maxRowsBudgetCapsAtElevenRows() throws Exception {
+    List<InvoiceLine> lines = new ArrayList<>();
+    for (int i = 1; i <= 12; i++) {
+      lines.add(
+          line(String.format("Item%02d", i), 1, "1000", "10", DiscountType.NONE, null, "1000"));
+    }
+    Invoice invoice = baseInvoice(lines, List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("12000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("12000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    String text = extractText(pdf);
+
+    assertThat(text).contains("Item11");
+    assertThat(text).doesNotContain("Item12");
+  }
+
+  /** Issue #90 AC2: per-item discount descriptions print "Dto. X%" before the item name. */
+  @Test
+  void renderPdf_discountDescriptionPrintsDiscountBeforeItemName() throws Exception {
+    InvoiceLine item = line("Corte", 1, "10000", "10", DiscountType.PERCENT, "10", "9000");
+    Invoice invoice = baseInvoice(List.of(item), List.of());
+    when(invoice.getSubtotal()).thenReturn(new BigDecimal("9000"));
+    when(invoice.getTotal()).thenReturn(new BigDecimal("9000"));
+
+    byte[] pdf = newService().renderPdf(invoice);
+    String text = extractText(pdf);
+
+    assertThat(text).contains("Dto. 10% Corte");
+    assertThat(text).doesNotContain("Corte Dto. 10%");
+  }
+
   /**
    * Phone numbers must not be drawn in the PDF. The reference form (factura_vieja_femme.pdf) does
    * not include a client phone field.
@@ -597,6 +887,17 @@ class InvoicePdfServiceTest {
     byte[] pdf = newService().renderPdf(invoice);
     String text = extractText(pdf);
     assertThat(text).doesNotContain("0981-123456");
+  }
+
+  // ─── Issue #84: invoice PDF filename ──────────────────────────────────────
+
+  /** Filename must be FACTURA-<yyyymmdd>-<timbrado>-<numero de comprobante>.pdf. */
+  @Test
+  void buildFilename_matchesRequiredFormat() {
+    InvoicePdfService svc = newService();
+    Invoice invoice = baseInvoice(List.of(singleLine()), List.of());
+
+    assertThat(svc.buildFilename(invoice)).isEqualTo("FACTURA-20260407-SET-1-0000007.pdf");
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────

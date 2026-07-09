@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loginAsDemo } from "../fixtures/auth";
+import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
 import { apiBaseUrl } from "../fixtures/api";
 
 /** Creates a professional via the API and returns their id. */
@@ -23,7 +23,7 @@ async function adminToken(baseUrl: string): Promise<string> {
   const res = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "admin@demo.com", password: "Demo123!" }),
+    body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD }),
   });
   const data = (await res.json()) as { accessToken: string };
   return data.accessToken;
