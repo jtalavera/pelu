@@ -106,3 +106,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "frontend_custom_domains" {
+  description = "Custom domains already registered on the Static Web App outside Terraform (e.g. [\"flowbit.tech\", \"www.flowbit.tech\"]), added as allowed CORS origins."
+  type        = list(string)
+  default     = []
+}

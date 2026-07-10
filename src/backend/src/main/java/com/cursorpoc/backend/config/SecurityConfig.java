@@ -3,6 +3,7 @@ package com.cursorpoc.backend.config;
 import com.cursorpoc.backend.security.JwtAuthenticationFilter;
 import com.cursorpoc.backend.security.JwtService;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -67,12 +68,15 @@ public class SecurityConfig {
     List<String> originPatterns = new ArrayList<>();
     originPatterns.add("http://localhost:5173");
     originPatterns.add("http://127.0.0.1:5173");
-    if (StringUtils.hasText(appFrontendUrl)) {
-      String trimmed = appFrontendUrl.trim();
-      if (!originPatterns.contains(trimmed)) {
-        originPatterns.add(trimmed);
-      }
-    }
+    Arrays.stream(appFrontendUrl.split(","))
+        .map(String::trim)
+        .filter(StringUtils::hasText)
+        .forEach(
+            origin -> {
+              if (!originPatterns.contains(origin)) {
+                originPatterns.add(origin);
+              }
+            });
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOriginPatterns(originPatterns);
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
