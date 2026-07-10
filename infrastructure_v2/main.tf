@@ -25,7 +25,12 @@ locals {
     local.sql_db
   )
 
-  frontend_origin    = "https://${azurerm_static_web_app.frontend.default_host_name}"
+  # Comma-separated origins for CORS: the SWA default host plus any custom domains
+  # already registered on the Static Web App outside Terraform (var.frontend_custom_domains).
+  frontend_allowed_origins = join(",", concat(
+    ["https://${azurerm_static_web_app.frontend.default_host_name}"],
+    [for d in var.frontend_custom_domains : "https://${d}"]
+  ))
   acs_sender_address = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
 
   # Tags applied to every resource. Additional tags can be passed via var.tags.
@@ -265,7 +270,7 @@ resource "azurerm_container_app" "backend" {
 
       env {
         name  = "APP_FRONTEND_URL"
-        value = local.frontend_origin
+        value = local.frontend_allowed_origins
       }
 
       env {
@@ -327,6 +332,12 @@ resource "azurerm_container_app" "backend" {
       percentage      = 100
       latest_revision = true
     }
+  }
+
+  # CI deploys new images via `az containerapp update --image` between applies;
+  # ignore drift here so `terraform apply` doesn't revert to backend_container_image.
+  lifecycle {
+    ignore_changes = [template[0].container[0].image]
   }
 }
 

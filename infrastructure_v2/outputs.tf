@@ -45,8 +45,8 @@ output "jdbc_url" {
 }
 
 output "frontend_origin_for_cors" {
-  description = "Frontend origin used in CORS (APP_FRONTEND_URL env var on the Container App)."
-  value       = local.frontend_origin
+  description = "Comma-separated frontend origins used in CORS (APP_FRONTEND_URL env var on the Container App)."
+  value       = local.frontend_allowed_origins
 }
 
 output "acs_sender_address" {

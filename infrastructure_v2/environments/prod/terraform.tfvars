@@ -24,3 +24,7 @@ backend_max_replicas = 1
 sql_backup_storage_redundancy = "Zone"
 
 log_analytics_daily_quota_gb = 0.5
+
+# Custom domains already registered on the Static Web App via the Azure Portal
+# (not managed by Terraform); added as allowed CORS origins on the backend.
+frontend_custom_domains = ["flowbit.tech", "www.flowbit.tech"]
