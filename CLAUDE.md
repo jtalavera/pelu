@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Frontend | `src/frontend/` | React 18 + Vite + TypeScript 5.4 + Tailwind + i18next | `:5173` |
 | Backend  | `src/backend/`  | Spring Boot 4 (Java 21) + Spring Security (JWT) + SQL Server + Flyway | `:8080` |
 
-E2E tests live in `e2e/` (Playwright). Infrastructure is Terraform (Azure) under `infrastructure/`.
+E2E tests live in `e2e/` (Playwright). Infrastructure is Terraform (Azure) under `infrastructure_v2/`.
 
 Product requirements: `requirements/prds/femme_historias_usuario_mvp_v1.md` (cross-cutting definitions: multi-tenant, server timezone UTC, etc.). User stories: `requirements/user_stories/`.
 
