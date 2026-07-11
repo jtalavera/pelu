@@ -24,8 +24,8 @@ Browser
 Both environments run from this single root module with per-environment
 `environments/<env>/backend.hcl` + `environments/<env>/terraform.tfvars`.
 
-**During migration:** the existing v1 pipeline (`ci.yml`) continues deploying to v1
-on push to `main`. Both pipelines run in parallel until v2 is validated.
+This is now the sole deploy pipeline — the legacy v1 pipeline and its Terraform
+code (`infrastructure/`, `ci.yml`) have been retired.
 
 ## Estimated monthly cost
 
@@ -160,9 +160,8 @@ Create two environments — **v2-test** and **v2-production** — each with:
   4. Re-run the managed-identity DB user grant (see above).
   5. Update `VITE_API_BASE_URL` and re-deploy frontend if FQDNs changed.
 
-## Retiring v1 (future)
+## v1 retirement (done)
 
-Once v2 is validated:
-1. Remove the `deploy` job from `.github/workflows/ci.yml`.
-2. Leave the v1 Azure resources running until traffic is confirmed on v2.
-3. Destroy v1 with `cd infrastructure/terraform && terraform destroy`.
+v1 has been fully retired: `.github/workflows/ci.yml` and the `infrastructure/`
+Terraform code were removed once v2 traffic was confirmed and the v1 Azure
+resources were decommissioned.

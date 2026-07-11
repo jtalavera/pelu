@@ -1,10 +1,7 @@
-# Deploys the v2 infrastructure targets alongside the existing v1 pipeline (ci.yml).
+# Deploys the v2 infrastructure targets.
 # Triggers:
 #   develop → v2-test environment (subscription 677a6eab…)
 #   main    → v2-production environment (subscription 9e394b80…)
-#
-# ci.yml continues deploying to v1 on push to main — both run in parallel during migration.
-# Once v2 is validated, remove the v1 deploy job from ci.yml.
 name: Deploy v2
 
 on:
@@ -149,7 +146,7 @@ jobs:
       VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
       AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
 
-  # Deploys to v2-production on push to main (runs alongside the v1 ci.yml deploy during migration).
+  # Deploys to v2-production on push to main.
   # Secrets are resolved from the 'v2-production' GitHub Environment.
   deploy-prod:
     name: Deploy to v2-production
