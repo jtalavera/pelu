@@ -84,6 +84,41 @@ variable "backend_max_replicas" {
   }
 }
 
+variable "backend_wake_schedule_enabled" {
+  description = "Enable a KEDA cron scale rule that keeps the backend warm (1+ replicas) on a schedule, on top of the scale-to-zero min_replicas. Used to avoid cold-start latency during business hours."
+  type        = bool
+  default     = false
+}
+
+variable "backend_wake_schedule_timezone" {
+  description = "IANA timezone for the wake schedule cron expressions (e.g. 'America/Asuncion')."
+  type        = string
+  default     = "America/Asuncion"
+}
+
+variable "backend_wake_schedule_start" {
+  description = "Cron expression (KEDA cron scaler format) for when the backend should scale up to backend_wake_schedule_replicas. Default: 07:00, Monday-Saturday."
+  type        = string
+  default     = "0 7 * * 1-6"
+}
+
+variable "backend_wake_schedule_end" {
+  description = "Cron expression (KEDA cron scaler format) for when the backend may resume scaling to zero. Default: 20:00, Monday-Saturday."
+  type        = string
+  default     = "0 20 * * 1-6"
+}
+
+variable "backend_wake_schedule_replicas" {
+  description = "Desired replica count during the wake window."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.backend_wake_schedule_replicas >= 1
+    error_message = "backend_wake_schedule_replicas must be at least 1."
+  }
+}
+
 variable "sql_backup_storage_redundancy" {
   description = "Backup storage redundancy for the SQL database. 'Local' for test (cheapest); 'Zone' for prod (zone-resilient PITR backups, free-limit compatible)."
   type        = string

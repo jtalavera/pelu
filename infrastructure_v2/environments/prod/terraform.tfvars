@@ -19,6 +19,11 @@ entra_sql_admin_object_id = "53c652ae-0159-4a39-9a38-b7444c89156e"
 backend_min_replicas = 0
 backend_max_replicas = 1
 
+# Keep the backend warm 07:00-20:00, Monday-Saturday (America/Asuncion) so the
+# first customer each day doesn't hit a cold start; scales to zero outside
+# this window and on Sundays.
+backend_wake_schedule_enabled = true
+
 # Zone-redundant PITR backups — protects restores from a single-AZ failure.
 # The DB itself is non-zonal so the SQL free-limit grant is kept.
 sql_backup_storage_redundancy = "Zone"

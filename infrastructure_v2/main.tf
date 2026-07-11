@@ -243,6 +243,23 @@ resource "azurerm_container_app" "backend" {
     min_replicas = var.backend_min_replicas
     max_replicas = var.backend_max_replicas
 
+    # Keeps the backend warm on a schedule (e.g. business hours) on top of
+    # scale-to-zero, to avoid cold-start latency for the first users each day.
+    # min_replicas stays 0 so the app still scales down outside the window.
+    dynamic "custom_scale_rule" {
+      for_each = var.backend_wake_schedule_enabled ? [1] : []
+      content {
+        name             = "wake-schedule"
+        custom_rule_type = "cron"
+        metadata = {
+          timezone        = var.backend_wake_schedule_timezone
+          start           = var.backend_wake_schedule_start
+          end             = var.backend_wake_schedule_end
+          desiredReplicas = tostring(var.backend_wake_schedule_replicas)
+        }
+      }
+    }
+
     container {
       name   = "backend"
       image  = var.backend_container_image
