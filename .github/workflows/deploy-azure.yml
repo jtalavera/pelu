@@ -1,5 +1,5 @@
 # Deploys backend (GHCR → Azure Container Apps) and frontend (Azure Static Web Apps)
-# after CI succeeds on a push to main. Invoked via workflow_call from ci.yml (same commit as CI;
+# after CI succeeds. Invoked via workflow_call from deploy-v2.yml (same commit as CI;
 # avoids workflow_run + head_sha checkout, which Semgrep flags as unsafe with secrets).
 # Manual runs: workflow_dispatch.
 name: Deploy Azure
@@ -125,7 +125,7 @@ jobs:
           set -euo pipefail
           APP="${{ secrets.AZURE_CONTAINER_APP_NAME }}"
           RG="${{ secrets.AZURE_RESOURCE_GROUP_NAME }}"
-          # Probes and env are defined in infrastructure/terraform; only the image changes here.
+          # Probes and env are defined in infrastructure_v2; only the image changes here.
           az containerapp update -n "$APP" -g "$RG" \
             --image "${{ env.IMAGE_NAME_LOWER }}:${{ env.IMAGE_TAG }}"
 

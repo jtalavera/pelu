@@ -14,8 +14,8 @@ Single application with a **React** SPA and a **Spring Boot** API under `src/`. 
 | `src/frontend/`      | React app, Tailwind, i18n (English / Spanish), shared UI in `design-system/` |
 | `src/backend/`       | Spring Boot API (Java 21), Gradle wrapper                                    |
 | `e2e/`               | Playwright config and scripts (optional local use)                           |
-| `infrastructure/`    | Terraform and infra notes                                                    |
-| `.github/workflows/` | CI (`ci.yml`) and Azure deploy (`deploy-azure.yml`)                          |
+| `infrastructure_v2/` | Terraform and infra notes (dev/prod environments)                            |
+| `.github/workflows/` | CI + deploy (`deploy-v2.yml`) and reusable Azure deploy (`deploy-azure.yml`) |
 
 
 ## Tech stack
@@ -114,13 +114,13 @@ Other scripts:
 
 ## Continuous integration
 
-Workflow: [.github/workflows/ci.yml](.github/workflows/ci.yml)
+Workflow: [.github/workflows/deploy-v2.yml](.github/workflows/deploy-v2.yml)
 
-- **Frontend:** install, ESLint, `npm audit` (high+), Vitest, production build; uploads `dist` as an artifact.
-- **Backend:** Spotless (`spotlessCheck`), `./gradlew test`, `bootJar`, Trivy filesystem scan on `build/libs`; uploads the JAR.
+- **Frontend:** install, ESLint, `npm audit` (high+), Vitest, production build.
+- **Backend:** Spotless (`spotlessCheck`), `./gradlew test`, `bootJar`, Trivy filesystem scan on `build/libs`.
 - **SAST:** Semgrep (`semgrep scan --config auto`).
 
-Successful runs on `main` trigger the **Deploy to Azure** job (reusable workflow).
+Successful pushes trigger a deploy via the reusable [deploy-azure.yml](.github/workflows/deploy-azure.yml) workflow: `develop` → `v2-test`, `main` → `v2-production`.
 
 ## More documentation
 
