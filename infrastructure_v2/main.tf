@@ -305,11 +305,16 @@ resource "azurerm_container_app" "backend" {
         secret_name = "appinsights-connection-string"
       }
 
-      # HTTP probes on /health (public in SecurityConfig). Kept in Terraform so deploy
-      # only needs `az containerapp update --image` and does not re-specify probes in CI.
+      # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on
+      # /health were previously used here, but Container Apps counts HTTP probe
+      # traffic as container activity, which prevented scale-to-zero — the backend
+      # (and the SQL database behind it) stayed on indefinitely instead of pausing
+      # when idle. /health itself doesn't check anything beyond "the app is up"
+      # (see HealthController), so TCP loses no real signal. Kept in Terraform so
+      # deploy only needs `az containerapp update --image` and does not re-specify
+      # probes in CI.
       startup_probe {
-        transport               = "HTTP"
-        path                    = "/health"
+        transport               = "TCP"
         port                    = var.backend_container_port
         initial_delay           = 10
         interval_seconds        = 5
@@ -318,8 +323,7 @@ resource "azurerm_container_app" "backend" {
       }
 
       liveness_probe {
-        transport               = "HTTP"
-        path                    = "/health"
+        transport               = "TCP"
         port                    = var.backend_container_port
         initial_delay           = 0
         interval_seconds        = 30
@@ -328,8 +332,7 @@ resource "azurerm_container_app" "backend" {
       }
 
       readiness_probe {
-        transport               = "HTTP"
-        path                    = "/health"
+        transport               = "TCP"
         port                    = var.backend_container_port
         initial_delay           = 0
         interval_seconds        = 10
