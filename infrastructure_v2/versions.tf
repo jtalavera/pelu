@@ -21,11 +21,5 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
-    # Used to set properties not yet exposed by azurerm (e.g. SQL free-limit
-    # grant on azurerm_mssql_database — see main.tf).
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.0"
-    }
   }
 }

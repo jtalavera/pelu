@@ -34,11 +34,6 @@ output "sql_server_fqdn" {
   value       = azurerm_mssql_server.main.fully_qualified_domain_name
 }
 
-output "sql_server_name" {
-  description = "Name of the Azure SQL Server (for az cli commands that take a bare server name, not the FQDN)."
-  value       = azurerm_mssql_server.main.name
-}
-
 output "sql_database_name" {
   description = "Name of the SQL database."
   value       = azurerm_mssql_database.app.name

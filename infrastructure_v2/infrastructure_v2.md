@@ -33,12 +33,12 @@ code (`infrastructure/`, `ci.yml`) have been retired.
 |---|---|---|
 | Static Web App (Free) | $0 | $0 |
 | Container App (min 0, 0.25 vCPU / 0.5 GiB) | $0–2 | $0–2 |
-| Azure SQL (serverless GP_S_Gen5_1, auto-pause, free limit) | $0 | $0–5 |
+| Azure SQL (serverless GP_S_Gen5_1, auto-pause) | $0–5 | $5–15 |
 | SQL backup storage (Local / Zone) | $0–1 | $1–3 |
 | Log Analytics (0.5 GB/day cap) | $0–3 | $0–3 |
 | Application Insights (workspace-based) | $0–2 | $0–2 |
 | Communication Services (email) | $0–1 | $0–1 |
-| **Total** | **≈ $0–5** | **≈ $5–15** |
+| **Total** | **≈ $0–10** | **≈ $5–25** |
 
 ## Applying per environment
 
@@ -132,21 +132,19 @@ sqlcmd -S "$SERVER_FQDN" -d "$DB_NAME" \
 
 `db_ddladmin` is required so Flyway can run migrations on startup.
 
-## SQL free-limit grant
+## SQL free-limit grant (not enabled — known limitation)
 
 Azure grants one serverless General Purpose database per subscription up to
-100,000 free vCore-seconds (~27.7 vCore-hours) and 32GB storage per month.
-The azurerm provider doesn't yet expose `use_free_limit` /
-`free_limit_exhaustion_behavior` on `azurerm_mssql_database`
-([provider issue #23438](https://github.com/hashicorp/terraform-provider-azurerm/issues/23438)),
-so `terraform apply` sets it via the `azapi_update_resource.sql_database_free_limit`
-resource in `main.tf` instead — no manual step needed. It's configured with
-`BillOverUsage`, not `AutoPause`: `AutoPause` would hard-pause the database
-for the remainder of the calendar month once the free quota is exhausted
-(likely within the first week for prod's usage pattern), a real outage.
-`BillOverUsage` just bills normally past the free quota with no behavior
-change. Once the azurerm provider adds native support, this azapi resource
-should be replaced with the native attributes on `azurerm_mssql_database`.
+100,000 free vCore-seconds (~27.7 vCore-hours) and 32GB storage per month via
+`useFreeLimit`. This was investigated but **cannot be applied to these
+databases**: Azure rejects converting an already-provisioned "paid" database
+to the free tier (`ProvisioningDisabled: Cannot update paid database to free
+database`), via both the ARM API directly and `az sql db update`. The free
+offer can only be selected at database creation. Recreating the databases to
+pick it up isn't worth the risk to live data for the ~$15/month it would
+save. If this ever needs revisiting, it would require a new database created
+with `useFreeLimit` set from the start (and a data migration), not a
+Terraform/CLI update to the existing one.
 
 ## GitHub Environments (configure in GitHub repo settings)
 

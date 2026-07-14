@@ -158,26 +158,6 @@ resource "azurerm_mssql_database" "app" {
   tags = local.tags
 }
 
-# use_free_limit / free_limit_exhaustion_behavior aren't yet exposed by the
-# azurerm provider (https://github.com/hashicorp/terraform-provider-azurerm/issues/23438),
-# so patch them directly via azapi. Azure grants one serverless GP database per
-# subscription up to 100,000 free vCore-seconds (~27.7 vCore-hours) and 32GB
-# storage per month. BillOverUsage (not AutoPause) so exhausting the free quota
-# just bills normally instead of hard-pausing the database for the rest of the
-# month — AutoPause would mean a real outage once prod's usage exceeds the
-# free quota, which happens within the first week at its current usage rate.
-resource "azapi_update_resource" "sql_database_free_limit" {
-  type        = "Microsoft.Sql/servers/databases@2024-11-01-preview"
-  resource_id = azurerm_mssql_database.app.id
-
-  body = {
-    properties = {
-      useFreeLimit                = true
-      freeLimitExhaustionBehavior = "BillOverUsage"
-    }
-  }
-}
-
 resource "azurerm_mssql_server_extended_auditing_policy" "main" {
   server_id                               = azurerm_mssql_server.main.id
   log_monitoring_enabled                  = true
