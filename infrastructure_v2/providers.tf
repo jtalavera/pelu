@@ -12,3 +12,8 @@ provider "azurerm" {
 
 # Used to resolve Entra ID objects (SQL Entra admin group/user).
 provider "azuread" {}
+
+# Used to patch resource properties not yet exposed by azurerm.
+provider "azapi" {
+  subscription_id = var.subscription_id
+}
