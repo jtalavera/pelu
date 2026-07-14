@@ -152,6 +152,12 @@ resource "azurerm_mssql_database" "app" {
   min_capacity                = 0.5
   auto_pause_delay_in_minutes = 60
 
+  # The SQL free-limit grant (use_free_limit / free_limit_exhaustion_behavior)
+  # isn't yet exposed by the azurerm provider — see
+  # https://github.com/hashicorp/terraform-provider-azurerm/issues/23438.
+  # Enabled out-of-band via `az sql db update` instead; see
+  # infrastructure_v2.md "Post-apply: enable the SQL free-limit grant".
+
   # test: Local (cheapest). prod: Zone (zone-resilient PITR backups).
   storage_account_type = var.sql_backup_storage_redundancy
 
@@ -305,11 +311,16 @@ resource "azurerm_container_app" "backend" {
         secret_name = "appinsights-connection-string"
       }
 
-      # HTTP probes on /health (public in SecurityConfig). Kept in Terraform so deploy
-      # only needs `az containerapp update --image` and does not re-specify probes in CI.
+      # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on
+      # /health were previously used here, but Container Apps counts HTTP probe
+      # traffic as container activity, which prevented scale-to-zero — the backend
+      # (and the SQL database behind it) stayed on indefinitely instead of pausing
+      # when idle. /health itself doesn't check anything beyond "the app is up"
+      # (see HealthController), so TCP loses no real signal. Kept in Terraform so
+      # deploy only needs `az containerapp update --image` and does not re-specify
+      # probes in CI.
       startup_probe {
-        transport               = "HTTP"
-        path                    = "/health"
+        transport               = "TCP"
         port                    = var.backend_container_port
         initial_delay           = 10
         interval_seconds        = 5
@@ -318,8 +329,7 @@ resource "azurerm_container_app" "backend" {
       }
 
       liveness_probe {
-        transport               = "HTTP"
-        path                    = "/health"
+        transport               = "TCP"
         port                    = var.backend_container_port
         initial_delay           = 0
         interval_seconds        = 30
@@ -328,8 +338,7 @@ resource "azurerm_container_app" "backend" {
       }
 
       readiness_probe {
-        transport               = "HTTP"
-        path                    = "/health"
+        transport               = "TCP"
         port                    = var.backend_container_port
         initial_delay           = 0
         interval_seconds        = 10

@@ -132,6 +132,32 @@ sqlcmd -S "$SERVER_FQDN" -d "$DB_NAME" \
 
 `db_ddladmin` is required so Flyway can run migrations on startup.
 
+## Post-apply: enable the SQL free-limit grant
+
+Azure grants one serverless General Purpose database per subscription up to
+100,000 free vCore-seconds (~27.7 vCore-hours) and 32GB storage per month.
+The azurerm provider doesn't yet expose `use_free_limit` /
+`free_limit_exhaustion_behavior` on `azurerm_mssql_database`
+([provider issue #23438](https://github.com/hashicorp/terraform-provider-azurerm/issues/23438)),
+so this is enabled out-of-band. Run once per environment after `terraform
+apply` (and again if the SQL server/database is ever recreated, e.g. a
+`name_prefix` or region change forces replacement):
+
+```bash
+az sql db update \
+  --resource-group "<terraform output -raw resource_group_name>" \
+  --server "<terraform output -raw sql_server_name>" \
+  --name "<terraform output -raw sql_database_name>" \
+  --use-free-limit true \
+  --free-limit-exhaustion-behavior BillOverUsage
+```
+
+Use `BillOverUsage`, not `AutoPause` — `AutoPause` hard-pauses the database
+for the remainder of the calendar month once the free quota is exhausted
+(likely within the first week for prod's usage pattern), which would cause a
+real outage. `BillOverUsage` just bills normally past the free quota with no
+behavior change.
+
 ## GitHub Environments (configure in GitHub repo settings)
 
 Create two environments — **v2-test** and **v2-production** — each with:
