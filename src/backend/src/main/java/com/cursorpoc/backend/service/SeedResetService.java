@@ -131,6 +131,16 @@ public class SeedResetService {
     long deletedCategories = serviceCategoryRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} service_categories", deletedCategories);
 
+    // Safety net: findAllByTenant_Id above only catches invoices whose own tenant_id
+    // matches. An invoice created concurrently (e.g. by a live demo visitor) or with a
+    // mismatched tenant_id can still reference a demo-tenant client and would otherwise
+    // trip fk_inv_client on the client delete below.
+    List<Invoice> strayInvoices = invoiceRepository.findAllByClient_Tenant_Id(DEMO_TENANT_ID);
+    if (!strayInvoices.isEmpty()) {
+      invoiceRepository.deleteAll(strayInvoices);
+      log.info("Deleted {} stray invoices referencing demo-tenant clients", strayInvoices.size());
+    }
+
     long deletedClients = clientRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} clients", deletedClients);
 

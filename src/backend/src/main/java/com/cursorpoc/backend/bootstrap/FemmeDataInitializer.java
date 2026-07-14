@@ -14,10 +14,12 @@ import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
+import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
@@ -41,6 +43,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -66,6 +69,8 @@ public class FemmeDataInitializer {
   private final ProfessionalScheduleRepository professionalScheduleRepository;
   private final TaxRepository taxRepository;
   private final ClientRepository clientRepository;
+  private final InvoiceRepository invoiceRepository;
+  private final AppointmentRepository appointmentRepository;
   private final FemmeSystemAdminProperties systemAdminProperties;
   private final PasswordEncoder passwordEncoder;
 
@@ -81,6 +86,8 @@ public class FemmeDataInitializer {
       ProfessionalScheduleRepository professionalScheduleRepository,
       TaxRepository taxRepository,
       ClientRepository clientRepository,
+      InvoiceRepository invoiceRepository,
+      AppointmentRepository appointmentRepository,
       FemmeSystemAdminProperties systemAdminProperties,
       PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
@@ -94,12 +101,20 @@ public class FemmeDataInitializer {
     this.professionalScheduleRepository = professionalScheduleRepository;
     this.taxRepository = taxRepository;
     this.clientRepository = clientRepository;
+    this.invoiceRepository = invoiceRepository;
+    this.appointmentRepository = appointmentRepository;
     this.systemAdminProperties = systemAdminProperties;
     this.passwordEncoder = passwordEncoder;
   }
 
+  // Disabled as a production hotfix: this runner reconciles the catalog/client tables against
+  // static seed CSVs on every boot and was hard-deleting clients that had gained real invoices/
+  // appointments since the CSV was last updated, tripping fk_inv_client / fk_appt_client and
+  // crash-looping the container. Left in place pending a proper refactor; re-enable by setting
+  // femme.data-init.enabled=true.
   @Bean
   @Profile("!test")
+  @ConditionalOnProperty(name = "femme.data-init.enabled", havingValue = "true")
   CommandLineRunner femmeSeed() {
     return args -> {
       if (featureFlagRepository.findByFlagKey("GUIDED_TOUR").isEmpty()) {
@@ -427,9 +442,17 @@ public class FemmeDataInitializer {
     List<Client> existingClients = clientRepository.findByTenant_Id(tenantId);
     Set<String> existingNames = new HashSet<>();
     int deleted = 0;
+    int skippedInUse = 0;
     for (Client client : existingClients) {
       if (desiredClients.containsKey(client.getFullName())) {
         existingNames.add(client.getFullName());
+      } else if (invoiceRepository.existsByClient_Id(client.getId())
+          || appointmentRepository.existsByClient_Id(client.getId())) {
+        // This client has real invoices/appointments tied to it (created via live usage since
+        // the seed CSV was last updated). Deleting it would violate fk_inv_client/fk_appt_client
+        // and crash this CommandLineRunner on every subsequent boot. Keep it instead.
+        existingNames.add(client.getFullName());
+        skippedInUse++;
       } else {
         clientRepository.delete(client);
         deleted++;
@@ -451,11 +474,13 @@ public class FemmeDataInitializer {
     }
 
     log.info(
-        "Reconciled clients from CSV for tenant id={}: total={} (inserted={}, removed={})",
+        "Reconciled clients from CSV for tenant id={}: total={} (inserted={}, removed={},"
+            + " skippedInUse={})",
         tenantId,
         desiredClients.size(),
         inserted,
-        deleted);
+        deleted,
+        skippedInUse);
   }
 
   /** Reads {@code Descripcion;Estado} rows from the clients seed CSV, deduplicated by name. */

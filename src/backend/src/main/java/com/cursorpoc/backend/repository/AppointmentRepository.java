@@ -103,4 +103,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
 
   long deleteByTenant_Id(Long tenantId);
+
+  boolean existsByClient_Id(Long clientId);
 }

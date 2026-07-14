@@ -118,4 +118,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("cashSessionId") Long cashSessionId, @Param("status") InvoiceStatus status);
 
   List<Invoice> findAllByTenant_Id(Long tenantId);
+
+  List<Invoice> findAllByClient_Tenant_Id(Long tenantId);
+
+  boolean existsByClient_Id(Long clientId);
 }
