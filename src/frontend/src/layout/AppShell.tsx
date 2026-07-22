@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { useSessionRefresh } from "../auth/useSessionRefresh";
+import { useIdleLogout } from "../auth/useIdleLogout";
 import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -199,6 +200,7 @@ function AppShellInner() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalTab, setProfileModalTab] = useState<"profile" | "password">("profile");
   useSessionRefresh(true);
+  useIdleLogout(true, () => logout("idle"));
 
   useEffect(() => {
     return () => {
@@ -222,9 +224,9 @@ function AppShellInner() {
 
   const currentLang: SupportedLanguage = i18n.resolvedLanguage?.startsWith("es") ? "es" : "en";
 
-  function logout() {
+  function logout(reason?: "idle") {
     sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    navigate("/login", { replace: true });
+    navigate("/login", { replace: true, state: reason ? { reason } : undefined });
   }
 
   function switchLang(lang: SupportedLanguage) {
@@ -667,7 +669,7 @@ function AppShellInner() {
         {/* User block */}
         <button
           type="button"
-          onClick={logout}
+          onClick={() => logout()}
           aria-label={t("femme.nav.logout")}
           style={{
             paddingTop: 10,
