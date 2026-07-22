@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Button, Heading, Input, Label, Text } from "@design-system";
+import { Alert, Button, Heading, Input, Label, Text } from "@design-system";
 import { apiBaseUrl } from "../api/baseUrl";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { FieldValidationError } from "../components/FieldValidationError";
@@ -14,7 +14,9 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   useTour("login", loginSteps, undefined, false);
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/app";
+  const state = location.state as { from?: { pathname?: string }; reason?: string } | null;
+  const from = state?.from?.pathname ?? "/app";
+  const sessionExpired = state?.reason === "idle";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -101,6 +103,11 @@ export default function LoginPage() {
           <Text variant="muted" className="mb-6 text-[var(--color-ink-3)]">
             {t("femme.login.subtitle")}
           </Text>
+          {sessionExpired ? (
+            <Alert variant="info" className="mb-4">
+              {t("femme.login.sessionExpired")}
+            </Alert>
+          ) : null}
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>
             <div data-tour="login-email">
               <Label htmlFor="email" className="text-[var(--color-ink-2)]">
