@@ -4,12 +4,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
+import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
-import { formatGuaraniesGs } from "../lib/formatMoney";
+import { formatGuaraniesGs, formatAmountDecimal } from "../lib/formatMoney";
+import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useTour } from "../tour/useTour";
 import { dashboardSteps } from "../tour/steps/dashboard";
@@ -213,6 +216,8 @@ export default function DashboardPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [todayAppts, setTodayAppts]   = useState<Appointment[]>([]);
+  const [todayServiceRecords, setTodayServiceRecords] = useState<ServiceRecordListItem[]>([]);
+  const [selectedServiceRecordId, setSelectedServiceRecordId] = useState<number | null>(null);
   const [calMonth, setCalMonth]       = useState(() => new Date());
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
@@ -259,6 +264,19 @@ export default function DashboardPage() {
       .then(setTodayAppts)
       .catch(() => setTodayAppts([]));
   }, [todayRangeIso.from, todayRangeIso.to]);
+
+  // ── Today's fichas de servicio (any status), newest first ─────────────────
+  const loadTodayServiceRecords = useCallback(() => {
+    listServiceRecordsPaged({ from: todayRangeIso.from, to: todayRangeIso.to, size: 50 })
+      .then((page) => setTodayServiceRecords(Array.isArray(page?.content) ? page.content : []))
+      .catch(() => setTodayServiceRecords([]));
+  }, [todayRangeIso.from, todayRangeIso.to]);
+
+  useEffect(() => {
+    loadTodayServiceRecords();
+    const id = window.setInterval(loadTodayServiceRecords, POLL_MS);
+    return () => window.clearInterval(id);
+  }, [loadTodayServiceRecords]);
 
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
@@ -835,6 +853,81 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── 5. TODAY'S SERVICE RECORDS ── */}
+      <div style={{ ...cardStyle, marginTop: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+            {t("femme.serviceRecords.dashboard.title")}
+          </span>
+          <Link
+            to="/app/service-records"
+            state={{ activeTab: "history" }}
+            style={{ fontSize: 11, color: "var(--color-rose)", textDecoration: "none" }}
+          >
+            {t("femme.serviceRecords.dashboard.viewHistory")}
+          </Link>
+        </div>
+
+        {todayServiceRecords.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
+            {t("femme.serviceRecords.dashboard.empty")}
+          </div>
+        ) : (
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {todayServiceRecords.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setSelectedServiceRecordId(r.id)}
+                style={{
+                  minWidth: 180,
+                  textAlign: "left",
+                  background: "var(--color-stone)",
+                  border: "var(--border-default)",
+                  borderRadius: "var(--radius-md)",
+                  padding: 10,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: "var(--color-ink)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    marginBottom: 4,
+                  }}
+                >
+                  {r.clientFullName}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--color-ink-3)", marginBottom: 6 }}>
+                  {formatParaguayDateTime(r.createdAt, locale)} · {formatAmountDecimal(r.totalAmount)}
+                </div>
+                <StatusBadge status={r.status} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {selectedServiceRecordId !== null && (
+        <ServiceRecordDetailModal
+          serviceRecordId={selectedServiceRecordId}
+          onClose={() => setSelectedServiceRecordId(null)}
+          onChanged={loadTodayServiceRecords}
+        />
+      )}
     </div>
   );
 }

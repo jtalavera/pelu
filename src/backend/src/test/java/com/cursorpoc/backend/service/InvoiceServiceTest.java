@@ -18,6 +18,7 @@ import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceLineRequest;
@@ -49,6 +50,7 @@ class InvoiceServiceTest {
   @Mock private TenantRepository tenantRepository;
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private BusinessProfileRepository businessProfileRepository;
+  @Mock private ServiceRecordRepository serviceRecordRepository;
 
   @InjectMocks private InvoiceService invoiceService;
 
@@ -97,7 +99,8 @@ class InvoiceServiceTest {
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
     var request =
-        new InvoiceCreateRequest(null, null, null, null, null, List.of(line), List.of(payment));
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
@@ -148,7 +151,8 @@ class InvoiceServiceTest {
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
     var request =
-        new InvoiceCreateRequest(7L, "  ", "  ", null, null, List.of(line), List.of(payment));
+        new InvoiceCreateRequest(
+            7L, "  ", "  ", null, null, List.of(line), List.of(payment), null, null);
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
@@ -171,7 +175,15 @@ class InvoiceServiceTest {
     var payment = new InvoicePaymentAllocationRequest("DEBIT_CARD", new BigDecimal("90000.00"));
     var request =
         new InvoiceCreateRequest(
-            null, null, null, "FIXED", new BigDecimal("10000.00"), List.of(line), List.of(payment));
+            null,
+            null,
+            null,
+            "FIXED",
+            new BigDecimal("10000.00"),
+            List.of(line),
+            List.of(payment),
+            null,
+            null);
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
@@ -194,7 +206,15 @@ class InvoiceServiceTest {
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("180000.00"));
     var request =
         new InvoiceCreateRequest(
-            null, null, null, "PERCENT", new BigDecimal("10"), List.of(line), List.of(payment));
+            null,
+            null,
+            null,
+            "PERCENT",
+            new BigDecimal("10"),
+            List.of(line),
+            List.of(payment),
+            null,
+            null);
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
@@ -215,7 +235,8 @@ class InvoiceServiceTest {
     var p1 = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"));
     var p2 = new InvoicePaymentAllocationRequest("CREDIT_CARD", new BigDecimal("40000.00"));
     var request =
-        new InvoiceCreateRequest(null, null, null, null, null, List.of(line), List.of(p1, p2));
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(p1, p2), null, null);
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
@@ -235,7 +256,8 @@ class InvoiceServiceTest {
     var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("100000.00"), null, null);
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("99000.00"));
     var request =
-        new InvoiceCreateRequest(null, null, null, null, null, List.of(line), List.of(payment));
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
 
     assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
         .isInstanceOf(ResponseStatusException.class)
@@ -248,6 +270,127 @@ class InvoiceServiceTest {
   }
 
   @Test
+  void issueInvoice_withTipsAmount_paymentsMustCoverTotalPlusTips() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var paymentTooLow = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var requestTooLow =
+        new InvoiceCreateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(paymentTooLow),
+            null,
+            new BigDecimal("10000.00"));
+
+    // Paying only the fiscal total (ignoring the 10000 tip) must be rejected.
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, requestTooLow))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex -> {
+              ResponseStatusException rse = (ResponseStatusException) ex;
+              assertThat(rse.getReason()).isEqualTo("PAYMENT_SUM_MISMATCH");
+            });
+
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+    var paymentCoveringTips =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"));
+    var requestOk =
+        new InvoiceCreateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(paymentCoveringTips),
+            null,
+            new BigDecimal("10000.00"));
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, requestOk);
+
+    // Tips are collected but never touch the fiscal subtotal/total.
+    assertThat(result.total()).isEqualByComparingTo(new BigDecimal("50000.00"));
+    assertThat(result.tipsAmount()).isEqualByComparingTo(new BigDecimal("10000.00"));
+  }
+
+  @Test
+  void issueInvoice_withServiceRecordId_closesLinkedFichaAndLinksInvoice() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    com.cursorpoc.backend.domain.ServiceRecord serviceRecord =
+        new com.cursorpoc.backend.domain.ServiceRecord();
+    serviceRecord.setId(200L);
+    serviceRecord.setTenant(tenant);
+    serviceRecord.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    when(serviceRecordRepository.findByIdAndTenant_Id(200L, 1L))
+        .thenReturn(Optional.of(serviceRecord));
+    when(invoiceRepository.existsByServiceRecord_Id(200L)).thenReturn(false);
+
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), 200L, null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.serviceRecordId()).isEqualTo(200L);
+    assertThat(serviceRecord.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.CLOSED);
+    assertThat(serviceRecord.getClosedAt()).isNotNull();
+  }
+
+  @Test
+  void issueInvoice_withServiceRecordId_alreadyInvoiced_throwsConflict() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    com.cursorpoc.backend.domain.ServiceRecord serviceRecord =
+        new com.cursorpoc.backend.domain.ServiceRecord();
+    serviceRecord.setId(201L);
+    serviceRecord.setTenant(tenant);
+    serviceRecord.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    when(serviceRecordRepository.findByIdAndTenant_Id(201L, 1L))
+        .thenReturn(Optional.of(serviceRecord));
+    when(invoiceRepository.existsByServiceRecord_Id(201L)).thenReturn(true);
+
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), 201L, null);
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex -> {
+              ResponseStatusException rse = (ResponseStatusException) ex;
+              assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+              assertThat(rse.getReason()).isEqualTo("SERVICE_RECORD_ALREADY_INVOICED");
+            });
+  }
+
+  @Test
   void issueInvoice_noCashSession_throwsConflict() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
         .thenReturn(Optional.empty());
@@ -255,7 +398,8 @@ class InvoiceServiceTest {
     var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("50000.00"), null, null);
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
     var request =
-        new InvoiceCreateRequest(null, null, null, null, null, List.of(line), List.of(payment));
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
 
     assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
         .isInstanceOf(ResponseStatusException.class)
@@ -276,7 +420,8 @@ class InvoiceServiceTest {
     var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("50000.00"), null, null);
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
     var request =
-        new InvoiceCreateRequest(null, null, null, null, null, List.of(line), List.of(payment));
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
 
     assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
         .isInstanceOf(ResponseStatusException.class)
@@ -345,7 +490,8 @@ class InvoiceServiceTest {
     var line = new InvoiceLineRequest(null, "S", 1, new BigDecimal("10.00"), null, null);
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("10.00"));
     var request =
-        new InvoiceCreateRequest(null, null, null, null, null, List.of(line), List.of(payment));
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 

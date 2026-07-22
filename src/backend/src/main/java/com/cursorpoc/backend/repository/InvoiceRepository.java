@@ -122,4 +122,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
   List<Invoice> findAllByClient_Tenant_Id(Long tenantId);
 
   boolean existsByClient_Id(Long clientId);
+
+  boolean existsByServiceRecord_Id(Long serviceRecordId);
+
+  Optional<Invoice> findByServiceRecord_Id(Long serviceRecordId);
 }

@@ -6,16 +6,19 @@ import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
+import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceLineRequest;
@@ -59,6 +62,7 @@ public class InvoiceService {
   private final TenantRepository tenantRepository;
   private final SalonServiceRepository salonServiceRepository;
   private final BusinessProfileRepository businessProfileRepository;
+  private final ServiceRecordRepository serviceRecordRepository;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -67,7 +71,8 @@ public class InvoiceService {
       ClientRepository clientRepository,
       TenantRepository tenantRepository,
       SalonServiceRepository salonServiceRepository,
-      BusinessProfileRepository businessProfileRepository) {
+      BusinessProfileRepository businessProfileRepository,
+      ServiceRecordRepository serviceRecordRepository) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -75,6 +80,7 @@ public class InvoiceService {
     this.tenantRepository = tenantRepository;
     this.salonServiceRepository = salonServiceRepository;
     this.businessProfileRepository = businessProfileRepository;
+    this.serviceRecordRepository = serviceRecordRepository;
   }
 
   @Transactional
@@ -156,6 +162,32 @@ public class InvoiceService {
     businessProfileRepository
         .findByTenantId(tenantId)
         .ifPresent(bp -> invoice.setBusinessRuc(bp.getRuc()));
+
+    // 4b. Optional link to the "ficha de servicio" this invoice was generated from —
+    // issuing the invoice auto-closes the ficha (Issue #53).
+    ServiceRecord serviceRecord = null;
+    if (request.serviceRecordId() != null) {
+      serviceRecord =
+          serviceRecordRepository
+              .findByIdAndTenant_Id(request.serviceRecordId(), tenantId)
+              .orElseThrow(
+                  () ->
+                      new ResponseStatusException(
+                          HttpStatus.NOT_FOUND, "SERVICE_RECORD_NOT_FOUND"));
+      if (serviceRecord.getStatus() != ServiceRecordStatus.OPEN) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_NOT_OPEN");
+      }
+      if (invoiceRepository.existsByServiceRecord_Id(serviceRecord.getId())) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_ALREADY_INVOICED");
+      }
+      invoice.setServiceRecord(serviceRecord);
+    }
+
+    BigDecimal tipsAmount =
+        request.tipsAmount() != null
+            ? request.tipsAmount().setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+    invoice.setTipsAmount(tipsAmount);
 
     // 5. Lines
     if (request.lines() == null || request.lines().isEmpty()) {
@@ -289,8 +321,9 @@ public class InvoiceService {
       paymentsSum = paymentsSum.add(pr.amount());
     }
 
-    // 8. Validate payment sum equals total
-    if (paymentsSum.setScale(2, RoundingMode.HALF_UP).compareTo(total) != 0) {
+    // 8. Validate payment sum equals total + tips (tips are collected but not fiscal)
+    BigDecimal requiredPayment = total.add(tipsAmount);
+    if (paymentsSum.setScale(2, RoundingMode.HALF_UP).compareTo(requiredPayment) != 0) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENT_SUM_MISMATCH");
     }
 
@@ -298,6 +331,12 @@ public class InvoiceService {
     invoiceRepository.save(invoice);
     stamp.setNextEmissionNumber(nextNumber + 1);
     stamp.setLockedAfterInvoice(true);
+
+    // 10. Auto-close the linked ficha de servicio, if any (Issue #53)
+    if (serviceRecord != null) {
+      serviceRecord.setStatus(ServiceRecordStatus.CLOSED);
+      serviceRecord.setClosedAt(Instant.now());
+    }
 
     return toDetailDto(invoice);
   }
@@ -497,6 +536,8 @@ public class InvoiceService {
         i.getIssuedAt(),
         i.getCashSession().getId(),
         i.getVoidReason(),
+        i.getTipsAmount(),
+        i.getServiceRecord() != null ? i.getServiceRecord().getId() : null,
         lines,
         payments);
   }

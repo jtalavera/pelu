@@ -21,5 +21,7 @@ public record InvoiceResponse(
     Instant issuedAt,
     Long cashSessionId,
     String voidReason,
+    BigDecimal tipsAmount,
+    Long serviceRecordId,
     List<InvoiceLineResponse> lines,
     List<InvoicePaymentAllocationResponse> payments) {}
