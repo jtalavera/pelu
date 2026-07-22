@@ -14,6 +14,8 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
 
   Optional<ServiceRecord> findByIdAndTenant_Id(Long id, Long tenantId);
 
+  long deleteByTenant_Id(Long tenantId);
+
   @Query(
       """
       SELECT r FROM ServiceRecord r
