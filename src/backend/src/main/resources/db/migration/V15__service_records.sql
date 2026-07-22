@@ -67,5 +67,11 @@ BEGIN
   ALTER TABLE invoices
     ADD service_record_id BIGINT NULL
         CONSTRAINT fk_invoices_service_record FOREIGN KEY REFERENCES service_records(id);
+END;
+GO
+
+-- Separate batch: SQL Server can't resolve a column in the same batch that added it via ALTER TABLE.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'invoices') AND name = N'uq_invoices_service_record')
+BEGIN
   CREATE UNIQUE INDEX uq_invoices_service_record ON invoices(service_record_id) WHERE service_record_id IS NOT NULL;
 END;
