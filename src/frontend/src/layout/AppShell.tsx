@@ -199,7 +199,7 @@ function AppShellInner() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalTab, setProfileModalTab] = useState<"profile" | "password">("profile");
-  useSessionRefresh(true);
+  useSessionRefresh(true, () => logout("expired"));
   useIdleLogout(true, () => logout("idle"));
 
   useEffect(() => {
@@ -224,7 +224,7 @@ function AppShellInner() {
 
   const currentLang: SupportedLanguage = i18n.resolvedLanguage?.startsWith("es") ? "es" : "en";
 
-  function logout(reason?: "idle") {
+  function logout(reason?: "idle" | "expired") {
     sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     navigate("/login", { replace: true, state: reason ? { reason } : undefined });
   }
