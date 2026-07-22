@@ -242,10 +242,10 @@ test.describe("Issue #77 · Services and billing history searches are global", (
     const clientName = `${tag} Cliente Factura`;
     const client = await seedClient(request, token, clientName);
 
-    const issueInvoice = (clientId: number | null) =>
+    const issueInvoice = (clientId: number | null, clientDisplayName: string | null) =>
       apiPostJson(request, token, "/api/invoices", {
         clientId,
-        clientDisplayName: clientId === null ? "CONSUMIDOR FINAL" : null,
+        clientDisplayName,
         clientRucOverride: null,
         discountType: null,
         discountValue: null,
@@ -263,10 +263,12 @@ test.describe("Issue #77 · Services and billing history searches are global", (
       });
 
     // Target invoice first, then 11 newer ones → target lands beyond page 1
-    // (history is ordered by issue date, newest first).
-    await issueInvoice(client.id);
+    // (history is ordered by issue date, newest first). The history text search matches against
+    // clientDisplayName (Issue #96: a selected client's display name is never auto-filled from
+    // their profile), so it must be set explicitly here for the by-name search to find it.
+    await issueInvoice(client.id, clientName);
     for (let i = 0; i < 11; i++) {
-      await issueInvoice(null);
+      await issueInvoice(null, "CONSUMIDOR FINAL");
     }
 
     await loginAsDemo(page);

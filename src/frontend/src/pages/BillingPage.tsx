@@ -521,26 +521,39 @@ type InitialClientForBilling = {
   ruc: string | null;
 };
 
+type PrefillServiceRecordLine = { serviceId: number; description: string; unitPrice: string };
+type PrefillServiceRecord = {
+  serviceRecordId: number;
+  client: InitialClientForBilling;
+  lines: PrefillServiceRecordLine[];
+  tipsAmount: string | number;
+};
+
 function NewInvoiceTab({
   onIssued,
   initialClient,
   onInitialClientConsumed,
+  initialPrefillServiceRecord,
+  onInitialPrefillConsumed,
 }: {
   onIssued: () => void;
   initialClient?: InitialClientForBilling | null;
   onInitialClientConsumed?: () => void;
+  initialPrefillServiceRecord?: PrefillServiceRecord | null;
+  onInitialPrefillConsumed?: () => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const initialSelection: ClientSelection = initialClient
+  const effectiveInitialClient = initialClient ?? initialPrefillServiceRecord?.client ?? null;
+  const initialSelection: ClientSelection = effectiveInitialClient
     ? {
         type: "client",
         client: {
-          id: initialClient.id,
-          fullName: initialClient.fullName,
-          phone: initialClient.phone,
-          email: initialClient.email,
-          ruc: initialClient.ruc,
+          id: effectiveInitialClient.id,
+          fullName: effectiveInitialClient.fullName,
+          phone: effectiveInitialClient.phone,
+          email: effectiveInitialClient.email,
+          ruc: effectiveInitialClient.ruc,
         },
       }
     : null;
@@ -548,33 +561,66 @@ function NewInvoiceTab({
   const [clientSearchKey, setClientSearchKey] = useState(0);
   const [linesKey, setLinesKey] = useState(0);
   const [clientDisplayName, setClientDisplayName] = useState(
-    initialClient?.fullName ?? "",
+    effectiveInitialClient?.fullName ?? "",
   );
   const [clientRucOverride, setClientRucOverride] = useState(
-    initialClient?.ruc ?? "",
+    effectiveInitialClient?.ruc ?? "",
+  );
+  const [serviceRecordId, setServiceRecordId] = useState<number | null>(
+    initialPrefillServiceRecord?.serviceRecordId ?? null,
+  );
+  const [tipsAmount, setTipsAmount] = useState(
+    initialPrefillServiceRecord?.tipsAmount
+      ? maskMoneyInput(String(Math.round(Number(initialPrefillServiceRecord.tipsAmount))))
+      : "",
   );
 
   useEffect(() => {
     if (initialClient && onInitialClientConsumed) {
       onInitialClientConsumed();
     }
+    if (initialPrefillServiceRecord && onInitialPrefillConsumed) {
+      onInitialPrefillConsumed();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
   const [discountValueError, setDiscountValueError] = useState<string | null>(null);
-  const [lines, setLines] = useState<InvoiceLineForm[]>([
-    {
-      serviceId: "",
-      description: "",
-      quantity: "1",
-      unitPrice: "",
-      pickedService: null,
-      discountEnabled: false,
-      discountType: "PERCENT",
-      discountValue: "",
-    },
-  ]);
+  const [lines, setLines] = useState<InvoiceLineForm[]>(() =>
+    initialPrefillServiceRecord && initialPrefillServiceRecord.lines.length > 0
+      ? initialPrefillServiceRecord.lines.map((l) => ({
+          serviceId: String(l.serviceId),
+          description: l.description,
+          quantity: "1",
+          unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
+          pickedService: {
+            id: l.serviceId,
+            categoryId: 0,
+            categoryName: "",
+            categoryAccentKey: "",
+            name: l.description,
+            priceMinor: l.unitPrice,
+            durationMinutes: 0,
+            active: true,
+          },
+          discountEnabled: false,
+          discountType: "PERCENT",
+          discountValue: "",
+        }))
+      : [
+          {
+            serviceId: "",
+            description: "",
+            quantity: "1",
+            unitPrice: "",
+            pickedService: null,
+            discountEnabled: false,
+            discountType: "PERCENT",
+            discountValue: "",
+          },
+        ],
+  );
   const [payments, setPayments] = useState<PaymentForm[]>([
     { method: "CASH", amount: "" },
   ]);
@@ -643,31 +689,36 @@ function NewInvoiceTab({
   }
   const discountAmount = perItemDiscountTotal + globalDiscount;
   const total = Math.max(0, subtotal - discountAmount);
+  // Tips are collected alongside the invoice but never affect subtotal/discount/total
+  // (fiscal fields) or the printed comprobante — they only add to the amount to collect.
+  const tipsAmountNum = parseMaskedMoney(tipsAmount);
+  const showTips = serviceRecordId != null || tipsAmount !== "";
+  const amountToCollect = total + tipsAmountNum;
 
   const assignedPayments = payments.reduce(
     (acc, p) => acc + parseMaskedMoney(p.amount),
     0,
   );
-  const remaining = total - assignedPayments;
+  const remaining = amountToCollect - assignedPayments;
 
-  // When the invoice total changes (due to service/discount edits), auto-fill
-  // any CASH payment row with the amount needed to cover the remaining balance.
-  // Watching `total` (not `remaining`) avoids a circular dependency: setting
-  // the CASH amount would change `remaining`, re-firing the effect forever.
+  // When the invoice total (or tips) changes, auto-fill any CASH payment row
+  // with the amount needed to cover the remaining balance. Watching `amountToCollect`
+  // (not `remaining`) avoids a circular dependency: setting the CASH amount would
+  // change `remaining`, re-firing the effect forever.
   useEffect(() => {
-    if (total <= 0) return;
+    if (amountToCollect <= 0) return;
     setPayments((prev) => {
       const nonCashTotal = prev
         .filter((p) => p.method !== "CASH")
         .reduce((acc, p) => acc + parseMaskedMoney(p.amount), 0);
-      const cashFill = Math.max(0, total - nonCashTotal);
+      const cashFill = Math.max(0, amountToCollect - nonCashTotal);
       return prev.map((p) =>
         p.method === "CASH"
           ? { ...p, amount: cashFill > 0 ? maskMoneyInput(cashFill.toFixed(0)) : "" }
           : p,
       );
     });
-  }, [total]);
+  }, [amountToCollect]);
 
   /**
    * Whether all mandatory fields are filled to enable the "Emit" button:
@@ -966,6 +1017,8 @@ function NewInvoiceTab({
         method: p.method,
         amount: parseMaskedMoney(p.amount),
       })),
+      serviceRecordId: serviceRecordId,
+      tipsAmount: tipsAmount.trim() !== "" ? tipsAmountNum : null,
     };
 
     setSubmitting(true);
@@ -999,6 +1052,8 @@ function NewInvoiceTab({
         },
       ]);
       setPayments([{ method: "CASH", amount: "" }]);
+      setTipsAmount("");
+      setServiceRecordId(null);
       setLineErrors({});
       setPaymentErrors({});
       setGlobalErrors([]);
@@ -1334,6 +1389,21 @@ function NewInvoiceTab({
               <span>{t("femme.billing.invoice.total")}</span>
               <span>{formatAmountDecimal(total.toFixed(2))}</span>
             </div>
+            {showTips && (
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="billing-tips-amount" className="text-[rgb(var(--color-muted-foreground))]">
+                  {t("femme.billing.invoice.tips")}
+                </Label>
+                <Input
+                  id="billing-tips-amount"
+                  inputMode="numeric"
+                  value={tipsAmount}
+                  onChange={(e) => setTipsAmount(maskMoneyInput(e.target.value))}
+                  placeholder={t("femme.billing.invoice.tipsPlaceholder")}
+                  className="w-32 text-right"
+                />
+              </div>
+            )}
             <div
               className={`flex justify-between ${Math.abs(remaining) > 0.01 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
             >
@@ -2127,6 +2197,7 @@ export default function BillingPage() {
     | {
         activeTab?: "session" | "invoice" | "history";
         selectedClient?: InitialClientForBilling;
+        prefillServiceRecord?: PrefillServiceRecord;
       }
     | null;
   const [loading, setLoading] = useState(true);
@@ -2139,9 +2210,11 @@ export default function BillingPage() {
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
   >(navState?.selectedClient ?? null);
+  const [pendingPrefillServiceRecord, setPendingPrefillServiceRecord] =
+    useState<PrefillServiceRecord | null>(navState?.prefillServiceRecord ?? null);
 
   useEffect(() => {
-    if (navState && (navState.activeTab || navState.selectedClient)) {
+    if (navState && (navState.activeTab || navState.selectedClient || navState.prefillServiceRecord)) {
       navigate(location.pathname, { replace: true, state: {} });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2278,6 +2351,8 @@ export default function BillingPage() {
             }}
             initialClient={pendingInitialClient}
             onInitialClientConsumed={() => setPendingInitialClient(null)}
+            initialPrefillServiceRecord={pendingPrefillServiceRecord}
+            onInitialPrefillConsumed={() => setPendingPrefillServiceRecord(null)}
           />
         ) : (
           <Text variant="muted">{t("femme.billing.noOpenSession")}</Text>

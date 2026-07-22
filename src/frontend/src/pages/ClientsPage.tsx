@@ -166,7 +166,7 @@ export default function ClientsPage() {
   // Open "new client" from other flows (e.g. billing → create client)
   const [returnAfterCreate, setReturnAfterCreate] = useState<{
     path: string;
-    tab?: "session" | "invoice" | "history";
+    tab?: "session" | "invoice" | "history" | "new";
   } | null>(null);
   useEffect(() => {
     const st = location.state as
@@ -174,7 +174,7 @@ export default function ClientsPage() {
           openCreateClient?: boolean;
           prefilledName?: string;
           returnTo?: string;
-          returnTab?: "session" | "invoice" | "history";
+          returnTab?: "session" | "invoice" | "history" | "new";
         }
       | undefined;
     if (st?.openCreateClient) {

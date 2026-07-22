@@ -26,6 +26,8 @@ type Props = {
   label?: string;
   /** Defaults to femme.clients.inlineSearch.placeholder */
   placeholder?: string;
+  /** Hides the "occasional client" option — for flows that require a real client record. */
+  hideOccasional?: boolean;
 };
 
 const DEBOUNCE_MS = 300;
@@ -37,6 +39,7 @@ export function ClientSearchField({
   id,
   label,
   placeholder,
+  hideOccasional,
 }: Props) {
   const { t } = useTranslation();
   const inputId = id ?? "client-search-field";
@@ -189,16 +192,18 @@ export function ClientSearchField({
               </Button>
             </li>
           ) : null}
-          <li className="border-b border-[rgb(var(--color-border))]">
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full justify-start rounded-none px-3 py-2 text-sm"
-              onClick={selectOccasional}
-            >
-              {t("femme.clients.inlineSearch.occasional")}
-            </Button>
-          </li>
+          {!hideOccasional ? (
+            <li className="border-b border-[rgb(var(--color-border))]">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start rounded-none px-3 py-2 text-sm"
+                onClick={selectOccasional}
+              >
+                {t("femme.clients.inlineSearch.occasional")}
+              </Button>
+            </li>
+          ) : null}
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">
               <Text variant="muted" className="text-sm">

@@ -17,6 +17,7 @@ import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import java.util.List;
@@ -46,6 +47,7 @@ public class SeedResetService {
   private final ClientRepository clientRepository;
   private final AppointmentRepository appointmentRepository;
   private final InvoiceRepository invoiceRepository;
+  private final ServiceRecordRepository serviceRecordRepository;
   private final CashSessionRepository cashSessionRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final AppUserTourStateRepository appUserTourStateRepository;
@@ -65,6 +67,7 @@ public class SeedResetService {
       ClientRepository clientRepository,
       AppointmentRepository appointmentRepository,
       InvoiceRepository invoiceRepository,
+      ServiceRecordRepository serviceRecordRepository,
       CashSessionRepository cashSessionRepository,
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
@@ -82,6 +85,7 @@ public class SeedResetService {
     this.clientRepository = clientRepository;
     this.appointmentRepository = appointmentRepository;
     this.invoiceRepository = invoiceRepository;
+    this.serviceRecordRepository = serviceRecordRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.appUserTourStateRepository = appUserTourStateRepository;
@@ -114,6 +118,11 @@ public class SeedResetService {
     List<Invoice> invoices = invoiceRepository.findAllByTenant_Id(DEMO_TENANT_ID);
     invoiceRepository.deleteAll(invoices);
     log.info("Deleted {} invoices (with lines and payment allocations)", invoices.size());
+
+    // Must run before deleting clients/services/professionals below: service_records (and its
+    // lines/tips, cascaded at the DB level) reference all three and would otherwise trip their FKs.
+    long deletedServiceRecords = serviceRecordRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} service_records (with lines and tips)", deletedServiceRecords);
 
     long deletedCashSessions = cashSessionRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} cash_sessions", deletedCashSessions);

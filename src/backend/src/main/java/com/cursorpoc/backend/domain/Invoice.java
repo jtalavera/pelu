@@ -82,6 +82,13 @@ public class Invoice {
   @Column(name = "void_reason", length = 500)
   private String voidReason;
 
+  @Column(name = "tips_amount", nullable = false, precision = 19, scale = 2)
+  private BigDecimal tipsAmount = BigDecimal.ZERO;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "service_record_id")
+  private ServiceRecord serviceRecord;
+
   @OneToMany(
       mappedBy = "invoice",
       cascade = CascadeType.ALL,
@@ -238,5 +245,21 @@ public class Invoice {
 
   public void setPaymentAllocations(List<InvoicePaymentAllocation> paymentAllocations) {
     this.paymentAllocations = paymentAllocations;
+  }
+
+  public BigDecimal getTipsAmount() {
+    return tipsAmount;
+  }
+
+  public void setTipsAmount(BigDecimal tipsAmount) {
+    this.tipsAmount = tipsAmount;
+  }
+
+  public ServiceRecord getServiceRecord() {
+    return serviceRecord;
+  }
+
+  public void setServiceRecord(ServiceRecord serviceRecord) {
+    this.serviceRecord = serviceRecord;
   }
 }
