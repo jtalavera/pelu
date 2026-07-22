@@ -88,7 +88,8 @@
       "errorInvalid": "Invalid email or password.",
       "errorNetwork": "Network error. Check that the API is running.",
       "forgotPassword": "Forgot password?",
-      "sessionExpired": "Your session expired due to inactivity. Please sign in again."
+      "sessionExpired": "Your session expired due to inactivity. Please sign in again.",
+      "sessionRefreshExpired": "Your session expired. Please sign in again."
     },
     "forgot": {
       "title": "Reset password",

@@ -17,6 +17,7 @@ export default function LoginPage() {
   const state = location.state as { from?: { pathname?: string }; reason?: string } | null;
   const from = state?.from?.pathname ?? "/app";
   const sessionExpired = state?.reason === "idle";
+  const sessionRefreshExpired = state?.reason === "expired";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -106,6 +107,11 @@ export default function LoginPage() {
           {sessionExpired ? (
             <Alert variant="info" className="mb-4">
               {t("femme.login.sessionExpired")}
+            </Alert>
+          ) : null}
+          {sessionRefreshExpired ? (
+            <Alert variant="info" className="mb-4">
+              {t("femme.login.sessionRefreshExpired")}
             </Alert>
           ) : null}
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>

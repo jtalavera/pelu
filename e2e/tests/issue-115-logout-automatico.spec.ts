@@ -95,4 +95,25 @@ test.describe("issue-115 logout automatico", () => {
     await page.goto("/login");
     await expect(page.getByRole("alert").filter({ hasText: /session expired/i })).toHaveCount(0);
   });
+
+  test("regression: a 401 from the refresh endpoint stops the retry loop and logs out", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await page.clock.install();
+    await loginAsDemo(page);
+
+    let refreshCalls = 0;
+    await page.route("**/api/auth/refresh", async (route) => {
+      refreshCalls++;
+      await route.fulfill({ status: 401, contentType: "application/json", body: "{}" });
+    });
+
+    await page.clock.runFor("05:00");
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole("alert").filter({ hasText: /session expired/i })).toBeVisible();
+
+    const callsAtLogout = refreshCalls;
+    await page.clock.runFor("15:00");
+    expect(refreshCalls, "refresh must not keep retrying every 5 minutes after a 401").toBe(callsAtLogout);
+  });
 });
