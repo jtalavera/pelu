@@ -36,6 +36,8 @@ type LineForm = {
   key: string;
   pickedService: SalonServiceOption | null;
   professionalId: number | "";
+  quantity: number;
+  unitPrice: string;
 };
 
 let keySeq = 0;
@@ -45,7 +47,13 @@ function nextKey(): string {
 }
 
 function emptyLine(): LineForm {
-  return { key: nextKey(), pickedService: null, professionalId: "" };
+  return {
+    key: nextKey(),
+    pickedService: null,
+    professionalId: "",
+    quantity: 1,
+    unitPrice: "",
+  };
 }
 
 type ClientOverride = {
@@ -108,6 +116,8 @@ export function ServiceRecordEditor({
             active: true,
           },
           professionalId: l.professionalId,
+          quantity: l.quantity,
+          unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
         }))
       : [emptyLine()],
   );
@@ -119,8 +129,14 @@ export function ServiceRecordEditor({
     return map;
   });
 
+  // Bumped after a successful create to force `ClientSearchField` (which keeps its own
+  // internal query-text state) to remount and clear its displayed text.
+  const [clientFieldResetKey, setClientFieldResetKey] = useState(0);
+
   const [clientError, setClientError] = useState<string | null>(null);
-  const [lineErrors, setLineErrors] = useState<Record<number, { service?: string; professional?: string }>>({});
+  const [lineErrors, setLineErrors] = useState<
+    Record<number, { service?: string; professional?: string; quantity?: string; unitPrice?: string }>
+  >({});
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -170,7 +186,8 @@ export function ServiceRecordEditor({
   const isReadOnly = record != null && record.status !== "OPEN";
 
   const total = lines.reduce(
-    (acc, l) => acc + (l.pickedService ? Number(l.pickedService.priceMinor) || 0 : 0),
+    (acc, l) =>
+      acc + (l.pickedService ? parseMaskedMoney(l.unitPrice) * (l.quantity || 0) : 0),
     0,
   );
   const tipsTotal = distinctProfessionalIds.reduce(
@@ -191,11 +208,34 @@ export function ServiceRecordEditor({
   }
 
   function updateLineService(key: string, service: SalonServiceOption | null) {
-    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, pickedService: service } : l)));
+    setLines((prev) =>
+      prev.map((l) =>
+        l.key === key
+          ? {
+              ...l,
+              pickedService: service,
+              unitPrice: service
+                ? maskMoneyInput(String(Math.round(Number(service.priceMinor))))
+                : "",
+              quantity: service ? 1 : l.quantity,
+            }
+          : l,
+      ),
+    );
   }
 
   function updateLineProfessional(key: string, professionalId: number | "") {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, professionalId } : l)));
+  }
+
+  function updateLineQuantity(key: string, quantity: number) {
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, quantity } : l)));
+  }
+
+  function updateLineUnitPrice(key: string, raw: string) {
+    setLines((prev) =>
+      prev.map((l) => (l.key === key ? { ...l, unitPrice: maskMoneyInput(raw) } : l)),
+    );
   }
 
   function validate(): boolean {
@@ -207,11 +247,18 @@ export function ServiceRecordEditor({
       setClientError(null);
     }
 
-    const newLineErrors: Record<number, { service?: string; professional?: string }> = {};
+    const newLineErrors: Record<
+      number,
+      { service?: string; professional?: string; quantity?: string; unitPrice?: string }
+    > = {};
     lines.forEach((l, idx) => {
-      const err: { service?: string; professional?: string } = {};
+      const err: { service?: string; professional?: string; quantity?: string; unitPrice?: string } =
+        {};
       if (!l.pickedService) err.service = t("femme.serviceRecords.lineServiceRequired");
       if (l.professionalId === "") err.professional = t("femme.serviceRecords.lineProfessionalRequired");
+      if (!l.quantity || l.quantity < 1) err.quantity = t("femme.serviceRecords.lineQuantityRequired");
+      if (!l.unitPrice || parseMaskedMoney(l.unitPrice) <= 0)
+        err.unitPrice = t("femme.serviceRecords.lineUnitPriceRequired");
       if (Object.keys(err).length > 0) newLineErrors[idx] = err;
     });
     setLineErrors(newLineErrors);
@@ -236,6 +283,8 @@ export function ServiceRecordEditor({
       lines: lines.map((l) => ({
         serviceId: l.pickedService!.id,
         professionalId: l.professionalId as number,
+        quantity: l.quantity,
+        unitPrice: parseMaskedMoney(l.unitPrice),
       })),
       tips: distinctProfessionalIds.map((id) => ({
         professionalId: id,
@@ -249,8 +298,22 @@ export function ServiceRecordEditor({
       const result = wasCreate
         ? await createServiceRecord(payload)
         : await updateServiceRecord(record!.id, payload);
-      setRecord(result);
       setSaveSuccessKind(wasCreate ? "created" : "updated");
+      if (wasCreate) {
+        // Reset to a blank "new record" form in place (not a remount) so the success
+        // alert stays visible above the cleared fields.
+        setRecord(null);
+        setClientSelection(null);
+        setClientFieldResetKey((k) => k + 1);
+        setLines([emptyLine()]);
+        setTips({});
+        setClientError(null);
+        setLineErrors({});
+        setGlobalErrors([]);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        setRecord(result);
+      }
       onSaved?.(result);
     } catch (err) {
       setSaveError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
@@ -271,7 +334,7 @@ export function ServiceRecordEditor({
             fullName: record.clientFullName,
             phone: null,
             email: null,
-            ruc: null,
+            ruc: record.clientRuc,
           },
           lines: record.lines.map((l) => ({
             serviceId: l.serviceId,
@@ -369,6 +432,7 @@ export function ServiceRecordEditor({
           ) : (
             <>
               <ClientSearchField
+                key={clientFieldResetKey}
                 id="service-record-client-search"
                 value={clientSelection}
                 onChange={(sel) => {
@@ -407,7 +471,7 @@ export function ServiceRecordEditor({
                 key={line.key}
                 className="grid grid-cols-12 gap-2 items-start border border-[rgb(var(--color-border))] rounded p-3"
               >
-                <div className="col-span-12 sm:col-span-5">
+                <div className="col-span-12 sm:col-span-4">
                   {isReadOnly ? (
                     <>
                       <Label>{t("femme.serviceRecords.linesSection")}</Label>
@@ -428,7 +492,7 @@ export function ServiceRecordEditor({
                     </>
                   )}
                 </div>
-                <div className="col-span-9 sm:col-span-5">
+                <div className="col-span-12 sm:col-span-3">
                   {isReadOnly ? (
                     <>
                       <Label>{t("femme.serviceRecords.lineProfessionalLabel")}</Label>
@@ -457,10 +521,68 @@ export function ServiceRecordEditor({
                     </>
                   )}
                 </div>
-                <div className="col-span-3 sm:col-span-1 flex min-h-9 w-full items-end justify-center">
-                  <span className="w-full text-center text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
-                    {line.pickedService ? formatAmountDecimal(line.pickedService.priceMinor) : "—"}
-                  </span>
+                <div className="col-span-6 sm:col-span-2">
+                  {isReadOnly ? (
+                    <>
+                      <Label>{t("femme.serviceRecords.lineUnitPriceLabel")}</Label>
+                      <Text>{line.pickedService ? line.unitPrice || "—" : "—"}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Label htmlFor={`service-record-line-price-${idx}`}>
+                        {t("femme.serviceRecords.lineUnitPriceLabel")}
+                      </Label>
+                      <Input
+                        id={`service-record-line-price-${idx}`}
+                        inputMode="numeric"
+                        value={line.unitPrice}
+                        onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
+                        invalid={!!lineErrors[idx]?.unitPrice}
+                        aria-describedby={
+                          lineErrors[idx]?.unitPrice
+                            ? `service-record-line-price-err-${idx}`
+                            : undefined
+                        }
+                      />
+                      <FieldValidationError id={`service-record-line-price-err-${idx}`}>
+                        {lineErrors[idx]?.unitPrice}
+                      </FieldValidationError>
+                    </>
+                  )}
+                </div>
+                <div className="col-span-6 sm:col-span-2">
+                  {isReadOnly ? (
+                    <>
+                      <Label>{t("femme.serviceRecords.lineQuantityLabel")}</Label>
+                      <Text>{line.quantity}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Label htmlFor={`service-record-line-qty-${idx}`}>
+                        {t("femme.serviceRecords.lineQuantityLabel")}
+                      </Label>
+                      <Input
+                        id={`service-record-line-qty-${idx}`}
+                        type="number"
+                        min={1}
+                        step={1}
+                        inputMode="numeric"
+                        value={line.quantity}
+                        onChange={(e) =>
+                          updateLineQuantity(line.key, Math.max(0, Math.floor(Number(e.target.value))))
+                        }
+                        invalid={!!lineErrors[idx]?.quantity}
+                        aria-describedby={
+                          lineErrors[idx]?.quantity
+                            ? `service-record-line-qty-err-${idx}`
+                            : undefined
+                        }
+                      />
+                      <FieldValidationError id={`service-record-line-qty-err-${idx}`}>
+                        {lineErrors[idx]?.quantity}
+                      </FieldValidationError>
+                    </>
+                  )}
                 </div>
                 {!isReadOnly && (
                   <div className="col-span-12 sm:col-span-1 flex items-end justify-end">
@@ -534,7 +656,12 @@ export function ServiceRecordEditor({
 
         {!isReadOnly && (
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" variant="primary" disabled={saving} data-testid="service-record-submit">
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={saving || clientSelection?.type !== "client"}
+              data-testid="service-record-submit"
+            >
               {saving
                 ? t("femme.serviceRecords.saving")
                 : record
@@ -544,7 +671,7 @@ export function ServiceRecordEditor({
             {record && isOpen && (
               <Button
                 type="button"
-                variant="outline"
+                variant="success"
                 onClick={handleGenerateInvoice}
                 data-testid="service-record-generate-invoice"
               >

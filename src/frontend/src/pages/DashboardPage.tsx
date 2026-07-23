@@ -278,6 +278,25 @@ export default function DashboardPage() {
     return () => window.clearInterval(id);
   }, [loadTodayServiceRecords]);
 
+  // Grouped by status (Open, Closed, Voided), newest first within each group, capped at 14
+  // with a "More" button to the full Historial list.
+  const SERVICE_RECORD_STATUS_RANK: Record<string, number> = { OPEN: 0, CLOSED: 1, VOIDED: 2 };
+  const DASHBOARD_SERVICE_RECORDS_CAP = 14;
+  const sortedTodayServiceRecords = useMemo(() => {
+    return [...todayServiceRecords].sort((a, b) => {
+      const rankDiff =
+        (SERVICE_RECORD_STATUS_RANK[a.status] ?? 99) - (SERVICE_RECORD_STATUS_RANK[b.status] ?? 99);
+      if (rankDiff !== 0) return rankDiff;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [todayServiceRecords]);
+  const visibleTodayServiceRecords = sortedTodayServiceRecords.slice(
+    0,
+    DASHBOARD_SERVICE_RECORDS_CAP,
+  );
+  const hasMoreTodayServiceRecords =
+    sortedTodayServiceRecords.length > DASHBOARD_SERVICE_RECORDS_CAP;
+
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
     const map = new Map<number, { id: number; name: string; count: number }>();
@@ -882,7 +901,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1">
-            {todayServiceRecords.map((r) => (
+            {visibleTodayServiceRecords.map((r) => (
               <button
                 key={r.id}
                 type="button"
@@ -917,6 +936,29 @@ export default function DashboardPage() {
                 <StatusBadge status={r.status} />
               </button>
             ))}
+            {hasMoreTodayServiceRecords && (
+              <Link
+                to="/app/service-records"
+                state={{ activeTab: "history" }}
+                style={{
+                  minWidth: 90,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "var(--color-stone)",
+                  border: "var(--border-default)",
+                  borderRadius: "var(--radius-md)",
+                  padding: 10,
+                  flexShrink: 0,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--color-rose)",
+                  textDecoration: "none",
+                }}
+              >
+                {t("femme.serviceRecords.dashboard.showMore")}
+              </Link>
+            )}
           </div>
         )}
       </div>

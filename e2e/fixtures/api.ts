@@ -208,12 +208,13 @@ export async function seedClient(
   token: string,
   fullName: string,
   phone?: string,
+  ruc?: string,
 ): Promise<{ id: number }> {
   return apiPostJson<{ id: number }>(request, token, "/api/clients", {
     fullName,
     phone: phone ?? null,
     email: null,
-    ruc: null,
+    ruc: ruc ?? null,
   });
 }
 

@@ -101,8 +101,9 @@ public class ServiceRecordService {
     Client client = requireClient(tenantId, request.clientId());
     record.setClient(client);
 
+    Hibernate.initialize(record.getLines());
+    Hibernate.initialize(record.getTips());
     record.getLines().clear();
-    record.getTips().clear();
     applyLinesAndTips(record, request, tenantId);
 
     return toDetailDto(record, null);
@@ -220,6 +221,14 @@ public class ServiceRecordService {
     Set<Long> lineProfessionalIds = new LinkedHashSet<>();
     Map<Long, Professional> professionalsById = new LinkedHashMap<>();
     for (ServiceRecordLineRequest lr : request.lines()) {
+      if (lr.quantity() == null || lr.quantity() < 1) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LINE_QUANTITY_INVALID");
+      }
+      if (lr.unitPrice() == null || lr.unitPrice().compareTo(BigDecimal.ZERO) <= 0) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LINE_UNIT_PRICE_INVALID");
+      }
       SalonService salonService =
           salonServiceRepository
               .findByIdAndTenant_Id(lr.serviceId(), tenantId)
@@ -237,29 +246,58 @@ public class ServiceRecordService {
       line.setSalonService(salonService);
       line.setProfessional(professional);
       line.setDescription(salonService.getName());
-      BigDecimal unitPrice = salonService.getPriceMinor().setScale(2, RoundingMode.HALF_UP);
+      BigDecimal unitPrice = lr.unitPrice().setScale(2, RoundingMode.HALF_UP);
       line.setUnitPrice(unitPrice);
+      line.setQuantity(lr.quantity());
       record.getLines().add(line);
 
-      total = total.add(unitPrice);
+      total = total.add(unitPrice.multiply(BigDecimal.valueOf(lr.quantity())));
       lineProfessionalIds.add(professional.getId());
       professionalsById.put(professional.getId(), professional);
     }
     record.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
 
+    reconcileTips(record, request, lineProfessionalIds, professionalsById);
+  }
+
+  /**
+   * Updates/adds/removes tip rows to match the request, reusing existing {@link ServiceRecordTip}
+   * entities for professionals that remain present. A blind clear-then-recreate would momentarily
+   * re-insert a row for a professional whose old tip row hasn't been deleted yet, violating the
+   * DB's unique (service_record_id, professional_id) constraint — this is why edits to an
+   * already-open record could silently fail to persist.
+   */
+  private void reconcileTips(
+      ServiceRecord record,
+      ServiceRecordRequest request,
+      Set<Long> lineProfessionalIds,
+      Map<Long, Professional> professionalsById) {
+    Map<Long, ServiceRecordTip> existingByProfessional =
+        record.getTips().stream()
+            .collect(Collectors.toMap(t -> t.getProfessional().getId(), t -> t));
+
+    Set<Long> requestedProfessionalIds = new LinkedHashSet<>();
     if (request.tips() != null) {
       for (ServiceRecordTipRequest tr : request.tips()) {
         if (!lineProfessionalIds.contains(tr.professionalId())) {
           throw new ResponseStatusException(
               HttpStatus.BAD_REQUEST, "TIP_PROFESSIONAL_NOT_IN_LINES");
         }
-        ServiceRecordTip tip = new ServiceRecordTip();
-        tip.setServiceRecord(record);
-        tip.setProfessional(professionalsById.get(tr.professionalId()));
-        tip.setAmount(tr.amount().setScale(2, RoundingMode.HALF_UP));
-        record.getTips().add(tip);
+        requestedProfessionalIds.add(tr.professionalId());
+        BigDecimal amount = tr.amount().setScale(2, RoundingMode.HALF_UP);
+        ServiceRecordTip existing = existingByProfessional.get(tr.professionalId());
+        if (existing != null) {
+          existing.setAmount(amount);
+        } else {
+          ServiceRecordTip tip = new ServiceRecordTip();
+          tip.setServiceRecord(record);
+          tip.setProfessional(professionalsById.get(tr.professionalId()));
+          tip.setAmount(amount);
+          record.getTips().add(tip);
+        }
       }
     }
+    record.getTips().removeIf(t -> !requestedProfessionalIds.contains(t.getProfessional().getId()));
   }
 
   private static ServiceRecordListItemResponse toListItemDto(ServiceRecord r) {
@@ -282,6 +320,10 @@ public class ServiceRecordService {
                         l.getSalonService().getId(),
                         l.getDescription(),
                         l.getUnitPrice(),
+                        l.getQuantity(),
+                        l.getUnitPrice()
+                            .multiply(BigDecimal.valueOf(l.getQuantity()))
+                            .setScale(2, RoundingMode.HALF_UP),
                         l.getProfessional().getId(),
                         l.getProfessional().getFullName()))
             .collect(Collectors.toList());
@@ -305,6 +347,7 @@ public class ServiceRecordService {
         r.getId(),
         r.getClient().getId(),
         r.getClient().getFullName(),
+        r.getClient().getRuc(),
         r.getStatus().name(),
         r.getTotalAmount(),
         tipsTotal,

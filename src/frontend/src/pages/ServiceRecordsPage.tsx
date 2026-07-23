@@ -328,7 +328,6 @@ export default function ServiceRecordsPage() {
   const [pendingClient, setPendingClient] = useState<InitialClientForRecord | null>(
     navState?.selectedClient ?? null,
   );
-  const [createKey, setCreateKey] = useState(0);
 
   useEffect(() => {
     if (navState && (navState.activeTab || navState.selectedClient)) {
@@ -382,20 +381,11 @@ export default function ServiceRecordsPage() {
 
       <div hidden={activeTab !== "new"}>
         <ServiceRecordEditor
-          key={createKey}
           initial={null}
           allowClientCreateNew
           initialClientOverride={pendingClient}
           onInitialClientOverrideConsumed={() => setPendingClient(null)}
-          onSaved={() => {
-            /* keep editing the just-created record in place */
-          }}
         />
-        <div className="pt-4">
-          <Button variant="ghost" size="sm" onClick={() => setCreateKey((k) => k + 1)}>
-            {t("femme.serviceRecords.newRecordButton")}
-          </Button>
-        </div>
       </div>
 
       <div hidden={activeTab !== "history"}>

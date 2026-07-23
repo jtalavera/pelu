@@ -693,6 +693,8 @@
       "SERVICE_RECORD_NOT_OPEN": "This service record is not open and can no longer be modified.",
       "SERVICE_RECORD_ALREADY_INVOICED": "This service record already has an invoice generated for it.",
       "SERVICE_RECORD_LINES_REQUIRED": "Add at least one service to the record.",
+      "SERVICE_RECORD_LINE_QUANTITY_INVALID": "The line quantity must be at least 1.",
+      "SERVICE_RECORD_LINE_UNIT_PRICE_INVALID": "The line unit price must be greater than 0.",
       "TIP_PROFESSIONAL_NOT_IN_LINES": "Tips can only be entered for professionals who performed a service on this record.",
       "SERVICE_RECORD_LIST_RANGE_INCOMPLETE": "Both start and end dates are required.",
       "SERVICE_RECORD_LIST_INVALID_RANGE": "The start date must be before the end date.",
@@ -995,7 +997,6 @@
       "pageTitle": "Ficha de servicio",
       "pageSubtitle": "Track every service a client receives during a visit, from check-in to invoice.",
       "tabs": { "new": "New record", "history": "History" },
-      "newRecordButton": "+ New record",
       "clientSection": "Client",
       "clientSearchLabel": "Search or select client",
       "clientPlaceholder": "Search or select a client…",
@@ -1008,6 +1009,10 @@
       "lineProfessionalPlaceholder": "Search professional…",
       "lineProfessionalNoResults": "No professionals found.",
       "lineProfessionalRequired": "Select a professional.",
+      "lineUnitPriceLabel": "Unit price",
+      "lineUnitPriceRequired": "Unit price must be greater than 0.",
+      "lineQuantityLabel": "Quantity",
+      "lineQuantityRequired": "Quantity must be at least 1.",
       "linesRequired": "Add at least one service.",
       "tipsSection": "Tips",
       "tipsAmountLabel": "Tip",
@@ -1016,7 +1021,7 @@
       "save": "Save record",
       "saving": "Saving…",
       "saveChanges": "Save changes",
-      "createdSuccess": "Service record created.",
+      "createdSuccess": "Service record created successfully. You can check it on the Dashboard or in the Service record history.",
       "updatedSuccess": "Changes saved.",
       "generateInvoice": "Generate invoice",
       "voidButton": "Void record",
@@ -1059,7 +1064,8 @@
       "dashboard": {
         "title": "Today's service records",
         "empty": "No service records today.",
-        "viewHistory": "View history"
+        "viewHistory": "View history",
+        "showMore": "More"
       }
     },
     "tour": {

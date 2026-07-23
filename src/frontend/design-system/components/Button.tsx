@@ -15,6 +15,8 @@ const variants = {
     "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
   danger:
     "bg-red-600 text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-700 dark:hover:bg-red-600 dark:focus-visible:outline-red-500",
+  success:
+    "bg-green-600 text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:bg-green-400 dark:bg-green-600 dark:hover:bg-green-500 dark:focus-visible:outline-green-500 dark:disabled:bg-green-900",
 } as const;
 
 const sizes = {
