@@ -190,7 +190,7 @@ function AppShellInner() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalTab, setProfileModalTab] = useState<"profile" | "password">("profile");
-  useSessionRefresh(true);
+  useSessionRefresh(true, () => logout("expired"));
 
   useEffect(() => {
     return () => {
@@ -214,9 +214,9 @@ function AppShellInner() {
 
   const currentLang: SupportedLanguage = i18n.resolvedLanguage?.startsWith("es") ? "es" : "en";
 
-  function logout() {
+  function logout(reason?: "expired") {
     sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    navigate("/login", { replace: true });
+    navigate("/login", { replace: true, state: reason ? { reason } : undefined });
   }
 
   function switchLang(lang: SupportedLanguage) {
@@ -653,7 +653,7 @@ function AppShellInner() {
         {/* User block */}
         <button
           type="button"
-          onClick={logout}
+          onClick={() => logout()}
           aria-label={t("femme.nav.logout")}
           style={{
             paddingTop: 10,

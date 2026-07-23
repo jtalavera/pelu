@@ -87,7 +87,8 @@
       "submitting": "Iniciando sesión…",
       "errorInvalid": "Correo o contraseña incorrectos.",
       "errorNetwork": "Error de red. Comprobá que la API esté en ejecución.",
-      "forgotPassword": "¿Olvidaste tu contraseña?"
+      "forgotPassword": "¿Olvidaste tu contraseña?",
+      "sessionRefreshExpired": "Tu sesión expiró. Iniciá sesión nuevamente."
     },
     "forgot": {
       "title": "Restablecer contraseña",
