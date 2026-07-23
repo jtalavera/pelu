@@ -37,6 +37,9 @@ public class ServiceRecordLine {
   @Column(name = "unit_price", nullable = false, precision = 19, scale = 2)
   private BigDecimal unitPrice;
 
+  @Column(nullable = false)
+  private Integer quantity;
+
   public Long getId() {
     return id;
   }
@@ -83,5 +86,13 @@ public class ServiceRecordLine {
 
   public void setUnitPrice(BigDecimal unitPrice) {
     this.unitPrice = unitPrice;
+  }
+
+  public Integer getQuantity() {
+    return quantity;
+  }
+
+  public void setQuantity(Integer quantity) {
+    this.quantity = quantity;
   }
 }

@@ -36,13 +36,23 @@ async function createServiceRecordApi(
   token: string,
   body: {
     clientId: number;
-    lines: Array<{ serviceId: number; professionalId: number }>;
+    lines: Array<{
+      serviceId: number;
+      professionalId: number;
+      quantity?: number;
+      unitPrice?: number;
+    }>;
     tips?: Array<{ professionalId: number; amount: number }>;
   },
 ): Promise<ServiceRecordSeed> {
   return apiPostJson<ServiceRecordSeed>(request, token, "/api/service-records", {
     clientId: body.clientId,
-    lines: body.lines,
+    lines: body.lines.map((l) => ({
+      serviceId: l.serviceId,
+      professionalId: l.professionalId,
+      quantity: l.quantity ?? 1,
+      unitPrice: l.unitPrice ?? 50000,
+    })),
     tips: body.tips ?? [],
   });
 }
@@ -124,17 +134,41 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(tipInput2).toHaveValue("3.000");
 
     await page.getByRole("button", { name: "Save record" }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Service record created." })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("service-record-status")).toHaveText("Open");
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Service record created successfully." }),
+    ).toBeVisible({ timeout: 15_000 });
 
-    // AC3: still open → editable. Add a third line and save again.
-    await page.getByRole("button", { name: "Add service" }).click();
+    // Issue #119 AC3/AC5: the "New record" form resets to blank after a successful create —
+    // no more "+ New record" button, and the client field is cleared for the next ficha.
+    await expect(page.getByRole("button", { name: "+ New record" })).toHaveCount(0);
+    await expect(page.getByLabel("Search or select client")).toHaveValue("");
+
+    // AC3/AC9: the just-created record is still Open → reopen it from History and edit it there.
+    // The underlying page (History table row, hidden "New record" tab) stays mounted behind the
+    // modal, so all locators below are scoped to the dialog to avoid duplicate-match ambiguity.
+    const row = await findHistoryRow(page, client.fullName);
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.getByRole("button", { name: "View" }).click();
+    const dialog = page.getByRole("dialog", { name: "Service record detail" });
+    await expect(dialog.getByTestId("service-record-status")).toHaveText("Open");
+    await expect(dialog.getByText(/^80\.000$/)).toBeVisible();
+
+    await dialog.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 2, seed.serviceFullName);
     await pickLineProfessional(page, 2, seed.professionalFullName);
-    await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Changes saved." })).toBeVisible({ timeout: 15_000 });
+    await dialog.getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog.getByRole("alert").filter({ hasText: "Changes saved." })).toBeVisible({
+      timeout: 15_000,
+    });
     // New total = 80.000 + 50.000 = 130.000
-    await expect(page.getByText(/^130\.000$/)).toBeVisible();
+    await expect(dialog.getByText(/^130\.000$/)).toBeVisible();
+
+    // Reload the detail view fresh (new GET) and confirm the added line truly persisted —
+    // this is the issue #119 AC7 regression guard for edits to an OPEN record.
+    const row2 = await findHistoryRow(page, client.fullName);
+    await expect(row2).toBeVisible({ timeout: 15_000 });
+    await row2.getByRole("button", { name: "View" }).click();
+    await expect(dialog.getByText(/^130\.000$/)).toBeVisible({ timeout: 15_000 });
   });
 
   test("AC2 · si el cliente no existe, se puede crear uno nuevo desde la ficha", async ({ page }) => {
@@ -157,7 +191,9 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
     await page.getByRole("button", { name: "Save record" }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Service record created." })).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Service record created successfully." }),
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   test("AC4+AC6 · generar comprobante prellena la factura, cierra la ficha y la vuelve inmutable", async ({
@@ -165,7 +201,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    const client = await seedClient(request, token, `E2E GenInv ${Date.now()}`);
+    const client = await seedClient(request, token, `E2E GenInv ${Date.now()}`, undefined, "80000005-6");
     const record = await createServiceRecordApi(request, token, {
       clientId: client.id,
       lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
@@ -178,12 +214,17 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await row.getByRole("button", { name: "View" }).click();
 
     await expect(page.getByTestId("service-record-status")).toHaveText("Open");
-    await page.getByRole("button", { name: "Generate invoice" }).click();
+    // Issue #119 AC8: "Generate invoice" uses the dark-green design-system success variant.
+    const generateInvoiceButton = page.getByRole("button", { name: "Generate invoice" });
+    await expect(generateInvoiceButton).toHaveClass(/bg-green-600/);
+    await generateInvoiceButton.click();
 
-    // Lands on Billing → New Invoice, prefilled with the ficha's client, service and tips.
+    // Lands on Billing → New Invoice, prefilled with the ficha's client, RUC, service and tips.
     await expect(page).toHaveURL(/\/app\/billing/);
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
     await expect(page.getByText(client.fullName)).toBeVisible();
+    // Issue #119 AC9: the client's RUC is carried over from the ficha into the invoice form.
+    await expect(page.locator("#client-ruc")).toHaveValue("80000005-6");
     await expect(page.locator("#line-price-0")).toHaveValue("50.000");
     await expect(page.locator("#billing-tips-amount")).toHaveValue("4.000");
     // Payment auto-fills to cover total + tips = 54.000.
@@ -217,7 +258,9 @@ test.describe("Issue #53 · Ficha de servicio", () => {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       data: {
         clientId: client.id,
-        lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
+        lines: [
+          { serviceId: seed.serviceId, professionalId: seed.professionalId, quantity: 1, unitPrice: 50000 },
+        ],
         tips: [],
       },
     });
@@ -249,7 +292,9 @@ test.describe("Issue #53 · Ficha de servicio", () => {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       data: {
         clientId: client.id,
-        lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
+        lines: [
+          { serviceId: seed.serviceId, professionalId: seed.professionalId, quantity: 1, unitPrice: 50000 },
+        ],
         tips: [],
       },
     });
@@ -268,7 +313,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
     await new Promise((r) => setTimeout(r, 1100));
     const newerClient = await seedClient(request, token, `E2E Newer ${Date.now()}`);
-    await createServiceRecordApi(request, token, {
+    const newerRecord = await createServiceRecordApi(request, token, {
       clientId: newerClient.id,
       lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
     });
@@ -282,6 +327,49 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     const cards = page.locator("button", { hasText: /E2E (Newer|Older)/ });
     const firstCardText = await cards.first().innerText();
     expect(firstCardText).toContain(newerClient.fullName);
+
+    // Issue #119 AC10: status grouping (Open, Closed, Voided) beats recency — voiding the
+    // newer record must push it after the still-open older one, even though it's newer.
+    await request.post(`${API_BASE}/api/service-records/${newerRecord.id}/void`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      data: { voidReason: "E2E void for ordering test" },
+    });
+    await page.reload();
+    await expect(page.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(newerClient.fullName)).toBeVisible();
+    const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/ });
+    const firstCardAfterVoid = await reorderedCards.first().innerText();
+    expect(firstCardAfterVoid).toContain(olderClient.fullName);
+  });
+
+  test("AC10 · el dashboard muestra un máximo de 14 fichas y un botón Más hacia el Historial", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const capMarker = `E2E Cap ${Date.now()}`;
+    for (let i = 0; i < 15; i++) {
+      const client = await seedClient(request, token, `${capMarker} ${i}`);
+      await createServiceRecordApi(request, token, {
+        clientId: client.id,
+        lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
+      });
+    }
+
+    await loginAsDemo(page);
+    await page.goto("/app");
+    await expect(page.getByText("Today's service records")).toBeVisible();
+    await expect(page.getByText(capMarker, { exact: false }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const cards = page.locator("button", { hasText: capMarker });
+    await expect(cards).toHaveCount(14);
+    const moreLink = page.getByRole("link", { name: "More", exact: true });
+    await expect(moreLink).toBeVisible();
+    await moreLink.click();
+    await expect(page).toHaveURL(/\/app\/service-records/);
+    await expect(page.getByRole("tab", { name: "History", selected: true })).toBeVisible();
   });
 
   test("AC8 · historial de fichas con filtros de búsqueda", async ({ page, request }) => {

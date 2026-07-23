@@ -8,6 +8,7 @@ public record ServiceRecordResponse(
     Long id,
     Long clientId,
     String clientFullName,
+    String clientRuc,
     String status,
     BigDecimal totalAmount,
     BigDecimal tipsTotal,

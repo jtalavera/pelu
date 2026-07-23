@@ -693,6 +693,8 @@
       "SERVICE_RECORD_NOT_OPEN": "Esta ficha de servicio no está abierta y ya no se puede modificar.",
       "SERVICE_RECORD_ALREADY_INVOICED": "Esta ficha de servicio ya tiene un comprobante generado.",
       "SERVICE_RECORD_LINES_REQUIRED": "Agregá al menos un servicio a la ficha.",
+      "SERVICE_RECORD_LINE_QUANTITY_INVALID": "La cantidad de la línea debe ser al menos 1.",
+      "SERVICE_RECORD_LINE_UNIT_PRICE_INVALID": "El precio unitario de la línea debe ser mayor que 0.",
       "TIP_PROFESSIONAL_NOT_IN_LINES": "Solo se pueden cargar propinas para profesionales que realizaron un servicio en esta ficha.",
       "SERVICE_RECORD_LIST_RANGE_INCOMPLETE": "Elegí fecha desde y hasta.",
       "SERVICE_RECORD_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
@@ -995,7 +997,6 @@
       "pageTitle": "Ficha de servicio",
       "pageSubtitle": "Registrá todos los servicios que recibe un cliente durante su visita, desde que entra hasta la emisión del comprobante.",
       "tabs": { "new": "Nueva ficha", "history": "Historial" },
-      "newRecordButton": "+ Nueva ficha",
       "clientSection": "Cliente",
       "clientSearchLabel": "Buscar o seleccionar cliente",
       "clientPlaceholder": "Buscar o seleccionar cliente…",
@@ -1008,6 +1009,10 @@
       "lineProfessionalPlaceholder": "Buscar profesional…",
       "lineProfessionalNoResults": "No se encontraron profesionales.",
       "lineProfessionalRequired": "Seleccioná un profesional.",
+      "lineUnitPriceLabel": "Precio unitario",
+      "lineUnitPriceRequired": "El precio unitario debe ser mayor que 0.",
+      "lineQuantityLabel": "Cantidad",
+      "lineQuantityRequired": "La cantidad debe ser al menos 1.",
       "linesRequired": "Agregá al menos un servicio.",
       "tipsSection": "Propinas",
       "tipsAmountLabel": "Propina",
@@ -1016,7 +1021,7 @@
       "save": "Guardar ficha",
       "saving": "Guardando…",
       "saveChanges": "Guardar cambios",
-      "createdSuccess": "Ficha de servicio creada.",
+      "createdSuccess": "Ficha de servicio creada exitosamente. Puede verificarla en el Panel principal o en el Historial de fichas.",
       "updatedSuccess": "Cambios guardados.",
       "generateInvoice": "Generar comprobante",
       "voidButton": "Anular ficha",
@@ -1059,7 +1064,8 @@
       "dashboard": {
         "title": "Fichas de servicio de hoy",
         "empty": "No hay fichas de servicio hoy.",
-        "viewHistory": "Ver historial"
+        "viewHistory": "Ver historial",
+        "showMore": "Más"
       }
     },
     "tour": {

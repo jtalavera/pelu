@@ -5,6 +5,8 @@ export type ServiceRecordLine = {
   serviceId: number;
   description: string;
   unitPrice: string;
+  quantity: number;
+  lineTotal: string;
   professionalId: number;
   professionalName: string;
 };
@@ -19,6 +21,7 @@ export type ServiceRecordDetail = {
   id: number;
   clientId: number;
   clientFullName: string;
+  clientRuc: string | null;
   status: "OPEN" | "CLOSED" | "VOIDED";
   totalAmount: string;
   tipsTotal: string;
@@ -48,7 +51,12 @@ export type PagedServiceRecordsResponse = {
   totalPages: number;
 };
 
-export type ServiceRecordLineInput = { serviceId: number; professionalId: number };
+export type ServiceRecordLineInput = {
+  serviceId: number;
+  professionalId: number;
+  quantity: number;
+  unitPrice: number;
+};
 export type ServiceRecordTipInput = { professionalId: number; amount: number };
 
 export type ServiceRecordSaveRequest = {

@@ -7,5 +7,7 @@ public record ServiceRecordLineResponse(
     Long serviceId,
     String description,
     BigDecimal unitPrice,
+    Integer quantity,
+    BigDecimal lineTotal,
     Long professionalId,
     String professionalName) {}
