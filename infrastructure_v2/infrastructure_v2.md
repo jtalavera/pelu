@@ -9,7 +9,7 @@ Browser
   ├── Azure Static Web App (Free) ─────────────── React SPA
   └── Azure Container App (Consumption)  ──────── Spring Boot :8080
         │  system-assigned managed identity
-        ├── Azure SQL Database (serverless, auto-pause)
+        ├── Azure SQL Database (Basic tier)
         ├── Azure Communication Services (email)
         └── Application Insights / Log Analytics
 ```
@@ -33,12 +33,12 @@ code (`infrastructure/`, `ci.yml`) have been retired.
 |---|---|---|
 | Static Web App (Free) | $0 | $0 |
 | Container App (min 0, 0.25 vCPU / 0.5 GiB) | $0–2 | $0–2 |
-| Azure SQL (serverless GP_S_Gen5_1, auto-pause) | $0–5 | $5–15 |
+| Azure SQL (Basic tier, 5 DTU / 2 GB, no auto-pause) | ≈ $5 | ≈ $5 |
 | SQL backup storage (Local / Zone) | $0–1 | $1–3 |
 | Log Analytics (0.5 GB/day cap) | $0–3 | $0–3 |
 | Application Insights (workspace-based) | $0–2 | $0–2 |
 | Communication Services (email) | $0–1 | $0–1 |
-| **Total** | **≈ $0–10** | **≈ $5–25** |
+| **Total** | **≈ $5–11** | **≈ $9–14** |
 
 ## Applying per environment
 
