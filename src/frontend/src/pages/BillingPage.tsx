@@ -656,6 +656,7 @@ function NewInvoiceTab({
   // the CASH amount would change `remaining`, re-firing the effect forever.
   useEffect(() => {
     if (total <= 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPayments((prev) => {
       const nonCashTotal = prev
         .filter((p) => p.method !== "CASH")
@@ -1490,6 +1491,7 @@ function CashSessionTab({
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadTodayInvoices, refreshTrigger, currentSession?.id, sessionListQuery, todayPageNum, todayPageSize]);
@@ -2166,6 +2168,7 @@ export default function BillingPage() {
   }, [t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadCurrentSession();
   }, [loadCurrentSession]);
 

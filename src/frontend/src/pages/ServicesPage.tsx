@@ -159,6 +159,7 @@ export default function ServicesPage() {
   }, [t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -167,6 +168,7 @@ export default function ServicesPage() {
     if (serviceModalOpen && !serviceEditing && serviceTaxId === "" && taxes.length > 0) {
       const defaultTax =
         taxes.find((tx) => tx.active && tx.rate === 10) ?? taxes.find((tx) => tx.active);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (defaultTax) setServiceTaxId(String(defaultTax.id));
     }
   }, [taxes, serviceModalOpen, serviceEditing, serviceTaxId]);

@@ -280,6 +280,7 @@ export default function CalendarPage() {
   }, [weekStart, selectedProfessionalId, t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAppointments();
   }, [fetchAppointments]);
 

@@ -13,7 +13,9 @@ const IDLE_REFRESH_MS = 5 * 60 * 1000;
 export function useSessionRefresh(enabled: boolean, onExpired: () => void) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onExpiredRef = useRef(onExpired);
-  onExpiredRef.current = onExpired;
+  useEffect(() => {
+    onExpiredRef.current = onExpired;
+  }, [onExpired]);
 
   useEffect(() => {
     if (!enabled) return;

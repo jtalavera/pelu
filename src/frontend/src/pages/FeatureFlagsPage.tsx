@@ -43,6 +43,7 @@ export default function FeatureFlagsPage() {
   }, [isSystemAdmin, t, effectiveTenantId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 

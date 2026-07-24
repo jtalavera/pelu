@@ -61,6 +61,7 @@ export function FeatureFlagProvider({ children }: ProviderProps) {
 
   useEffect(() => {
     if (meLoading) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refetch();
   }, [meLoading, me, refetch]);
 

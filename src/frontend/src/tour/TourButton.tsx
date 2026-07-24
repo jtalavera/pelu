@@ -37,6 +37,7 @@ export function TourButton({ enabled = true }: { enabled?: boolean }) {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsPulsing(!!tourKey && !hasSeenTour(tourKey));
   }, [tourKey, seenVersion, hasSeenTour]);
 

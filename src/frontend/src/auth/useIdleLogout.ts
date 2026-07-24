@@ -14,7 +14,9 @@ const ACTIVITY_THROTTLE_MS = 1000;
  */
 export function useIdleLogout(enabled: boolean, onIdle: () => void, timeoutMs: number = IDLE_TIMEOUT_MS) {
   const onIdleRef = useRef(onIdle);
-  onIdleRef.current = onIdle;
+  useEffect(() => {
+    onIdleRef.current = onIdle;
+  }, [onIdle]);
 
   useEffect(() => {
     if (!enabled) return;

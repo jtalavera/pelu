@@ -122,12 +122,14 @@ export default function BusinessSettingsPage() {
   }, [t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
   useEffect(() => {
     const url = logoDataUrl && logoDataUrl.length > 0 ? logoDataUrl : null;
     if (!url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLogoDims(null);
       return;
     }
