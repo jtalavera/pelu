@@ -28,6 +28,8 @@ export default function ActivatePage() {
 
   useEffect(() => {
     if (!rawToken) {
+      // Guard clause: no token means no async validation call is needed.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTokenError(t("femme.activate.errorInvalid"));
       setTokenLoading(false);
       return;

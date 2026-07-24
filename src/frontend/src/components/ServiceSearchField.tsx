@@ -57,7 +57,9 @@ export function ServiceSearchField({
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Sync displayed text from the selection prop.
     if (value) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery(value.name);
     }
   }, [value]);

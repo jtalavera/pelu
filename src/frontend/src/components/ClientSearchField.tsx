@@ -55,6 +55,7 @@ export function ClientSearchField({
   // Sync from selection only when a concrete selection is set (not when cleared — user may be typing).
   useEffect(() => {
     if (value?.type === "client") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery(value.client.fullName);
     } else if (value?.type === "occasional") {
       setQuery(t("femme.clients.inlineSearch.occasional"));

@@ -16,6 +16,7 @@ export default function LoginPage() {
   useTour("login", loginSteps, undefined, false);
   const state = location.state as { from?: { pathname?: string }; reason?: string } | null;
   const from = state?.from?.pathname ?? "/app";
+  const sessionExpired = state?.reason === "idle";
   const sessionRefreshExpired = state?.reason === "expired";
 
   const [email, setEmail] = useState("");
@@ -103,6 +104,11 @@ export default function LoginPage() {
           <Text variant="muted" className="mb-6 text-[var(--color-ink-3)]">
             {t("femme.login.subtitle")}
           </Text>
+          {sessionExpired ? (
+            <Alert variant="info" className="mb-4">
+              {t("femme.login.sessionExpired")}
+            </Alert>
+          ) : null}
           {sessionRefreshExpired ? (
             <Alert variant="info" className="mb-4">
               {t("femme.login.sessionRefreshExpired")}

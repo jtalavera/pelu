@@ -242,6 +242,7 @@ export default function DashboardPage() {
   }, [t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     const id = window.setInterval(() => void load(), POLL_MS);
     return () => window.clearInterval(id);

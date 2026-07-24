@@ -178,6 +178,8 @@ export default function ClientsPage() {
         }
       | undefined;
     if (st?.openCreateClient) {
+      // Open the create-client modal pre-filled from router navigation state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFullName(st.prefilledName?.trim() ?? "");
       setPhone("");
       setEmail("");

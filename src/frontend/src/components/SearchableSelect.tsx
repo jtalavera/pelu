@@ -78,7 +78,9 @@ export function SearchableSelect<T extends string | number>({
   }, []);
 
   useEffect(() => {
+    // Sync displayed text from the selection prop when the dropdown is closed.
     if (!open && !disabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery(selectedLabel);
     }
   }, [selectedLabel, open, disabled]);

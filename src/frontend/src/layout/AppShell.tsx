@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { useSessionRefresh } from "../auth/useSessionRefresh";
+import { useIdleLogout } from "../auth/useIdleLogout";
 import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -191,6 +192,7 @@ function AppShellInner() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalTab, setProfileModalTab] = useState<"profile" | "password">("profile");
   useSessionRefresh(true, () => logout("expired"));
+  useIdleLogout(true, () => logout("idle"));
 
   useEffect(() => {
     return () => {
@@ -214,7 +216,7 @@ function AppShellInner() {
 
   const currentLang: SupportedLanguage = i18n.resolvedLanguage?.startsWith("es") ? "es" : "en";
 
-  function logout(reason?: "expired") {
+  function logout(reason?: "idle" | "expired") {
     sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     navigate("/login", { replace: true, state: reason ? { reason } : undefined });
   }
