@@ -146,11 +146,12 @@ resource "azurerm_mssql_database" "app" {
   server_id = azurerm_mssql_server.main.id
   collation = "SQL_Latin1_General_CP1_CI_AS"
 
-  # Serverless General Purpose, Gen5, 1 vCore max / 0.5 vCore min.
-  # Auto-pauses after 60 min of inactivity to minimise cost.
-  sku_name                    = "GP_S_Gen5_1"
-  min_capacity                = 0.5
-  auto_pause_delay_in_minutes = 60
+  # Basic tier: fixed 5 DTU, 2 GB max size, no auto-pause. Matches what's
+  # actually deployed — set manually in the Portal in both environments as a
+  # cost-mitigation stopgap during the useSessionRefresh 401 retry-loop
+  # incident, and kept afterward. Terraform now reflects reality rather than
+  # reverting the live databases back to serverless.
+  sku_name = "Basic"
 
   # test: Local (cheapest). prod: Zone (zone-resilient PITR backups).
   storage_account_type = var.sql_backup_storage_redundancy
