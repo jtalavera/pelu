@@ -107,6 +107,7 @@
       "clients": "Clients",
       "billing": "Billing",
       "serviceRecords": "Service records",
+      "propinas": "Tips",
       "settings": "Settings",
       "businessSettings": "Settings",
       "featureFlags": "Feature flags",
@@ -627,6 +628,8 @@
       "FLAG_NOT_FOUND": "That feature flag does not exist.",
       "INVALID_FLAG_KEY": "Invalid feature flag name. Use uppercase letters, digits, and underscores (e.g. GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Professional not found.",
+      "TIP_WITHDRAWAL_AMOUNT_INVALID": "Enter an amount greater than zero.",
+      "TIP_WITHDRAWAL_EXCEEDS_BALANCE": "The withdrawal amount cannot exceed the accumulated tip balance.",
       "PROFESSIONAL_EMAIL_DUPLICATE": "Another professional in your business already uses this email address.",
       "PROFESSIONAL_NAME_REQUIRED": "Full name is required.",
       "PROFESSIONAL_SCHEDULES_REQUIRED": "Weekly schedule is required.",
@@ -1066,6 +1069,55 @@
         "empty": "No service records today.",
         "viewHistory": "View history",
         "showMore": "More"
+      }
+    },
+    "propinas": {
+      "pageTitle": "Tips",
+      "pageSubtitle": "Track tips earned by professionals and withdraw accumulated balances.",
+      "errorTitle": "Error",
+      "tabs": {
+        "report": "Tips report",
+        "withdrawal": "Tip withdrawal"
+      },
+      "report": {
+        "filterFrom": "From",
+        "filterTo": "To",
+        "filterProfessional": "Professional",
+        "filterProfessionalPlaceholder": "All professionals",
+        "filterProfessionalFilterPlaceholder": "Search professionals…",
+        "filterProfessionalNoResults": "No professionals found.",
+        "filterProfessionalSummary": "{count} selected",
+        "search": "Search",
+        "exportPdf": "Export PDF",
+        "exporting": "Exporting…",
+        "exportError": "Could not export the report.",
+        "loading": "Loading…",
+        "loadError": "Could not load the tips report.",
+        "empty": "No tips found for the selected filters.",
+        "colProfessional": "Professional",
+        "colAmount": "Tip amount",
+        "colClient": "Client",
+        "colDateTime": "Service date and time",
+        "subtotalLabel": "Subtotal — {{name}}",
+        "grandTotalLabel": "Grand total"
+      },
+      "withdrawal": {
+        "professionalLabel": "Professional",
+        "professionalFilterPlaceholder": "Search professionals…",
+        "professionalNoResults": "No professionals found.",
+        "selectProfessionalPrompt": "Select a professional to see their accumulated tip balance.",
+        "balanceLabel": "Accumulated tip balance",
+        "amountLabel": "Amount to withdraw",
+        "amountPlaceholder": "0",
+        "amountInvalid": "Enter an amount greater than zero.",
+        "amountExceedsBalance": "The amount cannot exceed the accumulated tip balance.",
+        "submit": "Withdraw",
+        "submitting": "Withdrawing…",
+        "success": "Withdrawal completed successfully.",
+        "historyTitle": "Withdrawal history",
+        "historyEmpty": "No withdrawals yet for this professional.",
+        "historyColDate": "Date",
+        "historyColAmount": "Amount"
       }
     },
     "tour": {
