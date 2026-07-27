@@ -6,6 +6,7 @@ export default function SettingsLayout() {
   const { t } = useTranslation();
   const { me } = useMe();
   const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
+  const isTenantAdmin = me?.role === "ADMIN";
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -63,6 +64,11 @@ export default function SettingsLayout() {
           {isSystemAdmin ? (
             <NavLink to="/app/settings/feature-flags" className={navClass}>
               {t("femme.settings.tabFeatureFlags")}
+            </NavLink>
+          ) : null}
+          {isTenantAdmin ? (
+            <NavLink to="/app/settings/sifen" className={navClass}>
+              {t("femme.settings.tabSifen")}
             </NavLink>
           ) : null}
         </nav>

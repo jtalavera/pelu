@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
   FemmeJwtProperties.class,
   FemmeTimeProperties.class,
-  FemmeSystemAdminProperties.class
+  FemmeSystemAdminProperties.class,
+  SifenCertificateProperties.class
 })
 public class FemmeConfiguration {}
