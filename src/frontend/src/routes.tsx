@@ -14,6 +14,7 @@ import ClientDetailPage from "./pages/ClientDetailPage";
 import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import ServiceRecordsPage from "./pages/ServiceRecordsPage";
+import PropinasPage from "./pages/PropinasPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
@@ -38,6 +39,7 @@ export function AppRoutes() {
         <Route path="/app/services" element={<ServicesPage />} />
         <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/service-records" element={<ServiceRecordsPage />} />
+        <Route path="/app/propinas" element={<PropinasPage />} />
         <Route path="/app/clients" element={<ClientsPage />} />
         <Route path="/app/clients/:id" element={<ClientDetailPage />} />
         <Route path="/app/professionals" element={<ProfessionalsPage />} />

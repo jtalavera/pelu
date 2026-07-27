@@ -107,6 +107,7 @@
       "clients": "Clientes",
       "billing": "Facturación",
       "serviceRecords": "Fichas de servicio",
+      "propinas": "Propinas",
       "settings": "Configuración",
       "businessSettings": "Configuración",
       "featureFlags": "Funcionalidades",
@@ -627,6 +628,8 @@
       "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
       "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Profesional no encontrada.",
+      "TIP_WITHDRAWAL_AMOUNT_INVALID": "Ingresá un monto mayor a cero.",
+      "TIP_WITHDRAWAL_EXCEEDS_BALANCE": "El monto a retirar no puede superar el total de propina acumulada.",
       "PROFESSIONAL_EMAIL_DUPLICATE": "Otra profesional de tu negocio ya usa este correo.",
       "PROFESSIONAL_NAME_REQUIRED": "Ingresá el nombre completo.",
       "PIN_ALREADY_IN_USE": "Este PIN ya está asignado a otra profesional en tu negocio.",
@@ -1066,6 +1069,55 @@
         "empty": "No hay fichas de servicio hoy.",
         "viewHistory": "Ver historial",
         "showMore": "Más"
+      }
+    },
+    "propinas": {
+      "pageTitle": "Propinas",
+      "pageSubtitle": "Seguí las propinas de las profesionales y retirá los saldos acumulados.",
+      "errorTitle": "Error",
+      "tabs": {
+        "report": "Reporte de propinas",
+        "withdrawal": "Retiro de propina"
+      },
+      "report": {
+        "filterFrom": "Fecha desde",
+        "filterTo": "Fecha hasta",
+        "filterProfessional": "Profesional",
+        "filterProfessionalPlaceholder": "Todas las profesionales",
+        "filterProfessionalFilterPlaceholder": "Buscar profesionales…",
+        "filterProfessionalNoResults": "No se encontraron profesionales.",
+        "filterProfessionalSummary": "{count} seleccionadas",
+        "search": "Buscar",
+        "exportPdf": "Exportar PDF",
+        "exporting": "Exportando…",
+        "exportError": "No se pudo exportar el reporte.",
+        "loading": "Cargando…",
+        "loadError": "No se pudo cargar el reporte de propinas.",
+        "empty": "No se encontraron propinas para los filtros seleccionados.",
+        "colProfessional": "Profesional",
+        "colAmount": "Monto propina",
+        "colClient": "Cliente",
+        "colDateTime": "Fecha y hora de servicio",
+        "subtotalLabel": "Subtotal — {{name}}",
+        "grandTotalLabel": "Total general"
+      },
+      "withdrawal": {
+        "professionalLabel": "Profesional",
+        "professionalFilterPlaceholder": "Buscar profesionales…",
+        "professionalNoResults": "No se encontraron profesionales.",
+        "selectProfessionalPrompt": "Seleccioná una profesional para ver su propina acumulada.",
+        "balanceLabel": "Propina acumulada",
+        "amountLabel": "Monto a retirar",
+        "amountPlaceholder": "0",
+        "amountInvalid": "Ingresá un monto mayor a cero.",
+        "amountExceedsBalance": "El monto no puede superar la propina acumulada.",
+        "submit": "Retirar",
+        "submitting": "Retirando…",
+        "success": "Retiro realizado con éxito.",
+        "historyTitle": "Historial de retiros",
+        "historyEmpty": "Todavía no hay retiros para esta profesional.",
+        "historyColDate": "Fecha",
+        "historyColAmount": "Monto"
       }
     },
     "tour": {
