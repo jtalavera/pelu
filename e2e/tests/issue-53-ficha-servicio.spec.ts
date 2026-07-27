@@ -342,7 +342,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     expect(firstCardAfterVoid).toContain(olderClient.fullName);
   });
 
-  test("AC10 · el dashboard muestra un máximo de 14 fichas y un botón Más hacia el Historial", async ({
+  test("AC10 · el dashboard muestra un máximo de 12 fichas en una grilla y un botón Más que revela el resto en el lugar", async ({
     page,
     request,
   }) => {
@@ -364,12 +364,12 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     const cards = page.locator("button", { hasText: capMarker });
-    await expect(cards).toHaveCount(14);
-    const moreLink = page.getByRole("link", { name: "More", exact: true });
-    await expect(moreLink).toBeVisible();
-    await moreLink.click();
-    await expect(page).toHaveURL(/\/app\/service-records/);
-    await expect(page.getByRole("tab", { name: "History", selected: true })).toBeVisible();
+    await expect(cards).toHaveCount(12);
+    const moreButton = page.getByRole("button", { name: "More", exact: true });
+    await expect(moreButton).toBeVisible();
+    await moreButton.click();
+    await expect(cards).toHaveCount(15);
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
   test("AC8 · historial de fichas con filtros de búsqueda", async ({ page, request }) => {

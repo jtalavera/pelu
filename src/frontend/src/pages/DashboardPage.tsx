@@ -267,7 +267,7 @@ export default function DashboardPage() {
 
   // ── Today's fichas de servicio (any status), newest first ─────────────────
   const loadTodayServiceRecords = useCallback(() => {
-    listServiceRecordsPaged({ from: todayRangeIso.from, to: todayRangeIso.to, size: 50 })
+    listServiceRecordsPaged({ from: todayRangeIso.from, to: todayRangeIso.to, size: 100 })
       .then((page) => setTodayServiceRecords(Array.isArray(page?.content) ? page.content : []))
       .catch(() => setTodayServiceRecords([]));
   }, [todayRangeIso.from, todayRangeIso.to]);
@@ -278,10 +278,16 @@ export default function DashboardPage() {
     return () => window.clearInterval(id);
   }, [loadTodayServiceRecords]);
 
-  // Grouped by status (Open, Closed, Voided), newest first within each group, capped at 14
-  // with a "More" button to the full Historial list.
+  // Grouped by status (Open, Closed, Voided), newest first within each group, shown in a grid
+  // capped at 12 with a "Más" button that reveals more of the already-fetched records in place.
   const SERVICE_RECORD_STATUS_RANK: Record<string, number> = { OPEN: 0, CLOSED: 1, VOIDED: 2 };
-  const DASHBOARD_SERVICE_RECORDS_CAP = 14;
+  const DASHBOARD_SERVICE_RECORDS_CAP = 12;
+  const [visibleServiceRecordCount, setVisibleServiceRecordCount] = useState(
+    DASHBOARD_SERVICE_RECORDS_CAP,
+  );
+  useEffect(() => {
+    setVisibleServiceRecordCount(DASHBOARD_SERVICE_RECORDS_CAP);
+  }, [todayRangeIso.from]);
   const sortedTodayServiceRecords = useMemo(() => {
     return [...todayServiceRecords].sort((a, b) => {
       const rankDiff =
@@ -292,10 +298,9 @@ export default function DashboardPage() {
   }, [todayServiceRecords]);
   const visibleTodayServiceRecords = sortedTodayServiceRecords.slice(
     0,
-    DASHBOARD_SERVICE_RECORDS_CAP,
+    visibleServiceRecordCount,
   );
-  const hasMoreTodayServiceRecords =
-    sortedTodayServiceRecords.length > DASHBOARD_SERVICE_RECORDS_CAP;
+  const hasMoreTodayServiceRecords = sortedTodayServiceRecords.length > visibleServiceRecordCount;
 
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
@@ -900,21 +905,23 @@ export default function DashboardPage() {
             {t("femme.serviceRecords.dashboard.empty")}
           </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-1">
+          <div
+            data-testid="dashboard-service-records-grid"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
+          >
             {visibleTodayServiceRecords.map((r) => (
               <button
                 key={r.id}
                 type="button"
+                data-testid="dashboard-service-record-card"
                 onClick={() => setSelectedServiceRecordId(r.id)}
                 style={{
-                  minWidth: 180,
                   textAlign: "left",
                   background: "var(--color-stone)",
                   border: "var(--border-default)",
                   borderRadius: "var(--radius-md)",
                   padding: 10,
                   cursor: "pointer",
-                  flexShrink: 0,
                 }}
               >
                 <div
@@ -937,11 +944,13 @@ export default function DashboardPage() {
               </button>
             ))}
             {hasMoreTodayServiceRecords && (
-              <Link
-                to="/app/service-records"
-                state={{ activeTab: "history" }}
+              <button
+                type="button"
+                data-testid="dashboard-service-records-more"
+                onClick={() =>
+                  setVisibleServiceRecordCount((c) => c + DASHBOARD_SERVICE_RECORDS_CAP)
+                }
                 style={{
-                  minWidth: 90,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -949,15 +958,14 @@ export default function DashboardPage() {
                   border: "var(--border-default)",
                   borderRadius: "var(--radius-md)",
                   padding: 10,
-                  flexShrink: 0,
+                  cursor: "pointer",
                   fontSize: 12,
                   fontWeight: 500,
                   color: "var(--color-rose)",
-                  textDecoration: "none",
                 }}
               >
                 {t("femme.serviceRecords.dashboard.showMore")}
-              </Link>
+              </button>
             )}
           </div>
         )}

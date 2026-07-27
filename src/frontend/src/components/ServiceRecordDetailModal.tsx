@@ -39,7 +39,12 @@ export function ServiceRecordDetailModal({
   }, [serviceRecordId, t]);
 
   return (
-    <Modal open onClose={onClose} title={t("femme.serviceRecords.detailTitle")}>
+    <Modal
+      open
+      onClose={onClose}
+      title={t("femme.serviceRecords.detailTitle")}
+      className="max-w-4xl"
+    >
       <div className="flex flex-col gap-4">
         {loading && (
           <div className="flex items-center gap-2">

@@ -27,8 +27,8 @@ public class ServiceRecordLine {
   @JoinColumn(name = "service_id", nullable = false)
   private SalonService salonService;
 
-  @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "professional_id", nullable = false)
+  @ManyToOne(fetch = FetchType.LAZY, optional = true)
+  @JoinColumn(name = "professional_id", nullable = true)
   private Professional professional;
 
   @Column(nullable = false, length = 255)
