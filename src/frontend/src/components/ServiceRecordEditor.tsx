@@ -115,7 +115,7 @@ export function ServiceRecordEditor({
             durationMinutes: 0,
             active: true,
           },
-          professionalId: l.professionalId,
+          professionalId: l.professionalId ?? "",
           quantity: l.quantity,
           unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
         }))
@@ -195,7 +195,8 @@ export function ServiceRecordEditor({
     0,
   );
 
-  function professionalName(id: number): string {
+  function professionalName(id: number | ""): string {
+    if (id === "") return "—";
     return professionals.find((p) => p.id === id)?.fullName ?? String(id);
   }
 
@@ -204,7 +205,7 @@ export function ServiceRecordEditor({
   }
 
   function removeLine(key: string) {
-    setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== key) : prev));
+    setLines((prev) => prev.filter((l) => l.key !== key));
   }
 
   function updateLineService(key: string, service: SalonServiceOption | null) {
@@ -255,19 +256,12 @@ export function ServiceRecordEditor({
       const err: { service?: string; professional?: string; quantity?: string; unitPrice?: string } =
         {};
       if (!l.pickedService) err.service = t("femme.serviceRecords.lineServiceRequired");
-      if (l.professionalId === "") err.professional = t("femme.serviceRecords.lineProfessionalRequired");
-      if (!l.quantity || l.quantity < 1) err.quantity = t("femme.serviceRecords.lineQuantityRequired");
-      if (!l.unitPrice || parseMaskedMoney(l.unitPrice) <= 0)
-        err.unitPrice = t("femme.serviceRecords.lineUnitPriceRequired");
       if (Object.keys(err).length > 0) newLineErrors[idx] = err;
     });
     setLineErrors(newLineErrors);
     if (Object.keys(newLineErrors).length > 0) ok = false;
 
-    const errors: string[] = [];
-    if (lines.length === 0) errors.push(t("femme.serviceRecords.linesRequired"));
-    setGlobalErrors(errors);
-    if (errors.length > 0) ok = false;
+    setGlobalErrors([]);
 
     return ok;
   }
@@ -282,9 +276,9 @@ export function ServiceRecordEditor({
       clientId: clientSelection.client.id,
       lines: lines.map((l) => ({
         serviceId: l.pickedService!.id,
-        professionalId: l.professionalId as number,
-        quantity: l.quantity,
-        unitPrice: parseMaskedMoney(l.unitPrice),
+        professionalId: l.professionalId === "" ? null : l.professionalId,
+        quantity: l.quantity || null,
+        unitPrice: l.unitPrice && parseMaskedMoney(l.unitPrice) > 0 ? parseMaskedMoney(l.unitPrice) : null,
       })),
       tips: distinctProfessionalIds.map((id) => ({
         professionalId: id,
@@ -403,14 +397,7 @@ export function ServiceRecordEditor({
         </Alert>
       )}
       {saveSuccessKind && (
-        <Alert
-          variant="success"
-          title={
-            saveSuccessKind === "created"
-              ? t("femme.serviceRecords.createdSuccess")
-              : t("femme.serviceRecords.updatedSuccess")
-          }
-        >
+        <Alert variant="success">
           {saveSuccessKind === "created"
             ? t("femme.serviceRecords.createdSuccess")
             : t("femme.serviceRecords.updatedSuccess")}
@@ -465,7 +452,7 @@ export function ServiceRecordEditor({
           <Heading as="h3" className="text-base">
             {t("femme.serviceRecords.linesSection")}
           </Heading>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 overflow-x-auto">
             {lines.map((line, idx) => (
               <div
                 key={line.key}
@@ -496,7 +483,7 @@ export function ServiceRecordEditor({
                   {isReadOnly ? (
                     <>
                       <Label>{t("femme.serviceRecords.lineProfessionalLabel")}</Label>
-                      <Text>{professionalName(line.professionalId as number)}</Text>
+                      <Text>{professionalName(line.professionalId)}</Text>
                     </>
                   ) : (
                     <>
@@ -586,17 +573,15 @@ export function ServiceRecordEditor({
                 </div>
                 {!isReadOnly && (
                   <div className="col-span-12 sm:col-span-1 flex items-end justify-end">
-                    {lines.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeLine(line.key)}
-                        aria-label={t("femme.serviceRecords.removeLine")}
-                      >
-                        ×
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeLine(line.key)}
+                      aria-label={t("femme.serviceRecords.removeLine")}
+                    >
+                      ×
+                    </Button>
                   </div>
                 )}
               </div>

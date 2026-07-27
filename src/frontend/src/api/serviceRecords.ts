@@ -7,8 +7,8 @@ export type ServiceRecordLine = {
   unitPrice: string;
   quantity: number;
   lineTotal: string;
-  professionalId: number;
-  professionalName: string;
+  professionalId: number | null;
+  professionalName: string | null;
 };
 
 export type ServiceRecordTip = {
@@ -53,9 +53,9 @@ export type PagedServiceRecordsResponse = {
 
 export type ServiceRecordLineInput = {
   serviceId: number;
-  professionalId: number;
-  quantity: number;
-  unitPrice: number;
+  professionalId: number | null;
+  quantity: number | null;
+  unitPrice: number | null;
 };
 export type ServiceRecordTipInput = { professionalId: number; amount: number };
 
