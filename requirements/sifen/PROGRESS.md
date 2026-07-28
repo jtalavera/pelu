@@ -14,8 +14,8 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-20 Calcular estado del certificado | ✅ Done | Ver detalle abajo. |
 | HU-21 Usar certificado vigente automáticamente | ✅ Done | Ver detalle abajo. |
 | HU-05 Conectarse de forma segura con SIFEN | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real. |
-| HU-01 Generar número de control | ⬜ Next (Frente B de la Fase 1) | |
-| HU-02 Datos identificación/timbrado/emisor/receptor | ⬜ Todo | |
+| HU-01 Generar número de control | ✅ Done | Ver detalle abajo. |
+| HU-02 Datos identificación/timbrado/emisor/receptor | ⬜ Next | |
 | HU-03 Servicios facturados y totales | ⬜ Todo | |
 | HU-04 Firmar digitalmente | ⬜ Todo | |
 | HU-06 Enviar factura y registrar resultado | ⬜ Todo | |
@@ -24,14 +24,19 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-01 (Generar el número de control de una
-factura), inicio del Frente B de la Fase 1 (en paralelo conceptual con HU-05, ya cerrado). Es
-lógica pura (CDC de 44 caracteres, dígito verificador, código de seguridad aleatorio, determinismo
-para la misma factura) — no depende de red ni de SIFEN, así que es 100% testeable con JUnit sin las
-complicaciones de HU-05. Consultar el Manual Técnico (capítulo del "Número de Control" / CDC,
-buscar "44" o "dígito verificador" en el texto extraído) para el algoritmo exacto de cálculo del
-dígito verificador (probablemente módulo 11, común en documentos tributarios paraguayos) antes de
-inventar uno.
+**Próximo paso al reanudar el loop:** implementar HU-02 (Completar los datos de identificación,
+timbrado, emisor y receptor), siguiente paso del Frente B de la Fase 1 (depende de HU-01, ya
+cerrado). A diferencia de HU-01, esta historia sí necesita tocar el modelo de dominio existente:
+la especificación exige establecimiento y punto de expedición (hoy **no existen** en `FiscalStamp`
+— solo `stampNumber`, ver detalle en la sección HU-01 abajo) y un concepto de "tipo de
+contribuyente" (persona física=1/jurídica=2, campo `iTipCont`/D103 que `SifenControlNumberFields`
+ya espera recibido desde afuera) que tampoco existe en `BusinessProfile` ni en ningún otro lugar del
+dominio — hay que decidir dónde vive (¿nuevo campo en `BusinessProfile`? ¿en `FiscalStamp`?) antes
+de escribir el servicio que arma el documento. También hay que decidir dónde persiste el CDC/código
+de seguridad de cada factura para que HU-01 AC-06 (determinismo) se cumpla de punta a punta —
+probablemente una tabla o columnas nuevas asociadas a `Invoice`, ya que hoy `Invoice` no tiene
+ningún campo relacionado con SIFEN. AC-05 de HU-02 (umbral de Gs. 7.000.000 para exigir
+identificación del cliente) es lógica de negocio nueva, no depende de estos gaps de modelo.
 
 ## HU-05 — Conectarse de forma segura con SIFEN (Done)
 
@@ -132,6 +137,86 @@ entradas IP/DNS son necesarias para que la verificación de hostname de Java no 
   configurado por el seed (`FemmeDataInitializer`), así que habría que configurarlo a `1137152-8`
   en Configuración → Negocio antes de que `SifenConnectionService` acepte ese certificado para ese
   tenant.
+
+## HU-01 — Generar el número de control de una factura (Done)
+
+Frente B de la Fase 1 (en paralelo con HU-05, ya cerrado). Lógica pura, sin persistencia ni red —
+tal como anticipaba la nota dejada en la iteración anterior de este documento.
+
+**Hallazgo clave (Manual Técnico V150.pdf, sección 10.1/10.2):** el texto extraído por
+`pdftotext` **no** incluye la tabla "Conformación del CDC" ni el ejemplo resuelto — ambos son
+imágenes incrustadas en la página 57 del PDF (página impresa 56), invisibles a una búsqueda de
+texto plano. Hubo que renderizar esa página a PNG (`pdftoppm`) y leerla visualmente para obtener la
+estructura real de los 44 caracteres. Quien retome esta integración y necesite releer el capítulo
+10 del manual: **no confiar en un grep sobre el texto extraído para las secciones con tablas**,
+renderizar la página como imagen primero.
+
+**Estructura del CDC** (11 campos concatenados, 44 caracteres exactos):
+
+| # | Campo | Origen | Longitud |
+|---|---|---|---|
+| 1 | Tipo de Documento (iTiDE) | parámetro | 2 |
+| 2 | RUC del Emisor sin DV (dRucEm) | parámetro | 8 |
+| 3 | DV del RUC del Emisor (dDVEmi) | parámetro | 1 |
+| 4 | Establecimiento (dEst) | parámetro | 3 |
+| 5 | Punto de Expedición (dPunExp) | parámetro | 3 |
+| 6 | Número de Documento (dNumDoc) | parámetro | 7 |
+| 7 | Tipo de Contribuyente (iTipCont) | parámetro | 1 |
+| 8 | Fecha de Emisión, formato AAAAMMDD (dFeEmiDE) | parámetro | 8 |
+| 9 | Tipo de Emisión (iTipEmi) | parámetro | 1 |
+| 10 | Código de Seguridad (dCodSeg) | generado/persistido por el llamador | 9 |
+| 11 | Dígito Verificador del CDC | calculado | 1 |
+
+**Algoritmo del dígito verificador (módulo 11):** confirmado combinando el manual (que solo dice
+"se debe utilizar el módulo 11" y linkea a un PDF de la SET que hoy redirige al home de la DNIT,
+ya no sirve el documento) con el ejemplo numérico resuelto del propio manual (RUC `44444401`,
+DV `7`, establecimiento `001`, punto expedición `001`, documento `0014528`, tipo contribuyente `2`,
+fecha `20170125`, tipo emisión `1`, código de seguridad `587326098` → CDC completo
+`01444444017001001001452822017012515873260988`, es decir DV del CDC = `8`) y con la documentación
+pública sobre el algoritmo de dígito verificador de RUC paraguayo (mismo algoritmo, confirmado por
+[varias fuentes de la comunidad](https://gist.github.com/zrkb/747866c47f47762989caf0fa7707160b)):
+pesos cíclicos 2..11 aplicados de derecha a izquierda (el dígito más a la derecha se multiplica por
+2, el siguiente por 3, ..., al llegar a 11 se reinicia en 2), `resto = suma % 11`,
+`DV = resto > 1 ? 11 - resto : 0`. Se usó el ejemplo del manual como test de regresión exacto
+(`build_matchesManualsWorkedExample`) — es el ancla más fuerte posible porque el resultado no fue
+derivado por nosotros, viene impreso en el propio documento oficial.
+
+**Curiosidad del algoritmo (no es un bug, es así como lo define SET):** el peso 11 aporta 0 al
+módulo 11 (`11 % 11 = 0`), así que el dígito que cae exactamente en la posición de peso 11 dentro
+de los 43 caracteres (posiciones 10, 20, 30 y 40 contando desde la derecha) puede alterarse sin que
+cambie el dígito verificador. Con el orden de campos de esta implementación, la posición de peso 11
+más relevante cae exactamente sobre `iTipEmi` (tipo de emisión): cambiarlo de `1` a `2` no altera
+el DV. Esto es una propiedad del algoritmo oficial, no algo que debamos "arreglar" — SIFEN valida
+con este mismo algoritmo.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`, siguiendo la convención
+plana `Sifen*` ya establecida, sin subpaquete):
+- `SifenControlNumberFields.java` — record con los 10 campos de entrada (sin padear), documentado
+  campo por campo con su ID SIFEN (`C002/iTiDE`, `D101/dRucEm`, etc.) para que HU-02 pueda mapear
+  directamente contra el manual al completarlos.
+- `SifenControlNumberService.java` — sin dependencias (no es `@Transactional` ni usa repositorios):
+  - `build(fields)`: arma los 43 caracteres base (zero-pad AC-03) + dígito verificador (AC-01).
+  - `isValid(cdc)`: recalcula el DV de los primeros 43 caracteres y lo compara contra el 44°
+    (AC-02) — pensado para reutilizarse en HU-07/HU-09 (verificar/revalidar por CDC).
+  - `generateSecurityCode(documentNumber)`: `SecureRandom` de 9 dígitos, reintenta si coincide
+    numéricamente con `documentNumber` (AC-04) en vez de confiar en la baja probabilidad de
+    colisión entre un espacio de 9 dígitos y uno de 7.
+- **Decisión de diseño para AC-06 (determinismo):** `build()` es una función pura — no genera el
+  código de seguridad internamente, lo recibe ya resuelto en `fields.securityCode()`. Esto hace que
+  llamar a `build()` dos veces con los mismos datos sea trivialmente determinista, pero traslada la
+  responsabilidad de persistir y reutilizar el código de seguridad de cada factura ya procesada a
+  quien la llame — todavía no existe ese llamador (es HU-02, que construye el documento completo).
+  Ver la nota de "Próximo paso" al inicio de este documento sobre dónde probablemente deba
+  persistirse ese código de seguridad.
+- Sin endpoint HTTP ni pantalla — igual que HU-21, es una capacidad de servicio consumida por
+  historias futuras (HU-02 en particular).
+
+**Tests** (`SifenControlNumberServiceTest`, 9 casos): incluye el ejemplo resuelto del manual como
+test de regresión exacto, padding de RUC/número de documento cortos (AC-03), unicidad del código de
+seguridad frente al número de documento (AC-04, 200 iteraciones × 3 números de documento distintos),
+CDCs distintos para facturas distintas (AC-05), determinismo (AC-06), detección de alteración
+(AC-02, alterando un dígito fuera de las posiciones de peso 11 para garantizar que sí se detecta), y
+rechazo de valores que no entran en su campo (p.ej. un RUC de 9 dígitos).
 
 ## HU-18 — Cargar un nuevo certificado y clave para un tenant (Done)
 
