@@ -18,7 +18,11 @@ public record BusinessProfileUpdateRequest(
     String sifenDepartmentName,
     /** SIFEN D115/cCiuEmi — SIFEN HU-04. Null clears it. */
     String sifenCityCode,
-    String sifenCityName) {
+    String sifenCityName,
+    /** SIFEN D106/dNomFanEmi (opcional) — SIFEN HU-08 AC-03. Null clears it. */
+    String sifenFantasyName,
+    /** Mensaje libre del KuDE, nunca enviado a SIFEN — SIFEN HU-08 AC-11. Null clears it. */
+    String kudeFooterMessage) {
 
   public BusinessProfileUpdateRequest(
       String businessName,
@@ -34,6 +38,8 @@ public record BusinessProfileUpdateRequest(
         phone,
         contactEmail,
         logoDataUrl,
+        null,
+        null,
         null,
         null,
         null,
@@ -63,6 +69,8 @@ public record BusinessProfileUpdateRequest(
         taxpayerType,
         economicActivityCode,
         economicActivityDescription,
+        null,
+        null,
         null,
         null,
         null,

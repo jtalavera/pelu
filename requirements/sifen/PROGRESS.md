@@ -5,8 +5,8 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 2** (Cerrar el ciclo de vida de la factura ya enviada) — en curso, HU-07 hecha.
-HU-19 (de EP-06/Fase 1) también se tomó ya, en paralelo, por no depender de HU-08/HU-09.
+Fase actual: **Fase 2** (Cerrar el ciclo de vida de la factura ya enviada) — en curso, HU-07 y HU-08
+hechas. HU-19 (de EP-06/Fase 1) también se tomó ya, en paralelo, por no depender de HU-08/HU-09.
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -22,26 +22,218 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-06 Enviar factura y registrar resultado | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (rechazo); ver limitación de "Aprobado" abajo. |
 | HU-07 Verificar estado de una factura pendiente | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (CDC inexistente); primera historia con pantalla + controller propios. |
 | HU-19 Ver listado de certificados | ✅ Done | Ver detalle abajo. Sin interacción con SIFEN (N/A) — 100% lectura de datos locales. |
-| HU-08 Generar comprobante PDF (KuDE) | ⬜ Next | Depende de HU-06 (factura aprobada) — ver "Próximo paso" abajo. |
-| HU-09 Revalidar en SIFEN una factura | ⬜ Todo | Depende de HU-08. |
+| HU-08 Generar comprobante PDF (KuDE) | ✅ Done | Ver detalle abajo. Verificado en vivo: el fix de `gCamFuFD/dCarQR` cierra ese gap específico; quedan 3 gaps menores ya documentados por HU-06, sin "Aprobado" real todavía. |
+| HU-09 Revalidar en SIFEN una factura | ⬜ Next | Depende de HU-08 (ya hecha) — ver "Próximo paso" abajo. |
 | Fase 3 (HU-10, HU-11) | ⬜ Todo | |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-08 (Generar el comprobante en PDF de una
-factura aprobada) — único ítem restante de Fase 2 además de HU-09 (que depende de HU-08). HU-19 ya
-se tomó (ver su sección abajo). HU-08 va a necesitar por fin cerrar el gap que HU-06/HU-07 dejaron documentado
-dos veces seguidas: **ningún documento de este sistema puede llegar a "Aprobado" real todavía**
-porque `gCamFuFD/dCarQR` (el código QR) falta en el XML armado por `SifenDocumentXmlService`
-(HU-04) — HU-08 es explícitamente quien calcula ese hash (usa el CSC de "Configuración del ambiente
-de pruebas" del spec, sección con dos CSC de prueba ya provistos por la SET). Hasta que HU-08 cierre
-eso, HU-07's AC-01/AC-03 (aprobación real + contenido completo del documento) van a seguir sin
-poder verificarse en vivo — la próxima vez que se reintente la verificación en vivo de HU-07,
-conviene hacerlo recién después de HU-08, reusando el mismo procedimiento manual (test JUnit
-temporal + `curl`) documentado abajo. El WS de consulta (`SiConsDE`) ya quedó completamente
-investigado por HU-07 (XSD real vía `consulta.wsdl.xsd1.xsd`, endpoint real, forma real de
-`rEnviConsDeResponse`) — no hace falta re-investigarlo para HU-09 (revalidar), que reutiliza el
-mismo `SifenDocumentQueryClient`.
+**Próximo paso al reanudar el loop:** implementar HU-09 (Revalidar en SIFEN una factura desde el
+sistema) — único ítem restante de Fase 2. HU-09 reconstruye la misma URL de consulta pública que
+codifica el QR del KuDE (ya persistida por HU-08 en `Invoice.sifenPublicConsultationUrl`/
+`sifenQrUrl`) y la abre en una pestaña nueva — no necesita recalcular nada, solo leer esos dos
+campos. El WS de consulta (`SiConsDE`) ya quedó completamente investigado por HU-07 (XSD real vía
+`consulta.wsdl.xsd1.xsd`, endpoint real, forma real de `rEnviConsDeResponse`) — no hace falta
+re-investigarlo para HU-09, que reutiliza el mismo `SifenDocumentQueryClient`. **Sigue sin existir
+ningún CDC real que SIFEN devuelva como "Aprobado"** (ver hallazgo de HU-08 abajo: quedan 3 gaps de
+schema menores — `dFeFinT`, `dDesUniMed`, `dBasExe` — ya documentados por HU-06 como deliberadamente
+fuera de alcance hasta homologación, HU-12..HU-17) — así que HU-07's AC-01/AC-03 y la consulta real
+de HU-09 AC-02/AC-03 (aprobación real) van a seguir sin poder verificarse en vivo hasta que
+homologación cierre esos 3 gaps. Quien quiera reintentarlo puede reusar el mismo procedimiento
+manual (test JUnit temporal + `curl`) documentado en la sección de HU-08 abajo — ahora ya incluye el
+grupo QR, así que solo faltarían esos 3 campos para llegar a un "Aprobado" real.
+
+## HU-08 — Generar el comprobante en PDF (KuDE) de una factura aprobada (Done)
+
+Épica EP-03. La pieza que le faltaba a este sistema para poder llegar a un "Aprobado" real de
+SIFEN: HU-06/HU-07 dejaron documentado, dos veces, que ningún documento propio llegó nunca a
+"Aprobado" porque `gCamFuFD/dCarQR` (el código QR) faltaba en el DE. **Esta historia lo cierra y lo
+verifica en vivo** (ver "Verificación en vivo" abajo) — con resultado real: el gap de `gCamFuFD`
+desaparece, quedan solo los 3 gaps menores que HU-06 ya había documentado como fuera de alcance.
+
+**Investigación del algoritmo del QR (Manual Técnico V150, sección 13.8, extraíble como texto sin
+renderizar imágenes — a diferencia de lo que se esperaba):** el código QR codifica una URL
+(`<host>/consultas[-test]/qr?...`) cuyo query string concatena, en un orden fijo, `nVersion` (150),
+`Id` (el CDC completo), `dFeEmiDE` (fecha/hora de emisión, **hex de los bytes UTF-8 del texto
+literal**, no del valor decodificado), el identificador del receptor (ver hallazgo siguiente),
+`dTotGralOpe`/`dTotIVA` (F014/F017, tal cual aparecen en el DE), `cItems` (cantidad de `gCamItem`),
+`DigestValue` (el mismo hex-de-texto-literal, esta vez del `DigestValue` base64 de la firma XML-DSig
+— campo XS17) y `IdCSC`. El hash (`cHashQR`) es SHA-256 sobre esa cadena completa **más el CSC
+crudo pegado sin separador** (nunca se transmite, solo se usa para hashear), en hexadecimal
+minúscula. Verificado **exactamente** contra el ejemplo resuelto que trae el propio manual (sección
+13.8.4: mismo CDC, mismo `DigestValue`, mismos totales, mismo CSC de prueba `ABCD...`/`IdCSC=0001`)
+— `SifenQrCodeServiceTest` reproduce ese ejemplo carácter por carácter, incluido el hash final
+`97ddbb3c1e7d65af...`. Esto es lo más parecido a una prueba matemática de que el algoritmo está bien
+implementado, igual que HU-01 hizo con el checksum del CDC.
+
+**Hallazgo (cross-check con fuente pública, ver siguiente párrafo): el parámetro de identificación
+del receptor cambia de *nombre*, no solo de valor.** El manual documenta una sola fila
+"`dRucRec`/`dNumIDRec`" para esto (ID Campo "D206 o D210"), con un único ejemplo resuelto que solo
+cubre el caso RUC (`dRucRec=88899990`) — no alcanza para inferir qué pasa con el otro caso. Se buscó
+en un generador de QR de SIFEN públicamente mantenido, `TIPS-SA/facturacionelectronicapy-qrgen`
+(paquete npm de un proveedor competidor de facturación electrónica paraguaya, parte de una suite con
+`xmlgen`/`xmlsign`/`setapi`), cuyo `QRGen.ts` confirma: el parámetro literalmente se llama
+`dRucRec` cuando el receptor tiene RUC (`iNatRec=1`) y `dNumIDRec` en cualquier otro caso —
+incluido el consumidor final anónimo, cuyo valor es `"0"` (mismo criterio "campo vacío → 0" que el
+manual ya documenta para `dTotGralOpe`/`dTotIVA`). `SifenReceiverIdentification` implementa
+exactamente esa rama, replicando (sin duplicar código de) la que `SifenDocumentXmlService.buildReceiver`
+ya usa para decidir D206 vs D210 en el DE — deben coincidir siempre, porque el hash del QR solo es
+válido si referencia literalmente el mismo par campo/valor que terminó en el documento firmado.
+
+**Dónde se resuelve la dependencia circular DE↔QR:** el QR necesita el `DigestValue` de la firma
+(campo XS17), pero `gCamFuFD` es parte del DE que SIFEN espera recibir firmado. La resolución (ya
+insinuada por el propio error de HU-06, `"Elemento esperado: gCamFuFD dentro de: rDE"`) es que
+`gCamFuFD` **no** va anidado dentro de `<DE>` — va como **hermano** de `<DE>` y `<Signature>`,
+directamente bajo `<rDE>`. Eso permite firmar primero (la referencia firmada solo cubre `<DE>`, vía
+`URI="#cdc"`), leer el `DigestValue` ya producido, calcular el QR, y recién ahí agregar `gCamFuFD`
+como último hijo de `<rDE>` — sin invalidar la firma (probado explícitamente:
+`signInvoice_appendsTheQrGroupWithoutInvalidatingTheSignature`, `SifenDocumentSigningServiceTest`).
+`SifenDocumentXmlService.appendQrGroup` hace exactamente eso; `SifenDocumentSigningService.signInvoice`
+(el orquestador) es quien firma, extrae el digest, llama a `SifenQrCodeService.build`, y agrega el
+grupo — este orquestador es el único punto de esta app que arma un DE listo para enviar, así que HU-06
+(envío) obtiene el QR gratis sin cambiar su propio código.
+
+**Verificación en vivo (2026-07-28), procedimiento para reproducir:** mismo patrón que HU-06/HU-07 —
+un test JUnit temporal (no commiteado, `ThrowawayLiveSifenHu08Test`, borrado antes de este commit)
+construyó un documento real con los mismos datos piloto (RUC `1137152-8`, timbrado `1137152`, un
+`dNumDoc` nuevo para no reusar un CDC de un intento anterior), lo firmó con el `.p12` real
+(`requirements/sifen/*.p12`, gitignored) vía `SifenDocumentSigningService.sign`, calculó el QR real
+con `SifenQrCodeService.build` usando el CSC de prueba `ABCD0000000000000000000000000000`
+(`IdCSC=0001`), le agregó `gCamFuFD/dCarQR` con `appendQrGroup`, y volcó el XML resultante a un
+archivo. Ese XML se envolvió a mano en el mismo sobre SOAP que `SifenDocumentReceptionClient` arma
+(`rEnviDe`/`dId`/`xDE`) y se envió con `curl --cert-type P12 --cert archivo.p12:contraseña -X POST
+https://sifen-test.set.gov.py/de/ws/sync/recibe.wsdl`.
+
+- **Primer intento: `dCodRes=0160 "XML Mal Formado."` (HTTP 400) — pero era un error propio, no de
+  SIFEN ni del código de esta app.** El script de `curl` generaba `<dId>` con `date +%s%3N` (formato
+  GNU) para un id de correlación — en macOS, `date` no soporta `%3N` y lo deja como litoral, así que
+  `<dId>` terminaba en una "N" (`"1785258251
+
+3N"`), un valor no numérico en un campo `N` (numérico).
+  Nada que ver con `SifenDocumentXmlService`/`SifenDocumentSigningService`/`SifenQrCodeService` —
+  puramente un bug del script de reproducción manual, corregido generando el id con milisegundos
+  reales (`python3 -c "import time; print(int(time.time()*1000))"`).
+- **Segundo intento, con el `dId` corregido: `HTTP 200`, `dEstRes=Rechazado`, con exactamente los
+  mismos 3 `gResProc` que HU-06 ya había documentado como gaps menores fuera de alcance** — `dFeFinT
+  es invalido`, `dDesUniMed es invalido` (`"Unidad"` en vez del código de catálogo que el schema
+  exige), `Elemento esperado: dBasExe dentro de: gCamIVA`. **Ningún error menciona ya `gCamFuFD`** —
+  confirma en vivo, contra el servidor real, que el fix de esta historia cierra exactamente el gap
+  que bloqueaba a HU-06/HU-07. `dDigVal` (el digest que SIFEN calculó de vuelta sobre el `<DE>`
+  recibido) también vino en la respuesta — coincide con el que este sistema ya había calculado antes
+  de enviar, otra confirmación de que la firma y el QR están usando el `DigestValue` correcto.
+- **Conclusión: sigue sin haber, hoy, ningún CDC real "Aprobado" para consultar** (HU-07 AC-01/AC-03
+  y la futura HU-09 siguen bloqueadas por esto) — pero la razón ya no es `gCamFuFD` (cerrado por esta
+  historia), son los 3 gaps de compliance de schema que HU-04/HU-06 ya documentaron como
+  deliberadamente pospuestos a homologación (HU-12..HU-17), no como algo que HU-08 debía resolver.
+  Cerrarlos ahí sí podría finalmente producir un "Aprobado" real.
+
+**Decisión de diseño clave: el QR no se recalcula al generar el KuDE — se lee tal cual quedó
+persistido en el momento del envío real.** `SifenInvoiceSubmissionService.submit()` (HU-06) ahora
+persiste `Invoice.sifenQrUrl`/`sifenPublicConsultationUrl` inmediatamente después de firmar (antes
+de siquiera intentar el envío — es una propiedad del documento transmitido, no de la respuesta de
+SIFEN). `SifenKudePdfService` simplemente lee esos dos campos. Esto evita dos problemas: (1) no
+depende de que el certificado del tenant siga vigente en el momento de la descarga (un certificado
+puede vencer mucho después de que una factura ya fue aprobada, pero su KuDE debe seguir
+descargable), y (2) garantiza bit a bit que el QR impreso es el que SIFEN realmente recibió, nunca
+una aproximación recalculada — literal cumplimiento de AC-11 y precondición real de AC-14.
+
+**Dos campos nuevos, con distinto origen, en `BusinessProfile` (migración V24):**
+`sifenFantasyName` (D106/dNomFanEmi, opcional en el propio schema del DE — sí es dato real de la
+factura, se agregó también a `SifenIssuerData`/`SifenDocumentXmlService` para que el DE lo emita
+cuando esté configurado) y `kudeFooterMessage` (la única excepción de AC-11 que no tiene ya una vía
+de configuración — la otra, el logo, reutiliza `BusinessProfile.logoDataUrl`, que ya existía desde
+antes de esta historia). **Deuda técnica conocida, mismo patrón que HU-04 dejó para
+`taxpayerType`/`economicActivityCode`/ubicación del emisor:** ninguno de estos 2 campos tiene UI
+propia todavía en `BusinessSettingsPage` — se puede cerrar junto con esos otros 3 campos en una sola
+extensión futura del formulario existente; no bloquea esta historia porque son datos opcionales
+(el nombre de fantasía no siempre existe; el mensaje libre es explícitamente opcional por AC-11).
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `config/SifenQrProperties.java` (nuevo) — URLs de QR/consulta pública por ambiente (reusa
+  `SifenConnectionProperties.activeEnvironment()`) + CSC activo, con los dos CSC de prueba de la SET
+  como default (mismo patrón que `SifenConnectionProperties`: cambiar de ambiente/CSC es
+  configuración, no código).
+- `service/SifenQrCodeService.java` (nuevo) — el algoritmo de arriba. `build(header, totals,
+  itemCount, digestValueBase64)` devuelve `SifenQrResult(qrUrl, publicConsultationUrl,
+  productionEnvironment)`.
+- `service/SifenReceiverIdentification.java` (nuevo, package-private) — resuelve `dRucRec`/`dNumIDRec`
+  + valor, documentado como debiendo permanecer sincronizado con `SifenDocumentXmlService.buildReceiver`.
+- `service/SifenDocumentXmlService.appendQrGroup` (nuevo) — agrega `gCamFuFD/dCarQR` como hermano de
+  `<DE>`/`<Signature>`. `buildIssuer` ahora también emite `dNomFanEmi` cuando está configurado.
+- `service/SifenDocumentSigningService.signInvoice` — ahora también extrae el `DigestValue` post-firma,
+  llama a `SifenQrCodeService`, y agrega el grupo QR antes de devolver el documento. `SifenSignedDocument`
+  ganó 2 campos (`qrUrl`, `publicConsultationUrl`); `sign()` (de más bajo nivel, sin header/totals)
+  los deja en `null` — solo el orquestador los completa.
+- `service/SifenInvoiceSubmissionService.submit()` — persiste `sifenQrUrl`/`sifenPublicConsultationUrl`
+  en una transacción corta nueva (`persistQrData`), justo después de firmar, antes de intentar el envío.
+- `domain/Invoice.java` — 2 columnas nuevas (`sifen_qr_url`, `sifen_public_consultation_url`,
+  migración V25).
+- `service/SifenQrImageService.java` (nuevo) — renderiza el QR como PNG con `com.google.zxing:core`
+  (única dependencia nueva de este HU además de la ya existente `openpdf`; no se usa el submódulo
+  `javase` de zxing — el raster se arma a mano desde el `BitMatrix`, un puñado de líneas).
+- `service/SifenKudePdfService.java` (nuevo) — arma el PDF completo con `com.lowagie` (`openpdf`, ya
+  usado por `InvoicePdfService`/`TipsReportPdfService` — sin dependencia nueva de PDF). AC-01 (solo
+  Aprobado/Aprobado con observación), AC-02 (A4, `com.lowagie.text.PageSize.A4`, multi-página
+  automática por flujo de contenido — no hay paginación manual), AC-03/04/05 (encabezado, timbrado,
+  venta, cliente si identificado — mismo criterio de "identificado" que ya usa el DE: RUC, documento
+  o nombre no vacíos), AC-06/07 (tabla de ítems con columnas exento/5%/10%, subtotal/total/total en
+  guaraníes/liquidación de IVA — el "total en guaraníes" es literalmente igual al total ya que este
+  dominio solo opera en PYG), AC-08 (CDC agrupado en once bloques de 4, `groupControlNumber`), AC-09
+  (leyenda KuDE), AC-10 (URL de consulta pública + CDC), AC-11 (logo + mensaje libre, únicas
+  excepciones), AC-12 (numeración "Página N / " + plantilla de total de páginas — el truco estándar
+  de iText/OpenPDF vía `PdfTemplate`; el bloque de totales se agrega al final del flujo, así que cae
+  en la página real que sea la última, sin lógica de paginación manual), AC-13 (imagen QR ≥25mm de
+  ancho, ver `QR_WIDTH_POINTS`), AC-15 (leyenda de ambiente de prueba solo si `testEnvironmentNotice`).
+- `web/SifenKudeController.java` (nuevo) — `GET /api/invoices/{id}/sifen/kude` (AC-16, descarga) y
+  `POST /api/invoices/{id}/sifen/kude/email` (AC-17, envío por correo). Archivo propio, no se agregó
+  a `InvoicePdfController` (la factura PDF tradicional, sin relación con SIFEN, que HU-08 no debe
+  tocar ni confundir).
+- `service/SifenKudeEmailService.java` (nuevo) — reusa `SifenKudePdfService` + `EmailService`. El
+  destinatario es el email tipeado explícitamente si se informó; si no, el email del cliente
+  vinculado a la factura; si ninguno existe, `SIFEN_KUDE_EMAIL_REQUIRED` (400) en vez de fallar en
+  silencio.
+- `service/EmailService.sendPdfAttachment` (nuevo método) — primera vez que este servicio envía un
+  adjunto; mismo patrón enabled/disabled (`app.femme.email.enabled=false` en e2e) que
+  `sendActivationLink` ya tenía, ahora también con `EmailAttachment`/`BinaryData` de
+  `azure-communication-email` (dependencia ya existente, sin agregar nada nuevo).
+- `web/SifenInvoiceTestSupportController` — endpoint nuevo, solo test (`prepare-as-approved`):
+  arma una factura "Aprobado" completa reusando los servicios reales
+  (`SifenInvoiceHeaderService`/`SifenInvoiceDetailService`/`SifenQrCodeService`) — sin firma real ni
+  round-trip real a SIFEN (innecesarios para probar que el KuDE renderiza/descarga/envía bien desde
+  datos reales y válidos), ya que nada en la app llama todavía a `submit()` (activación real por
+  tenant es HU-22).
+
+**Tests backend**: `SifenQrCodeServiceTest` (6 casos: reproducción exacta del ejemplo resuelto del
+manual — hash y URL carácter por carácter —, receptor anónimo, receptor con documento de identidad,
+ambiente de prueba vs producción). `SifenQrImageServiceTest` (2 casos: PNG decodificable y cuadrado,
+contenidos distintos producen imágenes distintas). `SifenKudePdfServiceTest` (13 casos, con
+`com.lowagie.text.pdf.parser.PdfTextExtractor` para asserts de contenido real del PDF generado — la
+herramienta correcta para esto, no Playwright/OCR: AC-01 rechazo si no aprobada, rechazo si falta el
+QR persistido, AC-02 PDF A4 válido, AC-03/04 datos de negocio/timbrado/venta, AC-05 cliente
+identificado/anónimo, AC-08 agrupación del CDC, AC-09/AC-10/AC-15 leyendas y URL de consulta, AC-06/07
+detalle e impuestos, AC-12 numeración de página, AC-11 mensaje libre opcional, AC-13 imagen QR
+embebida en la página 1 con el ancho mínimo). `SifenKudeEmailServiceTest` (5 casos: email explícito
+gana, cae al email del cliente, error claro sin ninguno de los dos, email en blanco cae al del
+cliente, se adjuntan los bytes reales del PDF). `SifenDocumentSigningServiceTest` ganó 1 caso nuevo
+(`gCamFuFD` agregado sin invalidar la firma). `SifenDocumentXmlServiceTest` ganó 2 casos
+(`dNomFanEmi` presente/ausente). `SifenInvoiceSubmissionServiceTest` ganó aserciones sobre
+`sifenQrUrl`/`sifenPublicConsultationUrl` persistidos.
+
+**Playwright** (`e2e/tests/sifen-hu-08-generar-comprobante-kude.spec.ts`, 2 casos — AC-16 y AC-17,
+las únicas dos ACs de esta historia con pantalla propia): AC-16 confirma que el botón de descarga no
+existe antes de aprobar, aparece tras `prepare-as-approved`, y una descarga real produce un PDF
+(`content-type: application/pdf`, nombre `KUDE-*.pdf`); AC-17 envía el KuDE a un email tipeado y
+confirma el mensaje de éxito. El resto de los 17 ACs (estructura/contenido del PDF, algoritmo del
+QR) se cubrieron con JUnit — son puramente de contenido generado, no de interacción de UI, mismo
+criterio que las historias anteriores sin pantalla propia (HU-01/03/04/05/21).
+
+**Frontend**: `InvoiceDetailModal.tsx` — dentro de la sección "SIFEN status" (HU-07), un bloque nuevo
+visible solo si el estado es Aprobado/Aprobado con observación: botón de descarga del KuDE y un
+formulario de una sola línea (email opcional + botón "Enviar"). `api/downloadSifenKude.ts` (nuevo,
+mismo patrón que `downloadInvoicePdf.ts`). Claves i18n nuevas bajo
+`femme.billing.history.detail.sifen.*` y 3 códigos de error nuevos en `femme.apiErrors.*`
+(`SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES`, `SIFEN_KUDE_MISSING_QR_DATA`, `SIFEN_KUDE_EMAIL_REQUIRED`),
+en `en.json` y `es.json`.
 
 ## HU-19 — Ver el listado de certificados cargados de un tenant (Done)
 

@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.config.SifenConnectionProperties;
+import com.cursorpoc.backend.config.SifenQrProperties;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import java.io.InputStream;
@@ -39,6 +41,8 @@ class SifenDocumentSigningServiceTest {
 
   private final SifenControlNumberService controlNumberService = new SifenControlNumberService();
   private final SifenDocumentXmlService xmlService = new SifenDocumentXmlService();
+  private final SifenQrCodeService qrCodeService =
+      new SifenQrCodeService(new SifenQrProperties(), new SifenConnectionProperties());
 
   private SifenDocumentSigningService service;
   private SifenActiveCertificateMaterial material;
@@ -55,6 +59,7 @@ class SifenDocumentSigningServiceTest {
             detailService,
             controlNumberService,
             xmlService,
+            qrCodeService,
             new FemmeTimeProperties());
     material = loadFixtureCertificateMaterial();
 
@@ -68,6 +73,7 @@ class SifenDocumentSigningServiceTest {
             "1137152",
             8,
             "Lucía Zymanscki de Onieva Vit S.A.",
+            null,
             "Avda. España 123",
             SifenTaxpayerType.LEGAL_ENTITY,
             "96020",
@@ -232,6 +238,33 @@ class SifenDocumentSigningServiceTest {
     assertThat(signed.controlNumber()).isEqualTo(header.controlNumber());
     assertThat(service.verify(signed.document())).isTrue();
     verify(certificateService).requireActiveCertificate(TENANT_ID);
+  }
+
+  /**
+   * SIFEN HU-08: signInvoice appends gCamFuFD/dCarQR as a sibling of DE and Signature — the exact
+   * field HU-06/HU-07 both documented as the reason no document from this system ever reached a
+   * real "Aprobado" ({@code "Elemento esperado: gCamFuFD dentro de: rDE"}). Appending it after
+   * signing must not invalidate the signature, since the signed reference only covers {@code <DE>}.
+   */
+  @Test
+  void signInvoice_appendsTheQrGroupWithoutInvalidatingTheSignature() {
+    when(certificateService.requireActiveCertificate(TENANT_ID)).thenReturn(material);
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID)).thenReturn(header);
+    when(detailService.buildDetail(TENANT_ID, INVOICE_ID)).thenReturn(detail);
+
+    SifenSignedDocument signed = service.signInvoice(TENANT_ID, INVOICE_ID);
+
+    assertThat(service.verify(signed.document())).isTrue();
+    assertThat(signed.qrUrl()).isNotBlank().contains("cHashQR=").contains(header.controlNumber());
+    assertThat(signed.publicConsultationUrl())
+        .isEqualTo("https://ekuatia.set.gov.py/consultas-test/");
+
+    String xml = SifenDocumentXmlService.serialize(signed.document());
+    assertThat(xml).contains("<gCamFuFD>").contains("<dCarQR>");
+    // gCamFuFD must be a sibling of DE/Signature inside rDE, not nested inside DE (HU-06 finding).
+    var deChildren = signed.document().getDocumentElement().getElementsByTagNameNS("*", "gCamFuFD");
+    assertThat(deChildren.getLength()).isEqualTo(1);
+    assertThat(deChildren.item(0).getParentNode()).isSameAs(signed.document().getDocumentElement());
   }
 
   private static SifenActiveCertificateMaterial loadFixtureCertificateMaterial() throws Exception {

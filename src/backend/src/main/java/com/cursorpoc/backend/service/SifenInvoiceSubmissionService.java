@@ -83,6 +83,10 @@ public class SifenInvoiceSubmissionService {
     Document document = signed.document();
     String xml = SifenDocumentXmlService.serialize(document);
 
+    // SIFEN HU-08: persisted regardless of what SIFEN answers below — the QR is a property of the
+    // document actually transmitted, not of SIFEN's response to it (AC-11's "sent invoice" data).
+    persistQrData(tenantId, invoiceId, signed.qrUrl(), signed.publicConsultationUrl());
+
     Optional<SifenSubmissionResult> response = receptionClient.send(tenantId, xml);
     SifenSubmissionResult result =
         response.orElseGet(
@@ -132,6 +136,13 @@ public class SifenInvoiceSubmissionService {
 
     requireWithinTransmissionWindow(invoice, signedAt, now);
     return signedAt;
+  }
+
+  @Transactional
+  void persistQrData(long tenantId, long invoiceId, String qrUrl, String publicConsultationUrl) {
+    Invoice invoice = requireInvoice(tenantId, invoiceId);
+    invoice.setSifenQrUrl(qrUrl);
+    invoice.setSifenPublicConsultationUrl(publicConsultationUrl);
   }
 
   /**

@@ -76,6 +76,14 @@ public class BusinessProfile {
   @Column(name = "sifen_city_name", length = 64)
   private String sifenCityName;
 
+  /** Nombre de fantasía (SIFEN D106/dNomFanEmi, opcional) — SIFEN HU-08 AC-03. */
+  @Column(name = "sifen_fantasy_name", length = 255)
+  private String sifenFantasyName;
+
+  /** Mensaje libre configurable impreso en el KuDE, nunca enviado a SIFEN — SIFEN HU-08 AC-11. */
+  @Column(name = "kude_footer_message", length = 500)
+  private String kudeFooterMessage;
+
   public Long getTenantId() {
     return tenantId;
   }
@@ -194,5 +202,21 @@ public class BusinessProfile {
 
   public void setSifenCityName(String sifenCityName) {
     this.sifenCityName = sifenCityName;
+  }
+
+  public String getSifenFantasyName() {
+    return sifenFantasyName;
+  }
+
+  public void setSifenFantasyName(String sifenFantasyName) {
+    this.sifenFantasyName = sifenFantasyName;
+  }
+
+  public String getKudeFooterMessage() {
+    return kudeFooterMessage;
+  }
+
+  public void setKudeFooterMessage(String kudeFooterMessage) {
+    this.kudeFooterMessage = kudeFooterMessage;
   }
 }

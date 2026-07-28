@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Heading,
+  Input,
   Modal,
   Spinner,
   Text,
@@ -13,6 +14,7 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
+import { downloadSifenKude, sendSifenKudeByEmail } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "./FieldValidationError";
 import { useDateLocale } from "../i18n/dateLocale";
@@ -151,6 +153,12 @@ export function InvoiceDetailModal({
   const [checkingSifenStatus, setCheckingSifenStatus] = useState(false);
   const [sifenCheckError, setSifenCheckError] = useState<string | null>(null);
   const [sifenCheckMessage, setSifenCheckMessage] = useState<string | null>(null);
+  const [kudeDownloading, setKudeDownloading] = useState(false);
+  const [kudeError, setKudeError] = useState<string | null>(null);
+  const [kudeEmail, setKudeEmail] = useState("");
+  const [kudeEmailSending, setKudeEmailSending] = useState(false);
+  const [kudeEmailError, setKudeEmailError] = useState<string | null>(null);
+  const [kudeEmailSuccess, setKudeEmailSuccess] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -200,6 +208,35 @@ export function InvoiceDetailModal({
       setSifenCheckError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setCheckingSifenStatus(false);
+    }
+  }
+
+  /** SIFEN HU-08 AC-16: downloads the KuDE PDF for an approved invoice. */
+  async function handleDownloadKude() {
+    setKudeError(null);
+    setKudeDownloading(true);
+    try {
+      await downloadSifenKude(invoiceId);
+    } catch (err) {
+      setKudeError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setKudeDownloading(false);
+    }
+  }
+
+  /** SIFEN HU-08 AC-17: emails the KuDE to the typed address, or the client's own email if blank. */
+  async function handleSendKudeEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setKudeEmailError(null);
+    setKudeEmailSuccess(false);
+    setKudeEmailSending(true);
+    try {
+      await sendSifenKudeByEmail(invoiceId, kudeEmail);
+      setKudeEmailSuccess(true);
+    } catch (err) {
+      setKudeEmailError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setKudeEmailSending(false);
     }
   }
 
@@ -437,6 +474,76 @@ export function InvoiceDetailModal({
                         ? t("femme.billing.history.detail.sifen.checkingStatus")
                         : t("femme.billing.history.detail.sifen.checkStatusButton")}
                     </Button>
+                  </div>
+                )}
+                {(invoice.sifenSubmissionStatus === "APPROVED" ||
+                  invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION") && (
+                  <div className="flex flex-col gap-2 pt-2 border-t border-[rgb(var(--color-border))]">
+                    {kudeError && (
+                      <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                        {kudeError}
+                      </Alert>
+                    )}
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={kudeDownloading}
+                        data-testid="sifen-kude-download-button"
+                        onClick={() => void handleDownloadKude()}
+                      >
+                        {kudeDownloading
+                          ? t("femme.billing.history.detail.sifen.kudeDownloading")
+                          : t("femme.billing.history.detail.sifen.kudeDownloadButton")}
+                      </Button>
+                    </div>
+                    <form
+                      className="flex flex-wrap items-end gap-2"
+                      onSubmit={(e) => void handleSendKudeEmail(e)}
+                      noValidate
+                    >
+                      <div className="flex-1 min-w-[200px]">
+                        <Label htmlFor="kude-email">
+                          {t("femme.billing.history.detail.sifen.kudeEmailLabel")}
+                        </Label>
+                        <Input
+                          id="kude-email"
+                          type="email"
+                          value={kudeEmail}
+                          onChange={(e) => {
+                            setKudeEmail(e.target.value);
+                            setKudeEmailSuccess(false);
+                          }}
+                          placeholder={t("femme.billing.history.detail.sifen.kudeEmailPlaceholder")}
+                          className="mt-1 w-full"
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="secondary"
+                        size="sm"
+                        disabled={kudeEmailSending}
+                        data-testid="sifen-kude-send-email-button"
+                      >
+                        {kudeEmailSending
+                          ? t("femme.billing.history.detail.sifen.kudeEmailSending")
+                          : t("femme.billing.history.detail.sifen.kudeEmailButton")}
+                      </Button>
+                    </form>
+                    {kudeEmailError && (
+                      <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                        {kudeEmailError}
+                      </Alert>
+                    )}
+                    {kudeEmailSuccess && !kudeEmailError && (
+                      <Alert
+                        variant="success"
+                        title={t("femme.billing.history.detail.sifen.kudeEmailSuccess")}
+                        data-testid="sifen-kude-email-success"
+                      >
+                        {t("femme.billing.history.detail.sifen.kudeEmailSuccess")}
+                      </Alert>
+                    )}
                   </div>
                 )}
               </div>

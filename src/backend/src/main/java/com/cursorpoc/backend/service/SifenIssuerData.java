@@ -13,6 +13,10 @@ public record SifenIssuerData(
     String ruc,
     int rucCheckDigit,
     String businessName,
+    /**
+     * D106/dNomFanEmi, opcional — SIFEN HU-08 AC-03. {@code null} si el tenant no configuró uno.
+     */
+    String fantasyName,
     String address,
     SifenTaxpayerType taxpayerType,
     String economicActivityCode,

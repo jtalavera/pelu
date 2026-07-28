@@ -5,12 +5,18 @@ import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.service.SifenCertificateService;
+import com.cursorpoc.backend.service.SifenInvoiceDetail;
+import com.cursorpoc.backend.service.SifenInvoiceDetailService;
+import com.cursorpoc.backend.service.SifenInvoiceHeader;
+import com.cursorpoc.backend.service.SifenInvoiceHeaderService;
+import com.cursorpoc.backend.service.SifenQrCodeService;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
 import java.io.IOException;
 import java.io.InputStream;
@@ -79,6 +85,9 @@ public class SifenInvoiceTestSupportController {
   private final AppUserRepository appUserRepository;
   private final SifenCertificateService certificateService;
   private final SifenCertificateRepository certificateRepository;
+  private final SifenInvoiceHeaderService headerService;
+  private final SifenInvoiceDetailService detailService;
+  private final SifenQrCodeService qrCodeService;
 
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
@@ -86,13 +95,19 @@ public class SifenInvoiceTestSupportController {
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       SifenCertificateService certificateService,
-      SifenCertificateRepository certificateRepository) {
+      SifenCertificateRepository certificateRepository,
+      SifenInvoiceHeaderService headerService,
+      SifenInvoiceDetailService detailService,
+      SifenQrCodeService qrCodeService) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.certificateService = certificateService;
     this.certificateRepository = certificateRepository;
+    this.headerService = headerService;
+    this.detailService = detailService;
+    this.qrCodeService = qrCodeService;
   }
 
   /**
@@ -129,6 +144,62 @@ public class SifenInvoiceTestSupportController {
     invoice.setSifenControlNumber(FIXTURE_CONTROL_NUMBER);
     invoice.setSifenSignedAt(LocalDateTime.now());
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+  }
+
+  /**
+   * SIFEN HU-08: fabricates a fully "Aprobado" invoice — the precondition Playwright needs to
+   * exercise the KuDE download (AC-16) and email-send (AC-17) buttons end-to-end, since nothing in
+   * the app calls {@code SifenInvoiceSubmissionService.submit()} yet (tenant activation is HU-22).
+   * Builds the header/detail/QR the exact same way the real submission flow would (real {@link
+   * SifenInvoiceHeaderService}/{@link SifenInvoiceDetailService}/{@link SifenQrCodeService}, no
+   * shortcuts) — only the signature itself and the actual SIFEN round-trip are skipped, since
+   * neither is needed to prove the KuDE renders/downloads/emails correctly from real, valid data.
+   */
+  @PostMapping("/invoices/{id}/prepare-as-approved")
+  @Transactional
+  public void prepareAsApproved(@PathVariable long id) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/prepare-as-approved", id);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    long tenantId = invoice.getTenant().getId();
+
+    ensureFullIssuerData(tenantId);
+
+    SifenInvoiceHeader header = headerService.buildHeader(tenantId, id);
+    SifenInvoiceDetail detail = detailService.buildDetail(tenantId, id);
+    // A syntactically valid base64 placeholder — no real signature exists in this fabricated path
+    // (see javadoc above), so there's no real DigestValue to reuse; the QR only needs to be a
+    // realistic, correctly-hashed URL for the PDF/email flow to exercise, not one SIFEN itself
+    // would recognize.
+    SifenQrCodeService.SifenQrResult qr =
+        qrCodeService.build(header, detail.totals(), detail.lines().size(), "ZmFrZURpZ2VzdA==");
+
+    invoice.setSifenSignedAt(LocalDateTime.now());
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    invoice.setSifenSubmissionProtocolNumber("123456789");
+    invoice.setSifenSubmittedAt(LocalDateTime.now());
+    invoice.setSifenQrUrl(qr.qrUrl());
+    invoice.setSifenPublicConsultationUrl(qr.publicConsultationUrl());
+  }
+
+  private void ensureFullIssuerData(long tenantId) {
+    BusinessProfile profile =
+        businessProfileRepository.findByTenantId(tenantId).orElseGet(() -> createProfile(tenantId));
+    profile.setRuc(FIXTURE_CERTIFICATE_RUC);
+    profile.setAddress("Avda. España 123");
+    profile.setTaxpayerType(SifenTaxpayerType.LEGAL_ENTITY);
+    profile.setEconomicActivityCode("96020");
+    profile.setEconomicActivityDescription("Peluquería y otros tratamientos de belleza");
+    profile.setPhone("021555000");
+    profile.setContactEmail("facturacion@example.com");
+    profile.setSifenDepartmentCode("11");
+    profile.setSifenDepartmentName("CENTRAL");
+    profile.setSifenCityCode("3432");
+    profile.setSifenCityName("FERNANDO DE LA MORA");
+    businessProfileRepository.save(profile);
   }
 
   private void ensureBusinessRuc(long tenantId) {

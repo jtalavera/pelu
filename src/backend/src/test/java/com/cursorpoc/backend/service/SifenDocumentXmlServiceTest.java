@@ -38,6 +38,7 @@ class SifenDocumentXmlServiceTest {
             "1137152",
             8,
             "Lucía Zymanscki de Onieva Vit S.A.",
+            "Nombre de Fantasía Demo",
             "Avda. España 123",
             SifenTaxpayerType.LEGAL_ENTITY,
             "96020",
@@ -121,10 +122,52 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='dDVEmi']")).isEqualTo("8");
     assertThat(xpath(doc, "//*[local-name()='dNomEmi']"))
         .isEqualTo("Lucía Zymanscki de Onieva Vit S.A.");
+    // SIFEN HU-08 AC-03: D106/dNomFanEmi is optional (0-1) but emitted when configured.
+    assertThat(xpath(doc, "//*[local-name()='dNomFanEmi']")).isEqualTo("Nombre de Fantasía Demo");
     assertThat(xpath(doc, "//*[local-name()='cDepEmi']")).isEqualTo("11");
     assertThat(xpath(doc, "//*[local-name()='cCiuEmi']")).isEqualTo("3432");
     assertThat(xpath(doc, "//*[local-name()='dTelEmi']")).isEqualTo("021555000");
     assertThat(xpath(doc, "//*[local-name()='cActEco']")).isEqualTo("96020");
+  }
+
+  /**
+   * SIFEN HU-08 AC-03: dNomFanEmi is 0-1 in the schema — omitted, not emitted blank, when unset.
+   */
+  @Test
+  void buildDocument_omitsFantasyNameWhenNotConfigured() throws Exception {
+    SifenIssuerData issuerWithoutFantasyName =
+        new SifenIssuerData(
+            header.issuer().ruc(),
+            header.issuer().rucCheckDigit(),
+            header.issuer().businessName(),
+            null,
+            header.issuer().address(),
+            header.issuer().taxpayerType(),
+            header.issuer().economicActivityCode(),
+            header.issuer().economicActivityDescription(),
+            header.issuer().phone(),
+            header.issuer().contactEmail(),
+            header.issuer().departmentCode(),
+            header.issuer().departmentName(),
+            header.issuer().cityCode(),
+            header.issuer().cityName());
+    SifenInvoiceHeader headerWithoutFantasyName =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            issuerWithoutFantasyName,
+            header.receiver(),
+            header.testEnvironmentNotice());
+
+    Document doc =
+        service.buildDocument(headerWithoutFantasyName, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='dNomFanEmi']")).isEmpty();
   }
 
   /** AC-08 (HU-02): the test-environment legend flows straight through into dNomEmi. */
@@ -135,6 +178,7 @@ class SifenDocumentXmlServiceTest {
             header.issuer().ruc(),
             header.issuer().rucCheckDigit(),
             SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND,
+            header.issuer().fantasyName(),
             header.issuer().address(),
             header.issuer().taxpayerType(),
             header.issuer().economicActivityCode(),

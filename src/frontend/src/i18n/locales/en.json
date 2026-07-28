@@ -557,7 +557,14 @@
             "checkingStatus": "Checking…",
             "checkStatusStillPending": "SIFEN has not answered yet. The invoice is still pending verification.",
             "checkStatusResolved": "SIFEN answered: status updated.",
-            "documentContent": "Full document content"
+            "documentContent": "Full document content",
+            "kudeDownloadButton": "Download KuDE (PDF)",
+            "kudeDownloading": "Downloading…",
+            "kudeEmailLabel": "Send by email",
+            "kudeEmailPlaceholder": "client@example.com (leave blank to use the client's email)",
+            "kudeEmailButton": "Send",
+            "kudeEmailSending": "Sending…",
+            "kudeEmailSuccess": "KuDE sent by email."
           }
         }
       },
@@ -699,6 +706,9 @@
       "SIFEN_INVOICE_NOT_PENDING_VERIFICATION": "This invoice is not pending verification with SIFEN.",
       "SIFEN_INVOICE_MISSING_CONTROL_NUMBER": "This invoice has no SIFEN control number to check.",
       "SIFEN_QUERY_RUC_NOT_AUTHORIZED": "The certificate's RUC is not authorized to query this document in SIFEN.",
+      "SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES": "The KuDE can only be generated for invoices Approved or Approved with observation by SIFEN.",
+      "SIFEN_KUDE_MISSING_QR_DATA": "This invoice is missing the QR data needed to generate its KuDE.",
+      "SIFEN_KUDE_EMAIL_REQUIRED": "Enter an email address, or select a client with an email on file.",
       "CATEGORY_NOT_FOUND": "Category not found.",
       "CATEGORY_INACTIVE": "The selected category is inactive. Please choose an active category.",
       "INVALID_CATEGORY_ACCENT": "Choose a valid category color from the palette.",

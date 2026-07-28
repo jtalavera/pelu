@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
   FemmeTimeProperties.class,
   FemmeSystemAdminProperties.class,
   SifenCertificateProperties.class,
-  SifenConnectionProperties.class
+  SifenConnectionProperties.class,
+  SifenQrProperties.class
 })
 public class FemmeConfiguration {}

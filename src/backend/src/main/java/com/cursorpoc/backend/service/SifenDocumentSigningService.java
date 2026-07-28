@@ -61,6 +61,7 @@ public class SifenDocumentSigningService {
   private final SifenInvoiceDetailService detailService;
   private final SifenControlNumberService controlNumberService;
   private final SifenDocumentXmlService xmlService;
+  private final SifenQrCodeService qrCodeService;
   private final FemmeTimeProperties timeProperties;
 
   public SifenDocumentSigningService(
@@ -69,12 +70,14 @@ public class SifenDocumentSigningService {
       SifenInvoiceDetailService detailService,
       SifenControlNumberService controlNumberService,
       SifenDocumentXmlService xmlService,
+      SifenQrCodeService qrCodeService,
       FemmeTimeProperties timeProperties) {
     this.certificateService = certificateService;
     this.headerService = headerService;
     this.detailService = detailService;
     this.controlNumberService = controlNumberService;
     this.xmlService = xmlService;
+    this.qrCodeService = qrCodeService;
     this.timeProperties = timeProperties;
   }
 
@@ -106,13 +109,41 @@ public class SifenDocumentSigningService {
 
     Document unsigned = xmlService.buildDocument(header, detail, cdcFields, signatureTimestamp);
     SifenSignedDocument signed = sign(material, unsigned, signatureTimestamp);
+
+    // SIFEN HU-08: gCamFuFD/dCarQR (the QR code) can only be computed once a signature exists to
+    // reference (its hash covers XS17/DigestValue) — appended here, right after signing, as a
+    // sibling of <DE>/<Signature>, never nested inside the signed <DE> (see
+    // SifenDocumentXmlService#appendQrGroup's javadoc for why that doesn't invalidate the
+    // signature). This is also the fix for the schema gap HU-06/HU-07 both left documented:
+    // every prior document this system sent SIFEN was rejected for lacking this exact field.
+    String digestValueBase64 = extractDigestValueBase64(signed.document());
+    SifenQrCodeService.SifenQrResult qr =
+        qrCodeService.build(header, detail.totals(), detail.lines().size(), digestValueBase64);
+    xmlService.appendQrGroup(signed.document(), qr.qrUrl());
+    SifenSignedDocument signedWithQr =
+        new SifenSignedDocument(
+            signed.document(),
+            signed.controlNumber(),
+            signed.signedAt(),
+            qr.qrUrl(),
+            qr.publicConsultationUrl());
+
     log.info(
         "SIFEN document signed tenantId={} invoiceId={} controlNumber={} certificateId={}",
         tenantId,
         invoiceId,
-        signed.controlNumber(),
+        signedWithQr.controlNumber(),
         material.certificateId());
-    return signed;
+    return signedWithQr;
+  }
+
+  /** XS17/DigestValue — the signature's own reference digest, needed to compute the QR (HU-08). */
+  private static String extractDigestValueBase64(Document signedRDe) {
+    NodeList nodes = signedRDe.getElementsByTagNameNS(XMLSignature.XMLNS, "DigestValue");
+    if (nodes.getLength() == 0) {
+      throw new IllegalStateException("Signed document has no DigestValue to build the QR code");
+    }
+    return nodes.item(0).getTextContent().trim();
   }
 
   /**
@@ -166,7 +197,9 @@ public class SifenDocumentSigningService {
       throw new IllegalStateException("Failed to sign SIFEN document controlNumber=" + cdc, e);
     }
 
-    return new SifenSignedDocument(unsignedRDe, cdc, signedAt);
+    // qrUrl/publicConsultationUrl are only populated by the signInvoice(...) orchestrator (HU-08) —
+    // this lower-level sign() step has no header/totals to compute them from.
+    return new SifenSignedDocument(unsignedRDe, cdc, signedAt, null, null);
   }
 
   /**

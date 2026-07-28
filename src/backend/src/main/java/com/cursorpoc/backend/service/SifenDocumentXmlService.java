@@ -140,6 +140,9 @@ public class SifenDocumentXmlService {
     el(doc, gEmis, "dDVEmi", String.valueOf(issuer.rucCheckDigit()));
     el(doc, gEmis, "iTipCont", String.valueOf(issuer.taxpayerType().sifenCode()));
     el(doc, gEmis, "dNomEmi", issuer.businessName());
+    if (!isBlank(issuer.fantasyName())) {
+      el(doc, gEmis, "dNomFanEmi", issuer.fantasyName());
+    }
     el(doc, gEmis, "dDirEmi", issuer.address());
     // D108/dNumCas: no separate house-number field in this domain's address — the manual itself
     // sanctions "0" when there's no numeration to report.
@@ -190,6 +193,22 @@ public class SifenDocumentXmlService {
     if (!isBlank(receiver.address())) {
       el(doc, gDatRec, "dDirRec", receiver.address());
     }
+  }
+
+  /**
+   * J. Campos fuera de la Firma Digital (SIFEN HU-08): agrega {@code gCamFuFD/dCarQR} como
+   * <b>hermano</b> de {@code <DE>} y {@code <Signature>} dentro de {@code <rDE>} — no anidado
+   * dentro de {@code <DE>}, porque el error real observado en vivo por HU-06 ("Elemento esperado:
+   * gCamFuFD dentro de: rDE") confirma ese nivel. Debe llamarse <b>después</b> de firmar: el propio
+   * valor de {@code qrUrl} depende del {@code DigestValue} que produce la firma (Manual Técnico
+   * V150 sección 13.8.2, campo XS17) — agregarlo después no invalida la firma porque la referencia
+   * firmada solo cubre {@code <DE>} (transforms enveloped + C14N exclusive sobre {@code
+   * URI="#cdc"}), nunca sus hermanos.
+   */
+  public void appendQrGroup(Document rDe, String qrUrl) {
+    Element root = rDe.getDocumentElement();
+    Element gCamFuFD = el(rDe, root, "gCamFuFD", null);
+    el(rDe, gCamFuFD, "dCarQR", qrUrl);
   }
 
   /** E8 (ítems) + F (subtotales/totales). */

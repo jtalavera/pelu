@@ -14,4 +14,6 @@ public record BusinessProfileResponse(
     String sifenDepartmentCode,
     String sifenDepartmentName,
     String sifenCityCode,
-    String sifenCityName) {}
+    String sifenCityName,
+    String sifenFantasyName,
+    String kudeFooterMessage) {}

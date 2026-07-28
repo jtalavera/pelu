@@ -141,6 +141,9 @@ public class SifenInvoiceHeaderService {
         rucParts.base(),
         rucParts.checkDigit(),
         businessName,
+        // AC-08's test-environment legend only replaces the razón social (dNomEmi); the fantasy
+        // name is orthogonal and still shown as configured.
+        profile.getSifenFantasyName(),
         profile.getAddress(),
         profile.getTaxpayerType(),
         profile.getEconomicActivityCode(),

@@ -35,6 +35,10 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
     implementation("com.github.librepdf:openpdf:1.3.30")
     implementation("com.azure:azure-communication-email:1.0.16")
+    // SIFEN HU-08: QR code generation for the KuDE (AC-13). No QR library existed in this repo
+    // before; zxing:core alone is enough (no javase/awt-integration submodule needed — the raster
+    // is built by hand from its BitMatrix, see SifenQrImageService).
+    implementation("com.google.zxing:core:3.5.3")
 
     runtimeOnly("com.h2database:h2")
     testImplementation("org.springframework.boot:spring-boot-starter-test")

@@ -59,7 +59,13 @@ class SifenInvoiceSubmissionServiceTest {
         .thenReturn(Optional.of(invoice));
     lenient()
         .when(signingService.signInvoice(eq(TENANT_ID), eq(INVOICE_ID), any()))
-        .thenReturn(new SifenSignedDocument(minimalDocument(), "cdc-123", LocalDateTime.now()));
+        .thenReturn(
+            new SifenSignedDocument(
+                minimalDocument(),
+                "cdc-123",
+                LocalDateTime.now(),
+                "https://ekuatia.set.gov.py/consultas-test/qr?nVersion=150",
+                "https://ekuatia.set.gov.py/consultas-test/"));
     // AC-05 default: SIFEN gives no answer when queried, so submit() falls through to a normal
     // (re)send for every pre-existing test below that doesn't care about the query step itself.
     lenient().when(queryClient.query(eq(TENANT_ID), any())).thenReturn(Optional.empty());
@@ -80,6 +86,12 @@ class SifenInvoiceSubmissionServiceTest {
     assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.APPROVED);
     assertThat(invoice.getSifenSubmissionProtocolNumber()).isEqualTo("1234567890");
     assertThat(invoice.getSifenSubmittedAt()).isNotNull();
+    // SIFEN HU-08: the QR data the signing step produced is persisted regardless of the outcome
+    // SIFEN reports back — it's a property of the document sent, not of the response.
+    assertThat(invoice.getSifenQrUrl())
+        .isEqualTo("https://ekuatia.set.gov.py/consultas-test/qr?nVersion=150");
+    assertThat(invoice.getSifenPublicConsultationUrl())
+        .isEqualTo("https://ekuatia.set.gov.py/consultas-test/");
   }
 
   /** AC-03: an approved-with-observation result is persisted distinctly from a plain approval. */

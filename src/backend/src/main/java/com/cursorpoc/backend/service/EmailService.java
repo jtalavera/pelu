@@ -3,7 +3,9 @@ package com.cursorpoc.backend.service;
 import com.azure.communication.email.EmailClient;
 import com.azure.communication.email.EmailClientBuilder;
 import com.azure.communication.email.models.EmailAddress;
+import com.azure.communication.email.models.EmailAttachment;
 import com.azure.communication.email.models.EmailMessage;
+import com.azure.core.util.BinaryData;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,5 +62,47 @@ public class EmailService {
         toEmail,
         subject,
         locale.getLanguage());
+  }
+
+  /**
+   * SIFEN HU-08 AC-17: sends an email with a single PDF attachment (the KuDE) — same
+   * enabled/disabled branching as {@link #sendActivationLink}, logging the would-be send instead of
+   * calling Azure Communication Email when {@code app.femme.email.enabled=false} (dev/e2e).
+   */
+  public void sendPdfAttachment(
+      String toEmail,
+      String subject,
+      String body,
+      String attachmentFilename,
+      byte[] attachmentBytes) {
+    if (!enabled) {
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" attachment={} bytes={}",
+          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          toEmail,
+          subject,
+          attachmentFilename,
+          attachmentBytes.length);
+      return;
+    }
+
+    EmailClient client = new EmailClientBuilder().connectionString(connectionString).buildClient();
+    EmailAttachment attachment =
+        new EmailAttachment(
+            attachmentFilename, "application/pdf", BinaryData.fromBytes(attachmentBytes));
+    EmailMessage message =
+        new EmailMessage()
+            .setSenderAddress(senderAddress)
+            .setToRecipients(new EmailAddress(toEmail))
+            .setSubject(subject)
+            .setBodyPlainText(body)
+            .setAttachments(attachment);
+    client.beginSend(message).getFinalResult();
+    log.info(
+        "EMAIL SENT (with attachment) from={} to={} subject=\"{}\" attachment={}",
+        senderAddress,
+        toEmail,
+        subject,
+        attachmentFilename);
   }
 }

@@ -105,6 +105,22 @@ public class Invoice {
   @Column(name = "sifen_query_document_content", columnDefinition = "NVARCHAR(MAX)")
   private String sifenQueryDocumentContent;
 
+  /**
+   * SIFEN HU-08: {@code gCamFuFD/dCarQR} exactly as computed and embedded in the signed document
+   * this system actually transmitted (persisted once, at submission time — HU-06's {@code
+   * SifenInvoiceSubmissionService}) — so the KuDE PDF (AC-13/AC-14) and the revalidation button
+   * (HU-09) never need to re-sign the document just to recover this URL, and can't drift from what
+   * was really sent.
+   */
+  @Column(name = "sifen_qr_url", length = 1000)
+  private String sifenQrUrl;
+
+  /**
+   * SIFEN HU-08 AC-10/AC-15: the public consultation site for the environment used to sign/send.
+   */
+  @Column(name = "sifen_public_consultation_url", length = 200)
+  private String sifenPublicConsultationUrl;
+
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
 
@@ -291,6 +307,22 @@ public class Invoice {
 
   public void setSifenQueryDocumentContent(String sifenQueryDocumentContent) {
     this.sifenQueryDocumentContent = sifenQueryDocumentContent;
+  }
+
+  public String getSifenQrUrl() {
+    return sifenQrUrl;
+  }
+
+  public void setSifenQrUrl(String sifenQrUrl) {
+    this.sifenQrUrl = sifenQrUrl;
+  }
+
+  public String getSifenPublicConsultationUrl() {
+    return sifenPublicConsultationUrl;
+  }
+
+  public void setSifenPublicConsultationUrl(String sifenPublicConsultationUrl) {
+    this.sifenPublicConsultationUrl = sifenPublicConsultationUrl;
   }
 
   public String getBusinessRuc() {

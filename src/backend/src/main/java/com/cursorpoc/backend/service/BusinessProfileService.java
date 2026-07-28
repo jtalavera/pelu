@@ -67,6 +67,8 @@ public class BusinessProfileService {
     bp.setSifenDepartmentName(blankToNull(request.sifenDepartmentName()));
     bp.setSifenCityCode(blankToNull(request.sifenCityCode()));
     bp.setSifenCityName(blankToNull(request.sifenCityName()));
+    bp.setSifenFantasyName(blankToNull(request.sifenFantasyName()));
+    bp.setKudeFooterMessage(blankToNull(request.kudeFooterMessage()));
     return toDto(bp);
   }
 
@@ -118,7 +120,9 @@ public class BusinessProfileService {
         bp.getSifenDepartmentCode(),
         bp.getSifenDepartmentName(),
         bp.getSifenCityCode(),
-        bp.getSifenCityName());
+        bp.getSifenCityName(),
+        bp.getSifenFantasyName(),
+        bp.getKudeFooterMessage());
   }
 
   private static void validateLogoDataUrl(String dataUrl) {
