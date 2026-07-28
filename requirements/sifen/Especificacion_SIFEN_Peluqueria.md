@@ -34,6 +34,8 @@ Estos conceptos se usan a lo largo del documento sin repetir su explicación en 
 | **Firma digital** | Un mecanismo que usa el certificado digital de la peluquería para garantizar que el documento no fue alterado y que efectivamente lo generó la peluquería. |
 | **Certificado digital** | El archivo (emitido por una entidad certificadora habilitada) que identifica digitalmente a la peluquería y que se usa tanto para conectarse con SIFEN como para firmar los documentos. |
 | **Archivo .p12** | El formato de archivo estándar que empaqueta el certificado digital junto con su clave privada, protegido por una contraseña. |
+| **Azure Key Vault** | Servicio de Azure para almacenar y administrar de forma centralizada claves criptográficas y otros secretos, con control de acceso, auditoría y rotación, sin exponerlos en archivos de configuración ni variables de entorno. |
+| **Identidad administrada (Managed Identity)** | Mecanismo de Azure que le da a un servicio (por ejemplo, el backend) una identidad propia para autenticarse ante otros servicios de Azure (como Key Vault) sin necesidad de guardar ninguna credencial o secreto de conexión. |
 | **Tenant** | Cada peluquería (cliente) que usa el sistema de forma independiente, con sus propios datos, certificado y configuración, aislados de los demás tenants. |
 | **Ambiente de prueba / producción** | SIFEN ofrece un ambiente de prueba (sin valor legal, usado para homologar el sistema) y un ambiente de producción (donde los documentos aprobados sí tienen valor tributario). |
 | **Envío inmediato** | El documento se envía a SIFEN de a uno y la respuesta (aprobado o rechazado) llega en el momento. Es el modo que usa la peluquería en su operación diaria. |
@@ -65,6 +67,19 @@ Toda la lógica de facturación electrónica (preparar el documento, firmarlo, e
 | RT-05 | Activar el flag de un tenant no reprocesa ni reenvía automáticamente a SIFEN ninguna factura anterior emitida con el generador tradicional; esas facturas quedan tal como fueron emitidas. A partir de la activación, las facturas nuevas de ese tenant pasan a emitirse mediante el flujo de SIFEN (siempre que además tenga un certificado vigente cargado). |
 | RT-06 | Las pruebas de homologación (EP-05) solo pueden ejecutarse para un tenant y ambiente con el flag activado; si está desactivado, las pruebas fallan de forma explícita indicando el motivo. |
 | RT-07 | El sistema admite que un mismo tenant tenga, en su historial, tanto facturas emitidas con el generador tradicional como facturas emitidas mediante SIFEN (por ejemplo, si el flag estuvo desactivado y luego se activó), sin que esta coexistencia genere errores ni inconsistencias en el listado de facturas. |
+
+### Manejo de activos criptográficos según el ambiente de ejecución
+
+Este requisito aplica de forma transversal a todo activo criptográfico sensible de la integración: el archivo `.p12` cargado en HU-18, la clave privada que contiene, la contraseña que lo protege, y cualquier clave maestra que el sistema use para cifrarlos en reposo. El ambiente de pruebas end-to-end (`e2e`) es una excepción deliberada a estas reglas, ya que corre siempre contra una base de datos en memoria descartable y sin conectividad a servicios de Azure.
+
+**Reglas de negocio transversales:**
+
+| ID | Regla (testeable) |
+|---|---|
+| RT-08 | Cuando el sistema corre en el perfil de pruebas end-to-end (`e2e`), los activos criptográficos pueden almacenarse cifrados en archivos y en tablas de la base de datos de la aplicación, y la clave maestra que los cifra puede administrarse mediante configuración local (variable de entorno o archivo de propiedades). |
+| RT-09 | En cualquier otro ambiente (desarrollo contra Azure, homologación, producción), la clave maestra que cifra los activos criptográficos no se administra mediante variables de entorno ni archivos de configuración de la aplicación: el sistema la obtiene en tiempo de ejecución desde Azure Key Vault. |
+| RT-10 | En cualquier otro ambiente que no sea `e2e`, el acceso del backend a Azure Key Vault se realiza mediante una identidad administrada (Managed Identity) de Azure asignada al servicio, sin credenciales, cadenas de conexión, ni secretos de acceso a Key Vault almacenados en el código, la configuración, o variables de entorno. |
+| RT-11 | Ninguna clave privada de tenant, contraseña de certificado, ni clave maestra de cifrado se registra en logs, mensajes de error, ni trazas de la aplicación, en ningún ambiente. |
 
 ---
 
