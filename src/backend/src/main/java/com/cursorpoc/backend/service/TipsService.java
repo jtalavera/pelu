@@ -88,6 +88,29 @@ public class TipsService {
       grandTotal = grandTotal.add(row.amount());
     }
 
+    // Withdrawals made within the same window must reduce the totals they were drawn from, or a
+    // professional's report subtotal never reflects money they already took out.
+    List<TipWithdrawal> withdrawalsInRange =
+        tipWithdrawalRepository.findForReport(tenantId, fromDate, toDate, resolvedProfessionalIds);
+    Map<Long, BigDecimal> withdrawalsByProfessional = new LinkedHashMap<>();
+    for (TipWithdrawal withdrawal : withdrawalsInRange) {
+      withdrawalsByProfessional.merge(
+          withdrawal.getProfessional().getId(), withdrawal.getAmount(), BigDecimal::add);
+    }
+    for (Map.Entry<Long, BigDecimal> entry : withdrawalsByProfessional.entrySet()) {
+      TipReportProfessionalTotalResponse existing = totalsByProfessional.get(entry.getKey());
+      if (existing == null) {
+        continue;
+      }
+      totalsByProfessional.put(
+          entry.getKey(),
+          new TipReportProfessionalTotalResponse(
+              existing.professionalId(),
+              existing.professionalName(),
+              existing.total().subtract(entry.getValue())));
+      grandTotal = grandTotal.subtract(entry.getValue());
+    }
+
     return new TipReportResponse(rows, List.copyOf(totalsByProfessional.values()), grandTotal);
   }
 
