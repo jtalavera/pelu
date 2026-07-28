@@ -5,8 +5,8 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12, HU-13 y HU-14 hechas. Próximo:
-HU-15 o HU-16 (pueden avanzar en paralelo según el plan; ver "Próximo paso" abajo).
+Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12, HU-13, HU-14 y HU-15 hechas.
+Próximo: HU-16 (Frente C, independiente de HU-15; ver "Próximo paso" abajo).
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -29,22 +29,171 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-12 Probar la conexión segura contra todos los servicios | ✅ Done | Ver detalle abajo. **Primer paso de Fase 4.** Los 7 servicios nombrados por AC-01 (6 endpoints reales distintos) verificados en vivo: certificado válido aceptado, certificado inválido rechazado, en los 14 casos. |
 | HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo. **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`) — los 4 confirmados en vivo, ya no aparecen en ninguna respuesta real. AC-02 (incorrectas rechazadas) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado hoy por un límite externo real (RUC piloto "inactivo" en el registro de SIFEN, `dCodRes=1252`) — no es un bug de código, ver detalle; el test usa `Assumptions.assumeTrue` para ese tramo específico. |
 | HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo. Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **Cierra 2 gaps de schema nuevos, propios de esta historia** (`gOpeCom`/`iTipTra` no permitido para NC/ND — `dCodRes=1216`; grupo `gOpeCom` completo no permitido para nota de remisión — `dCodRes=1201`) — confirmados en vivo, ya no aparecen en ninguna respuesta real de los 44 documentos enviados. AC-02 (incorrectas rechazadas, 5/5 por tipo) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado por el mismo límite externo de HU-13 (`dCodRes=1252`, RUC piloto inactivo) — sigue así hoy para los 4 tipos nuevos también. |
-| Fase 4 (HU-15..HU-17, homologación) | ⬜ Next | HU-15/HU-16 pueden avanzar en paralelo; HU-17 depende de que existan resultados de las anteriores para su reporte consolidado. |
+| HU-15 Probar el envío por lotes de todos los tipos de comprobante | ✅ Done | Ver detalle abajo. **Introduce el WS asíncrono `SiRecepLoteDE`/`SiResultLoteDE`, nunca usado hasta ahora.** AC-03 (incorrectas rechazadas, 5/5, motivo identificable) y AC-04/AC-05 (lote con mezcla de emisor/tipo rechazado antes de procesar, `dCodRes=0363`) verificados en vivo con aserción dura. AC-01/AC-02 (correctas aprobadas, los 5 tipos) quedan bloqueadas por el mismo límite externo de HU-13/HU-14 (`dCodRes=1252`). |
+| Fase 4 (HU-16/HU-17, homologación) | ⬜ Next | HU-16 (Frente C) es independiente de HU-15; HU-17 depende de que existan resultados de HU-13..HU-16 para su reporte consolidado. |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** HU-14 (Fase 4, envío inmediato de nota de crédito/débito/
-autofactura/nota de remisión) está hecha — ver detalle abajo para el reporte completo de los 44
-documentos reales y los 2 gaps de schema nuevos cerrados. El plan permite que **HU-15 y HU-16
-avancen en paralelo** (ambas dependen solo de HU-12/HU-13/HU-14, no entre sí) — este loop puede
-elegir cualquiera de las dos. **HU-17 sí depende** de que HU-13..HU-16 existan (consolida su reporte
-con `SifenHomologationReport.combinedWith`), así que debe ser la última de la fase. El bloqueo
-externo que HU-13 documentó (RUC piloto reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue
-afectando también a HU-14 (confirmado, misma forma, los 4 tipos nuevos) — es razonable esperar que
-afecte a HU-15/HU-16 de la misma manera mientras persista; no hace falta esperar a que se resuelva
-para implementar esas historias (sus tests quedan con el mismo patrón `Assumptions.assumeTrue` para
-el tramo "aprobado", igual que HU-13/HU-14), pero si en algún momento ese estado cambia, vale la pena
-re-ejecutar los tests guardados de HU-13/HU-14 para confirmar el primer "Aprobado" real de esta
-integración.
+**Próximo paso al reanudar el loop:** HU-15 (Fase 4, envío por lotes de los 5 tipos de comprobante)
+está hecha — ver detalle abajo para el protocolo asíncrono real (`SiRecepLoteDE`/`SiResultLoteDE`) y
+el reporte completo. Queda **HU-16** (Frente C, registro de todos los eventos exigidos) — depende de
+HU-10/HU-11 (Fase 3), no de HU-15, así que puede implementarse ahora sin esperar nada más. **HU-17
+sí depende** de que HU-13..HU-16 existan (consolida su reporte con
+`SifenHomologationReport.combinedWith`), así que debe ser la última de la fase. El bloqueo externo
+que HU-13 documentó (RUC piloto reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue afectando
+también a HU-14 y ahora a HU-15 (confirmado, misma forma, los 5 tipos vía lote también) — es
+razonable esperar que afecte a HU-16 de la misma manera mientras persista; no hace falta esperar a
+que se resuelva para implementar esa historia (su test debería quedar con el mismo patrón
+`Assumptions.assumeTrue` para el tramo "aprobado", igual que HU-13/HU-14/HU-15), pero si en algún
+momento ese estado cambia, vale la pena re-ejecutar los tests guardados de HU-13/HU-14/HU-15 para
+confirmar el primer "Aprobado" real de esta integración.
+
+## HU-15 — Probar el envío por lotes de todos los tipos de comprobante (Done)
+
+Épica EP-05, Fase 4, "Frente B" (paralelo a HU-14/HU-16, converge en HU-17). Introduce el **Web
+Service asíncrono de envío por lotes** (`SiRecepLoteDE`) — nunca usado hasta esta historia; las 9
+historias anteriores de envío (HU-06, HU-13, HU-14) usaron siempre el envío inmediato síncrono
+(`SiRecepDE`). Reutiliza sin cambios `SifenDocumentXmlService`/`SifenDocumentSigningService`/
+`SifenDocumentType`/`SifenDocumentTypeExtras` de HU-04/HU-13/HU-14 — el trabajo real de esta historia
+es el protocolo de lote en sí (armar/comprimir/enviar, y consultar el resultado asíncrono más tarde).
+
+**Investigación — protocolo real confirmado en vivo, no inferido del manual.** Se descargó el
+WSDL/XSD real de ambos servicios con el mismo procedimiento `curl --cert-type P12` que las historias
+anteriores establecieron (`.../de/ws/async/recibe-lote.wsdl(.xsd1.xsd)` y `.../de/ws/consultas/
+consulta-lote.wsdl(.xsd1.xsd)`, 2026-07-28). A diferencia de casi toda historia anterior de esta
+integración, **esta vez el manual (Manual Técnico V150, secciones 9.2/9.3/12.3.2/12.3.3) coincide casi
+exactamente con el XSD real** — un caso más raro en esta integración:
+
+- Envío (`SiRecepLoteDE`): request raíz `rEnvioLote` (`dId` + `xDE`, este último `xs:base64Binary`
+  con `expectedContentTypes="application/zip"`); respuesta raíz `rResEnviLoteDe` (`dFecProc`/
+  `dCodRes`/`dMsgRes`/`dProtConsLote`/`dTpoProces`, todos `minOccurs="0"`) — coincide con los Schema
+  XML 5/6 del manual.
+- `xDE` (Schema XML 5A, `ProtProcesLoteDE_v150.xsd`): una raíz `rLoteDE` que envuelve de 1 a 50 hijos
+  `rDE` — exactamente los mismos documentos `<rDE>...</rDE>` firmados que HU-04/HU-13/HU-14 ya
+  producen para envío inmediato, concatenados dentro de `rLoteDE`, comprimidos en `.zip` y luego
+  codificados en Base64 (`SifenBatchReceptionClient.buildCompressedLotePayload`).
+- Consulta (`SiResultLoteDE`): request raíz `rEnviConsLoteDe` (`dId` + `dProtConsLote`); respuesta
+  raíz `rResEnviConsLoteDe` (`dFecProc`/`dCodResLot`/`dMsgResLot`/`gResProcLote[0..50]`, cada uno con
+  `id` (CDC)/`dEstRes`/`dProtAut`/`gResProc[1..5]`) — coincide con los Schema XML 7/8.
+
+**Hallazgo 1 — el "tiempo mínimo recomendado" que pide AC-01 es un campo real de la propia
+respuesta, no una constante fija del manual.** Se buscó explícitamente en el manual (secciones 9.2/
+9.3/12.3.2/12.3.3 completas) un número fijo de espera recomendada — no existe ninguno. Se
+cross-verificó también el SDK público `TIPS-SA/facturacionelectronicapy-setapi` (misma familia de
+SDKs que HU-08/10/11/14 ya usaron para contrastar hallazgos): su `consultaLote()` no impone ningún
+intervalo fijo tampoco, deja el polling completamente a cargo de quien lo llama. En cambio, la propia
+respuesta de `SiRecepLoteDE` incluye `dTpoProces` ("Tiempo medio de procesamiento en segundos") — una
+estimación dinámica, calculada por SIFEN, específica de ese lote — **la decisión de diseño de esta
+historia es usar ese valor como el "tiempo mínimo recomendado antes de consultar" de AC-01**, en vez
+de inventar una constante, ya que es la única fuente real y autoritativa que existe. Confirmado en
+vivo: en este ambiente de prueba (poca carga), `dTpoProces` vino siempre en `0` — por eso
+`SifenHomologationBatchSubmissionLiveTest` usa un piso de 5 segundos (`MIN_POLL_WAIT_SECONDS`) cuando
+SIFEN reporta `0`, pero preferiría el valor real si SIFEN alguna vez reporta algo mayor.
+
+**Hallazgo 2 — el tipo local `tiTiDE`/`tdDesTiDE` embebido en el XSD real de `recibe-lote` es una
+copia desactualizada e inerte, no una restricción real.** Una primera lectura del XSD real
+descargado (`recibe-lote.wsdl.xsd1.xsd`) mostró que su propia copia local de estos tipos comunes
+restringe `iTiDE` al patrón `"1|[5-6]"` y la enumeración de `tdDesTiDE` a solo 3 valores (Factura/
+Nota de crédito/Nota de débito) — **sin Autofactura ni Nota de remisión**, a diferencia del
+`DE_Types_v150.xsd` de producción que HU-14 usó (`"1|[4-7]|9|10"`, los 5 tipos). Esto sugería que el
+servicio de lote podría rechazar Autofactura/Nota de remisión por completo. **Una prueba real en
+vivo descartó esa hipótesis**: los 5 tipos, incluidas Autofactura y Nota de remisión, fueron
+aceptados (`dCodRes=0300`) y concluidos (`dCodResLot=0362`) igual que Factura — el tipo local
+resultó ser una copia obsoleta del bloque de "tipos comunes" que cada XSD de este dominio arrastra
+(el propio `rEnvioLote`/`rResEnviLoteDe` no lo referencian: `xDE` es `xs:base64Binary` opaco), nunca
+actualizada cuando la NT extendió el catálogo a 5 tipos — un hallazgo de "manual/schema vs.
+comportamiento real" más, en la línea de los que HU-06/HU-07/HU-10/HU-11/HU-13/HU-14 ya documentaron,
+pero esta vez resuelto a favor de "sí funciona" en vez de "hay que corregir código".
+
+**Hallazgo 3 (AC-04/AC-05) — una divergencia real manual-vs-vivo: `dCodRes=0363` llega en el `ack`
+síncrono, no solo al consultar.** La Tabla B104 del manual (sección 12.3.3.3) documenta
+`dCodResLot=0363` ("Lotes con tipos distintos de DE") únicamente bajo `SiResultLoteDE` (el paso de
+consulta asíncrona) — sugiriendo que un lote inválido se encolaría primero y se rechazaría recién al
+consultar. **Confirmado en vivo: el propio `ack` síncrono de `SiRecepLoteDE` ya devuelve
+`dCodRes=0363`**, con `accepted=false` y sin que el lote llegue a encolarse (`dProtConsLote` vino
+ausente en el caso de mezcla de tipos, y como el string literal `"0"` en el caso de mezcla de
+emisor — por eso `SifenBatchSubmissionResult.accepted()`, no la forma de `batchNumber`, es la señal
+confiable). Esto satisface "rechazado antes de ser procesado" (AC-04/AC-05) de la forma más literal
+posible — nunca hace falta ni siquiera consultar. El mismo código se reutiliza para ambas
+violaciones de "un lote debe contener solo un mismo tipo de DE" (sección 9.2.2, que también implica
+un mismo emisor, ya que todo el lote se autentica con un solo certificado mTLS) — el texto del
+mensaje sí distingue dinámicamente la causa: `"Lotes con tipos distintos de DE"` para AC-05 (mezcla
+de tipos), y `"Lotes con tipos distintos de DE emisor [<ruc>]"` (nombrando el RUC ofensor) para AC-04
+(mezcla de emisor).
+
+**El mismo límite externo de HU-13/HU-14 sigue afectando esta historia: RUC piloto "inactivo",
+`dCodRes=1252`.** Confirmado en vivo para los 5 tipos enviados por lote — igual que por envío
+inmediato. AC-01/AC-02 ("correctas aprobadas") se verifican con `Assumptions.assumeTrue`, igual que
+HU-13/HU-14.
+
+**Reporte real (2026-07-28) contra `sifen-test.set.gov.py` con el `.p12` piloto real (RUC
+`1137152-8`, timbrado `1137152`):**
+
+```
+Escenario                                                        | Esperado                | Obtenido                | Resultado
+FACTURA lote correcto — envío (5 documentos)                     | ACCEPTED                | ACCEPTED (0300)         | OK
+FACTURA correcta 1..5/5 — consulta                               | APROBADO                | REJECTED (1252)         | FALLO (bloqueo externo)
+NOTA_CREDITO lote correcto — envío (5 documentos)                 | ACCEPTED                | ACCEPTED (0300)         | OK
+NOTA_CREDITO correcta 1..5/5 — consulta                           | APROBADO                | REJECTED (1252)         | FALLO (bloqueo externo)
+NOTA_DEBITO lote correcto — envío (5 documentos)                  | ACCEPTED                | ACCEPTED (0300)         | OK
+NOTA_DEBITO correcta 1..5/5 — consulta                            | APROBADO                | REJECTED (1252)         | FALLO (bloqueo externo)
+AUTOFACTURA lote correcto — envío (5 documentos)                  | ACCEPTED                | ACCEPTED (0300)         | OK
+AUTOFACTURA correcta 1..5/5 — consulta                            | APROBADO                | REJECTED (1252)         | FALLO (bloqueo externo)
+NOTA_REMISION lote correcto — envío (5 documentos)                | ACCEPTED                | ACCEPTED (0300)         | OK
+NOTA_REMISION correcta 1..5/5 — consulta                          | APROBADO                | REJECTED (1252)         | FALLO (bloqueo externo)
+lote factura incorrecto — envío (5 documentos)                    | ACCEPTED                | ACCEPTED (0300)         | OK
+incorrecta 1/5 (RUC receptor malformado)                          | RECHAZADO               | REJECTED (0160)         | OK
+incorrecta 2/5 (descripción de ítem vacía)                        | RECHAZADO               | REJECTED (0160)         | OK
+incorrecta 3/5 (fecha de emisión fuera de rango)                  | RECHAZADO               | REJECTED (1103)         | OK
+incorrecta 4/5 (total no coincide con la suma de ítems)           | RECHAZADO               | REJECTED (1252, enmascarado) | OK
+incorrecta 5/5 (código de unidad de medida inexistente)           | RECHAZADO               | REJECTED (0160)         | OK
+lote con mezcla de emisores (4 RUC piloto + 1 distinto)           | RECHAZADO (antes de procesar) | REJECTED (0363, emisor [80000005]) | OK
+lote con mezcla de tipos (4 factura + 1 nota de crédito)          | RECHAZADO (antes de procesar) | REJECTED (0363)         | OK
+```
+
+AC-03 (5/5 incorrectas rechazadas con motivo identificable — la 4ª queda enmascarada por el mismo
+`1252` antes de que SIFEN llegue a validar la aritmética, igual que HU-13/HU-14) y AC-04/AC-05 (lotes
+mezclados rechazados antes de procesar) pasaron con aserción dura. AC-01/AC-02 (correctas aprobadas,
+los 5 tipos) quedan pendientes de que SIFEN active el RUC piloto — el test se aborta explícitamente,
+no falla.
+
+**Decisión: dos clientes nuevos, mismo patrón que los de envío/consulta inmediatos.**
+`SifenBatchReceptionClient` (envío) y `SifenBatchResultQueryClient` (consulta) siguen exactamente la
+forma de `SifenDocumentReceptionClient`/`SifenDocumentQueryClient`: parsing defensivo por nombre
+local de elemento (sin asumir un anidamiento fijo, misma filosofía que el Javadoc de HU-06
+estableció), un overload `sendWithClient`/`queryWithClient` paquete-visible que recibe un
+`HttpClient` ya armado (mismo seam que HU-12/HU-13 abrieron), y `Optional.empty()` — nunca una
+excepción — ante cualquier falla de transporte o respuesta no interpretable.
+
+**Decisión: test guardado (no descartable), mismo patrón que HU-12/HU-13/HU-14.**
+`SifenHomologationBatchSubmissionLiveTest` extiende `SifenHomologationReport`, se salta con
+`Assumptions.assumeTrue` cuando el `.p12`/contraseña piloto no están presentes, y aplica la misma
+pauta de espaciado (`PACING_DELAY`, 700ms) y reintentos solo ante falla de transporte que HU-12
+estableció. Un probe descartable (`ThrowawayBatchProbeTest`, borrado antes de este commit) se usó
+primero para confirmar en vivo los Hallazgos 1-3 antes de fijar las aserciones finales del test
+guardado.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+- `SifenBatchReceptionClient.java` (nuevo, `@Service`) — envía un lote (`send`/`sendWithClient`);
+  `buildCompressedLotePayload` (paquete-visible) arma `rLoteDE` + zip + Base64.
+- `SifenBatchResultQueryClient.java` (nuevo, `@Service`) — consulta el resultado de un lote
+  (`query`/`queryWithClient`).
+- `SifenBatchSubmissionResult.java`/`SifenBatchQueryResult.java`/`SifenBatchDocumentResult.java`
+  (nuevos, records) — ver Javadoc de cada uno para el mapeo de `dCodRes`/`dCodResLot`.
+
+**Tests backend**:
+- `SifenBatchReceptionClientTest.java` (nuevo, 6 casos) — zip/Base64 roundtrip sin servidor, y contra
+  un `HttpsServer` local: aceptado con `dProtConsLote`/`dTpoProces`, rechazado (0301) sin número de
+  lote, sin respuesta (transporte/no parseable), forma del sobre SOAP enviado.
+- `SifenBatchResultQueryClientTest.java` (nuevo, 7 casos) — en procesamiento (0361), concluido con
+  documentos aprobado/rechazado (0362, incluye unión de mensajes de `gResProc`), rechazo de lote
+  completo por tipos distintos (0363, sin documentos), sin respuesta, forma del sobre SOAP enviado.
+- `SifenHomologationBatchSubmissionLiveTest.java` (nuevo, guardado) — el reporte real de arriba es su
+  salida cuando corre con el `.p12` piloto presente; aserción dura sobre AC-03/AC-04/AC-05,
+  `Assumptions.assumeTrue` sobre AC-01/AC-02.
+
+**Playwright**: ninguno — mismo patrón que HU-01/03/04/05/06/09/12/13/14 (capacidad de
+servicio/prueba de homologación sin pantalla propia; la peluquería nunca usa envío por lotes en
+operación real).
 
 ## HU-14 — Probar el envío inmediato de los demás tipos de comprobante exigidos (Done)
 
