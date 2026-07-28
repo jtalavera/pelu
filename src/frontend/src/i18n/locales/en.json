@@ -564,7 +564,9 @@
             "kudeEmailPlaceholder": "client@example.com (leave blank to use the client's email)",
             "kudeEmailButton": "Send",
             "kudeEmailSending": "Sending…",
-            "kudeEmailSuccess": "KuDE sent by email."
+            "kudeEmailSuccess": "KuDE sent by email.",
+            "revalidateButton": "Revalidate in SIFEN",
+            "revalidateHint": "Opens SIFEN's own verification page in a new tab — the result is shown there, not in this system."
           }
         }
       },

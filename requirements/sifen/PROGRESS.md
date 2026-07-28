@@ -5,9 +5,10 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 2** (Cerrar el ciclo de vida de la factura ya enviada) — en curso, HU-07 y HU-08
-hechas. HU-19 (de EP-06/Fase 1) también se tomó ya, en paralelo, por no depender de HU-08/HU-09.
-Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
+Fase actual: **Fase 2 completa** (Cerrar el ciclo de vida de la factura ya enviada) — HU-07, HU-08,
+HU-09 y HU-19 hechas. Próxima fase: **Fase 3** (Primeras interacciones complejas adicionales:
+eventos sobre DTE aprobados — HU-10 y HU-11). Plan completo: `Especificacion_SIFEN_Peluqueria.md`
+sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
 |---|---|---|
@@ -23,25 +24,116 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-07 Verificar estado de una factura pendiente | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (CDC inexistente); primera historia con pantalla + controller propios. |
 | HU-19 Ver listado de certificados | ✅ Done | Ver detalle abajo. Sin interacción con SIFEN (N/A) — 100% lectura de datos locales. |
 | HU-08 Generar comprobante PDF (KuDE) | ✅ Done | Ver detalle abajo. Verificado en vivo: el fix de `gCamFuFD/dCarQR` cierra ese gap específico; quedan 3 gaps menores ya documentados por HU-06, sin "Aprobado" real todavía. |
-| HU-09 Revalidar en SIFEN una factura | ⬜ Next | Depende de HU-08 (ya hecha) — ver "Próximo paso" abajo. |
-| Fase 3 (HU-10, HU-11) | ⬜ Todo | |
+| HU-09 Revalidar en SIFEN una factura | ✅ Done | Ver detalle abajo. **Cierra Fase 2.** Verificado en vivo: la URL real (`consultas-test/qr?...`) responde HTTP 200 con la app "Consultas" real de SIFEN. |
+| HU-10 Cancelar una factura ya aprobada | ⬜ Next | Fase 3 — ver "Próximo paso" abajo. |
+| HU-11 Identificar al cliente en una factura sin datos | ⬜ Todo | Fase 3 — puede hacerse en paralelo con HU-10. |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-09 (Revalidar en SIFEN una factura desde el
-sistema) — único ítem restante de Fase 2. HU-09 reconstruye la misma URL de consulta pública que
-codifica el QR del KuDE (ya persistida por HU-08 en `Invoice.sifenPublicConsultationUrl`/
-`sifenQrUrl`) y la abre en una pestaña nueva — no necesita recalcular nada, solo leer esos dos
-campos. El WS de consulta (`SiConsDE`) ya quedó completamente investigado por HU-07 (XSD real vía
-`consulta.wsdl.xsd1.xsd`, endpoint real, forma real de `rEnviConsDeResponse`) — no hace falta
-re-investigarlo para HU-09, que reutiliza el mismo `SifenDocumentQueryClient`. **Sigue sin existir
-ningún CDC real que SIFEN devuelva como "Aprobado"** (ver hallazgo de HU-08 abajo: quedan 3 gaps de
-schema menores — `dFeFinT`, `dDesUniMed`, `dBasExe` — ya documentados por HU-06 como deliberadamente
-fuera de alcance hasta homologación, HU-12..HU-17) — así que HU-07's AC-01/AC-03 y la consulta real
-de HU-09 AC-02/AC-03 (aprobación real) van a seguir sin poder verificarse en vivo hasta que
-homologación cierre esos 3 gaps. Quien quiera reintentarlo puede reusar el mismo procedimiento
-manual (test JUnit temporal + `curl`) documentado en la sección de HU-08 abajo — ahora ya incluye el
-grupo QR, así que solo faltarían esos 3 campos para llegar a un "Aprobado" real.
+**Próximo paso al reanudar el loop:** con Fase 2 cerrada, arrancar Fase 3 — HU-10 (Cancelar una
+factura ya aprobada) primero, ya que introduce el primer estado nuevo de este dominio
+(`SifenSubmissionStatus` hoy solo tiene `PENDING_VERIFICATION`/`APPROVED`/
+`APPROVED_WITH_OBSERVATION`/`REJECTED`, sin ningún valor de cancelación — HU-09 dejó documentado en
+`InvoiceDetailModal.tsx` y en su Playwright que el botón de revalidar no está gateado por status
+específico, precisamente para no romperse cuando ese valor exista). HU-11 (identificar cliente en
+factura sin datos) puede avanzar en paralelo, ya que ambas son eventos independientes entre sí sobre
+un DTE ya aprobado.
+
+## HU-09 — Revalidar en SIFEN una factura desde el sistema (Done)
+
+Épica EP-03. Cierra Fase 2: la última pieza del ciclo de vida de una factura ya enviada. A
+diferencia de toda historia anterior, **esta no habla con SIFEN desde el backend en absoluto** —
+por diseño (AC-04): reconstruye la misma URL que HU-08 ya calcula/persiste para el código QR del
+KuDE (`SifenQrCodeService`, vía `Invoice.sifenQrUrl`) y la abre en una pestaña nueva del navegador,
+delegando por completo en la propia página de "Consultas" de SIFEN la interpretación del resultado.
+
+**Decisión de diseño clave: qué URL exactamente se reutiliza.** La descripción de la historia dice
+"reconstruye la misma dirección de verificación que está codificada en el código QR" — es decir, la
+URL **completa** que el QR codifica (`sifenQrUrl`: `.../consultas-test/qr?nVersion=150&Id=...&...&
+cHashQR=...`), no la URL "base" de consulta pública que HU-08 ya mostraba como texto en el propio
+PDF junto al CDC para tipeo manual (`sifenPublicConsultationUrl`, sin querystring). Abrir la primera
+directamente en una pestaña reproduce exactamente lo que pasaría al escanear el QR (AC-02: "sin
+necesidad de escanear ni leer ninguna imagen"); abrir la segunda obligaría al usuario a volver a
+tipear el CDC a mano, contradiciendo el propio objetivo de "un solo clic" de la historia.
+
+**No hizo falta un endpoint nuevo.** `Invoice.sifenQrUrl` ya existía (persistido por HU-08/HU-06 en
+el momento del envío real, antes incluso de intentar la conexión con SIFEN) — solo faltaba
+exponerlo. Se agregó un campo nuevo `sifenVerificationUrl` a `InvoiceResponse` (mapeado 1:1 desde
+`Invoice.getSifenQrUrl()` en `InvoiceService.toDetailDto`), reusando el mismo `GET
+/api/invoices/{id}` que el modal de detalle ya consume — ningún controller ni ruta nueva.
+
+**AC-05 (activa o cancelada) y el estado que todavía no existe.** `SifenSubmissionStatus` (HU-06)
+hoy solo tiene `PENDING_VERIFICATION`/`APPROVED`/`APPROVED_WITH_OBSERVATION`/`REJECTED` — ningún
+`CANCELLED`, porque HU-10 (que lo introduciría) es Fase 3 y todavía no se construyó. Implementar
+cancelación real está deliberadamente fuera de alcance de esta historia. En su lugar, el botón de
+revalidar en `InvoiceDetailModal.tsx` se gatea **únicamente en que `sifenVerificationUrl` exista**
+(no en el valor de `sifenSubmissionStatus`) — es la precondición técnica real (solo una factura
+efectivamente firmada/enviada tiene una URL de QR que revalidar) y, a diferencia de gatear por
+"Aprobado"/"Aprobado con observación" como hace el bloque del KuDE (HU-08, donde sí es correcto
+restringir así), deja el botón funcionando sin cambios el día que HU-10 agregue un estado
+`CANCELLED` — nadie tendrá que tocar esta historia de nuevo. El Playwright de esta historia prueba
+esto explícitamente fabricando una factura en estado `REJECTED` (el "terminal, no aprobado" más
+cercano disponible hoy) con URL persistida, y confirmando que el botón igual aparece.
+
+**Verificación en vivo (2026-07-28), procedimiento para reproducir:** mismo patrón que HU-06/HU-07/
+HU-08 — un test JUnit temporal (no commiteado, `ThrowawayLiveSifenHu09Test`, borrado antes de este
+commit) construyó un documento real con los mismos datos piloto (RUC `1137152-8`, timbrado
+`1137152`), lo firmó con el `.p12` real (`requirements/sifen/*.p12`, gitignored) vía
+`SifenDocumentSigningService.sign`, y calculó el QR real con `SifenQrCodeService.build` (CSC de
+prueba `ABCD.../IdCSC=0001`) — exactamente el mismo camino que produce `Invoice.sifenQrUrl` en
+producción. La URL real resultante:
+
+```
+https://ekuatia.set.gov.py/consultas-test/qr?nVersion=150&Id=01011371528001002001452822026072839191919198
+  &dFeEmiDE=...&dNumIDRec=4123456&dTotGralOpe=100000&dTotIVA=9090.91&cItems=1
+  &DigestValue=...&IdCSC=0001&cHashQR=e85ca3838b6256df2bd2eb09817e01186eab7cf6d3fdaa49997b6de1f78226df
+```
+
+se pidió con `curl` (GET simple, sin mTLS — a diferencia de los WS SOAP de HU-05/HU-06/HU-07, el
+sitio de consultas públicas no exige certificado de cliente) contra
+`https://ekuatia.set.gov.py/consultas-test/qr?...`. **Resultado: HTTP 200**, `Content-Type:
+text/html; charset=UTF-8`, cuerpo la aplicación Angular real "Consultas" de la DNIT/SIFEN
+(`ng-app="consultaspublicasApp"`, footer "SIFEN Versión 1.3.5") — la misma SPA que renderiza el
+resultado de la consulta client-side a partir de esos parámetros de query, exactamente lo que
+pasaría en un browser real al hacer clic en el botón de esta historia. Esto confirma en vivo, contra
+el servidor real: (a) el dominio/ruta (`ekuatia.set.gov.py/consultas-test/qr`) es el correcto para
+AC-02/AC-03, (b) el formato del querystring que `SifenQrCodeService` genera es aceptado por el
+servidor real (no un 400/404), (c) el ambiente de prueba resuelve al sitio de prueba, nunca al de
+producción (AC-03) — `SifenQrProperties`/`SifenConnectionProperties.activeEnvironment()` ya
+garantizaban esto en código, ahora también confirmado end-to-end contra el servidor real. No se
+verificó (ni HU-09 lo necesita) qué mensaje específico muestra esa SPA para este CDC en particular —
+por diseño (AC-04), ese resultado lo interpreta y muestra la propia página de SIFEN, no este sistema.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `web/dto/InvoiceResponse.java` — campo nuevo `sifenVerificationUrl` (último de la lista, para no
+  reordenar los ya existentes).
+- `service/InvoiceService.toDetailDto` — lo mapea desde `Invoice.getSifenQrUrl()`, ya persistido por
+  HU-06/HU-08 en submit(). Sin cambios de comportamiento en ningún otro método.
+- `web/SifenInvoiceTestSupportController` — `prepareAsApproved` refactorizado a un helper privado
+  `prepareWithQrAndStatus(id, status)` reusado por un endpoint nuevo, **solo test**, `POST
+  /invoices/{id}/prepare-with-status/{status}` (cualquier valor de `SifenSubmissionStatus`) — hizo
+  falta para que el Playwright de AC-05 pudiera fabricar una factura con URL de verificación
+  persistida bajo un estado distinto de `APPROVED`, sin depender de que exista aún un estado de
+  cancelación real.
+
+**Tests backend** (`InvoiceServiceTest`, 2 casos nuevos): `getInvoice_exposesTheSameUrlPersistedAsSifenQrUrl`
+(el campo nuevo refleja exactamente `Invoice.sifenQrUrl`, sin transformación) y
+`getInvoice_withoutSifenSubmission_sifenVerificationUrlIsNull` (una factura que nunca se firmó/envió
+no expone ninguna URL). No hizo falta tocar ningún test de `SifenQrCodeService`/
+`SifenDocumentSigningService`/`SifenInvoiceSubmissionService` — ninguno de sus contratos cambió.
+
+**Playwright** (`e2e/tests/sifen-hu-09-revalidar-factura.spec.ts`, 3 casos): AC-01/AC-06 (sin
+verificación SIFEN previa no existe el botón, y tampoco ningún `input[type="file"]` en toda la
+pantalla — confirma por ausencia que esta funcionalidad nunca ofrece subir/escanear una imagen),
+AC-01/AC-02/AC-03 (factura aprobada real vía `prepare-as-approved`: el clic abre una pestaña nueva
+cuya URL apunta exactamente a `consultas-test/qr?...`, nunca a `consultas/qr?...` de producción),
+AC-05 (factura `REJECTED` fabricada vía el endpoint de test-support nuevo: el botón sigue
+apareciendo, prueba directa de que no está gateado por "Aprobado"). AC-02/AC-03 usan el evento
+`popup` de Playwright — la `Page` del `window.open` está disponible sincrónicamente en el instante en
+que se crea, antes de que la navegación externa termine de cargar, así que el test puede afirmar
+sobre la URL objetivo y cerrar la pestaña de inmediato sin depender de que el sitio real de SIFEN
+efectivamente renderice dentro de CI. AC-04 no tiene test (por diseño, este sistema nunca interpreta
+esa respuesta) y AC-06 se cubre por ausencia (ya descrito arriba).
 
 ## HU-08 — Generar el comprobante en PDF (KuDE) de una factura aprobada (Done)
 

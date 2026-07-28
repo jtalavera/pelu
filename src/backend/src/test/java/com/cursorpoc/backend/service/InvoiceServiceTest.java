@@ -477,6 +477,34 @@ class InvoiceServiceTest {
             });
   }
 
+  /**
+   * SIFEN HU-09: {@code sifenVerificationUrl} in the response must be exactly whatever HU-08
+   * persisted on {@code Invoice.sifenQrUrl} at submission time — the same URL encoded in the KuDE's
+   * QR code — with no gating on the invoice's current SIFEN status (AC-05: this must keep working
+   * for a cancelled invoice too, once that state exists).
+   */
+  @Test
+  void getInvoice_exposesTheSameUrlPersistedAsSifenQrUrl() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenQrUrl("https://ekuatia.set.gov.py/consultas-test/qr?nVersion=150&Id=abc");
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenVerificationUrl())
+        .isEqualTo("https://ekuatia.set.gov.py/consultas-test/qr?nVersion=150&Id=abc");
+  }
+
+  @Test
+  void getInvoice_withoutSifenSubmission_sifenVerificationUrlIsNull() {
+    Invoice invoice = buildIssuedInvoice();
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenVerificationUrl()).isNull();
+  }
+
   @Test
   void formatInvoiceNumber_pads7Digits() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))

@@ -31,4 +31,5 @@ public record InvoiceResponse(
     String sifenSubmissionProtocolNumber,
     String sifenSubmissionResultCode,
     String sifenSubmissionMessage,
-    String sifenQueryDocumentContent) {}
+    String sifenQueryDocumentContent,
+    String sifenVerificationUrl) {}

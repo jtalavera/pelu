@@ -578,7 +578,8 @@ public class InvoiceService {
         i.getSifenSubmissionProtocolNumber(),
         i.getSifenSubmissionResultCode(),
         i.getSifenSubmissionMessage(),
-        i.getSifenQueryDocumentContent());
+        i.getSifenQueryDocumentContent(),
+        i.getSifenQrUrl());
   }
 
   private static String formatInvoiceNumber(int number) {

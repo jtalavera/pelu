@@ -61,6 +61,14 @@ export type InvoiceDetail = {
   sifenSubmissionResultCode?: string | null;
   sifenSubmissionMessage?: string | null;
   sifenQueryDocumentContent?: string | null;
+  /**
+   * SIFEN HU-09: the exact verification URL encoded in the KuDE's QR code (HU-08's
+   * `SifenQrCodeService`), persisted on the invoice at submission time. Present whenever the
+   * invoice was actually signed/submitted, independent of its current status — HU-09 AC-05
+   * requires this to keep working once a cancelled state exists (Fase 3, not built yet), so the
+   * button below is intentionally not gated on `sifenSubmissionStatus`.
+   */
+  sifenVerificationUrl?: string | null;
 };
 
 /** SIFEN HU-07: badge variant + i18n key per sifenSubmissionStatus literal. */
@@ -451,6 +459,24 @@ export function InvoiceDetailModal({
                       </pre>
                     </div>
                   )}
+                {/* SIFEN HU-09 AC-01/AC-05: available regardless of status (active or, once
+                    Fase 3 ships, cancelled) as long as the invoice actually has a persisted
+                    verification URL — i.e. it was really signed/submitted at some point. */}
+                {invoice.sifenVerificationUrl && (
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="sifen-revalidate-button"
+                      title={t("femme.billing.history.detail.sifen.revalidateHint")}
+                      onClick={() =>
+                        window.open(invoice.sifenVerificationUrl!, "_blank", "noopener,noreferrer")
+                      }
+                    >
+                      {t("femme.billing.history.detail.sifen.revalidateButton")}
+                    </Button>
+                  </div>
+                )}
                 {sifenCheckError && (
                   <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
                     {sifenCheckError}

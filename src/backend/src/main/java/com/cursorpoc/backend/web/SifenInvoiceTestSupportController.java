@@ -159,6 +159,26 @@ public class SifenInvoiceTestSupportController {
   @Transactional
   public void prepareAsApproved(@PathVariable long id) {
     log.info("POST /api/admin/sifen-test-support/invoices/{}/prepare-as-approved", id);
+    prepareWithQrAndStatus(id, SifenSubmissionStatus.APPROVED);
+  }
+
+  /**
+   * SIFEN HU-09 AC-05: the revalidate button must not be gated to "Aprobado"/"Aprobado con
+   * observación" only, since it also has to keep working once a cancelled state exists (Fase 3, not
+   * built yet). This lets Playwright fabricate an invoice with a persisted QR/verification URL
+   * under a status other than APPROVED — {@code REJECTED} here, the closest already-existing
+   * "terminal, non-approved" status — to prove the button's visibility really only depends on the
+   * URL being present, not on the status value. Shares the exact same QR-building path as {@link
+   * #prepareAsApproved(long)}.
+   */
+  @PostMapping("/invoices/{id}/prepare-with-status/{status}")
+  @Transactional
+  public void prepareWithStatus(@PathVariable long id, @PathVariable SifenSubmissionStatus status) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/prepare-with-status/{}", id, status);
+    prepareWithQrAndStatus(id, status);
+  }
+
+  private void prepareWithQrAndStatus(long id, SifenSubmissionStatus status) {
     Invoice invoice =
         invoiceRepository
             .findById(id)
@@ -178,7 +198,7 @@ public class SifenInvoiceTestSupportController {
         qrCodeService.build(header, detail.totals(), detail.lines().size(), "ZmFrZURpZ2VzdA==");
 
     invoice.setSifenSignedAt(LocalDateTime.now());
-    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    invoice.setSifenSubmissionStatus(status);
     invoice.setSifenSubmissionProtocolNumber("123456789");
     invoice.setSifenSubmittedAt(LocalDateTime.now());
     invoice.setSifenQrUrl(qr.qrUrl());
