@@ -178,6 +178,69 @@ public class SifenInvoiceTestSupportController {
     prepareWithQrAndStatus(id, status);
   }
 
+  /**
+   * SIFEN HU-10 AC-02: lets Playwright fabricate an invoice approved {@code hoursAgo} hours in the
+   * past — both within the 48h cancellation window (a small value) and past it (a value &gt; 48) —
+   * without waiting on a real clock. Shares the same real header/detail/QR-building path as {@link
+   * #prepareAsApproved(long)}.
+   */
+  @PostMapping("/invoices/{id}/prepare-with-status-hours-ago/{status}/{hoursAgo}")
+  @Transactional
+  public void prepareWithStatusHoursAgo(
+      @PathVariable long id,
+      @PathVariable SifenSubmissionStatus status,
+      @PathVariable long hoursAgo) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/prepare-with-status-hours-ago/{}/{}",
+        id,
+        status,
+        hoursAgo);
+    prepareWithQrAndStatus(id, status);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    invoice.setSifenSubmittedAt(LocalDateTime.now().minusHours(hoursAgo));
+  }
+
+  /**
+   * SIFEN HU-10 AC-03/AC-04/AC-05: fabricates the result of a cancellation attempt directly — since
+   * this system has never reached a real "Aprobado" DE to genuinely cancel (see PROGRESS.md), this
+   * lets Playwright exercise the resulting UI (badge, audit fields, rejection message) for both
+   * outcomes without depending on a live SIFEN round-trip. {@code approved=true} moves the invoice
+   * to {@code CANCELLED} (AC-03); {@code approved=false} records the rejection but leaves the
+   * invoice's current status untouched (AC-04) — mirroring exactly what {@code
+   * SifenInvoiceCancellationService.recordCancellationResult} does with a real SIFEN response.
+   */
+  @PostMapping("/invoices/{id}/fabricate-cancellation-result/{approved}")
+  @Transactional
+  public void fabricateCancellationResult(@PathVariable long id, @PathVariable boolean approved) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/fabricate-cancellation-result/{}",
+        id,
+        approved);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    invoice.setSifenCancellationRequestedAt(LocalDateTime.now());
+    invoice.setSifenCancellationRequestedByUserId(1L);
+    invoice.setSifenCancellationRequestedByEmail("isabelzymanscki@gmail.com");
+    invoice.setSifenCancellationReason("Error en el monto facturado al cliente");
+    if (approved) {
+      invoice.setSifenCancellationResultCode("0600");
+      invoice.setSifenCancellationMessage("Evento registrado correctamente");
+      invoice.setSifenCancellationProtocolNumber("987654321");
+      invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
+    } else {
+      invoice.setSifenCancellationResultCode("4009");
+      invoice.setSifenCancellationMessage(
+          "Plazo de solicitud de cancelación de una FE extemporáneo");
+    }
+  }
+
   private void prepareWithQrAndStatus(long id, SifenSubmissionStatus status) {
     Invoice invoice =
         invoiceRepository

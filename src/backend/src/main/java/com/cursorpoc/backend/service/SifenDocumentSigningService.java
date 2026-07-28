@@ -156,14 +156,83 @@ public class SifenDocumentSigningService {
       SifenActiveCertificateMaterial material, Document unsignedRDe, LocalDateTime signedAt) {
     Element de = requireDeElement(unsignedRDe);
     String cdc = de.getAttribute("Id");
-    Element rDE = unsignedRDe.getDocumentElement();
+    signIdentifiedElement(
+        material,
+        unsignedRDe.getDocumentElement(),
+        de,
+        "Id",
+        cdc,
+        CanonicalizationMethod.INCLUSIVE);
 
+    // qrUrl/publicConsultationUrl are only populated by the signInvoice(...) orchestrator (HU-08) —
+    // this lower-level sign() step has no header/totals to compute them from.
+    return new SifenSignedDocument(unsignedRDe, cdc, signedAt, null, null);
+  }
+
+  /**
+   * SIFEN HU-10: signs a cancellation (or any future emisor) event's {@code <rEve Id="eventId">}
+   * element in place, appending {@code <Signature>} as its sibling inside {@code <rGesEve>} — same
+   * enveloped-signature shape as {@link #sign}, just anchored on {@code rEve} instead of {@code DE}
+   * (Manual Técnico V150 sección 11.5, GDE008: "Firma Digital del campo rEve"). {@code
+   * eventDocument} must be the {@code <rGesEve>}-rooted document {@link
+   * SifenCancellationEventXmlService#buildCancellationEvent} produces. AC: the certificate used is
+   * always the tenant's own active certificate (HU-21) — never material passed in from elsewhere —
+   * mirroring {@link #signInvoice}'s AC-06 guarantee for the DE itself.
+   *
+   * <p><b>Verified live (2026-07-28) against sifen-test.set.gov.py:</b> unlike {@link #sign} (DE),
+   * whose {@code SignedInfo} uses <i>inclusive</i> C14N (confirmed correct by every prior HU-06/07/
+   * 08 live check, which came back with real schema-content errors, never a signature error), the
+   * events service rejected that same choice for {@code SignedInfo} with {@code dCodRes=0160 "XML
+   * mal formado"} — a real, live HTTP 200 from the events endpoint, but with a generic
+   * malformed-document code, distinct from the {@code rRetEnviDe}-shaped 400 an entirely missing
+   * Signature produces (confirming the request *was* recognized as belonging to the events service,
+   * just failing a schema-level check). Cross-checked against a real, publicly maintained competing
+   * generator (TIPS-SA's {@code facturacionelectronicapy-xmlsign}, {@code SignXMLEvento.java}):
+   * confirms events must use <i>exclusive</i> C14N for {@code SignedInfo} — switching to it here
+   * resolved the issue live (see PROGRESS.md for the full before/after response bodies).
+   */
+  public Document signEvent(long tenantId, Document eventDocument) {
+    SifenActiveCertificateMaterial material = certificateService.requireActiveCertificate(tenantId);
+    Element rEve = requireREveElement(eventDocument);
+    String eventId = rEve.getAttribute("Id");
+    signIdentifiedElement(
+        material,
+        eventDocument.getDocumentElement(),
+        rEve,
+        "Id",
+        eventId,
+        CanonicalizationMethod.EXCLUSIVE);
+
+    log.info(
+        "SIFEN cancellation event signed tenantId={} eventId={} certificateId={}",
+        tenantId,
+        eventId,
+        material.certificateId());
+    return eventDocument;
+  }
+
+  /**
+   * Shared XML-DSig core for both {@link #sign} (DE) and {@link #signEvent} (event): builds an
+   * enveloped signature over {@code elementToSign} (referenced by {@code "#" + idValue}, backed by
+   * {@code elementToSign}'s {@code idAttributeName} attribute) and appends {@code <Signature>} as a
+   * child of {@code signatureParent} — the document root in both cases ({@code <rDE>} for the DE,
+   * {@code <rGesEve>} for an event), so {@code <Signature>} ends up a sibling of the signed
+   * element, never nested inside it. {@code signedInfoCanonicalizationMethod} is the one algorithm
+   * that differs between DE and event signing — see {@link #signEvent}'s javadoc.
+   */
+  private static void signIdentifiedElement(
+      SifenActiveCertificateMaterial material,
+      Element signatureParent,
+      Element elementToSign,
+      String idAttributeName,
+      String idValue,
+      String signedInfoCanonicalizationMethod) {
     try {
       XMLSignatureFactory fac = XMLSignatureFactory.getInstance("DOM");
 
       Reference reference =
           fac.newReference(
-              "#" + cdc,
+              "#" + idValue,
               fac.newDigestMethod(DigestMethod.SHA256, null),
               List.of(
                   fac.newTransform(Transform.ENVELOPED, (TransformParameterSpec) null),
@@ -175,7 +244,7 @@ public class SifenDocumentSigningService {
       SignedInfo signedInfo =
           fac.newSignedInfo(
               fac.newCanonicalizationMethod(
-                  CanonicalizationMethod.INCLUSIVE, (C14NMethodParameterSpec) null),
+                  signedInfoCanonicalizationMethod, (C14NMethodParameterSpec) null),
               fac.newSignatureMethod(SignatureMethod.RSA_SHA256, null),
               List.of(reference));
 
@@ -185,8 +254,8 @@ public class SifenDocumentSigningService {
       X509Data x509Data = kif.newX509Data(List.of(material.certificate()));
       KeyInfo keyInfo = kif.newKeyInfo(List.of(x509Data));
 
-      DOMSignContext signContext = new DOMSignContext(material.privateKey(), rDE);
-      signContext.setIdAttributeNS(de, null, "Id");
+      DOMSignContext signContext = new DOMSignContext(material.privateKey(), signatureParent);
+      signContext.setIdAttributeNS(elementToSign, null, idAttributeName);
 
       XMLSignature signature = fac.newXMLSignature(signedInfo, keyInfo);
       signature.sign(signContext);
@@ -194,12 +263,8 @@ public class SifenDocumentSigningService {
         | XMLSignatureException
         | NoSuchAlgorithmException
         | InvalidAlgorithmParameterException e) {
-      throw new IllegalStateException("Failed to sign SIFEN document controlNumber=" + cdc, e);
+      throw new IllegalStateException("Failed to sign SIFEN document id=" + idValue, e);
     }
-
-    // qrUrl/publicConsultationUrl are only populated by the signInvoice(...) orchestrator (HU-08) —
-    // this lower-level sign() step has no header/totals to compute them from.
-    return new SifenSignedDocument(unsignedRDe, cdc, signedAt, null, null);
   }
 
   /**
@@ -211,8 +276,17 @@ public class SifenDocumentSigningService {
    * document (AC-03), or any other validation failure.
    */
   public boolean verify(Document signedRDe) {
-    Element de = requireDeElement(signedRDe);
-    NodeList signatureNodes = signedRDe.getElementsByTagNameNS(XMLSignature.XMLNS, "Signature");
+    return verifySignatureOver(signedRDe, requireDeElement(signedRDe));
+  }
+
+  /** SIFEN HU-10: same as {@link #verify}, but for a signed cancellation (or future) event. */
+  public boolean verifyEvent(Document signedEventDocument) {
+    return verifySignatureOver(signedEventDocument, requireREveElement(signedEventDocument));
+  }
+
+  private static boolean verifySignatureOver(Document signedDocument, Element signedElement) {
+    NodeList signatureNodes =
+        signedDocument.getElementsByTagNameNS(XMLSignature.XMLNS, "Signature");
     if (signatureNodes.getLength() == 0) {
       return false;
     }
@@ -221,7 +295,7 @@ public class SifenDocumentSigningService {
     try {
       DOMValidateContext validateContext =
           new DOMValidateContext(new DocumentEmbeddedCertificateKeySelector(), signatureElement);
-      validateContext.setIdAttributeNS(de, null, "Id");
+      validateContext.setIdAttributeNS(signedElement, null, "Id");
       XMLSignatureFactory fac = XMLSignatureFactory.getInstance("DOM");
       XMLSignature signature = fac.unmarshalXMLSignature(validateContext);
       return signature.validate(validateContext);
@@ -236,6 +310,15 @@ public class SifenDocumentSigningService {
       throw new IllegalArgumentException("Document has no <DE> element");
     }
     return (Element) deNodes.item(0);
+  }
+
+  private static Element requireREveElement(Document eventDocument) {
+    NodeList rEveNodes =
+        eventDocument.getElementsByTagNameNS(SifenDocumentXmlService.SIFEN_NS, "rEve");
+    if (rEveNodes.getLength() == 0) {
+      throw new IllegalArgumentException("Event document has no <rEve> element");
+    }
+    return (Element) rEveNodes.item(0);
   }
 
   /** Extracts the public key straight from the signed document's own embedded X.509 certificate. */

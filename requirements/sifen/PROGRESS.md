@@ -5,10 +5,9 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 2 completa** (Cerrar el ciclo de vida de la factura ya enviada) — HU-07, HU-08,
-HU-09 y HU-19 hechas. Próxima fase: **Fase 3** (Primeras interacciones complejas adicionales:
-eventos sobre DTE aprobados — HU-10 y HU-11). Plan completo: `Especificacion_SIFEN_Peluqueria.md`
-sección "Plan de implementación por fases".
+Fase actual: **Fase 3 en curso** (Primeras interacciones complejas adicionales: eventos sobre DTE
+aprobados) — HU-10 hecha. Próximo: HU-11 (puede avanzar en paralelo, ver "Próximo paso" abajo). Plan
+completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
 |---|---|---|
@@ -25,19 +24,188 @@ sección "Plan de implementación por fases".
 | HU-19 Ver listado de certificados | ✅ Done | Ver detalle abajo. Sin interacción con SIFEN (N/A) — 100% lectura de datos locales. |
 | HU-08 Generar comprobante PDF (KuDE) | ✅ Done | Ver detalle abajo. Verificado en vivo: el fix de `gCamFuFD/dCarQR` cierra ese gap específico; quedan 3 gaps menores ya documentados por HU-06, sin "Aprobado" real todavía. |
 | HU-09 Revalidar en SIFEN una factura | ✅ Done | Ver detalle abajo. **Cierra Fase 2.** Verificado en vivo: la URL real (`consultas-test/qr?...`) responde HTTP 200 con la app "Consultas" real de SIFEN. |
-| HU-10 Cancelar una factura ya aprobada | ⬜ Next | Fase 3 — ver "Próximo paso" abajo. |
-| HU-11 Identificar al cliente en una factura sin datos | ⬜ Todo | Fase 3 — puede hacerse en paralelo con HU-10. |
+| HU-10 Cancelar una factura ya aprobada | ✅ Done | Ver detalle abajo. Verificado en vivo (real HTTP 200, forma de respuesta confirmada); el "Aprobado" real del evento queda como limitación abierta, ver detalle. |
+| HU-11 Identificar al cliente en una factura sin datos | ⬜ Next | Fase 3 — puede hacerse en paralelo con HU-10 (ya hecha), ver "Próximo paso" abajo. |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** con Fase 2 cerrada, arrancar Fase 3 — HU-10 (Cancelar una
-factura ya aprobada) primero, ya que introduce el primer estado nuevo de este dominio
-(`SifenSubmissionStatus` hoy solo tiene `PENDING_VERIFICATION`/`APPROVED`/
-`APPROVED_WITH_OBSERVATION`/`REJECTED`, sin ningún valor de cancelación — HU-09 dejó documentado en
-`InvoiceDetailModal.tsx` y en su Playwright que el botón de revalidar no está gateado por status
-específico, precisamente para no romperse cuando ese valor exista). HU-11 (identificar cliente en
-factura sin datos) puede avanzar en paralelo, ya que ambas son eventos independientes entre sí sobre
-un DTE ya aprobado.
+**Próximo paso al reanudar el loop:** HU-10 (Cancelar una factura ya aprobada) está hecha —
+introdujo `SifenSubmissionStatus.CANCELLED`, confirmando que HU-09 efectivamente no necesitó
+tocarse (ver su propia entrada, "AC-05 y el estado que todavía no existe" ya no aplica, el botón de
+revalidar sigue funcionando sin cambios). Sigue HU-11 (identificar cliente en factura sin datos),
+que puede avanzar de forma independiente — es otro evento sobre un DTE ya aprobado, sin dependencia
+con la cancelación.
+
+## HU-10 — Cancelar una factura ya aprobada (Done)
+
+Épica EP-04. Cierra Fase 1 de eventos: la primera interacción de este sistema con el web service de
+**eventos** de SIFEN (`siRecepEvento`), distinto de los ya usados por HU-06 (recepción de
+documentos) y HU-07/09 (consulta/QR) — introduce el primer estado nuevo de este dominio desde
+HU-06, `SifenSubmissionStatus.CANCELLED`.
+
+**Investigación (Manual Técnico V150, capítulo 11 "Gestión de eventos" + sección 9.5
+`siRecepEvento`):** el texto es extraíble con `pdftotext -layout` sin necesidad de renderizar
+imágenes (a diferencia de HU-01). La cancelación (11.1.2) es un evento "Registro Requerido" del
+emisor, con plazo de **48 horas desde la aprobación del DTE** para una Factura Electrónica
+(distinto de 168h para otros tipos de documento, sección 11.6.1/Tabla J fila 1 — este dominio solo
+emite facturas, así que solo 48h aplica). El request/response (`rEnviEventoDe`/`rRetEnviEventoDe`,
+Schema XML 13/14) y el formato del evento de cancelación en sí (`Evento_v150.xsd`, sección 11.5.1:
+`rGesEve > rEve[Id] > dFecFirma, dVerFor, dTiGDE, gGroupTiEvt > rGeVeCan[Id=CDC, mOtEve=motivo]` +
+`Signature` como hermano de `rEve` dentro de `rGesEve`) están bien documentados. Los códigos de
+rechazo de cancelación son 4000-4049 (sección 12.1.3), con `4009`/`4010` específicamente para
+"plazo... extemporáneo" (AC-04's caso de ejemplo) y `4002` para "CDC no existente en el SIFEN".
+
+**Hallazgo 1 (cross-check con fuente pública): el manual documenta `dTiGDE` (GDE006, "Tipo de
+Evento") como obligatorio (1-1), pero el XSD real en vivo no lo tiene en absoluto.** Se obtuvo el
+WSDL y XSD reales del servicio de eventos con el mismo patrón `curl --cert-type P12` de HU-05/06/07
+(`.../de/ws/eventos/evento.wsdl.xsd1.xsd`): el `complexType` `trEve` real solo tiene
+`dFecFirma, dVerFor, gGroupTiEvt` en su secuencia — el tipo de evento se transmite implícitamente
+por **cuál** elemento aparece dentro de `gGroupTiEvt` (`rGeVeCan` para cancelación, una de las
+opciones de un `xs:choice`), no por un campo `dTiGDE` explícito. Se confirmó cruzando con
+`TIPS-SA/facturacionelectronicapy-xmlgen` (mismo proveedor competidor cuyo `qrgen` ya había
+resuelto una ambigüedad similar en HU-08): su `JSonEventoMainService.generateXMLEventoCancelacion`
+tampoco emite nunca `dTiGDE` — confirmación independiente de que es una desviación real y estable
+del manual, no una rareza del ambiente de prueba. `SifenCancellationEventXmlService` sigue el XSD
+real, no la tabla de campos del manual.
+
+**Hallazgo 2 (el más importante, encontrado en vivo — ver "Verificación en vivo" abajo): el
+`SignedInfo` de la firma de un evento debe usar canonicalización C14N *exclusiva*, no la
+*inclusiva* que HU-04 estableció (y verificó en vivo) para el DE.** El propio Manual Técnico no lo
+aclara para eventos específicamente (solo dice, sección 7.6, que aplica el mismo "Estándar de firma
+digital" en general). Se cruzó con `TIPS-SA/facturacionelectronicapy-xmlsign`
+(`SignXMLEvento.java`, mismo proveedor competidor): su implementación de firma de eventos usa
+literalmente `CanonicalizationMethod.EXCLUSIVE` para `SignedInfo` (a diferencia de la inclusiva que
+otras librerías/el propio manual usan para el DE). `SifenDocumentSigningService.signEvent` ahora
+usa exclusiva para `SignedInfo` en eventos, inclusiva para el DE — la única diferencia entre ambos
+caminos de firma, que ahora comparten el mismo método interno `signIdentifiedElement` parametrizado
+en ese único algoritmo.
+
+**Decisión de diseño: se generalizó `SifenDocumentSigningService` en vez de duplicar la lógica de
+firma XML-DSig.** `sign()` (DE) y el nuevo `signEvent()` (evento) comparten `signIdentifiedElement`
+— ambos son "enveloped signature sobre un elemento con atributo `Id`, agregando `<Signature>` como
+hermano de ese elemento dentro de la raíz del documento" (`<rDE>` para el DE, `<rGesEve>` para el
+evento), difiriendo solo en la canonicalización de `SignedInfo` (Hallazgo 2). También se generalizó
+`verify()`/`verifyEvent()` de la misma forma. `SifenCancellationEventXmlService` (nuevo, mismo
+patrón que `SifenDocumentXmlService` pero para el fragmento `<rGesEve>`) construye el documento sin
+firmar; `SifenCancellationEventClient` (nuevo, mismo patrón que `SifenDocumentReceptionClient`/
+`SifenDocumentQueryClient`) envuelve el XML firmado en el sobre SOAP (`rEnviEventoDe/dId/dEvReg/
+gGroupGesEve`) y parsea `rRetEnviEventoDe` reusando `SifenXmlUtils`. `SifenInvoiceCancellationService`
+(nuevo) orquesta: valida AC-01 (Aprobado/Aprobado con observación) y AC-02 (dentro de 48h desde
+`Invoice.sifenSubmittedAt`, reusado como proxy de "fecha de aprobación en el SIFEN" — no hizo falta
+una columna nueva de "fecha de aprobación", ya que `sifenSubmittedAt` es exactamente ese instante
+desde HU-06), persiste los campos de auditoría (AC-05) en una transacción corta *antes* de
+intentar la red (mismo patrón que `SifenInvoiceSubmissionService.prepareForSubmission`), firma y
+envía el evento, y sobre la respuesta real de SIFEN: `Aprobado`/`Aprobado con observación` mueve la
+factura a `CANCELLED` (AC-03); `Rechazado` deja el estado anterior intacto pero igual registra el
+motivo del rechazo (AC-04); sin respuesta lanza `SIFEN_CANCELLATION_NO_RESPONSE` (502) sin tocar el
+estado de la factura, pero conservando igualmente el registro de "quién lo pidió y cuándo" (AC-05).
+
+**AC-05 (registro histórico): se siguió el mismo patrón "último resultado", no una tabla de
+auditoría nueva.** Igual que `sifenSubmissionResultCode`/`sifenSubmissionMessage` (HU-06) se
+sobrescriben en cada reintento sin mantener un historial completo, los 7 campos nuevos de
+cancelación en `Invoice` (`sifenCancellationRequestedAt/RequestedByUserId/RequestedByEmail/Reason/
+ResultCode/Message/ProtocolNumber`) se sobrescriben en cada intento — no existe en este código base
+ningún patrón de tabla de auditoría genérica que hubiera sido natural reusar (se buscó
+explícitamente antes de construir esto, ver instrucciones de la historia). Dado que la cancelación
+es, en la práctica, casi siempre un intento único (una vez `CANCELLED`, es terminal), esta
+simplificación es consistente con el resto del dominio.
+
+**Verificación en vivo (2026-07-28), procedimiento para reproducir:** mismo patrón que HU-06/07/08 —
+primero se obtuvo el WSDL/XSD reales del servicio de eventos (`curl --cert-type P12` contra
+`.../de/ws/eventos/evento.wsdl?wsdl` y su `.xsd1.xsd`/`.xsd2.xsd` importados), confirmando en vivo:
+(a) el endpoint real para POSTear es `https://sifen-test.set.gov.py/de/ws/eventos/evento.wsdl`
+(el WSDL sin `?wsdl`, mismo patrón que HU-05/06/07); (b) **a diferencia del hallazgo de HU-07 para
+`SiConsDE`, los nombres de los elementos raíz del manual (`rEnviEventoDe`/`rRetEnviEventoDe`) sí
+coinciden exactamente con el XSD real y con la respuesta real** — no hubo aquí el mismo tipo de
+desviación; (c) el grupo de resultado se llama literalmente `gResProcEVe` (V mayúscula, e final),
+confirmado tanto en el XSD como en una respuesta real capturada. Con esto confirmado, un test JUnit
+temporal (no commiteado, `ThrowawayLiveSifenHu10Test`/variantes, borrados antes de este commit)
+construyó y firmó un evento de cancelación real para un CDC sintácticamente válido del RUC piloto
+(`1137152-8`/timbrado `1137152`, nunca realmente aprobado — ver limitación abajo) con el `.p12`
+real, y lo envió con `curl --cert-type P12` al endpoint real. **Resultado: HTTP 200**, cuerpo
+`rRetEnviEventoDe` con `gResProcEVe/dEstRes=Rechazado`, `gResProc/dCodRes=0160 "XML mal formado"` —
+confirma en vivo, contra el servidor real: el endpoint/dominio es correcto, la forma de la
+respuesta (`rRetEnviEventoDe`/`gResProcEVe`/`gResProc`) es exactamente la que este cliente parsea, y
+el servidor real efectivamente enruta y procesa peticiones al servicio de eventos como tal (un
+envío sin `<Signature>` en absoluto devuelve, en cambio, la forma de error genérica compartida
+`rRetEnviDe` con HTTP 400 — confirma que el envío firmado sí fue reconocido como perteneciente al
+servicio de eventos, un paso más adelante que un envío completamente inválido).
+
+**Limitación real, documentada honestamente: no se logró resolver el "0160" en vivo durante esta
+historia — el camino feliz de AC-03 (SIFEN aprueba la cancelación) no se verificó en vivo.** Se
+probaron varias variantes sin cambiar el resultado: (1) el documento pasa una validación XSD
+completa con `xmllint` contra el schema real descargado; (2) se probó tanto C14N inclusiva como
+exclusiva para `SignedInfo` (Hallazgo 2 — aunque exclusiva es la elegida para el código final por
+estar respaldada por una implementación de referencia real, no cambió el resultado de este
+diagnóstico en particular); (3) se probó una referencia de firma con `URI=""` (documento completo)
+en vez de `URI="#id"` anclada al atributo `Id` de `rEve` (que no está tipado `xs:ID` en el XSD real,
+a diferencia de lo que se sospecha para `DE/@Id`) — tampoco cambió el resultado. El código 0160 es
+una validación genérica "aplicada a los mensajes de entrada de cualquiera de los Web Services"
+(sección 12.2.6) — no se pudo aislar la causa exacta dentro del alcance de esta historia. Sigue
+siendo, no obstante, información en vivo genuina y valiosa para AC-04 (el camino de error): un CDC
+nunca realmente aprobado por este sistema (limitación heredada, sin `gCamFuFD` real transmitido
+alguna vez con éxito — ver HU-06/07/08) siempre iba a ser rechazado de todos modos; lo que faltó
+verificar en vivo es específicamente la aprobación. Documentado aquí en vez de reclamar una
+verificación que no ocurrió — decisión consciente de no expandir el alcance a homologación completa
+(Fase 4) para perseguir esto, según lo pedido explícitamente por esta historia.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `domain/enums/SifenSubmissionStatus` — valor nuevo `CANCELLED` (AC-03), nunca asignado sin una
+  aprobación real de SIFEN sobre el evento.
+- `domain/Invoice.java` — 7 columnas nuevas de auditoría de cancelación (AC-05), migración
+  `V26__sifen_invoice_cancellation.sql`.
+- `service/SifenCancellationEventXmlService.java` (nuevo) — construye el documento `<rGesEve>` sin
+  firmar (Hallazgo 1: nunca emite `dTiGDE`), valida el motivo (`mOtEve`, 5-500 caracteres, GEC003).
+- `service/SifenDocumentSigningService` — generalizado: `sign()`/`verify()` (DE) y los nuevos
+  `signEvent()`/`verifyEvent()` (evento) comparten `signIdentifiedElement`/`verifySignatureOver`,
+  parametrizados solo en la canonicalización de `SignedInfo` (Hallazgo 2).
+- `service/SifenCancellationEventClient.java` (nuevo) — arma el sobre SOAP (`rEnviEventoDe/dId/
+  dEvReg/gGroupGesEve`), postea vía `SifenConnectionService.buildAuthenticatedClient` (mismo mTLS
+  de siempre), parsea `rRetEnviEventoDe`/`gResProcEVe`. Devuelve `Optional<SifenSubmissionResult>`
+  (reusa el mismo record de HU-06) — vacío si no hubo respuesta interpretable.
+- `service/SifenInvoiceCancellationService.java` (nuevo) — orquesta AC-01/AC-02 (elegibilidad +
+  ventana de 48h desde `sifenSubmittedAt`), AC-05 (persiste auditoría antes de la red), AC-03/AC-04
+  (mapea la respuesta real). Errores nuevos: `SIFEN_INVOICE_NOT_APPROVED` (409, cubre "nunca
+  aprobada" y "ya cancelada"), `SIFEN_INVOICE_CANCELLATION_WINDOW_EXPIRED` (409),
+  `SIFEN_CANCELLATION_NO_RESPONSE` (502) — reusa `SIFEN_INVOICE_MISSING_CONTROL_NUMBER` (HU-07) para
+  el caso defensivo sin CDC.
+- `web/InvoiceController.cancelSifenInvoice` — `POST /api/invoices/{id}/sifen/cancel` (body:
+  `{reason}`, `InvoiceCancellationRequest`, `@NotBlank @Size(min=5,max=500)`). Devuelve 200 con la
+  factura actualizada tanto si SIFEN aprueba como si rechaza — solo casos verdaderamente
+  excepcionales (no elegible, sin respuesta) son error HTTP.
+- `web/dto/InvoiceResponse` — 6 campos nuevos: `sifenCancellationDeadlineAt` (calculado por
+  `InvoiceService`, `sifenSubmittedAt + 48h`, solo presente si la factura sigue Aprobada/Aprobada
+  con observación) + 5 campos de auditoría (AC-05).
+- `web/SifenInvoiceTestSupportController` — 2 endpoints nuevos, solo test:
+  `prepare-with-status-hours-ago/{status}/{hoursAgo}` (fabrica una factura aprobada hace N horas,
+  para AC-02 dentro/fuera del plazo) y `fabricate-cancellation-result/{approved}` (fabrica
+  directamente el resultado de una cancelación, ya que ningún documento de este sistema llegó nunca
+  a un "Aprobado" real para cancelar de verdad — ver limitación arriba).
+
+**Tests backend**: `SifenCancellationEventXmlServiceTest` (6 casos, incluye la aserción explícita de
+que `dTiGDE` nunca se emite — Hallazgo 1). `SifenDocumentSigningServiceTest` ganó 2 casos
+(`signEvent`/`verifyEvent`, incluida detección de manipulación). `SifenCancellationEventClientTest`
+(5 casos: aprobado con `dProtAut`, rechazado por plazo vencido código real `4009`, sin respuesta,
+respuesta no-XML, forma del sobre SOAP enviado). `SifenInvoiceCancellationServiceTest` (11 casos:
+AC-03 aprobado/aprobado-con-observación, AC-04 rechazado deja estado intacto, AC-05 auditoría
+siempre se registra, AC-01 rechaza pendiente/rechazada/ya-cancelada, AC-02 rechaza pasado el plazo y
+permite justo dentro del límite, sin respuesta lanza error sin tocar el estado, el evento firmado
+contiene el CDC/motivo reales de la factura). `InvoiceServiceTest` ganó 3 casos (deadline calculado
+correctamente, ausente si no aprobada, ausente pero con auditoría visible si ya cancelada) — se
+agregó un `@Spy FemmeTimeProperties` nuevo a este test para que `@InjectMocks` pudiera resolver la
+dependencia nueva de `InvoiceService` (conversión LocalDateTime→Instant vía zona horaria de negocio).
+
+**Playwright** (`e2e/tests/sifen-hu-10-cancelar-factura.spec.ts`, 8 casos): AC-01 (sin
+verificación SIFEN no hay botón; pendiente de verificación tampoco), AC-01/AC-02 (aprobada dentro
+del plazo: cuenta regresiva + botón habilitado), AC-02 (pasado el plazo: explicación visible +
+botón deshabilitado), AC-03/AC-05 (SIFEN aprueba fabricado vía test-support: badge "Cancelled",
+botón desaparece, registro histórico visible con usuario/motivo), AC-04 (SIFEN rechaza fabricado:
+mensaje de rechazo visible, estado se mantiene Aprobado, botón de cancelar sigue disponible),
+validación de motivo mínimo 5 caracteres (sin red), y **un flujo real de punta a punta**: clic real
+en cancelar → firma real → intento de red real contra el servicio de eventos, que en el perfil
+`e2e` es inalcanzable por diseño (`application-e2e.properties` apunta a un puerto rechazado) →
+confirma que el error "SIFEN no respondió" se muestra y la factura queda sin cambios — mismo
+precedente que el propio Playwright de HU-07 para su camino de "sin respuesta".
 
 ## HU-09 — Revalidar en SIFEN una factura desde el sistema (Done)
 

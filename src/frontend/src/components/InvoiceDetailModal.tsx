@@ -69,6 +69,14 @@ export type InvoiceDetail = {
    * button below is intentionally not gated on `sifenSubmissionStatus`.
    */
   sifenVerificationUrl?: string | null;
+  /** SIFEN HU-10 AC-02: present only while the invoice is actually eligible to be cancelled. */
+  sifenCancellationDeadlineAt?: string | null;
+  /** SIFEN HU-10 AC-05: historical record of the last cancellation attempt, either outcome. */
+  sifenCancellationRequestedAt?: string | null;
+  sifenCancellationRequestedByEmail?: string | null;
+  sifenCancellationReason?: string | null;
+  sifenCancellationResultCode?: string | null;
+  sifenCancellationMessage?: string | null;
 };
 
 /** SIFEN HU-07: badge variant + i18n key per sifenSubmissionStatus literal. */
@@ -80,6 +88,8 @@ function sifenStatusLabelKey(status: string): string {
       return "femme.billing.history.detail.sifen.statusApprovedWithObservation";
     case "REJECTED":
       return "femme.billing.history.detail.sifen.statusRejected";
+    case "CANCELLED":
+      return "femme.billing.history.detail.sifen.statusCancelled";
     default:
       return "femme.billing.history.detail.sifen.statusPendingVerification";
   }
@@ -87,8 +97,14 @@ function sifenStatusLabelKey(status: string): string {
 
 function sifenStatusBadgeVariant(status: string): "success" | "destructive" | "warning" {
   if (status === "APPROVED" || status === "APPROVED_WITH_OBSERVATION") return "success";
-  if (status === "REJECTED") return "destructive";
+  if (status === "REJECTED" || status === "CANCELLED") return "destructive";
   return "warning";
+}
+
+/** SIFEN HU-10 AC-02: splits milliseconds remaining into whole hours + minutes for the countdown. */
+function remainingHoursMinutes(remainingMs: number): { hours: number; minutes: number } {
+  const totalMinutes = Math.max(0, Math.floor(remainingMs / 60000));
+  return { hours: Math.floor(totalMinutes / 60), minutes: totalMinutes % 60 };
 }
 
 function capitalize(s: string): string {
@@ -167,6 +183,18 @@ export function InvoiceDetailModal({
   const [kudeEmailSending, setKudeEmailSending] = useState(false);
   const [kudeEmailError, setKudeEmailError] = useState<string | null>(null);
   const [kudeEmailSuccess, setKudeEmailSuccess] = useState(false);
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // SIFEN HU-10 AC-02: ticks the deadline countdown without a full page refresh.
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +273,31 @@ export function InvoiceDetailModal({
       setKudeEmailError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setKudeEmailSending(false);
+    }
+  }
+
+  /** SIFEN HU-10: registers a cancellation event; SIFEN's response either way is reflected below. */
+  async function handleCancelInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    setCancelError(null);
+    const trimmedReason = cancelReason.trim();
+    if (trimmedReason.length < 5) {
+      setCancelReasonError(t("femme.billing.history.detail.sifen.cancelReasonTooShort"));
+      return;
+    }
+    setCancelReasonError(null);
+    setCancelling(true);
+    try {
+      const updated = await femmePostJson<InvoiceDetail>(`/api/invoices/${invoiceId}/sifen/cancel`, {
+        reason: trimmedReason,
+      });
+      setInvoice(updated);
+      setShowCancelForm(false);
+      setCancelReason("");
+    } catch (err) {
+      setCancelError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -572,6 +625,160 @@ export function InvoiceDetailModal({
                     )}
                   </div>
                 )}
+                {/* SIFEN HU-10: cancel an approved invoice within the 48h window (AC-01/AC-02) */}
+                {(invoice.sifenSubmissionStatus === "APPROVED" ||
+                  invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION") && (
+                  <div className="flex flex-col gap-2 pt-2 border-t border-[rgb(var(--color-border))]">
+                    {cancelError && (
+                      <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                        {cancelError}
+                      </Alert>
+                    )}
+                    {/* AC-04: a resultCode here, while status is still Approved(-ish), can only mean
+                        the last cancellation attempt was rejected — an approved one would have moved
+                        the invoice to CANCELLED, taking it out of this whole gated block. */}
+                    {invoice.sifenCancellationResultCode && (
+                      <Alert
+                        variant="destructive"
+                        title={t("femme.billing.history.detail.sifen.cancellationRejectedMessage")}
+                        data-testid="sifen-cancellation-rejected"
+                      >
+                        {invoice.sifenCancellationMessage}
+                      </Alert>
+                    )}
+                    {invoice.sifenCancellationDeadlineAt &&
+                      (() => {
+                        const deadlineMs = new Date(invoice.sifenCancellationDeadlineAt!).getTime();
+                        const remainingMs = deadlineMs - nowMs;
+                        const expired = remainingMs <= 0;
+                        const { hours, minutes } = remainingHoursMinutes(remainingMs);
+                        return (
+                          <>
+                            <Text
+                              variant="small"
+                              className="text-[rgb(var(--color-muted-foreground))]"
+                              data-testid={
+                                expired
+                                  ? "sifen-cancel-deadline-expired"
+                                  : "sifen-cancel-deadline-remaining"
+                              }
+                            >
+                              {expired
+                                ? t("femme.billing.history.detail.sifen.cancelDeadlineExpired")
+                                : t("femme.billing.history.detail.sifen.cancelDeadlineRemaining", {
+                                    hours,
+                                    minutes,
+                                  })}
+                            </Text>
+                            {!showCancelForm && (
+                              <div>
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  disabled={expired}
+                                  data-testid="sifen-cancel-button"
+                                  onClick={() => setShowCancelForm(true)}
+                                >
+                                  {t("femme.billing.history.detail.sifen.cancelButton")}
+                                </Button>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    {showCancelForm && (
+                      <form
+                        className="flex flex-col gap-2"
+                        onSubmit={(e) => void handleCancelInvoice(e)}
+                        noValidate
+                      >
+                        <div>
+                          <Label htmlFor="cancel-reason">
+                            {t("femme.billing.history.detail.sifen.cancelReasonLabel")}
+                          </Label>
+                          <Textarea
+                            id="cancel-reason"
+                            value={cancelReason}
+                            onChange={(e) => {
+                              setCancelReason(e.target.value);
+                              setCancelReasonError(null);
+                            }}
+                            placeholder={t(
+                              "femme.billing.history.detail.sifen.cancelReasonPlaceholder",
+                            )}
+                            rows={2}
+                            aria-invalid={!!cancelReasonError}
+                            aria-describedby={
+                              cancelReasonError ? "cancel-reason-err" : undefined
+                            }
+                            className="mt-1 w-full"
+                          />
+                          <FieldValidationError id="cancel-reason-err">
+                            {cancelReasonError}
+                          </FieldValidationError>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="submit"
+                            variant="danger"
+                            size="sm"
+                            disabled={cancelling}
+                            data-testid="sifen-cancel-confirm-button"
+                          >
+                            {cancelling
+                              ? t("femme.billing.history.detail.sifen.cancelling")
+                              : t("femme.billing.history.detail.sifen.cancelConfirm")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setShowCancelForm(false)}
+                          >
+                            {t("femme.billing.history.detail.sifen.cancelDismiss")}
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+                {/* SIFEN HU-10 AC-05: historical record, once the invoice is actually cancelled */}
+                {invoice.sifenSubmissionStatus === "CANCELLED" &&
+                  invoice.sifenCancellationRequestedAt && (
+                    <div
+                      className="flex flex-col gap-1 pt-2 border-t border-[rgb(var(--color-border))]"
+                      data-testid="sifen-cancellation-history"
+                    >
+                      <Text className="font-medium">
+                        {t("femme.billing.history.detail.sifen.cancellationHistoryTitle")}
+                      </Text>
+                      <Text
+                        variant="small"
+                        className="text-[rgb(var(--color-muted-foreground))]"
+                      >
+                        {t("femme.billing.history.detail.sifen.cancellationRequestedAt")}:{" "}
+                        {formatParaguayDateTime(invoice.sifenCancellationRequestedAt, dateLocale)}
+                      </Text>
+                      {invoice.sifenCancellationRequestedByEmail && (
+                        <Text
+                          variant="small"
+                          className="text-[rgb(var(--color-muted-foreground))]"
+                        >
+                          {t("femme.billing.history.detail.sifen.cancellationRequestedBy")}:{" "}
+                          {invoice.sifenCancellationRequestedByEmail}
+                        </Text>
+                      )}
+                      {invoice.sifenCancellationReason && (
+                        <Text
+                          variant="small"
+                          className="text-[rgb(var(--color-muted-foreground))]"
+                        >
+                          {t("femme.billing.history.detail.sifen.cancellationReason")}:{" "}
+                          {invoice.sifenCancellationReason}
+                        </Text>
+                      )}
+                    </div>
+                  )}
               </div>
             )}
 

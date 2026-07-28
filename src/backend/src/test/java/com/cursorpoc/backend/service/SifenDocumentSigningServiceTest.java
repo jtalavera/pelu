@@ -267,6 +267,47 @@ class SifenDocumentSigningServiceTest {
     assertThat(deChildren.item(0).getParentNode()).isSameAs(signed.document().getDocumentElement());
   }
 
+  /**
+   * SIFEN HU-10: signEvent signs the event's {@code <rEve Id="...">} element (not {@code <DE>}),
+   * appending {@code <Signature>} as a sibling inside {@code <rGesEve>} — same enveloped-signature
+   * shape as the DE itself, just anchored on a different element.
+   */
+  @Test
+  void signEvent_producesASignatureThatValidates() {
+    when(certificateService.requireActiveCertificate(TENANT_ID)).thenReturn(material);
+    SifenCancellationEventXmlService eventXmlService = new SifenCancellationEventXmlService();
+    Document unsignedEvent =
+        eventXmlService.buildCancellationEvent(
+            header.controlNumber(), "Error en el monto facturado", 123L, LocalDateTime.now());
+
+    Document signedEvent = service.signEvent(TENANT_ID, unsignedEvent);
+
+    assertThat(service.verifyEvent(signedEvent)).isTrue();
+    var signatureNodes =
+        signedEvent
+            .getDocumentElement()
+            .getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature");
+    assertThat(signatureNodes.getLength()).isEqualTo(1);
+    assertThat(signatureNodes.item(0).getParentNode()).isSameAs(signedEvent.getDocumentElement());
+  }
+
+  /** AC-03/AC-04 precondition: tampering with the event after signing invalidates the signature. */
+  @Test
+  void verifyEvent_detectsTamperingAfterSigning() {
+    when(certificateService.requireActiveCertificate(TENANT_ID)).thenReturn(material);
+    SifenCancellationEventXmlService eventXmlService = new SifenCancellationEventXmlService();
+    Document unsignedEvent =
+        eventXmlService.buildCancellationEvent(
+            header.controlNumber(), "Error en el monto facturado", 123L, LocalDateTime.now());
+    Document signedEvent = service.signEvent(TENANT_ID, unsignedEvent);
+    assertThat(service.verifyEvent(signedEvent)).isTrue();
+
+    var reasonNodes = signedEvent.getElementsByTagNameNS("*", "mOtEve");
+    reasonNodes.item(0).setTextContent("Motivo alterado");
+
+    assertThat(service.verifyEvent(signedEvent)).isFalse();
+  }
+
   private static SifenActiveCertificateMaterial loadFixtureCertificateMaterial() throws Exception {
     try (InputStream in =
         SifenDocumentSigningServiceTest.class

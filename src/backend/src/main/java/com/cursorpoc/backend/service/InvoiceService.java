@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
@@ -12,6 +13,7 @@ import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
@@ -33,6 +35,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -70,6 +73,7 @@ public class InvoiceService {
   private final SalonServiceRepository salonServiceRepository;
   private final BusinessProfileRepository businessProfileRepository;
   private final ServiceRecordRepository serviceRecordRepository;
+  private final FemmeTimeProperties timeProperties;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -79,7 +83,8 @@ public class InvoiceService {
       TenantRepository tenantRepository,
       SalonServiceRepository salonServiceRepository,
       BusinessProfileRepository businessProfileRepository,
-      ServiceRecordRepository serviceRecordRepository) {
+      ServiceRecordRepository serviceRecordRepository,
+      FemmeTimeProperties timeProperties) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -88,6 +93,7 @@ public class InvoiceService {
     this.salonServiceRepository = salonServiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.serviceRecordRepository = serviceRecordRepository;
+    this.timeProperties = timeProperties;
   }
 
   @Transactional
@@ -528,7 +534,7 @@ public class InvoiceService {
         .collect(Collectors.joining(", "));
   }
 
-  private static InvoiceResponse toDetailDto(Invoice i) {
+  private InvoiceResponse toDetailDto(Invoice i) {
     List<InvoiceLineResponse> lines =
         i.getLines().stream()
             .map(
@@ -579,7 +585,37 @@ public class InvoiceService {
         i.getSifenSubmissionResultCode(),
         i.getSifenSubmissionMessage(),
         i.getSifenQueryDocumentContent(),
-        i.getSifenQrUrl());
+        i.getSifenQrUrl(),
+        sifenCancellationDeadline(i),
+        toInstant(i.getSifenCancellationRequestedAt()),
+        i.getSifenCancellationRequestedByEmail(),
+        i.getSifenCancellationReason(),
+        i.getSifenCancellationResultCode(),
+        i.getSifenCancellationMessage());
+  }
+
+  /**
+   * SIFEN HU-10 AC-02: only present while the invoice is actually eligible to be cancelled — i.e.
+   * currently Aprobado/Aprobado con observación (never once it's Cancelada, or if it was never
+   * approved at all) — so the frontend can show a countdown/disabled-state without reimplementing
+   * this system's own eligibility rules ({@code SifenInvoiceCancellationService.requireCancellable}
+   * is still the authoritative check the cancel endpoint itself re-validates).
+   */
+  private Instant sifenCancellationDeadline(Invoice i) {
+    SifenSubmissionStatus status = i.getSifenSubmissionStatus();
+    if (status != SifenSubmissionStatus.APPROVED
+        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+      return null;
+    }
+    LocalDateTime approvedAt = i.getSifenSubmittedAt();
+    if (approvedAt == null) {
+      return null;
+    }
+    return toInstant(approvedAt.plus(SifenInvoiceCancellationService.CANCELLATION_WINDOW));
+  }
+
+  private Instant toInstant(LocalDateTime localDateTime) {
+    return localDateTime == null ? null : localDateTime.atZone(timeProperties.zoneId()).toInstant();
   }
 
   private static String formatInvoiceNumber(int number) {

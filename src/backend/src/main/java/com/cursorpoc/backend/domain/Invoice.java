@@ -121,6 +121,37 @@ public class Invoice {
   @Column(name = "sifen_public_consultation_url", length = 200)
   private String sifenPublicConsultationUrl;
 
+  /**
+   * SIFEN HU-10 AC-05: historical record of the last cancellation attempt — date/time, user,
+   * reason, and SIFEN's own result. Overwritten on each attempt (same "single last result" pattern
+   * as {@code sifenSubmissionResultCode}/{@code sifenSubmissionMessage}, not a separate audit-log
+   * table). {@code sifenSubmissionStatus} only actually becomes {@code CANCELLED} once SIFEN
+   * approves the event (AC-03); these fields are populated either way, including a rejection
+   * (AC-04), which leaves {@code sifenSubmissionStatus} untouched.
+   */
+  @Column(name = "sifen_cancellation_requested_at")
+  private LocalDateTime sifenCancellationRequestedAt;
+
+  @Column(name = "sifen_cancellation_requested_by_user_id")
+  private Long sifenCancellationRequestedByUserId;
+
+  @Column(name = "sifen_cancellation_requested_by_email", length = 320)
+  private String sifenCancellationRequestedByEmail;
+
+  /** GEC003/mOtEve — the free-text reason the user provided for the cancellation. */
+  @Column(name = "sifen_cancellation_reason", length = 500)
+  private String sifenCancellationReason;
+
+  @Column(name = "sifen_cancellation_result_code", length = 10)
+  private String sifenCancellationResultCode;
+
+  @Column(name = "sifen_cancellation_message", length = 2000)
+  private String sifenCancellationMessage;
+
+  /** dProtAut of the cancellation event itself (only present when SIFEN approves it). */
+  @Column(name = "sifen_cancellation_protocol_number", length = 10)
+  private String sifenCancellationProtocolNumber;
+
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
 
@@ -323,6 +354,62 @@ public class Invoice {
 
   public void setSifenPublicConsultationUrl(String sifenPublicConsultationUrl) {
     this.sifenPublicConsultationUrl = sifenPublicConsultationUrl;
+  }
+
+  public LocalDateTime getSifenCancellationRequestedAt() {
+    return sifenCancellationRequestedAt;
+  }
+
+  public void setSifenCancellationRequestedAt(LocalDateTime sifenCancellationRequestedAt) {
+    this.sifenCancellationRequestedAt = sifenCancellationRequestedAt;
+  }
+
+  public Long getSifenCancellationRequestedByUserId() {
+    return sifenCancellationRequestedByUserId;
+  }
+
+  public void setSifenCancellationRequestedByUserId(Long sifenCancellationRequestedByUserId) {
+    this.sifenCancellationRequestedByUserId = sifenCancellationRequestedByUserId;
+  }
+
+  public String getSifenCancellationRequestedByEmail() {
+    return sifenCancellationRequestedByEmail;
+  }
+
+  public void setSifenCancellationRequestedByEmail(String sifenCancellationRequestedByEmail) {
+    this.sifenCancellationRequestedByEmail = sifenCancellationRequestedByEmail;
+  }
+
+  public String getSifenCancellationReason() {
+    return sifenCancellationReason;
+  }
+
+  public void setSifenCancellationReason(String sifenCancellationReason) {
+    this.sifenCancellationReason = sifenCancellationReason;
+  }
+
+  public String getSifenCancellationResultCode() {
+    return sifenCancellationResultCode;
+  }
+
+  public void setSifenCancellationResultCode(String sifenCancellationResultCode) {
+    this.sifenCancellationResultCode = sifenCancellationResultCode;
+  }
+
+  public String getSifenCancellationMessage() {
+    return sifenCancellationMessage;
+  }
+
+  public void setSifenCancellationMessage(String sifenCancellationMessage) {
+    this.sifenCancellationMessage = sifenCancellationMessage;
+  }
+
+  public String getSifenCancellationProtocolNumber() {
+    return sifenCancellationProtocolNumber;
+  }
+
+  public void setSifenCancellationProtocolNumber(String sifenCancellationProtocolNumber) {
+    this.sifenCancellationProtocolNumber = sifenCancellationProtocolNumber;
   }
 
   public String getBusinessRuc() {

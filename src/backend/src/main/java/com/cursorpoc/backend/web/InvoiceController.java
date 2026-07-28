@@ -2,7 +2,9 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.InvoiceService;
+import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
+import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
@@ -31,11 +33,15 @@ public class InvoiceController {
 
   private final InvoiceService invoiceService;
   private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
+  private final SifenInvoiceCancellationService sifenInvoiceCancellationService;
 
   public InvoiceController(
-      InvoiceService invoiceService, SifenInvoiceSubmissionService sifenInvoiceSubmissionService) {
+      InvoiceService invoiceService,
+      SifenInvoiceSubmissionService sifenInvoiceSubmissionService,
+      SifenInvoiceCancellationService sifenInvoiceCancellationService) {
     this.invoiceService = invoiceService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
+    this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
   }
 
   @PostMapping
@@ -111,6 +117,32 @@ public class InvoiceController {
         "POST /api/invoices/{}/sifen/check-status tenantId={} status=200",
         id,
         principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * SIFEN HU-10: registers a cancellation event with SIFEN for an invoice currently Aprobado/
+   * Aprobado con observación (AC-01), within the 48h window since its approval (AC-02). Returns the
+   * invoice's fresh state either way — SIFEN approving moves it to Cancelada (AC-03); SIFEN
+   * rejecting leaves it exactly as it was, with the rejection reason recorded (AC-04). AC-05: who
+   * requested it and when is recorded regardless of the outcome.
+   */
+  @PostMapping("/{id}/sifen/cancel")
+  public ResponseEntity<InvoiceResponse> cancelSifenInvoice(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody InvoiceCancellationRequest request) {
+    requirePrincipal(principal);
+    log.info("POST /api/invoices/{}/sifen/cancel tenantId={}", id, principal.getTenantId());
+    sifenInvoiceCancellationService.cancel(
+        principal.getTenantId(),
+        id,
+        principal.getUserId(),
+        principal.getUsername(),
+        request.reason());
+    InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
+    log.info(
+        "POST /api/invoices/{}/sifen/cancel tenantId={} status=200", id, principal.getTenantId());
     return ResponseEntity.ok(response);
   }
 

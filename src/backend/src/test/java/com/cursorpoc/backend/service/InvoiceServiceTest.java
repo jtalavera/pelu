@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
@@ -12,6 +13,7 @@ import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -51,6 +54,13 @@ class InvoiceServiceTest {
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private BusinessProfileRepository businessProfileRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
+
+  // SIFEN HU-10: a real instance (via @Spy, not @Mock) so @InjectMocks' constructor injection
+  // resolves this new dependency to something whose zoneId() actually works, same as every other
+  // SIFEN service test that just does `new FemmeTimeProperties()` directly (e.g.
+  // SifenInvoiceSubmissionServiceTest) — this test just can't do that construction manually because
+  // it relies on @InjectMocks for the rest of InvoiceService's dependencies.
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private InvoiceService invoiceService;
 
@@ -503,6 +513,62 @@ class InvoiceServiceTest {
     InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
 
     assertThat(result.sifenVerificationUrl()).isNull();
+  }
+
+  /**
+   * SIFEN HU-10 AC-02: the deadline exposed to the frontend must be exactly {@code sifenSubmittedAt
+   * + 48h}, converted through the business zone — the same instant {@code
+   * SifenInvoiceCancellationService} itself checks.
+   */
+  @Test
+  void getInvoice_approvedInvoice_exposesTheCancellationDeadline48hAfterSubmission() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    java.time.LocalDateTime submittedAt = java.time.LocalDateTime.of(2026, 7, 28, 10, 0, 0);
+    invoice.setSifenSubmittedAt(submittedAt);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenCancellationDeadlineAt())
+        .isEqualTo(
+            submittedAt.plusHours(48).atZone(java.time.ZoneId.of("America/Asuncion")).toInstant());
+  }
+
+  @Test
+  void getInvoice_pendingVerificationInvoice_hasNoCancellationDeadline() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    invoice.setSifenSubmittedAt(null);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenCancellationDeadlineAt()).isNull();
+  }
+
+  /** AC-05: once cancelled, no more deadline is exposed — the option is gone for good. */
+  @Test
+  void getInvoice_cancelledInvoice_hasNoCancellationDeadlineButExposesTheAuditTrail() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
+    invoice.setSifenSubmittedAt(java.time.LocalDateTime.now().minusHours(2));
+    java.time.LocalDateTime requestedAt = java.time.LocalDateTime.of(2026, 7, 28, 11, 30, 0);
+    invoice.setSifenCancellationRequestedAt(requestedAt);
+    invoice.setSifenCancellationRequestedByEmail("isabelzymanscki@gmail.com");
+    invoice.setSifenCancellationReason("Error en el monto facturado");
+    invoice.setSifenCancellationResultCode("0600");
+    invoice.setSifenCancellationMessage("Evento registrado correctamente");
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenCancellationDeadlineAt()).isNull();
+    assertThat(result.sifenCancellationRequestedAt())
+        .isEqualTo(requestedAt.atZone(java.time.ZoneId.of("America/Asuncion")).toInstant());
+    assertThat(result.sifenCancellationRequestedByEmail()).isEqualTo("isabelzymanscki@gmail.com");
+    assertThat(result.sifenCancellationReason()).isEqualTo("Error en el monto facturado");
+    assertThat(result.sifenCancellationMessage()).isEqualTo("Evento registrado correctamente");
   }
 
   @Test

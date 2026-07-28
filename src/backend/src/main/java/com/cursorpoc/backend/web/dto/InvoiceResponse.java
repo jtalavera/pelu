@@ -32,4 +32,14 @@ public record InvoiceResponse(
     String sifenSubmissionResultCode,
     String sifenSubmissionMessage,
     String sifenQueryDocumentContent,
-    String sifenVerificationUrl) {}
+    String sifenVerificationUrl,
+    // SIFEN HU-10 AC-02: the deadline (48h after sifenSubmittedAt) up to which cancellation is
+    // still possible — null whenever the invoice isn't currently eligible (never approved, or
+    // already cancelled) so the frontend doesn't need to reimplement that eligibility logic.
+    Instant sifenCancellationDeadlineAt,
+    // AC-05: historical record of the last cancellation attempt, whichever outcome it had.
+    Instant sifenCancellationRequestedAt,
+    String sifenCancellationRequestedByEmail,
+    String sifenCancellationReason,
+    String sifenCancellationResultCode,
+    String sifenCancellationMessage) {}
