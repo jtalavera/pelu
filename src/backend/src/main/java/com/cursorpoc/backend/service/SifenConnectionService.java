@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
@@ -169,9 +170,23 @@ public class SifenConnectionService {
   private static HttpClient buildMutualTlsClient(
       SifenActiveCertificateMaterial material, javax.net.ssl.TrustManager[] trustManagers)
       throws GeneralSecurityException {
+    return buildMutualTlsClient(material.keyStore(), material.keystorePassword(), trustManagers);
+  }
+
+  /**
+   * EP-05 homologación (HU-12): package-visible so {@link SifenServiceConnectivityChecker} can
+   * build an mTLS client directly from a {@link KeyStore} (the real pilot certificate, or a
+   * self-signed fixture standing in for an invalid one) without going through {@link
+   * SifenCertificateService#requireActiveCertificate}/the tenant RUC-match check above —
+   * homologation deliberately tests raw certificate acceptance per SIFEN service, independent of
+   * which tenant (if any) that certificate is configured for in this app.
+   */
+  static HttpClient buildMutualTlsClient(
+      KeyStore keyStore, String keystorePassword, javax.net.ssl.TrustManager[] trustManagers)
+      throws GeneralSecurityException {
     KeyManagerFactory keyManagerFactory =
         KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-    keyManagerFactory.init(material.keyStore(), material.keystorePassword().toCharArray());
+    keyManagerFactory.init(keyStore, keystorePassword.toCharArray());
 
     // TLS 1.2 with mutual authentication is the standard mandated by the technical manual
     // (section 7.9) and confirmed live against the real test environment. `trustManagers` is null

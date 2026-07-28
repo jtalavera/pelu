@@ -5,8 +5,8 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 3 completa** (Primeras interacciones complejas adicionales: eventos sobre DTE
-aprobados) — HU-10 y HU-11 hechas. Próximo: **Fase 4** (Homologación ante la DNIT, HU-12..HU-17).
+Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12 hecha. Próximo: HU-13 (probar
+el envío inmediato de facturas correctas e incorrectas).
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -26,17 +26,169 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-09 Revalidar en SIFEN una factura | ✅ Done | Ver detalle abajo. **Cierra Fase 2.** Verificado en vivo: la URL real (`consultas-test/qr?...`) responde HTTP 200 con la app "Consultas" real de SIFEN. |
 | HU-10 Cancelar una factura ya aprobada | ✅ Done | Ver detalle abajo. Verificado en vivo (real HTTP 200, forma de respuesta confirmada); el "Aprobado" real del evento queda como limitación abierta, ver detalle. |
 | HU-11 Identificar al cliente en una factura sin datos | ✅ Done | Ver detalle abajo. **Cierra Fase 3.** Verificado en vivo (real HTTP 200, mismo `0160` que HU-10); evento no documentado en el Manual V150, encontrado solo en el XSD real en vivo. |
-| Fase 4 (HU-12..HU-17, homologación) | ⬜ Next | |
+| HU-12 Probar la conexión segura contra todos los servicios | ✅ Done | Ver detalle abajo. **Primer paso de Fase 4.** Los 7 servicios nombrados por AC-01 (6 endpoints reales distintos) verificados en vivo: certificado válido aceptado, certificado inválido rechazado, en los 14 casos. |
+| Fase 4 (HU-13..HU-17, homologación) | ⬜ Next | HU-13 sigue. |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** HU-10 y HU-11 (Fase 3, eventos sobre DTE aprobados) están
-hechas. Sigue **Fase 4** (Homologación ante la DNIT): HU-12 (probar la conexión segura contra todos
-los servicios de SIFEN) es el primer paso, según el propio plan de fases — valida la base de
-conectividad que el resto de HU-13..HU-17 necesitan. Ninguna historia de Fase 3/4 depende de que los
-3 gaps de compliance de schema documentados por HU-04/HU-06/HU-08 (dFeFinT, dDesUniMed, dBasExe)
-estén cerrados — pero cerrarlos durante Fase 4 (que sí cubre homologación real) podría finalmente
-producir un "Aprobado" real, lo cual desbloquearía verificar en vivo los caminos felices que HU-06,
-HU-08, HU-09, HU-10 y HU-11 dejaron todos documentados como no verificables por esta razón.
+**Próximo paso al reanudar el loop:** HU-12 (Fase 4, conectividad de los 7 servicios de
+homologación) está hecha — ver detalle abajo para el reporte completo. Sigue **HU-13** (probar el
+envío inmediato de facturas correctas e incorrectas), que reutiliza directamente lo construido en la
+Fase 1 (HU-01..HU-06) sobre la base de conectividad que HU-12 ya dejó probada. Ninguna historia de
+Fase 4 depende de que los 3 gaps de compliance de schema documentados por HU-04/HU-06/HU-08
+(dFeFinT, dDesUniMed, dBasExe) estén cerrados — pero cerrarlos durante esta fase (que sí cubre
+homologación real) podría finalmente producir un "Aprobado" real, lo cual desbloquearía verificar en
+vivo los caminos felices que HU-06, HU-08, HU-09, HU-10 y HU-11 dejaron todos documentados como no
+verificables por esta razón. HU-12 investigó explícitamente si el mismo muro del `0160` ("XML mal
+formado") que HU-10/HU-11 documentaron para el servicio de eventos también afecta la *conexión* en
+sí — ver el hallazgo dedicado en el detalle de HU-12 abajo: no la afecta, es un rechazo de contenido,
+no de conectividad.
+
+## HU-12 — Probar la conexión segura contra todos los servicios de SIFEN (Done)
+
+Épica EP-05. **Primer paso de Fase 4** (Homologación ante la DNIT) — a diferencia de toda historia
+anterior, esta épica entera es "pruebas automatizadas que demuestran ante la DNIT que el sistema
+cumple", no una funcionalidad de cara al negocio: el deliverable **es** la prueba y su reporte, no
+una pantalla ni un endpoint. Primera vez en esta integración que una verificación en vivo se diseñó
+para quedar en la suite permanente en vez de ser un test descartable (`ThrowawayLiveSifenHuNN`,
+patrón usado por HU-05/06/07/09/10/11) — ver "Decisión: test guardado, no descartable" abajo.
+
+**Investigación (Manual Técnico V150.pdf, sección 7.10 "Resumen de las Direcciones Electrónicas..." +
+verificación en vivo, 2026-07-28):** la tabla del manual publica 6 URLs de WSDL para el ambiente de
+prueba (no 7): `sync/recibe.wsd?wsdl` (con la misma errata ya documentada por HU-05, falta la "l"),
+`async/recibe-lote.wsdl?wsdl`, `eventos/evento.wsdl?wsdl`, `consultas/consulta.wsdl?wsdl`,
+`consultas/consulta-lote.wsdl?wsdl`, `consultas/consulta-ruc.wsdl?wsdl`. Los 3 nuevos para esta
+historia (envío por lotes, consulta de resultado de lotes, consulta de contribuyentes) se verificaron
+en vivo con el mismo procedimiento `curl --cert-type P12` que HU-05/06/07/10/11 ya establecieron:
+**los 3 responden HTTP 200 con un WSDL real en el path exacto que publica el manual, sin ninguna
+errata esta vez** (a diferencia del único typo ya conocido de `recibe.wsd`), y el `soap12:address` de
+cada WSDL real confirma que el endpoint real para conectarse es esa misma URL **sin** el query string
+`?wsdl` — mismo patrón que todos los servicios anteriores.
+
+**Hallazgo (resuelve la ambigüedad de AC-01 entre "consulta de facturas" y "consulta de
+documentos"): son el mismo servicio, no dos.** AC-01 nombra 7 servicios, pero la sección 8 del
+manual ("Aspectos Tecnológicos de los Servicios Web del SIFEN") solo lista **un** servicio síncrono
+de consulta, "Consulta DE" (`SiConsDE`) — la propia tabla del manual (dos párrafos arriba) coincide:
+6 URLs, no 7. La sección 8 sí menciona "Consulta DE destinados (Futuro)" y "Consulta DTE a entidades
+u organismos externos autorizados (a Futuro)" como servicios **todavía no implementados** en este
+ambiente — ninguno es la segunda "consulta de documentos" que buscaba AC-01. Se documentó
+explícitamente en el Javadoc de `SifenHomologationEndpoint` en vez de inventar un endpoint que SIFEN
+no expone: `INVOICE_QUERY` y `DOCUMENT_QUERY` apuntan al mismo path real
+(`/de/ws/consultas/consulta.wsdl?wsdl`), y ambos se verifican igual — AC-01 queda satisfecho
+literalmente (los 7 ítems nombrados se prueban) sin fingir una conectividad que no existe.
+
+**Hallazgo operativo (investigación explícita pedida por esta historia): el `0160` de HU-10/HU-11 es
+un rechazo de contenido, no de conectividad — confirmado, no solo inferido.** HU-10/HU-11 dejaron
+documentado que todo envío real de un evento firmado contra `eventos/evento.wsdl` devuelve HTTP 200
+con `dCodRes=0160 "XML mal formado"`, sin resolver la causa. La pregunta de esta historia era si ese
+mismo muro podría estar afectando la *conexión* en sí (lo que haría ver un falso rechazo de
+conectividad en el reporte de homologación). La respuesta, confirmada por este mismo reporte: no —
+`EVENT_REGISTRATION` con el certificado piloto real se conecta y es **aceptado** (HTTP 200 al pedir
+el WSDL, igual que los otros 6). El `0160` ocurre un paso más adelante, cuando SIFEN ya aceptó la
+conexión mTLS y está procesando el *contenido* del sobre SOAP que se le envía — una capa de
+validación completamente distinta a la que HU-12 mide (que solo pregunta "¿la conexión con este
+certificado es aceptada por este servicio, sí o no?"). En otras palabras: el 0160 nunca fue, y no es,
+un problema de homologación de conectividad (HU-12) — sigue siendo, exclusivamente, un problema de
+contenido/firma de eventos (alcance de HU-10/HU-11/futuro HU-16).
+
+**Decisión: `SifenServiceConnectivityChecker` es genérico y no requiere un tenant.** A diferencia de
+`SifenConnectionService.connect(tenantId)` (HU-05), que resuelve el certificado activo de un tenant
+vía `SifenCertificateService.requireActiveCertificate` y valida que su RUC coincida con
+`BusinessProfile.ruc` antes de conectar, la homologación necesita ejercitar el mismo chequeo mTLS con
+**dos certificados sin relación con ningún tenant real** (el `.p12` piloto real y un fixture
+autofirmado) — forzar esto a través del mecanismo de "certificado activo por tenant" habría exigido
+crear un tenant/certificado en base de datos solo para esta prueba, sin necesidad real. Se refactorizó
+`SifenConnectionService.buildMutualTlsClient(SifenActiveCertificateMaterial, TrustManager[])`
+(privado) para delegar en un overload nuevo, paquete-visible,
+`buildMutualTlsClient(KeyStore, String password, TrustManager[])` — mismo código de siempre (TLS 1.2,
+`KeyManagerFactory` con la identidad del certificado dado), ahora reutilizable sin pasar por el
+sistema de certificado-activo-por-tenant. `SifenServiceConnectivityChecker.check(endpoint, keyStore,
+password, expected)` es la única lógica nueva: arma el cliente mTLS con ese `KeyStore`, hace `GET` al
+WSDL del `SifenHomologationEndpoint` dado, y clasifica `200`→`ACCEPTED`/cualquier otra cosa (incluida
+una excepción de red/TLS)→`REJECTED` — la misma regla de clasificación que HU-05 ya verificó en vivo
+(el gateway F5 de SIFEN completa el handshake TLS igual y responde `302 → /vdesk/hangup.php3` en vez
+de cortar a nivel TLS).
+
+**Decisión: `SifenHomologationReport` es un acumulador genérico, no específico de conectividad —
+sienta la base que HU-17 AC-05 va a necesitar.** Fila = historia + escenario en texto libre +
+esperado/obtenido/aprobado; un método `render()` (AC-04, tabla de texto de ancho fijo) y
+`combinedWith(...)` (semilla para que HU-17 pueda concatenar el reporte de cada historia de esta fase
+en uno solo, sin que ninguna de las dos partes necesite conocer la estructura interna de la otra).
+Deliberadamente mínimo: sin persistencia, sin endpoint HTTP — vive solo durante la ejecución de un
+test JUnit que después imprime `render()` y afirma sobre `allPassed()`.
+
+**Decisión: test guardado (no descartable), con paso a paso encontrado durante la verificación en
+vivo que casi produce un falso negativo.** A diferencia de HU-05/06/07/09/10/11 (verificación real
+hecha con un test descartable, borrado antes del commit, porque el `.p12` real nunca está en un
+checkout limpio ni en CI), el propio propósito de esta historia (AC-04, y el mandato de EP-05 de
+"demostrar ante la DNIT") es un reporte real reproducible — se decidió que sí vale la pena que quede
+en la suite permanente como test JUnit normal, no un throwaway. `Assumptions.assumeTrue` lo salta
+("aborted", no "failed") cuando el `.p12`/contraseña piloto no están presentes localmente — nunca se
+ejecuta en CI ni en un checkout limpio, mismo motivo de siempre. **Hallazgo real durante la primera
+corrida: los 14 intentos de conexión (7 servicios × 2 certificados) disparados en menos de 2 segundos
+producen `IOException: HTTP/1.1 header parser received no bytes` en varios de ellos** — nunca una
+respuesta HTTP real (`200`/`302`), y el patrón de qué intentos fallaban no era determinístico (fallaba
+un intento, el siguiente contra el mismo servicio funcionaba). Se confirmó con `curl` manual, con y
+sin pausas entre pedidos, que **la misma petición exacta que falla disparada justo después de una
+docena de otras funciona instantáneamente en cuanto tiene lugar para respirar** — esto es limitación
+de conexiones del lado del gateway de prueba de SIFEN (probablemente un límite de tasa), no un
+rechazo de certificado. `SifenHomologationConnectivityLiveTest` agrega una pausa de 500ms entre cada
+intento real y hasta 3 reintentos, **pero solo cuando el resultado fue una excepción de transporte
+(`httpStatus=-1`), nunca cuando ya hay una respuesta HTTP real** (incluso una que no coincide con lo
+esperado) — evita que una limitación de infraestructura ajena se confunda con un verdadero fallo de
+AC-02/AC-03, sin enmascarar nunca un mismatch genuino.
+
+**Verificación en vivo (2026-07-28), reporte completo de los 7 servicios nombrados por AC-01 (14
+filas: cada uno con certificado válido —el `.p12` piloto real, RUC `1137152-8`— y con certificado
+inválido —el fixture autofirmado `sifen/test-cert.p12` del repo, sin RUC ni PSC habilitada—) contra el
+`sifen-test.set.gov.py` real:**
+
+```
+Historia | Escenario                                                | Esperado | Obtenido           | Resultado
+HU-12    | Envío inmediato (SiRecepDE) — certificado válido         | ACCEPTED | ACCEPTED (HTTP 200) | OK
+HU-12    | Envío inmediato (SiRecepDE) — certificado inválido       | REJECTED | REJECTED (HTTP 302) | OK
+HU-12    | Envío por lotes (SiRecepLoteDE) — certificado válido     | ACCEPTED | ACCEPTED (HTTP 200) | OK
+HU-12    | Envío por lotes (SiRecepLoteDE) — certificado inválido   | REJECTED | REJECTED (HTTP 302) | OK
+HU-12    | Consulta de facturas (SiConsDE) — certificado válido     | ACCEPTED | ACCEPTED (HTTP 200) | OK
+HU-12    | Consulta de facturas (SiConsDE) — certificado inválido   | REJECTED | REJECTED (HTTP 302) | OK
+HU-12    | Consulta de resultado de lotes (SiResultLoteDE) — válido | ACCEPTED | ACCEPTED (HTTP 200) | OK
+HU-12    | Consulta de resultado de lotes (SiResultLoteDE) — inválido | REJECTED | REJECTED (HTTP 302) | OK
+HU-12    | Consulta de documentos (SiConsDE) — certificado válido   | ACCEPTED | ACCEPTED (HTTP 200) | OK
+HU-12    | Consulta de documentos (SiConsDE) — certificado inválido | REJECTED | REJECTED (HTTP 302) | OK
+HU-12    | Registro de eventos (SiRecepEvento) — certificado válido | ACCEPTED | ACCEPTED (HTTP 200) | OK
+HU-12    | Registro de eventos (SiRecepEvento) — certificado inválido | REJECTED | REJECTED (HTTP 302) | OK
+HU-12    | Consulta de contribuyentes (SiConsRUC) — certificado válido | ACCEPTED | ACCEPTED (HTTP 200) | OK
+HU-12    | Consulta de contribuyentes (SiConsRUC) — certificado inválido | REJECTED | REJECTED (HTTP 302) | OK
+```
+
+**14/14 OK** — AC-01 (los 7 servicios nombrados, sobre 6 endpoints reales distintos), AC-02
+(certificado válido siempre aceptado), AC-03 (certificado inválido siempre rechazado con el mismo
+`302 → /vdesk/hangup.php3` que HU-05 ya documentó) y AC-04 (este mismo reporte) quedan verificados en
+vivo, de punta a punta, contra el ambiente real de prueba.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+- `SifenHomologationEndpoint.java` (nuevo, enum) — los 7 servicios nombrados por AC-01 con su path de
+  WSDL real; `INVOICE_QUERY`/`DOCUMENT_QUERY` comparten path a propósito (ver hallazgo arriba).
+- `SifenServiceConnectivityChecker.java` (nuevo, `@Service`) — `check(endpoint, keyStore, password,
+  expected)` (AC-02/AC-03), clasifica `200`→`ACCEPTED`/lo demás→`REJECTED`, reusa
+  `SifenConnectionService.buildMutualTlsClient` (ver overload nuevo abajo). `CheckResult` (record)
+  expone `matchesExpectation()`.
+- `SifenConnectionService.java` — el `buildMutualTlsClient(SifenActiveCertificateMaterial,
+  TrustManager[])` privado ahora delega en un overload nuevo paquete-visible
+  `buildMutualTlsClient(KeyStore, String, TrustManager[])`, sin cambiar ningún comportamiento
+  existente (mismos tests de HU-05 sin tocar, todos siguen pasando).
+- `SifenHomologationReport.java` (nuevo) — acumulador de filas (historia/escenario/esperado/
+  obtenido/aprobado) + `render()` (AC-04) + `combinedWith(...)` (semilla para el reporte consolidado
+  de HU-17 AC-05).
+
+**Tests backend**:
+- `SifenServiceConnectivityCheckerTest` (siempre corre en CI, 21 casos = 7 servicios × 3 escenarios
+  parametrizados con `@EnumSource`): acepta con servidor mock respondiendo 200, rechaza con el mismo
+  302→hangup verificado en vivo, rechaza cuando el servidor es inalcanzable — mismo patrón
+  `HttpsServer` local que `SifenConnectionServiceTest` (HU-05) ya estableció.
+- `SifenHomologationReportTest` (5 casos): orden de inserción, `allPassed` true/false, `render`
+  incluye cada fila con su resultado OK/FALLO, `combinedWith` no muta los reportes originales.
+- `SifenHomologationConnectivityLiveTest` (guardado, ver "Decisión" arriba) — el propio reporte de 14
+  filas de arriba es su salida real cuando corre con el `.p12` piloto presente.
 
 ## HU-11 — Identificar al cliente en una factura emitida sin sus datos (Done)
 
