@@ -52,6 +52,13 @@ public class InvoiceService {
 
   private static final String OCCASIONAL_CLIENT_DISPLAY_NAME = "CONSUMIDOR FINAL";
 
+  /**
+   * SIFEN HU-02 AC-05: a general DNIT invoicing rule (not SIFEN-specific) — any sale at or above
+   * this amount requires identifying the client (RUC or identity document), regardless of whether
+   * the tenant issues through SIFEN or the traditional generator.
+   */
+  private static final BigDecimal CLIENT_IDENTIFICATION_THRESHOLD = new BigDecimal("7000000");
+
   /** Maximum inclusive calendar months that date filters may span (6 months = ~180 days). */
   public static final int MAX_INVOICE_LIST_MONTHS = 6;
 
@@ -156,6 +163,10 @@ public class InvoiceService {
 
     if (request.clientRucOverride() != null && !request.clientRucOverride().isBlank()) {
       invoice.setClientRucOverride(request.clientRucOverride().trim());
+    }
+    if (request.clientIdentityDocumentOverride() != null
+        && !request.clientIdentityDocumentOverride().isBlank()) {
+      invoice.setClientIdentityDocumentOverride(request.clientIdentityDocumentOverride().trim());
     }
 
     // Snapshot the salon RUC at issue time so PDF reprints remain faithful
@@ -300,6 +311,27 @@ public class InvoiceService {
       total = BigDecimal.ZERO;
     }
     invoice.setTotal(total);
+
+    // 6b. SIFEN HU-02 AC-05: Gs. 7.000.000+ requires client identification (RUC or identity
+    // document), sin excepción — checked here so it blocks issuance up front, before payments.
+    if (total.compareTo(CLIENT_IDENTIFICATION_THRESHOLD) >= 0) {
+      Client linkedClient = invoice.getClient();
+      boolean hasRuc =
+          (invoice.getClientRucOverride() != null && !invoice.getClientRucOverride().isBlank())
+              || (linkedClient != null
+                  && linkedClient.getRuc() != null
+                  && !linkedClient.getRuc().isBlank());
+      boolean hasIdentityDocument =
+          (invoice.getClientIdentityDocumentOverride() != null
+                  && !invoice.getClientIdentityDocumentOverride().isBlank())
+              || (linkedClient != null
+                  && linkedClient.getIdentityDocumentNumber() != null
+                  && !linkedClient.getIdentityDocumentNumber().isBlank());
+      if (!hasRuc && !hasIdentityDocument) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
+      }
+    }
 
     // 7. Payments
     if (request.payments() == null || request.payments().isEmpty()) {
@@ -527,6 +559,7 @@ public class InvoiceService {
         i.getClient() != null ? i.getClient().getId() : null,
         i.getClientDisplayName(),
         i.getClientRucOverride(),
+        i.getClientIdentityDocumentOverride(),
         i.getBusinessRuc(),
         i.getStatus().name(),
         i.getSubtotal(),

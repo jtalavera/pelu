@@ -7,4 +7,8 @@ public record ClientResponse(
     String email,
     String ruc,
     boolean active,
-    int visitCount) {}
+    int visitCount,
+    String identityDocumentNumber,
+    String address,
+    String department,
+    String city) {}

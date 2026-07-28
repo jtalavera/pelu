@@ -1,7 +1,10 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -43,6 +46,19 @@ public class BusinessProfile {
    */
   @Column(name = "logo_data_url", columnDefinition = "NVARCHAR(MAX)")
   private String logoDataUrl;
+
+  /** Tipo de contribuyente (SIFEN D103/iTipCont) — SIFEN HU-02 AC-03, nullable until configured. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "taxpayer_type", length = 20)
+  private SifenTaxpayerType taxpayerType;
+
+  /** Código de actividad económica (SIFEN D131/cActEco) — SIFEN HU-02 AC-03. */
+  @Column(name = "economic_activity_code", length = 20)
+  private String economicActivityCode;
+
+  /** Descripción de la actividad económica (SIFEN D132/dDesActEco) — SIFEN HU-02 AC-03. */
+  @Column(name = "economic_activity_description", length = 300)
+  private String economicActivityDescription;
 
   public Long getTenantId() {
     return tenantId;
@@ -106,5 +122,29 @@ public class BusinessProfile {
 
   public void setLogoDataUrl(String logoDataUrl) {
     this.logoDataUrl = logoDataUrl;
+  }
+
+  public SifenTaxpayerType getTaxpayerType() {
+    return taxpayerType;
+  }
+
+  public void setTaxpayerType(SifenTaxpayerType taxpayerType) {
+    this.taxpayerType = taxpayerType;
+  }
+
+  public String getEconomicActivityCode() {
+    return economicActivityCode;
+  }
+
+  public void setEconomicActivityCode(String economicActivityCode) {
+    this.economicActivityCode = economicActivityCode;
+  }
+
+  public String getEconomicActivityDescription() {
+    return economicActivityDescription;
+  }
+
+  public void setEconomicActivityDescription(String economicActivityDescription) {
+    this.economicActivityDescription = economicActivityDescription;
   }
 }

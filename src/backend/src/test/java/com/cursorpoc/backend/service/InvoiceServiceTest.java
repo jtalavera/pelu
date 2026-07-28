@@ -565,6 +565,105 @@ class InvoiceServiceTest {
     assertThat(d0).isEqualTo(LocalDate.now(z).minusMonths(InvoiceService.MAX_INVOICE_LIST_MONTHS));
   }
 
+  /**
+   * SIFEN HU-02 AC-05: Gs. 7.000.000+ without any client RUC or identity document is rejected
+   * before payments are even considered.
+   */
+  @Test
+  void issueInvoice_atThreshold_withoutClientIdentification_throwsBadRequest() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
+  }
+
+  /** AC-05: just below the threshold, no identification is required. */
+  @Test
+  void issueInvoice_justBelowThreshold_withoutClientIdentification_succeeds() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("6999999.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("6999999.00"));
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.total()).isEqualByComparingTo(new BigDecimal("6999999.00"));
+  }
+
+  /**
+   * AC-05: a walk-in client identified only by cédula (no RUC) is enough at/above the threshold.
+   */
+  @Test
+  void issueInvoice_atThreshold_withIdentityDocumentOverride_succeeds() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, "4123456", null, null, List.of(line), List.of(payment), null, null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.clientIdentityDocumentOverride()).isEqualTo("4123456");
+  }
+
+  /** AC-05: a saved client with an on-file RUC also satisfies the threshold. */
+  @Test
+  void issueInvoice_atThreshold_withSavedClientRuc_succeeds() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    Client client = new Client();
+    client.setId(7L);
+    client.setTenant(tenant);
+    client.setFullName("Ana García");
+    client.setRuc("80000005-6");
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            7L, null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.clientId()).isEqualTo(7L);
+  }
+
   private Invoice buildIssuedInvoice() {
     Invoice invoice = new Invoice();
     invoice.setId(100L);

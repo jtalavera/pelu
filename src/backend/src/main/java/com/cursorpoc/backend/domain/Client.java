@@ -40,6 +40,21 @@ public class Client {
   @Column(name = "visit_count", nullable = false)
   private int visitCount;
 
+  /** Cédula u otro documento de identidad, para clientes sin RUC — SIFEN HU-02 AC-05. */
+  @Column(name = "identity_document_number", length = 32)
+  private String identityDocumentNumber;
+
+  @Column(length = 500)
+  private String address;
+
+  /** SIFEN HU-02 AC-07 — descripción libre, no valida contra la tabla de códigos DNIT. */
+  @Column(length = 120)
+  private String department;
+
+  /** SIFEN HU-02 AC-07 — descripción libre, no valida contra la tabla de códigos DNIT. */
+  @Column(length = 120)
+  private String city;
+
   public Long getId() {
     return id;
   }
@@ -102,5 +117,37 @@ public class Client {
 
   public void setVisitCount(int visitCount) {
     this.visitCount = visitCount;
+  }
+
+  public String getIdentityDocumentNumber() {
+    return identityDocumentNumber;
+  }
+
+  public void setIdentityDocumentNumber(String identityDocumentNumber) {
+    this.identityDocumentNumber = identityDocumentNumber;
+  }
+
+  public String getAddress() {
+    return address;
+  }
+
+  public void setAddress(String address) {
+    this.address = address;
+  }
+
+  public String getDepartment() {
+    return department;
+  }
+
+  public void setDepartment(String department) {
+    this.department = department;
+  }
+
+  public String getCity() {
+    return city;
+  }
+
+  public void setCity(String city) {
+    this.city = city;
   }
 }

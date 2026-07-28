@@ -15,8 +15,8 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-21 Usar certificado vigente automáticamente | ✅ Done | Ver detalle abajo. |
 | HU-05 Conectarse de forma segura con SIFEN | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real. |
 | HU-01 Generar número de control | ✅ Done | Ver detalle abajo. |
-| HU-02 Datos identificación/timbrado/emisor/receptor | ⬜ Next | |
-| HU-03 Servicios facturados y totales | ⬜ Todo | |
+| HU-02 Datos identificación/timbrado/emisor/receptor | ✅ Done | Ver detalle abajo. |
+| HU-03 Servicios facturados y totales | ⬜ Next | |
 | HU-04 Firmar digitalmente | ⬜ Todo | |
 | HU-06 Enviar factura y registrar resultado | ⬜ Todo | |
 | Fase 2 (HU-07, HU-08, HU-09, HU-19) | ⬜ Todo | |
@@ -24,19 +24,16 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-02 (Completar los datos de identificación,
-timbrado, emisor y receptor), siguiente paso del Frente B de la Fase 1 (depende de HU-01, ya
-cerrado). A diferencia de HU-01, esta historia sí necesita tocar el modelo de dominio existente:
-la especificación exige establecimiento y punto de expedición (hoy **no existen** en `FiscalStamp`
-— solo `stampNumber`, ver detalle en la sección HU-01 abajo) y un concepto de "tipo de
-contribuyente" (persona física=1/jurídica=2, campo `iTipCont`/D103 que `SifenControlNumberFields`
-ya espera recibido desde afuera) que tampoco existe en `BusinessProfile` ni en ningún otro lugar del
-dominio — hay que decidir dónde vive (¿nuevo campo en `BusinessProfile`? ¿en `FiscalStamp`?) antes
-de escribir el servicio que arma el documento. También hay que decidir dónde persiste el CDC/código
-de seguridad de cada factura para que HU-01 AC-06 (determinismo) se cumpla de punta a punta —
-probablemente una tabla o columnas nuevas asociadas a `Invoice`, ya que hoy `Invoice` no tiene
-ningún campo relacionado con SIFEN. AC-05 de HU-02 (umbral de Gs. 7.000.000 para exigir
-identificación del cliente) es lógica de negocio nueva, no depende de estos gaps de modelo.
+**Próximo paso al reanudar el loop:** implementar HU-03 (Completar los servicios facturados y
+calcular los totales), siguiente paso del Frente B de la Fase 1 (depende de HU-02, ya cerrado).
+HU-03 agrega el detalle de líneas/impuestos/totales al documento — el sistema ya calcula esto para
+la factura tradicional en `InvoiceService.issueInvoice` (subtotal, descuentos, IVA por línea vía
+`InvoiceLine.taxRate/taxAmount`); lo que falta es mapear ese cálculo ya existente al formato que
+SIFEN exige (grupo `gDtipDE`/`gCamItem` del Manual Técnico — línea por servicio, tasas
+gravado/exento/gravado parcial) y sumarlo al `SifenInvoiceHeader` que dejó armado HU-02. Conviene
+releer la sección de IVA del manual (probablemente con tablas en imagen, igual que el CDC de HU-01
+— renderizar la página a PNG si `pdftotext` no trae la tabla) antes de decidir el shape exacto de
+un nuevo `SifenInvoiceLine`/`SifenInvoiceTotals`.
 
 ## HU-05 — Conectarse de forma segura con SIFEN (Done)
 
@@ -217,6 +214,110 @@ seguridad frente al número de documento (AC-04, 200 iteraciones × 3 números d
 CDCs distintos para facturas distintas (AC-05), determinismo (AC-06), detección de alteración
 (AC-02, alterando un dígito fuera de las posiciones de peso 11 para garantizar que sí se detecta), y
 rechazo de valores que no entran en su campo (p.ej. un RUC de 9 dígitos).
+
+## HU-02 — Completar los datos de identificación, timbrado, emisor y receptor (Done)
+
+Frente B de la Fase 1, siguiente paso después de HU-01. A diferencia de HU-01, esta historia sí
+tocó el modelo de dominio existente — ver "Decisión de diseño clave" abajo para por qué el resultado
+**no** quedó conectado al flujo real de emisión de facturas todavía.
+
+**Hallazgo clave del manual (Manual Técnico V150.pdf):** la leyenda obligatoria de "ambiente de
+prueba" (AC-08) no es un campo aparte — es una regla de validación sobre **D105/dNomEmi** (nombre o
+razón social del emisor): en ambiente de prueba, ese campo debe contener literalmente
+`"DE generado en ambiente de prueba - sin valor comercial ni fiscal"` **en vez de** la razón social
+real, y en producción el uso de ese mismo texto está prohibido (sección "Campos que describen la
+actividad económica del emisor" + tabla de validaciones, ambas fuera del texto plano de
+`pdftotext` — hubo que grepear alrededor de "sin valor comercial" para encontrarlas). También se
+confirmó que la actividad económica del emisor es un grupo `gActEco` con dos campos (`cActEco`
+código + `dDesActEco` descripción, D131/D132), no un único campo libre.
+
+**Decisión de diseño clave: `SifenInvoiceHeaderService` no se llama desde
+`InvoiceService.issueInvoice`.** AC-01/02/03/04/06/07/08 (armar CDC + timbrado + emisor + receptor)
+quedaron implementadas en un servicio nuevo, `SifenInvoiceHeaderService`, pero **deliberadamente
+desconectado** del flujo real de emisión — igual que HU-01/HU-05/HU-21 ("sin pantalla propia,
+consumida por historias futuras"). La razón, a diferencia de esas tres: exigir RUC válido +
+actividad económica + tipo de contribuyente completos en `BusinessProfile` **en cada factura**
+habría roto la emisión de **cualquier** tenant que hoy no usa SIFEN (que es literalmente todos,
+salvo el piloto) — la activación real por tenant es HU-22 (Fase 5), que todavía no existe. Conectar
+`SifenInvoiceHeaderService.buildHeader()` al flujo real de emisión queda pendiente para cuando HU-04
+(firma) o HU-06 (envío) necesiten consumirlo — en ese punto también hará falta decidir el
+enrutamiento correcto (¿llamarlo solo si el tenant tiene SIFEN activo? eso todavía no existe).
+
+**La única AC de HU-02 que sí es una regla de negocio universal (no específica de SIFEN) es AC-05**
+(el umbral de Gs. 7.000.000 exige identificar al cliente) — es una obligación de la DNIT sobre
+cualquier factura con RUC, no algo exclusivo del documento electrónico. Por eso, a diferencia del
+resto de la historia, **sí quedó conectada** a `InvoiceService.issueInvoice` (después de calcular
+`total`, antes de validar los pagos): si `total >= 7.000.000` y ni el cliente vinculado ni el
+override de la factura tienen RUC o documento de identidad, rechaza con
+`SIFEN_CLIENT_IDENTIFICATION_REQUIRED` (400). Se verificó que ningún test e2e existente emite
+facturas por ese monto (`grep` sobre montos de 7+ dígitos en `e2e/`), así que la regla no tiene
+efectos colaterales sobre la suite ya existente — confirmado corriendo `hu-14`, `hu-15`, `hu-10`,
+`hu-12`, `hu-02b`, `issue-96`, `issue-101`, `sifen-hu-18` y `sifen-hu-20` completos (47/47 verde).
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `domain/enums/SifenTaxpayerType.java` — `INDIVIDUAL`(1)/`LEGAL_ENTITY`(2), mapea a D103/iTipCont.
+- `domain/FiscalStamp.java` — nuevos campos `establishment`/`expeditionPoint` (`int`, default 1 =
+  "001" al zero-padear). **Default deliberado en 1**: coincide con el valor real que la SET dio para
+  el piloto (Establecimiento `001`, primer Punto de expedición `001` de la lista `001, 002, 003` en
+  la sección "Configuración del ambiente de pruebas" del spec) — el piloto no necesita tocar estos
+  campos para que HU-02 ya sea correcta para él.
+- `domain/BusinessProfile.java` — nuevos campos `taxpayerType` (enum, nullable),
+  `economicActivityCode`/`economicActivityDescription` (String, nullable). **Sin UI propia
+  todavía** — ver "Deuda técnica" abajo.
+- `domain/Client.java` — nuevos campos `identityDocumentNumber` (cédula, para AC-05/AC-04),
+  `address`/`department`/`city` (AC-07). **`department`/`city` son texto libre, no validan contra
+  la tabla de códigos DNIT** (departamento/distrito/ciudad tienen relación cruzada exigida por el
+  manual vía códigos oficiales) — decisión deliberada de no construir ese catálogo todavía, ya que
+  ningún AC de HU-02 exige validarlo, solo "incluirlo".
+- `domain/Invoice.java` — `clientIdentityDocumentOverride` (simétrico a `clientRucOverride`, para
+  un cliente ocasional sin `Client` guardado), `sifenControlNumber`/`sifenSecurityCode` (persistidos
+  la primera vez que se arma el header, para que HU-01 AC-06 se cumpla de punta a punta si
+  `buildHeader()` se llama más de una vez para la misma factura).
+- Migración `V19__sifen_document_fields.sql`.
+- `util/ParaguayRucValidator.split(ruc)` — nuevo, separa RUC en base + dígito verificador (`record
+  RucParts`), reutilizado tanto para el emisor como potencialmente para clientes con RUC.
+- `service/SifenIssuerData.java` / `SifenReceiverData.java` / `SifenInvoiceHeader.java` — records
+  nuevos que modelan el documento parcial.
+- `service/SifenInvoiceHeaderService.buildHeader(tenantId, invoiceId)` — arma el header completo;
+  ver "Decisión de diseño clave" arriba sobre por qué no está conectado a `issueInvoice`. Valida que
+  `BusinessProfile` tenga RUC válido + tipo de contribuyente + actividad económica completos, si no
+  rechaza con `SIFEN_ISSUER_RUC_INVALID`/`SIFEN_TAXPAYER_TYPE_NOT_CONFIGURED`/
+  `SIFEN_ECONOMIC_ACTIVITY_NOT_CONFIGURED` (`PRECONDITION_FAILED`).
+- `InvoiceService.issueInvoice` — nueva validación AC-05 (ver arriba) + persiste
+  `clientIdentityDocumentOverride` igual que ya hacía con `clientRucOverride`.
+- **Compatibilidad de los DTOs existentes**: `ClientRequest`, `BusinessProfileUpdateRequest`,
+  `FiscalStampCreateRequest` e `InvoiceCreateRequest` son `record`s a los que se les agregaron
+  campos nuevos — para no reescribir cada test/caller existente que construye estos records con la
+  aridad vieja, cada uno ganó un constructor auxiliar que delega al canónico pasando `null` en los
+  campos nuevos. Convención a seguir si una futura historia necesita agregar más campos a un DTO ya
+  usado en muchos lugares.
+
+**Frontend**: la única historia que quedó con comportamiento real conectado (AC-05) tiene UI en
+`BillingPage.tsx` (`NewInvoiceTab`) — nuevo campo "Client identity document (override for this
+invoice)" junto al RUC de cliente ya existente, y validación cliente-side que bloquea el envío con
+el mismo umbral que el backend (mensaje `femme.billing.invoice.clientIdentificationRequiredThreshold`).
+`ClientResponse`/`ClientSearchField` ya devuelven `identityDocumentNumber` para que seleccionar un
+cliente con cédula guardada la precargue, igual que ya pasa con el RUC.
+
+**Deuda técnica (no bloqueante, documentada para cuando haga falta):**
+- `BusinessProfile.taxpayerType`/`economicActivityCode`/`economicActivityDescription` **no tienen
+  campo en ninguna pantalla de configuración** todavía (ni en `BusinessSettingsPage`). Hoy solo se
+  pueden cargar vía `PUT /api/business-profile` directo. Hace falta antes de que HU-04/HU-06
+  puedan construir un documento real para el tenant piloto — agregar los 3 campos al formulario
+  existente de `BusinessSettingsPage.tsx` es la extensión natural (no una pantalla nueva).
+- `FiscalStamp.establishment`/`expeditionPoint` tampoco tienen campo en `FiscalStampSettingsPage`
+  — no urgente porque el default (1/1 = "001"/"001") ya coincide con el valor real de prueba de la
+  SET, pero si el piloto necesita usar un punto de expedición distinto de `001` no hay forma de
+  configurarlo desde la UI todavía.
+- `Client.address`/`department`/`city` tampoco tienen campo en `ClientsPage` — solo se pueden
+  cargar vía API. Necesario para que AC-07 tenga datos reales que mostrar en HU-04/HU-06, más allá
+  del código ya probado en `SifenInvoiceHeaderServiceTest`.
+
+**Tests**: `SifenInvoiceHeaderServiceTest` (14 casos, cubre AC-01 a AC-08 incluyendo el contraste
+ambiente de prueba/producción para AC-08 y determinismo del CDC entre llamadas). 5 casos nuevos en
+`InvoiceServiceTest` para AC-05 (umbral exacto, justo debajo, override de cédula, RUC de cliente
+guardado). E2E: `e2e/tests/sifen-hu-02-datos-documento.spec.ts` (AC-05 vía API y vía UI — las demás
+ACs no tienen pantalla propia, ver nota en el spec).
 
 ## HU-18 — Cargar un nuevo certificado y clave para un tenant (Done)
 

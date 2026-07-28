@@ -51,6 +51,18 @@ public class Invoice {
   @Column(name = "client_ruc_override", length = 32)
   private String clientRucOverride;
 
+  /** Cédula u otro documento de identidad para un cliente ocasional — SIFEN HU-02 AC-05. */
+  @Column(name = "client_identity_document_override", length = 32)
+  private String clientIdentityDocumentOverride;
+
+  /** Número de control (CDC), generado una sola vez y reutilizado — SIFEN HU-01 AC-06. */
+  @Column(name = "sifen_control_number", length = 44)
+  private String sifenControlNumber;
+
+  /** Código de seguridad (dCodSeg) que compone el CDC — persistido para la misma razón. */
+  @Column(name = "sifen_security_code", length = 9)
+  private String sifenSecurityCode;
+
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
 
@@ -157,6 +169,30 @@ public class Invoice {
 
   public void setClientRucOverride(String clientRucOverride) {
     this.clientRucOverride = clientRucOverride;
+  }
+
+  public String getClientIdentityDocumentOverride() {
+    return clientIdentityDocumentOverride;
+  }
+
+  public void setClientIdentityDocumentOverride(String clientIdentityDocumentOverride) {
+    this.clientIdentityDocumentOverride = clientIdentityDocumentOverride;
+  }
+
+  public String getSifenControlNumber() {
+    return sifenControlNumber;
+  }
+
+  public void setSifenControlNumber(String sifenControlNumber) {
+    this.sifenControlNumber = sifenControlNumber;
+  }
+
+  public String getSifenSecurityCode() {
+    return sifenSecurityCode;
+  }
+
+  public void setSifenSecurityCode(String sifenSecurityCode) {
+    this.sifenSecurityCode = sifenSecurityCode;
   }
 
   public String getBusinessRuc() {

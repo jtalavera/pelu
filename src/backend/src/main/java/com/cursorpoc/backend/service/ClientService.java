@@ -95,6 +95,10 @@ public class ClientService {
     client.setRuc(ruc);
     client.setActive(true);
     client.setVisitCount(0);
+    client.setIdentityDocumentNumber(blankToNull(request.identityDocumentNumber()));
+    client.setAddress(blankToNull(request.address()));
+    client.setDepartment(blankToNull(request.department()));
+    client.setCity(blankToNull(request.city()));
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -145,6 +149,10 @@ public class ClientService {
     client.setPhone(phone);
     client.setEmail(email);
     client.setRuc(ruc);
+    client.setIdentityDocumentNumber(blankToNull(request.identityDocumentNumber()));
+    client.setAddress(blankToNull(request.address()));
+    client.setDepartment(blankToNull(request.department()));
+    client.setCity(blankToNull(request.city()));
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -205,6 +213,10 @@ public class ClientService {
         c.getEmail(),
         c.getRuc(),
         c.isActive(),
-        c.getVisitCount());
+        c.getVisitCount(),
+        c.getIdentityDocumentNumber(),
+        c.getAddress(),
+        c.getDepartment(),
+        c.getCity());
   }
 }

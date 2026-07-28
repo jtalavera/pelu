@@ -133,6 +133,9 @@ function InvoiceStatusBadge({ status }: { status: string }) {
   );
 }
 
+/** SIFEN HU-02 AC-05: Gs. 7.000.000+ requires identifying the client (RUC or identity document). */
+const SIFEN_CLIENT_IDENTIFICATION_THRESHOLD = 7_000_000;
+
 const PAYMENT_METHODS = [
   "CASH",
   "DEBIT_CARD",
@@ -519,6 +522,7 @@ type InitialClientForBilling = {
   phone: string | null;
   email: string | null;
   ruc: string | null;
+  identityDocumentNumber?: string | null;
 };
 
 type PrefillServiceRecordLine = { serviceId: number; description: string; unitPrice: string };
@@ -554,6 +558,7 @@ function NewInvoiceTab({
           phone: effectiveInitialClient.phone,
           email: effectiveInitialClient.email,
           ruc: effectiveInitialClient.ruc,
+          identityDocumentNumber: effectiveInitialClient.identityDocumentNumber,
         },
       }
     : null;
@@ -565,6 +570,9 @@ function NewInvoiceTab({
   );
   const [clientRucOverride, setClientRucOverride] = useState(
     effectiveInitialClient?.ruc ?? "",
+  );
+  const [clientIdentityDocumentOverride, setClientIdentityDocumentOverride] = useState(
+    effectiveInitialClient?.identityDocumentNumber ?? "",
   );
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
@@ -652,9 +660,11 @@ function NewInvoiceTab({
     if (sel?.type === "client") {
       setClientDisplayName(sel.client.fullName);
       setClientRucOverride(sel.client.ruc ?? "");
+      setClientIdentityDocumentOverride(sel.client.identityDocumentNumber ?? "");
     } else if (sel?.type === "occasional") {
       setClientDisplayName("");
       setClientRucOverride("");
+      setClientIdentityDocumentOverride("");
     }
   }
 
@@ -938,6 +948,14 @@ function NewInvoiceTab({
       if (rucTrim && !clientDisplayName.trim()) {
         errors.push(t("femme.billing.invoice.clientDisplayNameRequiredWithRuc"));
       }
+      // SIFEN HU-02 AC-05: Gs. 7.000.000+ requires a RUC or an identity document, sin excepción.
+      if (
+        total >= SIFEN_CLIENT_IDENTIFICATION_THRESHOLD &&
+        !rucTrim &&
+        !clientIdentityDocumentOverride.trim()
+      ) {
+        errors.push(t("femme.billing.invoice.clientIdentificationRequiredThreshold"));
+      }
     }
 
     setLineErrors(newLineErrors);
@@ -993,6 +1011,7 @@ function NewInvoiceTab({
       clientId: clientSelection?.type === "client" ? clientSelection.client.id : null,
       clientDisplayName: clientDisplayName.trim() || null,
       clientRucOverride: clientRucOverride.trim() || null,
+      clientIdentityDocumentOverride: clientIdentityDocumentOverride.trim() || null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
         discountType !== "NONE" && discountValue
@@ -1036,6 +1055,7 @@ function NewInvoiceTab({
       setLinesKey((k) => k + 1);
       setClientDisplayName("");
       setClientRucOverride("");
+      setClientIdentityDocumentOverride("");
       setDiscountType("NONE");
       setDiscountValue("");
       setDiscountValueError(null);
@@ -1166,6 +1186,18 @@ function NewInvoiceTab({
                 value={clientRucOverride}
                 onChange={(e) => setClientRucOverride(e.target.value)}
                 placeholder={t("femme.billing.invoice.clientRucOverridePlaceholder")}
+                className="mt-1 w-full"
+              />
+            </div>
+            <div>
+              <Label htmlFor="client-identity-doc">
+                {t("femme.billing.invoice.clientIdentityDocumentOverride")}
+              </Label>
+              <Input
+                id="client-identity-doc"
+                value={clientIdentityDocumentOverride}
+                onChange={(e) => setClientIdentityDocumentOverride(e.target.value)}
+                placeholder={t("femme.billing.invoice.clientIdentityDocumentOverridePlaceholder")}
                 className="mt-1 w-full"
               />
             </div>

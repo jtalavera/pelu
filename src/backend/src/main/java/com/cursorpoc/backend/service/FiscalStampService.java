@@ -41,6 +41,9 @@ public class FiscalStampService {
     validateRange(request.rangeFrom(), request.rangeTo());
     validateEmissionInRange(
         request.initialEmissionNumber(), request.rangeFrom(), request.rangeTo());
+    int establishment = validateSifenCdcField(request.establishment(), "INVALID_ESTABLISHMENT");
+    int expeditionPoint =
+        validateSifenCdcField(request.expeditionPoint(), "INVALID_EXPEDITION_POINT");
 
     FiscalStamp stamp = new FiscalStamp();
     stamp.setTenant(tenant);
@@ -52,8 +55,24 @@ public class FiscalStampService {
     stamp.setNextEmissionNumber(request.initialEmissionNumber());
     stamp.setActive(false);
     stamp.setLockedAfterInvoice(false);
+    stamp.setEstablishment(establishment);
+    stamp.setExpeditionPoint(expeditionPoint);
     fiscalStampRepository.save(stamp);
     return toDto(stamp);
+  }
+
+  /**
+   * SIFEN HU-02 AC-02: establecimiento/punto de expedición ocupan 3 dígitos en el CDC (000-999).
+   * Null defaults to 1 ("001") so existing callers that predate this field keep working.
+   */
+  private static int validateSifenCdcField(Integer value, String errorCode) {
+    if (value == null) {
+      return 1;
+    }
+    if (value < 0 || value > 999) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorCode);
+    }
+    return value;
   }
 
   @Transactional
@@ -147,6 +166,8 @@ public class FiscalStampService {
         s.getRangeTo(),
         s.getNextEmissionNumber(),
         s.isActive(),
-        s.isLockedAfterInvoice());
+        s.isLockedAfterInvoice(),
+        s.getEstablishment(),
+        s.getExpeditionPoint());
   }
 }

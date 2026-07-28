@@ -7,4 +7,7 @@ public record BusinessProfileResponse(
     String phone,
     String contactEmail,
     String logoDataUrl,
-    boolean rucValidForInvoicing) {}
+    boolean rucValidForInvoicing,
+    String taxpayerType,
+    String economicActivityCode,
+    String economicActivityDescription) {}

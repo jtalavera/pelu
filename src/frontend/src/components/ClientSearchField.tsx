@@ -9,6 +9,7 @@ type Client = {
   phone: string | null;
   email: string | null;
   ruc: string | null;
+  identityDocumentNumber?: string | null;
   active?: boolean;
 };
 
