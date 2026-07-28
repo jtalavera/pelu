@@ -147,6 +147,23 @@ public class SifenInvoiceTestSupportController {
   }
 
   /**
+   * SIFEN HU-11: real signing (used by "flujo real end-to-end" Playwright tests, e.g. HU-10's own
+   * cancellation and HU-11's client identification) requires a valid certificate for the tenant —
+   * normally seeded incidentally by other SIFEN e2e specs (HU-07/HU-18/HU-20) that run earlier in
+   * the same shared H2 instance, per HU-19's own documented caveat about execution-order
+   * dependence. Running a single spec file in isolation doesn't get that seeding for free, so this
+   * standalone endpoint lets any spec ensure one exists on its own, without the unrelated side
+   * effects {@link #prepareForStatusCheck} also has (control number/status changes).
+   */
+  @PostMapping("/ensure-valid-certificate")
+  @Transactional
+  public void ensureValidCertificateForDemoTenant() {
+    log.info(
+        "POST /api/admin/sifen-test-support/ensure-valid-certificate tenantId={}", DEMO_TENANT_ID);
+    ensureValidCertificate(DEMO_TENANT_ID);
+  }
+
+  /**
    * SIFEN HU-08: fabricates a fully "Aprobado" invoice — the precondition Playwright needs to
    * exercise the KuDE download (AC-16) and email-send (AC-17) buttons end-to-end, since nothing in
    * the app calls {@code SifenInvoiceSubmissionService.submit()} yet (tenant activation is HU-22).
@@ -238,6 +255,48 @@ public class SifenInvoiceTestSupportController {
       invoice.setSifenCancellationResultCode("4009");
       invoice.setSifenCancellationMessage(
           "Plazo de solicitud de cancelación de una FE extemporáneo");
+    }
+  }
+
+  /**
+   * SIFEN HU-11 AC-05/AC-06: fabricates the result of a client-identification attempt directly —
+   * same rationale as {@link #fabricateCancellationResult(long, boolean)}, since this system has
+   * never reached a real "Aprobado" DE to genuinely identify a client on. {@code approved=true}
+   * marks the invoice identified and updates its client fields (AC-05); {@code approved=false}
+   * records the rejection but leaves both untouched (AC-06) — mirroring exactly what {@code
+   * SifenInvoiceClientIdentificationService.recordIdentificationResult} does with a real SIFEN
+   * response.
+   */
+  @PostMapping("/invoices/{id}/fabricate-client-identification-result/{approved}")
+  @Transactional
+  public void fabricateClientIdentificationResult(
+      @PathVariable long id, @PathVariable boolean approved) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/fabricate-client-identification-result/{}",
+        id,
+        approved);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    invoice.setSifenClientIdentificationRequestedAt(LocalDateTime.now());
+    invoice.setSifenClientIdentificationRequestedByUserId(1L);
+    invoice.setSifenClientIdentificationRequestedByEmail("isabelzymanscki@gmail.com");
+    invoice.setSifenClientIdentificationClientType("PERSON");
+    invoice.setSifenClientIdentificationName("María Fernanda Duarte");
+    invoice.setSifenClientIdentificationIdentityDocument("4123456");
+    if (approved) {
+      invoice.setSifenClientIdentificationResultCode("0600");
+      invoice.setSifenClientIdentificationMessage("Evento registrado correctamente");
+      invoice.setSifenClientIdentificationProtocolNumber("123123123");
+      invoice.setSifenClientIdentified(true);
+      invoice.setClientDisplayName(invoice.getSifenClientIdentificationName());
+      invoice.setClientIdentityDocumentOverride(
+          invoice.getSifenClientIdentificationIdentityDocument());
+    } else {
+      invoice.setSifenClientIdentificationResultCode("4520");
+      invoice.setSifenClientIdentificationMessage("Datos del receptor inconsistentes");
     }
   }
 

@@ -54,6 +54,7 @@ class InvoiceServiceTest {
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private BusinessProfileRepository businessProfileRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
+  @Mock private SifenInvoiceHeaderService sifenInvoiceHeaderService;
 
   // SIFEN HU-10: a real instance (via @Spy, not @Mock) so @InjectMocks' constructor injection
   // resolves this new dependency to something whose zoneId() actually works, same as every other
@@ -569,6 +570,58 @@ class InvoiceServiceTest {
     assertThat(result.sifenCancellationRequestedByEmail()).isEqualTo("isabelzymanscki@gmail.com");
     assertThat(result.sifenCancellationReason()).isEqualTo("Error en el monto facturado");
     assertThat(result.sifenCancellationMessage()).isEqualTo("Evento registrado correctamente");
+  }
+
+  /**
+   * SIFEN HU-11 AC-01: the "identify client" option is only exposed when the invoice is approved,
+   * has no client data, and hasn't already been identified.
+   */
+  @Test
+  void getInvoice_approvedInvoiceWithoutClientData_exposesClientIdentificationEligible() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+    when(sifenInvoiceHeaderService.isReceiverUnidentified(invoice)).thenReturn(true);
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenClientIdentificationEligible()).isTrue();
+  }
+
+  @Test
+  void getInvoice_pendingVerificationInvoice_isNotEligibleForClientIdentification() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenClientIdentificationEligible()).isFalse();
+  }
+
+  @Test
+  void getInvoice_approvedInvoiceWithClientData_isNotEligibleForClientIdentification() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+    when(sifenInvoiceHeaderService.isReceiverUnidentified(invoice)).thenReturn(false);
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenClientIdentificationEligible()).isFalse();
+  }
+
+  @Test
+  void getInvoice_alreadyIdentifiedInvoice_isNoLongerEligibleForClientIdentification() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    invoice.setSifenClientIdentified(true);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenClientIdentificationEligible()).isFalse();
+    assertThat(result.sifenClientIdentified()).isTrue();
   }
 
   @Test

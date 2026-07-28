@@ -5,9 +5,9 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 3 en curso** (Primeras interacciones complejas adicionales: eventos sobre DTE
-aprobados) — HU-10 hecha. Próximo: HU-11 (puede avanzar en paralelo, ver "Próximo paso" abajo). Plan
-completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
+Fase actual: **Fase 3 completa** (Primeras interacciones complejas adicionales: eventos sobre DTE
+aprobados) — HU-10 y HU-11 hechas. Próximo: **Fase 4** (Homologación ante la DNIT, HU-12..HU-17).
+Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
 |---|---|---|
@@ -25,16 +25,229 @@ completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación
 | HU-08 Generar comprobante PDF (KuDE) | ✅ Done | Ver detalle abajo. Verificado en vivo: el fix de `gCamFuFD/dCarQR` cierra ese gap específico; quedan 3 gaps menores ya documentados por HU-06, sin "Aprobado" real todavía. |
 | HU-09 Revalidar en SIFEN una factura | ✅ Done | Ver detalle abajo. **Cierra Fase 2.** Verificado en vivo: la URL real (`consultas-test/qr?...`) responde HTTP 200 con la app "Consultas" real de SIFEN. |
 | HU-10 Cancelar una factura ya aprobada | ✅ Done | Ver detalle abajo. Verificado en vivo (real HTTP 200, forma de respuesta confirmada); el "Aprobado" real del evento queda como limitación abierta, ver detalle. |
-| HU-11 Identificar al cliente en una factura sin datos | ⬜ Next | Fase 3 — puede hacerse en paralelo con HU-10 (ya hecha), ver "Próximo paso" abajo. |
-| Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
+| HU-11 Identificar al cliente en una factura sin datos | ✅ Done | Ver detalle abajo. **Cierra Fase 3.** Verificado en vivo (real HTTP 200, mismo `0160` que HU-10); evento no documentado en el Manual V150, encontrado solo en el XSD real en vivo. |
+| Fase 4 (HU-12..HU-17, homologación) | ⬜ Next | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** HU-10 (Cancelar una factura ya aprobada) está hecha —
-introdujo `SifenSubmissionStatus.CANCELLED`, confirmando que HU-09 efectivamente no necesitó
-tocarse (ver su propia entrada, "AC-05 y el estado que todavía no existe" ya no aplica, el botón de
-revalidar sigue funcionando sin cambios). Sigue HU-11 (identificar cliente en factura sin datos),
-que puede avanzar de forma independiente — es otro evento sobre un DTE ya aprobado, sin dependencia
-con la cancelación.
+**Próximo paso al reanudar el loop:** HU-10 y HU-11 (Fase 3, eventos sobre DTE aprobados) están
+hechas. Sigue **Fase 4** (Homologación ante la DNIT): HU-12 (probar la conexión segura contra todos
+los servicios de SIFEN) es el primer paso, según el propio plan de fases — valida la base de
+conectividad que el resto de HU-13..HU-17 necesitan. Ninguna historia de Fase 3/4 depende de que los
+3 gaps de compliance de schema documentados por HU-04/HU-06/HU-08 (dFeFinT, dDesUniMed, dBasExe)
+estén cerrados — pero cerrarlos durante Fase 4 (que sí cubre homologación real) podría finalmente
+producir un "Aprobado" real, lo cual desbloquearía verificar en vivo los caminos felices que HU-06,
+HU-08, HU-09, HU-10 y HU-11 dejaron todos documentados como no verificables por esta razón.
+
+## HU-11 — Identificar al cliente en una factura emitida sin sus datos (Done)
+
+Épica EP-04. **Cierra Fase 3** (la segunda y última interacción de eventos de esta fase). Registra
+un evento llamado en la práctica "Evento de Nominación" contra un DTE ya aprobado emitido a
+consumidor final, para identificarlo después sin necesidad de cancelar y reemitir.
+
+**Investigación (Manual Técnico V150): esta vez el manual no dice nada en absoluto, ni siquiera algo
+que contradecir.** El capítulo 11 (Tabla J, "Resumen de los eventos de SIFEN según los actores")
+tiene exactamente 8 filas numeradas: 1 (Cancelación), 2 (Inutilización), 10 (Notificación de
+recepción), 11 (Conformidad), 12 (Disconformidad), 13 (Desconocimiento), 14 (Devolución y Ajuste de
+precios, automático), 16 (Asociación, automático) — **nada en las filas 3-9, 15, 17+.** Se confirmó
+que esto no es un artefacto de extracción de `pdftotext -layout` (a diferencia de lo que se esperaba
+por precedente de HU-01/HU-10): se renderizaron como imagen (`pdftoppm`) las dos páginas completas de
+la Tabla J y se confirmó visualmente que esas filas simplemente no existen en esta edición del
+manual (Septiembre 2019) — números reservados para una versión futura, no una omisión de extracción.
+Ningún otro capítulo del documento (búsqueda de "consumidor final", "Sin Nombre", "nominaci",
+"actualización de datos") menciona este evento tampoco.
+
+**El evento sí existe: se encontró primero por una fuente pública, luego se confirmó en vivo contra
+el XSD real de SIFEN.** Una búsqueda web (`gosocket.net`, sobre una Nota Técnica de la SET; y
+`facturasend.com.py`, un proveedor de facturación electrónica paraguayo) confirmó que SIFEN sí tiene,
+en la práctica, un "Evento de Nominación" — para asociar el receptor real de un DTE emitido
+inicialmente sin nombre —, aunque ninguna fuente pública publicaba su XML exacto. Se repitió
+entonces el procedimiento de HU-10: se descargó el WSDL/XSD real del servicio de eventos con
+`curl --cert-type P12` (`.../de/ws/eventos/evento.wsdl.xsd1.xsd`, 2026-07-28) y se comparó contra el
+`tgGroupEvt` (el `xs:choice` que decide el tipo de evento dentro de `<rEve>`): **el XSD real en vivo
+tiene 12 opciones, no las 8 del manual de 2019** — agrega `rGEveNom` (nominación, el que esta
+historia necesita), `rGeVeConAutPre`, `rGeVeAjuSal`, `rGeVeCamCliExt` (específico de exportación,
+"Cambio de Cliente del Exterior" — no es el mismo evento que esta historia necesita, a pesar del
+nombre parecido: siempre exige país+dirección+RUC/documento tributario extranjero, sin distinguir
+persona/empresa) y `rGeVeTipExtDeu`. Es la primera vez en esta integración que el propio manual está
+completamente desactualizado respecto al catálogo de eventos vivo, no solo respecto al detalle de un
+campo — un nivel de divergencia más allá de lo que HU-07/HU-10 ya habían encontrado.
+
+**Estructura real de `rGEveNom` (confirmada por el XSD real, no por ninguna fuente pública):**
+`Id` (el CDC), `mOtEve` (motivo, 5-500 caracteres — igual que `rGeVeCan`, generado automáticamente
+por este sistema ya que ningún AC le pide al usuario un motivo), `iNatRec` (1=tiene RUC/2=no, igual
+criterio que `SifenDocumentXmlService.buildReceiver`), **`iTiOpe`** (documentado en el propio XSD
+real como *"Tipo de operacion: 1(B2B), 2(B2C), 4(B2F)"* — el campo clave de esta historia: sin
+código para "empresa extranjera" ni "persona extranjera" por separado, un receptor del exterior
+siempre es `4` sin importar si es persona o empresa), `cPaisRec`/`dDesPaisRe` (siempre obligatorios,
+a diferencia del DE donde están hardcodeados a Paraguay — acá si `iTiOpe=4` viene de una lista real
+de 249 países ISO-3166 alpha-3 con nombre en español, `paisType`), `iTiContRec` (persona
+física/jurídica, opcional — a diferencia del DE, donde `buildReceiver` no tiene de dónde sacar este
+dato y lo hardcodea a "1", **esta historia sí lo resuelve correctamente** porque su propio formulario
+ya le pregunta al usuario el tipo de cliente), `dRucRec`/`dDVRec` o `iTipIDRec`/`dDTipIDRec`/
+`dNumIDRec` (RUC o documento, mutuamente excluyentes), `dNomRec` (nombre/razón social, obligatorio),
+`dDirRec` (dirección, opcional salvo exterior). Campos opcionales del XSD real que esta historia
+deliberadamente no completa (mismo criterio de alcance que el gap de departamento/ciudad de HU-02):
+`dNomFanRec`, `dNumCasRec`, códigos de departamento/distrito/ciudad, `dTelRec`/`dCelRec`/`dEmailRec`,
+`dCodCliente`.
+
+**Decisión de diseño: el formulario modela exactamente 3 opciones (empresa/persona/exterior), no
+"empresa o persona" + un checkbox separado de "es del exterior".** Esto refleja fielmente el propio
+modelo de SIFEN: `iTiOpe` solo tiene 3 valores posibles (1/2/4), sin una cuarta combinación para
+"empresa del exterior" vs "persona del exterior" — forzar esa distinción adicional en la UI
+inventaría una granularidad que el evento real no soporta. AC-02 ("si es empresa o persona") y AC-04
+("si es del exterior") se satisfacen igual: el AC-02 exige como mínimo tipo+documento/RUC+nombre
+(los 3 casos lo piden), y el "también" de AC-04 ("también exige la dirección") se cumple porque
+"exterior" es, en este modelo, una tercera categoría con requisitos adicionales sobre el mismo
+formulario base, no una combinación libre con las otras dos.
+
+**Reuso de la infraestructura compartida de HU-10, según lo pedido explícitamente por esta
+historia:** se generalizó `SifenCancellationEventClient` → **`SifenEventClient`** (rename, sin
+ningún otro cambio de comportamiento) — su código ya era 100% genérico (arma el mismo sobre
+`rEnviEventoDe`/`dEvReg`/`gGroupGesEve` sea cual sea el evento adentro, parsea la misma forma de
+respuesta `rRetEnviEventoDe`/`gResProcEVe`); el rename solo hace explícito lo que ya era cierto, en
+vez de dejar un cliente genérico bajo un nombre que sugiere lo contrario. `SifenDocumentSigningService
+.signEvent`/`verifyEvent` (HU-10) se reusan sin ningún cambio — la firma de un evento no depende de
+qué contiene `gGroupTiEvt`. `SifenClientIdentificationEventXmlService` (nuevo) sigue exactamente el
+mismo patrón que `SifenCancellationEventXmlService` (mismo shell `<rGesEve><rEve>...<Signature/>
+</rGesEve>`, mismo `Id` de evento en segundos époch). `SifenInvoiceClientIdentificationService`
+(nuevo) orquesta igual que `SifenInvoiceCancellationService`: valida elegibilidad y los campos del
+formulario, persiste auditoría antes de la red, firma y envía, y mapea la respuesta real.
+
+**Diferencia clave con HU-10: una identificación aprobada NO cambia `sifenSubmissionStatus`.** La
+factura sigue "Aprobada"/"Aprobada con observación" exactamente igual — solo se agrega un flag nuevo
+`sifenClientIdentified` (true únicamente si SIFEN aprueba, AC-01) y se actualizan los campos de
+cliente ya existentes de la factura (`clientDisplayName`/`clientRucOverride`/
+`clientIdentityDocumentOverride`) para que el resto de la app (KuDE, listado, etc.) vea el cliente
+identificado sin que ningún otro punto de la app necesite saber que este evento existe. Un rechazo
+(AC-06) dejo el flag en `false`, permitiendo reintentar — a diferencia de la cancelación, que es
+terminal una vez aprobada, aquí no hay ninguna razón de negocio para bloquear un segundo intento tras
+un rechazo.
+
+**AC-01 (elegibilidad): "sin datos del cliente" se define exactamente igual que el criterio real de
+SIFEN para un receptor anónimo/"Innominado"** (RUC y documento de identidad ambos vacíos — el mismo
+criterio, ni más ni menos, que hace que `SifenDocumentXmlService.buildReceiver` tome su rama
+`iTipIDRec=5`/consumidor final), no por el nombre para mostrar (que sí puede tener un valor por
+defecto tipo "Consumidor Final" sin que eso cuente como "identificado"). Se expuso un método nuevo,
+`SifenInvoiceHeaderService.isReceiverUnidentified`, para no duplicar esta lógica — `InvoiceService`
+lo inyecta y lo usa para calcular `sifenClientIdentificationEligible` en `InvoiceResponse`, mismo
+patrón que `sifenCancellationDeadlineAt` de HU-10.
+
+**Hallazgo real no relacionado con SIFEN, encontrado ejercitando el endpoint en vivo (no por los
+tests con Mockito): un bug genuino de auto-invocación transaccional, latente en el patrón que HU-10
+ya había establecido.** `SifenInvoiceCancellationService.cancel()` (público, sin `@Transactional`)
+llama a `this.prepareForCancellation(...)` (paquete-privado, `@Transactional`) — una auto-invocación
+de Spring AOP que **omite silenciosamente la anotación `@Transactional`** (limitación documentada de
+Spring: un proxy CGLIB solo intercepta llamadas que llegan *a través* del proxy, nunca las que un
+método hace sobre `this` dentro de la misma instancia). Esto nunca causó un fallo visible en HU-10
+porque `prepareForCancellation` solo toca columnas propias de `Invoice` (ya materializadas al cargar
+la fila, sin sesión de Hibernate necesaria). Esta historia, con la misma estructura calcada
+(`identifyClient()` llamando a `this.prepareForIdentification(...)`), fue la primera en necesitar
+resolver una asociación *lazy* real (`Invoice.client`, vía `isReceiverUnidentified` → `buildReceiverData`
+→ `client.getRuc()`) — y ahí sí explotó, con `org.hibernate.LazyInitializationException: ... no
+session`, confirmado contra un backend en vivo real (no en JUnit: los tests con Mockito de este
+dominio nunca instancian un proxy Spring real, así que nunca podían haber detectado esto). Se
+corrigió con el patrón estándar de auto-inyección diferida de Spring: un campo `@Autowired @Lazy`
+apuntando al propio bean (`selfProxy`), con un método `self()` que cae de vuelta a `this` si Spring
+nunca lo inyectó (para que los tests unitarios existentes, que instancian la clase directamente sin
+contexto Spring, sigan funcionando sin cambios) — `identifyClient()` ahora llama a
+`self().prepareForIdentification(...)`/`self().recordIdentificationResult(...)`, pasando realmente
+por el proxy transaccional. **Deliberadamente no se tocó `SifenInvoiceCancellationService`** (mismo
+bug, todavía latente ahí) — sigue sin manifestarse porque su propio `prepareForCancellation` nunca
+toca una asociación lazy; corregirlo queda fuera del alcance de esta historia, documentado acá como
+deuda técnica conocida para quien la retome (mismo fix, una línea de patrón).
+
+**Segundo hallazgo operativo: el "flujo real end-to-end" de Playwright necesita un certificado válido
+real para el tenant demo, algo que ninguna historia anterior garantiza si su archivo de test corre
+solo.** `signEvent`/`sign` exigen `SifenCertificateService.requireActiveCertificate(tenantId)` —
+normalmente sembrado de rebote por otras specs SIFEN (HU-07/HU-18/HU-20) que suben un certificado al
+mismo tenant compartido cuando corre la suite completa (mismo caveat que HU-19 ya documentó para su
+propio caso). Correr `sifen-hu-11-identificar-cliente.spec.ts` en aislamiento no hereda ese
+certificado gratis. Se agregó un endpoint nuevo, solo test, `POST /api/admin/sifen-test-support/
+ensure-valid-certificate` (extrae la lógica ya existente `ensureValidCertificate` de
+`prepareForStatusCheck` a un endpoint standalone, sin sus otros efectos secundarios), que el nuevo
+Playwright llama explícitamente antes de su propio flujo real — a diferencia de HU-10, que hoy
+depende implícitamente del orden de ejecución de la suite completa para que esto funcione (mismo
+gap, no corregido ahí por estar fuera de alcance).
+
+**Verificación en vivo (2026-07-28), procedimiento para reproducir:** mismo patrón que HU-10 — un
+test JUnit temporal (`ThrowawayLiveSifenHu11Test`, borrado antes de este commit) construyó el evento
+de nominación real (CDC sintácticamente válido del RUC piloto `1137152-8`/timbrado `1137152`, nunca
+realmente aprobado) y lo firmó con el `.p12` real, sin necesidad de un contexto Spring/base de datos
+completo — se mockeó únicamente `SifenCertificateService.requireActiveCertificate` para devolver un
+`SifenActiveCertificateMaterial` cargado directamente del `.p12` real vía `KeyStore` estándar de
+Java, evitando construir un tenant/certificado real en base de datos solo para esta verificación. El
+XML firmado resultante se envolvió a mano en el mismo sobre SOAP que arma `SifenEventClient` y se
+envió con `curl --cert-type P12` al mismo endpoint real de HU-10
+(`https://sifen-test.set.gov.py/de/ws/eventos/evento.wsdl`). **Resultado: HTTP 200**,
+`rRetEnviEventoDe/gResProcEVe/dEstRes=Rechazado`, `gResProc/dCodRes=0160 "XML mal formado"` —
+**exactamente el mismo código y mensaje que HU-10 documentó**, confirmando en vivo, contra el
+servidor real: (a) el endpoint/dominio sigue siendo correcto para un evento distinto (nominación, no
+cancelación); (b) la forma de la respuesta es la misma que `SifenEventClient` ya parsea sin cambios;
+(c) **el "0160" es una propiedad del camino compartido de sobre/firma de eventos, no algo específico
+del payload de cancelación** — la misma limitación de HU-10 (ningún documento de este sistema llegó
+nunca a un "Aprobado" real, así que un CDC "nunca aprobado" siempre sería rechazado de todos modos,
+independientemente de si el 0160 se resolviera) se confirma que aplica igual acá. No se intentó
+re-diagnosticar el 0160 desde cero — HU-10 ya documentó exhaustivamente las variantes probadas (C14N
+inclusiva/exclusiva, `URI=""` vs `URI="#id"`, validación XSD completa con `xmllint`) sin aislar la
+causa, y esta historia no encontró ninguna pista nueva que justificara reabrir esa investigación
+dentro de su propio alcance (eventos, no homologación completa).
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `service/SifenEventClient.java` — **renombrado desde `SifenCancellationEventClient`** (HU-10), sin
+  cambios de comportamiento; javadoc actualizado para describir su rol genérico (usado ahora por
+  HU-10 y HU-11). Su test acompaña el rename (`SifenEventClientTest`).
+- `domain/enums/SifenClientIdentificationType.java` (nuevo) — `COMPANY`/`PERSON`/`FOREIGN`, mapeado
+  1:1 a `iTiOpe` (1/2/4).
+- `service/SifenForeignCountry.java` (nuevo) — subconjunto curado (17 países) del catálogo real de
+  249 (`paisType`), con el nombre oficial en español exacto que SIFEN documenta — no se expuso el
+  catálogo completo (desproporcionado para este dominio); debe mantenerse sincronizado a mano con la
+  lista homónima en `InvoiceDetailModal.tsx` (documentado en ambos lados).
+- `service/SifenClientIdentificationEventXmlService.java` (nuevo) — construye `<rGesEve>` sin firmar
+  con la estructura real de `rGEveNom` descrita arriba.
+- `service/SifenInvoiceClientIdentificationService.java` (nuevo) — orquesta AC-01 (elegibilidad,
+  incluye `SIFEN_INVOICE_CLIENT_ALREADY_IDENTIFIED` nuevo, reusa `SIFEN_INVOICE_NOT_APPROVED` de
+  HU-10), AC-02/AC-03/AC-04 (validación de campos por tipo de cliente — `SIFEN_CLIENT_IDENTIFICATION_
+  TYPE_REQUIRED/NAME_REQUIRED/RUC_INVALID/DOCUMENT_REQUIRED/ADDRESS_REQUIRED/COUNTRY_INVALID`
+  nuevos), AC-05 (persiste auditoría + actualiza campos de cliente de la factura), AC-06 (dejo la
+  factura intacta, registra el rechazo). `SIFEN_CLIENT_IDENTIFICATION_NO_RESPONSE` (502) sin
+  respuesta. Usa auto-inyección diferida (`@Autowired @Lazy` campo `selfProxy` + método `self()`) para
+  que sus propias llamadas internas a `prepareForIdentification`/`recordIdentificationResult` pasen
+  por el proxy transaccional real de Spring — ver el hallazgo de auto-invocación más arriba.
+- `domain/Invoice.java` — 12 columnas nuevas de auditoría/estado (`sifen_client_identified` +
+  11 campos de auditoría), migración `V27__sifen_invoice_client_identification.sql`.
+- `service/SifenInvoiceHeaderService.isReceiverUnidentified` (nuevo, público) — expone la misma
+  lógica de "consumidor final sin RUC ni documento" que `buildReceiverData` ya calculaba
+  internamente, para que `InvoiceService` la reuse sin duplicarla.
+- `service/InvoiceService` — inyecta `SifenInvoiceHeaderService` (dependencia nueva, sin ciclo:
+  `SifenInvoiceHeaderService` no depende de `InvoiceService`); calcula
+  `sifenClientIdentificationEligible` en `toDetailDto`.
+- `web/InvoiceController.identifySifenClient` — `POST /api/invoices/{id}/sifen/identify-client`.
+- `web/dto/InvoiceResponse` — 11 campos nuevos (elegibilidad + identificado + auditoría AC-05/AC-06).
+- `web/SifenInvoiceTestSupportController` — 2 endpoints nuevos, solo test:
+  `fabricate-client-identification-result/{approved}` (mismo rol que el equivalente de HU-10) y
+  `ensure-valid-certificate` (extraído del helper ya existente `ensureValidCertificate`, ver
+  "Segundo hallazgo operativo" arriba).
+
+**Tests backend**: `SifenClientIdentificationEventXmlServiceTest` (8 casos: estructura `rGesEve`,
+empresa emite RUC+B2B+persona jurídica, persona emite documento+B2C, exterior emite país+dirección+
+B2F+pasaporte, nunca emite `dTiGDE`, rechaza CDC en blanco, rechaza país desconocido).
+`SifenInvoiceClientIdentificationServiceTest` (16 casos: AC-01 aprobado/rechazado/ya-identificado/con-
+datos-previos, AC-02 nombre obligatorio, AC-03 RUC obligatorio y validado para empresa, AC-04
+dirección+país obligatorios y validados para exterior, AC-05 actualiza campos de cliente, AC-06 dejo
+intacto, sin respuesta, firma el evento con los datos reales). `InvoiceServiceTest` ganó 4 casos
+(elegibilidad true/false por estado/datos-previos/ya-identificado). `SifenEventClientTest` sin
+cambios de comportamiento (solo renombrado).
+
+**Playwright** (`e2e/tests/sifen-hu-11-identificar-cliente.spec.ts`, 10 casos): AC-01 (factura
+aprobada sin datos ofrece identificar; no aprobada no ofrece; con datos previos del cliente no
+ofrece; ya identificada no vuelve a ofrecerse — via `fabricate-client-identification-result`),
+AC-05 (SIFEN aprueba fabricado: registro histórico con usuario/nombre/documento visibles, cliente
+queda identificado), AC-06 (SIFEN rechaza fabricado: motivo visible, factura sin cambios, la opción
+sigue disponible para reintentar), AC-02/AC-03 (empresa sin RUC válido muestra error), AC-04
+(exterior sin dirección ni país muestra ambos errores), AC-02 (nombre obligatorio), y **un flujo real
+de punta a punta**: clic real → firma real → intento de red real contra el servicio de eventos,
+inalcanzable en el perfil `e2e` por diseño → confirma "SIFEN no respondió" y la factura queda sin
+cambios — mismo precedente que el Playwright de HU-10 para su propio camino de "sin respuesta".
 
 ## HU-10 — Cancelar una factura ya aprobada (Done)
 

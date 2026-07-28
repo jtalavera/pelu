@@ -25,11 +25,22 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
 /**
- * SIFEN HU-10: posts a signed cancellation event to SIFEN's event registration service ({@code
- * siRecepEvento}, {@code rEnviEventoDe}, Manual Técnico V150 sección 9.5), on the same mTLS
- * connection {@link SifenConnectionService} already knows how to build (HU-05) — same pattern as
- * {@link SifenDocumentReceptionClient} (HU-06) and {@link SifenDocumentQueryClient} (HU-07), just
- * against the events endpoint instead of reception/consulta.
+ * SIFEN HU-10/HU-11: posts a signed event (any event type — cancellation, nomination, ...) to
+ * SIFEN's event registration service ({@code siRecepEvento}, {@code rEnviEventoDe}, Manual Técnico
+ * V150 sección 9.5), on the same mTLS connection {@link SifenConnectionService} already knows how
+ * to build (HU-05) — same pattern as {@link SifenDocumentReceptionClient} (HU-06) and {@link
+ * SifenDocumentQueryClient} (HU-07), just against the events endpoint instead of
+ * reception/consulta.
+ *
+ * <p><b>Originally {@code SifenCancellationEventClient} (HU-10) — renamed and generalized during
+ * HU-11.</b> Nothing about sending/parsing an event envelope is specific to any one event type: the
+ * request is always {@code rEnviEventoDe/dId/dEvReg/gGroupGesEve} wrapping whatever signed {@code
+ * <rGesEve>} the caller built ({@link SifenCancellationEventXmlService} for HU-10, {@link
+ * SifenClientIdentificationEventXmlService} for HU-11 — both produce the same {@code <rGesEve>}
+ * shell, differing only in what {@code gGroupTiEvt} contains), and the response is always {@code
+ * rRetEnviEventoDe/gResProcEVe}. HU-10's own class already had zero cancellation-specific code —
+ * this rename just makes that explicit instead of leaving a generic client under a misleadingly
+ * narrow name.
  *
  * <p><b>Verified live (2026-07-28) against sifen-test.set.gov.py</b> (WSDL + XSD fetched with the
  * same {@code curl --cert-type P12} pattern used by every prior SIFEN story in this integration):
@@ -49,17 +60,17 @@ import org.xml.sax.InputSource;
  *       integration batches several).
  * </ul>
  *
- * A genuinely SIFEN-approved cancellation (AC-03's happy path) could not be verified live during
- * this story — see {@code SifenInvoiceCancellationService}'s javadoc and PROGRESS.md for why (no
- * document from this system has ever reached real "Aprobado" status to cancel in the first place).
- * What <b>was</b> verified live is the error path: a syntactically valid event sent for a CDC that
- * was never truly approved by SIFEN, exercising this exact client/parsing code end to end against
- * the real server.
+ * A genuinely SIFEN-approved cancellation (AC-03's happy path, HU-10) could not be verified live —
+ * see {@code SifenInvoiceCancellationService}'s javadoc and PROGRESS.md for why (no document from
+ * this system has ever reached real "Aprobado" status). What <b>was</b> verified live is the error
+ * path: a syntactically valid event sent for a CDC that was never truly approved by SIFEN,
+ * exercising this exact client/parsing code end to end against the real server — HU-11 hit the
+ * exact same wall for the nomination event, see PROGRESS.md's HU-11 section.
  */
 @Service
-public class SifenCancellationEventClient {
+public class SifenEventClient {
 
-  private static final Logger log = LoggerFactory.getLogger(SifenCancellationEventClient.class);
+  private static final Logger log = LoggerFactory.getLogger(SifenEventClient.class);
 
   /** Confirmed live: the WSDL's own soap12:address, i.e. the WSDL path minus "?wsdl". */
   private static final String EVENTOS_PATH = "/de/ws/eventos/evento.wsdl";
@@ -70,7 +81,7 @@ public class SifenCancellationEventClient {
   private final SifenConnectionProperties connectionProperties;
   private final FemmeTimeProperties timeProperties;
 
-  public SifenCancellationEventClient(
+  public SifenEventClient(
       SifenConnectionService connectionService,
       SifenConnectionProperties connectionProperties,
       FemmeTimeProperties timeProperties) {

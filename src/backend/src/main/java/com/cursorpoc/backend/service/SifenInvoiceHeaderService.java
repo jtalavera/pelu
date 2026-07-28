@@ -157,6 +157,19 @@ public class SifenInvoiceHeaderService {
   }
 
   /**
+   * SIFEN HU-11 AC-01: true when this invoice would be sent to SIFEN as an anonymous/"Innominado"
+   * receiver (no RUC and no identity document) — the same condition that makes {@link
+   * #buildReceiverData} take its consumidor-final branch. Exposed so {@code InvoiceService} can
+   * gate the "identify client" option without duplicating this lookup (must stay in sync with
+   * {@link #buildReceiverData} — same cross-reference discipline as {@code
+   * SifenReceiverIdentification}).
+   */
+  public boolean isReceiverUnidentified(Invoice invoice) {
+    SifenReceiverData receiver = buildReceiverData(invoice);
+    return isBlank(receiver.ruc()) && isBlank(receiver.identityDocumentNumber());
+  }
+
+  /**
    * AC-04: consumidor final sin RUC no exige datos de identificación — todos los campos quedan en
    * {@code null} salvo, si se informó, el nombre para mostrar. AC-06: RUC + nombre cuando el
    * cliente tiene RUC. AC-07: departamento y ciudad solo si se informó una dirección.

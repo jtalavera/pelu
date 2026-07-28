@@ -3,8 +3,10 @@ package com.cursorpoc.backend.web;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.InvoiceService;
 import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
+import com.cursorpoc.backend.service.SifenInvoiceClientIdentificationService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
 import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
+import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
@@ -34,14 +36,17 @@ public class InvoiceController {
   private final InvoiceService invoiceService;
   private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
   private final SifenInvoiceCancellationService sifenInvoiceCancellationService;
+  private final SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService;
 
   public InvoiceController(
       InvoiceService invoiceService,
       SifenInvoiceSubmissionService sifenInvoiceSubmissionService,
-      SifenInvoiceCancellationService sifenInvoiceCancellationService) {
+      SifenInvoiceCancellationService sifenInvoiceCancellationService,
+      SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService) {
     this.invoiceService = invoiceService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
     this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
+    this.sifenInvoiceClientIdentificationService = sifenInvoiceClientIdentificationService;
   }
 
   @PostMapping
@@ -143,6 +148,31 @@ public class InvoiceController {
     InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
     log.info(
         "POST /api/invoices/{}/sifen/cancel tenantId={} status=200", id, principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * SIFEN HU-11: registers a client-identification event with SIFEN for an invoice currently
+   * Aprobado/Aprobado con observación that was issued without client data and hasn't been
+   * identified before (AC-01). Returns the invoice's fresh state either way — SIFEN approving marks
+   * it identified and updates its client fields (AC-05); SIFEN rejecting leaves it exactly as it
+   * was, with the rejection reason recorded (AC-06).
+   */
+  @PostMapping("/{id}/sifen/identify-client")
+  public ResponseEntity<InvoiceResponse> identifySifenClient(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody InvoiceClientIdentificationRequest request) {
+    requirePrincipal(principal);
+    log.info(
+        "POST /api/invoices/{}/sifen/identify-client tenantId={}", id, principal.getTenantId());
+    sifenInvoiceClientIdentificationService.identifyClient(
+        principal.getTenantId(), id, principal.getUserId(), principal.getUsername(), request);
+    InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
+    log.info(
+        "POST /api/invoices/{}/sifen/identify-client tenantId={} status=200",
+        id,
+        principal.getTenantId());
     return ResponseEntity.ok(response);
   }
 

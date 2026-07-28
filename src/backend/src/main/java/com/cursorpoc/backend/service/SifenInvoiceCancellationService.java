@@ -21,8 +21,8 @@ import org.w3c.dom.Document;
  * rGeVeCan}) with SIFEN — the first event-registration interaction in this integration (HU-06/07/08
  * /09 only ever did document reception/query). Orchestrates {@link
  * SifenCancellationEventXmlService} (build) + {@link SifenDocumentSigningService#signEvent} (sign,
- * reusing HU-04's XML-DSig machinery) + {@link SifenCancellationEventClient} (send), mirroring how
- * {@link SifenInvoiceSubmissionService} orchestrates the equivalent pieces for the DE itself.
+ * reusing HU-04's XML-DSig machinery) + {@link SifenEventClient} (send), mirroring how {@link
+ * SifenInvoiceSubmissionService} orchestrates the equivalent pieces for the DE itself.
  *
  * <p><b>AC-01/AC-02 eligibility is checked, and the request's audit fields (date/time/user/reason —
  * AC-05) are persisted, in one short transaction before any network activity</b> — same rationale
@@ -40,8 +40,8 @@ import org.w3c.dom.Document;
  * this system has ever submitted reached genuine "Aprobado" status in SIFEN (three schema gaps
  * deferred to homologación — same limitation HU-06/07/08 already documented), so AC-03's happy path
  * (SIFEN approves the cancellation) could not be exercised live end-to-end. What was verified live
- * is {@link SifenCancellationEventClient} actually reaching the real event service and parsing a
- * real rejection-shaped response for AC-04's error-handling path.
+ * is {@link SifenEventClient} actually reaching the real event service and parsing a real
+ * rejection-shaped response for AC-04's error-handling path.
  */
 @Service
 public class SifenInvoiceCancellationService {
@@ -59,14 +59,14 @@ public class SifenInvoiceCancellationService {
   private final InvoiceRepository invoiceRepository;
   private final SifenCancellationEventXmlService eventXmlService;
   private final SifenDocumentSigningService signingService;
-  private final SifenCancellationEventClient eventClient;
+  private final SifenEventClient eventClient;
   private final FemmeTimeProperties timeProperties;
 
   public SifenInvoiceCancellationService(
       InvoiceRepository invoiceRepository,
       SifenCancellationEventXmlService eventXmlService,
       SifenDocumentSigningService signingService,
-      SifenCancellationEventClient eventClient,
+      SifenEventClient eventClient,
       FemmeTimeProperties timeProperties) {
     this.invoiceRepository = invoiceRepository;
     this.eventXmlService = eventXmlService;

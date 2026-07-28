@@ -7,12 +7,16 @@ import {
   Heading,
   Input,
   Modal,
+  Radio,
+  RadioGroup,
+  Select,
   Spinner,
   Text,
   Textarea,
   Label,
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
+import { isValidParaguayRuc } from "../util/paraguayRuc";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude, sendSifenKudeByEmail } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
@@ -77,7 +81,42 @@ export type InvoiceDetail = {
   sifenCancellationReason?: string | null;
   sifenCancellationResultCode?: string | null;
   sifenCancellationMessage?: string | null;
+  /** SIFEN HU-11 AC-01: true only while "identify client" is currently offered for this invoice. */
+  sifenClientIdentificationEligible?: boolean;
+  sifenClientIdentified?: boolean;
+  /** AC-05/AC-06: historical record of the last client-identification attempt, either outcome. */
+  sifenClientIdentificationRequestedAt?: string | null;
+  sifenClientIdentificationRequestedByEmail?: string | null;
+  sifenClientIdentificationClientType?: string | null;
+  sifenClientIdentificationName?: string | null;
+  sifenClientIdentificationRuc?: string | null;
+  sifenClientIdentificationIdentityDocument?: string | null;
+  sifenClientIdentificationAddress?: string | null;
+  sifenClientIdentificationCountryCode?: string | null;
+  sifenClientIdentificationResultCode?: string | null;
+  sifenClientIdentificationMessage?: string | null;
 };
+
+/** SIFEN HU-11 AC-04: must stay in sync with the backend's SifenForeignCountry enum. */
+const FOREIGN_COUNTRY_CODES = [
+  "ARG",
+  "BRA",
+  "URY",
+  "BOL",
+  "CHL",
+  "PER",
+  "COL",
+  "MEX",
+  "USA",
+  "CAN",
+  "ESP",
+  "FRA",
+  "ITA",
+  "DEU",
+  "GBR",
+  "CHN",
+  "JPN",
+] as const;
 
 /** SIFEN HU-07: badge variant + i18n key per sifenSubmissionStatus literal. */
 function sifenStatusLabelKey(status: string): string {
@@ -189,6 +228,18 @@ export function InvoiceDetailModal({
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [showIdentifyForm, setShowIdentifyForm] = useState(false);
+  const [identifyClientType, setIdentifyClientType] = useState<"COMPANY" | "PERSON" | "FOREIGN">(
+    "PERSON",
+  );
+  const [identifyRuc, setIdentifyRuc] = useState("");
+  const [identifyDocument, setIdentifyDocument] = useState("");
+  const [identifyName, setIdentifyName] = useState("");
+  const [identifyAddress, setIdentifyAddress] = useState("");
+  const [identifyCountryCode, setIdentifyCountryCode] = useState("");
+  const [identifyFieldErrors, setIdentifyFieldErrors] = useState<Record<string, string>>({});
+  const [identifying, setIdentifying] = useState(false);
+  const [identifyError, setIdentifyError] = useState<string | null>(null);
 
   // SIFEN HU-10 AC-02: ticks the deadline countdown without a full page refresh.
   useEffect(() => {
@@ -298,6 +349,74 @@ export function InvoiceDetailModal({
       setCancelError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setCancelling(false);
+    }
+  }
+
+  /**
+   * SIFEN HU-11: registers a client-identification event. AC-02/AC-03/AC-04's field-level
+   * validation happens client-side first (mirroring what the backend also enforces), so the user
+   * sees a specific error without a round-trip whenever possible.
+   */
+  async function handleIdentifyClient(e: React.FormEvent) {
+    e.preventDefault();
+    setIdentifyError(null);
+    const errors: Record<string, string> = {};
+    const trimmedName = identifyName.trim();
+    const trimmedRuc = identifyRuc.trim();
+    const trimmedDocument = identifyDocument.trim();
+    const trimmedAddress = identifyAddress.trim();
+
+    if (!trimmedName) {
+      errors.name = t("femme.billing.history.detail.sifen.identifyClientNameRequired");
+    }
+    if (identifyClientType === "COMPANY") {
+      if (!isValidParaguayRuc(trimmedRuc)) {
+        errors.ruc = t("femme.billing.history.detail.sifen.identifyClientRucInvalid");
+      }
+    } else {
+      if (!trimmedRuc && !trimmedDocument) {
+        errors.document = t("femme.billing.history.detail.sifen.identifyClientDocumentRequired");
+      } else if (trimmedRuc && !isValidParaguayRuc(trimmedRuc)) {
+        errors.ruc = t("femme.billing.history.detail.sifen.identifyClientRucInvalid");
+      }
+    }
+    if (identifyClientType === "FOREIGN") {
+      if (!trimmedAddress) {
+        errors.address = t("femme.billing.history.detail.sifen.identifyClientAddressRequired");
+      }
+      if (!identifyCountryCode) {
+        errors.country = t("femme.billing.history.detail.sifen.identifyClientCountryRequired");
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setIdentifyFieldErrors(errors);
+      return;
+    }
+    setIdentifyFieldErrors({});
+    setIdentifying(true);
+    try {
+      const updated = await femmePostJson<InvoiceDetail>(
+        `/api/invoices/${invoiceId}/sifen/identify-client`,
+        {
+          clientType: identifyClientType,
+          ruc: trimmedRuc || null,
+          identityDocumentNumber: trimmedDocument || null,
+          name: trimmedName,
+          address: identifyClientType === "FOREIGN" ? trimmedAddress : null,
+          countryCode: identifyClientType === "FOREIGN" ? identifyCountryCode : null,
+        },
+      );
+      setInvoice(updated);
+      setShowIdentifyForm(false);
+      setIdentifyRuc("");
+      setIdentifyDocument("");
+      setIdentifyName("");
+      setIdentifyAddress("");
+      setIdentifyCountryCode("");
+    } catch (err) {
+      setIdentifyError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setIdentifying(false);
     }
   }
 
@@ -779,6 +898,287 @@ export function InvoiceDetailModal({
                       )}
                     </div>
                   )}
+                {/* SIFEN HU-11 AC-01: identify the client on an invoice issued without one */}
+                {invoice.sifenClientIdentificationEligible && (
+                  <div className="flex flex-col gap-2 pt-2 border-t border-[rgb(var(--color-border))]">
+                    {identifyError && (
+                      <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                        {identifyError}
+                      </Alert>
+                    )}
+                    {!showIdentifyForm && (
+                      <div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="sifen-identify-client-button"
+                          onClick={() => setShowIdentifyForm(true)}
+                        >
+                          {t("femme.billing.history.detail.sifen.identifyClientButton")}
+                        </Button>
+                      </div>
+                    )}
+                    {showIdentifyForm && (
+                      <form
+                        className="flex flex-col gap-3"
+                        onSubmit={(e) => void handleIdentifyClient(e)}
+                        noValidate
+                      >
+                        <Heading as="h3" className="text-base">
+                          {t("femme.billing.history.detail.sifen.identifyClientTitle")}
+                        </Heading>
+                        <div>
+                          <Label id="identify-client-type-label">
+                            {t("femme.billing.history.detail.sifen.identifyClientTypeLabel")}
+                          </Label>
+                          <RadioGroup
+                            aria-labelledby="identify-client-type-label"
+                            value={identifyClientType}
+                            onChange={(value) => {
+                              setIdentifyClientType(value as "COMPANY" | "PERSON" | "FOREIGN");
+                              setIdentifyFieldErrors({});
+                            }}
+                            className="flex-row gap-4 mt-1"
+                            name="identify-client-type"
+                          >
+                            <label className="flex items-center gap-2 text-sm">
+                              <Radio value="PERSON" />
+                              {t("femme.billing.history.detail.sifen.identifyClientTypePerson")}
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <Radio value="COMPANY" />
+                              {t("femme.billing.history.detail.sifen.identifyClientTypeCompany")}
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <Radio value="FOREIGN" />
+                              {t("femme.billing.history.detail.sifen.identifyClientTypeForeign")}
+                            </label>
+                          </RadioGroup>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="identify-client-name">
+                            {t("femme.billing.history.detail.sifen.identifyClientNameLabel")}
+                          </Label>
+                          <Input
+                            id="identify-client-name"
+                            value={identifyName}
+                            onChange={(e) => {
+                              setIdentifyName(e.target.value);
+                              setIdentifyFieldErrors((prev) => ({ ...prev, name: "" }));
+                            }}
+                            placeholder={t(
+                              "femme.billing.history.detail.sifen.identifyClientNamePlaceholder",
+                            )}
+                            aria-invalid={!!identifyFieldErrors.name}
+                            aria-describedby={
+                              identifyFieldErrors.name ? "identify-client-name-err" : undefined
+                            }
+                            className="mt-1 w-full"
+                          />
+                          <FieldValidationError id="identify-client-name-err">
+                            {identifyFieldErrors.name}
+                          </FieldValidationError>
+                        </div>
+
+                        {identifyClientType === "COMPANY" ? (
+                          <div>
+                            <Label htmlFor="identify-client-ruc">
+                              {t("femme.billing.history.detail.sifen.identifyClientRucLabel")}
+                            </Label>
+                            <Input
+                              id="identify-client-ruc"
+                              value={identifyRuc}
+                              onChange={(e) => {
+                                setIdentifyRuc(e.target.value);
+                                setIdentifyFieldErrors((prev) => ({ ...prev, ruc: "" }));
+                              }}
+                              placeholder={t(
+                                "femme.billing.history.detail.sifen.identifyClientRucPlaceholder",
+                              )}
+                              aria-invalid={!!identifyFieldErrors.ruc}
+                              aria-describedby={
+                                identifyFieldErrors.ruc ? "identify-client-ruc-err" : undefined
+                              }
+                              className="mt-1 w-full"
+                            />
+                            <FieldValidationError id="identify-client-ruc-err">
+                              {identifyFieldErrors.ruc}
+                            </FieldValidationError>
+                          </div>
+                        ) : (
+                          <div>
+                            <Label htmlFor="identify-client-document">
+                              {t("femme.billing.history.detail.sifen.identifyClientDocumentLabel")}
+                            </Label>
+                            <Input
+                              id="identify-client-document"
+                              value={identifyDocument}
+                              onChange={(e) => {
+                                setIdentifyDocument(e.target.value);
+                                setIdentifyFieldErrors((prev) => ({ ...prev, document: "" }));
+                              }}
+                              placeholder={t(
+                                "femme.billing.history.detail.sifen.identifyClientDocumentPlaceholder",
+                              )}
+                              aria-invalid={!!identifyFieldErrors.document}
+                              aria-describedby={
+                                identifyFieldErrors.document
+                                  ? "identify-client-document-err"
+                                  : undefined
+                              }
+                              className="mt-1 w-full"
+                            />
+                            <FieldValidationError id="identify-client-document-err">
+                              {identifyFieldErrors.document}
+                            </FieldValidationError>
+                          </div>
+                        )}
+
+                        {identifyClientType === "FOREIGN" && (
+                          <>
+                            <div>
+                              <Label htmlFor="identify-client-country">
+                                {t("femme.billing.history.detail.sifen.identifyClientCountryLabel")}
+                              </Label>
+                              <Select
+                                id="identify-client-country"
+                                value={identifyCountryCode}
+                                onChange={(e) => {
+                                  setIdentifyCountryCode(e.target.value);
+                                  setIdentifyFieldErrors((prev) => ({ ...prev, country: "" }));
+                                }}
+                                invalid={!!identifyFieldErrors.country}
+                                aria-describedby={
+                                  identifyFieldErrors.country
+                                    ? "identify-client-country-err"
+                                    : undefined
+                                }
+                                className="mt-1 w-full"
+                              >
+                                <option value="">
+                                  {t(
+                                    "femme.billing.history.detail.sifen.identifyClientCountryPlaceholder",
+                                  )}
+                                </option>
+                                {FOREIGN_COUNTRY_CODES.map((code) => (
+                                  <option key={code} value={code}>
+                                    {t(`femme.billing.history.detail.sifen.countries.${code}`)}
+                                  </option>
+                                ))}
+                              </Select>
+                              <FieldValidationError id="identify-client-country-err">
+                                {identifyFieldErrors.country}
+                              </FieldValidationError>
+                            </div>
+                            <div>
+                              <Label htmlFor="identify-client-address">
+                                {t("femme.billing.history.detail.sifen.identifyClientAddressLabel")}
+                              </Label>
+                              <Input
+                                id="identify-client-address"
+                                value={identifyAddress}
+                                onChange={(e) => {
+                                  setIdentifyAddress(e.target.value);
+                                  setIdentifyFieldErrors((prev) => ({ ...prev, address: "" }));
+                                }}
+                                placeholder={t(
+                                  "femme.billing.history.detail.sifen.identifyClientAddressPlaceholder",
+                                )}
+                                aria-invalid={!!identifyFieldErrors.address}
+                                aria-describedby={
+                                  identifyFieldErrors.address
+                                    ? "identify-client-address-err"
+                                    : undefined
+                                }
+                                className="mt-1 w-full"
+                              />
+                              <FieldValidationError id="identify-client-address-err">
+                                {identifyFieldErrors.address}
+                              </FieldValidationError>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="flex gap-2">
+                          <Button
+                            type="submit"
+                            variant="secondary"
+                            size="sm"
+                            disabled={identifying}
+                            data-testid="sifen-identify-client-confirm-button"
+                          >
+                            {identifying
+                              ? t("femme.billing.history.detail.sifen.identifyClientSubmitting")
+                              : t("femme.billing.history.detail.sifen.identifyClientSubmit")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setShowIdentifyForm(false)}
+                          >
+                            {t("femme.billing.history.detail.sifen.identifyClientDismiss")}
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+                {/* SIFEN HU-11 AC-05/AC-06: last client-identification attempt, either outcome */}
+                {invoice.sifenClientIdentificationRequestedAt && (
+                  <div
+                    className="flex flex-col gap-1 pt-2 border-t border-[rgb(var(--color-border))]"
+                    data-testid="sifen-client-identification-history"
+                  >
+                    <Text className="font-medium">
+                      {t("femme.billing.history.detail.sifen.identifyClientHistoryTitle")}
+                    </Text>
+                    {!invoice.sifenClientIdentified && invoice.sifenClientIdentificationMessage && (
+                      <Alert
+                        variant="destructive"
+                        title={t("femme.billing.history.detail.sifen.identifyClientRejectedMessage")}
+                        data-testid="sifen-client-identification-rejected"
+                      >
+                        {invoice.sifenClientIdentificationMessage}
+                      </Alert>
+                    )}
+                    <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                      {t("femme.billing.history.detail.sifen.identifyClientHistoryRequestedAt")}:{" "}
+                      {formatParaguayDateTime(invoice.sifenClientIdentificationRequestedAt, dateLocale)}
+                    </Text>
+                    {invoice.sifenClientIdentificationRequestedByEmail && (
+                      <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                        {t("femme.billing.history.detail.sifen.identifyClientHistoryRequestedBy")}:{" "}
+                        {invoice.sifenClientIdentificationRequestedByEmail}
+                      </Text>
+                    )}
+                    {invoice.sifenClientIdentificationName && (
+                      <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                        {t("femme.billing.history.detail.sifen.identifyClientHistoryName")}:{" "}
+                        {invoice.sifenClientIdentificationName}
+                      </Text>
+                    )}
+                    {invoice.sifenClientIdentificationRuc && (
+                      <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                        {t("femme.billing.history.detail.sifen.identifyClientHistoryRuc")}:{" "}
+                        {invoice.sifenClientIdentificationRuc}
+                      </Text>
+                    )}
+                    {invoice.sifenClientIdentificationIdentityDocument && (
+                      <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                        {t("femme.billing.history.detail.sifen.identifyClientHistoryDocument")}:{" "}
+                        {invoice.sifenClientIdentificationIdentityDocument}
+                      </Text>
+                    )}
+                    {invoice.sifenClientIdentificationAddress && (
+                      <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                        {t("femme.billing.history.detail.sifen.identifyClientHistoryAddress")}:{" "}
+                        {invoice.sifenClientIdentificationAddress}
+                      </Text>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

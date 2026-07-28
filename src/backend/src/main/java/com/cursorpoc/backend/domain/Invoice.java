@@ -152,6 +152,53 @@ public class Invoice {
   @Column(name = "sifen_cancellation_protocol_number", length = 10)
   private String sifenCancellationProtocolNumber;
 
+  /**
+   * SIFEN HU-11 AC-01: true only once SIFEN itself approves a client-identification event ("Evento
+   * de Nominación", {@code rGEveNom}) for this invoice — never set locally without a real SIFEN
+   * approval. Unlike HU-10's {@code CANCELLED} transition, a rejected attempt (AC-06) leaves this
+   * {@code false}, so the option remains offered for another attempt.
+   */
+  @Column(name = "sifen_client_identified", nullable = false)
+  private boolean sifenClientIdentified;
+
+  @Column(name = "sifen_client_identification_requested_at")
+  private LocalDateTime sifenClientIdentificationRequestedAt;
+
+  @Column(name = "sifen_client_identification_requested_by_user_id")
+  private Long sifenClientIdentificationRequestedByUserId;
+
+  @Column(name = "sifen_client_identification_requested_by_email", length = 320)
+  private String sifenClientIdentificationRequestedByEmail;
+
+  /** AC-02: which of the three choices (empresa/persona/exterior) the last attempt used. */
+  @Column(name = "sifen_client_identification_client_type", length = 20)
+  private String sifenClientIdentificationClientType;
+
+  @Column(name = "sifen_client_identification_ruc", length = 20)
+  private String sifenClientIdentificationRuc;
+
+  @Column(name = "sifen_client_identification_identity_document", length = 20)
+  private String sifenClientIdentificationIdentityDocument;
+
+  @Column(name = "sifen_client_identification_name", length = 255)
+  private String sifenClientIdentificationName;
+
+  /** AC-04: only ever populated for a foreign client. */
+  @Column(name = "sifen_client_identification_address", length = 255)
+  private String sifenClientIdentificationAddress;
+
+  @Column(name = "sifen_client_identification_country_code", length = 3)
+  private String sifenClientIdentificationCountryCode;
+
+  @Column(name = "sifen_client_identification_result_code", length = 10)
+  private String sifenClientIdentificationResultCode;
+
+  @Column(name = "sifen_client_identification_message", length = 2000)
+  private String sifenClientIdentificationMessage;
+
+  @Column(name = "sifen_client_identification_protocol_number", length = 10)
+  private String sifenClientIdentificationProtocolNumber;
+
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
 
@@ -410,6 +457,115 @@ public class Invoice {
 
   public void setSifenCancellationProtocolNumber(String sifenCancellationProtocolNumber) {
     this.sifenCancellationProtocolNumber = sifenCancellationProtocolNumber;
+  }
+
+  public boolean isSifenClientIdentified() {
+    return sifenClientIdentified;
+  }
+
+  public void setSifenClientIdentified(boolean sifenClientIdentified) {
+    this.sifenClientIdentified = sifenClientIdentified;
+  }
+
+  public LocalDateTime getSifenClientIdentificationRequestedAt() {
+    return sifenClientIdentificationRequestedAt;
+  }
+
+  public void setSifenClientIdentificationRequestedAt(
+      LocalDateTime sifenClientIdentificationRequestedAt) {
+    this.sifenClientIdentificationRequestedAt = sifenClientIdentificationRequestedAt;
+  }
+
+  public Long getSifenClientIdentificationRequestedByUserId() {
+    return sifenClientIdentificationRequestedByUserId;
+  }
+
+  public void setSifenClientIdentificationRequestedByUserId(
+      Long sifenClientIdentificationRequestedByUserId) {
+    this.sifenClientIdentificationRequestedByUserId = sifenClientIdentificationRequestedByUserId;
+  }
+
+  public String getSifenClientIdentificationRequestedByEmail() {
+    return sifenClientIdentificationRequestedByEmail;
+  }
+
+  public void setSifenClientIdentificationRequestedByEmail(
+      String sifenClientIdentificationRequestedByEmail) {
+    this.sifenClientIdentificationRequestedByEmail = sifenClientIdentificationRequestedByEmail;
+  }
+
+  public String getSifenClientIdentificationClientType() {
+    return sifenClientIdentificationClientType;
+  }
+
+  public void setSifenClientIdentificationClientType(String sifenClientIdentificationClientType) {
+    this.sifenClientIdentificationClientType = sifenClientIdentificationClientType;
+  }
+
+  public String getSifenClientIdentificationRuc() {
+    return sifenClientIdentificationRuc;
+  }
+
+  public void setSifenClientIdentificationRuc(String sifenClientIdentificationRuc) {
+    this.sifenClientIdentificationRuc = sifenClientIdentificationRuc;
+  }
+
+  public String getSifenClientIdentificationIdentityDocument() {
+    return sifenClientIdentificationIdentityDocument;
+  }
+
+  public void setSifenClientIdentificationIdentityDocument(
+      String sifenClientIdentificationIdentityDocument) {
+    this.sifenClientIdentificationIdentityDocument = sifenClientIdentificationIdentityDocument;
+  }
+
+  public String getSifenClientIdentificationName() {
+    return sifenClientIdentificationName;
+  }
+
+  public void setSifenClientIdentificationName(String sifenClientIdentificationName) {
+    this.sifenClientIdentificationName = sifenClientIdentificationName;
+  }
+
+  public String getSifenClientIdentificationAddress() {
+    return sifenClientIdentificationAddress;
+  }
+
+  public void setSifenClientIdentificationAddress(String sifenClientIdentificationAddress) {
+    this.sifenClientIdentificationAddress = sifenClientIdentificationAddress;
+  }
+
+  public String getSifenClientIdentificationCountryCode() {
+    return sifenClientIdentificationCountryCode;
+  }
+
+  public void setSifenClientIdentificationCountryCode(String sifenClientIdentificationCountryCode) {
+    this.sifenClientIdentificationCountryCode = sifenClientIdentificationCountryCode;
+  }
+
+  public String getSifenClientIdentificationResultCode() {
+    return sifenClientIdentificationResultCode;
+  }
+
+  public void setSifenClientIdentificationResultCode(String sifenClientIdentificationResultCode) {
+    this.sifenClientIdentificationResultCode = sifenClientIdentificationResultCode;
+  }
+
+  public String getSifenClientIdentificationMessage() {
+    return sifenClientIdentificationMessage;
+  }
+
+  public void setSifenClientIdentificationMessage(String sifenClientIdentificationMessage) {
+    this.sifenClientIdentificationMessage = sifenClientIdentificationMessage;
+  }
+
+  public String getSifenClientIdentificationProtocolNumber() {
+    return sifenClientIdentificationProtocolNumber;
+  }
+
+  public void setSifenClientIdentificationProtocolNumber(
+      String sifenClientIdentificationProtocolNumber) {
+    this.sifenClientIdentificationProtocolNumber = sifenClientIdentificationProtocolNumber;
   }
 
   public String getBusinessRuc() {

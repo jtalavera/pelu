@@ -74,6 +74,7 @@ public class InvoiceService {
   private final BusinessProfileRepository businessProfileRepository;
   private final ServiceRecordRepository serviceRecordRepository;
   private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -84,7 +85,8 @@ public class InvoiceService {
       SalonServiceRepository salonServiceRepository,
       BusinessProfileRepository businessProfileRepository,
       ServiceRecordRepository serviceRecordRepository,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceHeaderService sifenInvoiceHeaderService) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -94,6 +96,7 @@ public class InvoiceService {
     this.businessProfileRepository = businessProfileRepository;
     this.serviceRecordRepository = serviceRecordRepository;
     this.timeProperties = timeProperties;
+    this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
   }
 
   @Transactional
@@ -591,7 +594,36 @@ public class InvoiceService {
         i.getSifenCancellationRequestedByEmail(),
         i.getSifenCancellationReason(),
         i.getSifenCancellationResultCode(),
-        i.getSifenCancellationMessage());
+        i.getSifenCancellationMessage(),
+        sifenClientIdentificationEligible(i),
+        i.isSifenClientIdentified(),
+        toInstant(i.getSifenClientIdentificationRequestedAt()),
+        i.getSifenClientIdentificationRequestedByEmail(),
+        i.getSifenClientIdentificationClientType(),
+        i.getSifenClientIdentificationName(),
+        i.getSifenClientIdentificationRuc(),
+        i.getSifenClientIdentificationIdentityDocument(),
+        i.getSifenClientIdentificationAddress(),
+        i.getSifenClientIdentificationCountryCode(),
+        i.getSifenClientIdentificationResultCode(),
+        i.getSifenClientIdentificationMessage());
+  }
+
+  /**
+   * SIFEN HU-11 AC-01: the "identify client" option only appears for an invoice currently Aprobado/
+   * Aprobado con observación, issued without client data (an anonymous/"Innominado" receiver — see
+   * {@link SifenInvoiceHeaderService#isReceiverUnidentified}), and not already identified.
+   */
+  private boolean sifenClientIdentificationEligible(Invoice i) {
+    SifenSubmissionStatus status = i.getSifenSubmissionStatus();
+    if (status != SifenSubmissionStatus.APPROVED
+        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+      return false;
+    }
+    if (i.isSifenClientIdentified()) {
+      return false;
+    }
+    return sifenInvoiceHeaderService.isReceiverUnidentified(i);
   }
 
   /**

@@ -31,9 +31,8 @@ import org.w3c.dom.Document;
  * eligibility, AC-03 (SIFEN approves -> CANCELLED), AC-04 (SIFEN rejects -> status untouched), and
  * AC-05 (audit fields persisted either way). Real SIFEN approval of a cancellation could not be
  * observed live during this story (see PROGRESS.md), so the "approves" branch here is exercised
- * with a mocked {@link SifenCancellationEventClient} — the same limitation, and the same testing
- * strategy, HU-06/HU-07's own submission/query services already documented for their own "Aprobado"
- * branches.
+ * with a mocked {@link SifenEventClient} — the same limitation, and the same testing strategy,
+ * HU-06/HU-07's own submission/query services already documented for their own "Aprobado" branches.
  */
 @ExtendWith(MockitoExtension.class)
 class SifenInvoiceCancellationServiceTest {
@@ -46,7 +45,7 @@ class SifenInvoiceCancellationServiceTest {
 
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private SifenDocumentSigningService signingService;
-  @Mock private SifenCancellationEventClient eventClient;
+  @Mock private SifenEventClient eventClient;
 
   private final SifenCancellationEventXmlService eventXmlService =
       new SifenCancellationEventXmlService();

@@ -34,13 +34,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Exercises {@link SifenCancellationEventClient} against a local mock HTTPS server standing in for
- * SIFEN's event registration service ({@code siRecepEvento}) — response shapes per the real, live
- * {@code evento.wsdl.xsd1.xsd} fetched (2026-07-28) for this story: {@code rRetEnviEventoDe/
+ * Exercises {@link SifenEventClient} against a local mock HTTPS server standing in for SIFEN's
+ * event registration service ({@code siRecepEvento}) — response shapes per the real, live {@code
+ * evento.wsdl.xsd1.xsd} fetched (2026-07-28) for this story: {@code rRetEnviEventoDe/
  * dFecProc/gResProcEVe(dEstRes,dProtAut?,id,gResProc*(dCodRes,dMsgRes))}.
  */
 @ExtendWith(MockitoExtension.class)
-class SifenCancellationEventClientTest {
+class SifenEventClientTest {
 
   private static final String RUC_MATCHING_TENANT = "12345678-9";
 
@@ -164,8 +164,7 @@ class SifenCancellationEventClientTest {
         .contains("<dEvReg><gGroupGesEve><rGesEve><rEve Id=\"1\"/></rGesEve></gGroupGesEve>");
   }
 
-  private SifenCancellationEventClient newClient(
-      SifenActiveCertificateMaterial material, int port) {
+  private SifenEventClient newClient(SifenActiveCertificateMaterial material, int port) {
     when(certificateService.requireActiveCertificate(1L)).thenReturn(material);
     BusinessProfile profile = new BusinessProfile();
     profile.setRuc(RUC_MATCHING_TENANT);
@@ -176,8 +175,7 @@ class SifenCancellationEventClientTest {
     SifenConnectionService connectionService =
         new SifenConnectionService(
             certificateService, businessProfileRepository, connectionProperties);
-    return new SifenCancellationEventClient(
-        connectionService, connectionProperties, new FemmeTimeProperties());
+    return new SifenEventClient(connectionService, connectionProperties, new FemmeTimeProperties());
   }
 
   private static SifenActiveCertificateMaterial loadMaterial(String resourcePath, String password)
@@ -185,10 +183,7 @@ class SifenCancellationEventClientTest {
     byte[] bytes =
         Files.readAllBytes(
             Path.of(
-                SifenCancellationEventClientTest.class
-                    .getClassLoader()
-                    .getResource(resourcePath)
-                    .getPath()));
+                SifenEventClientTest.class.getClassLoader().getResource(resourcePath).getPath()));
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(new ByteArrayInputStream(bytes), password.toCharArray());
     String alias = keyStore.aliases().nextElement();

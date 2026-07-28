@@ -42,4 +42,21 @@ public record InvoiceResponse(
     String sifenCancellationRequestedByEmail,
     String sifenCancellationReason,
     String sifenCancellationResultCode,
-    String sifenCancellationMessage) {}
+    String sifenCancellationMessage,
+    // SIFEN HU-11 AC-01: true only while this invoice is currently eligible for "identify client" —
+    // approved, issued without client data, not yet identified — so the frontend doesn't need to
+    // reimplement that eligibility logic (SifenInvoiceClientIdentificationService.requireEligible
+    // is still the authoritative check the endpoint itself re-validates).
+    boolean sifenClientIdentificationEligible,
+    boolean sifenClientIdentified,
+    // AC-05/AC-06: historical record of the last client-identification attempt, either outcome.
+    Instant sifenClientIdentificationRequestedAt,
+    String sifenClientIdentificationRequestedByEmail,
+    String sifenClientIdentificationClientType,
+    String sifenClientIdentificationName,
+    String sifenClientIdentificationRuc,
+    String sifenClientIdentificationIdentityDocument,
+    String sifenClientIdentificationAddress,
+    String sifenClientIdentificationCountryCode,
+    String sifenClientIdentificationResultCode,
+    String sifenClientIdentificationMessage) {}
