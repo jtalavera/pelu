@@ -13,8 +13,8 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-18 Cargar certificado y clave | ✅ Done | Ver detalle abajo. ⚠️ Cifrado en reposo hoy no cumple RT-09/RT-10 fuera de `e2e` — ver "Deuda técnica" abajo. |
 | HU-20 Calcular estado del certificado | ✅ Done | Ver detalle abajo. |
 | HU-21 Usar certificado vigente automáticamente | ✅ Done | Ver detalle abajo. |
-| HU-05 Conectarse de forma segura con SIFEN | ⬜ Next | |
-| HU-01 Generar número de control | ⬜ Todo (Frente B, en paralelo con HU-05) | |
+| HU-05 Conectarse de forma segura con SIFEN | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real. |
+| HU-01 Generar número de control | ⬜ Next (Frente B de la Fase 1) | |
 | HU-02 Datos identificación/timbrado/emisor/receptor | ⬜ Todo | |
 | HU-03 Servicios facturados y totales | ⬜ Todo | |
 | HU-04 Firmar digitalmente | ⬜ Todo | |
@@ -24,22 +24,114 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-05 (Conectarse de forma segura con SIFEN),
-Frente A de la Fase 1. Depende solo de HU-21 (ya hecho) para obtener el certificado. Necesita
-investigar contra la documentación técnica real de SIFEN (`Manual Tecnico V150.pdf` — ver capítulo
-de servicios web / WSDL) y buscar en internet los endpoints exactos del ambiente de prueba
-(`sifen-test.set.gov.py` o similar — confirmar la URL real, no asumirla) para el servicio de
-recepción síncrona (`rEnviDe`/similar). El WebClient/HttpClient debe autenticarse con mTLS usando
-`SifenActiveCertificateMaterial.keyStore()` + `keystorePassword()` (vía `KeyManagerFactory` +
-`SSLContext`), no con Basic Auth ni API key. AC-04 pide poder cambiar entre ambiente de prueba y
-producción solo por configuración (agregar `app.femme.sifen.environment=TEST|PRODUCTION` con las
-URLs base de cada ambiente). AC-05 pide loguear cada intento de conexión (fecha, hora, ambiente,
-resultado) — posiblemente una tabla nueva o alcanza con logs INFO/ERROR ya exigidos por CLAUDE.md;
-decidir si conviene persistirlo (podría reusarse luego para EP-05 homologación). Como esta historia
-recién puede probarse de verdad contra el ambiente de prueba real de SIFEN (o quedarse en "compila
-y no lanza excepción" si no hay conectividad/carga aún el timbrado 1137152 provisto en la sección
-"Configuración del ambiente de pruebas" del spec), evaluar si hace falta pedir confirmación al
-usuario sobre cómo validar la conexión end-to-end sin acceso real a SIFEN todavía.
+**Próximo paso al reanudar el loop:** implementar HU-01 (Generar el número de control de una
+factura), inicio del Frente B de la Fase 1 (en paralelo conceptual con HU-05, ya cerrado). Es
+lógica pura (CDC de 44 caracteres, dígito verificador, código de seguridad aleatorio, determinismo
+para la misma factura) — no depende de red ni de SIFEN, así que es 100% testeable con JUnit sin las
+complicaciones de HU-05. Consultar el Manual Técnico (capítulo del "Número de Control" / CDC,
+buscar "44" o "dígito verificador" en el texto extraído) para el algoritmo exacto de cálculo del
+dígito verificador (probablemente módulo 11, común en documentos tributarios paraguayos) antes de
+inventar uno.
+
+## HU-05 — Conectarse de forma segura con SIFEN (Done)
+
+**La pieza más importante de esta historia fue de investigación, no de código** — quedó
+completamente verificada en vivo contra el ambiente de prueba real de SIFEN, con un certificado
+real. Ver "Certificado real y verificación en vivo" más abajo para cómo reproducirlo.
+
+**Hallazgos técnicos (Manual Técnico V150.pdf + verificación en vivo):**
+- URLs reales de los WSDL (sección 7.10 del manual, tabla "Resumen de las Direcciones
+  Electrónicas..."): producción en `https://sifen.set.gov.py/de/ws/...`, prueba en
+  `https://sifen-test.set.gov.py/de/ws/...`. El manual tiene una **errata**: la URL de prueba del
+  servicio síncrono de recepción figura como `recibe.wsd?wsdl` (falta la "l" final) — verificado en
+  vivo que el path real es `recibe.wsdl?wsdl`, igual que producción.
+- TLS 1.2 con **autenticación mutua obligatoria** (sección 7.9) — confirmado en vivo: el servidor
+  real manda `Request CERT` durante el handshake TLS.
+- Comportamiento real ante una conexión sin certificado válido: el handshake TLS se completa
+  igual (el servidor no lo corta a ese nivel), pero la capa de aplicación (un gateway F5 BIG-IP)
+  responde `HTTP 302` con `Location: /vdesk/hangup.php3` en vez de servir el WSDL. Con el
+  certificado real, correcto: `HTTP 200`, `Content-Type: text/xml`, cuerpo = WSDL real de
+  `rEnviDe`. Esta es la señal que usa `SifenConnectionService` para distinguir éxito de rechazo —
+  **no** se basa en capturar una excepción TLS.
+- El RUC del contribuyente va embebido en el certificado como una entrada `directoryName` dentro de
+  `Subject Alternative Name`, con el atributo `serialNumber` (OID `2.5.4.5`) conteniendo
+  `RUC<valor>`. Importante: la API de Java (`X509Certificate.getSubjectAlternativeNames()`) **no**
+  resuelve ese OID a un nombre amigable — lo devuelve como texto crudo
+  `2.5.4.5=#<hex DER>`, que hay que decodificar a mano (tag DER + longitud + contenido
+  PrintableString/UTF8String). Verificado con el certificado real: RUC extraído = `1137152-8`,
+  coincide exactamente con el Timbrado `1137152` de la sección "Configuración del ambiente de
+  pruebas" del spec.
+
+**Backend**:
+- `config/SifenConnectionProperties.java` (prefijo `app.femme.sifen.connection`) — enum
+  `Environment{TEST,PRODUCTION}` + URL base por ambiente (AC-04: cambiar de ambiente es 100%
+  configuración, cero código).
+- `service/SifenConnectionResult.java` — record con el ambiente usado + timestamp; HU-02 (AC-08,
+  leyenda de "sin valor comercial") y HU-06 van a necesitar saber en qué ambiente se conectó.
+- `service/SifenConnectionService.connect(tenantId)`:
+  1. Resuelve el certificado activo vía `SifenCertificateService.requireActiveCertificate` (HU-21).
+  2. **AC-02, antes que nada**: extrae el RUC del certificado y lo compara con
+     `BusinessProfile.ruc` del tenant — si no coincide (o cualquiera de los dos falta), rechaza
+     con `SIFEN_CERT_RUC_MISMATCH` **sin intentar ninguna conexión de red**.
+  3. Arma un `SSLContext` TLSv1.2 con `KeyManagerFactory` (identidad cliente = el certificado del
+     tenant) y `TrustManager` por defecto (confía en la CA real del servidor de SIFEN —
+     DigiCert — sin necesidad de trust store custom).
+  4. Hace `GET` al WSDL de recepción síncrona con `java.net.http.HttpClient`; `200` = éxito,
+     cualquier otra cosa (incluida una excepción de red/TLS) = `SIFEN_CONNECTION_REJECTED`.
+  5. Loguea cada intento (INFO en éxito, ERROR en rechazo) con tenantId/ambiente/certificateId —
+     ver "Decisión: AC-05 sin tabla nueva" abajo.
+- **AC-03 (CA no habilitada) quedó deliberadamente sin validación propia** — por decisión del
+  usuario ("RUC check now, defer PSC trust store"), ese chequeo lo termina haciendo el propio
+  servidor de SIFEN al validar el certificado del cliente en el handshake/gateway (ya verificado en
+  vivo: un certificado autofirmado nuestro también cae en el mismo `302 → /vdesk/hangup.php3`).
+  Pendiente si se quiere una validación propia más temprana: conseguir el bundle de raíces PSC
+  habilitadas (`https://www.acraiz.gov.py/html/Certif_1PrestaServ.html`) y agregar un
+  `TrustManager` adicional solo para ese chequeo.
+- **Decisión: AC-05 sin tabla nueva.** "Queda registrado" se interpretó como logs estructurados
+  INFO/ERROR (ya exigidos por CLAUDE.md para todo request), no una tabla de auditoría persistida —
+  a diferencia de HU-18 AC-09/HU-22 AC-05, ninguna pantalla necesita listar intentos de conexión
+  históricos. Si en algún momento se decide que sí hace falta (p.ej. para el reporte de HU-12), es
+  un cambio aislado: envolver `connect()` en un `SifenConnectionAttempt` persistido.
+- Sin endpoint HTTP propio ni pantalla — igual que HU-21, es una capacidad de servicio consumida
+  por historias futuras (HU-06 va a llamar a `connect()` antes de enviar).
+
+**Tests** (`SifenConnectionServiceTest`, `SifenConnectionPropertiesTest`, 10 casos): usan un
+`com.sun.net.httpserver.HttpsServer` local (JDK, sin dependencia nueva) haciendo de "SIFEN falso",
+reproduciendo exactamente el `200`/`302→hangup` observado en vivo — así la lógica de clasificación
+se prueba de verdad, no solo el cableado. Se agregó `connect(tenantId, TrustManager[])` (paquete-
+privado, solo para tests) para poder apuntar la confianza TLS al certificado del servidor mock en
+vez del trust store por defecto de la JVM. Fixture nuevo: `sifen/ruc-fixture.p12` (autofirmado,
+generado con `openssl req -x509 ... -config <archivo con subjectAltName = dirName:...,
+IP:127.0.0.1, DNS:localhost>` — keytool **no** soporta generar un SAN `directoryName`, solo
+`EMAIL/URI/DNS/IP/OID`), contraseña `TestPass123!`, RUC embebido `12345678-9` — permite probar
+tanto la extracción de RUC como el camino feliz completo sin usar el certificado real. Las
+entradas IP/DNS son necesarias para que la verificación de hostname de Java no falle al conectar a
+`127.0.0.1` en el test.
+
+**Certificado real y verificación en vivo (no es parte de la suite automatizada):**
+- El usuario proveyó el certificado real del tenant piloto: `.p12`, CSR, certificado emitido, y la
+  cadena de CA (raíz de Paraguay + intermedia de **VIT S.A.**, una PSC real que opera como
+  eFirma.com.py) en una carpeta `temp/` en la raíz del repo. **Esa carpeta y cualquier `*.p12` bajo
+  `requirements/sifen/` están gitignored** (`/temp/.gitignore` en la raíz, `requirements/sifen/.gitignore`)
+  — nunca deben terminar en un commit. La contraseña confirmada está en
+  `requirements/sifen/.secrets/lucia-cert-password.txt` (gitignored, permisos 600) — **nunca
+  transcribir su valor en un archivo que se commitee**, ni siquiera en este mismo documento.
+- Con ese certificado real, se verificó en vivo (vía `curl --cert-type P12 --cert
+  archivo.p12:contraseña`) una conexión mTLS exitosa contra `sifen-test.set.gov.py`: `HTTP 200`,
+  WSDL real de `rEnviDe` en el cuerpo. Con el fixture autofirmado del repo (`test-cert.p12`), la
+  misma URL responde `302` al `/vdesk/hangup.php3` — la prueba viva de que un certificado no
+  emitido por una PSC habilitada es rechazado (AC-03), y de que uno válido conecta (AC-01).
+- **Esto no se automatizó como test JUnit/Playwright** porque (a) el `.p12` real y su contraseña
+  nunca están presentes en un checkout limpio ni en CI (están gitignored a propósito), y (b) un
+  test de la suite estándar no debería depender de conectividad real a un servidor externo de un
+  gobierno. Si se necesita re-verificar en el futuro (p.ej. después de tocar
+  `SifenConnectionService`), repetir el comando `curl` de arriba manualmente con el `.p12` real ya
+  presente en `requirements/sifen/`.
+- Nota para cuando haga falta reusar este certificado real desde la app en sí (no desde `curl`):
+  el RUC embebido es `1137152-8`; el `BusinessProfile` del tenant demo (id=1) no tiene RUC
+  configurado por el seed (`FemmeDataInitializer`), así que habría que configurarlo a `1137152-8`
+  en Configuración → Negocio antes de que `SifenConnectionService` acepte ese certificado para ese
+  tenant.
 
 ## HU-18 — Cargar un nuevo certificado y clave para un tenant (Done)
 
