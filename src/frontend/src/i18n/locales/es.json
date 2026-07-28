@@ -542,7 +542,22 @@
           "total": "Total",
           "payments": "Pagos",
           "voidReason2": "Razón de anulación",
-          "status": "Estado"
+          "status": "Estado",
+          "sifen": {
+            "title": "Estado en SIFEN",
+            "controlNumber": "Número de control (CDC)",
+            "statusPendingVerification": "Pendiente de verificación",
+            "statusApproved": "Aprobado",
+            "statusApprovedWithObservation": "Aprobado con observación",
+            "statusRejected": "No existe / Rechazado",
+            "resultMessage": "Mensaje de SIFEN",
+            "protocolNumber": "Número de trámite",
+            "checkStatusButton": "Verificar estado en SIFEN",
+            "checkingStatus": "Verificando…",
+            "checkStatusStillPending": "SIFEN todavía no respondió. La factura sigue pendiente de verificación.",
+            "checkStatusResolved": "SIFEN respondió: se actualizó el estado.",
+            "documentContent": "Contenido completo del documento"
+          }
         }
       },
       "close": {
@@ -682,6 +697,9 @@
       "SIFEN_CERT_RUC_MISMATCH": "El RUC del certificado no coincide con el RUC configurado del negocio. Conexión rechazada.",
       "SIFEN_CONNECTION_REJECTED": "No se pudo establecer una conexión segura con SIFEN. Intentá de nuevo más tarde.",
       "SIFEN_CLIENT_IDENTIFICATION_REQUIRED": "Las ventas de Gs. 7.000.000 o más exigen identificar al cliente con RUC o documento de identidad.",
+      "SIFEN_INVOICE_NOT_PENDING_VERIFICATION": "Esta factura no está pendiente de verificación con SIFEN.",
+      "SIFEN_INVOICE_MISSING_CONTROL_NUMBER": "Esta factura no tiene un número de control de SIFEN para consultar.",
+      "SIFEN_QUERY_RUC_NOT_AUTHORIZED": "El RUC del certificado no tiene permiso para consultar este documento en SIFEN.",
       "CATEGORY_NOT_FOUND": "Categoría no encontrada.",
       "CATEGORY_INACTIVE": "La categoría seleccionada está inactiva. Elegí una categoría activa.",
       "INVALID_CATEGORY_ACCENT": "Elegí un color de categoría válido de la paleta.",

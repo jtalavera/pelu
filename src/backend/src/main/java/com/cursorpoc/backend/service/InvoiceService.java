@@ -572,7 +572,13 @@ public class InvoiceService {
         i.getTipsAmount(),
         i.getServiceRecord() != null ? i.getServiceRecord().getId() : null,
         lines,
-        payments);
+        payments,
+        i.getSifenControlNumber(),
+        i.getSifenSubmissionStatus() != null ? i.getSifenSubmissionStatus().name() : null,
+        i.getSifenSubmissionProtocolNumber(),
+        i.getSifenSubmissionResultCode(),
+        i.getSifenSubmissionMessage(),
+        i.getSifenQueryDocumentContent());
   }
 
   private static String formatInvoiceNumber(int number) {

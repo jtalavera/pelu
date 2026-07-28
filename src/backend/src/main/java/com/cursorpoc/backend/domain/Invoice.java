@@ -97,6 +97,14 @@ public class Invoice {
   @Column(name = "sifen_submitted_at")
   private LocalDateTime sifenSubmittedAt;
 
+  /**
+   * SIFEN HU-07 AC-03: full document content ({@code xContenDE}) SIFEN returns from the consulta
+   * (query) service when the CDC is found — only ever populated once a query resolves to APPROVED,
+   * never by the reception service (HU-06), which doesn't return this.
+   */
+  @Column(name = "sifen_query_document_content", columnDefinition = "NVARCHAR(MAX)")
+  private String sifenQueryDocumentContent;
+
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
 
@@ -275,6 +283,14 @@ public class Invoice {
 
   public void setSifenSubmittedAt(LocalDateTime sifenSubmittedAt) {
     this.sifenSubmittedAt = sifenSubmittedAt;
+  }
+
+  public String getSifenQueryDocumentContent() {
+    return sifenQueryDocumentContent;
+  }
+
+  public void setSifenQueryDocumentContent(String sifenQueryDocumentContent) {
+    this.sifenQueryDocumentContent = sifenQueryDocumentContent;
   }
 
   public String getBusinessRuc() {

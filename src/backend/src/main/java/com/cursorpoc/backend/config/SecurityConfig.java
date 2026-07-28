@@ -56,6 +56,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/admin/seed/reset")
                     .permitAll()
+                    .requestMatchers("/api/admin/sifen-test-support/**")
+                    .permitAll()
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

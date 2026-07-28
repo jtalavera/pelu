@@ -21,7 +21,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
@@ -155,25 +154,26 @@ public class SifenDocumentReceptionClient {
       org.w3c.dom.Document doc =
           factory.newDocumentBuilder().parse(new InputSource(new StringReader(body)));
 
-      Element rProtDe = firstDescendant(doc.getDocumentElement(), "rProtDe");
+      Element rProtDe = SifenXmlUtils.firstDescendant(doc.getDocumentElement(), "rProtDe");
       if (rProtDe == null) {
         return Optional.empty();
       }
-      SifenSubmissionStatus status = mapStatus(firstDescendantText(rProtDe, "dEstRes"));
+      SifenSubmissionStatus status =
+          mapStatus(SifenXmlUtils.firstDescendantText(rProtDe, "dEstRes"));
       if (status == null) {
         return Optional.empty();
       }
 
-      String protocolNumber = firstDescendantText(rProtDe, "dProtAut");
+      String protocolNumber = SifenXmlUtils.firstDescendantText(rProtDe, "dProtAut");
       String resultCode = null;
       List<String> messages = new ArrayList<>();
       NodeList resProcNodes = rProtDe.getElementsByTagNameNS("*", "gResProc");
       for (int i = 0; i < resProcNodes.getLength(); i++) {
         Element gResProc = (Element) resProcNodes.item(i);
         if (resultCode == null) {
-          resultCode = firstDescendantText(gResProc, "dCodRes");
+          resultCode = SifenXmlUtils.firstDescendantText(gResProc, "dCodRes");
         }
-        String message = firstDescendantText(gResProc, "dMsgRes");
+        String message = SifenXmlUtils.firstDescendantText(gResProc, "dMsgRes");
         if (message != null && !message.isBlank()) {
           messages.add(message);
         }
@@ -201,19 +201,5 @@ public class SifenDocumentReceptionClient {
       case "Rechazado" -> SifenSubmissionStatus.REJECTED;
       default -> null;
     };
-  }
-
-  private static Element firstDescendant(Element scope, String localName) {
-    NodeList nodes = scope.getElementsByTagNameNS("*", localName);
-    return nodes.getLength() == 0 ? null : (Element) nodes.item(0);
-  }
-
-  private static String firstDescendantText(Element scope, String localName) {
-    Element element = firstDescendant(scope, localName);
-    if (element == null) {
-      return null;
-    }
-    Node firstChild = element.getFirstChild();
-    return firstChild == null ? null : element.getTextContent().trim();
   }
 }

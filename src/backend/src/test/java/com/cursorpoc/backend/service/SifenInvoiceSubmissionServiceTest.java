@@ -35,6 +35,7 @@ class SifenInvoiceSubmissionServiceTest {
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenDocumentReceptionClient receptionClient;
+  @Mock private SifenDocumentQueryClient queryClient;
 
   private SifenInvoiceSubmissionService service;
   private Invoice invoice;
@@ -43,14 +44,25 @@ class SifenInvoiceSubmissionServiceTest {
   void setUp() {
     service =
         new SifenInvoiceSubmissionService(
-            invoiceRepository, signingService, receptionClient, new FemmeTimeProperties());
+            invoiceRepository,
+            signingService,
+            receptionClient,
+            queryClient,
+            new FemmeTimeProperties());
     invoice = new Invoice();
+    // Mirrors the real flow: SifenInvoiceHeaderService (called inside the real signInvoice, not
+    // this mock) persists the CDC onto the invoice the first time a document is built (HU-02) — so
+    // by the time an invoice could ever reach PENDING_VERIFICATION for real, it always has one.
+    invoice.setSifenControlNumber("cdc-123");
     lenient()
         .when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
         .thenReturn(Optional.of(invoice));
     lenient()
         .when(signingService.signInvoice(eq(TENANT_ID), eq(INVOICE_ID), any()))
         .thenReturn(new SifenSignedDocument(minimalDocument(), "cdc-123", LocalDateTime.now()));
+    // AC-05 default: SIFEN gives no answer when queried, so submit() falls through to a normal
+    // (re)send for every pre-existing test below that doesn't care about the query step itself.
+    lenient().when(queryClient.query(eq(TENANT_ID), any())).thenReturn(Optional.empty());
   }
 
   /** AC-02: an approved result, including the protocol number, is persisted on the invoice. */
@@ -211,6 +223,128 @@ class SifenInvoiceSubmissionServiceTest {
     assertThatThrownBy(() -> service.submit(TENANT_ID, 999L))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("INVOICE_NOT_FOUND");
+  }
+
+  // --- HU-07 AC-01/AC-02/AC-03/AC-04: checkPendingStatus (manual "check status" button) ---
+
+  /** AC-01: SIFEN confirms approval -> status updated, sifenSubmittedAt set. */
+  @Test
+  void checkPendingStatus_resolvesApproved_whenSifenFindsTheDocument() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    when(queryClient.query(TENANT_ID, "cdc-123"))
+        .thenReturn(
+            Optional.of(
+                new SifenQueryResult(
+                    new SifenSubmissionResult(
+                        SifenSubmissionStatus.APPROVED, null, "0422", "CDC encontrado", now()),
+                    "<rContDe>...</rContDe>")));
+
+    Optional<SifenSubmissionResult> result = service.checkPendingStatus(TENANT_ID, INVOICE_ID);
+
+    assertThat(result).isPresent();
+    assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    assertThat(invoice.getSifenSubmittedAt()).isNotNull();
+    // AC-03: the full document content is stored when SIFEN confirms approval.
+    assertThat(invoice.getSifenQueryDocumentContent()).isEqualTo("<rContDe>...</rContDe>");
+  }
+
+  /** AC-02: SIFEN doesn't recognize/rejected the CDC -> "No existe / Rechazado". */
+  @Test
+  void checkPendingStatus_resolvesRejected_whenSifenSaysNotFoundOrRejected() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    when(queryClient.query(TENANT_ID, "cdc-123"))
+        .thenReturn(
+            Optional.of(
+                new SifenQueryResult(
+                    new SifenSubmissionResult(
+                        SifenSubmissionStatus.REJECTED,
+                        null,
+                        "0420",
+                        "Documento No Existe en SIFEN o ha sido Rechazado",
+                        now()),
+                    null)));
+
+    Optional<SifenSubmissionResult> result = service.checkPendingStatus(TENANT_ID, INVOICE_ID);
+
+    assertThat(result).isPresent();
+    assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.REJECTED);
+    assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.REJECTED);
+    assertThat(invoice.getSifenQueryDocumentContent()).isNull();
+  }
+
+  /** SIFEN still gives no interpretable answer -> invoice stays untouched, still pending. */
+  @Test
+  void checkPendingStatus_returnsEmpty_whenSifenStillGivesNoAnswer() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    when(queryClient.query(TENANT_ID, "cdc-123")).thenReturn(Optional.empty());
+
+    Optional<SifenSubmissionResult> result = service.checkPendingStatus(TENANT_ID, INVOICE_ID);
+
+    assertThat(result).isEmpty();
+    assertThat(invoice.getSifenSubmissionStatus())
+        .isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenSubmittedAt()).isNull();
+  }
+
+  /** AC-04's precondition: the manual check only ever makes sense on a pending invoice. */
+  @Test
+  void checkPendingStatus_throws_whenInvoiceIsNotPendingVerification() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+
+    assertThatThrownBy(() -> service.checkPendingStatus(TENANT_ID, INVOICE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_INVOICE_NOT_PENDING_VERIFICATION");
+
+    verify(queryClient, never()).query(anyLong(), any());
+  }
+
+  @Test
+  void checkPendingStatus_throws_whenInvoiceHasNoControlNumber() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    invoice.setSifenControlNumber(null);
+
+    assertThatThrownBy(() -> service.checkPendingStatus(TENANT_ID, INVOICE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_INVOICE_MISSING_CONTROL_NUMBER");
+  }
+
+  // --- HU-07 AC-05: submit() checks status automatically before blindly resending ---
+
+  /** A resolved query (Aprobado) short-circuits submit(): no fresh sign/send attempt. */
+  @Test
+  void submit_resolvesViaStatusCheck_andSkipsResend_whenPendingVerificationGetsAnAnswer() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    when(queryClient.query(TENANT_ID, "cdc-123"))
+        .thenReturn(
+            Optional.of(
+                new SifenQueryResult(
+                    new SifenSubmissionResult(
+                        SifenSubmissionStatus.APPROVED, null, "0422", "CDC encontrado", now()),
+                    null)));
+
+    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
+    verify(receptionClient, never()).send(anyLong(), any());
+  }
+
+  /** No answer from the automatic check -> submit() falls through to a fresh resend attempt. */
+  @Test
+  void submit_fallsThroughToResend_whenPendingVerificationStatusCheckStillGivesNoAnswer() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    when(receptionClient.send(eq(TENANT_ID), any()))
+        .thenReturn(
+            Optional.of(
+                new SifenSubmissionResult(
+                    SifenSubmissionStatus.REJECTED, null, "0160", "still broken", now())));
+
+    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+
+    verify(queryClient, times(1)).query(TENANT_ID, "cdc-123");
+    verify(signingService, times(1)).signInvoice(eq(TENANT_ID), eq(INVOICE_ID), any());
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.REJECTED);
   }
 
   private static LocalDateTime now() {

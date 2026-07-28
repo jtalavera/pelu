@@ -13,6 +13,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
   @EntityGraph(attributePaths = "tenant")
   Optional<AppUser> findByEmail(String email);
 
+  Optional<AppUser> findFirstByTenant_IdOrderByIdAsc(Long tenantId);
+
   long countByTenant_Id(Long tenantId);
 
   long deleteByTenant_Id(Long tenantId);

@@ -5,7 +5,7 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 1** (Primera interacción real con el Web Service de SIFEN) — **completa**.
+Fase actual: **Fase 2** (Cerrar el ciclo de vida de la factura ya enviada) — en curso, HU-07 hecha.
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -19,24 +19,188 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-03 Servicios facturados y totales | ✅ Done | Ver detalle abajo. |
 | HU-04 Firmar digitalmente | ✅ Done | Ver detalle abajo. |
 | HU-06 Enviar factura y registrar resultado | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (rechazo); ver limitación de "Aprobado" abajo. |
-| Fase 2 (HU-07, HU-08, HU-09, HU-19) | ⬜ Next | |
+| HU-07 Verificar estado de una factura pendiente | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (CDC inexistente); primera historia con pantalla + controller propios. |
+| HU-08 Generar comprobante PDF (KuDE) | ⬜ Next | Depende de HU-06 (factura aprobada) — ver "Próximo paso" abajo. |
+| HU-09 Revalidar en SIFEN una factura | ⬜ Todo | Depende de HU-08. |
+| HU-19 Ver listado de certificados | ⬜ Todo | Solo depende de HU-18/HU-20 (Fase 1) — puede tomarse en paralelo con HU-08/HU-09. |
 | Fase 3 (HU-10, HU-11) | ⬜ Todo | |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-07 (Verificar en SIFEN el estado de una
-factura pendiente), primer paso de Fase 2 — Cerrar el ciclo de vida de la factura ya enviada. HU-07
-consulta el estado de una factura que HU-06 dejó en `PENDING_VERIFICATION` (sin respuesta de
-SIFEN); a diferencia de HU-06, esta historia **sí** tiene una pantalla propia (AC-04: "el usuario
-puede disparar la consulta manualmente con un botón"), así que va a necesitar, por primera vez en
-esta integración, un controller HTTP + alguna UI (probablemente en una pantalla de detalle de
-factura, que hoy no está claro si existe — investigar `InvoiceController`/páginas de facturación
-antes de empezar). El manual describe el WS de consulta (`SiConsDE`, mencionado en sección 7.3.1 de
-este mismo documento) — todavía no se investigó su XSD/SOAP en detalle (`SiConsultaDE_v150.xsd` y
-similares, ver tabla de Schemas XML sección 7.1). HU-19 (listado de certificados) puede
-implementarse en paralelo ya que solo depende de HU-18/HU-20 (Fase 1, ya completa) — es la primera
-vez en el plan que hay dos HUs de la misma fase sin dependencia entre sí; el loop decidirá cuál
-tomar primero según cuál quede más simple de aislar en un contexto limpio.
+**Próximo paso al reanudar el loop:** implementar HU-08 (Generar el comprobante en PDF de una
+factura aprobada) o, en paralelo, HU-19 (listado de certificados, ya lista para tomarse ya que solo
+depende de Fase 1). HU-08 va a necesitar por fin cerrar el gap que HU-06/HU-07 dejaron documentado
+dos veces seguidas: **ningún documento de este sistema puede llegar a "Aprobado" real todavía**
+porque `gCamFuFD/dCarQR` (el código QR) falta en el XML armado por `SifenDocumentXmlService`
+(HU-04) — HU-08 es explícitamente quien calcula ese hash (usa el CSC de "Configuración del ambiente
+de pruebas" del spec, sección con dos CSC de prueba ya provistos por la SET). Hasta que HU-08 cierre
+eso, HU-07's AC-01/AC-03 (aprobación real + contenido completo del documento) van a seguir sin
+poder verificarse en vivo — la próxima vez que se reintente la verificación en vivo de HU-07,
+conviene hacerlo recién después de HU-08, reusando el mismo procedimiento manual (test JUnit
+temporal + `curl`) documentado abajo. El WS de consulta (`SiConsDE`) ya quedó completamente
+investigado por HU-07 (XSD real vía `consulta.wsdl.xsd1.xsd`, endpoint real, forma real de
+`rEnviConsDeResponse`) — no hace falta re-investigarlo para HU-09 (revalidar), que reutiliza el
+mismo `SifenDocumentQueryClient`.
+
+## HU-07 — Verificar en SIFEN el estado de una factura pendiente (Done)
+
+Primer paso de la Fase 2: cierra el ciclo de vida de una factura que HU-06 dejó en
+`PENDING_VERIFICATION` (sin respuesta de SIFEN) consultando su estado real por CDC. **Primera
+historia de esta integración con pantalla + controller HTTP propios** (AC-04 lo pide
+explícitamente) — todas las anteriores (HU-01/02(salvo AC-05)/03/04/05/06/21) fueron capacidad de
+servicio sin UI.
+
+**Investigación del WS de consulta (`SiConsDE`, Manual Técnico V150.pdf sección 9.4):** el texto de
+esta sección **sí** es extraíble con `pdftotext -layout` (a diferencia del capítulo 10 de HU-01, que
+necesitó renderizar páginas como imagen) — describe el request (`rEnviConsDe`/`dId`/`dCDC`) y la
+respuesta (`rResEnviConsDe`/`dFecProc`/`dCodRes`/`dMsgRes`/`xContenDE`, con `xContenDE` definido
+como un `ContenedorDE` estructurado: `rDE` + `dProtAut` + `xContEv`) y la tabla de resultados
+(Tabla G, sección 9.4.2): `0420`="CDC inexistente", `0421`="RUC Certificado sin permiso",
+`0422`="CDC encontrado". Igual que en HU-05/HU-06, **el manual y el WSDL/XSD reales en vivo
+difieren** — ver "Verificación en vivo" abajo para lo confirmado.
+
+**Verificación en vivo (2026-07-28), procedimiento para reproducir:** se obtuvo el WSDL real del
+servicio de consulta con el mismo patrón de `curl --cert-type P12` de HU-05/HU-06 (`curl --cert-type
+P12 --cert archivo.p12:contraseña https://sifen-test.set.gov.py/de/ws/consultas/consulta.wsdl?wsdl`)
+y también su XSD importado (`consulta.wsdl.xsd1.xsd`). Con eso confirmado, se armó a mano un sobre
+SOAP con un CDC sintácticamente válido (mismos datos piloto RUC `1137152-8`/timbrado `1137152` que
+HU-06, pero un número de documento que nunca se envió de verdad) y se envió con `curl --cert-type
+P12 --cert archivo.p12:contraseña -X POST
+https://sifen-test.set.gov.py/de/ws/consultas/consulta.wsdl`. La respuesta real fue **HTTP 200**,
+cuerpo `rEnviConsDeResponse` con `dCodRes=0420`, `dMsgRes="Documento No Existe en SIFEN o ha sido
+Rechazado"` — una consulta real y completa de principio a fin contra el ambiente de prueba real, que
+ejercita AC-02 (aunque el CDC nunca fue realmente enviado en vez de rechazado, la respuesta de SIFEN
+no distingue esos dos casos — ver Hallazgo 2). Igual que HU-05/HU-06, esto no quedó como test
+automatizado contra el servidor real por la misma razón (el `.p12` real y su contraseña no están
+presentes en un checkout limpio ni en CI); quien necesite reverificarlo puede repetir el mismo
+procedimiento.
+
+**Hallazgo 1: el endpoint real para POSTear, otra vez, no es la URL del WSDL.** Mismo patrón que
+HU-06: el manual (sección 7.10) solo publica `.../de/ws/consultas/consulta.wsdl?wsdl`; el
+`soap12:address` del WSDL real apunta a esa misma URL **sin** `?wsdl`. `CONSULTA_PATH` en
+`SifenDocumentQueryClient` es literalmente eso.
+
+**Hallazgo 2 (el más importante): los nombres de los elementos raíz del manual no coinciden ni con
+el XSD real ni con la respuesta real.** El manual (secciones 9.4.1/9.4.3) documenta el request como
+`rEnviConsDe` y la respuesta como `rResEnviConsDe`. El XSD real (`consulta.wsdl.xsd1.xsd`) define
+`rEnviConsDeRequest` y `rEnviConsDeResponse` — confirmado también por la respuesta real capturada
+arriba, que trae literalmente `<rEnviConsDeResponse>` como elemento raíz. `SifenDocumentQueryClient`
+usa los nombres reales, no los del manual.
+
+**Hallazgo 3: el mensaje real de `0420` ya combina "no existe" y "rechazado" en un solo texto.** El
+manual (Tabla G) documenta `0420` como simplemente `"CDC inexistente"`. La respuesta real trajo
+`"Documento No Existe en SIFEN o ha sido Rechazado"` — es decir, **SIFEN mismo no distingue "nunca
+recibido" de "recibido y rechazado"** en esta consulta; ambos casos devuelven el mismo código y el
+mismo mensaje combinado. Esto explica por qué AC-02 del propio HU-07 ya pide un estado combinado
+("No existe / Rechazado") — el texto de la historia coincide con el comportamiento real observado,
+no es una interpretación nuestra.
+
+**Decisión de diseño: `0420`/`0422` se mapean sobre el enum ya existente `SifenSubmissionStatus`
+(HU-06), sin agregar un valor nuevo.** `0422` ("CDC encontrado") mapea a `APPROVED` (AC-01); `0420`
+mapea a `REJECTED`, reutilizando el estado terminal más cercano en vez de crear un
+"NOT_FOUND_OR_REJECTED" nuevo — no hay forma de distinguir más allá de eso con esta respuesta sola
+(Hallazgo 3), así que un enum nuevo no agregaría precisión real. `0421` ("RUC Certificado sin
+permiso") **no** se mapea a ningún estado de documento — es un error de configuración/autorización
+del certificado que está consultando, no una respuesta sobre el documento en sí, así que
+`SifenDocumentQueryClient` lo distingue explícitamente y lanza `SIFEN_QUERY_RUC_NOT_AUTHORIZED`
+(403) en vez de tratarlo como "sin respuesta".
+
+**Límite real encontrado (heredado de HU-06, no nuevo): AC-01/AC-03 (aprobación real + contenido
+completo del documento) no se pudieron verificar en vivo.** Mismo motivo documentado en HU-06:
+ningún documento de este sistema llegó nunca a estar realmente "Aprobado" en SIFEN (falta
+`gCamFuFD/dCarQR`, trabajo de HU-08), así que no existe ningún CDC real que devuelva `0422` para
+consultar. La forma interna de `xContenDE` para ese caso queda **inferida del XSD, no observada en
+vivo** — el XSD real lo tipa como `xs:string` plano (no como XML estructurado, a diferencia de lo
+que documenta el ContenedorDE del manual) y `SifenDocumentQueryClient` simplemente guarda ese string
+tal cual llega, sin intentar extraer un `dProtAut` de adentro (que según el manual estaría anidado
+ahí) — otra inconsistencia manual/schema-real que solo se podrá confirmar del todo cuando HU-08
+permita obtener una aprobación real para consultar.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `service/SifenXmlUtils.java` (nuevo) — extrae `firstDescendant`/`firstDescendantText` (búsqueda
+  por nombre local, ignorando namespace) de `SifenDocumentReceptionClient` a una clase compartida,
+  reusada también por `SifenDocumentQueryClient` — evita duplicar el mismo parsing tolerante a
+  namespace en dos clientes SOAP.
+- `service/SifenQueryResult.java` (nuevo) — record `submissionResult` (reusa `SifenSubmissionResult`
+  de HU-06) + `documentContent` (AC-03, `xContenDE` crudo).
+- `service/SifenDocumentQueryClient.query(tenantId, cdc)` — arma `rEnviConsDeRequest`, lo postea vía
+  `SifenConnectionService.buildAuthenticatedClient` (mismo mTLS que HU-05/HU-06), parsea
+  `rEnviConsDeResponse` según los Hallazgos de arriba. Devuelve `Optional<SifenQueryResult>` — vacío
+  si no hubo respuesta interpretable, nunca lanza para una falla de comunicación (mismo contrato que
+  `SifenDocumentReceptionClient.send`).
+- `domain/enums/SifenSubmissionStatus` — sin cambios (reusado, ver "Decisión de diseño" arriba).
+- `domain/Invoice.java` — campo nuevo `sifenQueryDocumentContent` (AC-03, `NVARCHAR(MAX)`, mismo
+  patrón que otras columnas de texto grande de SIFEN — no `@Lob`, ver comentario en
+  `SifenCertificate.encryptedP12Base64`). Migración `V23__sifen_invoice_query.sql`.
+- `service/SifenInvoiceSubmissionService`:
+  - `checkPendingStatus(tenantId, invoiceId)` (AC-01/AC-02/AC-03/AC-04) — exige que la factura esté
+    en `PENDING_VERIFICATION` (si no, `SIFEN_INVOICE_NOT_PENDING_VERIFICATION`, 409) y tenga un CDC
+    persistido (si no, `SIFEN_INVOICE_MISSING_CONTROL_NUMBER`, 409), consulta vía
+    `SifenDocumentQueryClient`, y si hay respuesta persiste el resultado reusando el mismo
+    `recordResult` de HU-06 (ahora con un parámetro nuevo `documentContent` para AC-03). Si SIFEN
+    sigue sin contestar, la factura queda intacta (sigue `PENDING_VERIFICATION`).
+  - `submit(tenantId, invoiceId)` (AC-05) — al principio del método, si la factura ya está
+    `PENDING_VERIFICATION`, llama a `checkPendingStatus` primero; si eso resuelve el estado (aprobado
+    o rechazado), retorna sin reintentar el envío. Si SIFEN sigue sin contestar, sigue de largo con
+    el flujo normal de (re)envío que HU-06 ya tenía — así un reintento nunca reenvía a ciegas un
+    documento cuyo estado real ya se puede confirmar.
+- `web/InvoiceController.checkSifenStatus` — `POST /api/invoices/{id}/sifen/check-status` (AC-04):
+  llama a `checkPendingStatus` y devuelve el `InvoiceResponse` actualizado (estado sin cambios si
+  SIFEN no contestó). `InvoiceResponse` ganó 6 campos nuevos (`sifenControlNumber`,
+  `sifenSubmissionStatus`, `sifenSubmissionProtocolNumber`, `sifenSubmissionResultCode`,
+  `sifenSubmissionMessage`, `sifenQueryDocumentContent`) — primera vez que el estado SIFEN de una
+  factura se expone al frontend.
+
+**Frontend** (`src/frontend/src/components/InvoiceDetailModal.tsx`): sección nueva "SIFEN status",
+visible solo si la factura tiene `sifenSubmissionStatus` (es decir, si alguna vez se intentó
+enviar a SIFEN — la inmensa mayoría de las facturas hoy no, ya que la activación real por tenant es
+HU-22): badge de estado, número de control, número de trámite, mensaje de SIFEN, y — cuando el
+estado es Aprobado/Aprobado con observación y hay contenido — el contenido completo del documento
+en un bloque `<pre>` (AC-03). El botón "Check status in SIFEN" (AC-04) solo aparece si el estado es
+`PENDING_VERIFICATION`; al hacer clic llama al endpoint nuevo y muestra si SIFEN contestó o si
+sigue sin responder. Claves i18n nuevas bajo `femme.billing.history.detail.sifen.*` en `en.json` y
+`es.json`, más 3 códigos de error nuevos en `femme.apiErrors.*`
+(`SIFEN_INVOICE_NOT_PENDING_VERIFICATION`, `SIFEN_INVOICE_MISSING_CONTROL_NUMBER`,
+`SIFEN_QUERY_RUC_NOT_AUTHORIZED`).
+
+**Infraestructura de test-only nueva (gateada, nunca activa en producción):**
+- `web/SifenInvoiceTestSupportController` — mismo patrón que `SeedResetController` (gateado con
+  `@ConditionalOnProperty(name = "femme.data-init.enabled", havingValue = "true")`, solo `true` en
+  el profile `e2e`). Existe porque, igual que HU-06, **nada en la app llama todavía a
+  `SifenInvoiceSubmissionService.submit()`** (la activación real por tenant es HU-22) — así que
+  ninguna factura puede llegar a `PENDING_VERIFICATION` por uso real todavía, ni en producción ni en
+  un checkout limpio. `POST /api/admin/sifen-test-support/invoices/{id}/prepare-for-status-check`
+  fabrica esa precondición completa para Playwright: sube un certificado válido (fixture
+  autofirmado `sifen/e2e-test-support-cert.p12`, RUC `12345678-9`, copiado a `src/main/resources`
+  para estar en el classpath en runtime — mismo fixture que `SifenConnectionServiceTest` usa como
+  `ruc-fixture.p12`), configura el RUC del negocio para que coincida, y marca la factura
+  `PENDING_VERIFICATION` con un CDC de forma real. Ruta permitida sin autenticación en
+  `SecurityConfig` (`/api/admin/sifen-test-support/**`), mismo criterio que `/api/admin/seed/reset`.
+- `application-e2e.properties` — `app.femme.sifen.connection.test-base-url` apunta a
+  `https://127.0.0.1:9` (puerto "discard") en vez del `sifen-test.set.gov.py` real: cualquier
+  llamada de red SIFEN en e2e falla rápido por conexión rechazada localmente, en vez de depender de
+  una llamada real a un servidor externo de gobierno (indeseable en CI). Esto es lo que hace que el
+  botón de HU-07 AC-04 ejercite el código real (controller → service → query client → intento de
+  conexión mTLS) de punta a punta en el test, terminando en "SIFEN no contestó" real (mismo modo de
+  falla que HU-06 ya documentó, no un mock).
+
+**Tests**: `SifenDocumentQueryClientTest` (7 casos: la respuesta real capturada en vivo como test de
+regresión exacto para `0420`, `0422`/aprobado con contenido de documento inferido del XSD, `0421`
+lanzando `SIFEN_QUERY_RUC_NOT_AUTHORIZED`, sin respuesta por servidor inalcanzable, sin respuesta
+por cuerpo no-XML, sin respuesta ante la forma de error compartida con el servicio de recepción
+(`rRetEnviDe`), estructura del sobre SOAP enviado). `SifenInvoiceSubmissionServiceTest` ganó 9 casos
+nuevos (`checkPendingStatus` resolviendo Aprobado con contenido de documento, resolviendo
+Rechazado, sin respuesta deja la factura intacta, rechaza si la factura no está pendiente, rechaza
+si falta el número de control; `submit` resolviendo vía la consulta automática sin reintentar el
+envío, y cayendo al reenvío normal si la consulta sigue sin contestar). **Con Playwright** —
+primera vez, ya que AC-04 sí tiene pantalla propia:
+`e2e/tests/sifen-hu-07-verificar-estado.spec.ts` (2 casos: el botón aparece solo para una factura
+`PENDING_VERIFICATION` y una consulta real end-to-end contra el mecanismo de test-support deja la
+factura pendiente porque SIFEN no contesta; una factura sin intento de envío a SIFEN no muestra la
+sección). AC-01/AC-02/AC-05 (resolución a Aprobado/Rechazado, disparo automático en reintento) se
+cubrieron con JUnit — no hay forma de alcanzar una aprobación real para probarla ni en backend ni en
+e2e (mismo límite que arriba), y las ramas de "SIFEN contesta con estado X" son puramente lógica de
+servicio, no de UI.
 
 ## HU-06 — Enviar una factura a SIFEN y registrar el resultado (Done)
 

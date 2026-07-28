@@ -53,7 +53,33 @@ export type InvoiceDetail = {
   voidReason: string | null;
   lines: InvoiceLine[];
   payments: InvoicePayment[];
+  sifenControlNumber?: string | null;
+  sifenSubmissionStatus?: string | null;
+  sifenSubmissionProtocolNumber?: string | null;
+  sifenSubmissionResultCode?: string | null;
+  sifenSubmissionMessage?: string | null;
+  sifenQueryDocumentContent?: string | null;
 };
+
+/** SIFEN HU-07: badge variant + i18n key per sifenSubmissionStatus literal. */
+function sifenStatusLabelKey(status: string): string {
+  switch (status) {
+    case "APPROVED":
+      return "femme.billing.history.detail.sifen.statusApproved";
+    case "APPROVED_WITH_OBSERVATION":
+      return "femme.billing.history.detail.sifen.statusApprovedWithObservation";
+    case "REJECTED":
+      return "femme.billing.history.detail.sifen.statusRejected";
+    default:
+      return "femme.billing.history.detail.sifen.statusPendingVerification";
+  }
+}
+
+function sifenStatusBadgeVariant(status: string): "success" | "destructive" | "warning" {
+  if (status === "APPROVED" || status === "APPROVED_WITH_OBSERVATION") return "success";
+  if (status === "REJECTED") return "destructive";
+  return "warning";
+}
 
 function capitalize(s: string): string {
   if (!s) return "";
@@ -122,6 +148,9 @@ export function InvoiceDetailModal({
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidSuccess, setVoidSuccess] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [checkingSifenStatus, setCheckingSifenStatus] = useState(false);
+  const [sifenCheckError, setSifenCheckError] = useState<string | null>(null);
+  const [sifenCheckMessage, setSifenCheckMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +177,29 @@ export function InvoiceDetailModal({
       await downloadInvoicePdf(invoiceId);
     } catch (err) {
       setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    }
+  }
+
+  /** SIFEN HU-07 AC-04: manually triggers the SIFEN status query for a pending-verification invoice. */
+  async function handleCheckSifenStatus() {
+    setSifenCheckError(null);
+    setSifenCheckMessage(null);
+    setCheckingSifenStatus(true);
+    try {
+      const updated = await femmePostJson<InvoiceDetail>(
+        `/api/invoices/${invoiceId}/sifen/check-status`,
+        {},
+      );
+      setInvoice(updated);
+      setSifenCheckMessage(
+        updated.sifenSubmissionStatus === "PENDING_VERIFICATION"
+          ? t("femme.billing.history.detail.sifen.checkStatusStillPending")
+          : t("femme.billing.history.detail.sifen.checkStatusResolved"),
+      );
+    } catch (err) {
+      setSifenCheckError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setCheckingSifenStatus(false);
     }
   }
 
@@ -322,6 +374,73 @@ export function InvoiceDetailModal({
                 ))}
               </div>
             </div>
+
+            {/* SIFEN status — HU-07 */}
+            {invoice.sifenSubmissionStatus && (
+              <div
+                className="border-t border-[rgb(var(--color-border))] pt-4 flex flex-col gap-2"
+                data-testid="sifen-status-section"
+              >
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Text className="font-medium">{t("femme.billing.history.detail.sifen.title")}</Text>
+                  <Badge variant={sifenStatusBadgeVariant(invoice.sifenSubmissionStatus)}>
+                    {t(sifenStatusLabelKey(invoice.sifenSubmissionStatus))}
+                  </Badge>
+                </div>
+                {invoice.sifenControlNumber && (
+                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                    {t("femme.billing.history.detail.sifen.controlNumber")}: {invoice.sifenControlNumber}
+                  </Text>
+                )}
+                {invoice.sifenSubmissionProtocolNumber && (
+                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                    {t("femme.billing.history.detail.sifen.protocolNumber")}: {invoice.sifenSubmissionProtocolNumber}
+                  </Text>
+                )}
+                {invoice.sifenSubmissionMessage && (
+                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                    {t("femme.billing.history.detail.sifen.resultMessage")}: {invoice.sifenSubmissionMessage}
+                  </Text>
+                )}
+                {(invoice.sifenSubmissionStatus === "APPROVED" ||
+                  invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION") &&
+                  invoice.sifenQueryDocumentContent && (
+                    <div>
+                      <Text variant="small" className="font-medium mb-1">
+                        {t("femme.billing.history.detail.sifen.documentContent")}
+                      </Text>
+                      <pre className="max-h-40 overflow-auto rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))] p-2 text-xs whitespace-pre-wrap break-all">
+                        {invoice.sifenQueryDocumentContent}
+                      </pre>
+                    </div>
+                  )}
+                {sifenCheckError && (
+                  <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                    {sifenCheckError}
+                  </Alert>
+                )}
+                {sifenCheckMessage && !sifenCheckError && (
+                  <Alert variant="success" title={sifenCheckMessage}>
+                    {sifenCheckMessage}
+                  </Alert>
+                )}
+                {invoice.sifenSubmissionStatus === "PENDING_VERIFICATION" && (
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={checkingSifenStatus}
+                      data-testid="sifen-check-status-button"
+                      onClick={() => void handleCheckSifenStatus()}
+                    >
+                      {checkingSifenStatus
+                        ? t("femme.billing.history.detail.sifen.checkingStatus")
+                        : t("femme.billing.history.detail.sifen.checkStatusButton")}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex flex-wrap gap-3 pt-2">

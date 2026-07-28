@@ -542,7 +542,22 @@
           "total": "Total",
           "payments": "Payments",
           "voidReason2": "Void reason",
-          "status": "Status"
+          "status": "Status",
+          "sifen": {
+            "title": "SIFEN status",
+            "controlNumber": "Control number (CDC)",
+            "statusPendingVerification": "Pending verification",
+            "statusApproved": "Approved",
+            "statusApprovedWithObservation": "Approved with observation",
+            "statusRejected": "Not found / Rejected",
+            "resultMessage": "SIFEN message",
+            "protocolNumber": "Protocol number",
+            "checkStatusButton": "Check status in SIFEN",
+            "checkingStatus": "Checking…",
+            "checkStatusStillPending": "SIFEN has not answered yet. The invoice is still pending verification.",
+            "checkStatusResolved": "SIFEN answered: status updated.",
+            "documentContent": "Full document content"
+          }
         }
       },
       "close": {
@@ -680,6 +695,9 @@
       "SIFEN_CERT_RUC_MISMATCH": "The certificate's RUC does not match this business's configured RUC. Connection refused.",
       "SIFEN_CONNECTION_REJECTED": "Could not establish a secure connection with SIFEN. Try again later.",
       "SIFEN_CLIENT_IDENTIFICATION_REQUIRED": "Sales of Gs. 7,000,000 or more require identifying the client with a RUC or an identity document.",
+      "SIFEN_INVOICE_NOT_PENDING_VERIFICATION": "This invoice is not pending verification with SIFEN.",
+      "SIFEN_INVOICE_MISSING_CONTROL_NUMBER": "This invoice has no SIFEN control number to check.",
+      "SIFEN_QUERY_RUC_NOT_AUTHORIZED": "The certificate's RUC is not authorized to query this document in SIFEN.",
       "CATEGORY_NOT_FOUND": "Category not found.",
       "CATEGORY_INACTIVE": "The selected category is inactive. Please choose an active category.",
       "INVALID_CATEGORY_ACCENT": "Choose a valid category color from the palette.",

@@ -25,4 +25,10 @@ public record InvoiceResponse(
     BigDecimal tipsAmount,
     Long serviceRecordId,
     List<InvoiceLineResponse> lines,
-    List<InvoicePaymentAllocationResponse> payments) {}
+    List<InvoicePaymentAllocationResponse> payments,
+    String sifenControlNumber,
+    String sifenSubmissionStatus,
+    String sifenSubmissionProtocolNumber,
+    String sifenSubmissionResultCode,
+    String sifenSubmissionMessage,
+    String sifenQueryDocumentContent) {}

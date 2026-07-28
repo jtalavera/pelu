@@ -2,6 +2,7 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.InvoiceService;
+import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
@@ -29,9 +30,12 @@ public class InvoiceController {
   private static final Logger log = LoggerFactory.getLogger(InvoiceController.class);
 
   private final InvoiceService invoiceService;
+  private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
 
-  public InvoiceController(InvoiceService invoiceService) {
+  public InvoiceController(
+      InvoiceService invoiceService, SifenInvoiceSubmissionService sifenInvoiceSubmissionService) {
     this.invoiceService = invoiceService;
+    this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
   }
 
   @PostMapping
@@ -88,6 +92,25 @@ public class InvoiceController {
     log.info("POST /api/invoices/{}/void tenantId={}", id, principal.getTenantId());
     InvoiceResponse response = invoiceService.voidInvoice(principal.getTenantId(), id, request);
     log.info("POST /api/invoices/{}/void tenantId={} status=200", id, principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * SIFEN HU-07 AC-04: manually triggers a status query to SIFEN for an invoice this system marked
+   * 'pendiente de verificación'. Returns the invoice's fresh state either way — if SIFEN still
+   * gives no answer, the invoice stays PENDING_VERIFICATION and the response reflects that.
+   */
+  @PostMapping("/{id}/sifen/check-status")
+  public ResponseEntity<InvoiceResponse> checkSifenStatus(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable Long id) {
+    requirePrincipal(principal);
+    log.info("POST /api/invoices/{}/sifen/check-status tenantId={}", id, principal.getTenantId());
+    sifenInvoiceSubmissionService.checkPendingStatus(principal.getTenantId(), id);
+    InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
+    log.info(
+        "POST /api/invoices/{}/sifen/check-status tenantId={} status=200",
+        id,
+        principal.getTenantId());
     return ResponseEntity.ok(response);
   }
 
