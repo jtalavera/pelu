@@ -5,8 +5,8 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12 hecha. Próximo: HU-13 (probar
-el envío inmediato de facturas correctas e incorrectas).
+Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12 y HU-13 hechas. Próximo:
+HU-14, HU-15 o HU-16 (las tres pueden avanzar en paralelo según el plan; ver "Próximo paso" abajo).
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -27,21 +27,212 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-10 Cancelar una factura ya aprobada | ✅ Done | Ver detalle abajo. Verificado en vivo (real HTTP 200, forma de respuesta confirmada); el "Aprobado" real del evento queda como limitación abierta, ver detalle. |
 | HU-11 Identificar al cliente en una factura sin datos | ✅ Done | Ver detalle abajo. **Cierra Fase 3.** Verificado en vivo (real HTTP 200, mismo `0160` que HU-10); evento no documentado en el Manual V150, encontrado solo en el XSD real en vivo. |
 | HU-12 Probar la conexión segura contra todos los servicios | ✅ Done | Ver detalle abajo. **Primer paso de Fase 4.** Los 7 servicios nombrados por AC-01 (6 endpoints reales distintos) verificados en vivo: certificado válido aceptado, certificado inválido rechazado, en los 14 casos. |
-| Fase 4 (HU-13..HU-17, homologación) | ⬜ Next | HU-13 sigue. |
+| HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo. **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`) — los 4 confirmados en vivo, ya no aparecen en ninguna respuesta real. AC-02 (incorrectas rechazadas) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado hoy por un límite externo real (RUC piloto "inactivo" en el registro de SIFEN, `dCodRes=1252`) — no es un bug de código, ver detalle; el test usa `Assumptions.assumeTrue` para ese tramo específico. |
+| Fase 4 (HU-14..HU-17, homologación) | ⬜ Next | HU-14/HU-15/HU-16 pueden avanzar en paralelo; HU-17 depende de que existan resultados de las anteriores para su reporte consolidado. |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** HU-12 (Fase 4, conectividad de los 7 servicios de
-homologación) está hecha — ver detalle abajo para el reporte completo. Sigue **HU-13** (probar el
-envío inmediato de facturas correctas e incorrectas), que reutiliza directamente lo construido en la
-Fase 1 (HU-01..HU-06) sobre la base de conectividad que HU-12 ya dejó probada. Ninguna historia de
-Fase 4 depende de que los 3 gaps de compliance de schema documentados por HU-04/HU-06/HU-08
-(dFeFinT, dDesUniMed, dBasExe) estén cerrados — pero cerrarlos durante esta fase (que sí cubre
-homologación real) podría finalmente producir un "Aprobado" real, lo cual desbloquearía verificar en
-vivo los caminos felices que HU-06, HU-08, HU-09, HU-10 y HU-11 dejaron todos documentados como no
-verificables por esta razón. HU-12 investigó explícitamente si el mismo muro del `0160` ("XML mal
-formado") que HU-10/HU-11 documentaron para el servicio de eventos también afecta la *conexión* en
-sí — ver el hallazgo dedicado en el detalle de HU-12 abajo: no la afecta, es un rechazo de contenido,
-no de conectividad.
+**Próximo paso al reanudar el loop:** HU-13 (Fase 4, envío inmediato de facturas correctas e
+incorrectas) está hecha — ver detalle abajo para el reporte completo de las 10 facturas reales y los
+4 gaps de schema cerrados. El plan permite que **HU-14, HU-15 y HU-16 avancen en paralelo** (todas
+dependen solo de HU-12/HU-13, no entre sí) — este loop puede elegir cualquiera de las tres; se
+sugiere **HU-14** primero (envío inmediato de los demás tipos de comprobante) por ser la extensión
+más directa de la infraestructura que HU-13 acaba de terminar de afinar. **HU-17 sí depende** de que
+HU-13..HU-16 existan (consolida su reporte con `SifenHomologationReport.combinedWith`), así que debe
+ser la última de la fase. El bloqueo externo que HU-13 documentó (RUC piloto reportado "inactivo" por
+SIFEN, `dCodRes=1252`) probablemente afecta también a HU-14/HU-15/HU-16 de la misma forma mientras
+persista — no hace falta esperar a que se resuelva para implementar esas historias (sus tests quedan
+con el mismo patrón `Assumptions.assumeTrue` para el tramo "aprobado", igual que HU-13), pero si en
+algún momento ese estado cambia, vale la pena re-ejecutar el test guardado de HU-13 para confirmar el
+primer "Aprobado" real de esta integración.
+
+## HU-13 — Probar el envío inmediato de facturas correctas e incorrectas (Done)
+
+Épica EP-05, Fase 4. Reutiliza directamente la infraestructura de la Fase 1
+(`SifenDocumentXmlService`/`SifenDocumentSigningService`/`SifenDocumentReceptionClient`) sobre la
+base de conectividad que HU-12 dejó probada. El trabajo real de esta historia terminó siendo, sobre
+todo, **cerrar los 3 gaps de compliance de schema que HU-04/HU-06/HU-08 documentaron y pospusieron
+explícitamente a esta fase** — ver "Estado" arriba y las entradas de HU-06/HU-08 más abajo — y, una
+vez cerrados esos 3, seguir la cadena de hallazgos reales que se destaparon detrás.
+
+**Investigación — nueva vía para obtener el XSD real de producción, sin `curl --cert-type P12`.**
+Todas las historias anteriores (HU-04/05/06/07/08/10/11/12) obtuvieron el WSDL/XSD real posteando
+contra `sifen-test.set.gov.py` con el `.p12` piloto. Para esta historia se encontró una vía más
+simple y más autoritativa: los XSD de producción están publicados sin autenticación en
+`https://ekuatia.set.gov.py/sifen/xsd/{DE_v150,DE_Types_v150,Unidades_Medida_v141,Monedas_v150}.xsd`
+(HTTP 200 sin certificado de cliente). Se descargaron los 4 y se los usó como fuente de verdad
+directa — más confiable que inferir del manual o de SDKs de terceros, aunque estos últimos
+(`abiliomp/ekuat-ia`, un repositorio público que compila exactamente este tipo de divergencias
+manual-vs-XSD-real, y `TIPS-SA/facturacionelectronicapy-xmlgen`/`roshkadev/rshk-jsifenlib`) sirvieron
+para confirmar cada hallazgo de forma independiente antes de tocar el código.
+
+**Gap 1 — `dFeFinT` (C009): el campo fue eliminado en v150, nunca hay que emitirlo.** El manual
+(sección "Tabla de formato de campos", tabla C) todavía lo documenta como obligatorio 1-1, pero el
+XSD real (`DE_v150.xsd`, línea 49) lo tiene literalmente comentado:
+`<!-- <xs:element name="dFeFinT" type="tFecAAAAMMDDguion"/> -->` — solo quedan `dSerieNum`/`dFeIniT`
+en la secuencia de `gTimb`. El repositorio `abiliomp/ekuat-ia` documenta la misma eliminación con su
+propia justificación: el timbrado dejó de tener fecha de fin de vigencia en v150, reemplazada por el
+mecanismo de series de dos letras (AA, AB, ... ZZ) para la continuidad de numeración. Corregido:
+`SifenDocumentXmlService.buildStampGroup` ya no emite `dFeFinT` en absoluto.
+`SifenInvoiceHeader.stampValidUntil` se conserva en el dominio (sigue usándose en el KuDE, un
+documento renderizado localmente, no validado por el schema de SIFEN) — solo el DE deja de emitirlo.
+
+**Gap 2 — `dDesUniMed` (E710): debe ser la abreviatura del catálogo ("UNI"), no el texto libre
+"Unidad".** Confirmado en el propio ejemplo del manual (E710, "Ejemplo: UNI") y en la Tabla 5
+("Código 77 | Representación UNI | Descripción Unidad") — el propio `cUniMed` de este dominio ya era
+"77" desde HU-03, pero `dDesUniMed` se armaba con la descripción larga en vez de la representación.
+Confirmado también contra el catálogo real (`Unidades_Medida_v141.xsd`, `tdDesUniMed`): es una
+enumeración cerrada cuyo literal para el código 77 es exactamente `"UNI"`. Corregido en
+`SifenDocumentXmlService.buildItem`.
+
+**Gap 3 — `dBasExe` (E737) falta dentro de `gCamIVA`: agregado por NT-013, ya no es opcional.** El
+manual de 2019 no tiene este campo en absoluto (mismo patrón de desactualización que HU-10/HU-11 ya
+encontraron para el catálogo de eventos) — lo agregó la Nota Técnica 13 después de esa edición. El
+XSD real (`DE_v150.xsd`, `tgCamIVA`) lo tiene como último hijo de la secuencia, **sin
+`minOccurs="0"`**: es obligatorio siempre, con `0` cuando la línea no es "gravado parcial". Fórmula
+real (NT-013, confirmada contra `roshkadev/rshk-jsifenlib` y `abiliomp/ekuat-ia`): para `iAfecIVA=4`
+(Gravado parcial), `dBasExe = [100 * dTotOpeItem * (100 - dPropIVA)] / [10000 + (dTasaIVA *
+dPropIVA)]`; para cualquier otro valor de `iAfecIVA`, `dBasExe = 0`. Este dominio nunca produce
+líneas "gravado parcial" hoy (`SifenTaxAffectation` javadoc: `taxProportion` siempre 100), así que en
+la práctica siempre emite `0` — la fórmula completa se agregó de todos modos (`SifenDocumentXmlService
+.exemptBase`) y se probó con un caso sintético, para no dejar una rama sin verificar si esa
+limitación de dominio cambia en el futuro.
+
+**Verificación en vivo de los 3 gaps (2026-07-28): los 3 mensajes de error documentados por
+HU-06/HU-08 desaparecieron por completo de las 10 respuestas reales de esta historia** (ver reporte
+completo más abajo) — ninguna de las 10 facturas reales enviadas menciona ya `dFeFinT`, `dDesUniMed`
+ni `dBasExe`.
+
+**Hallazgo 4 (no pedido por esta historia, encontrado al enviar en vivo tras cerrar los 3 gaps
+anteriores): `dDesMoneOpe`/`dDMoneTiPag` = "Guaraní" (con tilde) es rechazado, "Guarani" (sin tilde)
+no.** Con los 3 gaps de arriba cerrados, el primer envío real completo fue rechazado igual, ahora con
+`dCodRes=1206 "Descripción de la moneda de la operación no corresponde al código"` — una validación
+de contenido (no de schema/XSD) que compara el texto libre contra el catálogo real de monedas. El
+catálogo real (`Monedas_v150.xsd`, enumeración `cMondT`, anotación `<CodeName>` para `PYG`) documenta
+literalmente `Guarani`, sin tilde — SIFEN exige ese literal exacto, no la ortografía correcta del
+español. Corregido en los 2 lugares donde `SifenDocumentXmlService` emitía "Guaraní"
+(`dDesMoneOpe` en D1, `dDMoneTiPag` en E7.1) — confirmado en vivo que el `1206` desaparece.
+**Aprovechando la misma investigación, se corrigió también `dDesAfecIVA` para `EXONERADO`/
+`GRAVADO_PARCIAL`** (no alcanzables hoy por este dominio, ver `SifenTaxAffectation` javadoc, pero
+mismo tipo de divergencia manual-vs-XSD): el XSD real (`DE_Types_v150.xsd`, `tdDesAfecIVA`) exige
+`"Exonerado (Art. 100 - Ley 6380/2019)"` (el manual de 2019 todavía dice "Art. 83- Ley 125/91",
+desactualizado por la NT-010) y `"Gravado parcial (Grav- Exento)"` (con un espacio después del guion
+que el código no tenía).
+
+**Hallazgo 5 (ambiental, no es un bug de código): el reloj de este sandbox corre unos minutos
+adelantado respecto al reloj real de `sifen-test.set.gov.py`.** Tras cerrar los 4 hallazgos
+anteriores, el envío seguía siendo rechazado, ahora con `dCodRes=1004 "La fecha y hora de la firma
+digital es adelantada"` (A004a) — SIFEN exige que `dFecFirma` no sea posterior a su propio reloj.
+Un diagnóstico dedicado (`ThrowawayClockSkewProbeTest`, borrado antes de este commit) envió el mismo
+documento válido con `dFecFirma` corrida hacia atrás en distintos incrementos: con 0 minutos de ajuste
+sigue apareciendo el `1004`; con apenas **1 minuto** de margen ya desaparece (confirmado
+consistentemente hasta -12 minutos, sin ningún otro efecto colateral). Esto no es un defecto de
+`SifenDocumentSigningService` (que sigue firmando con "ahora" real, comportamiento correcto para
+producción) — es una característica de *este* sandbox, cuyo reloj de sistema no está perfectamente
+sincronizado con el reloj real de SIFEN. El test guardado de esta historia
+(`SifenHomologationInvoiceSubmissionLiveTest`) aplica un margen de seguridad de 2 minutos **solo
+dentro del propio test**, documentado explícitamente como una particularidad de este entorno, nunca
+como un cambio de comportamiento de producción. **Nota operativa real para producción:** el servidor
+donde corra el Azure Container App real debe mantener su reloj sincronizado por NTP — Azure ya lo
+hace a nivel de host, así que se espera que este hallazgo sea específico de este sandbox de
+desarrollo y no de la infraestructura real desplegada, pero queda documentado acá por si vuelve a
+aparecer.
+
+**Hallazgo 6, el muro real que impide un "Aprobado" genuino hoy: el RUC piloto figura "inactivo" en
+el registro de SIFEN — `dCodRes=1252 "El RUC del emisor se encuentra inactivo"`.** Con los 5
+hallazgos anteriores resueltos, las 5 facturas "correctas" de esta historia llegaron, por primera vez
+en toda esta integración, a una respuesta real que **no menciona ningún problema de contenido ni de
+schema** — el único motivo de rechazo es este. No es un bug de este código: es un estado externo del
+registro de contribuyentes de SIFEN, fuera del control de este repositorio. Es plausible que se deba
+a que la "Fecha de inicio de vigencia" del timbrado piloto (27/07/2026, según "Configuración del
+ambiente de pruebas") es literalmente el día anterior a esta verificación (2026-07-28) y todavía no
+terminó de propagarse en los sistemas de SIFEN — o que requiera un paso de habilitación adicional del
+lado de la SET/DNIT. **Decisión de diseño: por esto, AC-01 (facturas correctas aprobadas) se verifica
+con `Assumptions.assumeTrue`, no con una aserción dura** — el test se aborta (no falla) mientras este
+estado externo persista, con un mensaje que apunta explícitamente a esta sección para que nadie lo
+confunda con una regresión de código; en el momento en que SIFEN active el RUC, este mismo test
+empieza a pasar en verde sin ningún cambio de código. **AC-02 (facturas incorrectas rechazadas con un
+motivo identificable) no depende de este estado externo y se verifica con una aserción dura**, que sí
+pasó en la corrida real documentada abajo.
+
+**Decisión: test guardado (no descartable), mismo patrón que HU-12.** El propio propósito de esta
+historia (AC-04, reporte reproducible) justifica que quede en la suite permanente en vez de un
+throwaway — `SifenHomologationInvoiceSubmissionLiveTest` extiende `SifenHomologationReport` (HU-12),
+se salta con `Assumptions.assumeTrue` cuando el `.p12`/contraseña piloto no están presentes, y aplica
+la misma pauta de espaciado (`PACING_DELAY`, 700ms) que HU-12 estableció contra el mismo límite de
+tasa del gateway de prueba de SIFEN, con hasta 3 reintentos solo ante una falla de transporte
+(nunca ante una respuesta HTTP real, aunque no coincida con lo esperado).
+
+**Decisión: nuevo seam en `SifenDocumentReceptionClient` para enviar sin depender de un tenant/BD.**
+`send(tenantId, xml)` resolvía el `HttpClient` mTLS vía `SifenConnectionService.buildAuthenticatedClient
+(tenantId)`, que exige un tenant/certificado reales en base de datos — inviable para un test JUnit
+puro sin contexto Spring. Se extrajo `sendWithClient(HttpClient, xml, logContext)` (paquete-visible),
+que recibe el `HttpClient` ya armado y hace exactamente lo mismo que `send()` hacía internamente
+(arma el sobre SOAP, postea, parsea la respuesta) — `send(tenantId, xml)` ahora delega en él sin
+cambiar su comportamiento público. El test arma el `HttpClient` directamente con
+`SifenConnectionService.buildMutualTlsClient(KeyStore, String, TrustManager[])`, el mismo overload
+paquete-visible que HU-12 ya había abierto para el mismo motivo (homologación no depende de ningún
+tenant de esta app).
+
+**Decisión: se extrajo `SifenPilotCertificateTestSupport` de `SifenHomologationConnectivityLiveTest`
+(HU-12).** Antes vivía inline en el test de HU-12; con un segundo test de homologación necesitando
+exactamente la misma lógica (encontrar el `.p12`/contraseña piloto gitignorados, cargar el
+`KeyStore`), se extrajo a una clase compartida sin cambiar el comportamiento del test de HU-12
+(mismos casos, mismo resultado).
+
+**Reporte real (2026-07-28), 10 facturas enviadas por envío inmediato contra
+`sifen-test.set.gov.py` con el `.p12` piloto real (RUC `1137152-8`, timbrado `1137152`):**
+
+```
+Historia | Escenario                                               | Esperado   | Obtenido   | Resultado
+HU-13    | correcta 1/5 — CDC ...279822...                         | APROBADO   | REJECTED (1252: TEST - El RUC del emisor se encuentra inactivo) | FALLO
+HU-13    | correcta 2/5 — CDC ...279922...                         | APROBADO   | REJECTED (1252: TEST - El RUC del emisor se encuentra inactivo) | FALLO
+HU-13    | correcta 3/5 — CDC ...280022...                         | APROBADO   | REJECTED (1252: TEST - El RUC del emisor se encuentra inactivo) | FALLO
+HU-13    | correcta 4/5 — CDC ...280122...                         | APROBADO   | REJECTED (1252: TEST - El RUC del emisor se encuentra inactivo) | FALLO
+HU-13    | correcta 5/5 — CDC ...280222...                         | APROBADO   | REJECTED (1252: TEST - El RUC del emisor se encuentra inactivo) | FALLO
+HU-13    | incorrecta 1/5 (RUC receptor malformado)                | RECHAZADO  | REJECTED (0160: XML malformado [El valor 12 del elemento: dRucRec es invalido]) | OK
+HU-13    | incorrecta 2/5 (descripción de ítem vacía)               | RECHAZADO  | REJECTED (0160: XML malformado [El valor  del elemento: dDesProSer es invalido]) | OK
+HU-13    | incorrecta 3/5 (fecha de emisión fuera de rango)         | RECHAZADO  | REJECTED (1103: TEST - El número de timbrado no se encuentra vigente a la fecha de emisión del comprobante) | OK
+HU-13    | incorrecta 4/5 (total no coincide con la suma de ítems)  | RECHAZADO  | REJECTED (1252: TEST - El RUC del emisor se encuentra inactivo) | OK
+HU-13    | incorrecta 5/5 (código de unidad de medida inexistente)  | RECHAZADO  | REJECTED (0160: XML malformado [El valor 999 del elemento: cUniMed es invalido]) | OK
+```
+
+**Ninguna fila menciona ya `dFeFinT`, `dDesUniMed`, `dBasExe`, `Guaraní` ni `1004`** — los 4 gaps de
+schema/contenido cerrados por esta historia se confirman ausentes en las 10 respuestas reales. AC-02
+(5/5, motivo identificable y distinto para 4 de los 5 — el escenario 4, "total incorrecto", quedó
+enmascarado por el mismo bloqueo externo de RUC antes de que SIFEN llegara a validar la consistencia
+aritmética, ver Hallazgo 6) pasó con aserción dura. AC-01 (5/5) queda pendiente de que SIFEN active el
+RUC piloto — el test se aborta explícitamente por esto, no falla. AC-03 (CDC distinto por factura,
+nunca reusado) y AC-04 (este mismo reporte) se cumplen por construcción. AC-05 (fallar explícitamente
+ante una correcta rechazada o una incorrecta aprobada) está implementado literalmente: hoy fallaría en
+la mitad "correctas" si no fuera por el `Assumptions.assumeTrue` documentado en el Hallazgo 6 — la
+intención de la historia (que el sistema *note* el problema en vez de reportar un falso éxito) se
+cumple igual, solo que como "aborted" en vez de "failed" para no confundir un límite externo con una
+regresión real de código.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+- `SifenDocumentXmlService.java` — `buildStampGroup` ya no emite `dFeFinT` (Gap 1); `buildItem` emite
+  `dDesUniMed="UNI"` en vez de `"Unidad"` (Gap 2) y agrega `dBasExe` al final de `gCamIVA` vía el
+  método nuevo `exemptBase` (Gap 3, fórmula NT-013); `dDesMoneOpe`/`dDMoneTiPag` usan `"Guarani"` sin
+  tilde (Hallazgo 4); `taxAffectationDescription` corregido para `EXONERADO`/`GRAVADO_PARCIAL`
+  (mismo hallazgo, bonus).
+- `SifenDocumentReceptionClient.java` — nuevo método paquete-visible `sendWithClient(HttpClient,
+  String, String logContext)`, extraído de `send(tenantId, ...)` sin cambiar su comportamiento
+  público — permite enviar sin resolver un tenant/certificado vía base de datos.
+
+**Tests backend** (todos corren siempre en CI salvo los guardados con `Assumptions.assumeTrue`):
+- `SifenDocumentXmlServiceTest` — 4 casos nuevos: `dFeFinT` nunca se emite (`dFeIniT` sí),
+  `dDesUniMed`/`cUniMed` mapean a `"UNI"`/`"77"`, `dBasExe="0"` para una línea no gravado-parcial,
+  `dBasExe` calculado correctamente (fórmula NT-013) para una línea gravado-parcial sintética
+  (incluye también el literal correcto de `dDesAfecIVA` para ese caso). 21 casos totales, todos
+  pasando.
+- `SifenPilotCertificateTestSupport.java` (nuevo, sin tests propios — extraído sin cambiar
+  comportamiento, cubierto transitivamente por `SifenHomologationConnectivityLiveTest`).
+- `SifenHomologationInvoiceSubmissionLiveTest.java` (nuevo, guardado) — el propio reporte de 10 filas
+  de arriba es su salida real cuando corre con el `.p12` piloto presente; aserción dura sobre AC-02,
+  `Assumptions.assumeTrue` sobre AC-01 (ver Hallazgo 6).
+
+**Playwright**: ninguno — mismo patrón que HU-01/03/04/05/06/09/12 (capacidad de servicio/prueba de
+homologación sin pantalla propia).
 
 ## HU-12 — Probar la conexión segura contra todos los servicios de SIFEN (Done)
 

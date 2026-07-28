@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.cursorpoc.backend.config.SifenConnectionProperties;
 import com.cursorpoc.backend.service.SifenServiceConnectivityChecker.CheckResult;
 import com.cursorpoc.backend.service.SifenServiceConnectivityChecker.Outcome;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,8 +61,8 @@ class SifenHomologationConnectivityLiveTest {
 
   @Test
   void allSevenNamedServices_acceptRealPilotCertificate_andRejectASelfSignedOne() throws Exception {
-    Path pilotCertificate = findPilotCertificate();
-    Path pilotPassword = findPilotPassword();
+    Path pilotCertificate = SifenPilotCertificateTestSupport.findPilotCertificate();
+    Path pilotPassword = SifenPilotCertificateTestSupport.findPilotPassword();
     Assumptions.assumeTrue(
         pilotCertificate != null && pilotPassword != null,
         "Pilot .p12/password not present in this checkout (gitignored, see requirements/sifen/"
@@ -71,9 +70,12 @@ class SifenHomologationConnectivityLiveTest {
             + "HU-12 in requirements/sifen/PROGRESS.md to obtain them locally.");
 
     String password = Files.readString(pilotPassword).trim();
-    KeyStore validKeyStore = loadKeyStore(Files.readAllBytes(pilotCertificate), password);
+    KeyStore validKeyStore =
+        SifenPilotCertificateTestSupport.loadKeyStore(
+            Files.readAllBytes(pilotCertificate), password);
     KeyStore invalidKeyStore =
-        loadKeyStore(readClasspathResource(INVALID_CERT_CLASSPATH_RESOURCE), INVALID_CERT_PASSWORD);
+        SifenPilotCertificateTestSupport.loadKeyStore(
+            readClasspathResource(INVALID_CERT_CLASSPATH_RESOURCE), INVALID_CERT_PASSWORD);
 
     var checker = new SifenServiceConnectivityChecker(new SifenConnectionProperties());
     var report = new SifenHomologationReport();
@@ -138,12 +140,6 @@ class SifenHomologationConnectivityLiveTest {
     return String.format(Locale.ROOT, "%s (HTTP %d)", result.actual(), result.httpStatus());
   }
 
-  private static KeyStore loadKeyStore(byte[] bytes, String password) throws Exception {
-    KeyStore keyStore = KeyStore.getInstance("PKCS12");
-    keyStore.load(new ByteArrayInputStream(bytes), password.toCharArray());
-    return keyStore;
-  }
-
   private static byte[] readClasspathResource(String resourcePath) throws IOException {
     return Files.readAllBytes(
         Path.of(
@@ -151,40 +147,5 @@ class SifenHomologationConnectivityLiveTest {
                 .getClassLoader()
                 .getResource(resourcePath)
                 .getPath()));
-  }
-
-  /** The gitignored pilot cert lives at {@code requirements/sifen/*.p12} — filename varies. */
-  private static Path findPilotCertificate() throws IOException {
-    Path dir = findRequirementsSifenDir();
-    if (dir == null) {
-      return null;
-    }
-    try (var stream = Files.list(dir)) {
-      return stream.filter(p -> p.toString().endsWith(".p12")).findFirst().orElse(null);
-    }
-  }
-
-  private static Path findPilotPassword() {
-    Path dir = findRequirementsSifenDir();
-    if (dir == null) {
-      return null;
-    }
-    Path password = dir.resolve(".secrets/lucia-cert-password.txt");
-    return Files.exists(password) ? password : null;
-  }
-
-  /**
-   * Gradle's test working directory is the backend module ({@code src/backend}), but this test may
-   * also be invoked from the repo root by tooling — try both.
-   */
-  private static Path findRequirementsSifenDir() {
-    for (String candidate :
-        List.of("requirements/sifen", "../../requirements/sifen", "../../../requirements/sifen")) {
-      Path path = Path.of(candidate).toAbsolutePath().normalize();
-      if (Files.isDirectory(path)) {
-        return path;
-      }
-    }
-    return null;
   }
 }

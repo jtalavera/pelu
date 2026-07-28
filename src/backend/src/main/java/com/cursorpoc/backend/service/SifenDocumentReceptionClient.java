@@ -93,9 +93,28 @@ public class SifenDocumentReceptionClient {
 
   Optional<SifenSubmissionResult> send(
       long tenantId, String signedDocumentXml, javax.net.ssl.TrustManager[] testTrustManagers) {
-    String envelope = buildEnvelope(signedDocumentXml);
     try {
       HttpClient client = connectionService.buildAuthenticatedClient(tenantId, testTrustManagers);
+      return sendWithClient(client, signedDocumentXml, "tenantId=" + tenantId);
+    } catch (GeneralSecurityException e) {
+      log.error("SIFEN submission got no response tenantId={} error={}", tenantId, e.toString());
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * EP-05 homologación (HU-13): package-visible overload that sends over an already-built mTLS
+   * {@link HttpClient} instead of resolving one from a tenant's active certificate — lets a
+   * homologation test send a real invoice signed with the pilot {@code .p12} directly, mirroring
+   * the seam HU-12 opened on {@link SifenConnectionService#buildMutualTlsClient(KeyStore, String,
+   * javax.net.ssl.TrustManager[])} for the same reason: a real homologation send isn't tied to any
+   * tenant in this app. {@code logContext} is a free-text label (e.g. a CDC) for the log lines
+   * only.
+   */
+  Optional<SifenSubmissionResult> sendWithClient(
+      HttpClient client, String signedDocumentXml, String logContext) {
+    String envelope = buildEnvelope(signedDocumentXml);
+    try {
       HttpRequest request =
           HttpRequest.newBuilder(
                   URI.create(connectionProperties.activeBaseUrl() + SYNC_RECIBE_PATH))
@@ -109,16 +128,16 @@ public class SifenDocumentReceptionClient {
           parseResponse(response.body(), LocalDateTime.now(timeProperties.zoneId()));
       if (result.isEmpty()) {
         log.error(
-            "SIFEN submission response could not be parsed tenantId={} httpStatus={}",
-            tenantId,
+            "SIFEN submission response could not be parsed {} httpStatus={}",
+            logContext,
             response.statusCode());
       }
       return result;
-    } catch (IOException | InterruptedException | GeneralSecurityException e) {
+    } catch (IOException | InterruptedException e) {
       if (Thread.currentThread().isInterrupted()) {
         Thread.currentThread().interrupt();
       }
-      log.error("SIFEN submission got no response tenantId={} error={}", tenantId, e.toString());
+      log.error("SIFEN submission got no response {} error={}", logContext, e.toString());
       return Optional.empty();
     }
   }

@@ -262,6 +262,92 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='dMonTiPag']")).isEqualTo("100000");
   }
 
+  /**
+   * SIFEN HU-13 bonus finding: the real production currency catalog (Monedas_v150.xsd's {@code
+   * <CodeName>} for PYG) spells the currency description without an accent — "Guarani", not
+   * "Guaraní" — confirmed live 2026-07-28 (dCodRes=1206 "Descripción de la moneda de la operación
+   * no corresponde al código" disappeared once fixed). Both occurrences (D1's operation currency
+   * and E7.1's payment currency) must use the unaccented spelling.
+   */
+  @Test
+  void buildDocument_usesUnaccentedGuaraniForBothCurrencyDescriptions() throws Exception {
+    Document doc = service.buildDocument(header, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='dDesMoneOpe']")).isEqualTo("Guarani");
+    assertThat(xpath(doc, "//*[local-name()='dDMoneTiPag']")).isEqualTo("Guarani");
+  }
+
+  /**
+   * SIFEN HU-13 gap fix: dFeFinT (C009) is commented out of the real production schema (DE_v150.xsd
+   * downloaded live 2026-07-28) — never emit it, even though dFeIniT (C008) stays.
+   */
+  @Test
+  void buildDocument_neverEmitsDFeFinT() throws Exception {
+    Document doc = service.buildDocument(header, detail, cdcFields, LocalDateTime.now());
+
+    NodeList feFinT = (NodeList) xpathNodes(doc, "//*[local-name()='dFeFinT']");
+    assertThat(feFinT.getLength()).isZero();
+    assertThat(xpath(doc, "//*[local-name()='dFeIniT']")).isEqualTo("2025-01-01");
+  }
+
+  /**
+   * SIFEN HU-13 gap fix: dDesUniMed (E710) must be the schema's closed-enumeration abbreviation
+   * ("UNI" for cUniMed=77/Unidad), not the free-text "Unidad" this used to send.
+   */
+  @Test
+  void buildDocument_mapsUnitOfMeasureDescriptionAsUni() throws Exception {
+    Document doc = service.buildDocument(header, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='cUniMed']")).isEqualTo("77");
+    assertThat(xpath(doc, "//*[local-name()='dDesUniMed']")).isEqualTo("UNI");
+  }
+
+  /**
+   * SIFEN HU-13 gap fix: dBasExe (E737) is a mandatory child of gCamIVA in the real production
+   * schema — always present, "0" for every affectation except gravado parcial (iAfecIVA=4).
+   */
+  @Test
+  void buildDocument_includesZeroExemptBase_whenLineIsNotGravadoParcial() throws Exception {
+    Document doc = service.buildDocument(header, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='dBasExe']")).isEqualTo("0");
+  }
+
+  /**
+   * SIFEN HU-13 gap fix, NT-013 formula: for a gravado-parcial line, dBasExe = [100 * dTotOpeItem *
+   * (100 - dPropIVA)] / [10000 + (dTasaIVA * dPropIVA)]. This affectation isn't reachable through
+   * any real invoice in this domain today (see SifenTaxAffectation javadoc) — exercised here only
+   * to prove the formula itself is correct, in case it becomes reachable later.
+   */
+  @Test
+  void buildDocument_computesExemptBase_forGravadoParcialLine() throws Exception {
+    SifenInvoiceLine gravadoParcialLine =
+        new SifenInvoiceLine(
+            "SVC-2",
+            "Servicio mixto",
+            null,
+            1,
+            "77",
+            BigDecimal.valueOf(100_000),
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(100_000),
+            SifenTaxAffectation.GRAVADO_PARCIAL,
+            BigDecimal.valueOf(50),
+            BigDecimal.valueOf(10),
+            BigDecimal.valueOf(45454.55),
+            BigDecimal.valueOf(4545.45));
+    SifenInvoiceDetail detailWithGravadoParcialLine =
+        new SifenInvoiceDetail(List.of(gravadoParcialLine), detail.totals(), 1, detail.payments());
+
+    Document doc =
+        service.buildDocument(header, detailWithGravadoParcialLine, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iAfecIVA']")).isEqualTo("4");
+    assertThat(xpath(doc, "//*[local-name()='dDesAfecIVA']"))
+        .isEqualTo("Gravado parcial (Grav- Exento)");
+    assertThat(xpath(doc, "//*[local-name()='dBasExe']")).isEqualTo("47619.04761905");
+  }
+
   private static String xpath(Document doc, String expression) throws Exception {
     XPath xPath = XPathFactory.newInstance().newXPath();
     return xPath.evaluate(expression, doc);

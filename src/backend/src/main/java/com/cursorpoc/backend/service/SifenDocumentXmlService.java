@@ -100,7 +100,21 @@ public class SifenDocumentXmlService {
     el(doc, gOpeDE, "dCodSeg", cdcFields.securityCode());
   }
 
-  /** C. Campos de datos del Timbrado. */
+  /**
+   * C. Campos de datos del Timbrado.
+   *
+   * <p><b>SIFEN HU-13 gap fix:</b> {@code dFeFinT} (C009) is <b>not</b> emitted — confirmed against
+   * the real production schema ({@code DE_v150.xsd}, downloaded directly from {@code
+   * https://ekuatia.set.gov.py/sifen/xsd/DE_v150.xsd}, 2026-07-28): the element is commented out
+   * inside {@code gTimb}'s sequence (only {@code dSerieNum}/{@code dFeIniT} remain), the field
+   * having been eliminated in v150 in favor of the two-letter series mechanism (AA, AB, ... ZZ) for
+   * numbering continuity. The Manual Técnico V150 (sección "Tabla de formato de campos", tabla C)
+   * still documents it as 1-1 obligatorio — a manual/schema divergence, same pattern as the
+   * `dDesAfecIVA`/`dBasExe` gaps below. Sending it produced the live rejection this system had
+   * documented since HU-06/HU-08 (schema doesn't expect this element at all). {@code
+   * header.stampValidUntil()} is kept on the domain model and still used by the KuDE PDF (a locally
+   * rendered receipt, not SIFEN-schema-validated) — only the DE XML stops emitting it.
+   */
   private void buildStampGroup(
       Document doc, Element de, SifenInvoiceHeader header, SifenControlNumberFields cdcFields) {
     Element gTimb = el(doc, de, "gTimb", null);
@@ -111,7 +125,6 @@ public class SifenDocumentXmlService {
     el(doc, gTimb, "dPunExp", pad(header.expeditionPoint(), 3));
     el(doc, gTimb, "dNumDoc", pad(cdcFields.documentNumber(), 7));
     el(doc, gTimb, "dFeIniT", header.stampValidFrom().format(DATE_FORMAT));
-    el(doc, gTimb, "dFeFinT", header.stampValidUntil().format(DATE_FORMAT));
   }
 
   /** D. Campos Generales del DE: D1 (operación comercial), D2 (emisor), D3 (receptor). */
@@ -127,7 +140,12 @@ public class SifenDocumentXmlService {
     el(doc, gOpeCom, "iTImp", "1");
     el(doc, gOpeCom, "dDesTImp", "IVA");
     el(doc, gOpeCom, "cMoneOpe", "PYG");
-    el(doc, gOpeCom, "dDesMoneOpe", "Guaraní");
+    // SIFEN HU-13 bonus finding: the real production catalog (Monedas_v150.xsd, cMondT
+    // enumeration's <CodeName> for "PYG") documents the currency name as "Guarani" — no accent —
+    // confirmed live (2026-07-28): sending "Guaraní" was rejected with dCodRes=1206 "Descripción de
+    // la moneda de la operación no corresponde al código", a business-rule cross-check against that
+    // exact catalog string, independent of the 3 schema gaps this history was chartered to close.
+    el(doc, gOpeCom, "dDesMoneOpe", "Guarani");
 
     buildIssuer(doc, gDatGralOpe, header.issuer());
     buildReceiver(doc, gDatGralOpe, header.receiver());
@@ -228,7 +246,8 @@ public class SifenDocumentXmlService {
       el(doc, gPaConEIni, "dDesTiPag", paymentTypeDescription(payment.typeCode()));
       el(doc, gPaConEIni, "dMonTiPag", payment.amount().toPlainString());
       el(doc, gPaConEIni, "cMoneTiPag", "PYG");
-      el(doc, gPaConEIni, "dDMoneTiPag", "Guaraní");
+      // Same fix as dDesMoneOpe above — same catalog, same field-content cross-check.
+      el(doc, gPaConEIni, "dDMoneTiPag", "Guarani");
     }
 
     for (SifenInvoiceLine line : detail.lines()) {
@@ -243,7 +262,13 @@ public class SifenDocumentXmlService {
     el(doc, gCamItem, "dCodInt", line.internalCode());
     el(doc, gCamItem, "dDesProSer", line.description());
     el(doc, gCamItem, "cUniMed", line.unitOfMeasureCode());
-    el(doc, gCamItem, "dDesUniMed", "Unidad");
+    // SIFEN HU-13 gap fix: dDesUniMed (E710) is a closed enumeration (Unidades_Medida_v141.xsd,
+    // tdDesUniMed) keyed to the *abbreviation* the manual's own Tabla 5 publishes for each cUniMed
+    // code — "UNI" for code 77 (Unidad), never the free-text description "Unidad" this used to
+    // send.
+    // Confirmed directly against the real production XSD (2026-07-28): "Unidad" isn't one of the
+    // enumeration's literals, only "UNI" is — every public SIFEN XML generator/example agrees.
+    el(doc, gCamItem, "dDesUniMed", "UNI");
     el(doc, gCamItem, "dCantProSer", String.valueOf(line.quantity()));
     if (line.additionalInfo() != null) {
       el(doc, gCamItem, "dInfItem", line.additionalInfo());
@@ -269,6 +294,32 @@ public class SifenDocumentXmlService {
     el(doc, gCamIVA, "dTasaIVA", line.taxRatePercent().toPlainString());
     el(doc, gCamIVA, "dBasGravIVA", line.taxableBase().toPlainString());
     el(doc, gCamIVA, "dLiqIVAItem", line.taxAmount().toPlainString());
+    // SIFEN HU-13 gap fix: dBasExe (E737, "base exenta por ítem") is a required child of gCamIVA —
+    // confirmed directly against the real production schema (DE_v150.xsd, tgCamIVA complexType,
+    // downloaded from https://ekuatia.set.gov.py/sifen/xsd/DE_v150.xsd 2026-07-28), where it has no
+    // minOccurs="0" (always mandatory, unlike the manual's 2019 edition, which doesn't have this
+    // field at all — added later by NT-013). Must always be present, "0" whenever the line isn't
+    // gravado-parcial (iAfecIVA=4); NT-013's formula applies only for that affectation.
+    el(doc, gCamIVA, "dBasExe", exemptBase(line).toPlainString());
+  }
+
+  /**
+   * NT-013's formula for E737/dBasExe, gravado-parcial (iAfecIVA=4) only: {@code [100 * dTotOpeItem
+   * * (100 - dPropIVA)] / [10000 + (dTasaIVA * dPropIVA)]}. Every other affectation reports 0 —
+   * this business never actually produces {@code GRAVADO_PARCIAL} lines today (see {@link
+   * SifenTaxAffectation} javadoc: no split gravado/exento within one line is representable), so
+   * this branch is exercised only by the unit test built for this fix, not by any real invoice yet.
+   */
+  private static BigDecimal exemptBase(SifenInvoiceLine line) {
+    if (line.taxAffectation() != SifenTaxAffectation.GRAVADO_PARCIAL) {
+      return BigDecimal.ZERO;
+    }
+    BigDecimal hundred = BigDecimal.valueOf(100);
+    BigDecimal numerator =
+        hundred.multiply(line.netTotal()).multiply(hundred.subtract(line.taxProportion()));
+    BigDecimal denominator =
+        BigDecimal.valueOf(10_000).add(line.taxRatePercent().multiply(line.taxProportion()));
+    return numerator.divide(denominator, 8, RoundingMode.HALF_UP);
   }
 
   private void buildTotals(Document doc, Element de, SifenInvoiceTotals totals) {
@@ -315,12 +366,22 @@ public class SifenDocumentXmlService {
     };
   }
 
+  /**
+   * SIFEN HU-13 bonus finding: {@code EXONERADO}/{@code GRAVADO_PARCIAL} literals corrected to
+   * match the real production schema's closed enumeration ({@code DE_Types_v150.xsd}, {@code
+   * tdDesAfecIVA}, verified live 2026-07-28) — neither value is reachable today (see {@link
+   * SifenTaxAffectation} javadoc), so this was latent, not something HU-13's live invoices could
+   * have exercised, but it's the same manual-vs-schema divergence family as the 3 gaps this history
+   * closes and costs nothing to fix alongside them. The manual (Art. 83- Ley 125/91) was superseded
+   * by NT-010 (Art. 100 - Ley 6380/2019) without a corresponding manual reedition; "Gravado parcial
+   * (Grav-Exento)" is missing the schema's space after the hyphen ("Grav- Exento").
+   */
   private static String taxAffectationDescription(SifenTaxAffectation affectation) {
     return switch (affectation) {
       case GRAVADO -> "Gravado IVA";
-      case EXONERADO -> "Exonerado (Art. 83- Ley 125/91)";
+      case EXONERADO -> "Exonerado (Art. 100 - Ley 6380/2019)";
       case EXENTO -> "Exento";
-      case GRAVADO_PARCIAL -> "Gravado parcial (Grav-Exento)";
+      case GRAVADO_PARCIAL -> "Gravado parcial (Grav- Exento)";
     };
   }
 
