@@ -10,7 +10,7 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 
 | HU | Estado | Notas |
 |---|---|---|
-| HU-18 Cargar certificado y clave | ✅ Done | Ver detalle abajo |
+| HU-18 Cargar certificado y clave | ✅ Done | Ver detalle abajo. ⚠️ Cifrado en reposo hoy no cumple RT-09/RT-10 fuera de `e2e` — ver "Deuda técnica" abajo. |
 | HU-20 Calcular estado del certificado | ⬜ Next | |
 | HU-21 Usar certificado vigente automáticamente | ⬜ Todo | |
 | HU-05 Conectarse de forma segura con SIFEN | ⬜ Todo | |
@@ -92,6 +92,21 @@ este repo** ningún mecanismo (endpoint, fixture, o seed) para crear un segundo 
 infraestructura está fuera del alcance de HU-18; si se decide agregarla, sería un fixture
 reutilizable en `e2e/fixtures/` (p.ej. `createSecondTenantApi`) para que HU-18 y futuras historias
 multi-tenant (HU-21 AC-04, HU-22 AC-02) puedan verificarlo con Playwright.
+
+**Deuda técnica (agregada después de HU-18, no re-abrir la historia por esto — trackear aparte):**
+la especificación ahora exige RT-08..RT-11 (Azure Key Vault + Managed Identity para la clave
+maestra de cifrado fuera del ambiente `e2e`), agregado *después* de implementar HU-18. La
+implementación actual de `SifenCertificateEncryptionService`/`SifenCertificateProperties` lee la
+clave maestra de `app.femme.sifen.cert-encryption-key` (env var `FEMME_SIFEN_CERT_ENCRYPTION_KEY`
+con default de desarrollo) en **todos** los ambientes, igual que ya hace `FemmeJwtProperties` para
+el secreto JWT — por lo tanto hoy **no cumple RT-09/RT-10** fuera de `e2e`. Pendiente: un chore
+que (a) agregue una dependencia a Azure Key Vault (`azure-security-keyvault-secrets` +
+`DefaultAzureCredential`/Managed Identity, ya hay `com.azure:azure-identity` en el classpath) para
+resolver la clave maestra solo cuando el perfil activo no sea `e2e`, y (b) evalúe si conviene
+extender lo mismo al secreto JWT ya que comparte el mismo patrón de riesgo. No se resolvió en el
+loop porque es una historia de infraestructura transversal, no una de las 22 HU numeradas del plan
+de fases — se necesita indicación del usuario sobre si crear una HU nueva para esto o manejarlo
+como chore de infraestructura.
 
 ## Convenciones establecidas para el resto de la integración
 
