@@ -31,11 +31,19 @@ import org.w3c.dom.Element;
  * this business only has one possible value (moneda PYG, impuesto afectado IVA, tipo de transacción
  * "Prestación de servicios", indicador de presencia "Operación presencial"). It does <b>not</b>
  * attempt full DE_v150.xsd coverage — groups that don't apply to a cash-sale peluquería service
- * (D2.2 responsable, E7.1.1 tarjeta, E7.1.2 cheque, E7.2 crédito, E9.x sectores, E10 transporte, G,
- * H) are omitted, and the receiver's departamento/ciudad codes remain a known gap inherited from
- * HU-02 (department/city are free text there, not DNIT catalog codes). None of this blocks HU-04's
- * actual goal — signing whatever document this produces — closing full schema/homologación
- * compliance is EP-05's job (HU-12..HU-17).
+ * (D2.2 responsable, E7.1.1 tarjeta, E7.1.2 cheque, E7.2 crédito, E9.x sectores, G, H) are omitted,
+ * and the receiver's departamento/ciudad codes remain a known gap inherited from HU-02 (department/
+ * city are free text there, not DNIT catalog codes). None of this blocks HU-04's actual goal —
+ * signing whatever document this produces — closing full schema/homologación compliance is EP-05's
+ * job (HU-12..HU-17).
+ *
+ * <p><b>SIFEN HU-14</b> extends this beyond factura electrónica (C002/iTiDE=1): {@link
+ * #buildDocument(SifenInvoiceHeader, SifenInvoiceDetail, SifenControlNumberFields, LocalDateTime,
+ * SifenDocumentTypeExtras)} threads a {@link SifenDocumentTypeExtras} through to add nota de
+ * crédito/débito's {@code gCamNCDE}+{@code gCamDEAsoc} (iTiDE 5/6), autofactura's {@code gCamAE}
+ * (iTiDE 4), and nota de remisión's {@code gCamNRE}+{@code gTransp} (iTiDE 7, E10 transporte — the
+ * one group this class's original scope note above explicitly deferred). Everything else (header/
+ * emisor/receptor/ítems/totales/firma/QR) is shared unchanged across all 5 types this class builds.
  */
 @Service
 public class SifenDocumentXmlService {
@@ -58,6 +66,24 @@ public class SifenDocumentXmlService {
       SifenInvoiceDetail detail,
       SifenControlNumberFields cdcFields,
       LocalDateTime signatureTimestamp) {
+    return buildDocument(
+        header, detail, cdcFields, signatureTimestamp, SifenDocumentTypeExtras.NONE);
+  }
+
+  /**
+   * SIFEN HU-14: same as {@link #buildDocument(SifenInvoiceHeader, SifenInvoiceDetail,
+   * SifenControlNumberFields, LocalDateTime)}, extended to branch by document type (nota de
+   * crédito/débito, autofactura, nota de remisión) via {@code extras} — reuses every group the base
+   * factura path already builds (header/emisor/receptor/ítems/totales/firma/QR unchanged) and adds
+   * only the type-specific groups {@code extras} carries, in the exact sequence order the real
+   * schema ({@code DE_v150.xsd}) requires.
+   */
+  public Document buildDocument(
+      SifenInvoiceHeader header,
+      SifenInvoiceDetail detail,
+      SifenControlNumberFields cdcFields,
+      LocalDateTime signatureTimestamp,
+      SifenDocumentTypeExtras extras) {
     Document doc = newDocument();
 
     Element rDE = doc.createElementNS(SIFEN_NS, "rDE");
@@ -84,10 +110,12 @@ public class SifenDocumentXmlService {
         signatureTimestamp.truncatedTo(ChronoUnit.SECONDS).format(DATE_TIME_FORMAT));
     el(doc, de, "dSisFact", "1");
 
+    SifenDocumentType documentType = SifenDocumentType.fromCode(cdcFields.documentType());
     buildOperationGroup(doc, de, cdcFields);
     buildStampGroup(doc, de, header, cdcFields);
-    buildGeneralDataGroup(doc, de, header, detail);
-    buildItemsAndTotals(doc, de, detail);
+    buildGeneralDataGroup(doc, de, header, detail, documentType);
+    buildItemsAndTotals(doc, de, detail, extras);
+    buildAssociatedDocumentGroup(doc, de, extras);
 
     return doc;
   }
@@ -119,7 +147,9 @@ public class SifenDocumentXmlService {
       Document doc, Element de, SifenInvoiceHeader header, SifenControlNumberFields cdcFields) {
     Element gTimb = el(doc, de, "gTimb", null);
     el(doc, gTimb, "iTiDE", String.valueOf(cdcFields.documentType()));
-    el(doc, gTimb, "dDesTiDE", "Factura electrónica");
+    // SIFEN HU-14: dDesTiDE now varies by document type — previously hardcoded to "Factura
+    // electrónica" because HU-04..HU-13 only ever built that one type.
+    el(doc, gTimb, "dDesTiDE", SifenDocumentType.fromCode(cdcFields.documentType()).description());
     el(doc, gTimb, "dNumTim", pad(header.stampNumber(), 8));
     el(doc, gTimb, "dEst", pad(header.establishment(), 3));
     el(doc, gTimb, "dPunExp", pad(header.expeditionPoint(), 3));
@@ -127,25 +157,54 @@ public class SifenDocumentXmlService {
     el(doc, gTimb, "dFeIniT", header.stampValidFrom().format(DATE_FORMAT));
   }
 
-  /** D. Campos Generales del DE: D1 (operación comercial), D2 (emisor), D3 (receptor). */
+  /**
+   * D. Campos Generales del DE: D1 (operación comercial), D2 (emisor), D3 (receptor).
+   *
+   * <p><b>SIFEN HU-14 gap fix — gOpeCom (D1) isn't valid for every document type, confirmed live
+   * (2026-07-28), not from the manual/XSD alone</b> (both mark the whole group and every one of its
+   * children {@code minOccurs="0"}, so nothing on paper ruled this out in advance): sending it
+   * unconditionally on a nota de remisión was rejected with {@code dCodRes=1201 "Grupo de
+   * informaciones inherentes a la operación comercial no es permitido para el tipo de documento"} —
+   * a goods-movement document has no commercial-operation/currency/tax concept, so the entire group
+   * is omitted for {@link SifenDocumentType#NOTA_REMISION}. Sending {@code iTipTra} on a nota de
+   * crédito/débito was rejected with {@code dCodRes=1216 "Tipo de transacción no requerido para el
+   * tipo de documento electrónico seleccionado"} — the rest of the group (impuesto/moneda) was
+   * accepted, only {@code iTipTra}/{@code dDesTipTra} is disallowed for {@link
+   * SifenDocumentType#NOTA_CREDITO}/{@link SifenDocumentType#NOTA_DEBITO} — a note adjusts an
+   * already-issued invoice that already carries its own tipo de transacción, so repeating it on the
+   * note itself is redundant. {@link SifenDocumentType#FACTURA}/{@link
+   * SifenDocumentType#AUTOFACTURA} keep the full group unchanged (confirmed live: autofactura's
+   * "correct" scenarios reach the same {@code 1252} RUC-inactive wall as factura, never {@code
+   * 1201}/{@code 1216} — i.e. no schema/content complaint about this group for those 2 types).
+   */
   private void buildGeneralDataGroup(
-      Document doc, Element de, SifenInvoiceHeader header, SifenInvoiceDetail detail) {
+      Document doc,
+      Element de,
+      SifenInvoiceHeader header,
+      SifenInvoiceDetail detail,
+      SifenDocumentType documentType) {
     Element gDatGralOpe = el(doc, de, "gDatGralOpe", null);
     el(doc, gDatGralOpe, "dFeEmiDE", header.issueDateTime().format(DATE_TIME_FORMAT));
 
-    // D1: fixed to "Prestación de servicios" / IVA / PYG — the only values this business has.
-    Element gOpeCom = el(doc, gDatGralOpe, "gOpeCom", null);
-    el(doc, gOpeCom, "iTipTra", "2");
-    el(doc, gOpeCom, "dDesTipTra", "Prestación de servicios");
-    el(doc, gOpeCom, "iTImp", "1");
-    el(doc, gOpeCom, "dDesTImp", "IVA");
-    el(doc, gOpeCom, "cMoneOpe", "PYG");
-    // SIFEN HU-13 bonus finding: the real production catalog (Monedas_v150.xsd, cMondT
-    // enumeration's <CodeName> for "PYG") documents the currency name as "Guarani" — no accent —
-    // confirmed live (2026-07-28): sending "Guaraní" was rejected with dCodRes=1206 "Descripción de
-    // la moneda de la operación no corresponde al código", a business-rule cross-check against that
-    // exact catalog string, independent of the 3 schema gaps this history was chartered to close.
-    el(doc, gOpeCom, "dDesMoneOpe", "Guarani");
+    if (documentType != SifenDocumentType.NOTA_REMISION) {
+      Element gOpeCom = el(doc, gDatGralOpe, "gOpeCom", null);
+      if (documentType != SifenDocumentType.NOTA_CREDITO
+          && documentType != SifenDocumentType.NOTA_DEBITO) {
+        // D1: fixed to "Prestación de servicios" — the only value this business has.
+        el(doc, gOpeCom, "iTipTra", "2");
+        el(doc, gOpeCom, "dDesTipTra", "Prestación de servicios");
+      }
+      el(doc, gOpeCom, "iTImp", "1");
+      el(doc, gOpeCom, "dDesTImp", "IVA");
+      el(doc, gOpeCom, "cMoneOpe", "PYG");
+      // SIFEN HU-13 bonus finding: the real production catalog (Monedas_v150.xsd, cMondT
+      // enumeration's <CodeName> for "PYG") documents the currency name as "Guarani" — no accent —
+      // confirmed live (2026-07-28): sending "Guaraní" was rejected with dCodRes=1206 "Descripción
+      // de la moneda de la operación no corresponde al código", a business-rule cross-check against
+      // that exact catalog string, independent of the 3 schema gaps that history was chartered to
+      // close.
+      el(doc, gOpeCom, "dDesMoneOpe", "Guarani");
+    }
 
     buildIssuer(doc, gDatGralOpe, header.issuer());
     buildReceiver(doc, gDatGralOpe, header.receiver());
@@ -229,32 +288,195 @@ public class SifenDocumentXmlService {
     el(rDe, gCamFuFD, "dCarQR", qrUrl);
   }
 
-  /** E8 (ítems) + F (subtotales/totales). */
-  private void buildItemsAndTotals(Document doc, Element de, SifenInvoiceDetail detail) {
+  /**
+   * E8 (ítems) + F (subtotales/totales). SIFEN HU-14: also threads {@code extras} through in the
+   * exact sequence order {@code tgDtipDE} requires ({@code DE_v150.xsd}): {@code gCamFE} → {@code
+   * gCamAE} → {@code gCamNCDE} → {@code gCamNRE} → {@code gCamCond} → {@code gCamItem}* → {@code
+   * gTransp}.
+   */
+  private void buildItemsAndTotals(
+      Document doc, Element de, SifenInvoiceDetail detail, SifenDocumentTypeExtras extras) {
     Element gDtipDE = el(doc, de, "gDtipDE", null);
 
     Element gCamFE = el(doc, gDtipDE, "gCamFE", null);
     el(doc, gCamFE, "iIndPres", "1");
     el(doc, gCamFE, "dDesIndPres", "Operación presencial");
 
-    Element gCamCond = el(doc, gDtipDE, "gCamCond", null);
-    el(doc, gCamCond, "iCondOpe", String.valueOf(detail.paymentCondition()));
-    el(doc, gCamCond, "dDCondOpe", detail.paymentCondition() == 1 ? "Contado" : "Crédito");
-    for (SifenPaymentDetail payment : detail.payments()) {
-      Element gPaConEIni = el(doc, gCamCond, "gPaConEIni", null);
-      el(doc, gPaConEIni, "iTiPago", String.valueOf(payment.typeCode()));
-      el(doc, gPaConEIni, "dDesTiPag", paymentTypeDescription(payment.typeCode()));
-      el(doc, gPaConEIni, "dMonTiPag", payment.amount().toPlainString());
-      el(doc, gPaConEIni, "cMoneTiPag", "PYG");
-      // Same fix as dDesMoneOpe above — same catalog, same field-content cross-check.
-      el(doc, gPaConEIni, "dDMoneTiPag", "Guarani");
+    if (extras.autoInvoiceProvider() != null) {
+      buildAutoInvoiceProviderGroup(doc, gDtipDE, extras.autoInvoiceProvider());
+    }
+    if (extras.creditDebitNote() != null) {
+      buildCreditDebitNoteMotiveGroup(doc, gDtipDE, extras.creditDebitNote());
+    }
+    if (extras.goodsRemission() != null) {
+      buildGoodsRemissionMotiveGroup(doc, gDtipDE, extras.goodsRemission());
+    }
+
+    // SIFEN HU-14 scope decision: gCamCond (condición de pago) is optional in the real schema
+    // (minOccurs="0") — omitted only for nota de remisión, a goods-movement document with no
+    // monetary sale/payment concept, kept for every other type (factura/autofactura/NC/ND still
+    // represent a monetary operation).
+    if (extras.goodsRemission() == null) {
+      Element gCamCond = el(doc, gDtipDE, "gCamCond", null);
+      el(doc, gCamCond, "iCondOpe", String.valueOf(detail.paymentCondition()));
+      el(doc, gCamCond, "dDCondOpe", detail.paymentCondition() == 1 ? "Contado" : "Crédito");
+      for (SifenPaymentDetail payment : detail.payments()) {
+        Element gPaConEIni = el(doc, gCamCond, "gPaConEIni", null);
+        el(doc, gPaConEIni, "iTiPago", String.valueOf(payment.typeCode()));
+        el(doc, gPaConEIni, "dDesTiPag", paymentTypeDescription(payment.typeCode()));
+        el(doc, gPaConEIni, "dMonTiPag", payment.amount().toPlainString());
+        el(doc, gPaConEIni, "cMoneTiPag", "PYG");
+        // Same fix as dDesMoneOpe above — same catalog, same field-content cross-check.
+        el(doc, gPaConEIni, "dDMoneTiPag", "Guarani");
+      }
     }
 
     for (SifenInvoiceLine line : detail.lines()) {
       buildItem(doc, gDtipDE, line);
     }
 
+    if (extras.goodsRemission() != null) {
+      buildTransportGroup(doc, gDtipDE, extras.goodsRemission());
+    }
+
     buildTotals(doc, de, detail.totals());
+  }
+
+  /** gCamAE — SIFEN HU-14, autofactura: datos del proveedor no inscripto/extranjero. */
+  private void buildAutoInvoiceProviderGroup(
+      Document doc, Element gDtipDE, SifenAutoInvoiceProviderData provider) {
+    Element gCamAE = el(doc, gDtipDE, "gCamAE", null);
+    el(doc, gCamAE, "iNatVen", String.valueOf(provider.natureCode()));
+    el(doc, gCamAE, "dDesNatVen", provider.natureCode() == 1 ? "No contribuyente" : "Extranjero");
+    el(doc, gCamAE, "iTipIDVen", String.valueOf(provider.idTypeCode()));
+    el(doc, gCamAE, "dDTipIDVen", identityDocumentTypeDescription(provider.idTypeCode()));
+    el(doc, gCamAE, "dNumIDVen", provider.idNumber());
+    el(doc, gCamAE, "dNomVen", provider.name());
+    el(doc, gCamAE, "dDirVen", provider.address());
+    el(doc, gCamAE, "dNumCasVen", provider.houseNumber());
+    el(doc, gCamAE, "cDepVen", provider.departmentCode());
+    el(doc, gCamAE, "dDesDepVen", provider.departmentName());
+    el(doc, gCamAE, "cCiuVen", provider.cityCode());
+    el(doc, gCamAE, "dDesCiuVen", provider.cityName());
+    // dDirProv/cDepProv/cCiuProv ("lugar donde se realizó la operación"): reuses the provider's own
+    // address — see SifenAutoInvoiceProviderData's javadoc for why this domain doesn't model a
+    // separate "place of transaction".
+    el(doc, gCamAE, "dDirProv", provider.address());
+    el(doc, gCamAE, "cDepProv", provider.departmentCode());
+    el(doc, gCamAE, "dDesDepProv", provider.departmentName());
+    el(doc, gCamAE, "cCiuProv", provider.cityCode());
+    el(doc, gCamAE, "dDesCiuProv", provider.cityName());
+  }
+
+  private static String identityDocumentTypeDescription(int code) {
+    return switch (code) {
+      case 1 -> "Cédula paraguaya";
+      case 2 -> "Pasaporte";
+      case 3 -> "Cédula extranjera";
+      default -> "Carnet de residencia";
+    };
+  }
+
+  /** gCamNCDE — SIFEN HU-14, nota de crédito/débito: motivo de emisión. */
+  private void buildCreditDebitNoteMotiveGroup(
+      Document doc, Element gDtipDE, SifenCreditDebitNoteData note) {
+    Element gCamNCDE = el(doc, gDtipDE, "gCamNCDE", null);
+    el(doc, gCamNCDE, "iMotEmi", String.valueOf(note.reasonCode()));
+    el(doc, gCamNCDE, "dDesMotEmi", creditDebitReasonDescription(note.reasonCode()));
+  }
+
+  private static String creditDebitReasonDescription(int code) {
+    return switch (code) {
+      case 1 -> "Devolución y Ajuste de precios";
+      case 2 -> "Devolución";
+      case 3 -> "Descuento";
+      case 4 -> "Bonificación";
+      case 5 -> "Crédito incobrable";
+      case 6 -> "Recupero de costo";
+      case 7 -> "Recupero de gasto";
+      default -> "Ajuste de precio";
+    };
+  }
+
+  /** gCamNRE — SIFEN HU-14, nota de remisión: motivo del traslado + responsable de la emisión. */
+  private void buildGoodsRemissionMotiveGroup(
+      Document doc, Element gDtipDE, SifenGoodsRemissionData remission) {
+    Element gCamNRE = el(doc, gDtipDE, "gCamNRE", null);
+    el(doc, gCamNRE, "iMotEmiNR", String.valueOf(remission.reasonCode()));
+    el(doc, gCamNRE, "dDesMotEmiNR", goodsRemissionReasonDescription(remission.reasonCode()));
+    el(doc, gCamNRE, "iRespEmiNR", String.valueOf(remission.responsibleCode()));
+    el(
+        doc,
+        gCamNRE,
+        "dDesRespEmiNR",
+        goodsRemissionResponsibleDescription(remission.responsibleCode()));
+    el(doc, gCamNRE, "dKmR", String.valueOf(remission.estimatedKm()));
+  }
+
+  private static String goodsRemissionReasonDescription(int code) {
+    return switch (code) {
+      case 1 -> "Traslado por ventas";
+      case 2 -> "Traslado por consignación";
+      case 3 -> "Exportación";
+      case 4 -> "Traslado por compra";
+      case 5 -> "Importación";
+      case 6 -> "Traslado por devolución";
+      case 7 -> "Traslado entre locales de la empresa";
+      case 8 -> "Traslado de bienes por transformación";
+      case 9 -> "Traslado de bienes para reparación";
+      case 10 -> "Traslado por emisor móvil";
+      case 11 -> "Exhibición o Demostración";
+      case 12 -> "Participación en ferias";
+      case 13 -> "Traslado de encomienda";
+      case 14 -> "Decomiso";
+      default -> "Otro";
+    };
+  }
+
+  private static String goodsRemissionResponsibleDescription(int code) {
+    return switch (code) {
+      case 1 -> "Emisor de la factura";
+      case 2 -> "Poseedor de la factura y bienes";
+      case 3 -> "Empresa transportista";
+      case 4 -> "Despachante de Aduanas";
+      default -> "Agente de transporte o intermediario";
+    };
+  }
+
+  /** gTransp — SIFEN HU-14, nota de remisión: modalidad de transporte + responsable del flete. */
+  private void buildTransportGroup(
+      Document doc, Element gDtipDE, SifenGoodsRemissionData remission) {
+    Element gTransp = el(doc, gDtipDE, "gTransp", null);
+    el(doc, gTransp, "iModTrans", String.valueOf(remission.transportModeCode()));
+    el(doc, gTransp, "dDesModTrans", transportModeDescription(remission.transportModeCode()));
+    el(doc, gTransp, "iRespFlete", String.valueOf(remission.freightResponsibleCode()));
+  }
+
+  private static String transportModeDescription(int code) {
+    return switch (code) {
+      case 1 -> "Terrestre";
+      case 2 -> "Fluvial";
+      case 3 -> "Aéreo";
+      default -> "Multimodal";
+    };
+  }
+
+  /**
+   * gCamDEAsoc — SIFEN HU-14, nota de crédito/débito (AC-03): referencia a la factura previamente
+   * aprobada, a nivel de documento (hermano de {@code gTotSub} bajo {@code <DE>}, confirmado contra
+   * el schema real). {@code iTipDocAso} queda fijo en {@code 1} ("Electrónico") porque este dominio
+   * nunca asocia un documento impreso ni una constancia electrónica, solo un DE real ya aprobado
+   * por SIFEN.
+   */
+  private void buildAssociatedDocumentGroup(
+      Document doc, Element de, SifenDocumentTypeExtras extras) {
+    if (extras.creditDebitNote() == null) {
+      return;
+    }
+    Element gCamDEAsoc = el(doc, de, "gCamDEAsoc", null);
+    el(doc, gCamDEAsoc, "iTipDocAso", "1");
+    el(doc, gCamDEAsoc, "dDesTipDocAso", "Electrónico");
+    el(doc, gCamDEAsoc, "dCdCDERef", extras.creditDebitNote().referencedControlNumber());
   }
 
   private void buildItem(Document doc, Element gDtipDE, SifenInvoiceLine line) {

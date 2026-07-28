@@ -5,8 +5,8 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12 y HU-13 hechas. Próximo:
-HU-14, HU-15 o HU-16 (las tres pueden avanzar en paralelo según el plan; ver "Próximo paso" abajo).
+Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12, HU-13 y HU-14 hechas. Próximo:
+HU-15 o HU-16 (pueden avanzar en paralelo según el plan; ver "Próximo paso" abajo).
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -28,22 +28,173 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-11 Identificar al cliente en una factura sin datos | ✅ Done | Ver detalle abajo. **Cierra Fase 3.** Verificado en vivo (real HTTP 200, mismo `0160` que HU-10); evento no documentado en el Manual V150, encontrado solo en el XSD real en vivo. |
 | HU-12 Probar la conexión segura contra todos los servicios | ✅ Done | Ver detalle abajo. **Primer paso de Fase 4.** Los 7 servicios nombrados por AC-01 (6 endpoints reales distintos) verificados en vivo: certificado válido aceptado, certificado inválido rechazado, en los 14 casos. |
 | HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo. **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`) — los 4 confirmados en vivo, ya no aparecen en ninguna respuesta real. AC-02 (incorrectas rechazadas) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado hoy por un límite externo real (RUC piloto "inactivo" en el registro de SIFEN, `dCodRes=1252`) — no es un bug de código, ver detalle; el test usa `Assumptions.assumeTrue` para ese tramo específico. |
-| Fase 4 (HU-14..HU-17, homologación) | ⬜ Next | HU-14/HU-15/HU-16 pueden avanzar en paralelo; HU-17 depende de que existan resultados de las anteriores para su reporte consolidado. |
+| HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo. Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **Cierra 2 gaps de schema nuevos, propios de esta historia** (`gOpeCom`/`iTipTra` no permitido para NC/ND — `dCodRes=1216`; grupo `gOpeCom` completo no permitido para nota de remisión — `dCodRes=1201`) — confirmados en vivo, ya no aparecen en ninguna respuesta real de los 44 documentos enviados. AC-02 (incorrectas rechazadas, 5/5 por tipo) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado por el mismo límite externo de HU-13 (`dCodRes=1252`, RUC piloto inactivo) — sigue así hoy para los 4 tipos nuevos también. |
+| Fase 4 (HU-15..HU-17, homologación) | ⬜ Next | HU-15/HU-16 pueden avanzar en paralelo; HU-17 depende de que existan resultados de las anteriores para su reporte consolidado. |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** HU-13 (Fase 4, envío inmediato de facturas correctas e
-incorrectas) está hecha — ver detalle abajo para el reporte completo de las 10 facturas reales y los
-4 gaps de schema cerrados. El plan permite que **HU-14, HU-15 y HU-16 avancen en paralelo** (todas
-dependen solo de HU-12/HU-13, no entre sí) — este loop puede elegir cualquiera de las tres; se
-sugiere **HU-14** primero (envío inmediato de los demás tipos de comprobante) por ser la extensión
-más directa de la infraestructura que HU-13 acaba de terminar de afinar. **HU-17 sí depende** de que
-HU-13..HU-16 existan (consolida su reporte con `SifenHomologationReport.combinedWith`), así que debe
-ser la última de la fase. El bloqueo externo que HU-13 documentó (RUC piloto reportado "inactivo" por
-SIFEN, `dCodRes=1252`) probablemente afecta también a HU-14/HU-15/HU-16 de la misma forma mientras
-persista — no hace falta esperar a que se resuelva para implementar esas historias (sus tests quedan
-con el mismo patrón `Assumptions.assumeTrue` para el tramo "aprobado", igual que HU-13), pero si en
-algún momento ese estado cambia, vale la pena re-ejecutar el test guardado de HU-13 para confirmar el
-primer "Aprobado" real de esta integración.
+**Próximo paso al reanudar el loop:** HU-14 (Fase 4, envío inmediato de nota de crédito/débito/
+autofactura/nota de remisión) está hecha — ver detalle abajo para el reporte completo de los 44
+documentos reales y los 2 gaps de schema nuevos cerrados. El plan permite que **HU-15 y HU-16
+avancen en paralelo** (ambas dependen solo de HU-12/HU-13/HU-14, no entre sí) — este loop puede
+elegir cualquiera de las dos. **HU-17 sí depende** de que HU-13..HU-16 existan (consolida su reporte
+con `SifenHomologationReport.combinedWith`), así que debe ser la última de la fase. El bloqueo
+externo que HU-13 documentó (RUC piloto reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue
+afectando también a HU-14 (confirmado, misma forma, los 4 tipos nuevos) — es razonable esperar que
+afecte a HU-15/HU-16 de la misma manera mientras persista; no hace falta esperar a que se resuelva
+para implementar esas historias (sus tests quedan con el mismo patrón `Assumptions.assumeTrue` para
+el tramo "aprobado", igual que HU-13/HU-14), pero si en algún momento ese estado cambia, vale la pena
+re-ejecutar los tests guardados de HU-13/HU-14 para confirmar el primer "Aprobado" real de esta
+integración.
+
+## HU-14 — Probar el envío inmediato de los demás tipos de comprobante exigidos (Done)
+
+Épica EP-05, Fase 4. Extiende directamente la infraestructura que HU-13 acaba de afinar
+(`SifenDocumentXmlService`/`SifenDocumentSigningService`/`SifenDocumentReceptionClient`) a los 4
+tipos de documento adicionales que la homologación de la DNIT exige, aunque esta peluquería nunca
+los emita en operación real: nota de crédito, nota de débito, autofactura y nota de remisión.
+
+**Investigación — `iTiDE` (C002) confirmado contra el catálogo real, no adivinado.** El mismo XSD de
+producción que HU-13 descargó sin autenticación (`https://ekuatia.set.gov.py/sifen/xsd/
+DE_Types_v150.xsd`, 2026-07-28) publica `tiTiDE` (patrón `"1|[4-7]|9|10"`) y `tdDesTiDE` (la
+enumeración de descripciones, en el mismo orden): **1=Factura electrónica, 4=Autofactura electrónica,
+5=Nota de crédito electrónica, 6=Nota de débito electrónica, 7=Nota de remisión electrónica** (más
+9/10, boleta de venta/resimple, fuera del alcance de esta historia). Confirma exactamente la hipótesis
+de partida de esta historia. Se descargó también `DE_v150.xsd` completo para mapear la estructura
+real de cada grupo nuevo: `gCamNCDE` (motivo de nota de crédito/débito, dentro de `gDtipDE`),
+`gCamDEAsoc` (documento asociado, a nivel de `<DE>`, hermano de `gTotSub` — la referencia real que
+AC-03 exige), `gCamAE` (datos del proveedor de una autofactura, dentro de `gDtipDE`), y
+`gCamNRE`+`gTransp` (motivo de traslado + datos de transporte de una nota de remisión, ambos dentro
+de `gDtipDE`) — el grupo E10 "transporte" que la propia nota de HU-04 había dejado explícitamente
+fuera de alcance ("no aplica a una venta al contado de una peluquería") es, correctamente, la primera
+vez que este dominio lo necesita.
+
+**Diseño: `SifenDocumentXmlService` se extiende por rama, no se duplica 4 veces.** Un nuevo
+`SifenDocumentType` (enum, `sifenCode()`/`description()` con los literales exactos del catálogo real)
+reemplaza el `"Factura electrónica"` hardcodeado de `buildStampGroup`. Un nuevo
+`SifenDocumentTypeExtras` (record con como máximo un campo no nulo: `creditDebitNote`/
+`autoInvoiceProvider`/`goodsRemission`) se enhebra a través de un nuevo overload de `buildDocument`
+(el de 4 argumentos existente delega en el de 5 con `SifenDocumentTypeExtras.NONE`, cero cambios de
+comportamiento para las 21 llamadas existentes de HU-04..HU-13) — cada grupo nuevo se agrega
+condicionalmente, respetando el orden exacto de secuencia que exige el XSD real (`gCamFE` → `gCamAE`
+→ `gCamNCDE` → `gCamNRE` → `gCamCond` → `gCamItem`* → `gTransp`, y `gCamDEAsoc` al final, hermano de
+`gTotSub`). Todo lo demás (header/emisor/receptor/ítems/totales/firma/QR) se comparte sin cambios
+entre los 5 tipos que esta clase construye.
+
+**Decisión de diseño — receptor de una autofactura: el emisor se autofactura a sí mismo.** A
+diferencia de una factura normal, el "receptor" real de una autofactura es el propio emisor (compra
+un servicio a alguien —no contribuyente o extranjero— que no puede emitir su propio comprobante); el
+vendedor real se describe por separado en `gCamAE` (`SifenAutoInvoiceProviderData`, nuevo). Esto no
+exigió ningún cambio en `buildReceiver` — es una decisión de qué datos arma el llamador, documentada
+en el javadoc de `SifenAutoInvoiceProviderData`. Alcance deliberadamente mínimo: `dDirProv`/
+`cDepProv`/`cCiuProv` ("lugar donde se realizó la operación", obligatorios en el XSD real) reusan la
+misma dirección del proveedor — este dominio no modela un "lugar de la operación" distinto.
+
+**Decisión de diseño — nota de remisión, alcance mínimo del grupo de transporte.** `gCamSal`/
+`gCamEnt` (local de salida/entrega de mercaderías) y el resto de `gTransp` (manifiesto, vehículo,
+transportista) son opcionales en el propio XSD (`minOccurs="0"`) — se omiten, solo se emiten los
+campos que el schema real exige sin ese atributo: `gCamNRE` completo (`iMotEmiNR`/`dDesMotEmiNR`/
+`iRespEmiNR`/`dDesRespEmiNR`/`dKmR`) y `gTransp`'s `iModTrans`/`dDesModTrans`/`iRespFlete`. La
+verificación en vivo (ver abajo) confirmó que esto alcanza — ninguna de las 10 respuestas reales de
+este tipo menciona un campo faltante de `gCamSal`/`gCamEnt`/resto de `gTransp`.
+
+**AC-03 (nota de crédito/débito referencian una factura previamente aprobada):** cada corrida de
+esta historia envía primero una factura electrónica real (`sendSeedInvoiceForReference`) y usa su CDC
+resultante como `gCamDEAsoc/dCdCDERef` para las 10 notas (5 correctas + 5 incorrectas) de ese tipo —
+una referencia real, efectivamente enviada, no fabricada. Si esa factura semilla llega a estar
+realmente "Aprobada" por SIFEN depende del mismo límite externo de abajo (Hallazgo 3) — el punto de
+AC-03 es que la referencia sea real y consistente, no relitigar ese estado externo.
+
+**Verificación en vivo (2026-07-28), 44 documentos reales contra `sifen-test.set.gov.py` con el `.p12`
+piloto real: encontró y cerró 2 gaps de schema/contenido nuevos, propios de esta historia**, con el
+mismo patrón iterativo que HU-13 (un hallazgo destapa el siguiente):
+
+**Hallazgo 1 — `gOpeCom` (D1, grupo entero) no está permitido en una nota de remisión.** La primera
+corrida completa (con el modelo de arriba, reusando `gOpeCom` sin condición, igual que factura)
+rechazó las 5 notas de remisión "correctas" con `dCodRes=1201 "Grupo de informaciones inherentes a
+la operación comercial no es permitido para el tipo de documento"` — ni el manual ni el XSD (que
+marca todo el grupo y cada uno de sus hijos `minOccurs="0"`) lo descartaban de antemano; es una regla
+de negocio, no de schema. Tiene sentido: un movimiento de bienes no es una operación comercial con
+impuesto/moneda propios. Corregido: `buildGeneralDataGroup` omite `gOpeCom` por completo cuando
+`documentType == NOTA_REMISION`.
+
+**Hallazgo 2 — `gOpeCom/iTipTra` (tipo de transacción) no está permitido en nota de crédito/débito,
+pero el resto del grupo sí.** Con el Hallazgo 1 corregido, las notas de crédito/débito "correctas"
+seguían siendo rechazadas, ahora con `dCodRes=1216 "Tipo de transacción no requerido para el tipo de
+documento electrónico seleccionado"` — un mensaje que nombra específicamente `iTipTra`, no todo el
+grupo. Tiene sentido: la nota ajusta una factura ya emitida que ya tiene su propio tipo de
+transacción; repetirlo en la nota es redundante. Corregido: `buildGeneralDataGroup` sigue emitiendo
+`iTImp`/`dDesTImp`/`cMoneOpe`/`dDesMoneOpe` para NC/ND, pero omite `iTipTra`/`dDesTipTra`.
+
+**Verificación de ambos fixes:** una segunda corrida completa de los 44 documentos confirma que
+ninguna de las 44 respuestas reales menciona ya `1201` ni `1216` — las 5 notas de crédito, 5 de
+débito y 5 de remisión "correctas" llegan ahora al mismo único obstáculo que la factura de HU-13, ver
+Hallazgo 3 abajo (autofactura ya llegaba ahí desde la primera corrida, sin necesitar ningún fix — su
+`gOpeCom` completo, incluyendo `iTipTra`, es válido tal cual, confirmando que sí representa una
+operación comercial propia).
+
+**Hallazgo 3, el mismo muro externo que HU-13 documentó: persiste igual para los 4 tipos nuevos.**
+Con los 2 gaps de arriba cerrados, las 20 "correctas" (5 por tipo) y la factura semilla de referencia
+llegan, sin excepción, a `dCodRes=1252 "El RUC del emisor se encuentra inactivo"` — el mismo estado
+externo del registro de contribuyentes de SIFEN que HU-13 documentó, no un defecto de este código.
+Confirma que el bloqueo no es específico de factura electrónica: afecta a los 5 tipos por igual. Igual
+que HU-13, **AC-01 (correctas aprobadas) se verifica con `Assumptions.assumeTrue`**, no con aserción
+dura — el test se aborta, no falla, mientras este estado externo persista.
+
+**AC-02 (incorrectas rechazadas con motivo identificable), 20/20 (5 por tipo), aserción dura, pasó en
+la corrida real.** Las primeras 4 de cada tipo reusan los mismos 4 escenarios que HU-13 ya probó
+(RUC receptor malformado → `0160`; descripción de ítem vacía → `0160`; fecha de emisión 45 días atrás,
+antes de `dFeIniT` del timbrado → `1103`; total que no coincide con la suma de ítems → enmascarado
+por el mismo `1252` externo, igual que en HU-13, ver Hallazgo 3). La 5ª es específica de cada tipo
+nuevo, elegida para ejercitar el propio grupo que esta historia agrega, no solo el andamiaje de
+factura debajo: `iMotEmi=9` (fuera del rango `1-8`) para NC/ND → `0160 "iMotEmi es invalido"`;
+`iNatVen=3` (fuera del rango `1-2`) para autofactura → `0160 "iNatVen es invalido"`; `iModTrans=5`
+(fuera de la enumeración `1-4`) para nota de remisión → `0160 "iModTrans es invalido"` — los 3
+confirmados en vivo.
+
+**Reporte real (2026-07-28), 44 documentos enviados por envío inmediato contra
+`sifen-test.set.gov.py` con el `.p12` piloto real (RUC `1137152-8`, timbrado `1137152`), después de
+cerrar los 2 gaps de arriba:**
+
+```
+Tipo           | Correctas aprobadas      | Incorrectas rechazadas
+NOTA_CREDITO   | 0/5                      | 5/5
+NOTA_DEBITO    | 0/5                      | 5/5
+AUTOFACTURA    | 0/5                      | 5/5
+NOTA_REMISION  | 0/5                      | 5/5
+```
+
+(Más 2 facturas semilla de referencia para AC-03, también `REJECTED 1252`, igual que las 20
+"correctas".) AC-04 (este mismo reporte consolidado por tipo) se cumple por construcción —
+`renderPerTypeSummary` en el propio test. AC-01 queda pendiente de que SIFEN active el RUC piloto,
+igual que HU-13 — el test se aborta explícitamente por esto, no falla.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+- `SifenDocumentType.java` (nuevo, enum) — `FACTURA(1)`/`AUTOFACTURA(4)`/`NOTA_CREDITO(5)`/
+  `NOTA_DEBITO(6)`/`NOTA_REMISION(7)`, con la descripción literal exacta del catálogo real.
+- `SifenCreditDebitNoteData.java`/`SifenAutoInvoiceProviderData.java`/`SifenGoodsRemissionData.java`
+  (nuevos, records) — los campos propios de cada tipo, ver "Investigación"/"Decisión de diseño"
+  arriba.
+- `SifenDocumentTypeExtras.java` (nuevo, record) — enhebra como máximo uno de los 3 records de arriba
+  a través de `buildDocument`; `NONE` para factura.
+- `SifenDocumentXmlService.java` — nuevo overload de 5 argumentos de `buildDocument` (el de 4 delega
+  sin cambios); `buildStampGroup` usa `SifenDocumentType.fromCode(...).description()` en vez del
+  literal hardcodeado; `buildGeneralDataGroup` omite `gOpeCom`/`iTipTra` condicionalmente (Hallazgos
+  1/2); `buildItemsAndTotals` agrega `gCamAE`/`gCamNCDE`/`gCamNRE`/`gTransp` condicionalmente, en el
+  orden de secuencia real; nuevo `buildAssociatedDocumentGroup` (`gCamDEAsoc`, AC-03).
+
+**Tests backend**:
+- `SifenDocumentXmlServiceTest` — 9 casos nuevos: `iTiDE`/`dDesTiDE` correctos para los 4 tipos,
+  `gCamNCDE`+`gCamDEAsoc` para nota de crédito y de débito, `gCamAE` para autofactura, `gCamNRE`+
+  `gTransp` para nota de remisión, omisión de `gCamCond` en remisión, omisión de `iTipTra` en NC/ND
+  (Hallazgo 2), omisión de `gOpeCom` completo en remisión (Hallazgo 1), y que una factura simple nunca
+  emite ninguno de los grupos nuevos. 22 casos totales en este archivo, todos pasando.
+- `SifenHomologationOtherDocumentTypesLiveTest.java` (nuevo, guardado, mismo patrón que HU-12/HU-13)
+  — el propio reporte de 44 documentos de arriba es su salida real cuando corre con el `.p12` piloto
+  presente; aserción dura sobre AC-02, `Assumptions.assumeTrue` sobre AC-01 (Hallazgo 3).
+
+**Playwright**: ninguno — mismo patrón que HU-01/03/04/05/06/09/12/13 (capacidad de servicio/prueba
+de homologación sin pantalla propia; esta historia es explícitamente solo de homologación, la
+peluquería nunca emite estos 4 tipos en operación real).
 
 ## HU-13 — Probar el envío inmediato de facturas correctas e incorrectas (Done)
 

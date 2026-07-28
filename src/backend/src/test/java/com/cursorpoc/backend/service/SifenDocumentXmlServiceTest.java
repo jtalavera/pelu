@@ -348,6 +348,207 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='dBasExe']")).isEqualTo("47619.04761905");
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // SIFEN HU-14: nota de crédito, nota de débito, autofactura, nota de remisión.
+  // ---------------------------------------------------------------------------------------------
+
+  private SifenControlNumberFields cdcFieldsForType(SifenDocumentType type) {
+    return new SifenControlNumberFields(
+        type.sifenCode(), "1137152", 8, 1, 2, 14528, 2, LocalDate.of(2026, 7, 28), 1, "587326098");
+  }
+
+  /**
+   * AC-01: iTiDE/dDesTiDE reflect the real production catalog's literal for each of the 4 types.
+   */
+  @Test
+  void buildDocument_notaCredito_usesCorrectDocumentTypeCodeAndDescription() throws Exception {
+    SifenControlNumberFields ncCdcFields = cdcFieldsForType(SifenDocumentType.NOTA_CREDITO);
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            ncCdcFields,
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.creditDebitNote(
+                new SifenCreditDebitNoteData(3, "0".repeat(43) + "1")));
+
+    assertThat(xpath(doc, "//*[local-name()='iTiDE']")).isEqualTo("5");
+    assertThat(xpath(doc, "//*[local-name()='dDesTiDE']")).isEqualTo("Nota de crédito electrónica");
+  }
+
+  /** AC-02/AC-03: gCamNCDE (motivo) + gCamDEAsoc (referencia a la factura ya aprobada). */
+  @Test
+  void buildDocument_notaCredito_includesMotiveAndAssociatedInvoiceReference() throws Exception {
+    String referencedCdc = "0".repeat(43) + "1";
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            cdcFieldsForType(SifenDocumentType.NOTA_CREDITO),
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.creditDebitNote(
+                new SifenCreditDebitNoteData(2, referencedCdc)));
+
+    assertThat(xpath(doc, "//*[local-name()='iMotEmi']")).isEqualTo("2");
+    assertThat(xpath(doc, "//*[local-name()='dDesMotEmi']")).isEqualTo("Devolución");
+    assertThat(xpath(doc, "//*[local-name()='iTipDocAso']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='dDesTipDocAso']")).isEqualTo("Electrónico");
+    assertThat(xpath(doc, "//*[local-name()='dCdCDERef']")).isEqualTo(referencedCdc);
+  }
+
+  /** AC-01/AC-03: nota de débito shares the exact same gCamNCDE/gCamDEAsoc shape, iTiDE=6. */
+  @Test
+  void buildDocument_notaDebito_usesCorrectDocumentTypeAndIncludesAssociatedInvoiceReference()
+      throws Exception {
+    String referencedCdc = "0".repeat(43) + "2";
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            cdcFieldsForType(SifenDocumentType.NOTA_DEBITO),
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.creditDebitNote(
+                new SifenCreditDebitNoteData(8, referencedCdc)));
+
+    assertThat(xpath(doc, "//*[local-name()='iTiDE']")).isEqualTo("6");
+    assertThat(xpath(doc, "//*[local-name()='dDesTiDE']")).isEqualTo("Nota de débito electrónica");
+    assertThat(xpath(doc, "//*[local-name()='iMotEmi']")).isEqualTo("8");
+    assertThat(xpath(doc, "//*[local-name()='dDesMotEmi']")).isEqualTo("Ajuste de precio");
+    assertThat(xpath(doc, "//*[local-name()='dCdCDERef']")).isEqualTo(referencedCdc);
+  }
+
+  /** AC-01/AC-02: autofactura's gCamAE (proveedor no inscripto), iTiDE=4. */
+  @Test
+  void buildDocument_autofactura_includesProviderGroup() throws Exception {
+    SifenAutoInvoiceProviderData provider =
+        new SifenAutoInvoiceProviderData(
+            1,
+            1,
+            "1234567",
+            "Juan Proveedor",
+            "Calle Falsa 123",
+            "45",
+            "11",
+            "CENTRAL",
+            "3432",
+            "FERNANDO DE LA MORA");
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            cdcFieldsForType(SifenDocumentType.AUTOFACTURA),
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.autoInvoiceProvider(provider));
+
+    assertThat(xpath(doc, "//*[local-name()='iTiDE']")).isEqualTo("4");
+    assertThat(xpath(doc, "//*[local-name()='dDesTiDE']")).isEqualTo("Autofactura electrónica");
+    assertThat(xpath(doc, "//*[local-name()='iNatVen']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='dDesNatVen']")).isEqualTo("No contribuyente");
+    assertThat(xpath(doc, "//*[local-name()='iTipIDVen']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='dDTipIDVen']")).isEqualTo("Cédula paraguaya");
+    assertThat(xpath(doc, "//*[local-name()='dNumIDVen']")).isEqualTo("1234567");
+    assertThat(xpath(doc, "//*[local-name()='dNomVen']")).isEqualTo("Juan Proveedor");
+    assertThat(xpath(doc, "//*[local-name()='dDirProv']")).isEqualTo("Calle Falsa 123");
+  }
+
+  /** AC-01/AC-02: nota de remisión's gCamNRE (motivo) + gTransp (transporte), iTiDE=7. */
+  @Test
+  void buildDocument_notaRemision_includesMotiveAndTransportGroups() throws Exception {
+    SifenGoodsRemissionData remission = new SifenGoodsRemissionData(1, 1, 25, 1, 1);
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            cdcFieldsForType(SifenDocumentType.NOTA_REMISION),
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.goodsRemission(remission));
+
+    assertThat(xpath(doc, "//*[local-name()='iTiDE']")).isEqualTo("7");
+    assertThat(xpath(doc, "//*[local-name()='dDesTiDE']"))
+        .isEqualTo("Nota de remisión electrónica");
+    assertThat(xpath(doc, "//*[local-name()='iMotEmiNR']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='dDesMotEmiNR']")).isEqualTo("Traslado por ventas");
+    assertThat(xpath(doc, "//*[local-name()='iRespEmiNR']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='dKmR']")).isEqualTo("25");
+    assertThat(xpath(doc, "//*[local-name()='iModTrans']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='dDesModTrans']")).isEqualTo("Terrestre");
+    assertThat(xpath(doc, "//*[local-name()='iRespFlete']")).isEqualTo("1");
+  }
+
+  /**
+   * SIFEN HU-14 scope decision: nota de remisión omits gCamCond (condición de pago) — a
+   * goods-movement document has no payment concept, unlike every other type this class builds.
+   */
+  @Test
+  void buildDocument_notaRemision_omitsPaymentConditionGroup() throws Exception {
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            cdcFieldsForType(SifenDocumentType.NOTA_REMISION),
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.goodsRemission(new SifenGoodsRemissionData(1, 1, 25, 1, 1)));
+
+    NodeList gCamCond = (NodeList) xpathNodes(doc, "//*[local-name()='gCamCond']");
+    assertThat(gCamCond.getLength()).isZero();
+  }
+
+  /**
+   * SIFEN HU-14 gap fix: nota de crédito/débito must not emit gOpeCom's iTipTra/dDesTipTra —
+   * confirmed live (2026-07-28), rejected with dCodRes=1216 "Tipo de transacción no requerido para
+   * el tipo de documento electrónico seleccionado" — but the rest of gOpeCom (impuesto/moneda) is
+   * still expected.
+   */
+  @Test
+  void buildDocument_notaCredito_omitsTransactionTypeButKeepsRestOfOperationGroup()
+      throws Exception {
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            cdcFieldsForType(SifenDocumentType.NOTA_CREDITO),
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.creditDebitNote(
+                new SifenCreditDebitNoteData(3, "0".repeat(43) + "1")));
+
+    NodeList iTipTra = (NodeList) xpathNodes(doc, "//*[local-name()='iTipTra']");
+    assertThat(iTipTra.getLength()).isZero();
+    NodeList dDesTipTra = (NodeList) xpathNodes(doc, "//*[local-name()='dDesTipTra']");
+    assertThat(dDesTipTra.getLength()).isZero();
+    assertThat(xpath(doc, "//*[local-name()='iTImp']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='cMoneOpe']")).isEqualTo("PYG");
+  }
+
+  /**
+   * SIFEN HU-14 gap fix: nota de remisión must not emit gOpeCom at all — confirmed live
+   * (2026-07-28), rejected with dCodRes=1201 "Grupo de informaciones inherentes a la operación
+   * comercial no es permitido para el tipo de documento".
+   */
+  @Test
+  void buildDocument_notaRemision_omitsWholeOperationGroup() throws Exception {
+    Document doc =
+        service.buildDocument(
+            header,
+            detail,
+            cdcFieldsForType(SifenDocumentType.NOTA_REMISION),
+            LocalDateTime.now(),
+            SifenDocumentTypeExtras.goodsRemission(new SifenGoodsRemissionData(1, 1, 25, 1, 1)));
+
+    NodeList gOpeCom = (NodeList) xpathNodes(doc, "//*[local-name()='gOpeCom']");
+    assertThat(gOpeCom.getLength()).isZero();
+  }
+
+  /** A plain factura (no extras) never emits any of the 4 new types' groups. */
+  @Test
+  void buildDocument_factura_neverEmitsOtherDocumentTypeGroups() throws Exception {
+    Document doc = service.buildDocument(header, detail, cdcFields, LocalDateTime.now());
+
+    for (String tag : List.of("gCamAE", "gCamNCDE", "gCamNRE", "gTransp", "gCamDEAsoc")) {
+      NodeList nodes = (NodeList) xpathNodes(doc, "//*[local-name()='" + tag + "']");
+      assertThat(nodes.getLength()).as(tag + " must not be present on a factura").isZero();
+    }
+  }
+
   private static String xpath(Document doc, String expression) throws Exception {
     XPath xPath = XPathFactory.newInstance().newXPath();
     return xPath.evaluate(expression, doc);
