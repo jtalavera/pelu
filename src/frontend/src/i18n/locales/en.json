@@ -673,6 +673,7 @@
       "SIFEN_CERT_INVALID_PASSWORD": "Incorrect password for the certificate file.",
       "SIFEN_CERT_INVALID_FILE": "The file is not a valid .p12 certificate or is corrupted.",
       "SIFEN_CERT_FILE_TOO_LARGE": "The certificate file is too large.",
+      "SIFEN_NO_VALID_CERTIFICATE": "This action requires a valid SIFEN certificate. Upload one in Settings → SIFEN.",
       "CATEGORY_NOT_FOUND": "Category not found.",
       "CATEGORY_INACTIVE": "The selected category is inactive. Please choose an active category.",
       "INVALID_CATEGORY_ACCENT": "Choose a valid category color from the palette.",

@@ -220,4 +220,83 @@ class SifenCertificateServiceTest {
     c.setNotAfter(notAfter);
     return c;
   }
+
+  // HU-21: requireActiveCertificate() resolves the certificate/key an operation (HU-04, HU-05,
+  // HU-10, HU-11, EP-05) should use — these certs carry real encrypted material (round-tripped
+  // through the fixture .p12) so decryption is exercised end to end, not just the status filter.
+
+  private SifenCertificate certificateWithMaterial(
+      long id, LocalDate notBefore, LocalDate notAfter) {
+    SifenCertificate c = certificate(id, notBefore, notAfter);
+    c.setEncryptedP12Base64(encryptionService.encrypt(Base64.getDecoder().decode(validP12Base64)));
+    c.setEncryptedPasswordBase64(encryptionService.encrypt(FIXTURE_PASSWORD));
+    return c;
+  }
+
+  @Test
+  void requireActiveCertificate_decryptsRealMaterial_forSingleValidCertificate() {
+    SifenCertificate cert =
+        certificateWithMaterial(5L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(1));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(cert));
+
+    var material = service.requireActiveCertificate(1L);
+
+    assertThat(material.certificateId()).isEqualTo(5L);
+    assertThat(material.keystorePassword()).isEqualTo(FIXTURE_PASSWORD);
+    assertThat(material.privateKey().getAlgorithm()).isEqualTo("RSA");
+    assertThat(material.certificate().getSubjectX500Principal().getName()).contains("Test Sifen");
+  }
+
+  @Test
+  void requireActiveCertificate_picksFurthestExpiry_whenMultipleValid() {
+    // AC-03: consistently the same one — furthest notAfter.
+    SifenCertificate soonerExpiry =
+        certificateWithMaterial(1L, LocalDate.now().minusDays(5), LocalDate.now().plusDays(30));
+    SifenCertificate furtherExpiry =
+        certificateWithMaterial(2L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(5));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(soonerExpiry, furtherExpiry));
+
+    assertThat(service.requireActiveCertificate(1L).certificateId()).isEqualTo(2L);
+  }
+
+  @Test
+  void requireActiveCertificate_throwsPreconditionFailed_whenNoValidCertificate() {
+    // AC-02: no "Vigente" certificate at all blocks the operation with a specific error.
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L)).thenReturn(List.of());
+
+    assertThatThrownBy(() -> service.requireActiveCertificate(1L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_NO_VALID_CERTIFICATE");
+  }
+
+  @Test
+  void requireActiveCertificate_ignoresExpiredOrNotYetValidCertificates() {
+    // AC-02/AC-05: an expired (or not-yet-valid) certificate never gets chosen, even if it is the
+    // only one on file — the operation must be blocked exactly as if there were none.
+    SifenCertificate expired =
+        certificateWithMaterial(1L, LocalDate.now().minusDays(30), LocalDate.now().minusDays(1));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(expired));
+
+    assertThatThrownBy(() -> service.requireActiveCertificate(1L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_NO_VALID_CERTIFICATE");
+  }
+
+  @Test
+  void requireActiveCertificate_onlyEverResolvesFromTheRequestedTenant() {
+    // AC-04: no cache exists across calls, so a lookup for one tenant can never return another's.
+    SifenCertificate tenantOnesCert =
+        certificateWithMaterial(1L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(1));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(tenantOnesCert));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(2L)).thenReturn(List.of());
+
+    assertThat(service.requireActiveCertificate(1L).certificateId()).isEqualTo(1L);
+    assertThatThrownBy(() -> service.requireActiveCertificate(2L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_NO_VALID_CERTIFICATE");
+  }
 }

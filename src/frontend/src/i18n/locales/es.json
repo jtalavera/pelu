@@ -675,6 +675,7 @@
       "SIFEN_CERT_INVALID_PASSWORD": "Contraseña incorrecta para el archivo del certificado.",
       "SIFEN_CERT_INVALID_FILE": "El archivo no es un certificado .p12 válido o está corrupto.",
       "SIFEN_CERT_FILE_TOO_LARGE": "El archivo del certificado es demasiado grande.",
+      "SIFEN_NO_VALID_CERTIFICATE": "Esta acción requiere un certificado vigente de SIFEN. Cargá uno en Configuración → SIFEN.",
       "CATEGORY_NOT_FOUND": "Categoría no encontrada.",
       "CATEGORY_INACTIVE": "La categoría seleccionada está inactiva. Elegí una categoría activa.",
       "INVALID_CATEGORY_ACCENT": "Elegí un color de categoría válido de la paleta.",

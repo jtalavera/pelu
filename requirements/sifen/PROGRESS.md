@@ -12,9 +12,9 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 |---|---|---|
 | HU-18 Cargar certificado y clave | ✅ Done | Ver detalle abajo. ⚠️ Cifrado en reposo hoy no cumple RT-09/RT-10 fuera de `e2e` — ver "Deuda técnica" abajo. |
 | HU-20 Calcular estado del certificado | ✅ Done | Ver detalle abajo. |
-| HU-21 Usar certificado vigente automáticamente | ⬜ Next | |
-| HU-05 Conectarse de forma segura con SIFEN | ⬜ Todo | |
-| HU-01 Generar número de control | ⬜ Todo | |
+| HU-21 Usar certificado vigente automáticamente | ✅ Done | Ver detalle abajo. |
+| HU-05 Conectarse de forma segura con SIFEN | ⬜ Next | |
+| HU-01 Generar número de control | ⬜ Todo (Frente B, en paralelo con HU-05) | |
 | HU-02 Datos identificación/timbrado/emisor/receptor | ⬜ Todo | |
 | HU-03 Servicios facturados y totales | ⬜ Todo | |
 | HU-04 Firmar digitalmente | ⬜ Todo | |
@@ -24,21 +24,22 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-21 (usar automáticamente el certificado
-vigente del tenant en firmar/conectar/eventos). Necesita: (a) un método
-`SifenCertificateService.getActiveCertificateForTenant(tenantId)` que filtre los certificados del
-tenant a estado `VALID` (reutilizando `computeStatus`, hoy privado — hacerlo accesible o exponer
-un helper) y, si hay más de uno, elija el de `notAfter` más lejano (AC-03); (b) si no hay ninguno
-`VALID`, lanzar un error tipo `SIFEN_NO_VALID_CERTIFICATE` (AC-02); (c) el método debe descifrar el
-`.p12`/password on-demand (usar `SifenCertificateEncryptionService.decryptToBytes/String` +
-`KeyStore.getInstance("PKCS12")`) y devolver algo utilizable por HU-04/HU-05 (p.ej. un record con
-`KeyStore`, `PrivateKey`, `X509Certificate`) — no persistir el material descifrado en ningún campo
-de instancia ni cachearlo entre llamadas (evitar que quede en memoria más tiempo del necesario).
-HU-21 no tiene pantalla propia; es un método de servicio consumido por historias futuras (HU-04,
-HU-05, HU-10, HU-11, EP-05), así que sus tests son unitarios (backend), no Playwright — no hay UI
-que probar todavía. Confirmá con el usuario si conviene escribir HU-21 "a ciegas" sin nada que lo
-consuma aún, o adelantar HU-05 (conectar con SIFEN) en el mismo tramo para tener un consumidor real
-antes de dar la historia por cerrada.
+**Próximo paso al reanudar el loop:** implementar HU-05 (Conectarse de forma segura con SIFEN),
+Frente A de la Fase 1. Depende solo de HU-21 (ya hecho) para obtener el certificado. Necesita
+investigar contra la documentación técnica real de SIFEN (`Manual Tecnico V150.pdf` — ver capítulo
+de servicios web / WSDL) y buscar en internet los endpoints exactos del ambiente de prueba
+(`sifen-test.set.gov.py` o similar — confirmar la URL real, no asumirla) para el servicio de
+recepción síncrona (`rEnviDe`/similar). El WebClient/HttpClient debe autenticarse con mTLS usando
+`SifenActiveCertificateMaterial.keyStore()` + `keystorePassword()` (vía `KeyManagerFactory` +
+`SSLContext`), no con Basic Auth ni API key. AC-04 pide poder cambiar entre ambiente de prueba y
+producción solo por configuración (agregar `app.femme.sifen.environment=TEST|PRODUCTION` con las
+URLs base de cada ambiente). AC-05 pide loguear cada intento de conexión (fecha, hora, ambiente,
+resultado) — posiblemente una tabla nueva o alcanza con logs INFO/ERROR ya exigidos por CLAUDE.md;
+decidir si conviene persistirlo (podría reusarse luego para EP-05 homologación). Como esta historia
+recién puede probarse de verdad contra el ambiente de prueba real de SIFEN (o quedarse en "compila
+y no lanza excepción" si no hay conectividad/carga aún el timbrado 1137152 provisto en la sección
+"Configuración del ambiente de pruebas" del spec), evaluar si hace falta pedir confirmación al
+usuario sobre cómo validar la conexión end-to-end sin acceso real a SIFEN todavía.
 
 ## HU-18 — Cargar un nuevo certificado y clave para un tenant (Done)
 
@@ -154,6 +155,34 @@ AC-06/AC-07 ("pasa a Vigente/Expirado automáticamente al llegar la fecha, sin a
 cubiertas indirectamente: como el estado nunca se guarda (AC-04, ya testeado) y se recalcula en
 cada `list()`, la transición automática es una consecuencia directa de esa propiedad — no se
 escribió un test que espere el paso real del tiempo.
+
+## HU-21 — Usar automáticamente el certificado vigente del tenant (Done)
+
+Sin pantalla propia (es una capacidad de servicio para historias futuras). Se implementó sin pedir
+confirmación al usuario sobre adelantar HU-05 en paralelo — se decidió seguir el orden literal del
+plan de fases y avanzar con HU-05 en la próxima iteración del loop.
+
+**Backend**:
+- `service/SifenActiveCertificateMaterial.java` — record nuevo (no es un DTO web, **nunca**
+  serializar: expone `PrivateKey`/`KeyStore`) con `certificateId`, `keyStore`, `keystorePassword`,
+  `alias`, `certificate` (`X509Certificate`), `privateKey`. Pensado para que HU-04 (firmar) use
+  `privateKey`/`certificate` directamente y HU-05 (conectar) use `keyStore`/`keystorePassword` para
+  construir un `KeyManagerFactory`/`SSLContext` de mTLS.
+- `SifenCertificateService.requireActiveCertificate(tenantId)`: filtra los certificados del tenant
+  a estado `VALID` (reutiliza `computeStatus`, ya existente de HU-20) y elige el de `notAfter` más
+  lejano, con empate por `id` (AC-03: mismo criterio siempre). Si no hay ninguno `VALID`, lanza
+  `ResponseStatusException(PRECONDITION_FAILED, "SIFEN_NO_VALID_CERTIFICATE")` (AC-02) — agregado
+  ya el i18n `femme.apiErrors.SIFEN_NO_VALID_CERTIFICATE` en ambos locales aunque todavía no hay
+  ningún controller que dispare este código.
+- **Sin caché entre llamadas, deliberadamente**: cada llamada vuelve a consultar el repositorio y
+  descifrar el `.p12`/password desde cero. Esto es lo que hace que AC-04 (nunca cruzar tenants,
+  incluso en el mismo instante), AC-05 (un certificado que expira entre una operación y la
+  siguiente deja de usarse solo) y AC-06 (uno recién cargado se usa de inmediato) se cumplan sin
+  código adicional — no agregar un caché de material descifrado más adelante sin volver a revisar
+  estas tres ACs.
+- Tests (`SifenCertificateServiceTest`, 5 casos nuevos): decodificación real end-to-end del
+  material (no solo el filtro de estado), selección por vencimiento más lejano, rechazo cuando no
+  hay ninguno vigente, un certificado expirado nunca es elegido, y aislamiento estricto por tenant.
 
 ## Convenciones establecidas para el resto de la integración
 

@@ -14,12 +14,14 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -103,6 +105,57 @@ public class SifenCertificateService {
         uploadedByUserId,
         entity.getId());
     return toDto(entity, LocalDate.now(timeProperties.zoneId()));
+  }
+
+  /**
+   * HU-21: resolves the certificate/private key that any facturación-electrónica operation for this
+   * tenant (sign, connect, register an event) must use — obtained fresh on every call, so a
+   * certificate that expires or a newly-uploaded one is picked up immediately without a restart
+   * (AC-05, AC-06), and never mixed across tenants (AC-04: no cross-call cache exists at all).
+   */
+  @Transactional(readOnly = true)
+  public SifenActiveCertificateMaterial requireActiveCertificate(long tenantId) {
+    LocalDate today = LocalDate.now(timeProperties.zoneId());
+    SifenCertificate chosen =
+        sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(tenantId).stream()
+            .filter(c -> computeStatus(c, today) == SifenCertificateStatus.VALID)
+            // AC-03: pick the same one consistently — furthest expiry, tie-broken by id.
+            .max(
+                Comparator.comparing(SifenCertificate::getNotAfter)
+                    .thenComparing(SifenCertificate::getId))
+            .orElseThrow(
+                () -> {
+                  log.warn(
+                      "SIFEN active-certificate lookup found none valid tenantId={}", tenantId);
+                  return new ResponseStatusException(
+                      HttpStatus.PRECONDITION_FAILED, "SIFEN_NO_VALID_CERTIFICATE");
+                });
+
+    SifenActiveCertificateMaterial material = decryptMaterial(chosen);
+    log.info(
+        "SIFEN active-certificate resolved tenantId={} certificateId={}",
+        tenantId,
+        material.certificateId());
+    return material;
+  }
+
+  private SifenActiveCertificateMaterial decryptMaterial(SifenCertificate c) {
+    byte[] p12Bytes = encryptionService.decryptToBytes(c.getEncryptedP12Base64());
+    String password = encryptionService.decryptToString(c.getEncryptedPasswordBase64());
+    try {
+      KeyStore keyStore = KeyStore.getInstance("PKCS12");
+      keyStore.load(new ByteArrayInputStream(p12Bytes), password.toCharArray());
+      String alias = findFirstAlias(keyStore);
+      PrivateKey privateKey = (PrivateKey) keyStore.getKey(alias, password.toCharArray());
+      X509Certificate certificate = (X509Certificate) keyStore.getCertificate(alias);
+      return new SifenActiveCertificateMaterial(
+          c.getId(), keyStore, password, alias, certificate, privateKey);
+    } catch (GeneralSecurityException | IOException e) {
+      // Already validated at upload time (HU-18) — reaching here means stored/decrypted material
+      // is corrupted, not a user input error, so this is not a 4xx ResponseStatusException.
+      throw new IllegalStateException(
+          "Failed to load previously-validated SIFEN certificate id=" + c.getId(), e);
+    }
   }
 
   private static byte[] decodeFile(String fileBase64) {
