@@ -6,10 +6,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.config.SifenCertificateProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.SifenCertificate;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.SifenCertificateStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -52,7 +54,11 @@ class SifenCertificateServiceTest {
     encryptionService = new SifenCertificateEncryptionService(props);
     service =
         new SifenCertificateService(
-            tenantRepository, appUserRepository, sifenCertificateRepository, encryptionService);
+            tenantRepository,
+            appUserRepository,
+            sifenCertificateRepository,
+            encryptionService,
+            new FemmeTimeProperties());
 
     tenant = new Tenant();
     tenant.setId(1L);
@@ -140,5 +146,78 @@ class SifenCertificateServiceTest {
     assertThat(tenantOneList).hasSize(1);
     assertThat(tenantOneList.get(0).id()).isEqualTo(1L);
     assertThat(tenantTwoList).isEmpty();
+  }
+
+  // HU-20: status is computed fresh on every list() call from notBefore/notAfter vs "today" —
+  // never a stored value — so these build certs relative to the real current date rather than
+  // mocking a clock.
+
+  @Test
+  void list_certificateWithinValidityWindow_hasValidStatus() {
+    SifenCertificate cert =
+        certificate(1L, LocalDate.now().minusDays(10), LocalDate.now().plusDays(10));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(cert));
+
+    assertThat(service.list(1L).get(0).status()).isEqualTo(SifenCertificateStatus.VALID);
+  }
+
+  @Test
+  void list_certificateOnValidityBoundaries_isStillValid() {
+    // AC-01: today equal to notBefore or notAfter counts as valid (both bounds inclusive).
+    SifenCertificate onNotBefore = certificate(1L, LocalDate.now(), LocalDate.now().plusDays(1));
+    SifenCertificate onNotAfter = certificate(2L, LocalDate.now().minusDays(1), LocalDate.now());
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(onNotBefore, onNotAfter));
+
+    List<SifenCertificateResponse> dtos = service.list(1L);
+    assertThat(dtos)
+        .extracting(SifenCertificateResponse::status)
+        .containsExactly(SifenCertificateStatus.VALID, SifenCertificateStatus.VALID);
+  }
+
+  @Test
+  void list_certificatePastNotAfter_hasExpiredStatus() {
+    SifenCertificate cert =
+        certificate(1L, LocalDate.now().minusDays(30), LocalDate.now().minusDays(1));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(cert));
+
+    assertThat(service.list(1L).get(0).status()).isEqualTo(SifenCertificateStatus.EXPIRED);
+  }
+
+  @Test
+  void list_certificateBeforeNotBefore_hasNotYetValidStatus() {
+    SifenCertificate cert =
+        certificate(1L, LocalDate.now().plusDays(1), LocalDate.now().plusDays(30));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(cert));
+
+    assertThat(service.list(1L).get(0).status()).isEqualTo(SifenCertificateStatus.NOT_YET_VALID);
+  }
+
+  @Test
+  void list_multipleValidCertificatesForSameTenant_allReportValid() {
+    // AC-05: more than one "Vigente" certificate at once is not an error; HU-21 decides which is
+    // used.
+    SifenCertificate first =
+        certificate(1L, LocalDate.now().minusDays(5), LocalDate.now().plusDays(5));
+    SifenCertificate second =
+        certificate(2L, LocalDate.now().minusDays(1), LocalDate.now().plusDays(365));
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(first, second));
+
+    assertThat(service.list(1L))
+        .extracting(SifenCertificateResponse::status)
+        .containsExactly(SifenCertificateStatus.VALID, SifenCertificateStatus.VALID);
+  }
+
+  private static SifenCertificate certificate(long id, LocalDate notBefore, LocalDate notAfter) {
+    SifenCertificate c = new SifenCertificate();
+    c.setId(id);
+    c.setUploadedAt(java.time.Instant.now());
+    c.setNotBefore(notBefore);
+    c.setNotAfter(notAfter);
+    return c;
   }
 }

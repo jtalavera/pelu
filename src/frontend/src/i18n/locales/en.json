@@ -228,7 +228,11 @@
       "empty": "No certificates uploaded yet.",
       "colUploadedAt": "Upload date",
       "colNotBefore": "Issued on",
-      "colNotAfter": "Expires on"
+      "colNotAfter": "Expires on",
+      "colStatus": "Status",
+      "statusValid": "Valid",
+      "statusExpired": "Expired",
+      "statusNotYetValid": "Not yet valid"
     },
     "taxes": {
       "pageTitle": "Taxes",

@@ -11,8 +11,8 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU | Estado | Notas |
 |---|---|---|
 | HU-18 Cargar certificado y clave | ✅ Done | Ver detalle abajo. ⚠️ Cifrado en reposo hoy no cumple RT-09/RT-10 fuera de `e2e` — ver "Deuda técnica" abajo. |
-| HU-20 Calcular estado del certificado | ⬜ Next | |
-| HU-21 Usar certificado vigente automáticamente | ⬜ Todo | |
+| HU-20 Calcular estado del certificado | ✅ Done | Ver detalle abajo. |
+| HU-21 Usar certificado vigente automáticamente | ⬜ Next | |
 | HU-05 Conectarse de forma segura con SIFEN | ⬜ Todo | |
 | HU-01 Generar número de control | ⬜ Todo | |
 | HU-02 Datos identificación/timbrado/emisor/receptor | ⬜ Todo | |
@@ -24,11 +24,21 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-20 (calcular estado Vigente/Expirado/No
-vigente aún de cada `SifenCertificate`, comparando `notBefore`/`notAfter` con la fecha actual).
-Esto se resuelve en el `SifenCertificateService.list()` existente (agregar el campo `status` al
-DTO `SifenCertificateResponse`) y mostrarlo en `SifenCertificatesPage.tsx` como badge — no requiere
-tabla nueva.
+**Próximo paso al reanudar el loop:** implementar HU-21 (usar automáticamente el certificado
+vigente del tenant en firmar/conectar/eventos). Necesita: (a) un método
+`SifenCertificateService.getActiveCertificateForTenant(tenantId)` que filtre los certificados del
+tenant a estado `VALID` (reutilizando `computeStatus`, hoy privado — hacerlo accesible o exponer
+un helper) y, si hay más de uno, elija el de `notAfter` más lejano (AC-03); (b) si no hay ninguno
+`VALID`, lanzar un error tipo `SIFEN_NO_VALID_CERTIFICATE` (AC-02); (c) el método debe descifrar el
+`.p12`/password on-demand (usar `SifenCertificateEncryptionService.decryptToBytes/String` +
+`KeyStore.getInstance("PKCS12")`) y devolver algo utilizable por HU-04/HU-05 (p.ej. un record con
+`KeyStore`, `PrivateKey`, `X509Certificate`) — no persistir el material descifrado en ningún campo
+de instancia ni cachearlo entre llamadas (evitar que quede en memoria más tiempo del necesario).
+HU-21 no tiene pantalla propia; es un método de servicio consumido por historias futuras (HU-04,
+HU-05, HU-10, HU-11, EP-05), así que sus tests son unitarios (backend), no Playwright — no hay UI
+que probar todavía. Confirmá con el usuario si conviene escribir HU-21 "a ciegas" sin nada que lo
+consuma aún, o adelantar HU-05 (conectar con SIFEN) en el mismo tramo para tener un consumidor real
+antes de dar la historia por cerrada.
 
 ## HU-18 — Cargar un nuevo certificado y clave para un tenant (Done)
 
@@ -107,6 +117,43 @@ extender lo mismo al secreto JWT ya que comparte el mismo patrón de riesgo. No 
 loop porque es una historia de infraestructura transversal, no una de las 22 HU numeradas del plan
 de fases — se necesita indicación del usuario sobre si crear una HU nueva para esto o manejarlo
 como chore de infraestructura.
+
+## HU-20 — Calcular el estado de cada certificado según su vigencia (Done)
+
+Pequeño y puramente derivado — no agrega tabla ni columna nueva.
+
+**Backend**:
+- `domain/enums/SifenCertificateStatus.java` — `VALID`, `EXPIRED`, `NOT_YET_VALID` (inglés, como
+  el resto de los enums del dominio — ver `ServiceRecordStatus`, `UserRole`).
+- `SifenCertificateService`: nueva dependencia `FemmeTimeProperties` (mismo patrón que
+  `DashboardService`/`InvoicePdfService` para "hoy" en zona horaria de negocio, no UTC ni zona del
+  servidor). Método privado `computeStatus(cert, today)` — `today.isBefore(notBefore)` →
+  `NOT_YET_VALID`; `today.isAfter(notAfter)` → `EXPIRED`; si no, `VALID` (ambos límites inclusive,
+  AC-01). Se llama en `list()` (con `LocalDate.now(zone)` fresco en cada invocación — AC-04, nunca
+  se guarda) y en `upload()` para que la respuesta inmediata también traiga el estado correcto.
+- `SifenCertificateResponse` ahora incluye `status`.
+- Tests: 5 casos nuevos en `SifenCertificateServiceTest` (vigente, límites inclusive, expirado, no
+  vigente aún, y AC-05 — dos certificados `VALID` simultáneos sin error). Construidos con fechas
+  relativas a `LocalDate.now()` real (no hay `Clock` inyectable todavía), no con fechas fijas.
+
+**Frontend**: `SifenCertificatesPage.tsx` agrega un badge de estado (reusa
+`--color-timbrado-valid-bg/fg` de `FiscalStampSettingsPage` para `VALID`, `--color-danger-lt/danger`
+para `EXPIRED`, `--color-stone`/`--color-ink-2` neutro para `NOT_YET_VALID`). i18n:
+`femme.sifenCertificates.colStatus/statusValid/statusExpired/statusNotYetValid`.
+
+**E2E**: `e2e/tests/sifen-hu-20-estado-certificado.spec.ts`. Para probar `EXPIRED` y
+`NOT_YET_VALID` con el sistema real (sin mockear el reloj) se generaron dos fixtures adicionales
+con `keytool -genkeypair -startdate "-2y"/"+1y" -validity <n>`:
+`e2e/fixtures/sifen/expired-cert.p12` (vigencia 2024–2025) y `notyetvalid-cert.p12` (vigencia
+2027–2037), misma contraseña `TestPass123!` que `test-cert.p12`. Si `Especificacion_...md` o el
+reloj de referencia cambian mucho en el futuro, estas fechas fijas eventualmente podrían quedar
+fuera de rango (p.ej. `expired-cert.p12` ya no sería "expirado" si el sistema corriera en 2024) —
+regenerar con el mismo comando si algún test de HU-20 empieza a fallar por esto.
+
+AC-06/AC-07 ("pasa a Vigente/Expirado automáticamente al llegar la fecha, sin acción manual") están
+cubiertas indirectamente: como el estado nunca se guarda (AC-04, ya testeado) y se recalcula en
+cada `list()`, la transición automática es una consecuencia directa de esa propiedad — no se
+escribió un test que espere el paso real del tiempo.
 
 ## Convenciones establecidas para el resto de la integración
 

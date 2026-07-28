@@ -1,8 +1,10 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.SifenCertificate;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.SifenCertificateStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -46,22 +48,26 @@ public class SifenCertificateService {
   private final AppUserRepository appUserRepository;
   private final SifenCertificateRepository sifenCertificateRepository;
   private final SifenCertificateEncryptionService encryptionService;
+  private final FemmeTimeProperties timeProperties;
 
   public SifenCertificateService(
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       SifenCertificateRepository sifenCertificateRepository,
-      SifenCertificateEncryptionService encryptionService) {
+      SifenCertificateEncryptionService encryptionService,
+      FemmeTimeProperties timeProperties) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.sifenCertificateRepository = sifenCertificateRepository;
     this.encryptionService = encryptionService;
+    this.timeProperties = timeProperties;
   }
 
   @Transactional(readOnly = true)
   public List<SifenCertificateResponse> list(long tenantId) {
+    LocalDate today = LocalDate.now(timeProperties.zoneId());
     return sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(tenantId).stream()
-        .map(SifenCertificateService::toDto)
+        .map(c -> toDto(c, today))
         .collect(Collectors.toList());
   }
 
@@ -96,7 +102,7 @@ public class SifenCertificateService {
         tenantId,
         uploadedByUserId,
         entity.getId());
-    return toDto(entity);
+    return toDto(entity, LocalDate.now(timeProperties.zoneId()));
   }
 
   private static byte[] decodeFile(String fileBase64) {
@@ -149,8 +155,19 @@ public class SifenCertificateService {
     return date.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
   }
 
-  private static SifenCertificateResponse toDto(SifenCertificate c) {
+  /** HU-20: computed fresh on every read from notBefore/notAfter — never persisted (AC-04). */
+  private static SifenCertificateStatus computeStatus(SifenCertificate c, LocalDate today) {
+    if (today.isBefore(c.getNotBefore())) {
+      return SifenCertificateStatus.NOT_YET_VALID;
+    }
+    if (today.isAfter(c.getNotAfter())) {
+      return SifenCertificateStatus.EXPIRED;
+    }
+    return SifenCertificateStatus.VALID;
+  }
+
+  private static SifenCertificateResponse toDto(SifenCertificate c, LocalDate today) {
     return new SifenCertificateResponse(
-        c.getId(), c.getUploadedAt(), c.getNotBefore(), c.getNotAfter());
+        c.getId(), c.getUploadedAt(), c.getNotBefore(), c.getNotAfter(), computeStatus(c, today));
   }
 }

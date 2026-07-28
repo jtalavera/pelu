@@ -7,11 +7,14 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { useDateLocale } from "../i18n/dateLocale";
 import { useMe } from "../hooks/useMe";
 
+type SifenCertificateStatus = "VALID" | "EXPIRED" | "NOT_YET_VALID";
+
 type SifenCertificateRow = {
   id: number;
   uploadedAt: string;
   notBefore: string;
   notAfter: string;
+  status: SifenCertificateStatus;
 };
 
 const labelStyle: React.CSSProperties = {
@@ -103,6 +106,43 @@ export default function SifenCertificatesPage() {
     } catch {
       return iso;
     }
+  }
+
+  function statusBadge(status: SifenCertificateStatus) {
+    const badgeStyle: React.CSSProperties = {
+      fontSize: 10,
+      fontWeight: 500,
+      padding: "2px 8px",
+      borderRadius: "var(--radius-pill)",
+      whiteSpace: "nowrap",
+    };
+    if (status === "VALID") {
+      return (
+        <span
+          style={{
+            ...badgeStyle,
+            background: "var(--color-timbrado-valid-bg)",
+            color: "var(--color-timbrado-valid-fg)",
+          }}
+        >
+          {t("femme.sifenCertificates.statusValid")}
+        </span>
+      );
+    }
+    if (status === "EXPIRED") {
+      return (
+        <span
+          style={{ ...badgeStyle, background: "var(--color-danger-lt)", color: "var(--color-danger)" }}
+        >
+          {t("femme.sifenCertificates.statusExpired")}
+        </span>
+      );
+    }
+    return (
+      <span style={{ ...badgeStyle, background: "var(--color-stone)", color: "var(--color-ink-2)" }}>
+        {t("femme.sifenCertificates.statusNotYetValid")}
+      </span>
+    );
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -284,6 +324,9 @@ export default function SifenCertificatesPage() {
                     {t("femme.sifenCertificates.colNotAfter")}
                   </div>
                   <div>{fmtDate(row.notAfter)}</div>
+                </div>
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+                  {statusBadge(row.status)}
                 </div>
               </div>
             ))}

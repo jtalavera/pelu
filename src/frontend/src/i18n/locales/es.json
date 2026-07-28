@@ -228,7 +228,11 @@
       "empty": "Todavía no hay certificados cargados.",
       "colUploadedAt": "Fecha de carga",
       "colNotBefore": "Fecha de expedición",
-      "colNotAfter": "Fecha de vencimiento"
+      "colNotAfter": "Fecha de vencimiento",
+      "colStatus": "Estado",
+      "statusValid": "Vigente",
+      "statusExpired": "Expirado",
+      "statusNotYetValid": "No vigente aún"
     },
     "taxes": {
       "pageTitle": "Impuestos",
