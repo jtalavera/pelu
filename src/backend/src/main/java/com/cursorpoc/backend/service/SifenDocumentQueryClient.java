@@ -99,9 +99,27 @@ public class SifenDocumentQueryClient {
 
   Optional<SifenQueryResult> query(
       long tenantId, String cdc, javax.net.ssl.TrustManager[] testTrustManagers) {
-    String envelope = buildEnvelope(cdc);
     try {
       HttpClient client = connectionService.buildAuthenticatedClient(tenantId, testTrustManagers);
+      return queryWithClient(client, cdc, "tenantId=" + tenantId);
+    } catch (GeneralSecurityException e) {
+      log.error("SIFEN status query got no response tenantId={} error={}", tenantId, e.toString());
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * EP-05 homologación (HU-17): same seam {@link SifenDocumentReceptionClient#sendWithClient}/
+   * {@link SifenBatchResultQueryClient#queryWithClient} already opened — sends over an
+   * already-built mTLS {@link HttpClient} (the pilot certificate for a live homologation test, not
+   * a DB-backed tenant certificate), so this query can be exercised standalone against any CDC,
+   * document type included, since {@code xContenDE} itself is document-type-agnostic (see class
+   * Javadoc — it's typed as a plain {@code xs:string} by the real schema, never parsed further
+   * here).
+   */
+  Optional<SifenQueryResult> queryWithClient(HttpClient client, String cdc, String logContext) {
+    String envelope = buildEnvelope(cdc);
+    try {
       HttpRequest request =
           HttpRequest.newBuilder(URI.create(connectionProperties.activeBaseUrl() + CONSULTA_PATH))
               .timeout(REQUEST_TIMEOUT)
@@ -110,39 +128,38 @@ public class SifenDocumentQueryClient {
               .build();
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-      return handleResponse(tenantId, cdc, response.body(), response.statusCode());
-    } catch (IOException | InterruptedException | GeneralSecurityException e) {
+      return handleResponse(logContext, cdc, response.body(), response.statusCode());
+    } catch (IOException | InterruptedException e) {
       if (Thread.currentThread().isInterrupted()) {
         Thread.currentThread().interrupt();
       }
-      log.error("SIFEN status query got no response tenantId={} error={}", tenantId, e.toString());
+      log.error("SIFEN status query got no response {} error={}", logContext, e.toString());
       return Optional.empty();
     }
   }
 
   private Optional<SifenQueryResult> handleResponse(
-      long tenantId, String cdc, String body, int httpStatus) {
+      String logContext, String cdc, String body, int httpStatus) {
     ParsedQueryResponse parsed = parseResponse(body);
     if (parsed == null) {
       log.error(
-          "SIFEN status query response could not be parsed tenantId={} httpStatus={}",
-          tenantId,
+          "SIFEN status query response could not be parsed {} httpStatus={}",
+          logContext,
           httpStatus);
       return Optional.empty();
     }
     if (RESULT_CODE_RUC_NOT_AUTHORIZED.equals(parsed.resultCode())) {
       log.error(
-          "SIFEN status query rejected: querying certificate's RUC has no permission "
-              + "tenantId={} cdc={}",
-          tenantId,
+          "SIFEN status query rejected: querying certificate's RUC has no permission {} cdc={}",
+          logContext,
           cdc);
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "SIFEN_QUERY_RUC_NOT_AUTHORIZED");
     }
     SifenSubmissionStatus status = mapStatus(parsed.resultCode());
     if (status == null) {
       log.error(
-          "SIFEN status query returned an unrecognized result code tenantId={} resultCode={}",
-          tenantId,
+          "SIFEN status query returned an unrecognized result code {} resultCode={}",
+          logContext,
           parsed.resultCode());
       return Optional.empty();
     }

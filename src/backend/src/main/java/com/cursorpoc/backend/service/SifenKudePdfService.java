@@ -22,6 +22,7 @@ import com.lowagie.text.pdf.PdfTemplate;
 import com.lowagie.text.pdf.PdfWriter;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
@@ -47,6 +48,22 @@ import org.springframework.web.server.ResponseStatusException;
  * KuDE generation independent of certificate validity at download time (a certificate can expire
  * long after an invoice was approved, but its KuDE must still be downloadable) and guarantees the
  * printed QR is bit-for-bit what SIFEN itself received, never a re-derived approximation.
+ *
+ * <p><b>SIFEN HU-17 (EP-05, Fase 4):</b> the rendering core ({@link #render}) was generalized from
+ * "always a factura electrónica" to any {@link SifenDocumentType} — it now takes the document type,
+ * issue instant, document number, QR data and (nullable) {@link Client} as plain values instead of
+ * reading them off a persisted {@link Invoice}, and prints a "Tipo de comprobante" legend using
+ * {@link SifenDocumentType#description()}. {@link #buildKudePdf(long, long)} (the only production
+ * entry point — this peluquería only ever issues facturas) still resolves those values from a
+ * persisted, SIFEN-approved {@link Invoice} exactly as before, always with {@link
+ * SifenDocumentType#FACTURA}; {@link #buildHomologationKudePdf} is the new entry point HU-17 added
+ * for the other 4 document types the DNIT's homologación requires (nota de crédito/débito,
+ * autofactura, nota de remisión), none of which this app persists as an {@link Invoice} — it skips
+ * {@link #requireApprovedInvoice} entirely since there is no DB-backed invoice to check, by design
+ * (this is homologation-only scope, per EP-05's own intro, not a new production capability). Every
+ * other layout choice (items table, totals, QR/legend block, page numbering) is shared unchanged
+ * across all 5 types — the DNIT manual and HU-08's own findings don't call for a materially
+ * different KuDE structure per type, only the correct type legend.
  */
 @Service
 public class SifenKudePdfService {
@@ -93,8 +110,50 @@ public class SifenKudePdfService {
     SifenInvoiceDetail detail = detailService.buildDetail(tenantId, invoiceId);
     BusinessProfile profile = businessProfileRepository.findByTenantId(tenantId).orElse(null);
 
-    byte[] pdf = render(invoice, header, detail, profile);
-    return new KudePdfResult(pdf, buildFilename(header, invoice));
+    byte[] pdf =
+        render(
+            SifenDocumentType.FACTURA,
+            invoice.getIssuedAt(),
+            invoice.getInvoiceNumber(),
+            invoice.getSifenQrUrl(),
+            invoice.getSifenPublicConsultationUrl(),
+            header,
+            detail,
+            profile,
+            invoice.getClient());
+    return new KudePdfResult(
+        pdf, buildFilename(header, invoice.getIssuedAt(), invoice.getInvoiceNumber()));
+  }
+
+  /**
+   * SIFEN HU-17 (EP-05, Fase 4, homologación): renders a KuDE for one of the 4 additional document
+   * types the DNIT's homologación requires — nota de crédito/débito, autofactura, nota de remisión
+   * — none of which this peluquería persists as an {@link Invoice} in real operation (it never
+   * issues them). Deliberately bypasses {@link #requireApprovedInvoice} (there's no DB-backed
+   * invoice to check) — the caller is responsible for only calling this with data SIFEN genuinely
+   * returned {@code Aprobado}/{@code Aprobado con observación} for, same discipline {@link
+   * #buildKudePdf} enforces via the database for real invoices.
+   */
+  public KudePdfResult buildHomologationKudePdf(
+      SifenDocumentType documentType,
+      Instant issuedAt,
+      int documentNumber,
+      String qrUrl,
+      String publicConsultationUrl,
+      SifenInvoiceHeader header,
+      SifenInvoiceDetail detail) {
+    byte[] pdf =
+        render(
+            documentType,
+            issuedAt,
+            documentNumber,
+            qrUrl,
+            publicConsultationUrl,
+            header,
+            detail,
+            null,
+            null);
+    return new KudePdfResult(pdf, buildFilename(header, issuedAt, documentNumber));
   }
 
   @Transactional(readOnly = true)
@@ -121,28 +180,29 @@ public class SifenKudePdfService {
     return invoice;
   }
 
-  String buildFilename(SifenInvoiceHeader header, Invoice invoice) {
+  String buildFilename(SifenInvoiceHeader header, Instant issuedAt, int documentNumber) {
     DateTimeFormatter fileDateFmt =
         DateTimeFormatter.ofPattern("yyyyMMdd").withZone(timeProperties.zoneId());
-    String date = fileDateFmt.format(invoice.getIssuedAt());
+    String date = fileDateFmt.format(issuedAt);
     return "KUDE-"
         + date
         + "-"
         + header.stampNumber()
         + "-"
-        + formattedInvoiceNumber(invoice)
+        + String.format("%07d", documentNumber)
         + ".pdf";
   }
 
-  private static String formattedInvoiceNumber(Invoice invoice) {
-    return String.format("%07d", invoice.getInvoiceNumber());
-  }
-
   byte[] render(
-      Invoice invoice,
+      SifenDocumentType documentType,
+      Instant issuedAt,
+      int documentNumber,
+      String qrUrl,
+      String publicConsultationUrl,
       SifenInvoiceHeader header,
       SifenInvoiceDetail detail,
-      BusinessProfile profile) {
+      BusinessProfile profile,
+      Client client) {
     try {
       Document document = new Document(PageSize.A4, 36, 36, 36, 50);
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -159,12 +219,20 @@ public class SifenKudePdfService {
       Font testLegendFont = new Font(Font.HELVETICA, 9, Font.BOLD, java.awt.Color.RED);
 
       addHeaderBlock(document, header, profile, titleFont, subtitleFont, bodyFont);
-      addTimbradoAndSaleBlock(document, invoice, header, labelFont, bodyFont);
+      addTimbradoAndSaleBlock(
+          document, documentType, issuedAt, documentNumber, header, labelFont, bodyFont);
       if (isReceiverIdentified(header)) {
-        addClientBlock(document, invoice, header, labelFont, bodyFont);
+        addClientBlock(document, client, header, labelFont, bodyFont);
       }
       addQrAndControlNumberBlock(
-          document, invoice, header, bodyFont, labelFont, legendFont, testLegendFont);
+          document,
+          qrUrl,
+          publicConsultationUrl,
+          header,
+          bodyFont,
+          labelFont,
+          legendFont,
+          testLegendFont);
       addItemsTable(document, detail, labelFont, bodyFont);
       addTotalsBlock(document, detail.totals(), labelFont, bodyFont);
       addOptionalMessage(document, profile, bodyFont);
@@ -234,11 +302,19 @@ public class SifenKudePdfService {
   }
 
   private void addTimbradoAndSaleBlock(
-      Document document, Invoice invoice, SifenInvoiceHeader header, Font labelFont, Font bodyFont)
+      Document document,
+      SifenDocumentType documentType,
+      Instant issuedAt,
+      int documentNumber,
+      SifenInvoiceHeader header,
+      Font labelFont,
+      Font bodyFont)
       throws DocumentException {
     ZoneId zone = timeProperties.zoneId();
     Paragraph p = new Paragraph();
     p.setSpacingBefore(8);
+    // SIFEN HU-17: the only per-type visual difference this KuDE needs — see class Javadoc.
+    addLine(p, "Tipo de comprobante", documentType.description(), labelFont, bodyFont);
     addLine(
         p,
         "RUC",
@@ -258,14 +334,13 @@ public class SifenKudePdfService {
         p,
         "Comprobante N°",
         String.format(
-            "%03d-%03d-%07d",
-            header.establishment(), header.expeditionPoint(), invoice.getInvoiceNumber()),
+            "%03d-%03d-%07d", header.establishment(), header.expeditionPoint(), documentNumber),
         labelFont,
         bodyFont);
     addLine(
         p,
         "Fecha y hora de emisión",
-        DATE_TIME_FORMAT.format(invoice.getIssuedAt().atZone(zone)),
+        DATE_TIME_FORMAT.format(issuedAt.atZone(zone)),
         labelFont,
         bodyFont);
     addLine(p, "Condición de venta", "Contado", labelFont, bodyFont);
@@ -279,10 +354,9 @@ public class SifenKudePdfService {
   }
 
   private void addClientBlock(
-      Document document, Invoice invoice, SifenInvoiceHeader header, Font labelFont, Font bodyFont)
+      Document document, Client client, SifenInvoiceHeader header, Font labelFont, Font bodyFont)
       throws DocumentException {
     SifenReceiverData receiver = header.receiver();
-    Client client = invoice.getClient();
     Paragraph p = new Paragraph();
     p.setSpacingBefore(8);
     if (hasText(receiver.ruc())) {
@@ -308,7 +382,8 @@ public class SifenKudePdfService {
 
   private void addQrAndControlNumberBlock(
       Document document,
-      Invoice invoice,
+      String qrUrl,
+      String publicConsultationUrl,
       SifenInvoiceHeader header,
       Font bodyFont,
       Font labelFont,
@@ -323,7 +398,7 @@ public class SifenKudePdfService {
     table.setWidthPercentage(100);
     table.setWidths(new float[] {1f, 3f});
 
-    byte[] qrPng = qrImageService.renderPng(invoice.getSifenQrUrl(), QR_PIXELS);
+    byte[] qrPng = qrImageService.renderPng(qrUrl, QR_PIXELS);
     Image qrImage;
     try {
       qrImage = Image.getInstance(qrPng);
@@ -344,10 +419,7 @@ public class SifenKudePdfService {
         groupControlNumber(header.controlNumber()),
         labelFont,
         bodyFont);
-    info.add(
-        new Chunk(
-            "Consulte este comprobante en: " + invoice.getSifenPublicConsultationUrl() + "\n",
-            bodyFont));
+    info.add(new Chunk("Consulte este comprobante en: " + publicConsultationUrl + "\n", bodyFont));
     // AC-09: legend identifying this as a graphical representation of an electronic document.
     info.add(
         new Chunk("KuDE - Representación gráfica de un Documento Electrónico (DE)\n", legendFont));

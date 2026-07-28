@@ -162,30 +162,7 @@ class SifenHomologationBatchSubmissionLiveTest {
     SifenActiveCertificateMaterial material = loadMaterial(keyStore, password);
     HttpClient client = SifenConnectionService.buildMutualTlsClient(keyStore, password, null);
 
-    documentNumberCursor = Math.max(10, (System.currentTimeMillis() / 1000) % 9_000_000L);
-
-    var report = new SifenHomologationReport();
-
-    // AC-02 (nota de crédito/débito need a document to reference): one real, actually-submitted
-    // CDC via envío inmediato, same trick HU-14 used for the same reason.
-    String referenceCdc = sendSeedInvoiceForReference(report, material, client);
-
-    // AC-01: factura, and AC-02: the other 4 types — one batch of 5 correct documents each.
-    runCorrectBatch(report, material, client, SifenDocumentType.FACTURA, null);
-    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_CREDITO, referenceCdc);
-    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_DEBITO, referenceCdc);
-    runCorrectBatch(report, material, client, SifenDocumentType.AUTOFACTURA, null);
-    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_REMISION, null);
-
-    // AC-03: one batch of 5 incorrect facturas, distinct errors.
-    runIncorrectFacturaBatch(report, material, client);
-
-    // AC-04: a batch mixing two different emisor RUCs.
-    runMixedRucBatch(report, material, client);
-
-    // AC-05: a batch mixing two different document types.
-    runMixedTypeBatch(report, material, client);
-
+    SifenHomologationReport report = run(material, client);
     System.out.println(report.render());
 
     // AC-03: doesn't depend on the external RUC-active state — hard-asserted every time this runs.
@@ -235,6 +212,40 @@ class SifenHomologationBatchSubmissionLiveTest {
                 + " RUC 1137152-8 reported inactive, dCodRes=1252), not a code defect, before"
                 + " treating this as a regression: "
                 + report.render());
+  }
+
+  /**
+   * SIFEN HU-17 (EP-05, Fase 4) AC-05 seam: extracted so {@code SifenHomologationFinalReportTest}
+   * can fold this story's live report into the single consolidated report the DNIT needs, via
+   * {@link SifenHomologationReport#combinedWith}, without duplicating this class's own batch
+   * send/poll logic.
+   */
+  SifenHomologationReport run(SifenActiveCertificateMaterial material, HttpClient client)
+      throws InterruptedException {
+    documentNumberCursor = Math.max(10, (System.currentTimeMillis() / 1000) % 9_000_000L);
+
+    var report = new SifenHomologationReport();
+
+    // AC-02 (nota de crédito/débito need a document to reference): one real, actually-submitted
+    // CDC via envío inmediato, same trick HU-14 used for the same reason.
+    String referenceCdc = sendSeedInvoiceForReference(report, material, client);
+
+    // AC-01: factura, and AC-02: the other 4 types — one batch of 5 correct documents each.
+    runCorrectBatch(report, material, client, SifenDocumentType.FACTURA, null);
+    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_CREDITO, referenceCdc);
+    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_DEBITO, referenceCdc);
+    runCorrectBatch(report, material, client, SifenDocumentType.AUTOFACTURA, null);
+    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_REMISION, null);
+
+    // AC-03: one batch of 5 incorrect facturas, distinct errors.
+    runIncorrectFacturaBatch(report, material, client);
+
+    // AC-04: a batch mixing two different emisor RUCs.
+    runMixedRucBatch(report, material, client);
+
+    // AC-05: a batch mixing two different document types.
+    runMixedTypeBatch(report, material, client);
+    return report;
   }
 
   // ---------------------------------------------------------------------------------------------

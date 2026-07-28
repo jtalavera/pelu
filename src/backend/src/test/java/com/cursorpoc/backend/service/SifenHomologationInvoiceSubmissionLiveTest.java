@@ -184,6 +184,53 @@ class SifenHomologationInvoiceSubmissionLiveTest {
     SifenActiveCertificateMaterial material = loadMaterial(keyStore, password);
     HttpClient client = SifenConnectionService.buildMutualTlsClient(keyStore, password, null);
 
+    SifenHomologationReport report = run(material, client);
+    System.out.println(report.render());
+
+    // AC-02/AC-05 (the "incorrect → rejected" half): doesn't depend on SIFEN's external RUC-active
+    // registry state (see class Javadoc) — hard-asserted every time this runs.
+    List<SifenHomologationReport.Row> incorrectFailures =
+        report.rows().stream()
+            .filter(row -> row.scenario().startsWith("incorrecta"))
+            .filter(row -> !row.passed())
+            .toList();
+    assertThat(incorrectFailures)
+        .as(
+            "AC-02/AC-05: every incorrect invoice must be rejected by SIFEN with an identifiable"
+                + " reason: %s",
+            report.render())
+        .isEmpty();
+
+    // AC-01/AC-05 (the "correct → approved" half): today, every correct invoice comes back
+    // dCodRes=1252 "El RUC del emisor se encuentra inactivo" — a real external SIFEN test-registry
+    // state, not a defect in this codebase (see class Javadoc). Aborts (not fails) while that
+    // holds;
+    // starts hard-passing the moment SIFEN's registry marks the pilot RUC active, with no code
+    // change needed here.
+    List<SifenHomologationReport.Row> correctFailures =
+        report.rows().stream()
+            .filter(row -> row.scenario().startsWith("correcta"))
+            .filter(row -> !row.passed())
+            .toList();
+    Assumptions.assumeTrue(
+        correctFailures.isEmpty(),
+        () ->
+            "AC-01: not every correct invoice was approved by SIFEN just now — see"
+                + " requirements/sifen/PROGRESS.md's HU-13 section for why this is currently a known"
+                + " external SIFEN test-registry limitation (pilot RUC 1137152-8 reported inactive,"
+                + " dCodRes=1252), not a code defect, before treating this as a regression: "
+                + report.render());
+  }
+
+  /**
+   * SIFEN HU-17 (EP-05, Fase 4) AC-05 seam: extracted so {@code SifenHomologationFinalReportTest}
+   * can fold this story's live report into the single consolidated report the DNIT needs, via
+   * {@link SifenHomologationReport#combinedWith}, without duplicating this class's own send/build
+   * logic. {@code Scenario} is private to this class, so this method (not its scenario list) is the
+   * seam — it builds its own scenarios internally, same as the {@code @Test} method used to.
+   */
+  SifenHomologationReport run(SifenActiveCertificateMaterial material, HttpClient client)
+      throws InterruptedException {
     List<Scenario> correctScenarios =
         List.of(
             Scenario.correct("correcta 1/5"),
@@ -248,42 +295,7 @@ class SifenHomologationInvoiceSubmissionLiveTest {
           scenario,
           false /* expectApproved */);
     }
-
-    System.out.println(report.render());
-
-    // AC-02/AC-05 (the "incorrect → rejected" half): doesn't depend on SIFEN's external RUC-active
-    // registry state (see class Javadoc) — hard-asserted every time this runs.
-    List<SifenHomologationReport.Row> incorrectFailures =
-        report.rows().stream()
-            .filter(row -> row.scenario().startsWith("incorrecta"))
-            .filter(row -> !row.passed())
-            .toList();
-    assertThat(incorrectFailures)
-        .as(
-            "AC-02/AC-05: every incorrect invoice must be rejected by SIFEN with an identifiable"
-                + " reason: %s",
-            report.render())
-        .isEmpty();
-
-    // AC-01/AC-05 (the "correct → approved" half): today, every correct invoice comes back
-    // dCodRes=1252 "El RUC del emisor se encuentra inactivo" — a real external SIFEN test-registry
-    // state, not a defect in this codebase (see class Javadoc). Aborts (not fails) while that
-    // holds;
-    // starts hard-passing the moment SIFEN's registry marks the pilot RUC active, with no code
-    // change needed here.
-    List<SifenHomologationReport.Row> correctFailures =
-        report.rows().stream()
-            .filter(row -> row.scenario().startsWith("correcta"))
-            .filter(row -> !row.passed())
-            .toList();
-    Assumptions.assumeTrue(
-        correctFailures.isEmpty(),
-        () ->
-            "AC-01: not every correct invoice was approved by SIFEN just now — see"
-                + " requirements/sifen/PROGRESS.md's HU-13 section for why this is currently a known"
-                + " external SIFEN test-registry limitation (pilot RUC 1137152-8 reported inactive,"
-                + " dCodRes=1252), not a code defect, before treating this as a regression: "
-                + report.render());
+    return report;
   }
 
   private void recordAttempt(

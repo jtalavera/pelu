@@ -127,9 +127,40 @@ class SifenHomologationEventsLiveTest {
     KeyStore keyStore =
         SifenPilotCertificateTestSupport.loadKeyStore(
             Files.readAllBytes(pilotCertificate), password);
-    material = loadMaterial(keyStore, password);
-    client = SifenConnectionService.buildMutualTlsClient(keyStore, password, null);
-    idSequence = System.currentTimeMillis() / 1000;
+    SifenActiveCertificateMaterial loadedMaterial = loadMaterial(keyStore, password);
+    HttpClient httpClient = SifenConnectionService.buildMutualTlsClient(keyStore, password, null);
+
+    SifenHomologationReport report = run(loadedMaterial, httpClient);
+    System.out.println(report.render());
+
+    // AC-02 (hard): the 5 anulación de numeración events must all be genuinely approved — the first
+    // real "Aprobado" this integration has ever gotten from SIFEN, and not gated by the external
+    // RUC
+    // block below.
+    List<SifenHomologationReport.Row> ac02Failures =
+        report.rows().stream()
+            .filter(row -> row.scenario().startsWith("AC-02"))
+            .filter(row -> !row.passed())
+            .toList();
+    assertThat(ac02Failures)
+        .as("AC-02: every anulación de numeración must be approved by SIFEN: %s", report.render())
+        .isEmpty();
+    assertHu16ChannelHealthAndAssumptions(report);
+  }
+
+  /**
+   * SIFEN HU-17 (EP-05, Fase 4) AC-05 seam: extracted so {@code SifenHomologationFinalReportTest}
+   * can fold this story's live report into the single consolidated report the DNIT needs, via
+   * {@link SifenHomologationReport#combinedWith}, without duplicating this class's own
+   * event-building logic. Relies on {@code material}/{@code client}/ {@code idSequence} already
+   * being set by the {@code @Test} method (or, for the capstone caller, by an equivalent setup) —
+   * see {@link #everyRequiredEventTypeIsRegistered} for that setup.
+   */
+  SifenHomologationReport run(SifenActiveCertificateMaterial material, HttpClient client)
+      throws Exception {
+    this.material = material;
+    this.client = client;
+    this.idSequence = System.currentTimeMillis() / 1000;
 
     var report = new SifenHomologationReport();
 
@@ -292,21 +323,16 @@ class SifenHomologationEventsLiveTest {
     recordSpecificRejection(
         report, "AC-03 corrección de un evento anterior (Tabla K)", correctionAttempt, "4202");
 
-    System.out.println(report.render());
+    return report;
+  }
 
-    // AC-02 (hard): the 5 anulación de numeración events must all be genuinely approved — the first
-    // real "Aprobado" this integration has ever gotten from SIFEN, and not gated by the external
-    // RUC
-    // block below.
-    List<SifenHomologationReport.Row> ac02Failures =
-        report.rows().stream()
-            .filter(row -> row.scenario().startsWith("AC-02"))
-            .filter(row -> !row.passed())
-            .toList();
-    assertThat(ac02Failures)
-        .as("AC-02: every anulación de numeración must be approved by SIFEN: %s", report.render())
-        .isEmpty();
-
+  /**
+   * The rest of HU-16's own assertions (everything beyond AC-02, already asserted by the
+   * {@code @Test} method right after calling {@link #run()}) — kept as a separate method purely so
+   * {@link #run()} stays a pure report-builder the HU-17 capstone can call without also inheriting
+   * these JUnit assertions.
+   */
+  private void assertHu16ChannelHealthAndAssumptions(SifenHomologationReport report) {
     // AC-01/AC-05/AC-03(conformidad/disconformidad/corrección) channel-health half (hard): every
     // rejection above must be the SPECIFIC real SIFEN reason recorded, never the generic 0160 "XML
     // mal formado" that used to mask all of this.

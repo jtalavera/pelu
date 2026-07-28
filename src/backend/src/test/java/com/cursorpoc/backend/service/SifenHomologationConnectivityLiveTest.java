@@ -77,6 +77,24 @@ class SifenHomologationConnectivityLiveTest {
         SifenPilotCertificateTestSupport.loadKeyStore(
             readClasspathResource(INVALID_CERT_CLASSPATH_RESOURCE), INVALID_CERT_PASSWORD);
 
+    SifenHomologationReport report = run(validKeyStore, password, invalidKeyStore);
+    System.out.println(report.render());
+
+    List<SifenHomologationReport.Row> failures =
+        report.rows().stream().filter(row -> !row.passed()).toList();
+    assertThat(failures)
+        .as("Every AC-02/AC-03 expectation must hold for all 7 named services: %s", report.render())
+        .isEmpty();
+  }
+
+  /**
+   * SIFEN HU-17 (EP-05, Fase 4) AC-05 seam: extracted so {@code SifenHomologationFinalReportTest}
+   * can fold this story's live report into the single consolidated report the DNIT needs, via
+   * {@link SifenHomologationReport#combinedWith}, without duplicating this class's own connectivity
+   * logic.
+   */
+  SifenHomologationReport run(KeyStore validKeyStore, String password, KeyStore invalidKeyStore)
+      throws InterruptedException {
     var checker = new SifenServiceConnectivityChecker(new SifenConnectionProperties());
     var report = new SifenHomologationReport();
 
@@ -100,14 +118,7 @@ class SifenHomologationConnectivityLiveTest {
           describeActual(invalidResult),
           invalidResult.matchesExpectation());
     }
-
-    System.out.println(report.render());
-
-    List<SifenHomologationReport.Row> failures =
-        report.rows().stream().filter(row -> !row.passed()).toList();
-    assertThat(failures)
-        .as("Every AC-02/AC-03 expectation must hold for all 7 named services: %s", report.render())
-        .isEmpty();
+    return report;
   }
 
   /**
@@ -138,6 +149,16 @@ class SifenHomologationConnectivityLiveTest {
 
   private static String describeActual(CheckResult result) {
     return String.format(Locale.ROOT, "%s (HTTP %d)", result.actual(), result.httpStatus());
+  }
+
+  /**
+   * SIFEN HU-17 AC-05 seam: lets {@code SifenHomologationFinalReportTest} build the same
+   * self-signed "invalid" keystore this class uses for AC-03, without duplicating the classpath
+   * resource/password constants.
+   */
+  static KeyStore loadInvalidKeyStore() throws Exception {
+    return SifenPilotCertificateTestSupport.loadKeyStore(
+        readClasspathResource(INVALID_CERT_CLASSPATH_RESOURCE), INVALID_CERT_PASSWORD);
   }
 
   private static byte[] readClasspathResource(String resourcePath) throws IOException {

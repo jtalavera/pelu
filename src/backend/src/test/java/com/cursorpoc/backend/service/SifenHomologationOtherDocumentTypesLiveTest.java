@@ -151,22 +151,7 @@ class SifenHomologationOtherDocumentTypesLiveTest {
     SifenActiveCertificateMaterial material = loadMaterial(keyStore, password);
     HttpClient client = SifenConnectionService.buildMutualTlsClient(keyStore, password, null);
 
-    documentNumberCursor = Math.max(10, (System.currentTimeMillis() / 1000) % 9_000_000L);
-
-    var report = new SifenHomologationReport();
-
-    // AC-03: a real, actually-submitted CDC per note type to reference — see class Javadoc.
-    String creditNoteReferenceCdc =
-        sendSeedInvoiceForReference(report, material, client, "para NOTA_CREDITO");
-    String debitNoteReferenceCdc =
-        sendSeedInvoiceForReference(report, material, client, "para NOTA_DEBITO");
-
-    runDocumentType(
-        report, material, client, SifenDocumentType.NOTA_CREDITO, creditNoteReferenceCdc);
-    runDocumentType(report, material, client, SifenDocumentType.NOTA_DEBITO, debitNoteReferenceCdc);
-    runDocumentType(report, material, client, SifenDocumentType.AUTOFACTURA, null);
-    runDocumentType(report, material, client, SifenDocumentType.NOTA_REMISION, null);
-
+    SifenHomologationReport report = run(material, client);
     System.out.println(report.render());
     System.out.println(renderPerTypeSummary(report));
 
@@ -201,6 +186,32 @@ class SifenHomologationOtherDocumentTypesLiveTest {
                 + " 1137152-8 reported inactive, dCodRes=1252), not a code defect, before treating"
                 + " this as a regression: "
                 + report.render());
+  }
+
+  /**
+   * SIFEN HU-17 (EP-05, Fase 4) AC-05 seam: extracted so {@code SifenHomologationFinalReportTest}
+   * can fold this story's live report into the single consolidated report the DNIT needs, via
+   * {@link SifenHomologationReport#combinedWith}, without duplicating this class's own send/build
+   * logic.
+   */
+  SifenHomologationReport run(SifenActiveCertificateMaterial material, HttpClient client)
+      throws InterruptedException {
+    documentNumberCursor = Math.max(10, (System.currentTimeMillis() / 1000) % 9_000_000L);
+
+    var report = new SifenHomologationReport();
+
+    // AC-03: a real, actually-submitted CDC per note type to reference — see class Javadoc.
+    String creditNoteReferenceCdc =
+        sendSeedInvoiceForReference(report, material, client, "para NOTA_CREDITO");
+    String debitNoteReferenceCdc =
+        sendSeedInvoiceForReference(report, material, client, "para NOTA_DEBITO");
+
+    runDocumentType(
+        report, material, client, SifenDocumentType.NOTA_CREDITO, creditNoteReferenceCdc);
+    runDocumentType(report, material, client, SifenDocumentType.NOTA_DEBITO, debitNoteReferenceCdc);
+    runDocumentType(report, material, client, SifenDocumentType.AUTOFACTURA, null);
+    runDocumentType(report, material, client, SifenDocumentType.NOTA_REMISION, null);
+    return report;
   }
 
   private String sendSeedInvoiceForReference(

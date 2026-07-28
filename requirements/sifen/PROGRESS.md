@@ -5,8 +5,9 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12, HU-13, HU-14, HU-15 y HU-16
-hechas. Próximo: **HU-17**, la última de la fase (ver "Próximo paso" abajo).
+Fase actual: **Fase 4 completa** (Homologación ante la DNIT) — HU-12 a HU-17, las 6 historias de
+`EP-05`, hechas. Próximo: **Fase 5** (`HU-22`, activación real por tenant), la última fase del plan
+(ver "Próximo paso" abajo).
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -31,21 +32,210 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo. Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **Cierra 2 gaps de schema nuevos, propios de esta historia** (`gOpeCom`/`iTipTra` no permitido para NC/ND — `dCodRes=1216`; grupo `gOpeCom` completo no permitido para nota de remisión — `dCodRes=1201`) — confirmados en vivo, ya no aparecen en ninguna respuesta real de los 44 documentos enviados. AC-02 (incorrectas rechazadas, 5/5 por tipo) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado por el mismo límite externo de HU-13 (`dCodRes=1252`, RUC piloto inactivo) — sigue así hoy para los 4 tipos nuevos también. |
 | HU-15 Probar el envío por lotes de todos los tipos de comprobante | ✅ Done | Ver detalle abajo. **Introduce el WS asíncrono `SiRecepLoteDE`/`SiResultLoteDE`, nunca usado hasta ahora.** AC-03 (incorrectas rechazadas, 5/5, motivo identificable) y AC-04/AC-05 (lote con mezcla de emisor/tipo rechazado antes de procesar, `dCodRes=0363`) verificados en vivo con aserción dura. AC-01/AC-02 (correctas aprobadas, los 5 tipos) quedan bloqueadas por el mismo límite externo de HU-13/HU-14 (`dCodRes=1252`). |
 | HU-16 Probar el registro de todos los eventos exigidos | ✅ Done | Ver detalle abajo. **Cierra el muro `dCodRes=0160` que bloqueaba HU-10/HU-11 desde su creación** — root-cause encontrado y corregido en vivo (ver detalle). AC-02 (anulación de numeración, 5 tipos) y 2 de los 4 eventos de receptor de AC-03 (desconocimiento, notificación de recepción) verificados en vivo con aserción dura, **primer "Aprobado" real de toda esta integración**. AC-01/AC-03 (conformidad/disconformidad/corrección)/AC-05 quedan bloqueados por el mismo límite externo `dCodRes=1252` de HU-13/14/15 (confirmado que sigue vigente) — el canal de eventos en sí queda probado como sano (motivos de rechazo específicos, nunca el `0160` genérico) con aserción dura. |
-| Fase 4 (HU-17, homologación) | ⬜ Next | Última historia de la fase — depende de que existan resultados de HU-13..HU-16 para su reporte consolidado (`SifenHomologationReport.combinedWith`). |
-| Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
+| HU-17 Probar la consulta de documentos y la generación de comprobantes de todos los tipos | ✅ Done | Ver detalle abajo. **Cierra Fase 4.** Reporte final consolidado de EP-05 (HU-12..HU-17) construido y corrido en vivo — ver detalle. |
+| Fase 5 (HU-22, activación real por tenant) | ⬜ Next | |
 
-**Próximo paso al reanudar el loop:** HU-16 (Fase 4, registro de todos los eventos exigidos) está
-hecha — ver detalle abajo para el diagnóstico completo del muro `0160` (ahora resuelto) y el reporte
-real. Queda solo **HU-17** (consulta de documentos + comprobantes de todos los tipos), la última de
-Fase 4 — depende de que existan resultados de HU-13..HU-16 para su reporte consolidado
-(`SifenHomologationReport.combinedWith`). El bloqueo externo que HU-13 documentó (RUC piloto
-reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue confirmado vigente hoy (re-verificado al
-iniciar HU-16) — sigue afectando todo lo que dependa de un DTE genuinamente aprobado por SIFEN
-(consulta de documentos aprobados, comprobantes reales, etc.), así que es razonable esperar que siga
-afectando partes de HU-17 también; no hace falta esperar a que se resuelva para implementarla (mismo
-patrón `Assumptions.assumeTrue` que las historias anteriores), pero si ese estado cambia en algún
-momento vale la pena re-ejecutar los tests guardados de HU-13..HU-16 para confirmar más "Aprobado"
-reales.
+**Próximo paso al reanudar el loop:** HU-17 (Fase 4, consulta de documentos + comprobantes de todos
+los tipos) está hecha — **cierra Fase 4 (EP-05) por completo.** El reporte final consolidado
+(`SifenHomologationFinalReportTest`, ver detalle abajo) corrió en vivo y confirma, en un solo reporte,
+el estado real de las 6 historias de homologación (HU-12..HU-17). El bloqueo externo que HU-13
+documentó (RUC piloto reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue confirmado vigente hoy
+(re-verificado una vez más al iniciar HU-17) — sigue siendo el único obstáculo real pendiente de todo
+EP-05; ninguna otra historia de esta fase tiene un defecto de código abierto. Queda **Fase 5** (`HU-22`,
+activación real por tenant) como la última fase del plan — no depende de que el `1252` se resuelva
+para empezar, pero conviene re-ejecutar `SifenHomologationFinalReportTest` (y los tests guardados
+individuales de HU-13..HU-17) el día que ese estado cambie, para confirmar más "Aprobado" reales antes
+de dar por buena una activación real.
+
+## HU-17 — Probar la consulta de documentos y la generación de comprobantes de todos los tipos (Done)
+
+Épica EP-05, Fase 4. **La última historia de la fase** — converge el trabajo de HU-14 (otros tipos
+de documento), HU-15 (envío por lotes) y HU-16 (todos los eventos, y el fix del muro `0160` que hizo
+posible que cualquier envío llegue a validación de contenido real). Su AC-05 es, literalmente, el
+entregable de todo `EP-05`: un único reporte final que consolida el resultado de HU-12 a HU-17.
+
+### Re-verificación en vivo del bloqueo externo: `dCodRes=1252` sigue vigente
+
+Antes de tocar código, se re-probó en vivo el mismo chequeo que HU-13/14/15/16 ya hicieron al empezar
+(correr `SifenHomologationInvoiceSubmissionLiveTest` tal cual, sin cambios): las 5 facturas
+"correctas" siguen volviendo `dCodRes=1252 "El RUC del emisor se encuentra inactivo"` — el mismo
+límite externo del registro de contribuyentes de SIFEN, sin cambios desde HU-16. Esto confirma que
+ningún documento de ninguno de los 5 tipos ha llegado nunca a `Aprobado` real en esta integración
+(solo eventos lo lograron, HU-16) — así que AC-01/AC-02/AC-03/AC-04 de esta historia, en su forma más
+literal ("sobre documentos aprobados"), siguen bloqueados por el mismo motivo externo, no por un
+defecto de código.
+
+### AC-01: `SifenDocumentQueryClient` ya era genérico por tipo de documento — verificado, no asumido
+
+La consigna pedía comprobar, no asumir, si el cliente de consulta (HU-07) necesitaba generalizarse
+para los otros 4 tipos. Releyendo su código: `xContenDE` se parsea como un string plano
+(`SifenXmlUtils.firstDescendantText(consResponse, "xContenDE")`) sin ninguna suposición sobre su
+contenido interno — el propio Javadoc de la clase ya documentaba que el XSD real tipa ese elemento
+como `xs:string` opaco, no como XML estructurado. **No hizo falta ningún cambio de comportamiento en
+el parsing.** Lo que sí faltaba era el mismo seam que HU-13/HU-15 ya abrieron para sus propios
+clientes: un `queryWithClient(HttpClient, String cdc, String logContext)` extraído de
+`query(tenantId, cdc, testTrustManagers)`, para que un test en vivo pudiera consultar sin depender de
+un tenant/certificado de base de datos. Se aplicó el mismo patrón exacto (`sendWithClient`/
+`queryWithClient` package-visible, `query(tenantId, ...)` delegando sin cambiar su comportamiento
+público).
+
+### AC-03: `SifenKudePdfService` generalizado a los 5 tipos de documento
+
+A diferencia del cliente de consulta, el generador de KuDE sí estaba atado a la entidad `Invoice`
+persistida (`invoice.getIssuedAt()`/`getInvoiceNumber()`/`getSifenQrUrl()`/
+`getSifenPublicConsultationUrl()`/`getClient()`) — imposible de reusar tal cual para nota de
+crédito/débito/autofactura/nota de remisión, ninguno de los cuales esta peluquería persiste como
+`Invoice` (nunca los emite en operación real; existen solo como construcciones en memoria de los
+tests de homologación de HU-14/15/16/17). **Se extrajo el núcleo de renderizado (`render`) para
+tomar valores planos** (`SifenDocumentType`, `Instant issuedAt`, `documentNumber`, `qrUrl`,
+`publicConsultationUrl`, `Client` nullable) en vez de leerlos de un `Invoice` — `buildKudePdf` (el
+único punto de entrada de producción, sin cambios de comportamiento) sigue resolviendo esos valores
+desde un `Invoice` real igual que antes, siempre con `SifenDocumentType.FACTURA`; el nuevo
+`buildHomologationKudePdf` es el punto de entrada que esta historia agrega para los otros 4 tipos,
+deliberadamente sin pasar por `requireApprovedInvoice` (no hay ningún `Invoice` en la base de datos
+que chequear — alcance de homologación, no una capacidad de producción nueva, tal como aclara la
+introducción de `EP-05`).
+
+**El único cambio visual que los 5 tipos necesitan: una leyenda "Tipo de comprobante"** con
+`SifenDocumentType.description()` (el literal exacto del catálogo real que HU-14 ya confirmó:
+"Factura electrónica", "Nota de crédito electrónica", etc.), agregada como la primera línea del
+bloque de timbrado. Se revisó el resto del layout (tabla de ítems, totales, bloque de QR/leyendas,
+numeración de páginas) contra el Manual Técnico V150 y contra los propios hallazgos de HU-08 — nada
+más exige una estructura de KuDE visiblemente distinta por tipo de documento; el mismo template
+alcanza para los 5, con esa única leyenda como diferenciador.
+
+### El reporte de esta historia: canal verificado en vivo para los 5 tipos, aprobación real bloqueada
+
+`SifenHomologationDocumentQueryAndKudeLiveTest` (nuevo, guardado) envía 3 documentos reales de cada
+uno de los 5 tipos (más una factura semilla de referencia para nota de crédito/débito, mismo truco de
+HU-14/15), y para cada tipo:
+
+- **AC-01 (consulta por CDC):** consulta los 3 CDCs enviados. **Hallazgo confirmado en vivo:** un
+  documento rechazado por el `1252` externo nunca llega a existir formalmente en el registro de
+  SIFEN — consultarlo devuelve `dCodRes=0420 "Documento No Existe en SIFEN o ha sido Rechazado"`, el
+  mismo código que HU-07 ya había documentado para un CDC jamás enviado. Esto es, en sí mismo, una
+  prueba real y útil: la salud del canal de consulta (nunca una falla de transporte, siempre una
+  respuesta específica e interpretable) se verifica con aserción dura para los 5 tipos — 15
+  consultas reales, 15 respuestas interpretables. El contenido completo (`xContenDE`) de un documento
+  genuinamente aprobado, y la propia "aprobación" de al menos 3 por tipo, quedan con
+  `Assumptions.assumeTrue` (bloqueadas por el `1252`).
+- **AC-02/AC-04 (QR):** para 2 de los 3 documentos por tipo, se golpea en vivo la URL pública real de
+  consulta (`https://ekuatia.set.gov.py/consultas-test/qr?...`, GET simple sin mTLS, mismo hallazgo
+  de HU-09) — **HTTP 200 con la SPA real "Consultas" de SIFEN (marca `consultaspublicasApp`) para
+  los 5 tipos, con aserción dura**, y el dominio confirmado como el de ambiente de prueba
+  (`consultas-test`, nunca `consultas` de producción) — igual que HU-09 ya estableció, esta vez
+  extendido a los otros 4 tipos. El veredicto real de "SIFEN reconoce el documento como válido" lo
+  interpreta y renderiza la propia SPA Angular client-side (confirmado por HU-09: la misma URL con
+  parámetros deliberadamente inválidos también responde HTTP 200 con el mismo shell) — este sistema
+  nunca lo interpreta, por diseño, así que ese veredicto de negocio queda con `Assumptions.assumeTrue`
+  además de estar bloqueado por el mismo `1252` (no hay un documento real aprobado que la SPA pueda
+  reconocer como válido hoy).
+- **AC-03 (KuDE):** se genera el KuDE del primer documento de cada tipo vía
+  `buildHomologationKudePdf` — **aserción dura, para los 5 tipos**: el PDF se genera, tiene al menos
+  1 página, contiene el CDC agrupado (`SifenKudePdfService.groupControlNumber`) y la leyenda de tipo
+  correcta (`SifenDocumentType.description()`). Esto no depende de la aprobación real de SIFEN (es
+  renderizado puramente local a partir de datos ya conocidos), así que se afirma sin `assumeTrue` —
+  solo la premisa "sobre un documento genuinamente aprobado" queda condicionada al mismo `1252`.
+
+Reporte real (2026-07-28) contra `sifen-test.set.gov.py`, 5 tipos × 3 documentos + 1 semilla = 16
+envíos reales, 15 consultas reales, 10 verificaciones de QR reales, 5 KuDE generados:
+
+```
+Categoría                                          | Resultado
+Envío "aprobado" (16 documentos, los 5 tipos)       | 0/16 — bloqueado por 1252 (externo)
+Consulta por CDC — canal (15 consultas)             | 15/15 OK (0420, nunca 0160/timeout)
+Consulta — contenido completo (aprobado)            | 0/15 — bloqueado por 1252 (externo)
+QR alcanzable + ambiente de prueba (10 chequeos)     | 10/10 OK (HTTP 200, consultas-test)
+QR reconocido como válido (aprobado)                | 0/10 — bloqueado por 1252 + veredicto client-side
+KuDE generado con CDC y leyenda correctos (5 tipos)  | 5/5 OK
+```
+
+### AC-05: el reporte final consolidado de todo EP-05 — construido y corrido en vivo
+
+**Decisión de diseño: extraer el cuerpo de cada `@Test` de HU-12..HU-17 en un método
+`run(...)` package-visible que retorna su propio `SifenHomologationReport`,** sin cambiar ningún
+comportamiento ni aserción existente (los métodos `@Test` originales siguen llamando a `run(...)` y
+haciendo exactamente las mismas aserciones que antes). Esto fue necesario porque
+`SifenHomologationReport` (por diseño, desde HU-12) no persiste nada entre clases de test — cada
+reporte vive solo mientras dura su propio método de test — así que la única forma de consolidar
+resultados **reales**, en vez de transcribir a mano la salida de 6 clases distintas, es que un solo
+proceso llame al `run(...)` de cada historia y combine los reportes resultantes con
+`SifenHomologationReport.combinedWith` (el seam que HU-12 dejó preparado y que ninguna historia había
+usado hasta ahora).
+
+**Nuevo `SifenHomologationFinalReportTest`** hace exactamente eso: carga el `.p12` piloto una sola
+vez, construye el material/certificado y ambos `HttpClient` (mTLS y plano), instancia las 6 clases de
+test de EP-05 (`SifenHomologationConnectivityLiveTest`, `...InvoiceSubmissionLiveTest`,
+`...OtherDocumentTypesLiveTest`, `...BatchSubmissionLiveTest`, `...EventsLiveTest`, y el nuevo
+`...DocumentQueryAndKudeLiveTest` de esta misma historia), llama a cada `run(...)`, combina los 6
+reportes con `combinedWith`, imprime el reporte único resultante más un resumen por historia
+(pasaron/total), y afirma con aserción dura que la consolidación es genuina (las 6 historias
+aportaron al menos una fila cada una — nunca se cayó una silenciosamente).
+
+**Nota operativa, documentada explícitamente en el Javadoc de la clase:** correr este test duplica,
+por una vez, todo el tráfico real que HU-12..HU-17 ya generan contra el sandbox de SIFEN (~150
+peticiones reales más) — deliberado, ya que es la única forma de producir el artefacto único que la
+DNIT necesita ver, y hereda sin cambios la misma disciplina de espaciado/reintento
+(`PACING_DELAY`/reintento solo ante falla de transporte) que HU-12 estableció para mitigar el
+throttling real que esa historia documentó. Como todo test de homologación de Fase 4, solo corre con
+el `.p12` piloto presente (gitignored) — nunca en CI ni en un checkout limpio.
+
+**Corrido en vivo (2026-07-28) — el reporte final consolidado real de EP-05:**
+
+```
+Historia | Pasaron    | Total
+HU-12    | 14         | 14
+HU-13    | 5          | 10
+HU-14    | 20         | 42
+HU-15    | 13         | 39
+HU-16    | 14         | 14
+HU-17    | 31         | 71
+```
+
+Este es el estado real, verificado en vivo el mismo día, de las 6 historias de `EP-05`: **HU-12 y
+HU-16 pasan al 100%** (conectividad seguro/rechazado por los 7 servicios; todos los eventos que no
+necesitan un DTE previamente aprobado, más el canal de eventos verificado sano para los que sí lo
+necesitan). **HU-13, HU-14, HU-15 y HU-17 tienen filas que no pasan — todas ellas, sin excepción,
+son el mismo límite externo `dCodRes=1252`** (el envío "correcto" en sí, la consulta de contenido
+completo, o el veredicto de validez del QR, todos condicionados a una aprobación real que este
+ambiente de SIFEN aún no concede al RUC piloto) — ninguna es un defecto de código abierto en esta
+integración. El test asociado a cada una de esas 4 historias ya usa `Assumptions.assumeTrue`
+exactamente en esos tramos, así que ninguna falla el build — el número de "Total" en la tabla de
+arriba incluye intencionalmente esas filas bloqueadas (para que el reporte sea honesto sobre el
+alcance real logrado), no solo las que se afirmaron con aserción dura.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+- `SifenDocumentQueryClient.java` — nuevo `queryWithClient(HttpClient, String cdc, String
+  logContext)` package-visible, extraído de `query(tenantId, cdc, testTrustManagers)` sin cambiar su
+  comportamiento público; sin cambios de parsing (ya era agnóstico al tipo de documento).
+- `SifenKudePdfService.java` — `render`/`buildFilename` generalizados a valores planos
+  (`SifenDocumentType`, `Instant`, `documentNumber`, `qrUrl`, `publicConsultationUrl`, `Client`
+  nullable) en vez de leerlos de un `Invoice`; nueva leyenda "Tipo de comprobante"; nuevo
+  `buildHomologationKudePdf` (punto de entrada sin `Invoice`, para los 4 tipos que esta peluquería no
+  emite); `buildKudePdf` (producción, sin cambios de comportamiento) sigue resolviendo los mismos
+  valores desde un `Invoice` real, siempre con `SifenDocumentType.FACTURA`.
+
+**Tests backend**:
+- `SifenDocumentQueryClientTest.java`/`SifenKudePdfServiceTest.java` — sin cambios de aserciones, solo
+  verificados que siguen pasando tras la extracción/generalización (ambos pasan sin modificar).
+- `SifenHomologationDocumentQueryAndKudeLiveTest.java` (nuevo, guardado) — el reporte real de arriba
+  es su salida cuando corre con el `.p12` piloto presente; aserción dura sobre la salud del canal de
+  consulta, la alcanzabilidad/dominio del QR, y la generación correcta del KuDE (los 5 tipos);
+  `Assumptions.assumeTrue` sobre el tramo "sobre un documento genuinamente aprobado".
+- `SifenHomologationConnectivityLiveTest.java`/`...InvoiceSubmissionLiveTest.java`/
+  `...OtherDocumentTypesLiveTest.java`/`...BatchSubmissionLiveTest.java`/`...EventsLiveTest.java` —
+  cada uno refactorizado para extraer un método `run(...)` package-visible que retorna su
+  `SifenHomologationReport` (mismo comportamiento/aserciones que antes, ahora reutilizable); se agregó
+  también `SifenHomologationConnectivityLiveTest.loadInvalidKeyStore()` (package-visible) para que el
+  reporte final pueda construir el mismo certificado autofirmado de prueba sin duplicar sus
+  constantes.
+- `SifenHomologationFinalReportTest.java` (nuevo, guardado) — el reporte final consolidado real de
+  arriba es su salida; aserción dura sobre que la consolidación incluyó las 6 historias.
+
+**Playwright**: ninguno — mismo patrón que toda historia de `EP-05` (capacidad de servicio/prueba de
+homologación sin pantalla propia; la peluquería nunca consulta documentos por CDC ni genera
+comprobantes de los otros 4 tipos en operación real, ya cubierta por HU-07/HU-09 y HU-08
+respectivamente para factura).
 
 ## HU-16 — Probar el registro de todos los eventos exigidos (Done)
 
