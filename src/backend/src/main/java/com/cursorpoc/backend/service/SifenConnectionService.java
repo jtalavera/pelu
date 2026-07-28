@@ -132,6 +132,22 @@ public class SifenConnectionService {
     }
   }
 
+  /**
+   * SIFEN HU-06: exposes the same authenticated mTLS client this class uses internally for the WSDL
+   * connectivity check, so {@code SifenDocumentReceptionClient} can POST a signed document and read
+   * the response "en la misma conexión" (AC-01) instead of opening a second one.
+   */
+  public HttpClient buildAuthenticatedClient(long tenantId) throws GeneralSecurityException {
+    return buildAuthenticatedClient(tenantId, null);
+  }
+
+  HttpClient buildAuthenticatedClient(long tenantId, javax.net.ssl.TrustManager[] testTrustManagers)
+      throws GeneralSecurityException {
+    SifenActiveCertificateMaterial material = certificateService.requireActiveCertificate(tenantId);
+    validateRucMatches(tenantId, material.certificate());
+    return buildMutualTlsClient(material, testTrustManagers);
+  }
+
   private void validateRucMatches(long tenantId, X509Certificate certificate) {
     String certificateRuc = extractRuc(certificate);
     String tenantRuc =

@@ -87,12 +87,22 @@ public class SifenDocumentSigningService {
    * in from elsewhere.
    */
   public SifenSignedDocument signInvoice(long tenantId, long invoiceId) {
+    return signInvoice(tenantId, invoiceId, LocalDateTime.now(timeProperties.zoneId()));
+  }
+
+  /**
+   * SIFEN HU-06: lets the caller pin the signature timestamp instead of always using "now" — {@code
+   * SifenInvoiceSubmissionService} reuses the invoice's first-ever signature timestamp across
+   * retries, since AC-07's 72-hour transmission window is measured from that original instant, not
+   * from whenever a retry happens to run.
+   */
+  public SifenSignedDocument signInvoice(
+      long tenantId, long invoiceId, LocalDateTime signatureTimestamp) {
     SifenActiveCertificateMaterial material = certificateService.requireActiveCertificate(tenantId);
 
     SifenInvoiceHeader header = headerService.buildHeader(tenantId, invoiceId);
     SifenInvoiceDetail detail = detailService.buildDetail(tenantId, invoiceId);
     SifenControlNumberFields cdcFields = controlNumberService.parse(header.controlNumber());
-    LocalDateTime signatureTimestamp = LocalDateTime.now(timeProperties.zoneId());
 
     Document unsigned = xmlService.buildDocument(header, detail, cdcFields, signatureTimestamp);
     SifenSignedDocument signed = sign(material, unsigned, signatureTimestamp);

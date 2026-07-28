@@ -5,7 +5,7 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 1** (Primera interacción real con el Web Service de SIFEN).
+Fase actual: **Fase 1** (Primera interacción real con el Web Service de SIFEN) — **completa**.
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -18,25 +18,180 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-02 Datos identificación/timbrado/emisor/receptor | ✅ Done | Ver detalle abajo. |
 | HU-03 Servicios facturados y totales | ✅ Done | Ver detalle abajo. |
 | HU-04 Firmar digitalmente | ✅ Done | Ver detalle abajo. |
-| HU-06 Enviar factura y registrar resultado | ⬜ Next | |
-| Fase 2 (HU-07, HU-08, HU-09, HU-19) | ⬜ Todo | |
+| HU-06 Enviar factura y registrar resultado | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (rechazo); ver limitación de "Aprobado" abajo. |
+| Fase 2 (HU-07, HU-08, HU-09, HU-19) | ⬜ Next | |
 | Fase 3 (HU-10, HU-11) | ⬜ Todo | |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-06 (Enviar una factura a SIFEN y registrar el
-resultado), primer paso de EP-02 ahora que HU-04 deja un documento firmado listo. HU-06 va a
-necesitar: `SifenConnectionService.connect()` (HU-05) para el canal mTLS, el XML firmado de
-`SifenDocumentSigningService.signInvoice()` (HU-04, serializado con
-`SifenDocumentXmlService.serialize()`) como cuerpo del request, y armar el sobre SOAP 1.2 que pide
-el WSDL real de `rEnviDe` (`Schema XML 2: siRecepDE_v150.xsd`) — el manual describe el mensaje de
-entrada/respuesta en las secciones alrededor de `SiRecepDE_v150.xsd`/`resRecepDE_v150.xsd`/
-`ProtProcesDE_v150.xsd` (ver tabla de Schemas XML, sección 7.1). Falta revisar en el manual el
-formato exacto de esa respuesta (aprobado/rechazado, código de motivo) para saber qué persistir.
-También falta decidir dónde persistir el resultado del envío (¿tabla nueva `sifen_submissions`,
-o campos nuevos en `Invoice`? — HU-02 ya agregó `sifenControlNumber`/`sifenSecurityCode` a
-`Invoice`, lo más consistente es seguir esa convención en vez de una tabla aparte, salvo que HU-12
-necesite un historial de múltiples intentos por factura).
+**Próximo paso al reanudar el loop:** implementar HU-07 (Verificar en SIFEN el estado de una
+factura pendiente), primer paso de Fase 2 — Cerrar el ciclo de vida de la factura ya enviada. HU-07
+consulta el estado de una factura que HU-06 dejó en `PENDING_VERIFICATION` (sin respuesta de
+SIFEN); a diferencia de HU-06, esta historia **sí** tiene una pantalla propia (AC-04: "el usuario
+puede disparar la consulta manualmente con un botón"), así que va a necesitar, por primera vez en
+esta integración, un controller HTTP + alguna UI (probablemente en una pantalla de detalle de
+factura, que hoy no está claro si existe — investigar `InvoiceController`/páginas de facturación
+antes de empezar). El manual describe el WS de consulta (`SiConsDE`, mencionado en sección 7.3.1 de
+este mismo documento) — todavía no se investigó su XSD/SOAP en detalle (`SiConsultaDE_v150.xsd` y
+similares, ver tabla de Schemas XML sección 7.1). HU-19 (listado de certificados) puede
+implementarse en paralelo ya que solo depende de HU-18/HU-20 (Fase 1, ya completa) — es la primera
+vez en el plan que hay dos HUs de la misma fase sin dependencia entre sí; el loop decidirá cuál
+tomar primero según cuál quede más simple de aislar en un contexto limpio.
+
+## HU-06 — Enviar una factura a SIFEN y registrar el resultado (Done)
+
+Cierra la Fase 1: combina `SifenConnectionService` (HU-05) + `SifenDocumentSigningService` (HU-04)
+para efectivamente enviar un documento y registrar lo que SIFEN responde. **Esta historia fue la
+primera con verificación en vivo de punta a punta contra el ambiente de prueba real** (no solo
+conectividad TLS como HU-05, sino un envío SOAP real con un documento firmado real) — ver
+"Verificación en vivo" abajo para el procedimiento y los tres hallazgos que solo se podían descubrir
+así, no leyendo el manual.
+
+**Verificación en vivo (2026-07-28), procedimiento para reproducir:** se generó un documento firmado
+real reutilizando los mismos datos de fixture que `SifenDocumentSigningServiceTest` (RUC piloto
+`1137152-8`, timbrado `1137152`) pero con el `.p12` real (`requirements/sifen/*.p12`, gitignored) en
+vez del fixture autofirmado, vía un test JUnit temporal (no commiteado) que llamaba directamente a
+`SifenDocumentXmlService.buildDocument` + `SifenDocumentSigningService.sign` y volcaba el XML a un
+archivo. Ese XML se envolvió a mano en un sobre SOAP y se envió con `curl --cert-type P12 --cert
+archivo.p12:contraseña -X POST https://sifen-test.set.gov.py/de/ws/sync/recibe.wsdl`. Quien necesite
+reverificar esto en el futuro (p.ej. tras tocar `SifenDocumentXmlService`/`SifenDocumentSigningService`)
+puede repetir el mismo procedimiento — no quedó como test automatizado por la misma razón que HU-05
+(el `.p12` real y su contraseña no están presentes en un checkout limpio ni en CI).
+
+**Hallazgo 1 (el más importante): el endpoint real para POSTear no es la URL del WSDL.** El manual
+(sección 7.10) solo publica la URL del WSDL (`.../de/ws/sync/recibe.wsdl?wsdl`, la que HU-05 ya usa
+como chequeo de conectividad). Se obtuvo el WSDL real en vivo (mismo `curl`, sin `-X POST`) y su
+propio `<soap12:address location="...">` apunta a esa misma URL **sin** el query string `?wsdl` —
+`https://sifen-test.set.gov.py/de/ws/sync/recibe.wsdl`. `SYNC_RECIBE_PATH` en
+`SifenDocumentReceptionClient` es literalmente eso.
+
+**Hallazgo 2: el HTTP status code NO indica de forma confiable aprobado/rechazado.** Se probó en
+vivo con tres cuerpos distintos: (a) SOAP con XML claramente mal formado → **HTTP 400**, cuerpo
+`rRetEnviDe` con `dCodRes=0160 "XML Mal Formado."`; (b) SOAP bien formado pero con un `<DE>` vacío
+(sin firma, sin casi ningún campo) → **HTTP 200**, cuerpo `rRetEnviDe` con `dCodRes=0160 "Firma
+difiere del estándar..."`; (c) el documento firmado real completo (faltándole solo el grupo QR, ver
+Hallazgo 3) → **HTTP 200**, cuerpo `rRetEnviDe` con 4 `gResProc` distintos, cada uno con su propio
+error de schema. Es decir: **tanto 400 como 200 pueden traer un cuerpo `rRetEnviDe` perfectamente
+parseable**, y SIFEN no reserva el código HTTP para señalar rechazo. Por eso
+`SifenDocumentReceptionClient.send()` intenta parsear el cuerpo de la respuesta sin mirar el status
+code — solo cae a "sin respuesta" (`Optional.empty()`, AC-05) si el cuerpo no es XML válido o la
+conexión falla a nivel de transporte.
+
+**Hallazgo 3: `dEstRes` no queda anidado dentro de `gResProc` como documenta el manual.** Tanto la
+tabla de campos (sección 9.1.3, `Schema XML 4`, fila `PP050`) como el propio ejemplo de SOAP
+resuelto del manual (sección 7.4) muestran `dEstRes` como hijo de `gResProc`. En los tres envíos
+reales de arriba, `dEstRes` vino siempre como **hijo directo de `rProtDe`, hermano de `gResProc`** —
+y `gResProc` puede repetirse (se observaron 4 en el caso (c), uno por cada error de validación de
+schema), cada uno con su propio `dCodRes`/`dMsgRes`. `SifenDocumentReceptionClient` parsea buscando
+`dEstRes`/`dProtAut`/`dCodRes`/`dMsgRes` por nombre local en cualquier punto del subárbol de
+`rProtDe`, no asumiendo un anidamiento fijo — tolera ambas formas (la real y la documentada) sin
+cambios.
+
+**Un cuarto hallazgo, este sí en código propio (no en la respuesta de SIFEN): `xsi:schemaLocation`
+mal formado.** El primer intento de envío del documento firmado real completo fue rechazado con
+`dCodRes=0160 "No se informó el schema en el XML"`, **antes** de llegar a cualquier validación de
+contenido. La causa: `SifenDocumentXmlService` (HU-04) generaba
+`xsi:schemaLocation="http://ekuatia.set.gov.py/sifen/xsd/siRecepDE_v150.xsd"` (namespace y nombre de
+schema concatenados con `/`) — así es como aparece en la mayoría de los ejemplos del manual (secciones
+7.2.2.1/7.2.2.2), pero la convención estándar de XML Schema para `xsi:schemaLocation` es un **par
+separado por espacio** (namespace URI, espacio, URI del documento de schema) — que es como aparece
+en el ejemplo *anterior* del propio manual (sección 7.2.2). SIFEN exige el par separado por espacio,
+no la forma concatenada — corregido en `SifenDocumentXmlService` a `SIFEN_NS + " siRecepDE_v150.xsd"`
+(con espacio). **Esto corrige un bug real de HU-04** que ningún test unitario podía detectar (ningún
+test de HU-04 asertaba sobre el valor de `schemaLocation`) — solo se encontró al enviar un documento
+real contra el servidor real.
+
+**Límite real encontrado: "Aprobado" no se pudo verificar en vivo durante esta historia.** Tras
+corregir el Hallazgo 4, el envío del documento firmado real completo (con todos los datos de HU-02/
+HU-03/HU-04 correctamente poblados) todavía fue rechazado por schema — el motivo relevante:
+`"Elemento esperado: gCamFuFD dentro de: rDE"`. `gCamFuFD/dCarQR` (grupo J del manual, sección
+"Campos fuera de la Firma Digital") es el código QR del comprobante, obligatorio en todo DE — y
+calcular su hash es explícitamente trabajo de HU-08 (usa el CSC de "Configuración del ambiente de
+pruebas", ver spec), no de HU-04/HU-06. Es decir: **ningún documento de este sistema puede llegar a
+"Aprobado" real hasta que exista HU-08** — no es un bug de HU-06, es una dependencia real entre
+historias que el plan de fases no hace explícita. Los otros 3 errores de esa misma respuesta
+(`dFeFinT` inválido, `dDesUniMed` inválido, `dBasExe` faltante en `gCamIVA`) son gaps de compliance
+de schema menores, dentro del alcance ya documentado como deliberadamente acotado por HU-04
+("cerrar compliance total de schema es trabajo de homologación, HU-12..HU-17") — no se tocaron en
+esta historia para no expandir su alcance; van a aparecer de nuevo en la homologación real.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `domain/enums/SifenSubmissionStatus.java` — `PENDING_VERIFICATION`/`APPROVED`/
+  `APPROVED_WITH_OBSERVATION`/`REJECTED`. Los tres últimos mapean 1-1 desde el `dEstRes` literal de
+  SIFEN (`"Aprobado"`/`"Aprobado con observación"`/`"Rechazado"`); `PENDING_VERIFICATION` es propio
+  del sistema (AC-05), SIFEN no tiene ese estado.
+- `domain/Invoice.java` — 6 campos nuevos: `sifenSignedAt` (primera fecha/hora de firma,
+  persistida una sola vez — ver "Decisión de diseño" abajo), `sifenSubmissionStatus`,
+  `sifenSubmissionProtocolNumber` (dProtAut), `sifenSubmissionResultCode` (dCodRes del primer
+  `gResProc`), `sifenSubmissionMessage` (todos los `dMsgRes`, unidos con `"; "`),
+  `sifenSubmittedAt` (momento de la última respuesta *real* recibida — permanece `null` mientras el
+  estado sea `PENDING_VERIFICATION`, ver más abajo por qué eso importa para AC-07).
+- Migración `V22__sifen_invoice_submission.sql`.
+- `service/SifenDocumentReceptionClient.send(tenantId, signedXml)` — arma el sobre SOAP 1.2
+  (`rEnviDe`/`dId`/`xDE`, sección 9.1.1), lo postea vía
+  `SifenConnectionService.buildAuthenticatedClient(tenantId)` (mismo mTLS que HU-05, método nuevo
+  que reutiliza la resolución de certificado + validación de RUC ya existente, expuesto para que
+  AC-01 — "envía y espera la respuesta en la misma conexión" — sea literal), y parsea la respuesta
+  según los Hallazgos 2/3 de arriba. Devuelve `Optional<SifenSubmissionResult>` — vacío si no hubo
+  respuesta interpretable (AC-05), nunca lanza para una falla de comunicación. Una
+  `ResponseStatusException` de resolver el certificado (sin certificado vigente, RUC no coincide)
+  **sí** se propaga sin capturar — es un error de configuración, no de comunicación.
+- `service/SifenInvoiceSubmissionService.submit(tenantId, invoiceId)` — orquestador. Dos
+  transacciones separadas (no una sola envolviendo todo el método): la llamada de red puede tardar
+  hasta 30s y no debe mantener abierta una transacción de base de datos mientras tanto.
+  1. `prepareForSubmission` (transacción corta): AC-06 (ya Aprobado/Aprobado con observación →
+     `SIFEN_INVOICE_ALREADY_APPROVED`, 409), resuelve/persiste `sifenSignedAt` la primera vez, AC-07
+     (ver "Decisión de diseño" abajo).
+  2. Firma (`SifenDocumentSigningService.signInvoice(tenantId, invoiceId, signedAt)`, nuevo overload
+     de 3 argumentos — ver abajo) + envío (`SifenDocumentReceptionClient.send`), sin transacción
+     abierta.
+  3. `recordResult` (transacción corta): persiste el resultado; solo pisa `sifenSubmittedAt` si
+     `responseReceived` es verdadero.
+- `SifenDocumentSigningService.signInvoice` — nuevo overload de 3 argumentos
+  (`signInvoice(tenantId, invoiceId, LocalDateTime signatureTimestamp)`); el de 2 argumentos ya
+  existente delega a este con `now()`, sin romper ningún llamador existente (solo los tests de
+  HU-04, que siguen pasando sin cambios).
+- `SifenConnectionService.buildAuthenticatedClient(tenantId)` — nuevo método público, extrae la
+  misma lógica de resolución de certificado + validación de RUC + construcción de `HttpClient` mTLS
+  que `connect()` ya usaba internamente, para que `SifenDocumentReceptionClient` no duplique el
+  handshake TLS.
+- `SifenDocumentXmlService` — fix del Hallazgo 4 (`xsi:schemaLocation` con espacio, no `/`).
+
+**Decisión de diseño clave: `sifenSignedAt` se persiste una sola vez y AC-07 se mide contra ese
+instante fijo, no contra "ahora" en cada intento.** Sin esto, cada reintento de envío volvería a
+firmar con la hora actual (`SifenDocumentSigningService.signInvoice(tenantId, invoiceId)` de 2
+argumentos siempre usaba `now()`), y la ventana de 72 horas del manual ("La transmisión del DE
+firmado digitalmente contempla un plazo de hasta 72 horas posteriores a la firma digital", sección
+7.x) nunca podría vencerse — el propio código estaría re-firmando con una fecha siempre fresca. El
+overload de 3 argumentos existe exactamente para que el orquestador controle ese instante.
+
+**Decisión de diseño: AC-07 solo bloquea si la factura nunca recibió una respuesta real antes
+(`sifenSubmittedAt == null`), no simplemente "no fue Aprobada".** El criterio dice literalmente "sin
+haber sido enviada antes" — se interpretó como "sin haber recibido nunca una respuesta real de
+SIFEN", no "sin haber sido aprobada" (eso ya lo cubre AC-06 aparte). Consecuencia: una factura
+`REJECTED` o `APPROVED_WITH_OBSERVATION` que se reintenta mucho después de las 72h **no** queda
+bloqueada por AC-07 — solo una que quedó en `PENDING_VERIFICATION` (nunca hubo respuesta) y que se
+intenta reenviar directamente en vez de usar HU-07 (verificar estado) sigue bloqueada indefinidamente
+tras vencer la ventana. Esto empuja al operador hacia el flujo correcto (verificar antes de
+reintentar a ciegas) sin impedir corregir y reenviar una factura rechazada.
+
+**Frontend**: ninguno. Ninguna AC de HU-06 pide un disparador manual (a diferencia de HU-07 AC-04,
+que sí pide un botón) — mismo patrón que HU-01/02/03/04/05/21: capacidad de servicio sin pantalla,
+consumida por historias futuras. La activación real por tenant y el enrutamiento desde el flujo
+normal de emisión de facturas son HU-22 (Fase 5), que todavía no existe.
+
+**Tests**: `SifenDocumentReceptionClientTest` (7 casos, mismo patrón de `HttpsServer` local que
+`SifenConnectionServiceTest`: rechazo con un solo `gResProc`, rechazo con múltiples `gResProc` unidos
+en un solo mensaje, aprobado con número de trámite, aprobado con observación, sin respuesta por
+servidor inalcanzable, sin respuesta por cuerpo no-XML, estructura del sobre SOAP enviado). Los
+cuerpos de respuesta usados en los tests son copias literales de lo observado en vivo (Hallazgos
+2/3), no inventados. `SifenInvoiceSubmissionServiceTest` (11 casos: los tres estados de SIFEN
+persistidos correctamente, pendiente de verificación sin pisar `sifenSubmittedAt`, AC-06 para
+Aprobado y para Aprobado con observación, AC-07 bloqueando y permitiendo según los 72h, AC-07 no
+bloqueando un reintento que ya tuvo respuesta antes aunque esté vencido, `sifenSignedAt` persistido
+una sola vez y reutilizado en un segundo intento, factura no encontrada). **Sin Playwright** — mismo
+precedente que HU-01/02(salvo AC-05)/03/04/05/21: ninguna AC de HU-06 tiene pantalla propia que
+ejercitar.
 
 ## HU-04 — Firmar digitalmente el documento (Done)
 

@@ -62,7 +62,13 @@ public class SifenDocumentXmlService {
 
     Element rDE = doc.createElementNS(SIFEN_NS, "rDE");
     rDE.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xsi", XSI_NS);
-    rDE.setAttributeNS(XSI_NS, "xsi:schemaLocation", SIFEN_NS + "/siRecepDE_v150.xsd");
+    // Standard XSD convention: xsi:schemaLocation pairs a namespace URI with its schema document
+    // URI, space-separated — NOT concatenated with a slash. The manual's own example (sección
+    // 7.2.2.1) uses the slash-joined form, but the real SIFEN test server rejects that with
+    // dCodRes=0160 "No se informó el schema en el XML" (verified live, 2026-07-28); the
+    // space-separated pair (matching the manual's *other* example in sección 7.2.2) is what it
+    // actually expects.
+    rDE.setAttributeNS(XSI_NS, "xsi:schemaLocation", SIFEN_NS + " siRecepDE_v150.xsd");
     doc.appendChild(rDE);
     el(doc, rDE, "dVerFor", "150");
 

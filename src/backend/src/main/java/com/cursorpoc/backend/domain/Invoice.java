@@ -2,6 +2,7 @@ package com.cursorpoc.backend.domain;
 
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,6 +18,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -62,6 +64,38 @@ public class Invoice {
   /** Código de seguridad (dCodSeg) que compone el CDC — persistido para la misma razón. */
   @Column(name = "sifen_security_code", length = 9)
   private String sifenSecurityCode;
+
+  /**
+   * Primera fecha/hora de firma (A004/dFecFirma) de esta factura — persistida una sola vez y
+   * reutilizada en reintentos, para que HU-06 AC-07 mida siempre contra el mismo instante, no
+   * contra un "ahora" nuevo en cada intento.
+   */
+  @Column(name = "sifen_signed_at")
+  private LocalDateTime sifenSignedAt;
+
+  /** Resultado de SIFEN para el último intento de envío — SIFEN HU-06. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "sifen_submission_status", length = 32)
+  private SifenSubmissionStatus sifenSubmissionStatus;
+
+  /** dProtAut — número de trámite que devuelve SIFEN (Aprobado/Aprobado con observación). */
+  @Column(name = "sifen_submission_protocol_number", length = 10)
+  private String sifenSubmissionProtocolNumber;
+
+  /** dCodRes del primer resultado devuelto por SIFEN. */
+  @Column(name = "sifen_submission_result_code", length = 10)
+  private String sifenSubmissionResultCode;
+
+  /** dMsgRes de todos los resultados devueltos por SIFEN, unidos con "; ". */
+  @Column(name = "sifen_submission_message", length = 2000)
+  private String sifenSubmissionMessage;
+
+  /**
+   * Momento en que se recibió una respuesta real de SIFEN — permanece {@code null} mientras el
+   * estado sea {@code PENDING_VERIFICATION} (AC-05: nunca se recibió respuesta).
+   */
+  @Column(name = "sifen_submitted_at")
+  private LocalDateTime sifenSubmittedAt;
 
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
@@ -193,6 +227,54 @@ public class Invoice {
 
   public void setSifenSecurityCode(String sifenSecurityCode) {
     this.sifenSecurityCode = sifenSecurityCode;
+  }
+
+  public LocalDateTime getSifenSignedAt() {
+    return sifenSignedAt;
+  }
+
+  public void setSifenSignedAt(LocalDateTime sifenSignedAt) {
+    this.sifenSignedAt = sifenSignedAt;
+  }
+
+  public SifenSubmissionStatus getSifenSubmissionStatus() {
+    return sifenSubmissionStatus;
+  }
+
+  public void setSifenSubmissionStatus(SifenSubmissionStatus sifenSubmissionStatus) {
+    this.sifenSubmissionStatus = sifenSubmissionStatus;
+  }
+
+  public String getSifenSubmissionProtocolNumber() {
+    return sifenSubmissionProtocolNumber;
+  }
+
+  public void setSifenSubmissionProtocolNumber(String sifenSubmissionProtocolNumber) {
+    this.sifenSubmissionProtocolNumber = sifenSubmissionProtocolNumber;
+  }
+
+  public String getSifenSubmissionResultCode() {
+    return sifenSubmissionResultCode;
+  }
+
+  public void setSifenSubmissionResultCode(String sifenSubmissionResultCode) {
+    this.sifenSubmissionResultCode = sifenSubmissionResultCode;
+  }
+
+  public String getSifenSubmissionMessage() {
+    return sifenSubmissionMessage;
+  }
+
+  public void setSifenSubmissionMessage(String sifenSubmissionMessage) {
+    this.sifenSubmissionMessage = sifenSubmissionMessage;
+  }
+
+  public LocalDateTime getSifenSubmittedAt() {
+    return sifenSubmittedAt;
+  }
+
+  public void setSifenSubmittedAt(LocalDateTime sifenSubmittedAt) {
+    this.sifenSubmittedAt = sifenSubmittedAt;
   }
 
   public String getBusinessRuc() {
