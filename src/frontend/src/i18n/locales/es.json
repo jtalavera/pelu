@@ -226,6 +226,7 @@
       "saveError": "No se pudo cargar el certificado. Verificá los datos e intentá de nuevo.",
       "listTitle": "Certificados cargados",
       "empty": "Todavía no hay certificados cargados.",
+      "emptyCta": "Cargar tu primer certificado",
       "colUploadedAt": "Fecha de carga",
       "colNotBefore": "Fecha de expedición",
       "colNotAfter": "Fecha de vencimiento",

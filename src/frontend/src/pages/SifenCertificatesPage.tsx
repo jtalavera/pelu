@@ -289,7 +289,25 @@ export default function SifenCertificatesPage() {
           {t("femme.sifenCertificates.listTitle")}
         </Text>
         {rows.length === 0 ? (
-          <Text variant="muted">{t("femme.sifenCertificates.empty")}</Text>
+          <div
+            data-testid="sifen-certificate-empty-state"
+            style={{ display: "flex", flexDirection: "column", gap: 12 }}
+          >
+            <Text variant="muted">{t("femme.sifenCertificates.empty")}</Text>
+            <div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                onClick={() => {
+                  fileInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  fileInputRef.current?.focus();
+                }}
+              >
+                {t("femme.sifenCertificates.emptyCta")}
+              </Button>
+            </div>
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {rows.map((row) => (

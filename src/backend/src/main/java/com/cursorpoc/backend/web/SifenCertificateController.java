@@ -18,7 +18,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** HU-18: upload and list SIFEN digital certificates. Tenant-admin only (Configuración → SIFEN). */
+/**
+ * HU-18: upload SIFEN digital certificates. HU-19: {@link #list} returns the tenant's full
+ * certificate history (upload/issue/expiry dates + HU-20's live-computed status only — never the
+ * private key, .p12 bytes, or password, see {@link SifenCertificateResponse}). Tenant-admin only
+ * (Configuración → SIFEN).
+ */
 @RestController
 @RequestMapping("/api/sifen/certificates")
 public class SifenCertificateController {

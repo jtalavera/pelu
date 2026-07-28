@@ -129,6 +129,10 @@ class SifenCertificateServiceTest {
         .hasMessageContaining("SIFEN_CERT_INVALID_FILE");
   }
 
+  // Also covers HU-19 AC-04 (the certificate listing screen never shows another tenant's
+  // certificates) — HU-19 reuses this same list() unchanged. Same precedent as HU-18's own AC-07:
+  // no second-tenant fixture exists yet for Playwright (see PROGRESS.md "Desviación conocida"), so
+  // tenant isolation for the listing is proven here, at the repository-query level.
   @Test
   void list_onlyQueriesRequestedTenant_neverLeaksOtherTenants() {
     SifenCertificate own = new SifenCertificate();
@@ -210,6 +214,50 @@ class SifenCertificateServiceTest {
     assertThat(service.list(1L))
         .extracting(SifenCertificateResponse::status)
         .containsExactly(SifenCertificateStatus.VALID, SifenCertificateStatus.VALID);
+  }
+
+  // HU-19: the listing endpoint reuses this same list() — these two cases cover its ACs that
+  // AC-04 (tenant isolation, already proven above by list_onlyQueriesRequestedTenant_
+  // neverLeaksOtherTenants) doesn't: AC-02/AC-03 (exactly the 4 allowed fields, nothing else) and
+  // AC-06 (every historical certificate, not just the newest, all returned in the repository's
+  // order). No Playwright-testable AC exists for this without a screen — see
+  // sifen-hu-19-listado-certificados.spec.ts for the UI-level coverage of the same criteria.
+
+  @Test
+  void list_exposesOnlyTheFourAllowedFieldsPerCertificate_neverPrivateKeyOrPassword() {
+    SifenCertificate cert =
+        certificate(1L, LocalDate.now().minusDays(10), LocalDate.now().plusDays(10));
+    cert.setEncryptedP12Base64("super-secret-p12-bytes");
+    cert.setEncryptedPasswordBase64("super-secret-password");
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(cert));
+
+    SifenCertificateResponse dto = service.list(1L).get(0);
+
+    // The record type itself has exactly these 5 components (id + the 4 AC-02 fields) — asserting
+    // their values here, plus the type's own shape, is what guarantees AC-03: there is no
+    // getter/field on SifenCertificateResponse capable of leaking the encrypted material at all.
+    assertThat(dto.id()).isEqualTo(1L);
+    assertThat(dto.uploadedAt()).isEqualTo(cert.getUploadedAt());
+    assertThat(dto.notBefore()).isEqualTo(cert.getNotBefore());
+    assertThat(dto.notAfter()).isEqualTo(cert.getNotAfter());
+    assertThat(dto.status()).isEqualTo(SifenCertificateStatus.VALID);
+    assertThat(SifenCertificateResponse.class.getDeclaredFields()).hasSize(5);
+  }
+
+  @Test
+  void list_includesEveryHistoricalCertificate_notOnlyTheMostRecent() {
+    // AC-06: uploading new certificates never hides older ones from the listing (HU-18 AC-10
+    // already guarantees they aren't deleted; this proves list() doesn't filter them out either).
+    SifenCertificate oldest =
+        certificate(1L, LocalDate.now().minusYears(3), LocalDate.now().minusYears(2));
+    SifenCertificate newest =
+        certificate(2L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(1));
+    // Repository method is *OrderByUploadedAtDesc — most recent upload first.
+    when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
+        .thenReturn(List.of(newest, oldest));
+
+    assertThat(service.list(1L)).extracting(SifenCertificateResponse::id).containsExactly(2L, 1L);
   }
 
   private static SifenCertificate certificate(long id, LocalDate notBefore, LocalDate notAfter) {

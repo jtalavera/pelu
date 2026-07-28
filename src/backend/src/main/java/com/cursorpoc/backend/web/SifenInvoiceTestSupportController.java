@@ -8,6 +8,7 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
@@ -42,6 +43,9 @@ import org.springframework.web.server.ResponseStatusException;
  * pending-verification state) directly, so Playwright can exercise the real button + real query
  * client end-to-end without depending on a live network call to SIFEN's real test environment
  * (undesirable in CI) or on HU-22.
+ *
+ * <p>{@link #clearCertificates()} additionally supports SIFEN HU-19 (certificate listing) — see its
+ * own javadoc.
  */
 @RestController
 @RequestMapping("/api/admin/sifen-test-support")
@@ -66,23 +70,46 @@ public class SifenInvoiceTestSupportController {
   private static final String FIXTURE_CERTIFICATE_PASSWORD = "TestPass123!";
   private static final String FIXTURE_CERTIFICATE_RUC = "12345678-9";
 
+  /** Same demo tenant id hardcoded by {@code SeedResetService}. */
+  private static final long DEMO_TENANT_ID = 1L;
+
   private final InvoiceRepository invoiceRepository;
   private final BusinessProfileRepository businessProfileRepository;
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
   private final SifenCertificateService certificateService;
+  private final SifenCertificateRepository certificateRepository;
 
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
       BusinessProfileRepository businessProfileRepository,
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
-      SifenCertificateService certificateService) {
+      SifenCertificateService certificateService,
+      SifenCertificateRepository certificateRepository) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.certificateService = certificateService;
+    this.certificateRepository = certificateRepository;
+  }
+
+  /**
+   * SIFEN HU-19 AC-05's empty-state Playwright test needs the demo tenant's certificate list to be
+   * provably empty, but other SIFEN e2e specs (HU-07, HU-18, HU-20) upload certificates into the
+   * same shared demo tenant and never clean up after themselves (by design — they only ever assert
+   * relative counts, e.g. {@code countBefore + 1}, never an absolute zero). Since Playwright spec
+   * file execution order isn't guaranteed, HU-19's empty-state test calls this first to reset to a
+   * known-zero state; it never assumes other tests won't run afterward, and no other SIFEN e2e spec
+   * asserts an absolute starting count, so clearing here doesn't break them.
+   */
+  @PostMapping("/certificates/clear")
+  @Transactional
+  public void clearCertificates() {
+    log.info("POST /api/admin/sifen-test-support/certificates/clear tenantId={}", DEMO_TENANT_ID);
+    certificateRepository.deleteAll(
+        certificateRepository.findByTenant_IdOrderByUploadedAtDesc(DEMO_TENANT_ID));
   }
 
   @PostMapping("/invoices/{id}/prepare-for-status-check")

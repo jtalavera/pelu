@@ -226,6 +226,7 @@
       "saveError": "Could not upload the certificate. Check the data and try again.",
       "listTitle": "Uploaded certificates",
       "empty": "No certificates uploaded yet.",
+      "emptyCta": "Upload your first certificate",
       "colUploadedAt": "Upload date",
       "colNotBefore": "Issued on",
       "colNotAfter": "Expires on",

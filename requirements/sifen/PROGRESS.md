@@ -6,6 +6,7 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 ## Estado
 
 Fase actual: **Fase 2** (Cerrar el ciclo de vida de la factura ya enviada) — en curso, HU-07 hecha.
+HU-19 (de EP-06/Fase 1) también se tomó ya, en paralelo, por no depender de HU-08/HU-09.
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -20,16 +21,16 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-04 Firmar digitalmente | ✅ Done | Ver detalle abajo. |
 | HU-06 Enviar factura y registrar resultado | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (rechazo); ver limitación de "Aprobado" abajo. |
 | HU-07 Verificar estado de una factura pendiente | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (CDC inexistente); primera historia con pantalla + controller propios. |
+| HU-19 Ver listado de certificados | ✅ Done | Ver detalle abajo. Sin interacción con SIFEN (N/A) — 100% lectura de datos locales. |
 | HU-08 Generar comprobante PDF (KuDE) | ⬜ Next | Depende de HU-06 (factura aprobada) — ver "Próximo paso" abajo. |
 | HU-09 Revalidar en SIFEN una factura | ⬜ Todo | Depende de HU-08. |
-| HU-19 Ver listado de certificados | ⬜ Todo | Solo depende de HU-18/HU-20 (Fase 1) — puede tomarse en paralelo con HU-08/HU-09. |
 | Fase 3 (HU-10, HU-11) | ⬜ Todo | |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
 **Próximo paso al reanudar el loop:** implementar HU-08 (Generar el comprobante en PDF de una
-factura aprobada) o, en paralelo, HU-19 (listado de certificados, ya lista para tomarse ya que solo
-depende de Fase 1). HU-08 va a necesitar por fin cerrar el gap que HU-06/HU-07 dejaron documentado
+factura aprobada) — único ítem restante de Fase 2 además de HU-09 (que depende de HU-08). HU-19 ya
+se tomó (ver su sección abajo). HU-08 va a necesitar por fin cerrar el gap que HU-06/HU-07 dejaron documentado
 dos veces seguidas: **ningún documento de este sistema puede llegar a "Aprobado" real todavía**
 porque `gCamFuFD/dCarQR` (el código QR) falta en el XML armado por `SifenDocumentXmlService`
 (HU-04) — HU-08 es explícitamente quien calcula ese hash (usa el CSC de "Configuración del ambiente
@@ -41,6 +42,78 @@ temporal + `curl`) documentado abajo. El WS de consulta (`SiConsDE`) ya quedó c
 investigado por HU-07 (XSD real vía `consulta.wsdl.xsd1.xsd`, endpoint real, forma real de
 `rEnviConsDeResponse`) — no hace falta re-investigarlo para HU-09 (revalidar), que reutiliza el
 mismo `SifenDocumentQueryClient`.
+
+## HU-19 — Ver el listado de certificados cargados de un tenant (Done)
+
+Épica EP-06. **Sin interacción con SIFEN — N/A para el reporte final de interacciones reales
+contra SIFEN de este loop.** Puramente aditiva y de solo lectura: todo lo que HU-19 necesita
+(almacenamiento tenant-aislado del certificado, fechas extraídas del `.p12`, y el cálculo en vivo
+de vigencia) ya lo construyeron HU-18 y HU-20 respectivamente — esta historia solo formaliza que
+ese mismo endpoint/listado *es* HU-19, agrega la única pieza de UI que faltaba (el atajo del
+estado vacío, AC-05) y su propia cobertura de test dedicada.
+
+**Hallazgo principal: no hizo falta escribir casi nada de capacidad nueva.** `GET
+/api/sifen/certificates` (`SifenCertificateController.list`, HU-18) ya devolvía
+`SifenCertificateResponse` con exactamente los 4 campos permitidos por AC-02
+(`uploadedAt`/`notBefore`/`notAfter`/`status`, más el `id` técnico usado como key de fila — nunca
+la clave privada, el `.p12`, ni la contraseña, AC-03), ya ordenados por `uploadedAt` descendente
+(`findByTenant_IdOrderByUploadedAtDesc`, AC-06 — HU-18 AC-10 ya garantizaba que cargar uno nuevo no
+borra los anteriores), ya aislados por tenant (misma query, AC-04), y ya con el estado calculado en
+vivo en cada llamada por `SifenCertificateService.computeStatus` (HU-20 AC-04). El frontend
+(`SifenCertificatesPage.tsx`) ya renderizaba ese listado dentro de la misma sección que el
+formulario de carga (AC-01), con los 4 campos visibles por fila.
+
+**Lo único que realmente faltaba: AC-05 (estado vacío con acceso directo a la carga).** El listado
+vacío ya mostraba el texto "No certificates uploaded yet." pero sin ningún atajo a la opción de
+carga. Se agregó un botón (`femme.sifenCertificates.emptyCta`, variante `secondary` del design
+system) dentro de un contenedor nuevo `data-testid="sifen-certificate-empty-state"` que, al hacer
+clic, hace `scrollIntoView` + `focus()` sobre el input de archivo del formulario ya existente más
+arriba en la misma página — no se creó un segundo formulario ni una ruta nueva, solo se conecta el
+atajo al que ya estaba ahí (consistente con AC-01, que exige que carga y listado convivan en la
+misma sección).
+
+**Decisión de diseño: no se migró el listado a `DataTable` (design-system).** `DataTable` es un
+componente pesado (drag-and-drop de columnas, ocultar/mostrar columnas, orden por click) pensado
+para tablas con muchas columnas configurables — ninguna otra pantalla de configuración de este
+repo lo usa (`TaxesPage`/`FiscalStampSettingsPage` tampoco), solo aparece en
+`DesignSystemShowcasePage`. Con exactamente 4 campos fijos y sin necesidad de ordenar/ocultar
+columnas, el patrón de filas `div` ya usado por HU-18/HU-20 es más simple y consistente con el
+resto de `Configuración → SIFEN` — se mantuvo tal cual.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- Sin cambios de comportamiento — solo javadoc aclaratorio en `SifenCertificateController` (el
+  `GET` ya documentado como "HU-18: upload..." ahora también referencia a HU-19/HU-20 para dejar
+  explícito que ese mismo endpoint es el que sirve las tres historias).
+- `web/SifenInvoiceTestSupportController` ganó un endpoint nuevo, **solo para testing** (mismo
+  gateo `femme.data-init.enabled`, activo solo en el profile `e2e`): `POST
+  /api/admin/sifen-test-support/certificates/clear` — borra todos los `SifenCertificate` del
+  tenant demo. Hizo falta porque HU-07/HU-18/HU-20 ya suben certificados al mismo tenant demo
+  compartido sin nunca limpiarlos (por diseño: esos specs solo aseveran conteos relativos, nunca un
+  cero absoluto), y el orden de ejecución de archivos de Playwright no está garantizado — el test
+  de estado vacío de HU-19 (AC-05) necesita partir de un cero real y reproducible sin importar qué
+  corrió antes.
+
+**Tests backend** (`SifenCertificateServiceTest`, 2 casos nuevos +1 comentario en el ya
+existente): `list_exposesOnlyTheFourAllowedFieldsPerCertificate_neverPrivateKeyOrPassword`
+(AC-02/AC-03, incluye una aserción sobre la forma del propio record — 5 componentes exactos — para
+que agregar un campo nuevo a `SifenCertificateResponse` en el futuro rompa este test si no se
+revisa a propósito) y `list_includesEveryHistoricalCertificate_notOnlyTheMostRecent` (AC-06, orden
+descendente con certificados de antigüedad muy distinta). AC-04 (aislamiento por tenant) no
+necesitó un test nuevo — se documentó que `list_onlyQueriesRequestedTenant_neverLeaksOtherTenants`
+(ya existente desde HU-18) cubre exactamente lo mismo, porque HU-19 reutiliza `list()` sin
+cambios; mismo precedente que HU-18 AC-07 (no existe fixture de segundo tenant para Playwright en
+este repo — ver su propia "Desviación conocida" — así que el aislamiento se prueba a nivel de
+repositorio, no de UI).
+
+**Playwright** (`e2e/tests/sifen-hu-19-listado-certificados.spec.ts`, 4 casos, uno por AC restante
+— AC-04 documentado arriba como cubierto solo por JUnit): AC-01 (listado y carga en la misma
+sección), AC-02/AC-03 (inspecciona el JSON crudo de la respuesta de `GET
+/api/sifen/certificates` y confirma que las claves son exactamente
+`id/notAfter/notBefore/status/uploadedAt`, y que el cuerpo entero nunca contiene las palabras
+"password"/"privatekey" ni la contraseña real usada), AC-05 (limpia certificados vía el endpoint
+de test-support nuevo, confirma el estado vacío y que el botón de atajo efectivamente enfoca el
+input de archivo del formulario de carga), AC-06 (sube 3 certificados y confirma que los 3
+persisten visibles tras un *reload* completo de la página, no solo el más reciente).
 
 ## HU-07 — Verificar en SIFEN el estado de una factura pendiente (Done)
 
