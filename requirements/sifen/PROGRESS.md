@@ -16,24 +16,28 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-05 Conectarse de forma segura con SIFEN | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real. |
 | HU-01 Generar número de control | ✅ Done | Ver detalle abajo. |
 | HU-02 Datos identificación/timbrado/emisor/receptor | ✅ Done | Ver detalle abajo. |
-| HU-03 Servicios facturados y totales | ⬜ Next | |
-| HU-04 Firmar digitalmente | ⬜ Todo | |
+| HU-03 Servicios facturados y totales | ✅ Done | Ver detalle abajo. |
+| HU-04 Firmar digitalmente | ⬜ Next | |
 | HU-06 Enviar factura y registrar resultado | ⬜ Todo | |
 | Fase 2 (HU-07, HU-08, HU-09, HU-19) | ⬜ Todo | |
 | Fase 3 (HU-10, HU-11) | ⬜ Todo | |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-03 (Completar los servicios facturados y
-calcular los totales), siguiente paso del Frente B de la Fase 1 (depende de HU-02, ya cerrado).
-HU-03 agrega el detalle de líneas/impuestos/totales al documento — el sistema ya calcula esto para
-la factura tradicional en `InvoiceService.issueInvoice` (subtotal, descuentos, IVA por línea vía
-`InvoiceLine.taxRate/taxAmount`); lo que falta es mapear ese cálculo ya existente al formato que
-SIFEN exige (grupo `gDtipDE`/`gCamItem` del Manual Técnico — línea por servicio, tasas
-gravado/exento/gravado parcial) y sumarlo al `SifenInvoiceHeader` que dejó armado HU-02. Conviene
-releer la sección de IVA del manual (probablemente con tablas en imagen, igual que el CDC de HU-01
-— renderizar la página a PNG si `pdftotext` no trae la tabla) antes de decidir el shape exacto de
-un nuevo `SifenInvoiceLine`/`SifenInvoiceTotals`.
+**Próximo paso al reanudar el loop:** implementar HU-04 (Firmar digitalmente el documento), el
+último paso del Frente B de la Fase 1 antes de que HU-06 pueda enviar algo real a SIFEN. HU-04
+necesita combinar `SifenInvoiceHeader` (HU-02) + `SifenInvoiceDetail` (HU-03) en el XML del
+documento electrónico, firmarlo con XML-DSig (enveloped, `RSA-SHA256`/`C14N`, el nivel de firma que
+el manual exige — sección "Firma digital", probablemente con tablas en imagen igual que CDC/IVA,
+renderizar a PNG si `pdftotext` no trae el detalle) usando el certificado/clave del tenant vía
+`SifenActiveCertificateMaterial` (ya expuesto por HU-21: `privateKey`/`certificate` listos para
+esto). AC-02 (certificado vencido/revocado → no firmar) ya tiene la vigencia resuelta por
+`SifenCertificateService.requireActiveCertificate` (HU-21, ya excluye vencidos); revocación no
+tiene solución hoy (no hay consulta de CRL/OCSP implementada — puede quedar fuera de alcance,
+como el trust store de PSC en HU-05 AC-03, salvo que el usuario pida lo contrario). Todavía no
+existe ningún servicio en este repo que serialice a XML — antes de escribir el armado del XML
+conviene revisar si el manual publica el XSD real (sección de anexos) para validar contra eso en
+vez de adivinar el orden/formato exacto de los grupos A-G ya mapeados por HU-02/HU-03.
 
 ## HU-05 — Conectarse de forma segura con SIFEN (Done)
 
@@ -318,6 +322,103 @@ ambiente de prueba/producción para AC-08 y determinismo del CDC entre llamadas)
 `InvoiceServiceTest` para AC-05 (umbral exacto, justo debajo, override de cédula, RUC de cliente
 guardado). E2E: `e2e/tests/sifen-hu-02-datos-documento.spec.ts` (AC-05 vía API y vía UI — las demás
 ACs no tienen pantalla propia, ver nota en el spec).
+
+## HU-03 — Completar los servicios facturados y calcular los totales (Done)
+
+Frente B de la Fase 1, siguiente paso después de HU-02. Igual que HU-01/HU-02, es lógica de mapeo
+pura — no toca `InvoiceService.issueInvoice` ni agrega columnas nuevas: todo lo que HU-03 necesita
+ya está persistido en `Invoice`/`InvoiceLine`/`InvoicePaymentAllocation` desde que se emite la
+factura tradicional.
+
+**Hallazgo clave del manual (Manual Técnico V150.pdf, secciones E8/E8.1/E8.2/F, esta vez sí
+extraíble con `pdftotext -layout`, sin necesidad de renderizar imágenes):** el grupo de ítem
+(`gCamItem`/`gCamIVA`) define el cálculo de impuesto por ítem en **dos campos separados y
+encadenados**, no en un solo paso: `E735/dBasGravIVA = EA008 / (1 + tasa/100)` (base gravada) y
+`E736/dLiqIVAItem = E735 * (tasa/100)` (impuesto), cada uno con su propio redondeo. Esto es
+distinto — aunque matemáticamente equivalente sin el redondeo intermedio — de la fórmula de un solo
+paso que ya usaba `InvoiceService` para la factura tradicional (`taxAmount = lineNet * rate / (100 +
+rate)`). Se implementó la versión de dos pasos porque es la que el manual define campo por campo, no
+por replicar el atajo de un solo paso de la factura tradicional.
+
+**Segundo hallazgo: `dTasaIVA` (E734) solo acepta 0, 5 o 10** — "0 (para E731=2 o 3); 5 (para
+E731=1 o 4); 10 (para E731=1 o 4)". Como `Tax.rate` en este dominio es una tasa libre configurable
+por tenant (no restringida a los valores de IVA paraguayo), se agregó una validación explícita
+(`SIFEN_UNSUPPORTED_TAX_RATE`, `PRECONDITION_FAILED`) que rechaza cualquier tasa gravada que no sea
+exactamente 5 o 10 — sin esto, una tasa como 8% construiría un documento que SIFEN rechazaría en el
+envío, mucho más tarde y con un error mucho más difícil de diagnosticar.
+
+**Decisión de diseño clave: "Gravado parcial" (E731=4) no es alcanzable con el modelo de datos
+actual.** El manual define cuatro valores para `iAfecIVA` (1=Gravado, 2=Exonerado, 3=Exento,
+4=Gravado parcial — un mismo ítem con una porción gravada y otra exenta, vía `dPropIVA`). `Tax` en
+este dominio es una tasa única por servicio (`Tax.rate`), sin bandera de exoneración Art. 83 ni
+forma de partir un ítem en dos porciones — así que cada línea resuelve determinísticamente a
+GRAVADO (`rate > 0`) o EXENTO (`rate == 0`), nunca a EXONERADO ni GRAVADO_PARCIAL. Se modeló
+`SifenTaxAffectation` con los 4 valores del manual por completitud (y porque `AC-03` los menciona
+explícitamente), pero los dos no alcanzables están documentados en su propio Javadoc como
+limitación conocida, igual que el precedente ya sentado en HU-02 (departamento/ciudad como texto
+libre). Si una futura historia necesita soportar servicios con impuesto mixto, hay que extender
+`Tax`/`SalonService` antes de que esto sea alcanzable — no es un cambio aislado a este servicio.
+
+**AC-05 (descuento se refleja en el total): el descuento por línea y el descuento global de la
+factura son casos distintos.** El descuento por línea (`InvoiceLine.discountType/discountValue`) ya
+está incluido en `InvoiceLine.lineTotal` (no hace falta recalcularlo — `grossLineTotal - lineTotal`
+da el monto exacto sin importar si fue FIXED o PERCENT). El descuento a nivel factura
+(`Invoice.discountType/discountValue`, aplicado sobre el subtotal, no sobre un servicio puntual) no
+tiene un desglose por ítem en el modelo actual — SIFEN exige uno (`EA004/dDescGloItem`, por ítem).
+Se prorratea proporcionalmente al peso de cada línea sobre el subtotal
+(`globalDiscount * lineTotal_i / subtotal`), con la última línea absorbiendo el resto del redondeo
+en centavos — así la suma de los `netTotal` de las líneas siempre coincide exactamente con
+`Invoice.total` (AC-04), sin importar cuántas líneas haya ni cómo caigan los redondeos.
+
+**AC-02 (descripciones de hasta 2000 caracteres) vs. el límite real de SIFEN (120 caracteres para
+`E708/dDesProSer`):** son requisitos en tensión, no el mismo campo. Se resolvió ensanchando
+`invoice_lines.description` a `NVARCHAR(2000)` (antes 500) a nivel de aplicación, y truncando a 120
+caracteres para el nombre del ítem SIFEN — el resto de la descripción (hasta 500 caracteres, límite
+de `E714/dInfItem`) se manda en un campo complementario (`additionalInfo`) en vez de perderse. Nota
+para HU-04: **no existe hoy ningún input de UI que permita escribir una descripción larga** — en
+`BillingPage.tsx` la descripción de cada línea siempre viene de `service.name` (el catálogo de
+servicios), nunca de texto libre. AC-02 es hoy una capacidad de API/dominio sin forma de ejercitarla
+manualmente; si el negocio necesita descripciones largas reales, hace falta una historia aparte para
+agregar ese campo a la UI de facturación (fuera de alcance de HU-03, que solo pedía "admite").
+
+**AC-06 (forma de pago si es al contado): la condición siempre es Contado (1), nunca Crédito (2).**
+`InvoiceService.issueInvoice` (paso 8) ya exige que la suma de pagos sea exactamente igual al total
++ propinas al momento de emitir — no existe en este sistema el concepto de factura con saldo
+pendiente. Por eso `SifenInvoiceDetail.paymentCondition` es una constante, no algo que dependa de la
+factura. El mapeo `PaymentMethod → E606/iTiPago` es: `CASH→1 (Efectivo)`,
+`CREDIT_CARD→3 (Tarjeta de crédito)`, `DEBIT_CARD→4 (Tarjeta de débito)`, `TRANSFER→5
+(Transferencia)`, `OTHER→99 (Otro)` — sin código propio para cheque/giro/billetera electrónica/etc.
+porque `PaymentMethod` (el enum general del dominio, no específico de SIFEN) no los distingue hoy.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/`):
+- `domain/enums/SifenTaxAffectation.java` — `GRAVADO`/`EXONERADO`/`EXENTO`/`GRAVADO_PARCIAL` con
+  `sifenCode()`, ver limitación de alcance arriba.
+- `domain/InvoiceLine.java` — `description` ensanchado a `length = 2000` (antes 500).
+- `web/dto/InvoiceLineRequest.java` — agregado `@Size(max = 2000)` sobre `description` (AC-02); una
+  descripción que excede el límite ya cae en el manejo genérico de `MethodArgumentNotValidException`
+  → `INVALID_REQUEST` (`GlobalExceptionHandler`), mismo comportamiento que cualquier otra validación
+  Bean Validation existente en este DTO — no se agregó un código de error dedicado.
+- Migración `V20__sifen_invoice_line_description_length.sql` — `ALTER COLUMN` (no `ADD COLUMN`,
+  primera migración SIFEN que amplía una columna existente en vez de agregar una nueva).
+- `service/SifenInvoiceLine.java` / `SifenInvoiceTotals.java` / `SifenPaymentDetail.java` /
+  `SifenInvoiceDetail.java` — records nuevos, cada campo documentado con su ID SIFEN (`E7xx`/`E8xx`/
+  `Fxxx`) igual que `SifenControlNumberFields` de HU-01.
+- `service/SifenInvoiceDetailService.buildDetail(tenantId, invoiceId)` — arma líneas + totales +
+  pagos a partir de una factura ya persistida. Sin endpoint HTTP ni pantalla — igual que
+  HU-01/HU-02/HU-05/HU-21, es una capacidad de servicio consumida por HU-04 (que la va a combinar
+  con `SifenInvoiceHeader` de HU-02 antes de firmar).
+
+**Frontend**: ninguno — ver la nota de AC-02 arriba sobre por qué no hay forma de ejercitar
+descripciones largas desde la UI todavía.
+
+**Tests**: `SifenInvoiceDetailServiceTest` (14 casos, cubre AC-01 a AC-06: detalle por línea,
+código interno con/sin servicio vinculado, truncado de descripción larga + `additionalInfo`, cálculo
+de base/impuesto gravado al 5%/10%, exento, tasa no soportada, total = suma de líneas, prorrateo del
+descuento global, mapeo de formas de pago). **Sin Playwright** — igual que HU-01/HU-05/HU-21 (y la
+mayoría de HU-02), ninguna de las 6 ACs tiene una pantalla propia que ejercitar: es una capacidad de
+servicio consumida recién por HU-04/HU-06. Se investigó específicamente si AC-02 tenía un ángulo de
+UI viable (el input de descripción de línea en `BillingPage.tsx`) y se confirmó que no — ver nota
+arriba.
 
 ## HU-18 — Cargar un nuevo certificado y clave para un tenant (Done)
 
