@@ -161,7 +161,11 @@ class SifenEventClientTest {
     assertThat(sent).contains("<rEnviEventoDe xmlns=\"http://ekuatia.set.gov.py/sifen/xsd\">");
     assertThat(sent).contains("<dId>");
     assertThat(sent)
-        .contains("<dEvReg><gGroupGesEve><rGesEve><rEve Id=\"1\"/></rGesEve></gGroupGesEve>");
+        .contains(
+            "<dEvReg><gGroupGesEve"
+                + " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
+                + " xsi:schemaLocation=\"http://ekuatia.set.gov.py/sifen/xsd"
+                + " siRecepEvento_v150.xsd\"><rGesEve><rEve Id=\"1\"/></rGesEve></gGroupGesEve>");
   }
 
   private SifenEventClient newClient(SifenActiveCertificateMaterial material, int port) {

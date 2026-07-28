@@ -52,8 +52,6 @@ public class SifenClientIdentificationEventXmlService {
 
   static final String SIFEN_NS = SifenDocumentXmlService.SIFEN_NS;
 
-  private static final String XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
-
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
@@ -94,9 +92,12 @@ public class SifenClientIdentificationEventXmlService {
     }
     Document doc = newDocument();
 
+    // HU-16: see SifenCancellationEventXmlService's javadoc — xmlns:xsi/xsi:schemaLocation belong
+    // on
+    // gGroupGesEve (added by SifenEventClient#buildEnvelope), not here. This class inherited the
+    // same misplacement from HU-10 at HU-11 time; fixed now that the real root cause of the
+    // dCodRes=0160 wall is known.
     Element rGesEve = doc.createElementNS(SIFEN_NS, "rGesEve");
-    rGesEve.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xsi", XSI_NS);
-    rGesEve.setAttributeNS(XSI_NS, "xsi:schemaLocation", SIFEN_NS + " siRecepEvento_v150.xsd");
     doc.appendChild(rGesEve);
 
     Element rEve = el(doc, rGesEve, "rEve", null);

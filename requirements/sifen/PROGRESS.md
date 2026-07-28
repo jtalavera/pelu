@@ -5,8 +5,8 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12, HU-13, HU-14 y HU-15 hechas.
-Próximo: HU-16 (Frente C, independiente de HU-15; ver "Próximo paso" abajo).
+Fase actual: **Fase 4 en curso** (Homologación ante la DNIT) — HU-12, HU-13, HU-14, HU-15 y HU-16
+hechas. Próximo: **HU-17**, la última de la fase (ver "Próximo paso" abajo).
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -30,22 +30,241 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo. **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`) — los 4 confirmados en vivo, ya no aparecen en ninguna respuesta real. AC-02 (incorrectas rechazadas) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado hoy por un límite externo real (RUC piloto "inactivo" en el registro de SIFEN, `dCodRes=1252`) — no es un bug de código, ver detalle; el test usa `Assumptions.assumeTrue` para ese tramo específico. |
 | HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo. Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **Cierra 2 gaps de schema nuevos, propios de esta historia** (`gOpeCom`/`iTipTra` no permitido para NC/ND — `dCodRes=1216`; grupo `gOpeCom` completo no permitido para nota de remisión — `dCodRes=1201`) — confirmados en vivo, ya no aparecen en ninguna respuesta real de los 44 documentos enviados. AC-02 (incorrectas rechazadas, 5/5 por tipo) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado por el mismo límite externo de HU-13 (`dCodRes=1252`, RUC piloto inactivo) — sigue así hoy para los 4 tipos nuevos también. |
 | HU-15 Probar el envío por lotes de todos los tipos de comprobante | ✅ Done | Ver detalle abajo. **Introduce el WS asíncrono `SiRecepLoteDE`/`SiResultLoteDE`, nunca usado hasta ahora.** AC-03 (incorrectas rechazadas, 5/5, motivo identificable) y AC-04/AC-05 (lote con mezcla de emisor/tipo rechazado antes de procesar, `dCodRes=0363`) verificados en vivo con aserción dura. AC-01/AC-02 (correctas aprobadas, los 5 tipos) quedan bloqueadas por el mismo límite externo de HU-13/HU-14 (`dCodRes=1252`). |
-| Fase 4 (HU-16/HU-17, homologación) | ⬜ Next | HU-16 (Frente C) es independiente de HU-15; HU-17 depende de que existan resultados de HU-13..HU-16 para su reporte consolidado. |
+| HU-16 Probar el registro de todos los eventos exigidos | ✅ Done | Ver detalle abajo. **Cierra el muro `dCodRes=0160` que bloqueaba HU-10/HU-11 desde su creación** — root-cause encontrado y corregido en vivo (ver detalle). AC-02 (anulación de numeración, 5 tipos) y 2 de los 4 eventos de receptor de AC-03 (desconocimiento, notificación de recepción) verificados en vivo con aserción dura, **primer "Aprobado" real de toda esta integración**. AC-01/AC-03 (conformidad/disconformidad/corrección)/AC-05 quedan bloqueados por el mismo límite externo `dCodRes=1252` de HU-13/14/15 (confirmado que sigue vigente) — el canal de eventos en sí queda probado como sano (motivos de rechazo específicos, nunca el `0160` genérico) con aserción dura. |
+| Fase 4 (HU-17, homologación) | ⬜ Next | Última historia de la fase — depende de que existan resultados de HU-13..HU-16 para su reporte consolidado (`SifenHomologationReport.combinedWith`). |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** HU-15 (Fase 4, envío por lotes de los 5 tipos de comprobante)
-está hecha — ver detalle abajo para el protocolo asíncrono real (`SiRecepLoteDE`/`SiResultLoteDE`) y
-el reporte completo. Queda **HU-16** (Frente C, registro de todos los eventos exigidos) — depende de
-HU-10/HU-11 (Fase 3), no de HU-15, así que puede implementarse ahora sin esperar nada más. **HU-17
-sí depende** de que HU-13..HU-16 existan (consolida su reporte con
-`SifenHomologationReport.combinedWith`), así que debe ser la última de la fase. El bloqueo externo
-que HU-13 documentó (RUC piloto reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue afectando
-también a HU-14 y ahora a HU-15 (confirmado, misma forma, los 5 tipos vía lote también) — es
-razonable esperar que afecte a HU-16 de la misma manera mientras persista; no hace falta esperar a
-que se resuelva para implementar esa historia (su test debería quedar con el mismo patrón
-`Assumptions.assumeTrue` para el tramo "aprobado", igual que HU-13/HU-14/HU-15), pero si en algún
-momento ese estado cambia, vale la pena re-ejecutar los tests guardados de HU-13/HU-14/HU-15 para
-confirmar el primer "Aprobado" real de esta integración.
+**Próximo paso al reanudar el loop:** HU-16 (Fase 4, registro de todos los eventos exigidos) está
+hecha — ver detalle abajo para el diagnóstico completo del muro `0160` (ahora resuelto) y el reporte
+real. Queda solo **HU-17** (consulta de documentos + comprobantes de todos los tipos), la última de
+Fase 4 — depende de que existan resultados de HU-13..HU-16 para su reporte consolidado
+(`SifenHomologationReport.combinedWith`). El bloqueo externo que HU-13 documentó (RUC piloto
+reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue confirmado vigente hoy (re-verificado al
+iniciar HU-16) — sigue afectando todo lo que dependa de un DTE genuinamente aprobado por SIFEN
+(consulta de documentos aprobados, comprobantes reales, etc.), así que es razonable esperar que siga
+afectando partes de HU-17 también; no hace falta esperar a que se resuelva para implementarla (mismo
+patrón `Assumptions.assumeTrue` que las historias anteriores), pero si ese estado cambia en algún
+momento vale la pena re-ejecutar los tests guardados de HU-13..HU-16 para confirmar más "Aprobado"
+reales.
+
+## HU-16 — Probar el registro de todos los eventos exigidos (Done)
+
+Épica EP-05, Fase 4. **La primera oportunidad real de esta integración para diagnosticar a fondo el
+muro `dCodRes=0160 "XML mal formado"`** que HU-10 introdujo y documentó exhaustivamente sin resolver,
+que HU-11 confirmó era sistémico (no específico de un tipo de evento), y que HU-12 acotó a
+validación de contenido, no de conectividad. Esta historia lo diagnostica de raíz, lo corrige, y
+construye encima los 6 tipos de evento nuevos que exige AC-02/AC-03.
+
+### El diagnóstico del `0160` — causa raíz encontrada y corregida
+
+**Procedimiento:** se reprodujo el `0160` en vivo con el código real de producción tal cual estaba
+(sin cambios), luego se validó el XML exacto que ese código produce contra el XSD real
+(`evento.wsdl.xsd1.xsd`, descargado de nuevo con `curl --cert-type P12`) usando `xmllint --schema` —
+**el documento validó sin errores**, confirmando lo que HU-10 ya había anotado ("el documento pasa
+una validación XSD completa"). Esto significa que el `0160` nunca fue un problema de forma/tipo de
+dato — hacía falta otra fuente de verdad. Se descargó el código fuente Java real de dos paquetes
+públicos de referencia para Paraguay (`facturacionelectronicapy-xmlsign` de `marcosjara` en npm, la
+misma familia de librerías que HU-10 ya había citado como "TIPS-SA" — resultó ser el mismo autor
+original bajo un nombre de paquete distinto — y `facturacionelectronicapy-xmlgen`, que sí construye
+el sobre completo, no solo la firma). El archivo `SignXMLEvento.java` de `xmlsign` resultó ser
+**byte-a-byte idéntico** en su elección de algoritmos (`SignedInfo` exclusivo, transforms
+`[enveloped, exclusivo]`, `KeyInfo` solo con `X509Data`) al código que HU-10 ya había escrito después
+de su propio cruce con la misma librería — descartando definitivamente la hipótesis de "algoritmo de
+firma incorrecto" que HU-10 dejó como sospecha principal sin confirmar.
+
+**La pista real estaba en `jsonEventoMain.service.ts` (el paquete `xmlgen`, que si arma el sobre
+completo, no solo la firma):** su método `generateXMLEventoService` construye el JSON del que sale el
+XML final con esta estructura exacta —
+
+```ts
+this.json['gGroupGesEve'] = {};
+this.json['gGroupGesEve']['rGesEve'] = {};
+this.json['gGroupGesEve']['$'] = {};
+this.json['gGroupGesEve']['$']['xmlns:xsi'] = 'http://www.w3.org/2001/XMLSchema-instance';
+this.json['gGroupGesEve']['$']['xsi:schemaLocation'] = '... siRecepEvento_v150.xsd';
+```
+
+**`xmlns:xsi`/`xsi:schemaLocation` van en `gGroupGesEve` — no en `rGesEve`.** El código de este
+dominio, desde que HU-10 lo escribió, ponía esos dos atributos directamente en `<rGesEve>` (el
+elemento raíz del documento que `SifenCancellationEventXmlService`/
+`SifenClientIdentificationEventXmlService` construyen por separado, antes de que
+`SifenEventClient` lo envuelva en `<gGroupGesEve>` por concatenación de texto) — **un nivel más
+profundo de lo debido**. El propio Manual Técnico V150 ya lo decía, sin que ninguna historia anterior
+lo notara: su tabla de campos GDE000 (sección 11.5) describe literalmente a `gGroupGesEve` — no a
+`rGesEve` — como "Raíz del grupo de eventos" ("root of the events group"); `rGesEve` (GDE001) es
+"Elemento raíz" pero **de la Gestión de Eventos dentro de ese grupo**, un nivel más adentro.
+
+**Confirmado en vivo (2026-07-28), con el código real de producción, no un experimento aislado:**
+mover esos dos atributos a `<gGroupGesEve>` (ahora agregado por `SifenEventClient#buildEnvelope`, en
+vez de por `SifenCancellationEventXmlService`/`SifenClientIdentificationEventXmlService`/
+`SifenNumberVoidingEventXmlService`/`SifenReceptorEventXmlService`) cambia la respuesta real de
+`dCodRes=0160 "XML mal formado"` a **`dCodRes=4002 "CDC no existente en el SIFEN"`** para el mismo
+evento de cancelación exacto que antes fallaba — SIFEN ahora procesa la petición hasta el nivel de
+validación de contenido real (existencia del CDC), en vez de rechazarla de entrada. Se validó también
+que el `<rEnviEventoDe>` completo (con el fix aplicado) sigue validando limpio contra el XSD real con
+`xmllint` — el fix no rompe ninguna otra regla de schema, solo corrige la ubicación real del atributo.
+
+**Esto retroactivamente resuelve la limitación abierta de HU-10 y HU-11.** Ninguna de esas dos
+historias necesita reabrirse — su código (`SifenCancellationEventXmlService`,
+`SifenClientIdentificationEventXmlService`, `SifenEventClient`) es exactamente el que se corrigió acá,
+sin cambios de comportamiento público más allá de esta corrección — pero conviene saber, para
+cualquiera que retome esas historias, que su camino feliz ("Aprobado" real) ya no está bloqueado por
+este bug de código — solo por el límite externo `1252` descrito abajo. **Nota aparte, encontrada al
+revisar el código de HU-10 durante este diagnóstico:** el javadoc que HU-10 dejó en
+`SifenDocumentSigningService.signEvent` afirmaba que el cambio a C14N exclusiva para `SignedInfo`
+"resolvió el problema en vivo" — pero el propio texto de PROGRESS.md de HU-10 (sección
+"Verificación en vivo") documenta lo contrario: que ese cambio **no** alteró el resultado del
+diagnóstico. Es decir, el comentario en el código y la bitácora de esa misma historia se
+contradecían; esta historia corrige el javadoc para reflejar la causa real (confirmada acá) en vez de
+la hipótesis de C14N que nunca se verificó como la causa.
+
+### AC-02 — Anulación de numeración: el primer "Aprobado" real de toda esta integración
+
+**Nuevo `SifenNumberVoidingEventXmlService`** construye `rGeVeInu` ("Inutilización de numeración") —
+el único evento de este dominio cuyo elemento base **no** es el CDC (sección 11.5: "se toma como
+elemento base al Código de control (CDC), a excepción del evento de Inutilización de número de DE"),
+confirmado por el XSD real (`trGeVeInu`: `dNumTim/dEst/dPunExp/dNumIn/dNumFin/iTiDE/mOtEve`, sin
+ningún campo `Id`/CDC). Por esto, **AC-02 no depende de que exista un documento previamente
+aprobado** — la primera vez que se pudo hacer esa afirmación con evidencia real, no solo teórica.
+**Confirmado en vivo (2026-07-28) para los 5 tipos de documento exigidos: los 5 vuelven
+`dCodRes=0600 "Evento registrado correctamente"`, con número de protocolo real** — el primer
+`Aprobado` genuino que esta integración obtiene de SIFEN desde que empezó (HU-06). No está afectado
+por el límite externo `1252` (ver abajo) — es una vía administrativa distinta, no ligada al estado
+"activo" del RUC del emisor para efectos de facturación.
+
+### AC-03 — Eventos del receptor: 3 de 4 también se pudieron aprobar en vivo, sin necesitar un DTE real
+
+**Nuevo `SifenReceptorEventXmlService`** construye los 4 eventos que un receptor puede registrar
+sobre un DTE recibido (sección 11.5.2): `rGeVeNotRec` (Notificación de Recepción), `rGeVeConf`
+(Conformidad, "confirmarla"), `rGeVeDisconf` (Disconformidad, "cuestionarla") y `rGeVeDescon`
+(Desconocimiento, "desconocerla") — los 4 comparten el mismo cascarón `<rGesEve><rEve>...
+<gGroupTiEvt></rEve><Signature/></rGesEve>` que HU-10 ya estableció, solo cambia qué contiene
+`gGroupTiEvt`.
+
+**Hallazgo real, encontrado probando en vivo, no documentado en ninguna fuente previa de esta
+integración: Desconocimiento y Notificación de Recepción no exigen que el CDC ya exista en SIFEN —
+Conformidad y Disconformidad sí.** Confirmado con 4 envíos reales sobre CDCs sintácticamente válidos
+pero jamás enviados como DE real: `rGeVeDescon` y `rGeVeNotRec` volvieron **`Aprobado`
+(`dCodRes=0600`)** los dos — un segundo y tercer "Aprobado" genuino, independientes del de AC-02 —
+mientras que `rGeVeConf`/`rGeVeDisconf` volvieron rechazados con `dCodRes=4152`/`4202` ("CDC del DTE
+es inexistente"), un motivo específico y real, nunca el `0160` genérico. Tiene sentido de negocio:
+"no reconozco este documento" o "ya lo recibí" no presuponen que el documento exista formalmente en
+SIFEN, mientras que "lo confirmo"/"lo cuestiono" sí presuponen una aprobación previa real que
+confirmar o cuestionar.
+
+**Segundo hallazgo real: un segundo evento del mismo tipo sobre el mismo CDC no se trata como
+"corrección" — SIFEN lo rechaza como duplicado.** Se probó explícitamente (repetir
+Desconocimiento/Notificación de Recepción sobre el mismo CDC): ambos casos vuelven rechazados con
+`dCodRes=4251`/`4101` ("CDC del DTE ya cuenta con un evento previo de esta naturaleza"). Esto acota
+el mecanismo real de "corrección" (Tabla K del manual, "Correcciones de los eventos del Receptor")
+a los 3 eventos que esa tabla nombra explícitamente — Conformidad/Disconformidad/Desconocimiento — y
+solo cuando el evento original fue realmente registrado sobre un DTE real, no sobre un CDC sintético
+repetido. **"Corregir un evento anterior" (la 5ª acción de AC-03) no es un 5º tipo de XML propio**:
+Tabla K documenta que es, literalmente, volver a registrar Conformidad/Disconformidad/Desconocimiento
+una segunda vez sobre el mismo CDC ("Solo se puede registrar un evento de corrección sobre cada
+evento mencionado") — no hay ningún elemento `rGeVe*Correccion` en el XSD real ni en el manual. Se
+intentó en vivo (Disconformidad inmediatamente después de una Conformidad sobre el mismo CDC
+sintético, la forma que tomaría una corrección real) y, como es esperable, la validación de
+existencia de CDC se aplica antes que cualquier lógica de corrección — mismo `4152`/`4202` que sin
+corrección.
+
+**No existe, en ninguna fuente disponible en este repositorio, una "cantidad mínima" explícita para
+los eventos de receptor de AC-03** — se buscó explícitamente en el Manual Técnico V150 completo y en
+`Especificacion_SIFEN_Peluqueria.md`; ninguno de los dos documenta un número. Ante la ausencia de una
+cifra oficial, esta historia registra cada tipo de evento de receptor aprobable de forma
+independiente (Desconocimiento, Notificación de Recepción) dos veces cada uno, sobre CDCs distintos —
+mismo orden de magnitud que los mínimos ya establecidos por historias anteriores de esta épica.
+
+### AC-01/AC-05 y el resto de AC-03 — el mismo límite externo de HU-13/14/15, reconfirmado
+
+**El `dCodRes=1252 "El RUC del emisor se encuentra inactivo"` que HU-13 documentó sigue vigente
+hoy** (reconfirmado en vivo al iniciar esta historia con una factura real vía
+`SifenHomologationInvoiceSubmissionLiveTest`) — sigue bloqueando cualquier camino que necesite un DTE
+genuinamente aprobado por SIFEN: AC-01 (cancelar 5 documentos previamente aprobados), AC-05 (rechazar
+un segundo intento de cancelación sobre un documento ya cancelado) y la mitad de AC-03
+(Conformidad/Disconformidad/corrección, que si exigen que el CDC exista). **Con el `0160` resuelto,
+lo que sí se pudo verificar en vivo y con aserción dura es que el canal de eventos está sano de punta
+a punta para estos casos también**: cancelar dos veces el mismo CDC sintético (nunca aprobado) vuelve
+`dCodRes=4002` las dos veces — un motivo específico, consistente, correcto para "CDC no existente",
+nunca el `0160` genérico que antes lo enmascaraba todo. El día que el RUC piloto se active, estos
+mismos tests deberían empezar a pasar en verde sin ningún cambio de código — igual que HU-13/14/15 ya
+dejaron dicho para sus propios `Assumptions.assumeTrue`.
+
+### Decisión: nuevo seam `sendWithClient` en `SifenEventClient`
+
+Igual que HU-13 extrajo `SifenDocumentReceptionClient.sendWithClient(HttpClient, ...)` de
+`send(tenantId, ...)`, esta historia hizo lo mismo con `SifenEventClient` — necesario para que el
+test de homologación de esta historia (y cualquier live test de eventos futuro) pueda enviar eventos
+reales firmados con el `.p12` piloto sin depender de un tenant/certificado en base de datos.
+`send(tenantId, xml)` sigue delegando en él sin cambiar su comportamiento público.
+
+### Reporte real (2026-07-28) contra `sifen-test.set.gov.py` con el `.p12` piloto real (RUC
+`1137152-8`, timbrado `1137152`)
+
+```
+Escenario                                                     | Esperado         | Obtenido                              | Resultado
+AC-02 anulación numeración FACTURA                            | APROBADO         | APPROVED (0600)                       | OK
+AC-02 anulación numeración AUTOFACTURA                        | APROBADO         | APPROVED (0600)                       | OK
+AC-02 anulación numeración NOTA_CREDITO                       | APROBADO         | APPROVED (0600)                       | OK
+AC-02 anulación numeración NOTA_DEBITO                        | APROBADO         | APPROVED (0600)                       | OK
+AC-02 anulación numeración NOTA_REMISION                      | APROBADO         | APPROVED (0600)                       | OK
+AC-01/AC-05 cancelación 1/2 sobre CDC nunca aprobado          | RECHAZADO (4002) | REJECTED (4002: CDC no existente)     | OK
+AC-01/AC-05 cancelación 2/2 sobre el mismo CDC                | RECHAZADO (4002) | REJECTED (4002: CDC no existente)     | OK
+AC-03 desconocimiento 1/2 ("desconocerla")                    | APROBADO         | APPROVED (0600)                       | OK
+AC-03 desconocimiento 2/2 ("desconocerla")                    | APROBADO         | APPROVED (0600)                       | OK
+AC-03 notificación de recepción 1/2                           | APROBADO         | APPROVED (0600)                       | OK
+AC-03 notificación de recepción 2/2                           | APROBADO         | APPROVED (0600)                       | OK
+AC-03 conformidad ("confirmarla")                             | RECHAZADO (4152) | REJECTED (4152: CDC inexistente)      | OK
+AC-03 disconformidad ("cuestionarla")                         | RECHAZADO (4202) | REJECTED (4202: CDC inexistente)      | OK
+AC-03 corrección de un evento anterior (Tabla K)              | RECHAZADO (4202) | REJECTED (4202: CDC inexistente)      | OK
+```
+
+AC-02 (5/5 aprobadas) y la mitad "aprobable sin DTE previo" de AC-03 (desconocimiento/notificación,
+2/2 cada uno) pasaron con aserción dura — el hito más importante de esta historia. El canal de
+eventos para AC-01/AC-05/el resto de AC-03 pasó también con aserción dura (motivo específico, nunca
+`0160`). Lo único que queda pendiente, documentado con `Assumptions.assumeTrue` (aborta, no falla),
+es el tramo literal "sobre un DTE genuinamente aprobado" de AC-01/AC-05/Conformidad/Disconformidad/
+corrección — bloqueado por el `1252` externo, no por este código. AC-04 (el reporte en sí, con el
+resultado de cada evento) se cumple por construcción — es el propio reporte de arriba.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+
+- `SifenCancellationEventXmlService.java`/`SifenClientIdentificationEventXmlService.java` — ya no
+  ponen `xmlns:xsi`/`xsi:schemaLocation` en `<rGesEve>` (el fix del `0160`).
+- `SifenEventClient.java` — `buildEnvelope` ahora agrega esos 2 atributos a `<gGroupGesEve>`; nuevo
+  `sendWithClient(HttpClient, String, String logContext)` (paquete-visible), extraído de
+  `send(tenantId, ...)` sin cambiar su comportamiento público, mismo seam que
+  `SifenDocumentReceptionClient` ya tenía desde HU-13.
+- `SifenNumberVoidingEventXmlService.java` (nuevo, `@Service`) — construye `rGeVeInu` (AC-02),
+  reutiliza `SifenDocumentType` (HU-14) para `iTiDE` y el mismo `pad(...)` de `dNumTim`/`dEst`/
+  `dPunExp` que `SifenDocumentXmlService.buildStampGroup` ya usa para el DE.
+- `SifenReceptorEventXmlService.java` (nuevo, `@Service`) — construye los 4 eventos de receptor
+  (AC-03): `buildReceptionNotification`/`buildConformity`/`buildDisconformity`/`buildDisavowal`, más
+  los tipos `ReceiverIdentity`/`ReceiverTaxpayerStatus`/`ConformityType`.
+
+**Tests backend**:
+
+- `SifenNumberVoidingEventXmlServiceTest.java` (nuevo, 5 casos) — estructura `rGesEve` sin `Id`/CDC,
+  mapeo de los 5 tipos de documento, rango inválido, motivo corto, nunca emite
+  `xsi:schemaLocation`.
+- `SifenReceptorEventXmlServiceTest.java` (nuevo, 12 casos) — estructura de los 4 eventos, receptor
+  contribuyente/no-contribuyente, conformidad total/parcial (con su validación), motivo corto,
+  CDC en blanco para los 4, nunca emite `xsi:schemaLocation`.
+- `SifenEventClientTest.java` — actualizado el caso que verifica la forma del sobre SOAP enviado
+  para reflejar `xmlns:xsi`/`xsi:schemaLocation` en `gGroupGesEve` (antes en `rGesEve`); el resto
+  sin cambios de comportamiento.
+- `SifenHomologationEventsLiveTest.java` (nuevo, guardado, mismo patrón que HU-12..15) — el reporte
+  real de arriba es su salida cuando corre con el `.p12` piloto presente; aserción dura sobre AC-02
+  completo, sobre la salud del canal para AC-01/AC-05/resto de AC-03, y sobre
+  desconocimiento/notificación de AC-03; `Assumptions.assumeTrue` solo sobre el tramo que
+  literalmente exige un DTE ya aprobado.
+- Se usaron probes descartables (`ThrowawayEventProbeTest`, borrado antes de este commit) para
+  aislar el diagnóstico del `0160` y confirmar en vivo cada hallazgo antes de fijar las aserciones
+  finales del test guardado — mismo patrón que HU-13 estableció para su propio diagnóstico de reloj.
+
+**Playwright**: ninguno — mismo patrón que HU-12/13/14/15 (capacidad de servicio/prueba de
+homologación sin pantalla propia; la peluquería nunca registra estos eventos en operación real, solo
+cancelación e identificación de cliente, ya cubiertas por HU-10/HU-11).
 
 ## HU-15 — Probar el envío por lotes de todos los tipos de comprobante (Done)
 

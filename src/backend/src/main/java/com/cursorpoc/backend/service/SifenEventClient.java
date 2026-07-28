@@ -103,9 +103,27 @@ public class SifenEventClient {
 
   Optional<SifenSubmissionResult> send(
       long tenantId, String signedEventXml, javax.net.ssl.TrustManager[] testTrustManagers) {
-    String envelope = buildEnvelope(signedEventXml);
     try {
       HttpClient client = connectionService.buildAuthenticatedClient(tenantId, testTrustManagers);
+      return sendWithClient(client, signedEventXml, "tenantId=" + tenantId);
+    } catch (GeneralSecurityException e) {
+      log.error(
+          "SIFEN cancellation event got no response tenantId={} error={}", tenantId, e.toString());
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * EP-05 homologación (HU-16): package-visible overload that sends over an already-built mTLS
+   * {@link HttpClient} instead of resolving one from a tenant's active certificate — same seam
+   * HU-13 opened on {@link SifenDocumentReceptionClient#sendWithClient} for the same reason: a real
+   * homologation send isn't tied to any tenant in this app. {@code logContext} is a free-text label
+   * (e.g. an event id) for the log lines only.
+   */
+  Optional<SifenSubmissionResult> sendWithClient(
+      HttpClient client, String signedEventXml, String logContext) {
+    String envelope = buildEnvelope(signedEventXml);
+    try {
       HttpRequest request =
           HttpRequest.newBuilder(URI.create(connectionProperties.activeBaseUrl() + EVENTOS_PATH))
               .timeout(REQUEST_TIMEOUT)
@@ -118,22 +136,35 @@ public class SifenEventClient {
           parseResponse(response.body(), LocalDateTime.now(timeProperties.zoneId()));
       if (result.isEmpty()) {
         log.error(
-            "SIFEN cancellation event response could not be parsed tenantId={} httpStatus={}",
-            tenantId,
+            "SIFEN cancellation event response could not be parsed {} httpStatus={}",
+            logContext,
             response.statusCode());
       }
       return result;
-    } catch (IOException | InterruptedException | GeneralSecurityException e) {
+    } catch (IOException | InterruptedException e) {
       if (Thread.currentThread().isInterrupted()) {
         Thread.currentThread().interrupt();
       }
-      log.error(
-          "SIFEN cancellation event got no response tenantId={} error={}", tenantId, e.toString());
+      log.error("SIFEN cancellation event got no response {} error={}", logContext, e.toString());
       return Optional.empty();
     }
   }
 
-  /** {@code rEnviEventoDe/dId/dEvReg/gGroupGesEve}, per sección 9.5.1/11.5. */
+  private static final String XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
+
+  /**
+   * {@code rEnviEventoDe/dId/dEvReg/gGroupGesEve}, per sección 9.5.1/11.5.
+   *
+   * <p><b>HU-16:</b> {@code xmlns:xsi}/{@code xsi:schemaLocation} go on {@code gGroupGesEve} here —
+   * Manual Técnico V150's own GDE000 field table calls {@code gGroupGesEve} (not {@code rGesEve})
+   * "Raíz del grupo de eventos". From HU-10 through HU-15 those attributes were instead placed one
+   * level too deep, on {@code rGesEve} itself (see {@code SifenCancellationEventXmlService}'s
+   * history) — confirmed live (2026-07-28) to be the actual cause of the generic {@code
+   * dCodRes=0160 "XML mal formado"} that blocked every real event submission: moving them here
+   * changes the response to the specific {@code dCodRes=4002 "CDC no existente en el SIFEN"} for a
+   * syntactically valid event over a CDC SIFEN never approved — i.e. the server now parses the
+   * request all the way through to real content-level validation instead of rejecting it outright.
+   */
   private static String buildEnvelope(String signedEventXml) {
     // Envelope-level dId (GSch02) allows up to 15 digits — same correlation-id rationale as
     // SifenDocumentReceptionClient/SifenDocumentQueryClient's own dId, unrelated to rEve's own
@@ -145,7 +176,9 @@ public class SifenEventClient {
         + "<dId>"
         + dId
         + "</dId>"
-        + "<dEvReg><gGroupGesEve>"
+        + "<dEvReg><gGroupGesEve xmlns:xsi=\""
+        + XSI_NS
+        + "\" xsi:schemaLocation=\"http://ekuatia.set.gov.py/sifen/xsd siRecepEvento_v150.xsd\">"
         + signedEventXml
         + "</gGroupGesEve></dEvReg>"
         + "</rEnviEventoDe></soap:Body></soap:Envelope>";

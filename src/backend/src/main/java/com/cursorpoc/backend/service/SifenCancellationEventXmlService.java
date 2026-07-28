@@ -48,8 +48,6 @@ public class SifenCancellationEventXmlService {
 
   static final String SIFEN_NS = SifenDocumentXmlService.SIFEN_NS;
 
-  private static final String XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
-
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
@@ -81,13 +79,20 @@ public class SifenCancellationEventXmlService {
 
     Document doc = newDocument();
 
+    // HU-16: xmlns:xsi/xsi:schemaLocation must NOT go here. Manual Técnico V150's own GDE000 field
+    // table calls gGroupGesEve — not rGesEve — "Raíz del grupo de eventos" ("root of the events
+    // group"); SifenEventClient#buildEnvelope adds those attributes to gGroupGesEve instead.
+    // Placing
+    // them on rGesEve (one level too deep — the mistake this class made from HU-10 through HU-15)
+    // is
+    // exactly what produced the generic dCodRes=0160 "XML mal formado" that blocked every real
+    // event
+    // submission — confirmed live (2026-07-28): moving them to gGroupGesEve changes the response to
+    // the specific dCodRes=4002 "CDC no existente en el SIFEN" for a syntactically valid event over
+    // a
+    // CDC SIFEN never actually approved, i.e. the server now parses all the way through to real
+    // content-level validation. See PROGRESS.md's HU-16 section for the full diagnosis.
     Element rGesEve = doc.createElementNS(SIFEN_NS, "rGesEve");
-    rGesEve.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xsi", XSI_NS);
-    // Same requirement HU-04 found live for <rDE> (sección 7.2.2.1's worked example, confirmed live
-    // 2026-07-28 that the real server rejects a missing/slash-joined schemaLocation with
-    // dCodRes=0160): a space-separated namespace/schema-document pair, not the manual's own
-    // slash-joined sección 7.2.2.1 example.
-    rGesEve.setAttributeNS(XSI_NS, "xsi:schemaLocation", SIFEN_NS + " siRecepEvento_v150.xsd");
     doc.appendChild(rGesEve);
 
     Element rEve = el(doc, rGesEve, "rEve", null);
