@@ -16,4 +16,16 @@ public record SifenIssuerData(
     String address,
     SifenTaxpayerType taxpayerType,
     String economicActivityCode,
-    String economicActivityDescription) {}
+    String economicActivityDescription,
+    /** D117/dTelEmi. */
+    String phone,
+    /** D118/dEmailE. */
+    String contactEmail,
+    /** D111/cDepEmi — SIFEN HU-04. */
+    String departmentCode,
+    /** D112/dDesDepEmi — SIFEN HU-04. */
+    String departmentName,
+    /** D115/cCiuEmi — SIFEN HU-04. */
+    String cityCode,
+    /** D116/dDesCiuEmi — SIFEN HU-04. */
+    String cityName) {}

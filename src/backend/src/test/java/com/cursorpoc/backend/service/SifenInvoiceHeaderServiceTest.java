@@ -57,6 +57,8 @@ class SifenInvoiceHeaderServiceTest {
     stamp.setStampNumber("1137152");
     stamp.setEstablishment(1);
     stamp.setExpeditionPoint(2);
+    stamp.setValidFrom(java.time.LocalDate.of(2025, 1, 1));
+    stamp.setValidUntil(java.time.LocalDate.of(2027, 12, 31));
 
     profile = new BusinessProfile();
     profile.setTenant(tenant);
@@ -66,6 +68,12 @@ class SifenInvoiceHeaderServiceTest {
     profile.setTaxpayerType(SifenTaxpayerType.LEGAL_ENTITY);
     profile.setEconomicActivityCode("96020");
     profile.setEconomicActivityDescription("Peluquería y otros tratamientos de belleza");
+    profile.setPhone("021555000");
+    profile.setContactEmail("facturacion@example.com");
+    profile.setSifenDepartmentCode("11");
+    profile.setSifenDepartmentName("CENTRAL");
+    profile.setSifenCityCode("3432");
+    profile.setSifenCityName("FERNANDO DE LA MORA");
 
     invoice = new Invoice();
     invoice.setId(INVOICE_ID);
@@ -245,5 +253,35 @@ class SifenInvoiceHeaderServiceTest {
     assertThatThrownBy(() -> service.buildHeader(TENANT_ID, INVOICE_ID))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_ISSUER_RUC_INVALID");
+  }
+
+  /** SIFEN HU-04: D117/dTelEmi y D118/dEmailE son obligatorios en el DE. */
+  @Test
+  void buildHeader_throwsWhenContactInfoNotConfigured() {
+    profile.setPhone(null);
+
+    assertThatThrownBy(() -> service.buildHeader(TENANT_ID, INVOICE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_ISSUER_CONTACT_INFO_MISSING");
+  }
+
+  /** SIFEN HU-04: D111/cDepEmi y D115/cCiuEmi son obligatorios en el DE. */
+  @Test
+  void buildHeader_throwsWhenIssuerLocationNotConfigured() {
+    profile.setSifenCityCode(null);
+
+    assertThatThrownBy(() -> service.buildHeader(TENANT_ID, INVOICE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_ISSUER_LOCATION_NOT_CONFIGURED");
+  }
+
+  /** SIFEN HU-04: the header carries the invoice's issuance timestamp for D002/dFeEmiDE. */
+  @Test
+  void buildHeader_includesIssueDateTimeInBusinessTimezone() {
+    SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
+
+    assertThat(header.issueDateTime())
+        .isEqualTo(
+            invoice.getIssuedAt().atZone(new FemmeTimeProperties().zoneId()).toLocalDateTime());
   }
 }

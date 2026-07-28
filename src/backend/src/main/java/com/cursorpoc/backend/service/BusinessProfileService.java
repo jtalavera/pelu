@@ -63,6 +63,10 @@ public class BusinessProfileService {
     bp.setTaxpayerType(parseTaxpayerType(request.taxpayerType()));
     bp.setEconomicActivityCode(blankToNull(request.economicActivityCode()));
     bp.setEconomicActivityDescription(blankToNull(request.economicActivityDescription()));
+    bp.setSifenDepartmentCode(blankToNull(request.sifenDepartmentCode()));
+    bp.setSifenDepartmentName(blankToNull(request.sifenDepartmentName()));
+    bp.setSifenCityCode(blankToNull(request.sifenCityCode()));
+    bp.setSifenCityName(blankToNull(request.sifenCityName()));
     return toDto(bp);
   }
 
@@ -110,7 +114,11 @@ public class BusinessProfileService {
         rucValid,
         bp.getTaxpayerType() != null ? bp.getTaxpayerType().name() : null,
         bp.getEconomicActivityCode(),
-        bp.getEconomicActivityDescription());
+        bp.getEconomicActivityDescription(),
+        bp.getSifenDepartmentCode(),
+        bp.getSifenDepartmentName(),
+        bp.getSifenCityCode(),
+        bp.getSifenCityName());
   }
 
   private static void validateLogoDataUrl(String dataUrl) {

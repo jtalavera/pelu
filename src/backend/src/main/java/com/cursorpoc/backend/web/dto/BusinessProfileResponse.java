@@ -10,4 +10,8 @@ public record BusinessProfileResponse(
     boolean rucValidForInvoicing,
     String taxpayerType,
     String economicActivityCode,
-    String economicActivityDescription) {}
+    String economicActivityDescription,
+    String sifenDepartmentCode,
+    String sifenDepartmentName,
+    String sifenCityCode,
+    String sifenCityName) {}

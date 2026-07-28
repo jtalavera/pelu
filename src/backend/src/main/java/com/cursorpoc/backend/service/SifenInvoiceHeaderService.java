@@ -86,9 +86,12 @@ public class SifenInvoiceHeaderService {
 
     return new SifenInvoiceHeader(
         controlNumber,
+        invoice.getIssuedAt().atZone(timeProperties.zoneId()).toLocalDateTime(),
         stamp.getStampNumber(),
         stamp.getEstablishment(),
         stamp.getExpeditionPoint(),
+        stamp.getValidFrom(),
+        stamp.getValidUntil(),
         buildIssuerData(profile, testEnvironment),
         buildReceiverData(invoice),
         testEnvironment);
@@ -141,7 +144,13 @@ public class SifenInvoiceHeaderService {
         profile.getAddress(),
         profile.getTaxpayerType(),
         profile.getEconomicActivityCode(),
-        profile.getEconomicActivityDescription());
+        profile.getEconomicActivityDescription(),
+        profile.getPhone(),
+        profile.getContactEmail(),
+        profile.getSifenDepartmentCode(),
+        profile.getSifenDepartmentName(),
+        profile.getSifenCityCode(),
+        profile.getSifenCityName());
   }
 
   /**
@@ -186,6 +195,19 @@ public class SifenInvoiceHeaderService {
         || isBlank(profile.getEconomicActivityDescription())) {
       throw new ResponseStatusException(
           HttpStatus.PRECONDITION_FAILED, "SIFEN_ECONOMIC_ACTIVITY_NOT_CONFIGURED");
+    }
+    // D117/dTelEmi y D118/dEmailE son 1-1 (obligatorios) en el DE — SIFEN HU-04.
+    if (isBlank(profile.getPhone()) || isBlank(profile.getContactEmail())) {
+      throw new ResponseStatusException(
+          HttpStatus.PRECONDITION_FAILED, "SIFEN_ISSUER_CONTACT_INFO_MISSING");
+    }
+    // D111/cDepEmi y D115/cCiuEmi son 1-1 (obligatorios) en el DE — SIFEN HU-04.
+    if (isBlank(profile.getSifenDepartmentCode())
+        || isBlank(profile.getSifenDepartmentName())
+        || isBlank(profile.getSifenCityCode())
+        || isBlank(profile.getSifenCityName())) {
+      throw new ResponseStatusException(
+          HttpStatus.PRECONDITION_FAILED, "SIFEN_ISSUER_LOCATION_NOT_CONFIGURED");
     }
   }
 

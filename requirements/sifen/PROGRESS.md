@@ -17,27 +17,136 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-01 Generar número de control | ✅ Done | Ver detalle abajo. |
 | HU-02 Datos identificación/timbrado/emisor/receptor | ✅ Done | Ver detalle abajo. |
 | HU-03 Servicios facturados y totales | ✅ Done | Ver detalle abajo. |
-| HU-04 Firmar digitalmente | ⬜ Next | |
-| HU-06 Enviar factura y registrar resultado | ⬜ Todo | |
+| HU-04 Firmar digitalmente | ✅ Done | Ver detalle abajo. |
+| HU-06 Enviar factura y registrar resultado | ⬜ Next | |
 | Fase 2 (HU-07, HU-08, HU-09, HU-19) | ⬜ Todo | |
 | Fase 3 (HU-10, HU-11) | ⬜ Todo | |
 | Fase 4 (HU-12..HU-17, homologación) | ⬜ Todo | |
 | Fase 5 (HU-22, activación real por tenant) | ⬜ Todo | |
 
-**Próximo paso al reanudar el loop:** implementar HU-04 (Firmar digitalmente el documento), el
-último paso del Frente B de la Fase 1 antes de que HU-06 pueda enviar algo real a SIFEN. HU-04
-necesita combinar `SifenInvoiceHeader` (HU-02) + `SifenInvoiceDetail` (HU-03) en el XML del
-documento electrónico, firmarlo con XML-DSig (enveloped, `RSA-SHA256`/`C14N`, el nivel de firma que
-el manual exige — sección "Firma digital", probablemente con tablas en imagen igual que CDC/IVA,
-renderizar a PNG si `pdftotext` no trae el detalle) usando el certificado/clave del tenant vía
-`SifenActiveCertificateMaterial` (ya expuesto por HU-21: `privateKey`/`certificate` listos para
-esto). AC-02 (certificado vencido/revocado → no firmar) ya tiene la vigencia resuelta por
-`SifenCertificateService.requireActiveCertificate` (HU-21, ya excluye vencidos); revocación no
-tiene solución hoy (no hay consulta de CRL/OCSP implementada — puede quedar fuera de alcance,
-como el trust store de PSC en HU-05 AC-03, salvo que el usuario pida lo contrario). Todavía no
-existe ningún servicio en este repo que serialice a XML — antes de escribir el armado del XML
-conviene revisar si el manual publica el XSD real (sección de anexos) para validar contra eso en
-vez de adivinar el orden/formato exacto de los grupos A-G ya mapeados por HU-02/HU-03.
+**Próximo paso al reanudar el loop:** implementar HU-06 (Enviar una factura a SIFEN y registrar el
+resultado), primer paso de EP-02 ahora que HU-04 deja un documento firmado listo. HU-06 va a
+necesitar: `SifenConnectionService.connect()` (HU-05) para el canal mTLS, el XML firmado de
+`SifenDocumentSigningService.signInvoice()` (HU-04, serializado con
+`SifenDocumentXmlService.serialize()`) como cuerpo del request, y armar el sobre SOAP 1.2 que pide
+el WSDL real de `rEnviDe` (`Schema XML 2: siRecepDE_v150.xsd`) — el manual describe el mensaje de
+entrada/respuesta en las secciones alrededor de `SiRecepDE_v150.xsd`/`resRecepDE_v150.xsd`/
+`ProtProcesDE_v150.xsd` (ver tabla de Schemas XML, sección 7.1). Falta revisar en el manual el
+formato exacto de esa respuesta (aprobado/rechazado, código de motivo) para saber qué persistir.
+También falta decidir dónde persistir el resultado del envío (¿tabla nueva `sifen_submissions`,
+o campos nuevos en `Invoice`? — HU-02 ya agregó `sifenControlNumber`/`sifenSecurityCode` a
+`Invoice`, lo más consistente es seguir esa convención en vez de una tabla aparte, salvo que HU-12
+necesite un historial de múltiples intentos por factura).
+
+## HU-04 — Firmar digitalmente el documento (Done)
+
+Cierra el Frente B de la Fase 1: combina `SifenInvoiceHeader` (HU-02) + `SifenInvoiceDetail`
+(HU-03) en el XML real del documento electrónico y lo firma con XML-DSig.
+
+**Hallazgo clave (Manual Técnico V150.pdf, secciones 7.6/7.7, esta vez extraíble con
+`pdftotext -layout` sin renderizar imágenes):** el estándar de firma es un subconjunto de XML
+Digital Signature (W3C), formato **Enveloped**, con una particularidad: `<Signature>` no queda
+anidado dentro de `<DE>` sino como su **hermano** dentro de `<rDE>` (`<rDE><dVerFor/><DE Id="cdc">
+...</DE><Signature>...</Signature></rDE>`), y el `Reference` apunta a `<DE>` vía
+`URI="#{cdc}"` usando el atributo `Id`. Algoritmos exigidos (tabla "Schema XML 1"): canonicalización
+de `SignedInfo` = C14N **estándar** (no exclusive) `http://www.w3.org/TR/2001/REC-xml-c14n-20010315`;
+`SignatureMethod` = `http://www.w3.org/2001/04/xmldsig-more#rsa-sha256`; transforms del `Reference` =
+`enveloped-signature` + C14N **exclusive** `http://www.w3.org/2001/10/xml-exc-c14n#`; `DigestMethod`
+= `http://www.w3.org/2001/04/xmlenc#sha256`. El manual también prohíbe explícitamente incluir
+`X509SubjectName`/`X509IssuerSerial`/`X509IssuerName`/`X509SKI`/`KeyValue`/`RSAKeyValue` en
+`KeyInfo` — solo `X509Data > X509Certificate`, porque esa información ya está implícita en el
+certificado.
+
+**Decisión técnica: `javax.xml.crypto.dsig` (JSR 105), sin dependencia nueva.** Es parte del JDK
+desde Java 6. Sus constantes nombradas (`SignatureMethod.RSA_SHA256`, `DigestMethod.SHA256`,
+`Transform.ENVELOPED`, `CanonicalizationMethod.EXCLUSIVE`/`INCLUSIVE`) coinciden **exactamente**
+con las URIs de la tabla del manual — confirma que JSR 105 es la vía estándar para esto, no hay
+que reconstruir XML-DSig a mano.
+
+**El schema real del DE (`DE_v150.xsd`, sección "Tabla de formato de campos") sí es extraíble como
+texto** (secciones B/C/D/D2/D2.1/D3/E1/E7/E7.1/E8/E8.1/E8.1.1/E8.2/F) — se usó para mapear cada
+campo ya modelado por HU-02/HU-03 a su nombre de elemento XML real (`dRucEm`, `gCamItem`, etc.), no
+solo su ID (`D101`, `E701`). **Alcance deliberadamente acotado**: `SifenDocumentXmlService` cubre
+todo lo que el modelo de dominio ya tiene, con constantes fijas donde este negocio solo tiene un
+valor posible (moneda `PYG`, impuesto `IVA`, tipo de transacción "Prestación de servicios",
+indicador de presencia "Operación presencial", condición de pago "Contado" ya fijada por HU-03) —
+grupos que no aplican a una venta al contado de una peluquería (D2.2 responsable, E7.1.1 tarjeta,
+E7.1.2 cheque, E7.2 crédito, E9.x sectores, E10 transporte, G, H) quedan fuera. Nada de esto bloquea
+el objetivo real de HU-04 (firmar lo que sea que se construya) — cerrar compliance total de schema
+es trabajo de homologación (HU-12..HU-17), no de esta historia.
+
+**Gap nuevo encontrado y cerrado: el emisor no tenía departamento/ciudad.** `D111/cDepEmi` y
+`D115/cCiuEmi` (códigos numéricos del catálogo DNIT) son 1-1 (obligatorios) en el DE, y
+`BusinessProfile` no tenía ningún campo para esto (a diferencia del receptor, que ya tiene
+`department`/`city` como texto libre desde HU-02). Se agregaron 4 columnas nuevas
+(`sifen_department_code/name`, `sifen_city_code/name`, migración V21) + validación en
+`SifenInvoiceHeaderService.requireIssuerDataComplete` (`SIFEN_ISSUER_LOCATION_NOT_CONFIGURED`).
+También se agregó una validación que faltaba para `dTelEmi`/`dEmailE` (D117/D118, también 1-1):
+`BusinessProfile.phone`/`contactEmail` ya existían como columnas pero no se validaban como
+obligatorios (`SIFEN_ISSUER_CONTACT_INFO_MISSING`). **Gap conocido y no cerrado (heredado de
+HU-02, no un problema nuevo):** el receptor sigue sin códigos de departamento/ciudad — cuando su
+dirección está presente, el DE solo emite `dDirRec`, sin `cDepRec`/`cCiuRec` (que el manual exige
+solo si `dDirRec` está informado). No bloquea la firma; si bloquea el envío real es cosa de HU-06.
+
+**`SifenControlNumberService.parse()` (nuevo, inverso de `build()`):** `SifenInvoiceHeader` solo
+guarda el CDC ya armado (44 caracteres), no los 10 campos que lo componen — para reconstruir
+`B002/iTipEmi`, `B004/dCodSeg`, `C002/iTiDE`, `C005/dEst`, `C006/dPunExp`, `C007/dNumDoc` (todos
+también necesarios como elementos propios del DE, no solo embebidos en el CDC) se agregó `parse()`,
+con offsets fijos según la tabla de HU-01 (10.1). Probado contra el mismo ejemplo resuelto del
+manual usado por `build()` (inverso exacto) y con un round-trip `build(parse(cdc)) == cdc`.
+
+**Dos campos nuevos en `SifenInvoiceHeader`:** `issueDateTime` (D002/dFeEmiDE necesita fecha+hora
+completas; HU-02 solo derivaba la fecha para el CDC) y `stampValidFrom`/`stampValidUntil`
+(C008/dFeIniT y C009/dFeFinT, tomados de `FiscalStamp.validFrom/validUntil`, que ya existían pero
+no se exponían en el header).
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+- `SifenDocumentXmlService.buildDocument(header, detail, cdcFields, signatureTimestamp)` — arma el
+  DOM completo (`org.w3c.dom.Document`) del `<rDE>` sin firmar. `signatureTimestamp` lo pasa quien
+  va a firmar (no quien arma el XML), porque A004/dFecFirma es "fecha de la firma", no "fecha de
+  construcción del XML" — ver siguiente punto.
+- `SifenDocumentSigningService`:
+  - `sign(SifenActiveCertificateMaterial, Document, LocalDateTime signedAt)`: firma con JSR 105 tal
+    cual el algoritmo de la sección 7.6/7.7, usando `DOMSignContext.setIdAttributeNS(deElement,
+    null, "Id")` para que el `Reference URI="#cdc"` resuelva sin depender de un DTD/schema que
+    declare `Id` como atributo ID (necesario porque el DOM se arma a mano, no se parsea de un
+    archivo con esquema).
+  - `verify(Document)`: valida usando **solo lo que trae el propio documento firmado** — un
+    `KeySelector` interno extrae la clave pública directamente del `X509Certificate` embebido en
+    `KeyInfo` (no recibe la clave desde afuera). Esto es lo que hace la verificación "independiente"
+    (AC-05): cualquiera con el XML firmado puede validarlo, no solo el proceso que lo firmó.
+  - `signInvoice(tenantId, invoiceId)`: orquestador — resuelve el certificado **primero**
+    (`SifenCertificateService.requireActiveCertificate`, HU-21) antes de tocar `SifenInvoiceHeaderService`/
+    `SifenInvoiceDetailService`, así que si no hay certificado vigente, no se arma nada del
+    documento (AC-02: "no firma... antes de intentar enviarlo"). Revocación sigue sin chequeo
+    propio (no hay CRL/OCSP implementado) — mismo gap ya documentado en HU-05 AC-03.
+  - AC-03 (alteración detectable) es una consecuencia directa de cómo funciona XML-DSig, no código
+    propio: cualquier cambio al contenido de `<DE>` después de firmar cambia el digest y
+    `verify()` devuelve `false` — probado explícitamente mutando un nodo de texto post-firma.
+  - AC-04 (nivel de firma vigente, no obsoleto): los algoritmos están fijos por código
+    (RSA-SHA256, nunca SHA-1) — no hay configuración que permita degradarlos.
+- `SifenSignedDocument` (record `document`/`controlNumber`/`signedAt`) — resultado de firmar; su
+  XML final para HU-06 sale de `SifenDocumentXmlService.serialize(signed.document())`.
+- `BusinessProfile`/`SifenIssuerData`/`SifenInvoiceHeaderService`/`BusinessProfileService`/
+  `BusinessProfileUpdateRequest`/`BusinessProfileResponse` — extendidos con los 4 campos de
+  ubicación del emisor (ver "Gap nuevo" arriba). Sin UI propia todavía en `BusinessSettingsPage`
+  — mismo patrón de deuda técnica ya dejado por HU-02 para `taxpayerType`/`economicActivityCode`;
+  se puede cerrar junto con esos 3 campos en una sola extensión del formulario existente.
+
+**Frontend**: ninguno — igual que HU-01/HU-03/HU-05/HU-21, sin pantalla propia (capacidad de
+servicio consumida por HU-06).
+
+**Tests**: `SifenDocumentXmlServiceTest` (8 casos: estructura rDE/DE, mapeo de emisor, leyenda de
+ambiente de prueba, receptor con cédula, receptor anónimo/innominado, ítems, pagos).
+`SifenDocumentSigningServiceTest` (7 casos: firma+verificación válida end-to-end con el fixture
+`test-cert.p12` real de HU-18, detección de alteración post-firma (AC-03), verificación de un
+documento sin firmar, algoritmos exigidos por el manual presentes en el XML serializado (AC-04),
+`KeyInfo` sin los elementos prohibidos, rechazo sin certificado vigente sin llegar a construir el
+documento (AC-02), firma end-to-end vía el orquestador `signInvoice`). 3 casos nuevos en
+`SifenControlNumberServiceTest` (`parse`). 4 casos nuevos en `SifenInvoiceHeaderServiceTest`
+(contacto/ubicación del emisor, `issueDateTime`). **Sin Playwright** — mismo precedente que
+HU-01/HU-03/HU-05/HU-21: ninguna AC de HU-04 tiene pantalla propia que ejercitar (firma XML-DSig
+interna, no hay flujo de UI que la dispare todavía — eso es HU-06).
 
 ## HU-05 — Conectarse de forma segura con SIFEN (Done)
 

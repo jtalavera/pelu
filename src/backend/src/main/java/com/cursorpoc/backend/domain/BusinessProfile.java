@@ -60,6 +60,22 @@ public class BusinessProfile {
   @Column(name = "economic_activity_description", length = 300)
   private String economicActivityDescription;
 
+  /** Código del departamento de emisión (SIFEN D111/cDepEmi) — SIFEN HU-04. */
+  @Column(name = "sifen_department_code", length = 4)
+  private String sifenDepartmentCode;
+
+  /** Descripción del departamento de emisión (SIFEN D112/dDesDepEmi) — SIFEN HU-04. */
+  @Column(name = "sifen_department_name", length = 64)
+  private String sifenDepartmentName;
+
+  /** Código de la ciudad de emisión (SIFEN D115/cCiuEmi) — SIFEN HU-04. */
+  @Column(name = "sifen_city_code", length = 8)
+  private String sifenCityCode;
+
+  /** Descripción de la ciudad de emisión (SIFEN D116/dDesCiuEmi) — SIFEN HU-04. */
+  @Column(name = "sifen_city_name", length = 64)
+  private String sifenCityName;
+
   public Long getTenantId() {
     return tenantId;
   }
@@ -146,5 +162,37 @@ public class BusinessProfile {
 
   public void setEconomicActivityDescription(String economicActivityDescription) {
     this.economicActivityDescription = economicActivityDescription;
+  }
+
+  public String getSifenDepartmentCode() {
+    return sifenDepartmentCode;
+  }
+
+  public void setSifenDepartmentCode(String sifenDepartmentCode) {
+    this.sifenDepartmentCode = sifenDepartmentCode;
+  }
+
+  public String getSifenDepartmentName() {
+    return sifenDepartmentName;
+  }
+
+  public void setSifenDepartmentName(String sifenDepartmentName) {
+    this.sifenDepartmentName = sifenDepartmentName;
+  }
+
+  public String getSifenCityCode() {
+    return sifenCityCode;
+  }
+
+  public void setSifenCityCode(String sifenCityCode) {
+    this.sifenCityCode = sifenCityCode;
+  }
+
+  public String getSifenCityName() {
+    return sifenCityName;
+  }
+
+  public void setSifenCityName(String sifenCityName) {
+    this.sifenCityName = sifenCityName;
   }
 }

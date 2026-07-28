@@ -114,6 +114,45 @@ class SifenControlNumberServiceTest {
     assertThat(service.isValid(null)).isFalse();
   }
 
+  /**
+   * HU-04: {@link SifenControlNumberService#parse} recovers the manual's worked example exactly.
+   */
+  @Test
+  void parse_recoversManualsWorkedExample() {
+    SifenControlNumberFields fields = service.parse("01444444017001001001452822017012515873260988");
+
+    assertThat(fields.documentType()).isEqualTo(1);
+    assertThat(fields.issuerRuc()).isEqualTo("44444401");
+    assertThat(fields.issuerRucCheckDigit()).isEqualTo(7);
+    assertThat(fields.establishment()).isEqualTo(1);
+    assertThat(fields.expeditionPoint()).isEqualTo(1);
+    assertThat(fields.documentNumber()).isEqualTo(14528L);
+    assertThat(fields.taxpayerType()).isEqualTo(2);
+    assertThat(fields.issueDate()).isEqualTo(LocalDate.of(2017, 1, 25));
+    assertThat(fields.emissionType()).isEqualTo(1);
+    assertThat(fields.securityCode()).isEqualTo("587326098");
+  }
+
+  /**
+   * HU-04: build(parse(cdc)) reproduces the exact same CDC — round trip through the padded form.
+   */
+  @Test
+  void parse_isInverseOfBuild() {
+    SifenControlNumberFields original =
+        new SifenControlNumberFields(
+            1, "1137152", 8, 1, 2, 45, 2, LocalDate.of(2026, 7, 28), 1, "000000001");
+    String cdc = service.build(original);
+
+    SifenControlNumberFields parsed = service.parse(cdc);
+
+    assertThat(service.build(parsed)).isEqualTo(cdc);
+  }
+
+  @Test
+  void parse_rejectsWrongLength() {
+    assertThatThrownBy(() -> service.parse("123")).isInstanceOf(IllegalArgumentException.class);
+  }
+
   @Test
   void build_rejectsValuesThatDoNotFitTheirField() {
     SifenControlNumberFields tooLongRuc =

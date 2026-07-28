@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import org.springframework.stereotype.Service;
 
@@ -53,6 +54,30 @@ public class SifenControlNumberService {
     String base = controlNumber.substring(0, 43);
     char expected = controlNumber.charAt(43);
     return checkDigit(base) == expected;
+  }
+
+  /**
+   * HU-04: inverse of {@link #build} — recovers the 10 source fields from an already-built,
+   * 44-character CDC. Used to re-derive B002/B004/C002/C005/C006/C007/D002/D103 (all embedded in
+   * the CDC) when assembling the DE XML from a {@link SifenInvoiceHeader} that only carries the
+   * final CDC string, without re-threading those raw fields through every intermediate record. Does
+   * not validate the check digit — call {@link #isValid} first if that matters to the caller.
+   */
+  public SifenControlNumberFields parse(String controlNumber) {
+    if (controlNumber == null || controlNumber.length() != 44) {
+      throw new IllegalArgumentException("CDC must be exactly 44 characters: " + controlNumber);
+    }
+    return new SifenControlNumberFields(
+        Integer.parseInt(controlNumber.substring(0, 2)),
+        controlNumber.substring(2, 10),
+        Integer.parseInt(controlNumber.substring(10, 11)),
+        Integer.parseInt(controlNumber.substring(11, 14)),
+        Integer.parseInt(controlNumber.substring(14, 17)),
+        Long.parseLong(controlNumber.substring(17, 24)),
+        Integer.parseInt(controlNumber.substring(24, 25)),
+        LocalDate.parse(controlNumber.substring(25, 33), ISSUE_DATE_FORMAT),
+        Integer.parseInt(controlNumber.substring(33, 34)),
+        controlNumber.substring(34, 43));
   }
 
   /**
