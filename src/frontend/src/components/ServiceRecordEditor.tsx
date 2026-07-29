@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -83,6 +83,7 @@ export function ServiceRecordEditor({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const dateLocale = useDateLocale();
+  const topRef = useRef<HTMLDivElement>(null);
 
   const [record, setRecord] = useState<ServiceRecordDetail | null>(initial);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -307,10 +308,16 @@ export function ServiceRecordEditor({
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         setRecord(result);
+        // Updating an existing record happens inside a modal (opened from Historial de fichas or
+        // the Panel) whose scrollable area is the modal body, not the window — scroll that into view.
+        topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
       onSaved?.(result);
     } catch (err) {
       setSaveError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+      if (!wasCreate) {
+        topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     } finally {
       setSaving(false);
     }
@@ -364,7 +371,7 @@ export function ServiceRecordEditor({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={topRef} className="flex flex-col gap-4">
       {record && (
         <div className="flex flex-wrap items-center gap-3">
           <span data-testid="service-record-status">

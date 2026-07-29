@@ -1100,7 +1100,8 @@
         "colClient": "Client",
         "colDateTime": "Service date and time",
         "subtotalLabel": "Subtotal — {{name}}",
-        "withdrawalsTotalLabel": "Manual withdrawals",
+        "withdrawalRowLabel": "Manual withdrawal — {{name}}",
+        "withdrawalsTotalLabel": "Total manual withdrawals",
         "grandTotalLabel": "Grand total"
       },
       "withdrawal": {

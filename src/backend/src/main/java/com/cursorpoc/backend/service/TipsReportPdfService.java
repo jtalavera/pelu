@@ -15,6 +15,7 @@ import com.lowagie.text.pdf.BaseFont;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
+import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -61,6 +62,7 @@ public class TipsReportPdfService {
       Font headerFont = new Font(bfBold, 9);
       Font bodyFont = new Font(bf, 9);
       Font boldFont = new Font(bfBold, 9);
+      Font redBoldFont = new Font(bfBold, 9, Font.NORMAL, Color.RED);
 
       document.add(new Paragraph("Reporte de propinas", titleFont));
       document.add(new Paragraph(dateRangeLabel(from, to, zone), bodyFont));
@@ -120,8 +122,18 @@ public class TipsReportPdfService {
 
       document.add(table);
       document.add(new Paragraph(" "));
+      for (TipReportProfessionalTotalResponse withdrawal : report.withdrawalsByProfessional()) {
+        document.add(
+            new Paragraph(
+                "Retiro manual - "
+                    + withdrawal.professionalName()
+                    + ": "
+                    + formatMoneyGs(withdrawal.total()),
+                redBoldFont));
+      }
       document.add(
-          new Paragraph("Retiros manuales: " + formatMoneyGs(report.withdrawalsTotal()), boldFont));
+          new Paragraph(
+              "Total retiros manuales: " + formatMoneyGs(report.withdrawalsTotal()), redBoldFont));
       document.add(new Paragraph("Total general: " + formatMoneyGs(report.grandTotal()), boldFont));
 
       document.close();

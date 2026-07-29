@@ -1401,6 +1401,8 @@ function NewInvoiceTab({
                   onChange={(e) => setTipsAmount(maskMoneyInput(e.target.value))}
                   placeholder={t("femme.billing.invoice.tipsPlaceholder")}
                   className="w-32 text-right"
+                  disabled={serviceRecordId != null}
+                  aria-readonly={serviceRecordId != null}
                 />
               </div>
             )}
