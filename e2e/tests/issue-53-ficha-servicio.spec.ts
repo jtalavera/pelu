@@ -80,6 +80,20 @@ async function findHistoryRow(page: Page, query: string) {
   return page.locator("tbody tr").filter({ hasText: query }).first();
 }
 
+/**
+ * The dashboard's "Today's service records" grid caps at 12 cards with a "More" button that
+ * reveals the rest in place. When other tests (or other tenants' demo activity) have already
+ * created same-day records, a freshly-created card may not land in that first page — click
+ * "More" until every fetched record is visible so assertions don't depend on how much unrelated
+ * "today" activity already exists.
+ */
+async function revealAllTodayRecords(page: Page): Promise<void> {
+  const moreButton = page.getByTestId("dashboard-service-records-more");
+  for (let i = 0; i < 10 && (await moreButton.isVisible().catch(() => false)); i++) {
+    await moreButton.click();
+  }
+}
+
 test.describe("Issue #53 · Ficha de servicio", () => {
   let seed: SeededSalon;
   let secondProfessional: { id: number; fullName: string };
@@ -203,7 +217,10 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    const client = await seedClient(request, token, `E2E GenInv ${Date.now()}`, undefined, "80000005-6");
+    // Unique per run: the Client entity enforces per-tenant RUC uniqueness, and this spec can
+    // run alongside others (e.g. issue-96) that also create a client with a RUC.
+    const clientRuc = `800${Date.now()}-6`;
+    const client = await seedClient(request, token, `E2E GenInv ${Date.now()}`, undefined, clientRuc);
     const record = await createServiceRecordApi(request, token, {
       clientId: client.id,
       lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
@@ -226,7 +243,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
     await expect(page.getByText(client.fullName)).toBeVisible();
     // Issue #119 AC9: the client's RUC is carried over from the ficha into the invoice form.
-    await expect(page.locator("#client-ruc")).toHaveValue("80000005-6");
+    await expect(page.locator("#client-ruc")).toHaveValue(clientRuc);
     await expect(page.locator("#line-price-0")).toHaveValue("50.000");
     await expect(page.locator("#billing-tips-amount")).toHaveValue("4.000");
     // Payment auto-fills to cover total + tips = 54.000.
@@ -323,6 +340,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await loginAsDemo(page);
     await page.goto("/app");
     await expect(page.getByText("Today's service records")).toBeVisible();
+    await revealAllTodayRecords(page);
     await expect(page.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(olderClient.fullName)).toBeVisible();
 
@@ -337,6 +355,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
       data: { voidReason: "E2E void for ordering test" },
     });
     await page.reload();
+    await revealAllTodayRecords(page);
     await expect(page.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(newerClient.fullName)).toBeVisible();
     const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/ });
