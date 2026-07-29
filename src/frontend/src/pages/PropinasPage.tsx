@@ -293,7 +293,28 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
                     )}
                   </Fragment>
                 ))}
-                <tr style={{ borderTop: "2px solid var(--border-default)", fontWeight: 600 }}>
+                {report.withdrawalsByProfessional.map((withdrawal) => (
+                  <tr
+                    key={`withdrawal-${withdrawal.professionalId}`}
+                    className="text-red-600 dark:text-red-400"
+                    style={{ borderTop: "2px solid var(--border-default)", fontWeight: 600 }}
+                  >
+                    <td style={{ padding: "10px 12px" }}>
+                      {t("femme.propinas.report.withdrawalRowLabel", {
+                        name: withdrawal.professionalName,
+                      })}
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                      {formatAmountDecimal(withdrawal.total)}
+                    </td>
+                    <td style={{ padding: "10px 12px" }} />
+                    <td style={{ padding: "10px 12px" }} />
+                  </tr>
+                ))}
+                <tr
+                  className="text-red-600 dark:text-red-400"
+                  style={{ borderTop: "2px solid var(--border-default)", fontWeight: 600 }}
+                >
                   <td style={{ padding: "10px 12px" }}>{t("femme.propinas.report.withdrawalsTotalLabel")}</td>
                   <td style={{ padding: "10px 12px", textAlign: "right" }}>
                     {formatAmountDecimal(report.withdrawalsTotal)}

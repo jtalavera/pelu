@@ -57,7 +57,8 @@ public class TipsService {
       long tenantId, Instant fromDate, Instant toDate, List<Long> professionalIds) {
     List<Long> resolvedProfessionalIds = resolveProfessionalIds(tenantId, professionalIds);
     if (resolvedProfessionalIds.isEmpty()) {
-      return new TipReportResponse(List.of(), List.of(), BigDecimal.ZERO, BigDecimal.ZERO);
+      return new TipReportResponse(
+          List.of(), List.of(), BigDecimal.ZERO, BigDecimal.ZERO, List.of());
     }
     List<ServiceRecordTip> tips =
         serviceRecordTipRepository.findForReport(
@@ -92,29 +93,40 @@ public class TipsService {
     // professional's report subtotal never reflects money they already took out.
     List<TipWithdrawal> withdrawalsInRange =
         tipWithdrawalRepository.findForReport(tenantId, fromDate, toDate, resolvedProfessionalIds);
-    Map<Long, BigDecimal> withdrawalsByProfessional = new LinkedHashMap<>();
+    Map<Long, TipReportProfessionalTotalResponse> withdrawalsByProfessional = new LinkedHashMap<>();
     for (TipWithdrawal withdrawal : withdrawalsInRange) {
-      withdrawalsByProfessional.merge(
-          withdrawal.getProfessional().getId(), withdrawal.getAmount(), BigDecimal::add);
+      Long professionalId = withdrawal.getProfessional().getId();
+      TipReportProfessionalTotalResponse existing = withdrawalsByProfessional.get(professionalId);
+      BigDecimal newTotal =
+          (existing != null ? existing.total() : BigDecimal.ZERO).add(withdrawal.getAmount());
+      withdrawalsByProfessional.put(
+          professionalId,
+          new TipReportProfessionalTotalResponse(
+              professionalId, withdrawal.getProfessional().getFullName(), newTotal));
     }
     BigDecimal withdrawalsTotal = BigDecimal.ZERO;
-    for (Map.Entry<Long, BigDecimal> entry : withdrawalsByProfessional.entrySet()) {
-      TipReportProfessionalTotalResponse existing = totalsByProfessional.get(entry.getKey());
-      withdrawalsTotal = withdrawalsTotal.add(entry.getValue());
+    for (TipReportProfessionalTotalResponse withdrawalTotal : withdrawalsByProfessional.values()) {
+      withdrawalsTotal = withdrawalsTotal.add(withdrawalTotal.total());
+      TipReportProfessionalTotalResponse existing =
+          totalsByProfessional.get(withdrawalTotal.professionalId());
       if (existing == null) {
         continue;
       }
       totalsByProfessional.put(
-          entry.getKey(),
+          withdrawalTotal.professionalId(),
           new TipReportProfessionalTotalResponse(
               existing.professionalId(),
               existing.professionalName(),
-              existing.total().subtract(entry.getValue())));
-      grandTotal = grandTotal.subtract(entry.getValue());
+              existing.total().subtract(withdrawalTotal.total())));
+      grandTotal = grandTotal.subtract(withdrawalTotal.total());
     }
 
     return new TipReportResponse(
-        rows, List.copyOf(totalsByProfessional.values()), grandTotal, withdrawalsTotal);
+        rows,
+        List.copyOf(totalsByProfessional.values()),
+        grandTotal,
+        withdrawalsTotal,
+        List.copyOf(withdrawalsByProfessional.values()));
   }
 
   @Transactional(readOnly = true)

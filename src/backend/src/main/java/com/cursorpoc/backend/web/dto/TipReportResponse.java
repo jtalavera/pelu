@@ -7,4 +7,5 @@ public record TipReportResponse(
     List<TipReportRowResponse> rows,
     List<TipReportProfessionalTotalResponse> professionalTotals,
     BigDecimal grandTotal,
-    BigDecimal withdrawalsTotal) {}
+    BigDecimal withdrawalsTotal,
+    List<TipReportProfessionalTotalResponse> withdrawalsByProfessional) {}

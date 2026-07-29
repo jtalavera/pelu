@@ -39,6 +39,7 @@ public interface TipWithdrawalRepository extends JpaRepository<TipWithdrawal, Lo
       AND (:fromDate IS NULL OR w.withdrawnAt >= :fromDate)
       AND (:toDate IS NULL OR w.withdrawnAt <= :toDate)
       AND p.id IN :professionalIds
+      ORDER BY p.fullName ASC, w.withdrawnAt ASC
       """)
   List<TipWithdrawal> findForReport(
       @Param("tenantId") Long tenantId,
