@@ -1087,6 +1087,7 @@
         "filterProfessionalFilterPlaceholder": "Buscar profesionales…",
         "filterProfessionalNoResults": "No se encontraron profesionales.",
         "filterProfessionalSummary": "{count} seleccionadas",
+        "clear": "Limpiar",
         "search": "Buscar",
         "exportPdf": "Exportar PDF",
         "exporting": "Exportando…",

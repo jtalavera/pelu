@@ -26,6 +26,7 @@ public interface ServiceRecordTipRepository extends JpaRepository<ServiceRecordT
       AND (:fromDate IS NULL OR r.closedAt >= :fromDate)
       AND (:toDate IS NULL OR r.closedAt <= :toDate)
       AND p.id IN :professionalIds
+      AND t.amount > 0
       ORDER BY p.fullName ASC, r.closedAt ASC
       """)
   List<ServiceRecordTip> findForReport(

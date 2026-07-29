@@ -54,7 +54,7 @@ function localDateYmdToIsoEnd(ymd: string): string {
   return new Date(yy, mm - 1, dd, 23, 59, 59, 999).toISOString();
 }
 
-function ReportTab({ professionals }: { professionals: Professional[] }) {
+function ReportTab({ professionals, active }: { professionals: Professional[]; active: boolean }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [filterFrom, setFilterFrom] = useState(() => getDefaultReportDateRange().from);
@@ -88,9 +88,18 @@ function ReportTab({ professionals }: { professionals: Professional[] }) {
   );
 
   useEffect(() => {
+    // Reload whenever the report tab becomes visible again, e.g. after a withdrawal made in the
+    // other tab changed the totals — this tab stays mounted across tab switches (see `hidden`
+    // below), so a plain mount-only effect would keep showing stale totals.
+    if (!active) return;
     void load(filterFrom, filterTo, filterProfessionalIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active]);
+
+  function handleClear() {
+    setFilterProfessionalIds([]);
+    void load(filterFrom, filterTo, []);
+  }
 
   async function handleExportPdf() {
     setExportError(null);
@@ -169,6 +178,15 @@ function ReportTab({ professionals }: { professionals: Professional[] }) {
           noResultsText={t("femme.propinas.report.filterProfessionalNoResults")}
           summaryTemplate={t("femme.propinas.report.filterProfessionalSummary")}
         />
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={handleClear}
+          disabled={loading || filterProfessionalIds.length === 0}
+        >
+          {t("femme.propinas.report.clear")}
+        </Button>
         <Button type="submit" variant="primary" size="sm" disabled={loading}>
           {t("femme.propinas.report.search")}
         </Button>
@@ -580,7 +598,7 @@ export default function PropinasPage() {
       </div>
 
       <div hidden={activeTab !== "report"}>
-        <ReportTab professionals={professionals} />
+        <ReportTab professionals={professionals} active={activeTab === "report"} />
       </div>
       <div hidden={activeTab !== "withdrawal"}>
         <WithdrawalTab professionals={professionals} />
