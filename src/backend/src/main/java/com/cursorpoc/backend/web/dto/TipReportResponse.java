@@ -6,4 +6,5 @@ import java.util.List;
 public record TipReportResponse(
     List<TipReportRowResponse> rows,
     List<TipReportProfessionalTotalResponse> professionalTotals,
-    BigDecimal grandTotal) {}
+    BigDecimal grandTotal,
+    BigDecimal withdrawalsTotal) {}

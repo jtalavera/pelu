@@ -57,7 +57,7 @@ public class TipsService {
       long tenantId, Instant fromDate, Instant toDate, List<Long> professionalIds) {
     List<Long> resolvedProfessionalIds = resolveProfessionalIds(tenantId, professionalIds);
     if (resolvedProfessionalIds.isEmpty()) {
-      return new TipReportResponse(List.of(), List.of(), BigDecimal.ZERO);
+      return new TipReportResponse(List.of(), List.of(), BigDecimal.ZERO, BigDecimal.ZERO);
     }
     List<ServiceRecordTip> tips =
         serviceRecordTipRepository.findForReport(
@@ -97,8 +97,10 @@ public class TipsService {
       withdrawalsByProfessional.merge(
           withdrawal.getProfessional().getId(), withdrawal.getAmount(), BigDecimal::add);
     }
+    BigDecimal withdrawalsTotal = BigDecimal.ZERO;
     for (Map.Entry<Long, BigDecimal> entry : withdrawalsByProfessional.entrySet()) {
       TipReportProfessionalTotalResponse existing = totalsByProfessional.get(entry.getKey());
+      withdrawalsTotal = withdrawalsTotal.add(entry.getValue());
       if (existing == null) {
         continue;
       }
@@ -111,7 +113,8 @@ public class TipsService {
       grandTotal = grandTotal.subtract(entry.getValue());
     }
 
-    return new TipReportResponse(rows, List.copyOf(totalsByProfessional.values()), grandTotal);
+    return new TipReportResponse(
+        rows, List.copyOf(totalsByProfessional.values()), grandTotal, withdrawalsTotal);
   }
 
   @Transactional(readOnly = true)

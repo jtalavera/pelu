@@ -293,6 +293,14 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
                     )}
                   </Fragment>
                 ))}
+                <tr style={{ borderTop: "2px solid var(--border-default)", fontWeight: 600 }}>
+                  <td style={{ padding: "10px 12px" }}>{t("femme.propinas.report.withdrawalsTotalLabel")}</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                    {formatAmountDecimal(report.withdrawalsTotal)}
+                  </td>
+                  <td style={{ padding: "10px 12px" }} />
+                  <td style={{ padding: "10px 12px" }} />
+                </tr>
                 <tr style={{ borderTop: "2px solid var(--border-default)", fontWeight: 700 }}>
                   <td style={{ padding: "10px 12px" }}>{t("femme.propinas.report.grandTotalLabel")}</td>
                   <td style={{ padding: "10px 12px", textAlign: "right" }}>

@@ -80,6 +80,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await page.goto("/app/service-records");
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName, exact: false }).click();
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
     await page.getByRole("button", { name: "Save record" }).click();
@@ -135,8 +136,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName, exact: false }).click();
 
-    // Remove the single default empty line — a ficha may be saved with zero services.
-    await page.getByRole("button", { name: "Remove" }).click();
+    // Issue #133: no default line is seeded — a ficha may be saved with zero services.
     await expect(page.locator('[id^="service-record-line-svc-"]')).toHaveCount(0);
 
     await page.getByRole("button", { name: "Save record" }).click();
@@ -162,6 +162,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await page.goto("/app/service-records");
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName, exact: false }).click();
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
 
     // Clear the auto-filled unit price/quantity and leave professional unselected.

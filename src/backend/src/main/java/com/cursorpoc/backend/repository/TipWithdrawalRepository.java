@@ -15,6 +15,8 @@ public interface TipWithdrawalRepository extends JpaRepository<TipWithdrawal, Lo
   Page<TipWithdrawal> findByTenant_IdAndProfessional_IdOrderByWithdrawnAtDesc(
       Long tenantId, Long professionalId, Pageable pageable);
 
+  long deleteByTenant_Id(Long tenantId);
+
   @Query(
       """
       SELECT COALESCE(SUM(w.amount), 0) FROM TipWithdrawal w

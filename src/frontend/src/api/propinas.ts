@@ -21,6 +21,7 @@ export type TipReportResponse = {
   rows: TipReportRow[];
   professionalTotals: TipReportProfessionalTotal[];
   grandTotal: number;
+  withdrawalsTotal: number;
 };
 
 export type ProfessionalTipBalance = {
