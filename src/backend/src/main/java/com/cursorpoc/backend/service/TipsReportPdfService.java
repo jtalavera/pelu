@@ -120,6 +120,8 @@ public class TipsReportPdfService {
 
       document.add(table);
       document.add(new Paragraph(" "));
+      document.add(
+          new Paragraph("Retiros manuales: " + formatMoneyGs(report.withdrawalsTotal()), boldFont));
       document.add(new Paragraph("Total general: " + formatMoneyGs(report.grandTotal()), boldFont));
 
       document.close();

@@ -119,7 +119,7 @@ export function ServiceRecordEditor({
           quantity: l.quantity,
           unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
         }))
-      : [emptyLine()],
+      : [],
   );
   const [tips, setTips] = useState<Record<number, string>>(() => {
     const map: Record<number, string> = {};
@@ -299,7 +299,7 @@ export function ServiceRecordEditor({
         setRecord(null);
         setClientSelection(null);
         setClientFieldResetKey((k) => k + 1);
-        setLines([emptyLine()]);
+        setLines([]);
         setTips({});
         setClientError(null);
         setLineErrors({});

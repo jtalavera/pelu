@@ -99,6 +99,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     const submit = page.getByTestId("service-record-submit");
     await expect(submit).toBeDisabled();
 
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
     await expect(submit).toBeDisabled();
@@ -117,6 +118,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     const clientName = `E2E119 Qty ${Date.now()}`;
     await page.getByLabel("Search or select client").fill(clientName.slice(0, 8));
 
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
 
@@ -149,6 +151,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
 
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName, exact: false }).click();
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
 
@@ -164,7 +167,8 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
 
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(10);
     await expect(page.getByLabel("Search or select client")).toHaveValue("");
-    await expect(page.locator("#service-record-line-svc-0")).toHaveValue("");
+    // Issue #133: the reset "New record" form shows no blank line, only "Add service".
+    await expect(page.locator('[id^="service-record-line-svc-"]')).toHaveCount(0);
   });
 
   test("AC6 · el detalle de una ficha muestra Cantidad y Precio unitario editables en el mismo orden", async ({

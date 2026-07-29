@@ -115,6 +115,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 6));
     await page.getByRole("button", { name: client.fullName }).click();
 
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
 
@@ -188,6 +189,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page).toHaveURL(/\/app\/service-records/);
     await expect(page.getByLabel("Search or select client")).toHaveValue(newClientName);
 
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
     await page.getByRole("button", { name: "Save record" }).click();
