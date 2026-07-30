@@ -245,9 +245,8 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     // Issue #119 AC9: the client's RUC is carried over from the ficha into the invoice form.
     await expect(page.locator("#client-ruc")).toHaveValue(clientRuc);
     await expect(page.locator("#line-price-0")).toHaveValue("50.000");
-    await expect(page.locator("#billing-tips-amount")).toHaveValue("4.000");
-    // Issue #135: the Propinas field is read-only when the invoice comes from a ficha de servicio.
-    await expect(page.locator("#billing-tips-amount")).toBeDisabled();
+    // Issue #137: Propinas is a read-only text value (like Subtotal/Pendiente), not an input.
+    await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
     // Payment auto-fills to cover total + tips = 54.000.
     await expect(page.locator("#pay-amount-0")).toHaveValue("54.000");
 

@@ -133,12 +133,14 @@ test.describe("Issue #133 · Ajustes varios", () => {
     await page.getByRole("button", { name: "Search", exact: true }).click();
 
     const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    const withdrawalsRow = reportRows.filter({ hasText: "Manual withdrawals" });
+    const withdrawalsRow = reportRows.filter({
+      hasText: `Manual withdrawal — ${seed.professionalFullName}`,
+    });
     const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
 
-    // Before any withdrawal: line is visible and reads 0, grand total is the full generated tip.
-    await expect(withdrawalsRow.getByText(/^0$/)).toBeVisible({ timeout: 15_000 });
-    await expect(grandTotalRow.getByText(/^10\.000$/)).toBeVisible();
+    // Before any withdrawal: no withdrawal row yet, grand total is the full generated tip.
+    await expect(withdrawalsRow).toHaveCount(0);
+    await expect(grandTotalRow.getByText(/^Gs\. 10\.000$/)).toBeVisible({ timeout: 15_000 });
 
     // Withdraw part of the balance from the Withdrawal tab.
     await page.getByRole("tab", { name: "Tip withdrawal" }).click();
@@ -149,7 +151,7 @@ test.describe("Issue #133 · Ajustes varios", () => {
       seed.professionalFullName.slice(0, 10),
       new RegExp(seed.professionalFullName),
     );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("10.000", { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
 
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "3000");
@@ -159,12 +161,12 @@ test.describe("Issue #133 · Ajustes varios", () => {
       timeout: 15_000,
     });
 
-    // Back on the report tab, "Manual withdrawals" now shows the withdrawn amount, and the
-    // report behaves like a balance: grand total = generated tips (10.000) - withdrawals (3.000).
+    // Back on the report tab, a "Retiro manual" row now shows the withdrawn amount inside the
+    // professional's group, and the grand total = generated tips (10.000) - withdrawals (3.000).
     await page.getByRole("tab", { name: "Tips report" }).click();
     await expect(page.getByRole("tab", { name: "Tips report", selected: true })).toBeVisible();
 
-    await expect(withdrawalsRow.getByText(/^3\.000$/)).toBeVisible({ timeout: 15_000 });
-    await expect(grandTotalRow.getByText(/^7\.000$/)).toBeVisible();
+    await expect(withdrawalsRow.getByText(/^Gs\. 3\.000$/)).toBeVisible({ timeout: 15_000 });
+    await expect(grandTotalRow.getByText(/^Gs\. 7\.000$/)).toBeVisible();
   });
 });

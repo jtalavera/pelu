@@ -27,7 +27,7 @@ import {
 import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { useDateLocale } from "../i18n/dateLocale";
-import { formatAmountDecimal } from "../lib/formatMoney";
+import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDate, formatParaguayDateTime } from "../lib/paraguayDateTime";
 
@@ -130,9 +130,13 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
       list.push(row);
       byProfessional.set(row.professionalId, list);
     }
+    const withdrawalByProfessional = new Map(
+      report.withdrawalsByProfessional.map((w) => [w.professionalId, w]),
+    );
     return report.professionalTotals.map((total) => ({
       total,
       rows: byProfessional.get(total.professionalId) ?? [],
+      withdrawal: withdrawalByProfessional.get(total.professionalId) ?? null,
     }));
   }, [report]);
 
@@ -266,7 +270,7 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
                       <tr key={`${group.total.professionalId}-${idx}`} style={{ borderTop: "var(--border-default)" }}>
                         <td style={{ padding: "10px 12px" }}>{row.professionalName}</td>
                         <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                          {formatAmountDecimal(row.amount)}
+                          {formatGuaraniesGs(row.amount)}
                         </td>
                         <td style={{ padding: "10px 12px" }}>{row.clientName}</td>
                         <td style={{ padding: "10px 12px" }}>
@@ -274,6 +278,24 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
                         </td>
                       </tr>
                     ))}
+                    {group.withdrawal && (
+                      <tr
+                        key={`${group.total.professionalId}-withdrawal`}
+                        className="text-red-600 dark:text-red-400"
+                        style={{ borderTop: "var(--border-default)", fontWeight: 600 }}
+                      >
+                        <td style={{ padding: "10px 12px" }}>
+                          {t("femme.propinas.report.withdrawalRowLabel", {
+                            name: group.withdrawal.professionalName,
+                          })}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                          {formatGuaraniesGs(group.withdrawal.total)}
+                        </td>
+                        <td style={{ padding: "10px 12px" }} />
+                        <td style={{ padding: "10px 12px" }} />
+                      </tr>
+                    )}
                     {showSubtotals && (
                       <tr
                         key={`${group.total.professionalId}-subtotal`}
@@ -285,7 +307,7 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
                           })}
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                          {formatAmountDecimal(group.total.total)}
+                          {formatGuaraniesGs(group.total.total)}
                         </td>
                         <td style={{ padding: "10px 12px" }} />
                         <td style={{ padding: "10px 12px" }} />
@@ -293,39 +315,10 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
                     )}
                   </Fragment>
                 ))}
-                {report.withdrawalsByProfessional.map((withdrawal) => (
-                  <tr
-                    key={`withdrawal-${withdrawal.professionalId}`}
-                    className="text-red-600 dark:text-red-400"
-                    style={{ borderTop: "2px solid var(--border-default)", fontWeight: 600 }}
-                  >
-                    <td style={{ padding: "10px 12px" }}>
-                      {t("femme.propinas.report.withdrawalRowLabel", {
-                        name: withdrawal.professionalName,
-                      })}
-                    </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                      {formatAmountDecimal(withdrawal.total)}
-                    </td>
-                    <td style={{ padding: "10px 12px" }} />
-                    <td style={{ padding: "10px 12px" }} />
-                  </tr>
-                ))}
-                <tr
-                  className="text-red-600 dark:text-red-400"
-                  style={{ borderTop: "2px solid var(--border-default)", fontWeight: 600 }}
-                >
-                  <td style={{ padding: "10px 12px" }}>{t("femme.propinas.report.withdrawalsTotalLabel")}</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                    {formatAmountDecimal(report.withdrawalsTotal)}
-                  </td>
-                  <td style={{ padding: "10px 12px" }} />
-                  <td style={{ padding: "10px 12px" }} />
-                </tr>
                 <tr style={{ borderTop: "2px solid var(--border-default)", fontWeight: 700 }}>
                   <td style={{ padding: "10px 12px" }}>{t("femme.propinas.report.grandTotalLabel")}</td>
                   <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                    {formatAmountDecimal(report.grandTotal)}
+                    {formatGuaraniesGs(report.grandTotal)}
                   </td>
                   <td style={{ padding: "10px 12px" }} />
                   <td style={{ padding: "10px 12px" }} />
@@ -381,9 +374,10 @@ function WithdrawalTab({ professionals }: { professionals: Professional[] }) {
     [t],
   );
 
-  const loadHistory = useCallback(async (id: number, page: number, size: number) => {
+  /** Tenant-wide history (every professional, last 3 months) — independent of the selected professional. */
+  const loadHistory = useCallback(async (page: number, size: number) => {
     try {
-      const data = await listTipWithdrawalsPaged({ professionalId: id, page, size });
+      const data = await listTipWithdrawalsPaged({ page, size });
       setHistory(data);
     } catch {
       setHistory(null);
@@ -393,18 +387,14 @@ function WithdrawalTab({ professionals }: { professionals: Professional[] }) {
   useEffect(() => {
     if (professionalId === "") {
       setBalance(null);
-      setHistory(null);
       return;
     }
     void loadBalance(professionalId);
-    setHistoryPage(0);
-    void loadHistory(professionalId, 0, historyPageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [professionalId]);
 
   useEffect(() => {
-    if (professionalId === "") return;
-    void loadHistory(professionalId, historyPage, historyPageSize);
+    void loadHistory(historyPage, historyPageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyPage, historyPageSize]);
 
@@ -430,7 +420,7 @@ function WithdrawalTab({ professionals }: { professionals: Professional[] }) {
       setAmount("");
       setSuccessMessage(t("femme.propinas.withdrawal.success"));
       setHistoryPage(0);
-      void loadHistory(professionalId, 0, historyPageSize);
+      void loadHistory(0, historyPageSize);
     } catch (err) {
       setSubmitError(translateApiError(err, t, "femme.propinas.errorTitle"));
     } finally {
@@ -471,7 +461,7 @@ function WithdrawalTab({ professionals }: { professionals: Professional[] }) {
                 <Spinner size="sm" />
               ) : (
                 <Text data-testid="propinas-balance" className="font-semibold">
-                  {formatAmountDecimal(balance ?? 0)}
+                  {formatGuaraniesGs(balance ?? 0)}
                 </Text>
               )}
             </div>
@@ -507,63 +497,65 @@ function WithdrawalTab({ professionals }: { professionals: Professional[] }) {
         )}
       </Card>
 
-      {professionalId !== "" && (
-        <Card className="p-4 sm:p-6 flex flex-col gap-3">
-          <Heading as="h3" className="text-base">
-            {t("femme.propinas.withdrawal.historyTitle")}
-          </Heading>
-          {!history || history.content.length === 0 ? (
-            <Text variant="muted">{t("femme.propinas.withdrawal.historyEmpty")}</Text>
-          ) : (
-            <>
-              <div className="overflow-x-auto" data-testid="propinas-withdrawal-history-table">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr>
-                      <th style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, textTransform: "uppercase", color: "var(--color-ink-3)" }}>
-                        {t("femme.propinas.withdrawal.historyColDate")}
-                      </th>
-                      <th style={{ padding: "9px 12px", textAlign: "right", fontSize: 10, textTransform: "uppercase", color: "var(--color-ink-3)" }}>
-                        {t("femme.propinas.withdrawal.historyColAmount")}
-                      </th>
+      <Card className="p-4 sm:p-6 flex flex-col gap-3">
+        <Heading as="h3" className="text-base">
+          {t("femme.propinas.withdrawal.historyTitle")}
+        </Heading>
+        {!history || history.content.length === 0 ? (
+          <Text variant="muted">{t("femme.propinas.withdrawal.historyEmpty")}</Text>
+        ) : (
+          <>
+            <div className="overflow-x-auto" data-testid="propinas-withdrawal-history-table">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr>
+                    <th style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, textTransform: "uppercase", color: "var(--color-ink-3)" }}>
+                      {t("femme.propinas.withdrawal.historyColProfessional")}
+                    </th>
+                    <th style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, textTransform: "uppercase", color: "var(--color-ink-3)" }}>
+                      {t("femme.propinas.withdrawal.historyColDate")}
+                    </th>
+                    <th style={{ padding: "9px 12px", textAlign: "right", fontSize: 10, textTransform: "uppercase", color: "var(--color-ink-3)" }}>
+                      {t("femme.propinas.withdrawal.historyColAmount")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.content.map((item) => (
+                    <tr key={item.id} style={{ borderTop: "var(--border-default)" }}>
+                      <td style={{ padding: "10px 12px" }}>{item.professionalName}</td>
+                      <td style={{ padding: "10px 12px" }}>{formatParaguayDate(item.withdrawnAt, dateLocale)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                        {formatGuaraniesGs(item.amount)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {history.content.map((item) => (
-                      <tr key={item.id} style={{ borderTop: "var(--border-default)" }}>
-                        <td style={{ padding: "10px 12px" }}>{formatParaguayDate(item.withdrawnAt, dateLocale)}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                          {formatAmountDecimal(item.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <PageSizeSelect
-                  value={historyPageSize}
-                  onChange={(s) => {
-                    setHistoryPageSize(s);
-                    setHistoryPage(0);
-                  }}
-                  label={t("femme.pagination.rowsPerPage")}
-                />
-                <Text variant="small" className="text-[var(--color-ink-3)]">
-                  {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: totalElements })}
-                </Text>
-                <Pagination
-                  page={historyPage + 1}
-                  pageCount={totalPages}
-                  onPageChange={(p) => setHistoryPage(p - 1)}
-                  previousLabel={t("femme.pagination.previous")}
-                  nextLabel={t("femme.pagination.next")}
-                />
-              </div>
-            </>
-          )}
-        </Card>
-      )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <PageSizeSelect
+                value={historyPageSize}
+                onChange={(s) => {
+                  setHistoryPageSize(s);
+                  setHistoryPage(0);
+                }}
+                label={t("femme.pagination.rowsPerPage")}
+              />
+              <Text variant="small" className="text-[var(--color-ink-3)]">
+                {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: totalElements })}
+              </Text>
+              <Pagination
+                page={historyPage + 1}
+                pageCount={totalPages}
+                onPageChange={(p) => setHistoryPage(p - 1)}
+                previousLabel={t("femme.pagination.previous")}
+                nextLabel={t("femme.pagination.next")}
+              />
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }

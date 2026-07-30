@@ -197,7 +197,7 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
     // Grand total only reflects the non-zero tip (a single professional selected renders no
     // per-professional subtotal row, so the grand total is the relevant net-of-zero assertion).
     const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-    await expect(grandTotalRow.getByText(/^2\.000$/)).toBeVisible();
+    await expect(grandTotalRow.getByText(/^Gs\. 2\.000$/)).toBeVisible();
   });
 
   test("AC3 · un retiro de propina se refleja en los totales del reporte al volver a la pestaña", async ({
@@ -226,7 +226,7 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
 
     const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
     const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-    await expect(grandTotalRow.getByText(/^10\.000$/)).toBeVisible({ timeout: 15_000 });
+    await expect(grandTotalRow.getByText(/^Gs\. 10\.000$/)).toBeVisible({ timeout: 15_000 });
 
     // Withdraw part of the balance from the Withdrawal tab.
     await page.getByRole("tab", { name: "Tip withdrawal" }).click();
@@ -237,7 +237,7 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
       seed.professionalFullName.slice(0, 10),
       new RegExp(seed.professionalFullName),
     );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("10.000", { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
 
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "1000");
@@ -246,12 +246,12 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
     await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByTestId("propinas-balance")).toHaveText("9.000");
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 9.000");
 
     // AC3: switching back to the report tab (no manual "Search" click) shows the updated totals.
     await page.getByRole("tab", { name: "Tips report" }).click();
     await expect(page.getByRole("tab", { name: "Tips report", selected: true })).toBeVisible();
 
-    await expect(grandTotalRow.getByText(/^9\.000$/)).toBeVisible({ timeout: 15_000 });
+    await expect(grandTotalRow.getByText(/^Gs\. 9\.000$/)).toBeVisible({ timeout: 15_000 });
   });
 });

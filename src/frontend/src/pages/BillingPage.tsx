@@ -1390,20 +1390,11 @@ function NewInvoiceTab({
               <span>{formatAmountDecimal(total.toFixed(2))}</span>
             </div>
             {showTips && (
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="billing-tips-amount" className="text-[rgb(var(--color-muted-foreground))]">
+              <div className="flex justify-between">
+                <span className="text-[rgb(var(--color-muted-foreground))]">
                   {t("femme.billing.invoice.tips")}
-                </Label>
-                <Input
-                  id="billing-tips-amount"
-                  inputMode="numeric"
-                  value={tipsAmount}
-                  onChange={(e) => setTipsAmount(maskMoneyInput(e.target.value))}
-                  placeholder={t("femme.billing.invoice.tipsPlaceholder")}
-                  className="w-32 text-right"
-                  disabled={serviceRecordId != null}
-                  aria-readonly={serviceRecordId != null}
-                />
+                </span>
+                <span id="billing-tips-amount">{formatAmountDecimal(tipsAmountNum.toFixed(2))}</span>
               </div>
             )}
             <div

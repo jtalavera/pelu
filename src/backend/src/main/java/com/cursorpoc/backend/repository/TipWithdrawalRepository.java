@@ -46,4 +46,23 @@ public interface TipWithdrawalRepository extends JpaRepository<TipWithdrawal, Lo
       @Param("fromDate") Instant fromDate,
       @Param("toDate") Instant toDate,
       @Param("professionalIds") List<Long> professionalIds);
+
+  /** Tenant-wide withdrawal history (all professionals), most recent first. */
+  @Query(
+      value =
+          """
+          SELECT w FROM TipWithdrawal w
+          JOIN FETCH w.professional p
+          WHERE w.tenant.id = :tenantId
+          AND w.withdrawnAt >= :fromDate
+          ORDER BY w.withdrawnAt DESC
+          """,
+      countQuery =
+          """
+          SELECT COUNT(w) FROM TipWithdrawal w
+          WHERE w.tenant.id = :tenantId
+          AND w.withdrawnAt >= :fromDate
+          """)
+  Page<TipWithdrawal> findByTenantSince(
+      @Param("tenantId") Long tenantId, @Param("fromDate") Instant fromDate, Pageable pageable);
 }
