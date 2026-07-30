@@ -451,8 +451,7 @@
         "linesRequired": "Add at least one item.",
         "paymentsRequired": "Add at least one payment method.",
         "paymentSumHint": "Total assigned: {{assigned}} of {{total}}",
-        "tips": "Tips",
-        "tipsPlaceholder": "0"
+        "tips": "Tips"
       },
       "history": {
         "title": "Invoice history",
@@ -1101,7 +1100,6 @@
         "colDateTime": "Service date and time",
         "subtotalLabel": "Subtotal — {{name}}",
         "withdrawalRowLabel": "Manual withdrawal — {{name}}",
-        "withdrawalsTotalLabel": "Total manual withdrawals",
         "grandTotalLabel": "Grand total"
       },
       "withdrawal": {
@@ -1118,7 +1116,8 @@
         "submitting": "Withdrawing…",
         "success": "Withdrawal completed successfully.",
         "historyTitle": "Withdrawal history",
-        "historyEmpty": "No withdrawals yet for this professional.",
+        "historyEmpty": "No withdrawals in the last 3 months.",
+        "historyColProfessional": "Professional",
         "historyColDate": "Date",
         "historyColAmount": "Amount"
       }

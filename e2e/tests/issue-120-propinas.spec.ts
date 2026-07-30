@@ -175,23 +175,23 @@ test.describe("Issue #120 · Propinas", () => {
     const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
     const rowA = reportRows.filter({ hasText: clientA.fullName });
     await expect(rowA).toBeVisible({ timeout: 15_000 });
-    await expect(rowA.getByText(/^5\.000$/)).toBeVisible();
+    await expect(rowA.getByText(/^Gs\. 5\.000$/)).toBeVisible();
 
     const rowB = reportRows.filter({ hasText: clientB.fullName });
     await expect(rowB).toBeVisible();
-    await expect(rowB.getByText(/^3\.000$/)).toBeVisible();
+    await expect(rowB.getByText(/^Gs\. 3\.000$/)).toBeVisible();
 
     const subtotalRowA = reportRows.filter({ hasText: `Subtotal — ${seed.professionalFullName}` });
     await expect(subtotalRowA).toBeVisible();
-    await expect(subtotalRowA.getByText(/^5\.000$/)).toBeVisible();
+    await expect(subtotalRowA.getByText(/^Gs\. 5\.000$/)).toBeVisible();
 
     const subtotalRowB = reportRows.filter({ hasText: `Subtotal — ${profB.fullName}` });
     await expect(subtotalRowB).toBeVisible();
-    await expect(subtotalRowB.getByText(/^3\.000$/)).toBeVisible();
+    await expect(subtotalRowB.getByText(/^Gs\. 3\.000$/)).toBeVisible();
 
     const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
     await expect(grandTotalRow).toBeVisible();
-    await expect(grandTotalRow.getByText(/^8\.000$/)).toBeVisible();
+    await expect(grandTotalRow.getByText(/^Gs\. 8\.000$/)).toBeVisible();
 
     // AC2: filtering to a future date range (no tips possible yet) yields an empty report.
     const future = new Date();
@@ -268,7 +268,7 @@ test.describe("Issue #120 · Propinas", () => {
     );
 
     // AC6: accumulated (CLOSED-only) balance for the selected professional.
-    await expect(page.getByTestId("propinas-balance")).toHaveText("10.000", { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
 
     // AC7: withdrawing more than the balance is rejected client-side.
     const amountInput = page.locator("#propinas-withdrawal-amount");
@@ -277,20 +277,21 @@ test.describe("Issue #120 · Propinas", () => {
     await expect(amountInput).toHaveValue("15.000");
     await page.getByRole("button", { name: "Withdraw", exact: true }).click();
     await expect(page.getByText("The amount cannot exceed the accumulated tip balance.")).toBeVisible();
-    await expect(page.getByTestId("propinas-balance")).toHaveText("10.000");
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000");
 
     // AC8: a valid withdrawal deducts from the balance immediately.
     await setControlledInputValue(amountInput, "4000");
     await expect(amountInput).toHaveValue("4.000");
     await page.getByRole("button", { name: "Withdraw", exact: true }).click();
     await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("propinas-balance")).toHaveText("6.000");
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 6.000");
 
     // AC10: the withdrawal history list shows the new withdrawal, with the 10/25/50 paging standard.
     await expect(page.getByRole("heading", { name: "Withdrawal history" })).toBeVisible();
     const historyRow = page
       .getByTestId("propinas-withdrawal-history-table")
       .locator("tbody tr")
+      .filter({ hasText: withdrawalProf.fullName })
       .filter({ hasText: "4.000" });
     await expect(historyRow).toBeVisible({ timeout: 15_000 });
     const pageSizeSelect = page.getByLabel("Rows per page:");

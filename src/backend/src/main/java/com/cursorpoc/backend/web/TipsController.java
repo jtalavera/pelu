@@ -162,7 +162,7 @@ public class TipsController {
   @GetMapping("/withdrawals")
   public PagedTipWithdrawalsResponse withdrawals(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
-      @RequestParam Long professionalId,
+      @RequestParam(required = false) Long professionalId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size) {
     requirePrincipal(principal);

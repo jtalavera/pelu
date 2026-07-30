@@ -155,11 +155,15 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
 
     // Scroll down to the tips section (bottom of the form) before saving, simulating a user who
     // scrolled past the top alert area to edit a field further down.
-    await scrollContainer.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
+    // Retry the scroll-then-check as a poll: a transient reflow (e.g. the professionals dropdown
+    // finishing its async load) can otherwise reset scrollTop between the one-shot set and check.
     await expect
-      .poll(() => scrollContainer.evaluate((el) => el.scrollTop))
+      .poll(async () => {
+        await scrollContainer.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+        });
+        return scrollContainer.evaluate((el) => el.scrollTop);
+      })
       .toBeGreaterThan(0);
 
     const tipInput = dialog.locator(`#service-record-tip-${seed.professionalId}`);
@@ -204,11 +208,15 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     await expect(dialog).toBeVisible();
     const scrollContainer = dialog.locator(".overflow-y-auto");
 
-    await scrollContainer.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
+    // Retry the scroll-then-check as a poll: a transient reflow (e.g. the professionals dropdown
+    // finishing its async load) can otherwise reset scrollTop between the one-shot set and check.
     await expect
-      .poll(() => scrollContainer.evaluate((el) => el.scrollTop))
+      .poll(async () => {
+        await scrollContainer.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+        });
+        return scrollContainer.evaluate((el) => el.scrollTop);
+      })
       .toBeGreaterThan(0);
 
     const tipInput = dialog.locator(`#service-record-tip-${seed.professionalId}`);
@@ -259,7 +267,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
       seed.professionalFullName.slice(0, 10),
       new RegExp(seed.professionalFullName),
     );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("10.000", { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
     await setControlledInputValue(page.locator("#propinas-withdrawal-amount"), "4000");
     await page.getByRole("button", { name: "Withdraw", exact: true }).click();
     await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
@@ -267,7 +275,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     });
 
     await pickSearchableOption(page, "Professional", "E2E135 Prof B", /E2E135 Prof B/);
-    await expect(page.getByTestId("propinas-balance")).toHaveText("8.000", { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 8.000", { timeout: 15_000 });
     await setControlledInputValue(page.locator("#propinas-withdrawal-amount"), "2000");
     await page.getByRole("button", { name: "Withdraw", exact: true }).click();
     await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
@@ -291,22 +299,21 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
       hasText: `Manual withdrawal — ${seed.professionalFullName}`,
     });
     await expect(withdrawalRowA).toBeVisible({ timeout: 15_000 });
-    await expect(withdrawalRowA.getByText(/^4\.000$/)).toBeVisible();
+    await expect(withdrawalRowA.getByText(/^Gs\. 4\.000$/)).toBeVisible();
     await expect(withdrawalRowA).toHaveClass(/text-red-600/);
 
     const withdrawalRowB = reportRows.filter({
       hasText: "Manual withdrawal — E2E135 Prof B",
     });
     await expect(withdrawalRowB).toBeVisible({ timeout: 15_000 });
-    await expect(withdrawalRowB.getByText(/^2\.000$/)).toBeVisible();
+    await expect(withdrawalRowB.getByText(/^Gs\. 2\.000$/)).toBeVisible();
     await expect(withdrawalRowB).toHaveClass(/text-red-600/);
 
-    const totalRow = reportRows.filter({ hasText: "Total manual withdrawals" });
-    await expect(totalRow).toBeVisible();
-    await expect(totalRow.getByText(/^6\.000$/)).toBeVisible();
-    await expect(totalRow).toHaveClass(/text-red-600/);
+    // Issue #137: the aggregate "Total manual withdrawals" row was removed — each withdrawal now
+    // lives only inside its professional's own group.
+    await expect(reportRows.filter({ hasText: "Total manual withdrawals" })).toHaveCount(0);
 
     const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-    await expect(grandTotalRow.getByText(/^12\.000$/)).toBeVisible();
+    await expect(grandTotalRow.getByText(/^Gs\. 12\.000$/)).toBeVisible();
   });
 });
