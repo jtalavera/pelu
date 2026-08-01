@@ -1,14 +1,19 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.FeatureFlag;
 import com.cursorpoc.backend.domain.TenantFeatureFlag;
+import com.cursorpoc.backend.domain.TenantFeatureFlagChange;
 import com.cursorpoc.backend.repository.FeatureFlagRepository;
+import com.cursorpoc.backend.repository.TenantFeatureFlagChangeRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.FeatureFlagResponse;
 import com.cursorpoc.backend.web.dto.FeatureGlobalUpdateRequest;
+import com.cursorpoc.backend.web.dto.TenantFeatureFlagChangeResponse;
 import com.cursorpoc.backend.web.dto.TenantFeatureFlagOverrideRequest;
 import com.cursorpoc.backend.web.dto.TenantFeatureFlagRowResponse;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,15 +31,21 @@ public class FeatureFlagService {
 
   private final FeatureFlagRepository featureFlagRepository;
   private final TenantFeatureFlagRepository tenantFeatureFlagRepository;
+  private final TenantFeatureFlagChangeRepository tenantFeatureFlagChangeRepository;
   private final TenantRepository tenantRepository;
+  private final FemmeTimeProperties timeProperties;
 
   public FeatureFlagService(
       FeatureFlagRepository featureFlagRepository,
       TenantFeatureFlagRepository tenantFeatureFlagRepository,
-      TenantRepository tenantRepository) {
+      TenantFeatureFlagChangeRepository tenantFeatureFlagChangeRepository,
+      TenantRepository tenantRepository,
+      FemmeTimeProperties timeProperties) {
     this.featureFlagRepository = featureFlagRepository;
     this.tenantFeatureFlagRepository = tenantFeatureFlagRepository;
+    this.tenantFeatureFlagChangeRepository = tenantFeatureFlagChangeRepository;
     this.tenantRepository = tenantRepository;
+    this.timeProperties = timeProperties;
   }
 
   @Transactional(readOnly = true)
@@ -93,24 +104,35 @@ public class FeatureFlagService {
             g -> {
               Optional<TenantFeatureFlag> override =
                   tenantFeatureFlagRepository.findByTenantIdAndFlagKey(tenantId, g.getFlagKey());
+              TenantFeatureFlagChangeResponse lastChange =
+                  tenantFeatureFlagChangeRepository
+                      .findByTenantIdAndFlagKey(tenantId, g.getFlagKey())
+                      .map(this::toChangeResponse)
+                      .orElse(null);
               return new TenantFeatureFlagRowResponse(
                   g.getFlagKey(),
                   g.getDescription(),
                   g.isEnabled(),
                   override.isPresent(),
-                  override.map(TenantFeatureFlag::isEnabled).orElse(null));
+                  override.map(TenantFeatureFlag::isEnabled).orElse(null),
+                  lastChange);
             })
         .toList();
   }
 
   @Transactional
   public void upsertTenantOverride(
-      long tenantId, String flagKey, TenantFeatureFlagOverrideRequest request) {
+      long tenantId,
+      String flagKey,
+      TenantFeatureFlagOverrideRequest request,
+      long changedByUserId,
+      String changedByEmail) {
     requireValidFlagKey(flagKey);
     requireTenant(tenantId);
     featureFlagRepository
         .findByFlagKey(flagKey)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "FLAG_NOT_FOUND"));
+    boolean previousEnabled = isEnabled(flagKey, tenantId);
     TenantFeatureFlag row =
         tenantFeatureFlagRepository
             .findByTenantIdAndFlagKey(tenantId, flagKey)
@@ -123,13 +145,56 @@ public class FeatureFlagService {
                 });
     row.setEnabled(request.enabled());
     tenantFeatureFlagRepository.save(row);
+    recordChange(
+        tenantId, flagKey, previousEnabled, request.enabled(), changedByUserId, changedByEmail);
   }
 
   @Transactional
-  public void deleteTenantOverride(long tenantId, String flagKey) {
+  public void deleteTenantOverride(
+      long tenantId, String flagKey, long changedByUserId, String changedByEmail) {
     requireValidFlagKey(flagKey);
     requireTenant(tenantId);
+    boolean previousEnabled = isEnabled(flagKey, tenantId);
     tenantFeatureFlagRepository.deleteByTenantIdAndFlagKey(tenantId, flagKey);
+    boolean newEnabled = isEnabled(flagKey, tenantId);
+    recordChange(tenantId, flagKey, previousEnabled, newEnabled, changedByUserId, changedByEmail);
+  }
+
+  /**
+   * SIFEN HU-22 AC-05: upserts the single "last change" record for this (tenant, flag) pair — same
+   * "overwritten, not appended" convention as every other historical-record AC in this integration.
+   */
+  private void recordChange(
+      long tenantId,
+      String flagKey,
+      boolean previousEnabled,
+      boolean newEnabled,
+      long changedByUserId,
+      String changedByEmail) {
+    TenantFeatureFlagChange change =
+        tenantFeatureFlagChangeRepository
+            .findByTenantIdAndFlagKey(tenantId, flagKey)
+            .orElseGet(
+                () -> {
+                  TenantFeatureFlagChange c = new TenantFeatureFlagChange();
+                  c.setTenantId(tenantId);
+                  c.setFlagKey(flagKey);
+                  return c;
+                });
+    change.setPreviousEnabled(previousEnabled);
+    change.setNewEnabled(newEnabled);
+    change.setChangedAt(LocalDateTime.now(timeProperties.zoneId()));
+    change.setChangedByUserId(changedByUserId);
+    change.setChangedByEmail(changedByEmail);
+    tenantFeatureFlagChangeRepository.save(change);
+  }
+
+  private TenantFeatureFlagChangeResponse toChangeResponse(TenantFeatureFlagChange change) {
+    return new TenantFeatureFlagChangeResponse(
+        change.getChangedAt().atZone(timeProperties.zoneId()).toInstant(),
+        change.getChangedByEmail(),
+        change.isPreviousEnabled(),
+        change.isNewEnabled());
   }
 
   private void requireTenant(long tenantId) {

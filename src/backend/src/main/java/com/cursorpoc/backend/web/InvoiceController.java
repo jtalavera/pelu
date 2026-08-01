@@ -1,7 +1,9 @@
 package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.FeatureFlagService;
 import com.cursorpoc.backend.service.InvoiceService;
+import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
 import com.cursorpoc.backend.service.SifenInvoiceClientIdentificationService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
@@ -33,30 +35,62 @@ public class InvoiceController {
 
   private static final Logger log = LoggerFactory.getLogger(InvoiceController.class);
 
+  /**
+   * SIFEN HU-22 (Fase 5): the real per-tenant switch between the SIFEN pipeline and the traditional
+   * generator, wired here since {@code issue()} is the single entry point for both (see
+   * PROGRESS.md).
+   */
+  static final String SIFEN_ELECTRONIC_INVOICING_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
   private final InvoiceService invoiceService;
   private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
   private final SifenInvoiceCancellationService sifenInvoiceCancellationService;
   private final SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService;
+  private final FeatureFlagService featureFlagService;
+  private final SifenCertificateService sifenCertificateService;
 
   public InvoiceController(
       InvoiceService invoiceService,
       SifenInvoiceSubmissionService sifenInvoiceSubmissionService,
       SifenInvoiceCancellationService sifenInvoiceCancellationService,
-      SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService) {
+      SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService,
+      FeatureFlagService featureFlagService,
+      SifenCertificateService sifenCertificateService) {
     this.invoiceService = invoiceService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
     this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
     this.sifenInvoiceClientIdentificationService = sifenInvoiceClientIdentificationService;
+    this.featureFlagService = featureFlagService;
+    this.sifenCertificateService = sifenCertificateService;
   }
 
+  /**
+   * SIFEN HU-22 AC-03/AC-04: routes between the traditional generator and the SIFEN pipeline based
+   * on the tenant's {@value #SIFEN_ELECTRONIC_INVOICING_FLAG_KEY} flag. When enabled, a valid
+   * certificate is required *before* the invoice is created (AC-04: blocks issuance entirely,
+   * nothing is persisted, if {@link SifenCertificateService#requireActiveCertificate} throws), and
+   * the freshly persisted invoice is immediately submitted to SIFEN (HU-06) once it exists. When
+   * disabled, the invoice is issued exactly as before this story — the traditional generator is
+   * simply "no SIFEN fields ever get populated" (AC-03), not a separate code path.
+   */
   @PostMapping
   public ResponseEntity<InvoiceResponse> issue(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody InvoiceCreateRequest request) {
     requirePrincipal(principal);
-    log.info("POST /api/invoices tenantId={}", principal.getTenantId());
-    InvoiceResponse response = invoiceService.issueInvoice(principal.getTenantId(), request);
-    log.info("POST /api/invoices tenantId={} status=201", principal.getTenantId());
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/invoices tenantId={}", tenantId);
+    boolean sifenEnabled =
+        featureFlagService.isEnabled(SIFEN_ELECTRONIC_INVOICING_FLAG_KEY, tenantId);
+    if (sifenEnabled) {
+      sifenCertificateService.requireActiveCertificate(tenantId);
+    }
+    InvoiceResponse response = invoiceService.issueInvoice(tenantId, request);
+    if (sifenEnabled) {
+      sifenInvoiceSubmissionService.submit(tenantId, response.id());
+      response = invoiceService.getInvoice(tenantId, response.id());
+    }
+    log.info("POST /api/invoices tenantId={} status=201", tenantId);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
   }
 

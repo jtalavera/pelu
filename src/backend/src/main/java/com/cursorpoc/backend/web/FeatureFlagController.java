@@ -123,7 +123,8 @@ public class FeatureFlagController {
         flagKey,
         principal.getTenantId());
     try {
-      featureFlagService.upsertTenantOverride(tenantId, flagKey, request);
+      featureFlagService.upsertTenantOverride(
+          tenantId, flagKey, request, principal.getUserId(), principal.getUsername());
       log.info(
           "PUT /api/admin/feature-flags/tenants/{}/{} tenantId={} status=204",
           tenantId,
@@ -154,7 +155,8 @@ public class FeatureFlagController {
         flagKey,
         principal.getTenantId());
     try {
-      featureFlagService.deleteTenantOverride(tenantId, flagKey);
+      featureFlagService.deleteTenantOverride(
+          tenantId, flagKey, principal.getUserId(), principal.getUsername());
       log.info(
           "DELETE /api/admin/feature-flags/tenants/{}/{} tenantId={} status=204",
           tenantId,

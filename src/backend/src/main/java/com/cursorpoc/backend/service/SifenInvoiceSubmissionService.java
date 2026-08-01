@@ -1,18 +1,12 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
-import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
-import com.cursorpoc.backend.repository.InvoiceRepository;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import org.w3c.dom.Document;
 
 /**
@@ -23,43 +17,34 @@ import org.w3c.dom.Document;
  * #checkPendingStatus}) and the automatic one (AC-05, {@link #submit} checks first before blindly
  * resending).
  *
- * <p>Sin endpoint HTTP ni pantalla propia todavía para el envío en sí — ninguna AC de HU-06 pide un
- * disparador manual; la activación real por tenant y el enrutamiento desde el flujo normal de
- * emisión son HU-22 (Fase 5), que todavía no existe. Mismo patrón que HU-01/02/03/04/05/21:
- * capacidad de servicio consumida por historias futuras. HU-07 sí tiene un controller propio
- * ({@code InvoiceController}) para {@link #checkPendingStatus} — ver PROGRESS.md.
+ * <p>SIFEN HU-22 (Fase 5) wires {@link #submit} into real invoice issuance ({@code
+ * InvoiceController#issue}) — the first caller that isn't a test or the test-support controller.
+ * HU-07 has its own controller ({@code InvoiceController}) for {@link #checkPendingStatus} — see
+ * PROGRESS.md.
  *
- * <p>Dos transacciones separadas, no una sola envolviendo todo el método: la llamada de red a SIFEN
- * puede tardar (hasta 30s de timeout) y no debe mantener abierta una conexión/transacción de base
- * de datos mientras tanto. La primera transacción resuelve y persiste {@code sifenSignedAt} *antes*
- * de firmar/enviar, para que sobreviva aunque el proceso se caiga a mitad del envío (AC-07 necesita
- * ese instante para sobrevivir a un reintento).
+ * <p>Deliberately not itself {@code @Transactional}: the network call to SIFEN can take up to 30s,
+ * and must not hold a database transaction/connection open for that long. The DB reads/writes this
+ * method needs before and after that call live in {@link SifenInvoiceSubmissionPersistenceService}
+ * instead — see that class's javadoc for why this split is required, not just a style choice.
  */
 @Service
 public class SifenInvoiceSubmissionService {
 
   private static final Logger log = LoggerFactory.getLogger(SifenInvoiceSubmissionService.class);
 
-  /**
-   * AC-07: Manual Técnico V150 ("La transmisión del DE firmado digitalmente contempla un plazo de
-   * hasta 72 horas posteriores a la firma digital") — no es una regla propia, es la ventana real
-   * que SIFEN exige.
-   */
-  static final Duration SIGNATURE_TRANSMISSION_WINDOW = Duration.ofHours(72);
-
-  private final InvoiceRepository invoiceRepository;
+  private final SifenInvoiceSubmissionPersistenceService persistence;
   private final SifenDocumentSigningService signingService;
   private final SifenDocumentReceptionClient receptionClient;
   private final SifenDocumentQueryClient queryClient;
   private final FemmeTimeProperties timeProperties;
 
   public SifenInvoiceSubmissionService(
-      InvoiceRepository invoiceRepository,
+      SifenInvoiceSubmissionPersistenceService persistence,
       SifenDocumentSigningService signingService,
       SifenDocumentReceptionClient receptionClient,
       SifenDocumentQueryClient queryClient,
       FemmeTimeProperties timeProperties) {
-    this.invoiceRepository = invoiceRepository;
+    this.persistence = persistence;
     this.signingService = signingService;
     this.receptionClient = receptionClient;
     this.queryClient = queryClient;
@@ -70,14 +55,14 @@ public class SifenInvoiceSubmissionService {
     // HU-07 AC-05: a pending-verification invoice gets queried first, instead of blindly resending
     // the same document — only fall through to a fresh submission attempt below if SIFEN still
     // gives no answer (still ambiguous).
-    if (isPendingVerification(tenantId, invoiceId)) {
+    if (persistence.isPendingVerification(tenantId, invoiceId)) {
       Optional<SifenSubmissionResult> resolved = checkPendingStatus(tenantId, invoiceId);
       if (resolved.isPresent()) {
         return resolved.get();
       }
     }
 
-    LocalDateTime signedAt = prepareForSubmission(tenantId, invoiceId);
+    LocalDateTime signedAt = persistence.prepareForSubmission(tenantId, invoiceId);
 
     SifenSignedDocument signed = signingService.signInvoice(tenantId, invoiceId, signedAt);
     Document document = signed.document();
@@ -85,7 +70,7 @@ public class SifenInvoiceSubmissionService {
 
     // SIFEN HU-08: persisted regardless of what SIFEN answers below — the QR is a property of the
     // document actually transmitted, not of SIFEN's response to it (AC-11's "sent invoice" data).
-    persistQrData(tenantId, invoiceId, signed.qrUrl(), signed.publicConsultationUrl());
+    persistence.persistQrData(tenantId, invoiceId, signed.qrUrl(), signed.publicConsultationUrl());
 
     Optional<SifenSubmissionResult> response = receptionClient.send(tenantId, xml);
     SifenSubmissionResult result =
@@ -98,7 +83,7 @@ public class SifenInvoiceSubmissionService {
                     null,
                     LocalDateTime.now(timeProperties.zoneId())));
 
-    recordResult(tenantId, invoiceId, result, response.isPresent(), null);
+    persistence.recordResult(tenantId, invoiceId, result, response.isPresent(), null);
 
     if (response.isPresent()) {
       log.info(
@@ -119,59 +104,6 @@ public class SifenInvoiceSubmissionService {
   }
 
   /**
-   * AC-06/AC-07 guards, plus first-time persistence of {@code sifenSignedAt} — all inside one short
-   * transaction, before any signing or network activity.
-   */
-  @Transactional
-  LocalDateTime prepareForSubmission(long tenantId, long invoiceId) {
-    Invoice invoice = requireInvoice(tenantId, invoiceId);
-    requireNotAlreadyApproved(invoice);
-
-    LocalDateTime now = LocalDateTime.now(timeProperties.zoneId());
-    LocalDateTime signedAt = invoice.getSifenSignedAt();
-    if (signedAt == null) {
-      signedAt = now;
-      invoice.setSifenSignedAt(signedAt);
-    }
-
-    requireWithinTransmissionWindow(invoice, signedAt, now);
-    return signedAt;
-  }
-
-  @Transactional
-  void persistQrData(long tenantId, long invoiceId, String qrUrl, String publicConsultationUrl) {
-    Invoice invoice = requireInvoice(tenantId, invoiceId);
-    invoice.setSifenQrUrl(qrUrl);
-    invoice.setSifenPublicConsultationUrl(publicConsultationUrl);
-  }
-
-  /**
-   * @param documentContent HU-07 AC-03: the full document content SIFEN returns from a query
-   *     resolution (null for a HU-06 reception-service result, which never includes it).
-   */
-  @Transactional
-  void recordResult(
-      long tenantId,
-      long invoiceId,
-      SifenSubmissionResult result,
-      boolean responseReceived,
-      String documentContent) {
-    Invoice invoice = requireInvoice(tenantId, invoiceId);
-    invoice.setSifenSubmissionStatus(result.status());
-    invoice.setSifenSubmissionProtocolNumber(result.protocolNumber());
-    invoice.setSifenSubmissionResultCode(result.resultCode());
-    invoice.setSifenSubmissionMessage(result.message());
-    // AC-05: sifenSubmittedAt stays null while pending verification — no response was ever
-    // actually received, so AC-07's "never sent before" condition must still hold on retry.
-    if (responseReceived) {
-      invoice.setSifenSubmittedAt(result.processedAt());
-    }
-    if (documentContent != null) {
-      invoice.setSifenQueryDocumentContent(documentContent);
-    }
-  }
-
-  /**
    * HU-07 AC-01/AC-02/AC-03/AC-04: queries SIFEN directly for the real status of an invoice this
    * system marked 'pendiente de verificación'. Returns {@link Optional#empty()} — and leaves the
    * invoice untouched — if SIFEN still gives no interpretable answer; otherwise the invoice's
@@ -180,7 +112,7 @@ public class SifenInvoiceSubmissionService {
    * invoice that isn't currently pending verification — this check only ever makes sense for one.
    */
   public Optional<SifenSubmissionResult> checkPendingStatus(long tenantId, long invoiceId) {
-    String cdc = requirePendingInvoiceControlNumber(tenantId, invoiceId);
+    String cdc = persistence.requirePendingInvoiceControlNumber(tenantId, invoiceId);
 
     Optional<SifenQueryResult> queried = queryClient.query(tenantId, cdc);
     if (queried.isEmpty()) {
@@ -193,7 +125,8 @@ public class SifenInvoiceSubmissionService {
     }
 
     SifenQueryResult result = queried.get();
-    recordResult(tenantId, invoiceId, result.submissionResult(), true, result.documentContent());
+    persistence.recordResult(
+        tenantId, invoiceId, result.submissionResult(), true, result.documentContent());
     log.info(
         "SIFEN status check resolved tenantId={} invoiceId={} controlNumber={} status={}",
         tenantId,
@@ -201,55 +134,5 @@ public class SifenInvoiceSubmissionService {
         cdc,
         result.submissionResult().status());
     return Optional.of(result.submissionResult());
-  }
-
-  @Transactional(readOnly = true)
-  boolean isPendingVerification(long tenantId, long invoiceId) {
-    return requireInvoice(tenantId, invoiceId).getSifenSubmissionStatus()
-        == SifenSubmissionStatus.PENDING_VERIFICATION;
-  }
-
-  @Transactional(readOnly = true)
-  String requirePendingInvoiceControlNumber(long tenantId, long invoiceId) {
-    Invoice invoice = requireInvoice(tenantId, invoiceId);
-    if (invoice.getSifenSubmissionStatus() != SifenSubmissionStatus.PENDING_VERIFICATION) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "SIFEN_INVOICE_NOT_PENDING_VERIFICATION");
-    }
-    String cdc = invoice.getSifenControlNumber();
-    if (cdc == null || cdc.isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "SIFEN_INVOICE_MISSING_CONTROL_NUMBER");
-    }
-    return cdc;
-  }
-
-  private Invoice requireInvoice(long tenantId, long invoiceId) {
-    return invoiceRepository
-        .findByIdAndTenant_Id(invoiceId, tenantId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
-  }
-
-  /** AC-06: an invoice already Aprobado/Aprobado con observación can never be sent again. */
-  private static void requireNotAlreadyApproved(Invoice invoice) {
-    SifenSubmissionStatus status = invoice.getSifenSubmissionStatus();
-    if (status == SifenSubmissionStatus.APPROVED
-        || status == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_INVOICE_ALREADY_APPROVED");
-    }
-  }
-
-  /**
-   * AC-07: blocked only if this document was signed more than 72h ago AND has never actually
-   * received a response from SIFEN before (a rejected-then-retried or pending-then-retried
-   * submission this stale should go through HU-07's status check instead of a blind resend).
-   */
-  private static void requireWithinTransmissionWindow(
-      Invoice invoice, LocalDateTime signedAt, LocalDateTime now) {
-    boolean neverReceivedAResponse = invoice.getSifenSubmittedAt() == null;
-    if (neverReceivedAResponse
-        && Duration.between(signedAt, now).compareTo(SIGNATURE_TRANSMISSION_WINDOW) > 0) {
-      throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED, "SIFEN_SIGNATURE_EXPIRED");
-    }
   }
 }

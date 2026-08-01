@@ -3,8 +3,16 @@ import { useTranslation } from "react-i18next";
 import { Alert, Button, Heading, Spinner, Switch, Text } from "@design-system";
 import { femmeDeleteJson, femmeJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlagsState } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+
+type TenantFlagChange = {
+  changedAt: string;
+  changedByEmail: string;
+  previousEnabled: boolean;
+  newEnabled: boolean;
+};
 
 type TenantRow = {
   flagKey: string;
@@ -12,10 +20,12 @@ type TenantRow = {
   globalEnabled: boolean;
   hasOverride: boolean;
   overrideEnabled: boolean | null;
+  lastChange: TenantFlagChange | null;
 };
 
 export default function FeatureFlagsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = getDateLocale(i18n);
   const { me } = useMe();
   const { refetch: refetchFlags } = useFeatureFlagsState();
   const [rows, setRows] = useState<TenantRow[] | null>(null);
@@ -228,6 +238,27 @@ export default function FeatureFlagsPage() {
                   </div>
                 </div>
               </div>
+
+              {row.lastChange ? (
+                <p
+                  data-testid={`feature-flag-history-${row.flagKey}`}
+                  className="mt-3 text-xs text-[var(--color-ink-3)]"
+                >
+                  {t("femme.featureFlags.lastChange", {
+                    date: new Intl.DateTimeFormat(locale, {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    }).format(new Date(row.lastChange.changedAt)),
+                    email: row.lastChange.changedByEmail,
+                    previous: row.lastChange.previousEnabled
+                      ? t("femme.featureFlags.stateOn")
+                      : t("femme.featureFlags.stateOff"),
+                    next: row.lastChange.newEnabled
+                      ? t("femme.featureFlags.stateOn")
+                      : t("femme.featureFlags.stateOff"),
+                  })}
+                </p>
+              ) : null}
             </li>
           );
         })}

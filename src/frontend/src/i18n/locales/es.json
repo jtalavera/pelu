@@ -275,7 +275,8 @@
       "usingGlobal": "Usa el predeterminado global",
       "resetToGlobal": "Volver al global",
       "globalSwitchAria": "Predeterminado global para {{key}}",
-      "tenantSwitchAria": "Esta organización para {{key}}"
+      "tenantSwitchAria": "Esta organización para {{key}}",
+      "lastChange": "Último cambio: {{date}} por {{email}} — {{previous}} → {{next}}"
     },
     "businessSettings": {
       "title": "Configuración del negocio",

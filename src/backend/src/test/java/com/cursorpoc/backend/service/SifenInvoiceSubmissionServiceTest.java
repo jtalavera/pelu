@@ -42,13 +42,11 @@ class SifenInvoiceSubmissionServiceTest {
 
   @BeforeEach
   void setUp() {
+    SifenInvoiceSubmissionPersistenceService persistence =
+        new SifenInvoiceSubmissionPersistenceService(invoiceRepository, new FemmeTimeProperties());
     service =
         new SifenInvoiceSubmissionService(
-            invoiceRepository,
-            signingService,
-            receptionClient,
-            queryClient,
-            new FemmeTimeProperties());
+            persistence, signingService, receptionClient, queryClient, new FemmeTimeProperties());
     invoice = new Invoice();
     // Mirrors the real flow: SifenInvoiceHeaderService (called inside the real signInvoice, not
     // this mock) persists the CDC onto the invoice the first time a document is built (HU-02) — so

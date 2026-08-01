@@ -5,9 +5,10 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 
 ## Estado
 
-Fase actual: **Fase 4 completa** (Homologación ante la DNIT) — HU-12 a HU-17, las 6 historias de
-`EP-05`, hechas. Próximo: **Fase 5** (`HU-22`, activación real por tenant), la última fase del plan
-(ver "Próximo paso" abajo).
+**Fase 5 completa (2026-08-01) — las 22 historias de usuario del plan están hechas.** `HU-22`
+(activación real por tenant, ver detalle abajo) cierra el plan completo de esta integración. Queda
+pendiente únicamente la deuda técnica transversal ya documentada (RT-09/RT-10, Azure Key Vault —
+ver "Deuda técnica" más abajo), fuera del alcance de las 22 HU numeradas.
 
 **Actualización 2026-08-01 — el bloqueo externo `dCodRes=1252` se resolvió y HU-13/HU-14 ahora tienen
 "Aprobado" real, confirmado en vivo para los 5 tipos de documento.** Ver la sección "Adenda
@@ -42,12 +43,13 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-15 Probar el envío por lotes de todos los tipos de comprobante | ✅ Done | Ver detalle abajo. **Introduce el WS asíncrono `SiRecepLoteDE`/`SiResultLoteDE`, nunca usado hasta ahora.** AC-03 (incorrectas rechazadas, 5/5, motivo identificable) y AC-04/AC-05 (lote con mezcla de emisor/tipo rechazado antes de procesar, `dCodRes=0363`) verificados en vivo con aserción dura. AC-01/AC-02 (correctas aprobadas, los 5 tipos) quedan bloqueadas por el mismo límite externo de HU-13/HU-14 (`dCodRes=1252`). |
 | HU-16 Probar el registro de todos los eventos exigidos | ✅ Done | Ver detalle abajo. **Cierra el muro `dCodRes=0160` que bloqueaba HU-10/HU-11 desde su creación** — root-cause encontrado y corregido en vivo (ver detalle). AC-02 (anulación de numeración, 5 tipos) y 2 de los 4 eventos de receptor de AC-03 (desconocimiento, notificación de recepción) verificados en vivo con aserción dura, **primer "Aprobado" real de toda esta integración**. AC-01/AC-03 (conformidad/disconformidad/corrección)/AC-05 quedan bloqueados por el mismo límite externo `dCodRes=1252` de HU-13/14/15 (confirmado que sigue vigente) — el canal de eventos en sí queda probado como sano (motivos de rechazo específicos, nunca el `0160` genérico) con aserción dura. |
 | HU-17 Probar la consulta de documentos y la generación de comprobantes de todos los tipos | ✅ Done | Ver detalle abajo. **Cierra Fase 4.** Reporte final consolidado de EP-05 (HU-12..HU-17) construido y corrido en vivo — ver detalle. |
-| Fase 5 (HU-22, activación real por tenant) | ⬜ Next | |
+| HU-22 Activar/desactivar la facturación electrónica por tenant | ✅ Done | Ver detalle abajo. **Cierra Fase 5 y el plan completo (22/22 HU).** Encontró y corrigió un bug real preexistente (`SifenInvoiceSubmissionService` nunca persistía nada, ver detalle) — la primera vez que `submit()` corrió a través de un flujo real de emisión, no un test. |
 
-**Próximo paso al reanudar el loop:** HU-17 (Fase 4, consulta de documentos + comprobantes de todos
-los tipos) está hecha — **cierra Fase 4 (EP-05) por completo.** El reporte final consolidado
-(`SifenHomologationFinalReportTest`, ver detalle abajo) corrió en vivo y confirma, en un solo reporte,
-el estado real de las 6 historias de homologación (HU-12..HU-17).
+**Próximo paso al reanudar el loop:** no queda ninguna historia numerada pendiente del plan. Si se
+retoma este loop, lo único abierto es la deuda técnica transversal (RT-09/RT-10, Azure Key Vault +
+Managed Identity para la clave maestra de cifrado fuera de `e2e` — ver "Deuda técnica" abajo), que
+necesita indicación explícita del usuario sobre si se aborda como una HU nueva o como chore de
+infraestructura.
 
 **El bloqueo externo `dCodRes=1252` (RUC piloto "inactivo") que HU-13 documentó se resolvió el
 2026-08-01** — ver "Adenda 2026-08-01" (justo antes de "## HU-17" abajo) para el diagnóstico completo
@@ -210,6 +212,151 @@ intenta construir un documento realmente aprobado antes de cancelarlo/reaccionar
 externo. **Pendiente:** replicar el resto de la cadena de fixes de HU-14 en `SifenHomologationBatchSubmissionLiveTest`/`SifenHomologationDocumentQueryAndKudeLiveTest`, dar a Nota de
 Crédito una factura semilla por escenario en ambos archivos, y opcionalmente extender HU-16 para
 construir un documento real aprobado antes de cancelar/reaccionar sobre él.
+
+## HU-22 — Activar o desactivar la facturación electrónica para un tenant (Done)
+
+Épica EP-07, **Fase 5 — la última fase del plan.** Conecta, por fin, el flujo real de SIFEN
+(HU-01..HU-21) con la emisión normal de facturas (`InvoiceService.issueInvoice` /
+`InvoiceController.issue`), que hasta esta historia nunca lo invocaba — todo lo que EP-01..EP-06
+construyeron sólo se había ejercitado desde tests y desde el controller de soporte de test
+(`SifenInvoiceTestSupportController`).
+
+### Diseño: reutilizar el mecanismo genérico de feature flags ya existente
+
+El repo ya tenía un sistema de feature flags genérico (global + override por tenant, `FeatureFlag`/
+`TenantFeatureFlag`, `FeatureFlagService`, UI en `FeatureFlagsPage` bajo Configuración → Feature
+flags), construido para `GUIDED_TOUR`. En vez de crear un mecanismo nuevo específico de SIFEN, esta
+historia:
+
+- Agrega una migración (`V28__sifen_electronic_invoicing_flag.sql`) que siembra el flag
+  `SIFEN_ELECTRONIC_INVOICING` (deshabilitado por defecto).
+- Reutiliza `FeatureFlagsPage`/`GET /api/admin/feature-flags/tenants/{tenantId}` sin cambios de UI
+  nuevos para AC-01/AC-02 — el toggle "aparece solo" porque la página itera sobre cualquier flag que
+  exista en la tabla.
+- El único código nuevo de enrutamiento real vive en `InvoiceController.issue()` (el único punto de
+  entrada de emisión, para ambos caminos): si `featureFlagService.isEnabled("SIFEN_ELECTRONIC_INVOICING", tenantId)`
+  es `true`, primero exige un certificado vigente (`SifenCertificateService.requireActiveCertificate`,
+  ya construido por HU-21) **antes** de crear la factura — si no hay uno, la petición completa falla
+  con `412 SIFEN_NO_VALID_CERTIFICATE` y no se persiste ninguna factura (AC-04). Si hay uno, la
+  factura se emite normalmente y, inmediatamente después, se llama a
+  `SifenInvoiceSubmissionService.submit(tenantId, invoice.id)` (HU-06) y se retorna el estado
+  re-consultado. Si el flag está desactivado, el comportamiento es exactamente el de antes de esta
+  historia — "el generador tradicional" no es un código nuevo, es la ausencia total de esta rama
+  (AC-03/AC-08).
+
+### AC-05: registro histórico del cambio — mismo patrón "último valor", no una tabla de auditoría completa
+
+Igual que HU-10/HU-11 ya establecieron ("el sistema deja un registro histórico" = una fila que se
+sobrescribe en cada intento, nunca una tabla de auditoría creciente — ver "Convenciones establecidas"
+al final de este documento), `FeatureFlagService.upsertTenantOverride`/`deleteTenantOverride` ahora
+reciben `changedByUserId`/`changedByEmail` y registran el cambio (valor anterior/nuevo resuelto,
+quién, cuándo) en una tabla nueva y pequeña, `tenant_feature_flag_changes` (misma migración V28) —
+**deliberadamente una tabla separada de `tenant_feature_flags`**, no columnas agregadas a esa tabla:
+resetear el override de un tenant a su valor global borra la fila de `tenant_feature_flags`, y si el
+registro del cambio viviera ahí también se perdería el rastro de ese mismo reseteo. Genérico para
+cualquier flag (no específico de SIFEN) porque el punto de enganche ya es compartido — no tuvo
+sentido condicionarlo por nombre de flag.
+
+`TenantFeatureFlagRowResponse` ahora incluye `lastChange` (nullable); `FeatureFlagsPage.tsx` lo
+muestra como una línea de texto por fila (`data-testid="feature-flag-history-<flagKey>"`) sólo cuando
+existe.
+
+### El bug real que esta historia destapó: `SifenInvoiceSubmissionService` nunca persistía nada
+
+Al probar en vivo el camino feliz (flag activo + certificado vigente + factura real), SIFEN devolvía
+(como se espera en `e2e`, con `app.femme.sifen.connection.test-base-url` apuntando al puerto
+"discard" `127.0.0.1:9`) el "no responde" documentado por HU-06 AC-05 — pero la factura quedaba con
+`sifenSubmissionStatus=null` en vez de `PENDING_VERIFICATION`, a pesar de que el número de control
+sí se generaba correctamente. Causa raíz: `submit()` invocaba `prepareForSubmission`/`persistQrData`/
+`recordResult` — los tres `@Transactional` — **por auto-invocación** (`this.metodo()` implícito,
+dentro de la misma clase). El proxy AOP de Spring que hace real el `@Transactional` sólo intercepta
+llamadas que llegan desde **fuera** del bean; una auto-invocación lo saltea por completo, así que
+esos tres métodos corrían sin ninguna transacción real — la entidad `Invoice` se recuperaba y
+mutaba, pero como el `EntityManager` que la cargó ya había cerrado su contexto de persistencia (el
+propio `findByIdAndTenant_Id` de Spring Data JPA abre y cierra su propia transacción corta), esas
+mutaciones nunca se sincronizaban a la base de datos. El número de control sí persistía porque
+`signingService.signInvoice(...)` es una llamada real entre beans distintos (`SifenDocumentSigningService`),
+así que su propio `@Transactional` sí pasaba por el proxy correctamente.
+
+Este bug es preexistente desde HU-06 — nunca se detectó porque **ningún test anterior corrió
+`submit()` de una forma que pudiera exponerlo**: los tests unitarios (`SifenInvoiceSubmissionServiceTest`)
+usan Mockito puro (sin contexto de Spring, sin proxies, sin problema real de auto-invocación que
+importe), y los tests "en vivo" de homologación (HU-12..HU-17) son ellos mismos métodos `@Test`
+individuales sin ninguna envoltura transaccional externa que pudiera disimular la ausencia de una
+transacción interna. HU-22 es la primera vez que `submit()` corre dentro de un contexto de Spring
+real, a través de un controller real, sin ningún atajo de test — exactamente el escenario que
+expone el problema.
+
+**Corrección:** se extrajeron `prepareForSubmission`/`persistQrData`/`recordResult`/
+`isPendingVerification`/`requirePendingInvoiceControlNumber` (y sus helpers privados) a una clase
+nueva, `SifenInvoiceSubmissionPersistenceService` — un bean distinto, así que las llamadas desde
+`SifenInvoiceSubmissionService.submit()`/`checkPendingStatus()` ahora sí cruzan un proxy real y sus
+`@Transactional` se aplican de verdad. `submit()` sigue sin ser `@Transactional` a nivel de método
+(la razón documentada desde HU-06 sigue vigente: la llamada de red a SIFEN puede tardar hasta 30s y
+no debe mantener abierta una transacción/conexión de base de datos mientras tanto) — el fix respeta
+ese diseño, sólo corrige el mecanismo real por el cual las transacciones cortas alrededor de esa
+llamada se ejecutan. Ningún comportamiento público cambió: mismos métodos, misma firma, mismas
+aserciones — verificado corriendo `SifenInvoiceSubmissionServiceTest` sin cambios de aserciones (solo
+se actualizó cómo se construye `service` en `@BeforeEach`) y las 23 pruebas Playwright existentes de
+HU-07/09/10/11 (que dependen indirectamente de esta clase) sin ninguna regresión.
+
+### Verificación en vivo (contra el backend real en perfil `e2e`, no sólo unit tests)
+
+Con el fix aplicado, se reprodujo a mano (vía `curl`, con el backend real corriendo) el camino
+completo: activar el flag para el tenant demo, cargar un perfil de negocio con todos los campos
+SIFEN exigidos por `SifenInvoiceHeaderService` (RUC, dirección, tipo de contribuyente, actividad
+económica, departamento/ciudad — ningún test e2e anterior había necesitado configurar esto), cargar
+un certificado válido (mismo endpoint de soporte de test que ya usaba HU-10), y emitir una factura
+real. Resultado: `sifenControlNumber` generado, firma real ejecutada, intento de red real contra el
+endpoint deliberadamente inalcanzable de `e2e`, y **`sifenSubmissionStatus=PENDING_VERIFICATION`
+correctamente persistido** — la primera vez que una factura emitida por el flujo normal de la
+aplicación (no un test, no el controller de soporte) atraviesa toda la cadena HU-01..HU-06 de punta
+a punta.
+
+### AC-02 (aislamiento entre tenants): fuera de alcance para Playwright, cubierto a nivel unitario
+
+Igual que la desviación ya documentada en HU-18 (AC-07, "un tenant no puede ver certificados de
+otro"), este repo no tiene ningún mecanismo para crear un segundo tenant real en tests e2e. AC-02 se
+verifica en `FeatureFlagServiceTest` (nuevo caso: cambiar el override del tenant 1 nunca toca al
+tenant 2, cuyo `resolveAll` se resuelve de forma completamente independiente).
+
+**Backend**:
+- `db/migration/V28__sifen_electronic_invoicing_flag.sql` — siembra el flag global y crea
+  `tenant_feature_flag_changes`.
+- `bootstrap/FemmeDataInitializer.java` — mismo seed idempotente que ya existía para `GUIDED_TOUR`
+  (necesario porque Flyway está deshabilitado en el perfil `e2e`; sólo el `CommandLineRunner` de esta
+  clase siembra datos ahí).
+- `domain/TenantFeatureFlagChange.java` (nuevo) / `repository/TenantFeatureFlagChangeRepository.java`
+  (nuevo).
+- `service/FeatureFlagService.java` — `upsertTenantOverride`/`deleteTenantOverride` ahora reciben
+  `changedByUserId`/`changedByEmail` y registran el cambio; `listTenantView` incluye `lastChange`.
+- `web/dto/TenantFeatureFlagChangeResponse.java` (nuevo); `TenantFeatureFlagRowResponse` extendido.
+- `web/FeatureFlagController.java` — pasa `principal.getUserId()`/`principal.getUsername()` a los dos
+  métodos de escritura.
+- `web/InvoiceController.java` — nueva lógica de enrutamiento en `issue()` (ver diseño arriba);
+  inyecta `FeatureFlagService`/`SifenCertificateService`.
+- `service/SifenInvoiceSubmissionPersistenceService.java` (nuevo, ver "El bug real" arriba) /
+  `service/SifenInvoiceSubmissionService.java` (refactorizado para delegar en la clase nueva, sin
+  cambios de comportamiento público).
+
+**Tests backend**: `FeatureFlagServiceTest` (casos nuevos: registra el cambio con valor
+anterior/nuevo/usuario, aislamiento entre tenants — AC-02); `SifenInvoiceSubmissionServiceTest`
+(sin cambios de aserciones, sólo la construcción del servicio en `@BeforeEach`); suite completa
+(`./gradlew test`) y `spotlessCheck` verdes.
+
+**Frontend**: `FeatureFlagsPage.tsx` — línea de "último cambio" por fila cuando existe, con
+`data-testid` estable; i18n `femme.featureFlags.lastChange` en ambos locales.
+`FeatureFlagsPage.test.tsx` — caso nuevo para el renderizado del historial.
+
+**E2E**: `e2e/tests/sifen-hu-22-activacion-por-tenant.spec.ts` (nuevo) — AC-01 (toggle visible para
+system admin), AC-03 (flag desactivado ⇒ factura sin ningún campo SIFEN), AC-04 (flag activado sin
+certificado ⇒ `412 SIFEN_NO_VALID_CERTIFICATE`, nada persistido; flag activado con certificado ⇒
+factura real llega a `PENDING_VERIFICATION`), AC-06 (desactivar después no toca la factura SIFEN ya
+enviada), AC-07 (una factura tradicional emitida con el flag desactivado nunca se vuelve SIFEN al
+reactivar), AC-05 (historial visible con email del admin y valores anterior/nuevo), AC-08 (smoke: el
+listado de facturas sigue funcionando con el flag activo). Corridas también, sin regresiones, las 23
+pruebas Playwright preexistentes de HU-07/09/10/11 (afectadas indirectamente por el fix de
+persistencia).
 
 ## HU-17 — Probar la consulta de documentos y la generación de comprobantes de todos los tipos (Done)
 
