@@ -80,9 +80,9 @@ class SifenDocumentSigningServiceTest {
             "Peluquería y otros tratamientos de belleza",
             "021555000",
             "facturacion@example.com",
-            "11",
+            "12",
             "CENTRAL",
-            "3432",
+            "5044",
             "FERNANDO DE LA MORA");
     SifenReceiverData receiver =
         new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null);

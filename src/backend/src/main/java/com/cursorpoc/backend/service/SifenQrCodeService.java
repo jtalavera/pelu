@@ -70,6 +70,22 @@ public class SifenQrCodeService {
       SifenInvoiceTotals totals,
       int itemCount,
       String digestValueBase64) {
+    return build(header, totals, itemCount, digestValueBase64, false);
+  }
+
+  /**
+   * SIFEN HU-14 gap found live (dCodRes=2500, "cadena de caracteres correspondiente al código QR no
+   * es coincidente con el archivo XML"): the QR hash must reflect exactly what the DE itself
+   * reports, and {@code buildTotals} zeroes {@code dTotIVA} for autofactura (dCodRes=2353/2377 —
+   * there's no {@code gCamIVA} to cross-check it against) — the QR must zero it too, or the two
+   * stop matching.
+   */
+  public SifenQrResult build(
+      SifenInvoiceHeader header,
+      SifenInvoiceTotals totals,
+      int itemCount,
+      String digestValueBase64,
+      boolean isAutoInvoice) {
     boolean production =
         connectionProperties.activeEnvironment()
             == SifenConnectionProperties.Environment.PRODUCTION;
@@ -96,7 +112,7 @@ public class SifenQrCodeService {
             + "&dTotGralOpe="
             + totals.netTotal().toPlainString()
             + "&dTotIVA="
-            + totals.totalIva().toPlainString()
+            + (isAutoInvoice ? "0" : totals.totalIva().toPlainString())
             + "&cItems="
             + itemCount
             + "&DigestValue="

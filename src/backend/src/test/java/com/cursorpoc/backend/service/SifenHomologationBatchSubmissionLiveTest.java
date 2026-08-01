@@ -622,9 +622,9 @@ class SifenHomologationBatchSubmissionLiveTest {
             "Peluquería y otros tratamientos de belleza",
             "021555000",
             "facturacion@example.com",
-            "11",
+            "12",
             "CENTRAL",
-            "3432",
+            "5044",
             "FERNANDO DE LA MORA");
 
     SifenReceiverData receiver = buildReceiverFor(type, scenario, issuerRuc);
@@ -746,12 +746,13 @@ class SifenHomologationBatchSubmissionLiveTest {
                   "Juan Proveedor",
                   "Calle Falsa 123",
                   "45",
-                  "11",
+                  "12",
                   "CENTRAL",
-                  "3432",
+                  "5044",
                   "FERNANDO DE LA MORA"));
       case NOTA_REMISION ->
-          SifenDocumentTypeExtras.goodsRemission(new SifenGoodsRemissionData(1, 1, 25, 1, 1));
+          SifenDocumentTypeExtras.goodsRemission(
+              new SifenGoodsRemissionData(1, 1, 25, 1, 1, null, 1));
     };
   }
 

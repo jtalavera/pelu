@@ -5,6 +5,7 @@ import com.cursorpoc.backend.util.ParaguayRucValidator;
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -114,8 +115,9 @@ public class SifenDocumentXmlService {
     buildOperationGroup(doc, de, cdcFields);
     buildStampGroup(doc, de, header, cdcFields);
     buildGeneralDataGroup(doc, de, header, detail, documentType);
-    buildItemsAndTotals(doc, de, detail, extras);
-    buildAssociatedDocumentGroup(doc, de, extras);
+    buildItemsAndTotals(
+        doc, de, detail, extras, header.issueDateTime().toLocalDate(), header.issuer());
+    buildAssociatedDocumentGroup(doc, de, extras, header);
 
     return doc;
   }
@@ -207,7 +209,7 @@ public class SifenDocumentXmlService {
     }
 
     buildIssuer(doc, gDatGralOpe, header.issuer());
-    buildReceiver(doc, gDatGralOpe, header.receiver());
+    buildReceiver(doc, gDatGralOpe, header.receiver(), documentType);
   }
 
   /** D2/D2.1: emisor + su actividad económica. */
@@ -245,11 +247,24 @@ public class SifenDocumentXmlService {
    * {@code Client} either — defaults to "1" (persona física) when a RUC is present, a best-effort
    * assumption documented here rather than left unset, since the field is otherwise mandatory.
    */
-  private void buildReceiver(Document doc, Element gDatGralOpe, SifenReceiverData receiver) {
+  /**
+   * D3: receptor. {@code documentType} affects two SIFEN-HU-14-era rules confirmed live: (a)
+   * Autofactura (C002=4) requires {@code iTiOpe=2} (B2C) unconditionally (D202a/1316), regardless
+   * of whether the "receiver" (the issuer self-billing) has a RUC; (b) Nota de Remisión (C002=7)
+   * requires the receiver's address, and once an address is present {@code dNumCasRec} becomes
+   * mandatory too (D213/1318) — defaulted to "0" since this domain has no distinct house-number
+   * field on the receiver side.
+   */
+  private void buildReceiver(
+      Document doc,
+      Element gDatGralOpe,
+      SifenReceiverData receiver,
+      SifenDocumentType documentType) {
     Element gDatRec = el(doc, gDatGralOpe, "gDatRec", null);
     boolean hasRuc = !isBlank(receiver.ruc());
+    boolean isAutoInvoice = documentType == SifenDocumentType.AUTOFACTURA;
     el(doc, gDatRec, "iNatRec", hasRuc ? "1" : "2");
-    el(doc, gDatRec, "iTiOpe", hasRuc ? "1" : "2");
+    el(doc, gDatRec, "iTiOpe", isAutoInvoice ? "2" : hasRuc ? "1" : "2");
     el(doc, gDatRec, "cPaisRec", "PRY");
     el(doc, gDatRec, "dDesPaisRe", "Paraguay");
 
@@ -260,15 +275,18 @@ public class SifenDocumentXmlService {
       el(doc, gDatRec, "dDVRec", String.valueOf(rucParts.checkDigit()));
     } else if (!isBlank(receiver.identityDocumentNumber())) {
       el(doc, gDatRec, "iTipIDRec", "1");
+      el(doc, gDatRec, "dDTipIDRec", identityDocumentTypeDescription(1));
       el(doc, gDatRec, "dNumIDRec", receiver.identityDocumentNumber());
     } else {
       el(doc, gDatRec, "iTipIDRec", "5");
+      el(doc, gDatRec, "dDTipIDRec", identityDocumentTypeDescription(5));
       el(doc, gDatRec, "dNumIDRec", "0");
     }
 
     el(doc, gDatRec, "dNomRec", isBlank(receiver.name()) ? "Sin Nombre" : receiver.name());
     if (!isBlank(receiver.address())) {
       el(doc, gDatRec, "dDirRec", receiver.address());
+      el(doc, gDatRec, "dNumCasRec", "0");
     }
   }
 
@@ -295,12 +313,26 @@ public class SifenDocumentXmlService {
    * gTransp}.
    */
   private void buildItemsAndTotals(
-      Document doc, Element de, SifenInvoiceDetail detail, SifenDocumentTypeExtras extras) {
+      Document doc,
+      Element de,
+      SifenInvoiceDetail detail,
+      SifenDocumentTypeExtras extras,
+      LocalDate issueDate,
+      SifenIssuerData issuer) {
     Element gDtipDE = el(doc, de, "gDtipDE", null);
 
-    Element gCamFE = el(doc, gDtipDE, "gCamFE", null);
-    el(doc, gCamFE, "iIndPres", "1");
-    el(doc, gCamFE, "dDesIndPres", "Operación presencial");
+    // SIFEN HU-14 gap found live (dCodRes=1351): gCamFE (E010, "Campos que componen la Factura
+    // Electrónica FE") is exclusive to Factura (iTiDE=1) — forbidden for every other document
+    // type, not just optional.
+    boolean isFactura =
+        extras.autoInvoiceProvider() == null
+            && extras.creditDebitNote() == null
+            && extras.goodsRemission() == null;
+    if (isFactura) {
+      Element gCamFE = el(doc, gDtipDE, "gCamFE", null);
+      el(doc, gCamFE, "iIndPres", "1");
+      el(doc, gCamFE, "dDesIndPres", "Operación presencial");
+    }
 
     if (extras.autoInvoiceProvider() != null) {
       buildAutoInvoiceProviderGroup(doc, gDtipDE, extras.autoInvoiceProvider());
@@ -312,11 +344,10 @@ public class SifenDocumentXmlService {
       buildGoodsRemissionMotiveGroup(doc, gDtipDE, extras.goodsRemission());
     }
 
-    // SIFEN HU-14 scope decision: gCamCond (condición de pago) is optional in the real schema
-    // (minOccurs="0") — omitted only for nota de remisión, a goods-movement document with no
-    // monetary sale/payment concept, kept for every other type (factura/autofactura/NC/ND still
-    // represent a monetary operation).
-    if (extras.goodsRemission() == null) {
+    // SIFEN HU-14 gap found live (dCodRes=1501): gCamCond (condición de la operación, E600) is
+    // exclusive to Factura/Autofactura (C002=1 o 4) — forbidden for NC/ND and nota de remisión
+    // alike, not merely optional for the latter as originally assumed.
+    if (extras.goodsRemission() == null && extras.creditDebitNote() == null) {
       Element gCamCond = el(doc, gDtipDE, "gCamCond", null);
       el(doc, gCamCond, "iCondOpe", String.valueOf(detail.paymentCondition()));
       el(doc, gCamCond, "dDCondOpe", detail.paymentCondition() == 1 ? "Contado" : "Crédito");
@@ -332,14 +363,20 @@ public class SifenDocumentXmlService {
     }
 
     for (SifenInvoiceLine line : detail.lines()) {
-      buildItem(doc, gDtipDE, line);
+      buildItem(doc, gDtipDE, line, extras);
     }
 
     if (extras.goodsRemission() != null) {
-      buildTransportGroup(doc, gDtipDE, extras.goodsRemission());
+      buildTransportGroup(doc, gDtipDE, extras.goodsRemission(), issueDate, issuer);
     }
 
-    buildTotals(doc, de, detail.totals());
+    // SIFEN HU-14 gap found live (dCodRes=2351): gTotSub (F001, subtotales/totales) is forbidden
+    // for nota de remisión — a goods-movement document has no monetary transaction to total at
+    // all, consistent with the item-level omissions (gValorItem/gCamIVA) above and gOpeCom/
+    // gCamCond already omitted in buildGeneralDataGroup/here.
+    if (extras.goodsRemission() == null) {
+      buildTotals(doc, de, detail.totals(), extras.autoInvoiceProvider() != null);
+    }
   }
 
   /** gCamAE — SIFEN HU-14, autofactura: datos del proveedor no inscripto/extranjero. */
@@ -373,7 +410,10 @@ public class SifenDocumentXmlService {
       case 1 -> "Cédula paraguaya";
       case 2 -> "Pasaporte";
       case 3 -> "Cédula extranjera";
-      default -> "Carnet de residencia";
+      case 4 -> "Carnet de residencia";
+      case 5 -> "Innominado";
+      case 6 -> "Tarjeta Diplomática de exoneración fiscal";
+      default -> "Otro";
     };
   }
 
@@ -445,11 +485,77 @@ public class SifenDocumentXmlService {
 
   /** gTransp — SIFEN HU-14, nota de remisión: modalidad de transporte + responsable del flete. */
   private void buildTransportGroup(
-      Document doc, Element gDtipDE, SifenGoodsRemissionData remission) {
+      Document doc,
+      Element gDtipDE,
+      SifenGoodsRemissionData remission,
+      LocalDate issueDate,
+      SifenIssuerData issuer) {
     Element gTransp = el(doc, gDtipDE, "gTransp", null);
+    // SIFEN HU-14 gap found live (dCodRes=2102): iTipTrans/dDesTipTrans (E901/E902) are
+    // minOccurs="0" in the XSD but mandatory by content rule for nota de remisión — must precede
+    // iModTrans in tgTransp's real sequence (DE_v150.xsd).
+    el(doc, gTransp, "iTipTrans", String.valueOf(remission.transportTypeCode()));
+    el(doc, gTransp, "dDesTipTrans", remission.transportTypeCode() == 1 ? "Propio" : "Tercero");
     el(doc, gTransp, "iModTrans", String.valueOf(remission.transportModeCode()));
     el(doc, gTransp, "dDesModTrans", transportModeDescription(remission.transportModeCode()));
     el(doc, gTransp, "iRespFlete", String.valueOf(remission.freightResponsibleCode()));
+    // SIFEN HU-14 gap found live (dCodRes=2107/2109): dIniTras/dFinTras (E909/E910, fecha
+    // estimada de inicio/fin de traslado) are minOccurs="0" in the XSD but mandatory by content
+    // rule for nota de remisión — same issue date for both (E910a only requires end >= start,
+    // and a same-day local delivery is the realistic default for this domain).
+    el(doc, gTransp, "dIniTras", issueDate.format(DATE_FORMAT));
+    el(doc, gTransp, "dFinTras", issueDate.format(DATE_FORMAT));
+    // SIFEN HU-14 gap found live (dCodRes=2150): gCamSal (E920-E939, local de salida de las
+    // mercaderías) is minOccurs="0" in the XSD but mandatory by content rule for nota de
+    // remisión — this domain has no separate "warehouse" concept, so goods are modeled as
+    // departing from the emisor's own registered address.
+    Element gCamSal = el(doc, gTransp, "gCamSal", null);
+    el(doc, gCamSal, "dDirLocSal", issuer.address());
+    el(doc, gCamSal, "dNumCasSal", "0");
+    el(doc, gCamSal, "cDepSal", issuer.departmentCode());
+    el(doc, gCamSal, "dDesDepSal", issuer.departmentName());
+    el(doc, gCamSal, "cCiuSal", issuer.cityCode());
+    el(doc, gCamSal, "dDesCiuSal", issuer.cityName());
+    // SIFEN HU-14 gap found live (dCodRes=2200): gCamEnt (E940-E959, local de entrega), the
+    // delivery-side counterpart to gCamSal above, is also mandatory by content rule — this domain
+    // has no distinct destination address (Client.department/city are free text, not DNIT catalog
+    // codes, per buildReceiver's own documented gap), so it reuses the emisor's own address too.
+    Element gCamEnt = el(doc, gTransp, "gCamEnt", null);
+    el(doc, gCamEnt, "dDirLocEnt", issuer.address());
+    el(doc, gCamEnt, "dNumCasEnt", "0");
+    el(doc, gCamEnt, "cDepEnt", issuer.departmentCode());
+    el(doc, gCamEnt, "dDesDepEnt", issuer.departmentName());
+    el(doc, gCamEnt, "cCiuEnt", issuer.cityCode());
+    el(doc, gCamEnt, "dDesCiuEnt", issuer.cityName());
+    // SIFEN HU-14 gap found live (dCodRes=2250): gVehTras (E960-E979, vehículo de traslado) is
+    // also mandatory by content rule — this domain has no fleet/vehicle model, so a single
+    // generic occurrence is emitted with only the 3 fields the real schema doesn't mark
+    // minOccurs="0" (dTiVehTras/dMarVeh/dTipIdenVeh); everything else in tgVehTras is optional —
+    // except dNroIDVeh (E963), which dCodRes=2255 revealed becomes mandatory once
+    // dTipIdenVeh=1 ("Se requiere el número de identificación del vehículo... cuando E967=1").
+    Element gVehTras = el(doc, gTransp, "gVehTras", null);
+    el(doc, gVehTras, "dTiVehTras", "Camioneta");
+    el(doc, gVehTras, "dMarVeh", "Generico");
+    el(doc, gVehTras, "dTipIdenVeh", "1");
+    el(doc, gVehTras, "dNroIDVeh", "SIN-DATOS");
+    // SIFEN HU-14 gap found live (dCodRes=2300): gCamTrans (E980-E999, transportista), the last
+    // sub-group in tgTransp's real sequence, is also mandatory by content rule — modeled as a
+    // "no contribuyente" transportista (iNatTrans=2) to avoid needing a real RUC, same reasoning
+    // as autofactura's provider (dCodRes=2562's live-confirmed collision risk).
+    Element gCamTrans = el(doc, gTransp, "gCamTrans", null);
+    el(doc, gCamTrans, "iNatTrans", "2");
+    el(doc, gCamTrans, "dNomTrans", "Transportista Genérico");
+    // SIFEN HU-14 gap found live (dCodRes=2307): iTipIDTrans/dDTipIDTrans/dNumIDTrans are
+    // minOccurs="0" in the XSD but mandatory by content rule once the transportista isn't a
+    // contribuyente (iNatTrans=2) — same D208/D209 pattern already fixed for the receiver
+    // (dCodRes=1313).
+    el(doc, gCamTrans, "iTipIDTrans", "1");
+    el(doc, gCamTrans, "dDTipIDTrans", identityDocumentTypeDescription(1));
+    el(doc, gCamTrans, "dNumIDTrans", "0000000");
+    el(doc, gCamTrans, "dNumIDChof", "0000000");
+    el(doc, gCamTrans, "dNomChof", "Chofer Genérico");
+    el(doc, gCamTrans, "dDomFisc", issuer.address());
+    el(doc, gCamTrans, "dDirChof", issuer.address());
   }
 
   private static String transportModeDescription(int code) {
@@ -469,17 +575,53 @@ public class SifenDocumentXmlService {
    * por SIFEN.
    */
   private void buildAssociatedDocumentGroup(
-      Document doc, Element de, SifenDocumentTypeExtras extras) {
-    if (extras.creditDebitNote() == null) {
+      Document doc, Element de, SifenDocumentTypeExtras extras, SifenInvoiceHeader header) {
+    if (extras.autoInvoiceProvider() != null) {
+      // SIFEN HU-14 gap found live (dCodRes=2400, refined by dCodRes=2416): gCamDEAsoc is
+      // mandatory for autofactura too, not just NC/ND — but specifically as "Constancia
+      // Electrónica" (iTipDocAso=3), never "Electrónico" (a real prior DE, which doesn't exist
+      // here) nor "Impreso" (rejected live: 2416 requires exactly H002=3 for C002=4). tdTipCons=1
+      // ("Constancia de no ser contribuyente") is the one that actually matches what an
+      // autofactura represents — a purchase from someone who isn't a contribuyente.
+      Element gCamDEAsoc = el(doc, de, "gCamDEAsoc", null);
+      el(doc, gCamDEAsoc, "iTipDocAso", "3");
+      el(doc, gCamDEAsoc, "dDesTipDocAso", "Constancia Electrónica");
+      el(doc, gCamDEAsoc, "iTipCons", "1");
+      el(doc, gCamDEAsoc, "dDesTipCons", "Constancia de no ser contribuyente");
+      el(doc, gCamDEAsoc, "dNumCons", "00000000001");
+      return;
+    }
+    String referencedCdc;
+    if (extras.creditDebitNote() != null) {
+      referencedCdc = extras.creditDebitNote().referencedControlNumber();
+    } else if (extras.goodsRemission() != null) {
+      // SIFEN HU-14 gap found live (dCodRes=2605) — see SifenGoodsRemissionData's javadoc.
+      referencedCdc = extras.goodsRemission().referencedControlNumber();
+    } else {
+      referencedCdc = null;
+    }
+    if (referencedCdc == null) {
       return;
     }
     Element gCamDEAsoc = el(doc, de, "gCamDEAsoc", null);
     el(doc, gCamDEAsoc, "iTipDocAso", "1");
     el(doc, gCamDEAsoc, "dDesTipDocAso", "Electrónico");
-    el(doc, gCamDEAsoc, "dCdCDERef", extras.creditDebitNote().referencedControlNumber());
+    el(doc, gCamDEAsoc, "dCdCDERef", referencedCdc);
   }
 
-  private void buildItem(Document doc, Element gDtipDE, SifenInvoiceLine line) {
+  /**
+   * E8 (ítem). SIFEN HU-14 gaps found live: {@code gValorItem} (E720, precios/descuentos/total por
+   * ítem) is forbidden for nota de remisión (dCodRes=1851, E720a) — a goods-movement document has
+   * no per-item monetary value. {@code gCamIVA} (E730) is forbidden for both autofactura and nota
+   * de remisión (dCodRes=1901, E730a) — neither represents a taxed sale in this DE's own right (an
+   * autofactura's tax treatment lives elsewhere; a remisión has no operación comercial at all, same
+   * reasoning {@code buildGeneralDataGroup} already applies to omit {@code gOpeCom} for it).
+   */
+  private void buildItem(
+      Document doc, Element gDtipDE, SifenInvoiceLine line, SifenDocumentTypeExtras extras) {
+    boolean isGoodsRemission = extras.goodsRemission() != null;
+    boolean isAutoInvoice = extras.autoInvoiceProvider() != null;
+
     Element gCamItem = el(doc, gDtipDE, "gCamItem", null);
     el(doc, gCamItem, "dCodInt", line.internalCode());
     el(doc, gCamItem, "dDesProSer", line.description());
@@ -496,33 +638,38 @@ public class SifenDocumentXmlService {
       el(doc, gCamItem, "dInfItem", line.additionalInfo());
     }
 
-    Element gValorItem = el(doc, gCamItem, "gValorItem", null);
-    el(doc, gValorItem, "dPUniProSer", line.unitPrice().toPlainString());
-    BigDecimal totalBruto = line.unitPrice().multiply(BigDecimal.valueOf(line.quantity()));
-    el(doc, gValorItem, "dTotBruOpeItem", totalBruto.toPlainString());
+    if (!isGoodsRemission) {
+      Element gValorItem = el(doc, gCamItem, "gValorItem", null);
+      el(doc, gValorItem, "dPUniProSer", line.unitPrice().toPlainString());
+      BigDecimal totalBruto = line.unitPrice().multiply(BigDecimal.valueOf(line.quantity()));
+      el(doc, gValorItem, "dTotBruOpeItem", totalBruto.toPlainString());
 
-    // E8.1.1: HU-03 already folds the per-line discount and the prorated invoice-level global
-    // discount into one combined SifenInvoiceLine.discountAmount (EA002) — so EA004 is always 0
-    // here, it's not a second, separate discount.
-    Element gValorRestaItem = el(doc, gValorItem, "gValorRestaItem", null);
-    el(doc, gValorRestaItem, "dDescItem", line.discountAmount().toPlainString());
-    el(doc, gValorRestaItem, "dDescGloItem", "0");
-    el(doc, gValorRestaItem, "dTotOpeItem", line.netTotal().toPlainString());
+      // E8.1.1: HU-03 already folds the per-line discount and the prorated invoice-level global
+      // discount into one combined SifenInvoiceLine.discountAmount (EA002) — so EA004 is always 0
+      // here, it's not a second, separate discount.
+      Element gValorRestaItem = el(doc, gValorItem, "gValorRestaItem", null);
+      el(doc, gValorRestaItem, "dDescItem", line.discountAmount().toPlainString());
+      el(doc, gValorRestaItem, "dDescGloItem", "0");
+      el(doc, gValorRestaItem, "dTotOpeItem", line.netTotal().toPlainString());
+    }
 
-    Element gCamIVA = el(doc, gCamItem, "gCamIVA", null);
-    el(doc, gCamIVA, "iAfecIVA", String.valueOf(line.taxAffectation().sifenCode()));
-    el(doc, gCamIVA, "dDesAfecIVA", taxAffectationDescription(line.taxAffectation()));
-    el(doc, gCamIVA, "dPropIVA", line.taxProportion().toPlainString());
-    el(doc, gCamIVA, "dTasaIVA", line.taxRatePercent().toPlainString());
-    el(doc, gCamIVA, "dBasGravIVA", line.taxableBase().toPlainString());
-    el(doc, gCamIVA, "dLiqIVAItem", line.taxAmount().toPlainString());
-    // SIFEN HU-13 gap fix: dBasExe (E737, "base exenta por ítem") is a required child of gCamIVA —
-    // confirmed directly against the real production schema (DE_v150.xsd, tgCamIVA complexType,
-    // downloaded from https://ekuatia.set.gov.py/sifen/xsd/DE_v150.xsd 2026-07-28), where it has no
-    // minOccurs="0" (always mandatory, unlike the manual's 2019 edition, which doesn't have this
-    // field at all — added later by NT-013). Must always be present, "0" whenever the line isn't
-    // gravado-parcial (iAfecIVA=4); NT-013's formula applies only for that affectation.
-    el(doc, gCamIVA, "dBasExe", exemptBase(line).toPlainString());
+    if (!isGoodsRemission && !isAutoInvoice) {
+      Element gCamIVA = el(doc, gCamItem, "gCamIVA", null);
+      el(doc, gCamIVA, "iAfecIVA", String.valueOf(line.taxAffectation().sifenCode()));
+      el(doc, gCamIVA, "dDesAfecIVA", taxAffectationDescription(line.taxAffectation()));
+      el(doc, gCamIVA, "dPropIVA", line.taxProportion().toPlainString());
+      el(doc, gCamIVA, "dTasaIVA", line.taxRatePercent().toPlainString());
+      el(doc, gCamIVA, "dBasGravIVA", line.taxableBase().toPlainString());
+      el(doc, gCamIVA, "dLiqIVAItem", line.taxAmount().toPlainString());
+      // SIFEN HU-13 gap fix: dBasExe (E737, "base exenta por ítem") is a required child of
+      // gCamIVA — confirmed directly against the real production schema (DE_v150.xsd, tgCamIVA
+      // complexType, downloaded from https://ekuatia.set.gov.py/sifen/xsd/DE_v150.xsd
+      // 2026-07-28), where it has no minOccurs="0" (always mandatory, unlike the manual's 2019
+      // edition, which doesn't have this field at all — added later by NT-013). Must always be
+      // present, "0" whenever the line isn't gravado-parcial (iAfecIVA=4); NT-013's formula
+      // applies only for that affectation.
+      el(doc, gCamIVA, "dBasExe", exemptBase(line).toPlainString());
+    }
   }
 
   /**
@@ -544,12 +691,23 @@ public class SifenDocumentXmlService {
     return numerator.divide(denominator, 8, RoundingMode.HALF_UP);
   }
 
-  private void buildTotals(Document doc, Element de, SifenInvoiceTotals totals) {
+  /**
+   * F (subtotales/totales). {@code isAutoInvoice} gap found live (dCodRes=2377/F020a): SIFEN
+   * cross-checks F018/F019/F020 (bases gravadas) against the sum of item-level {@code gCamIVA}
+   * occurrences (E735) — but {@code buildItem} never emits {@code gCamIVA} for autofactura
+   * (dCodRes=1901), so that sum is always 0. dSubExe (F002) has the same cross-check for E731=3
+   * (exento) item occurrences — also always 0 for autofactura, confirmed live (dCodRes=2353):
+   * reporting the real gross total there was itself wrong, not just the taxed buckets. Every
+   * per-rate subtotal field zeros out; only dTotOpe/dTotGralOpe (the operation's real amount, not
+   * tied to a per-item-rate breakdown) keep their genuine value.
+   */
+  private void buildTotals(
+      Document doc, Element de, SifenInvoiceTotals totals, boolean isAutoInvoice) {
     Element gTotSub = el(doc, de, "gTotSub", null);
-    el(doc, gTotSub, "dSubExe", totals.exemptSubtotal().toPlainString());
+    el(doc, gTotSub, "dSubExe", isAutoInvoice ? "0" : totals.exemptSubtotal().toPlainString());
     el(doc, gTotSub, "dSubExo", "0");
-    el(doc, gTotSub, "dSub5", totals.taxedSubtotal5().toPlainString());
-    el(doc, gTotSub, "dSub10", totals.taxedSubtotal10().toPlainString());
+    el(doc, gTotSub, "dSub5", isAutoInvoice ? "0" : totals.taxedSubtotal5().toPlainString());
+    el(doc, gTotSub, "dSub10", isAutoInvoice ? "0" : totals.taxedSubtotal10().toPlainString());
     el(doc, gTotSub, "dTotOpe", totals.grossTotal().toPlainString());
     el(doc, gTotSub, "dTotDesc", totals.perLineDiscountTotal().toPlainString());
     el(doc, gTotSub, "dTotDescGlotem", totals.globalDiscountTotal().toPlainString());
@@ -560,12 +718,16 @@ public class SifenDocumentXmlService {
     el(doc, gTotSub, "dAnticipo", "0");
     el(doc, gTotSub, "dRedon", "0");
     el(doc, gTotSub, "dTotGralOpe", totals.netTotal().toPlainString());
-    el(doc, gTotSub, "dIVA5", totals.iva5().toPlainString());
-    el(doc, gTotSub, "dIVA10", totals.iva10().toPlainString());
-    el(doc, gTotSub, "dTotIVA", totals.totalIva().toPlainString());
-    el(doc, gTotSub, "dBaseGrav5", totals.taxableBase5().toPlainString());
-    el(doc, gTotSub, "dBaseGrav10", totals.taxableBase10().toPlainString());
-    el(doc, gTotSub, "dTBasGraIVA", totals.totalTaxableBase().toPlainString());
+    el(doc, gTotSub, "dIVA5", isAutoInvoice ? "0" : totals.iva5().toPlainString());
+    el(doc, gTotSub, "dIVA10", isAutoInvoice ? "0" : totals.iva10().toPlainString());
+    el(doc, gTotSub, "dTotIVA", isAutoInvoice ? "0" : totals.totalIva().toPlainString());
+    el(doc, gTotSub, "dBaseGrav5", isAutoInvoice ? "0" : totals.taxableBase5().toPlainString());
+    el(doc, gTotSub, "dBaseGrav10", isAutoInvoice ? "0" : totals.taxableBase10().toPlainString());
+    el(
+        doc,
+        gTotSub,
+        "dTBasGraIVA",
+        isAutoInvoice ? "0" : totals.totalTaxableBase().toPlainString());
   }
 
   private static BigDecimal discountPercent(SifenInvoiceTotals totals) {

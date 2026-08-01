@@ -205,12 +205,17 @@ class SifenHomologationOtherDocumentTypesLiveTest {
         sendSeedInvoiceForReference(report, material, client, "para NOTA_CREDITO");
     String debitNoteReferenceCdc =
         sendSeedInvoiceForReference(report, material, client, "para NOTA_DEBITO");
+    // dCodRes=2605 gap: "Traslado por venta" (reasonCode=1) requires a documento asociado — see
+    // SifenGoodsRemissionData's javadoc.
+    String remissionReferenceCdc =
+        sendSeedInvoiceForReference(report, material, client, "para NOTA_REMISION");
 
     runDocumentType(
         report, material, client, SifenDocumentType.NOTA_CREDITO, creditNoteReferenceCdc);
     runDocumentType(report, material, client, SifenDocumentType.NOTA_DEBITO, debitNoteReferenceCdc);
     runDocumentType(report, material, client, SifenDocumentType.AUTOFACTURA, null);
-    runDocumentType(report, material, client, SifenDocumentType.NOTA_REMISION, null);
+    runDocumentType(
+        report, material, client, SifenDocumentType.NOTA_REMISION, remissionReferenceCdc);
     return report;
   }
 
@@ -284,7 +289,16 @@ class SifenHomologationOtherDocumentTypesLiveTest {
                 true));
 
     for (Scenario scenario : correctScenarios) {
-      recordAttempt(report, material, client, type, referencedCdc, scenario, true);
+      // dCodRes=2417 gap found live: a nota de crédito can't exceed its referenced invoice's total
+      // (a real business rule, not a defect) — reusing one seed invoice for all 5 "correcta"
+      // scenarios means each one fully consumes it, so only the first can ever be approved. Nota
+      // de débito has no such cap (it adds to a balance, not subtracts from one), so it doesn't
+      // need this; every other type reuses the single shared referencedCdc as before.
+      String scenarioCdc =
+          type == SifenDocumentType.NOTA_CREDITO
+              ? sendSeedInvoiceForReference(report, material, client, "para " + scenario.label())
+              : referencedCdc;
+      recordAttempt(report, material, client, type, scenarioCdc, scenario, true);
     }
     for (Scenario scenario : incorrectScenarios) {
       recordAttempt(report, material, client, type, referencedCdc, scenario, false);
@@ -395,9 +409,9 @@ class SifenHomologationOtherDocumentTypesLiveTest {
             "Peluquería y otros tratamientos de belleza",
             "021555000",
             "facturacion@example.com",
-            "11",
+            "12",
             "CENTRAL",
-            "3432",
+            "5044",
             "FERNANDO DE LA MORA");
 
     SifenReceiverData receiver = buildReceiverFor(type, scenario);
@@ -498,7 +512,12 @@ class SifenHomologationOtherDocumentTypesLiveTest {
     // SIFEN HU-08: the QR group is mandatory on every DE, regardless of type.
     String digestValueBase64 = extractDigestValueBase64(signed.document());
     SifenQrCodeService.SifenQrResult qr =
-        qrCodeService.build(header, detail.totals(), detail.lines().size(), digestValueBase64);
+        qrCodeService.build(
+            header,
+            detail.totals(),
+            detail.lines().size(),
+            digestValueBase64,
+            extras.autoInvoiceProvider() != null);
     xmlService.appendQrGroup(signed.document(), qr.qrUrl());
 
     return new BuiltDocument(cdc, SifenDocumentXmlService.serialize(signed.document()));
@@ -527,7 +546,20 @@ class SifenHomologationOtherDocumentTypesLiveTest {
           null,
           null);
     }
+    if (type == SifenDocumentType.NOTA_REMISION) {
+      // SIFEN HU-14 gap found live (dCodRes=1318): Nota de Remisión requires the receiver's
+      // address (D213) — every other type leaves it optional.
+      return new SifenReceiverData(
+          null, "4123456", "Cliente Homologación HU-14", "Avda. Mcal. López 456", null, null);
+    }
     return new SifenReceiverData(null, "4123456", "Cliente Homologación HU-14", null, null, null);
+  }
+
+  /** Flips a CDC's last digit so it references no real document, never producing the same CDC. */
+  private static String corruptedCdc(String cdc) {
+    char last = cdc.charAt(cdc.length() - 1);
+    char replacement = last == '0' ? '1' : '0';
+    return cdc.substring(0, cdc.length() - 1) + replacement;
   }
 
   /**
@@ -550,13 +582,16 @@ class SifenHomologationOtherDocumentTypesLiveTest {
                   // iNatVen valid range is 1-2 (tiNatVen) — 3 deliberately violates that pattern.
                   scenario.invalidTypeSpecificField() ? 3 : 1,
                   1,
-                  "1234567",
+                  // Not "1234567": confirmed live via SiConsRUC that it's a real, active
+                  // contribuyente (dCodRes=1252's own registry) — dCodRes=2562 flagged exactly
+                  // that. "9876543" confirmed live as dCodRes=0500 "RUC no existe", genuinely safe.
+                  "9876543",
                   "Juan Proveedor",
                   "Calle Falsa 123",
                   "45",
-                  "11",
+                  "12",
                   "CENTRAL",
-                  "3432",
+                  "5044",
                   "FERNANDO DE LA MORA"));
       case NOTA_REMISION ->
           SifenDocumentTypeExtras.goodsRemission(
@@ -566,6 +601,15 @@ class SifenHomologationOtherDocumentTypesLiveTest {
                   25,
                   // iModTrans valid range is 1-4 (tiModTrans) — 5 deliberately violates that range.
                   scenario.invalidTypeSpecificField() ? 5 : 1,
+                  1,
+                  // dCodRes=2605 gap: reasonCode=1 ("Traslado por venta") requires a documento
+                  // asociado when no alternate future-date field is modeled — see
+                  // SifenGoodsRemissionData's javadoc. Live finding: nota de remisión has no
+                  // gTotSub (dCodRes=2351), so scenario 4's usual "wrong total" corruption is a
+                  // no-op here (confirmed live: it got APPROVED, not rejected) — redirected to a
+                  // bogus referenced CDC instead, a corruption that's actually meaningful for
+                  // this type.
+                  scenario.corruptTotals() ? corruptedCdc(referencedCdc) : referencedCdc,
                   1));
     };
   }

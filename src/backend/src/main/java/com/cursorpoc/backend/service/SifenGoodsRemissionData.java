@@ -23,10 +23,24 @@ package com.cursorpoc.backend.service;
  *     2=Fluvial, 3=Aéreo, 4=Multimodal.
  * @param freightResponsibleCode responsable del costo del flete ({@code iRespFlete}, 1-5): 1=Emisor
  *     de la factura, 2=Receptor, 3=Tercero, 4=Agente intermediario, 5=Transporte propio.
+ * @param referencedControlNumber CDC de 44 caracteres de la factura de venta que motiva este
+ *     traslado — gap encontrado en vivo (dCodRes=2605): si {@code reasonCode=1} ("Traslado por
+ *     venta") y no se informa un documento asociado, SIFEN exige un campo alternativo (E506, fecha
+ *     futura de emisión) que este dominio no modela; referenciar la factura real ya emitida ({@code
+ *     gCamDEAsoc}, el mismo mecanismo que HU-14 ya usa para nota de crédito/débito) es la
+ *     alternativa más correcta semánticamente. {@code null} para cualquier otro motivo de traslado.
+ * @param transportTypeCode tipo de transporte ({@code iTipTrans}, E901, 1-2): 1=Propio, 2=Tercero —
+ *     gap encontrado en vivo (dCodRes=2102): obligatorio para nota de remisión (C002=7) aunque
+ *     {@code minOccurs="0"} en el propio XSD (mismo patrón de divergencia
+ *     manual/schema-vs-regla-de-contenido ya visto varias veces en esta integración); nunca antes
+ *     modelado, distinto de {@code responsibleCode} (quién emite el traslado) y de {@code
+ *     freightResponsibleCode} (quién paga el flete).
  */
 public record SifenGoodsRemissionData(
     int reasonCode,
     int responsibleCode,
     int estimatedKm,
     int transportModeCode,
-    int freightResponsibleCode) {}
+    int freightResponsibleCode,
+    String referencedControlNumber,
+    int transportTypeCode) {}

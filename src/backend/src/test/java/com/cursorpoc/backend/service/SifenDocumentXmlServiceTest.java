@@ -45,9 +45,9 @@ class SifenDocumentXmlServiceTest {
             "Peluquería y otros tratamientos de belleza",
             "021555000",
             "facturacion@example.com",
-            "11",
+            "12",
             "CENTRAL",
-            "3432",
+            "5044",
             "FERNANDO DE LA MORA");
     SifenReceiverData receiver =
         new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null);
@@ -124,8 +124,8 @@ class SifenDocumentXmlServiceTest {
         .isEqualTo("Lucía Zymanscki de Onieva Vit S.A.");
     // SIFEN HU-08 AC-03: D106/dNomFanEmi is optional (0-1) but emitted when configured.
     assertThat(xpath(doc, "//*[local-name()='dNomFanEmi']")).isEqualTo("Nombre de Fantasía Demo");
-    assertThat(xpath(doc, "//*[local-name()='cDepEmi']")).isEqualTo("11");
-    assertThat(xpath(doc, "//*[local-name()='cCiuEmi']")).isEqualTo("3432");
+    assertThat(xpath(doc, "//*[local-name()='cDepEmi']")).isEqualTo("12");
+    assertThat(xpath(doc, "//*[local-name()='cCiuEmi']")).isEqualTo("5044");
     assertThat(xpath(doc, "//*[local-name()='dTelEmi']")).isEqualTo("021555000");
     assertThat(xpath(doc, "//*[local-name()='cActEco']")).isEqualTo("96020");
   }
@@ -428,9 +428,9 @@ class SifenDocumentXmlServiceTest {
             "Juan Proveedor",
             "Calle Falsa 123",
             "45",
-            "11",
+            "12",
             "CENTRAL",
-            "3432",
+            "5044",
             "FERNANDO DE LA MORA");
     Document doc =
         service.buildDocument(
@@ -454,7 +454,7 @@ class SifenDocumentXmlServiceTest {
   /** AC-01/AC-02: nota de remisión's gCamNRE (motivo) + gTransp (transporte), iTiDE=7. */
   @Test
   void buildDocument_notaRemision_includesMotiveAndTransportGroups() throws Exception {
-    SifenGoodsRemissionData remission = new SifenGoodsRemissionData(1, 1, 25, 1, 1);
+    SifenGoodsRemissionData remission = new SifenGoodsRemissionData(1, 1, 25, 1, 1, null, 1);
     Document doc =
         service.buildDocument(
             header,
@@ -487,7 +487,8 @@ class SifenDocumentXmlServiceTest {
             detail,
             cdcFieldsForType(SifenDocumentType.NOTA_REMISION),
             LocalDateTime.now(),
-            SifenDocumentTypeExtras.goodsRemission(new SifenGoodsRemissionData(1, 1, 25, 1, 1)));
+            SifenDocumentTypeExtras.goodsRemission(
+                new SifenGoodsRemissionData(1, 1, 25, 1, 1, null, 1)));
 
     NodeList gCamCond = (NodeList) xpathNodes(doc, "//*[local-name()='gCamCond']");
     assertThat(gCamCond.getLength()).isZero();
@@ -532,7 +533,8 @@ class SifenDocumentXmlServiceTest {
             detail,
             cdcFieldsForType(SifenDocumentType.NOTA_REMISION),
             LocalDateTime.now(),
-            SifenDocumentTypeExtras.goodsRemission(new SifenGoodsRemissionData(1, 1, 25, 1, 1)));
+            SifenDocumentTypeExtras.goodsRemission(
+                new SifenGoodsRemissionData(1, 1, 25, 1, 1, null, 1)));
 
     NodeList gOpeCom = (NodeList) xpathNodes(doc, "//*[local-name()='gOpeCom']");
     assertThat(gOpeCom.getLength()).isZero();

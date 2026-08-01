@@ -387,9 +387,9 @@ class SifenHomologationInvoiceSubmissionLiveTest {
             "Peluquería y otros tratamientos de belleza",
             "021555000",
             "facturacion@example.com",
-            "11",
+            "12",
             "CENTRAL",
-            "3432",
+            "5044",
             "FERNANDO DE LA MORA");
 
     boolean receiverHasRuc = scenario.receiverRuc() != null;

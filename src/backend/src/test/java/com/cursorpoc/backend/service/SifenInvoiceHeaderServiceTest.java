@@ -70,9 +70,9 @@ class SifenInvoiceHeaderServiceTest {
     profile.setEconomicActivityDescription("Peluquería y otros tratamientos de belleza");
     profile.setPhone("021555000");
     profile.setContactEmail("facturacion@example.com");
-    profile.setSifenDepartmentCode("11");
+    profile.setSifenDepartmentCode("12");
     profile.setSifenDepartmentName("CENTRAL");
-    profile.setSifenCityCode("3432");
+    profile.setSifenCityCode("5044");
     profile.setSifenCityName("FERNANDO DE LA MORA");
 
     invoice = new Invoice();

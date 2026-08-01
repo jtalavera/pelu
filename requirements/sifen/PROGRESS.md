@@ -8,6 +8,15 @@ Todo el trabajo vive en la branch `feat/integracion-sifen` (worktree en `pelu-si
 Fase actual: **Fase 4 completa** (Homologación ante la DNIT) — HU-12 a HU-17, las 6 historias de
 `EP-05`, hechas. Próximo: **Fase 5** (`HU-22`, activación real por tenant), la última fase del plan
 (ver "Próximo paso" abajo).
+
+**Actualización 2026-08-01 — el bloqueo externo `dCodRes=1252` se resolvió y HU-13/HU-14 ahora tienen
+"Aprobado" real, confirmado en vivo para los 5 tipos de documento.** Ver la sección "Adenda
+2026-08-01" (justo antes de "## HU-17" más abajo) para el diagnóstico completo, incluyendo el uso en
+vivo del propio `SiConsRUC` de SIFEN para diagnosticar el estado real del RUC piloto, y la cadena de
+~15 gaps de contenido/schema reales (no de código de homologación, sino defectos genuinos de
+`SifenDocumentXmlService`) que quedaron destapados una vez que ese bloqueo externo dejó de
+enmascararlos.
+
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
 | HU | Estado | Notas |
@@ -28,8 +37,8 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-10 Cancelar una factura ya aprobada | ✅ Done | Ver detalle abajo. Verificado en vivo (real HTTP 200, forma de respuesta confirmada); el "Aprobado" real del evento queda como limitación abierta, ver detalle. |
 | HU-11 Identificar al cliente en una factura sin datos | ✅ Done | Ver detalle abajo. **Cierra Fase 3.** Verificado en vivo (real HTTP 200, mismo `0160` que HU-10); evento no documentado en el Manual V150, encontrado solo en el XSD real en vivo. |
 | HU-12 Probar la conexión segura contra todos los servicios | ✅ Done | Ver detalle abajo. **Primer paso de Fase 4.** Los 7 servicios nombrados por AC-01 (6 endpoints reales distintos) verificados en vivo: certificado válido aceptado, certificado inválido rechazado, en los 14 casos. |
-| HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo. **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`) — los 4 confirmados en vivo, ya no aparecen en ninguna respuesta real. AC-02 (incorrectas rechazadas) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado hoy por un límite externo real (RUC piloto "inactivo" en el registro de SIFEN, `dCodRes=1252`) — no es un bug de código, ver detalle; el test usa `Assumptions.assumeTrue` para ese tramo específico. |
-| HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo. Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **Cierra 2 gaps de schema nuevos, propios de esta historia** (`gOpeCom`/`iTipTra` no permitido para NC/ND — `dCodRes=1216`; grupo `gOpeCom` completo no permitido para nota de remisión — `dCodRes=1201`) — confirmados en vivo, ya no aparecen en ninguna respuesta real de los 44 documentos enviados. AC-02 (incorrectas rechazadas, 5/5 por tipo) verificado en vivo con aserción dura. AC-01 (correctas aprobadas) queda bloqueado por el mismo límite externo de HU-13 (`dCodRes=1252`, RUC piloto inactivo) — sigue así hoy para los 4 tipos nuevos también. |
+| HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo + "Adenda 2026-08-01". **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`). AC-02 (incorrectas rechazadas) y **AC-01 (correctas aprobadas, 5/5) verificados en vivo con aserción dura — el bloqueo externo `dCodRes=1252` que impedía esto se resolvió el 2026-08-01, y 2 gaps reales más (departamento/ciudad del emisor, descripción del tipo de documento de identidad del receptor) quedaron cerrados en la misma sesión.** |
+| HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo + "Adenda 2026-08-01". Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **AC-01 y AC-02 (correctas aprobadas Y incorrectas rechazadas, 5/5 por tipo, los 4 tipos) verificados en vivo con aserción dura** — cerrada una cadena larga de gaps reales de schema/contenido específicos de cada tipo (ver Adenda), la última confirmación de que `SifenDocumentXmlService` cubre correctamente los 5 tipos de documento electrónico que homologación exige. |
 | HU-15 Probar el envío por lotes de todos los tipos de comprobante | ✅ Done | Ver detalle abajo. **Introduce el WS asíncrono `SiRecepLoteDE`/`SiResultLoteDE`, nunca usado hasta ahora.** AC-03 (incorrectas rechazadas, 5/5, motivo identificable) y AC-04/AC-05 (lote con mezcla de emisor/tipo rechazado antes de procesar, `dCodRes=0363`) verificados en vivo con aserción dura. AC-01/AC-02 (correctas aprobadas, los 5 tipos) quedan bloqueadas por el mismo límite externo de HU-13/HU-14 (`dCodRes=1252`). |
 | HU-16 Probar el registro de todos los eventos exigidos | ✅ Done | Ver detalle abajo. **Cierra el muro `dCodRes=0160` que bloqueaba HU-10/HU-11 desde su creación** — root-cause encontrado y corregido en vivo (ver detalle). AC-02 (anulación de numeración, 5 tipos) y 2 de los 4 eventos de receptor de AC-03 (desconocimiento, notificación de recepción) verificados en vivo con aserción dura, **primer "Aprobado" real de toda esta integración**. AC-01/AC-03 (conformidad/disconformidad/corrección)/AC-05 quedan bloqueados por el mismo límite externo `dCodRes=1252` de HU-13/14/15 (confirmado que sigue vigente) — el canal de eventos en sí queda probado como sano (motivos de rechazo específicos, nunca el `0160` genérico) con aserción dura. |
 | HU-17 Probar la consulta de documentos y la generación de comprobantes de todos los tipos | ✅ Done | Ver detalle abajo. **Cierra Fase 4.** Reporte final consolidado de EP-05 (HU-12..HU-17) construido y corrido en vivo — ver detalle. |
@@ -38,14 +47,161 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 **Próximo paso al reanudar el loop:** HU-17 (Fase 4, consulta de documentos + comprobantes de todos
 los tipos) está hecha — **cierra Fase 4 (EP-05) por completo.** El reporte final consolidado
 (`SifenHomologationFinalReportTest`, ver detalle abajo) corrió en vivo y confirma, en un solo reporte,
-el estado real de las 6 historias de homologación (HU-12..HU-17). El bloqueo externo que HU-13
-documentó (RUC piloto reportado "inactivo" por SIFEN, `dCodRes=1252`) sigue confirmado vigente hoy
-(re-verificado una vez más al iniciar HU-17) — sigue siendo el único obstáculo real pendiente de todo
-EP-05; ninguna otra historia de esta fase tiene un defecto de código abierto. Queda **Fase 5** (`HU-22`,
-activación real por tenant) como la última fase del plan — no depende de que el `1252` se resuelva
-para empezar, pero conviene re-ejecutar `SifenHomologationFinalReportTest` (y los tests guardados
-individuales de HU-13..HU-17) el día que ese estado cambie, para confirmar más "Aprobado" reales antes
-de dar por buena una activación real.
+el estado real de las 6 historias de homologación (HU-12..HU-17).
+
+**El bloqueo externo `dCodRes=1252` (RUC piloto "inactivo") que HU-13 documentó se resolvió el
+2026-08-01** — ver "Adenda 2026-08-01" (justo antes de "## HU-17" abajo) para el diagnóstico completo
+y la cadena de gaps reales de `SifenDocumentXmlService` que ese cambio externo dejó de enmascarar,
+todos cerrados en la misma sesión. Los 5 tipos de documento electrónico (factura, nota de crédito,
+nota de débito, autofactura, nota de remisión) llegan hoy a `Aprobado` real, confirmado en vivo con
+aserción dura en `SifenHomologationInvoiceSubmissionLiveTest`/`SifenHomologationOtherDocumentTypesLiveTest`.
+Sigue pendiente re-ejecutar `SifenHomologationFinalReportTest` (el reporte consolidado de las 6
+historias) para que refleje este estado — su última corrida real es anterior a esta adenda. Queda
+**Fase 5** (`HU-22`, activación real por tenant) como la última fase del plan.
+
+## Adenda (2026-08-01) — Resolución del bloqueo externo `dCodRes=1252` y cierre de ~15 gaps reales de HU-13/HU-14
+
+Sesión posterior al cierre de Fase 4. Punto de partida: HU-13/HU-14/HU-15/HU-16/HU-17 tenían todas su
+tramo de "correcta aprobada" bloqueado por el mismo límite externo documentado desde HU-13
+(`dCodRes=1252 "El RUC del emisor se encuentra inactivo"`). Esta sesión (a) diagnosticó esa causa
+externa usando el propio `SiConsRUC` de SIFEN, (b) confirmó su resolución en vivo, y (c) al dejar de
+estar enmascarados por `1252`, quedaron al descubierto ~15 gaps reales de contenido/schema en
+`SifenDocumentXmlService`, cerrados uno por uno con el mismo patrón iterativo de HU-13/HU-06 (enviar
+en vivo, leer el error real, corregir, repetir) hasta que **los 5 tipos de documento llegaron a
+`Aprobado` real**.
+
+### Diagnóstico del `1252`: usar `SiConsRUC` en vez de confiar solo en Marangatu
+
+El usuario reportó que Marangatu mostraba el RUC piloto como "Activo", contradiciendo el `1252`. En
+vez de especular, se armó y envió a mano (mismo patrón `curl --cert-type P12` de siempre) una consulta
+real al WS `SiConsRUC` (`https://sifen-test.set.gov.py/de/ws/consultas/consulta-ruc.wsdl`,
+`rEnviConsRUC/dId/dRUCCons`, confirmado contra el XSD real descargado en vivo — coincide exactamente
+con el manual, caso raro en esta integración) para el RUC `1137152` (sin DV, campo `dRUCCons`
+documentado como "RUC No incluye el Dígito de verificación"). Respuesta real:
+
+```xml
+<dCodRes>0502</dCodRes><dMsgRes>RUC encontrado</dMsgRes>
+<dRUCCons>1137152</dRUCCons><dRazCons>LUCIA ZYMANSCKI GALEANO</dRazCons>
+<dCodEstCons>SUS</dCodEstCons><dDesEstCons>SUSPENSION TEMPORAL</dDesEstCons>
+<dRUCFactElec>N</dRUCFactElec>
+```
+
+`dCodEstCons=SUS` — exactamente uno de los tres estados que el propio manual (D101b, `1252`) nombra
+como descalificantes ("distinto a CANCELADO, CANCELADO DEFINITIVO o SUSPENSIÓN TEMPORAL") — y
+`dRUCFactElec=N` (un campo no documentado en el manual de 2019, presumiblemente agregado por una NT
+posterior), la marca específica de "habilitado como facturador electrónico". Es decir: la
+"Activo"/"SUSPENSIÓN TEMPORAL" que reporta `SiConsRUC` es un estado *distinto* del que muestra la
+pantalla general de Marangatu que el usuario consultó — confirma que este es un estado de SIFEN, no
+uno inventado por este código. Días después (2026-08-01), la misma consulta reportó `dCodEstCons=ACT`
+("ACTIVO") — el bloqueo se había resuelto del lado de SET, sin ningún cambio de código. `dRUCFactElec`
+siguió en `N`, sin que eso terminara bloqueando nada en la práctica.
+
+**Nota operativa: `SiConsRUC` sigue sin tener un cliente Java propio en este código** (HU-12 solo
+probó su conectividad mTLS) — este diagnóstico se hizo con `curl` manual, no automatizado. Construir
+un `SifenRucQueryClient` real (mismo patrón que `SifenDocumentQueryClient`/`SifenEventClient`) queda
+como mejora futura si se necesita repetir este diagnóstico con frecuencia.
+
+### Gap 1 (HU-13, todos los tipos): departamento/ciudad del emisor con código y descripción que no correspondían
+
+Con `1252` resuelto, el primer intento de envío real de una factura correcta falló con
+`dCodRes=1254 "Descripción del departamento de emisión no corresponde al código"`. La causa: los
+datos de prueba fijaban `cDepEmi="11"` (que en el catálogo real de departamentos — descargado en vivo
+desde `evento.xsd`, `tDepartamentos` — es **Alto Paraná**) junto con `dDesDepEmi="CENTRAL"` (que en
+realidad es el código `12`) — una inconsistencia código/nombre presente en 9 archivos distintos desde
+que HU-04 introdujo estos campos, nunca antes ejercitada en vivo porque `1252` la enmascaraba. Corregido
+`"11"`→`"12"` en los 9 archivos. Segundo intento: `dCodRes=1255 "El Departamento, el Distrito y la
+Ciudad de emisión no están relacionados"` — el código de ciudad (`"3432"`) tampoco correspondía. Se
+descargó el catálogo geográfico oficial completo de la DNIT (`CÓDIGO DE REFERENCIA
+GEOGRAFICA_NOVIEMBRE_2025__.xlsx`, publicado en `dnit.gov.py/web/e-kuatia/tablas-y-codificaciones`,
+7742 filas Departamento→Distrito→Ciudad→Barrio) para encontrar el triple real de "Fernando de la Mora,
+Central": Departamento `12`/Distrito `154`/Ciudad `5044`. Corregido `"3432"`→`"5044"` en los mismos 9
+archivos (no hizo falta modelar Distrito — es opcional en el XSD y la corrección de departamento+ciudad
+ya bastó).
+
+### Gap 2 (HU-13, todos los tipos): `dDTipIDRec` — bug real en `SifenDocumentXmlService`, no de datos de prueba
+
+Con los 2 gaps anteriores cerrados: `dCodRes=1313 "Descripción del tipo de documento de identidad del
+receptor no corresponde al código"`. A diferencia de los gaps anteriores, este era un **bug real de
+producción**: `buildReceiver` emitía `iTipIDRec` (D208, código del tipo de documento) en sus dos ramas
+(cliente identificado con cédula, o consumidor final innominado) pero nunca emitía `dDTipIDRec` (D209,
+su descripción) — el manual documenta D209 como "Obligatorio si existe el campo D208", algo que ninguna
+factura real de este sistema había cumplido nunca hasta ahora. Corregido: se agregó `dDTipIDRec` en
+ambas ramas, reusando/extendiendo el helper `identityDocumentTypeDescription` (ya existía para
+`dDTipIDVen` de autofactura) para cubrir también los códigos 5/6/9 (Innominado/Tarjeta Diplomática/
+Otro). **Con los 3 gaps anteriores cerrados, `SifenHomologationInvoiceSubmissionLiveTest` alcanzó, por
+primera vez en toda esta integración, `dCodRes=0260 "Autorización del DE satisfactoria"` real para las
+5 facturas correctas** — el primer documento genuino jamás aprobado por SIFEN.
+
+### Gaps 3-15 (HU-14): la cascada de nota de crédito/débito, autofactura y nota de remisión
+
+Extender la misma verificación a los otros 4 tipos destapó una cascada larga, cada fix revelando el
+siguiente (mismo patrón iterativo de HU-13, aplicado ahora con volumen — 4 tipos × múltiples campos
+cada uno):
+
+- **`1351`** — `gCamFE` (E010, campos de Factura Electrónica) es exclusivo de Factura (`iTiDE=1`);
+  se emitía sin condición para los 5 tipos. Corregido: condicionado a que `extras` no tenga ningún
+  grupo de tipo específico.
+- **`1316`** — Autofactura exige `iTiOpe=2` (B2C) siempre, sin importar si el "receptor" (el propio
+  emisor autofacturándose) tiene RUC. Corregido en `buildReceiver`, nuevo parámetro `documentType`.
+- **`1318`** — Nota de Remisión exige `dDirRec` (dirección del receptor); una vez presente, `dNumCasRec`
+  (número de casa) también se vuelve obligatorio. Corregido: `buildReceiver` ahora emite ambos juntos.
+- **`2605`** — Nota de Remisión con `reasonCode=1` ("Traslado por venta") exige un documento asociado
+  (`gCamDEAsoc`) cuando no se informa una fecha futura alternativa (campo no modelado). Se generalizó
+  `SifenGoodsRemissionData`/`buildAssociatedDocumentGroup` para aceptar el mismo mecanismo de
+  referencia que ya usa NC/ND, referenciando una factura semilla real.
+- **`1501`** — `gCamCond` (condición de la operación) es exclusivo de Factura/Autofactura; se
+  emitía también para NC/ND. Corregido: condición extendida.
+- **`2562`** — El proveedor de autofactura (persona física, `iTipIDVen` cédula) usaba el número de
+  prueba `"1234567"`, que resultó ser el RUC real y activo de un contribuyente genuino (confirmado
+  consultando `SiConsRUC` en vivo: `BRIGIDA GAUTO JARA`, `ACT`) — SIFEN lo rechazó por "el vendedor no
+  debe ser contribuyente". Corregido: `"9876543"`, confirmado en vivo como `0500 RUC no existe`, un
+  número genuinamente seguro.
+- **`1901`** — `gCamIVA` (E730, IVA por ítem) prohibido para Autofactura y Nota de Remisión.
+- **`2353`**/**`2377`** — `dSubExe`/`dTotIVA` (F002/F017, subtotales de IVA) deben ser `0` para
+  Autofactura, ya que no hay `gCamIVA` por ítem contra el cual SIFEN pueda cotejarlos — el primer
+  intento (reportar el total real como "exento") también era incorrecto, debían ser `0` sin más.
+  `buildTotals` ahora recibe un flag `isAutoInvoice`.
+- **`2500`** — El QR (`SifenQrCodeService`) seguía calculando `dTotIVA` con el valor real (no
+  cero) para autofactura, produciendo un hash que ya no coincidía con el XML corregido — el servicio
+  ahora recibe el mismo flag `isAutoInvoice`.
+- **`1851`** — `gValorItem` (E720, precio/descuento/total por ítem) prohibido para Nota de Remisión.
+- **`2400`**/**`2416`** — `gCamDEAsoc` también es obligatorio para Autofactura, pero como **Constancia
+  Electrónica** (`iTipDocAso=3`, `tdTipCons=1` "Constancia de no ser contribuyente") — nunca como
+  "Impreso" (intento inicial, rechazado) ni "Electrónico" (no existe un DE previo real que referenciar).
+- **`2107`/`2109`/`2150`/`2200`/`2250`/`2255`/`2300`/`2307`** — Nota de Remisión, cascada completa del
+  grupo `gTransp`: fecha estimada de inicio/fin de traslado (`dIniTras`/`dFinTras`), local de salida
+  (`gCamSal`) y de entrega (`gCamEnt`, ambos modelados con la dirección del propio emisor — este
+  dominio no tiene un concepto de "depósito" separado), datos del vehículo (`gVehTras`, incluyendo
+  `dNroIDVeh` una vez que `dTipIdenVeh=1`), y datos del transportista (`gCamTrans`, incluyendo su tipo
+  de documento de identidad una vez que se modela como no contribuyente) — todos `minOccurs="0"` en el
+  XSD pero obligatorios por regla de contenido para este tipo de documento, ninguno detectable sin
+  enviar en vivo.
+- **Hallazgo de diseño de prueba, no de código:** el escenario "incorrecta 4/5" (total no coincide)
+  reutilizado de HU-13 resultó ser un no-op para Nota de Remisión (no tiene `gTotSub` desde el fix de
+  `1851`/`2351` — el envío "incorrecto" terminaba aprobado). Redirigido a un CDC de referencia
+  corrupto para ese tipo específico, produciendo un rechazo real y significativo
+  (`2403 "Número de CDC del DTE referenciado inexistente"`).
+- **Hallazgo de diseño de prueba, no de código:** Nota de Crédito reutilizaba una sola factura semilla
+  para sus 5 escenarios "correcta" — una nota de crédito consume el saldo de la factura que referencia,
+  así que la 2ª en adelante excedía el total de esa única factura (`dCodRes=2417`, una regla de negocio
+  real, no un bug). Corregido: una factura semilla nueva por cada escenario "correcta" de Nota de
+  Crédito (Nota de Débito no lo necesita, no tiene este tope).
+
+**Resultado final, confirmado en vivo, múltiples corridas consecutivas:** `SifenHomologationInvoiceSubmissionLiveTest`
+(factura) y `SifenHomologationOtherDocumentTypesLiveTest` (nota de crédito, nota de débito, autofactura,
+nota de remisión) — **los 5 tipos, 5/5 correctas aprobadas + 5/5 incorrectas rechazadas, aserción dura,
+sin `Assumptions.assumeTrue`.** Suite completa de backend (`./gradlew test`) y `spotlessCheck` verdes.
+Blips puntuales de `1001 CDC duplicado` observados en corridas individuales son ruido de transporte ya
+documentado por HU-12 (el gateway de prueba de SIFEN a veces no responde a una petición bajo ráfaga,
+el reintento reenvía el mismo CDC que SIFEN ya había procesado) — no una regresión, confirmado por
+corridas limpias inmediatamente posteriores.
+
+**Pendiente para quien retome esto:** re-ejecutar `SifenHomologationBatchSubmissionLiveTest` (HU-15),
+`SifenHomologationEventsLiveTest` (HU-16) y `SifenHomologationDocumentQueryAndKudeLiveTest` +
+`SifenHomologationFinalReportTest` (HU-17) — todas deberían beneficiarse de la misma resolución del
+`1252` y de los mismos fixes de `SifenDocumentXmlService`, pero no se re-confirmaron en esta sesión
+(el foco fue HU-13/HU-14, ya que son las que de verdad ejercitan la construcción del DE para los 5
+tipos). Es probable que ya pasen en verde sin cambios adicionales.
 
 ## HU-17 — Probar la consulta de documentos y la generación de comprobantes de todos los tipos (Done)
 
