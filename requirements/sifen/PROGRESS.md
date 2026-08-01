@@ -196,12 +196,20 @@ documentado por HU-12 (el gateway de prueba de SIFEN a veces no responde a una p
 el reintento reenvía el mismo CDC que SIFEN ya había procesado) — no una regresión, confirmado por
 corridas limpias inmediatamente posteriores.
 
-**Pendiente para quien retome esto:** re-ejecutar `SifenHomologationBatchSubmissionLiveTest` (HU-15),
-`SifenHomologationEventsLiveTest` (HU-16) y `SifenHomologationDocumentQueryAndKudeLiveTest` +
-`SifenHomologationFinalReportTest` (HU-17) — todas deberían beneficiarse de la misma resolución del
-`1252` y de los mismos fixes de `SifenDocumentXmlService`, pero no se re-confirmaron en esta sesión
-(el foco fue HU-13/HU-14, ya que son las que de verdad ejercitan la construcción del DE para los 5
-tipos). Es probable que ya pasen en verde sin cambios adicionales.
+**Re-ejecutadas (2026-08-01, misma sesión):** `SifenHomologationBatchSubmissionLiveTest` (HU-15),
+`SifenHomologationEventsLiveTest` (HU-16), `SifenHomologationDocumentQueryAndKudeLiveTest` (HU-17).
+Factura y Nota de Débito ya llegan a `Aprobado` real en las 3 (prueba independiente de que los fixes de
+`SifenDocumentXmlService` son correctos). Pero HU-15 y HU-17 tienen su **propia** construcción de datos
+de prueba, separada de la de HU-14 — se les aplicó el mismo fix de RUC de autofactura (`"1234567"`→
+`"9876543"`) y de dirección de receptor para nota de remisión, pero **no el resto de la cadena** (los
+campos nuevos de `gCamDEAsoc`/`gTransp`/el flag `isAutoInvoice` de `SifenQrCodeService`) — autofactura y
+nota de remisión en estos dos archivos siguen fallando (`2500`/`2605`) porque usan firmas de
+constructor más viejas. Nota de Crédito sigue con el mismo gap de diseño de HU-14 (reusar una sola
+factura semilla para 5 notas). HU-16 no cambió — su gap (AC-01/AC-03/AC-05) es que el test nunca
+intenta construir un documento realmente aprobado antes de cancelarlo/reaccionar, no un bloqueo
+externo. **Pendiente:** replicar el resto de la cadena de fixes de HU-14 en `SifenHomologationBatchSubmissionLiveTest`/`SifenHomologationDocumentQueryAndKudeLiveTest`, dar a Nota de
+Crédito una factura semilla por escenario en ambos archivos, y opcionalmente extender HU-16 para
+construir un documento real aprobado antes de cancelar/reaccionar sobre él.
 
 ## HU-17 — Probar la consulta de documentos y la generación de comprobantes de todos los tipos (Done)
 

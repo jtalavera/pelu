@@ -729,6 +729,11 @@ class SifenHomologationBatchSubmissionLiveTest {
           null,
           null);
     }
+    if (type == SifenDocumentType.NOTA_REMISION) {
+      // SIFEN HU-14 gap (dCodRes=1318): Nota de Remisión requires the receiver's address.
+      return new SifenReceiverData(
+          null, "4123456", "Cliente Homologación HU-15", "Avda. Mcal. López 456", null, null);
+    }
     return new SifenReceiverData(null, "4123456", "Cliente Homologación HU-15", null, null, null);
   }
 
@@ -742,7 +747,7 @@ class SifenHomologationBatchSubmissionLiveTest {
               new SifenAutoInvoiceProviderData(
                   1,
                   1,
-                  "1234567",
+                  "9876543",
                   "Juan Proveedor",
                   "Calle Falsa 123",
                   "45",
