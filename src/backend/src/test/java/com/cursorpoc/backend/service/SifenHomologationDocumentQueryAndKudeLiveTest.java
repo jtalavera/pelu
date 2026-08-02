@@ -529,6 +529,8 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
                 SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND,
                 null,
                 null,
+                null,
+                null,
                 null)
             : type == SifenDocumentType.NOTA_REMISION
                 // SIFEN HU-14 gap (dCodRes=1318): Nota de Remisión requires the receiver's address.
@@ -538,9 +540,11 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
                     "Cliente Homologación HU-17",
                     "Avda. Mcal. López 456",
                     null,
+                    null,
+                    null,
                     null)
                 : new SifenReceiverData(
-                    null, "4123456", "Cliente Homologación HU-17", null, null, null);
+                    null, "4123456", "Cliente Homologación HU-17", null, null, null, null, null);
 
     SifenInvoiceHeader header =
         new SifenInvoiceHeader(

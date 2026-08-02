@@ -535,7 +535,7 @@ class SifenHomologationOtherDocumentTypesLiveTest {
   private SifenReceiverData buildReceiverFor(SifenDocumentType type, Scenario scenario) {
     if (scenario.receiverRuc() != null) {
       return new SifenReceiverData(
-          scenario.receiverRuc(), null, "Cliente Homologación HU-14", null, null, null);
+          scenario.receiverRuc(), null, "Cliente Homologación HU-14", null, null, null, null, null);
     }
     if (type == SifenDocumentType.AUTOFACTURA) {
       return new SifenReceiverData(
@@ -544,15 +544,25 @@ class SifenHomologationOtherDocumentTypesLiveTest {
           SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND,
           null,
           null,
+          null,
+          null,
           null);
     }
     if (type == SifenDocumentType.NOTA_REMISION) {
       // SIFEN HU-14 gap found live (dCodRes=1318): Nota de Remisión requires the receiver's
       // address (D213) — every other type leaves it optional.
       return new SifenReceiverData(
-          null, "4123456", "Cliente Homologación HU-14", "Avda. Mcal. López 456", null, null);
+          null,
+          "4123456",
+          "Cliente Homologación HU-14",
+          "Avda. Mcal. López 456",
+          null,
+          null,
+          null,
+          null);
     }
-    return new SifenReceiverData(null, "4123456", "Cliente Homologación HU-14", null, null, null);
+    return new SifenReceiverData(
+        null, "4123456", "Cliente Homologación HU-14", null, null, null, null, null);
   }
 
   /** Flips a CDC's last digit so it references no real document, never producing the same CDC. */

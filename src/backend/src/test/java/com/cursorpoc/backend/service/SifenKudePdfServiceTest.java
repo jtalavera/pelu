@@ -81,7 +81,7 @@ class SifenKudePdfServiceTest {
             "5044",
             "FERNANDO DE LA MORA");
     SifenReceiverData receiver =
-        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null);
+        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null);
     header =
         new SifenInvoiceHeader(
             CDC,
@@ -207,7 +207,8 @@ class SifenKudePdfServiceTest {
 
   @Test
   void buildKudePdf_omitsClientBlockForAnonymousReceiver() throws Exception {
-    SifenReceiverData anonymous = new SifenReceiverData(null, null, null, null, null, null);
+    SifenReceiverData anonymous =
+        new SifenReceiverData(null, null, null, null, null, null, null, null);
     SifenInvoiceHeader anonymousHeader =
         new SifenInvoiceHeader(
             header.controlNumber(),

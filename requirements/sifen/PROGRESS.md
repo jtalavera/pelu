@@ -45,7 +45,7 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-21 Usar certificado vigente automáticamente | ✅ Done | Ver detalle abajo. |
 | HU-05 Conectarse de forma segura con SIFEN | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real. |
 | HU-01 Generar número de control | ✅ Done | Ver detalle abajo. |
-| HU-02 Datos identificación/timbrado/emisor/receptor | ✅ Done | Ver detalle abajo. |
+| HU-02 Datos identificación/timbrado/emisor/receptor | ✅ Done | Ver detalle abajo + "Adenda AC-07 (2026-08-01)". **AC-07 (departamento/ciudad del receptor) cerrado de punta a punta** — antes ni siquiera existía un campo de dirección en la UI del cliente; ahora hay un picker buscable contra el catálogo geográfico real de la DNIT (6.766 localidades) y `SifenDocumentXmlService` emite `cDepRec`/`cCiuRec` reales. |
 | HU-03 Servicios facturados y totales | ✅ Done | Ver detalle abajo. |
 | HU-04 Firmar digitalmente | ✅ Done | Ver detalle abajo. |
 | HU-06 Enviar factura y registrar resultado | ✅ Done | Ver detalle abajo + "Adenda 3 (2026-08-01)". **Verificado en vivo `Aprobado` real (`0260`) a través del flujo completo de producción** (no solo tests aislados) — encontró y corrigió un bug real: ningún código de producción tenía el margen de seguridad de reloj que EP-05 sí tenía, causando `dCodRes=1004` en toda emisión real (`SIFEN_CLOCK_SKEW_BUFFER`, ver Adenda 3). |
@@ -3098,15 +3098,75 @@ cliente con cédula guardada la precargue, igual que ya pasa con el RUC.
   — no urgente porque el default (1/1 = "001"/"001") ya coincide con el valor real de prueba de la
   SET, pero si el piloto necesita usar un punto de expedición distinto de `001` no hay forma de
   configurarlo desde la UI todavía.
-- `Client.address`/`department`/`city` tampoco tienen campo en `ClientsPage` — solo se pueden
-  cargar vía API. Necesario para que AC-07 tenga datos reales que mostrar en HU-04/HU-06, más allá
-  del código ya probado en `SifenInvoiceHeaderServiceTest`.
+- ~~`Client.address`/`department`/`city` tampoco tienen campo en `ClientsPage` — solo se pueden
+  cargar vía API.~~ **Cerrado 2026-08-01, ver "Adenda AC-07" abajo.**
 
 **Tests**: `SifenInvoiceHeaderServiceTest` (14 casos, cubre AC-01 a AC-08 incluyendo el contraste
 ambiente de prueba/producción para AC-08 y determinismo del CDC entre llamadas). 5 casos nuevos en
 `InvoiceServiceTest` para AC-05 (umbral exacto, justo debajo, override de cédula, RUC de cliente
 guardado). E2E: `e2e/tests/sifen-hu-02-datos-documento.spec.ts` (AC-05 vía API y vía UI — las demás
 ACs no tienen pantalla propia, ver nota en el spec).
+
+## Adenda AC-07 (2026-08-01) — dirección/departamento/ciudad del cliente, con códigos DNIT reales
+
+Sesión de auditoría de status posterior al cierre del plan (22/22 HU). AC-07 literalmente dice "si
+se informa la dirección del cliente, el documento también incluye su departamento y ciudad" — pero
+`SifenDocumentXmlService.buildReceiver` nunca emitía D219/D220/D223/D224 (`cDepRec`/`dDesDepRec`/
+`cCiuRec`/`dDesCiuRec`) porque `Client.department`/`city` (desde HU-02 original) eran texto libre,
+no los códigos numéricos del catálogo DNIT que esos campos exigen — y, hallazgo más importante:
+**ninguna pantalla exponía siquiera `address` para editarlo** (`ClientsPage`/`ClientDetailPage`
+nunca tuvieron ese campo, a pesar de que la columna existe en la base desde HU-02) — AC-07 era
+literalmente imposible de disparar desde la UI hasta ahora.
+
+**Decisión de diseño (confirmada con el usuario): construir un picker buscable**, no un simple
+texto libre para departamento/ciudad — el catálogo geográfico oficial de la DNIT tiene 6.766
+combinaciones únicas de departamento+ciudad (descargado en vivo de
+`dnit.gov.py/documents/.../CÓDIGO DE REFERENCIA GEOGRAFICA_NOVIEMBRE_2025__.xlsx`, la misma fuente
+oficial que HU-13's Adenda ya había usado para corregir el departamento/ciudad del emisor) —
+demasiadas para un `<select>` plano. Reducido de 7.735 filas (departamento→distrito→ciudad→barrio)
+a 6.766 combinaciones únicas departamento+ciudad (SIFEN solo necesita esas dos, igual que ya hace
+`SifenIssuerData` para el emisor) y empaquetado como `src/backend/src/main/resources/sifen/
+dnit-geographic-catalog.json`.
+
+**Backend**:
+- `Client.java` — `department`/`city` (texto libre) pasan a ser `departmentName`/`cityName` (mismo
+  nombre de columna, sin migración de datos necesaria) y ganan sus pares `departmentCode`/
+  `cityCode` nuevos (`V29__client_sifen_geographic_codes.sql`).
+- `SifenGeographicLocality.java`/`SifenGeographicCatalogService.java` (nuevos) — carga el catálogo
+  una vez a memoria (6.766 entradas, liviano) y expone `search(query, limit)` case/tilde-insensible
+  contra nombre de ciudad o departamento.
+- `SifenGeographicCatalogController.java` (nuevo) — `GET /api/sifen/geographic-localities?q=...`,
+  cualquier usuario autenticado del tenant (no requiere rol admin), cap de 20 resultados.
+- `SifenReceiverData.java` — gana `departmentCode`/`departmentName`/`cityCode`/`cityName` (antes
+  solo `department`/`city`, nunca leídos por `buildReceiver`).
+- `SifenInvoiceHeaderService.buildReceiverData` — solo puebla estos 4 campos si el cliente tiene
+  address **y** ambos códigos cargados (nunca fabrica un departamento/ciudad a medias).
+- `SifenDocumentXmlService.buildReceiver` — ahora sí emite D219/D220 (`cDepRec`/`dDesDepRec`) y
+  D223/D224 (`cCiuRec`/`dDesCiuRec`) en el orden real que el Manual Técnico V150 documenta
+  (D213→D218→D219→D220→D223→D224), solo cuando los códigos están presentes.
+- `ClientRequest`/`ClientResponse`/`ClientService` — extendidos con los 4 campos nuevos.
+
+**Frontend**: nuevo componente de design-system `LocalityCombobox` (mismo patrón de interacción que
+`TimeCombobox` — input editable + listbox flotante — pero con búsqueda server-side debounced vía el
+nuevo hook `useLocalitySearch`, no una lista estática cliente-side, ya que 6.766 opciones son
+demasiadas para filtrar en el navegador en cada tecla). Agregado a `ClientsPage.tsx` (alta) y
+`ClientDetailPage.tsx` (edición): un campo "Address" de texto libre + el picker de localidad,
+después del campo RUC en ambos formularios. i18n: `femme.clients.address`/`.locality`/
+`.localityPlaceholder`/`.localityHint`/`.localityNoResults` (en/es).
+
+**Tests backend**: `SifenGeographicCatalogServiceTest` (5 casos — búsqueda por ciudad/departamento
+case/tilde-insensible, query vacía, límite, sin resultados). `SifenDocumentXmlServiceTest` (+2 —
+emisión completa con códigos, omisión sin códigos aunque haya dirección).
+`SifenInvoiceHeaderServiceTest` (+1 — dirección sin códigos no fabrica nada). Resto de archivos
+(`SifenDocumentSigningServiceTest`/`SifenKudePdfServiceTest`/`SifenQrCodeServiceTest`/los 5
+`SifenHomologation*LiveTest`) actualizados solo por la firma nueva de `SifenReceiverData` (8
+argumentos en vez de 6), sin cambios de comportamiento. Suite completa de backend
+(`./gradlew test`) y `spotlessCheck` verdes.
+
+**Playwright**: `e2e/tests/sifen-hu-02-datos-documento.spec.ts` — 3 casos nuevos: AC-07 alta de
+cliente con dirección + selección de localidad vía UI (verifica los 4 campos persistidos por API),
+AC-07 negativo (dirección sin localidad no fabrica códigos), y una prueba directa del endpoint de
+búsqueda contra el catálogo real. Suite completa de Playwright de SIFEN (52 specs) verde.
 
 ## HU-03 — Completar los servicios facturados y calcular los totales (Done)
 

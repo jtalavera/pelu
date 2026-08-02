@@ -97,8 +97,10 @@ public class ClientService {
     client.setVisitCount(0);
     client.setIdentityDocumentNumber(blankToNull(request.identityDocumentNumber()));
     client.setAddress(blankToNull(request.address()));
-    client.setDepartment(blankToNull(request.department()));
-    client.setCity(blankToNull(request.city()));
+    client.setDepartmentCode(blankToNull(request.departmentCode()));
+    client.setDepartmentName(blankToNull(request.departmentName()));
+    client.setCityCode(blankToNull(request.cityCode()));
+    client.setCityName(blankToNull(request.cityName()));
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -151,8 +153,10 @@ public class ClientService {
     client.setRuc(ruc);
     client.setIdentityDocumentNumber(blankToNull(request.identityDocumentNumber()));
     client.setAddress(blankToNull(request.address()));
-    client.setDepartment(blankToNull(request.department()));
-    client.setCity(blankToNull(request.city()));
+    client.setDepartmentCode(blankToNull(request.departmentCode()));
+    client.setDepartmentName(blankToNull(request.departmentName()));
+    client.setCityCode(blankToNull(request.cityCode()));
+    client.setCityName(blankToNull(request.cityName()));
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -216,7 +220,9 @@ public class ClientService {
         c.getVisitCount(),
         c.getIdentityDocumentNumber(),
         c.getAddress(),
-        c.getDepartment(),
-        c.getCity());
+        c.getDepartmentCode(),
+        c.getDepartmentName(),
+        c.getCityCode(),
+        c.getCityName());
   }
 }

@@ -47,13 +47,21 @@ public class Client {
   @Column(length = 500)
   private String address;
 
-  /** SIFEN HU-02 AC-07 — descripción libre, no valida contra la tabla de códigos DNIT. */
-  @Column(length = 120)
-  private String department;
+  /** SIFEN HU-02 AC-07 — D219/cDepRec, código DNIT del departamento (catálogo oficial). */
+  @Column(name = "department_code", length = 4)
+  private String departmentCode;
 
-  /** SIFEN HU-02 AC-07 — descripción libre, no valida contra la tabla de códigos DNIT. */
-  @Column(length = 120)
-  private String city;
+  /** SIFEN HU-02 AC-07 — D220/dDesDepRec, nombre correspondiente a {@link #departmentCode}. */
+  @Column(name = "department", length = 120)
+  private String departmentName;
+
+  /** SIFEN HU-02 AC-07 — D223/cCiuRec, código DNIT de la ciudad (catálogo oficial). */
+  @Column(name = "city_code", length = 8)
+  private String cityCode;
+
+  /** SIFEN HU-02 AC-07 — D224/dDesCiuRec, nombre correspondiente a {@link #cityCode}. */
+  @Column(name = "city", length = 120)
+  private String cityName;
 
   public Long getId() {
     return id;
@@ -135,19 +143,35 @@ public class Client {
     this.address = address;
   }
 
-  public String getDepartment() {
-    return department;
+  public String getDepartmentCode() {
+    return departmentCode;
   }
 
-  public void setDepartment(String department) {
-    this.department = department;
+  public void setDepartmentCode(String departmentCode) {
+    this.departmentCode = departmentCode;
   }
 
-  public String getCity() {
-    return city;
+  public String getDepartmentName() {
+    return departmentName;
   }
 
-  public void setCity(String city) {
-    this.city = city;
+  public void setDepartmentName(String departmentName) {
+    this.departmentName = departmentName;
+  }
+
+  public String getCityCode() {
+    return cityCode;
+  }
+
+  public void setCityCode(String cityCode) {
+    this.cityCode = cityCode;
+  }
+
+  public String getCityName() {
+    return cityName;
+  }
+
+  public void setCityName(String cityName) {
+    this.cityName = cityName;
   }
 }

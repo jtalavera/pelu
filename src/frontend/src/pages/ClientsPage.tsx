@@ -7,11 +7,13 @@ import {
   Input,
   KebabMenu,
   Label,
+  LocalityCombobox,
   Modal,
   PageSizeSelect,
   Pagination,
   Spinner,
   Text,
+  type Locality,
 } from "@design-system";
 import { femmePostJson } from "../api/femmeClient";
 import { listClientsAll, listClientsPaged, type ClientListFilterParams } from "../api/clients";
@@ -22,6 +24,7 @@ import { SearchInput } from "../components/ui/SearchInput";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
+import { useLocalitySearch } from "../hooks/useLocalitySearch";
 import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
 import { isValidEmail } from "../lib/validateEmail";
 import { validateRuc } from "../lib/validateRuc";
@@ -41,6 +44,11 @@ type Client = {
   visitCount: number;
   lastVisitAt?: string | null;
   createdAt?: string | null;
+  address?: string | null;
+  departmentCode?: string | null;
+  departmentName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
 };
 
 type FilterKey = "all" | "active" | "ruc" | "new";
@@ -121,6 +129,9 @@ export default function ClientsPage() {
   const [phone, setPhone]           = useState("");
   const [email, setEmail]           = useState("");
   const [ruc, setRuc]               = useState("");
+  const [address, setAddress]       = useState("");
+  const [locality, setLocality]     = useState<Locality | null>(null);
+  const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
     ruc?: string;
@@ -182,6 +193,8 @@ export default function ClientsPage() {
       setPhone("");
       setEmail("");
       setRuc("");
+      setAddress("");
+      setLocality(null);
       setFieldError(null);
       setSaveError(null);
       setModalOpen(true);
@@ -200,6 +213,8 @@ export default function ClientsPage() {
     setPhone("");
     setEmail("");
     setRuc("");
+    setAddress("");
+    setLocality(null);
     setFieldError(null);
     setSaveError(null);
     setModalOpen(true);
@@ -226,6 +241,11 @@ export default function ClientsPage() {
         phone: phone.trim() || null,
         email: email.trim() || null,
         ruc: ruc.trim() || null,
+        address: address.trim() || null,
+        departmentCode: locality?.departmentCode ?? null,
+        departmentName: locality?.departmentName ?? null,
+        cityCode: locality?.cityCode ?? null,
+        cityName: locality?.cityName ?? null,
       });
       setModalOpen(false);
       if (returnAfterCreate) {
@@ -776,6 +796,33 @@ export default function ClientsPage() {
               {t("femme.clients.rucHint")}
             </Text>
             <FieldValidationError id="client-ruc-err">{fieldError?.ruc}</FieldValidationError>
+          </div>
+
+          <div>
+            <Label htmlFor="client-address">{t("femme.clients.address")}</Label>
+            <Input
+              id="client-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={t("femme.clients.addressPlaceholder")}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="client-locality">{t("femme.clients.locality")}</Label>
+            <LocalityCombobox
+              id="client-locality"
+              value={locality}
+              onChange={setLocality}
+              onSearch={localitySearch.search}
+              options={localitySearch.options}
+              loading={localitySearch.loading}
+              placeholder={t("femme.clients.localityPlaceholder")}
+              noResultsLabel={t("femme.clients.localityNoResults")}
+            />
+            <Text variant="muted" className="mt-1 text-sm">
+              {t("femme.clients.localityHint")}
+            </Text>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

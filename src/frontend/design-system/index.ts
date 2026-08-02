@@ -54,6 +54,11 @@ export {
   type KebabMenuProps,
 } from "./components/KebabMenu";
 export { Label, type LabelProps } from "./components/Label";
+export {
+  LocalityCombobox,
+  type Locality,
+  type LocalityComboboxProps,
+} from "./components/LocalityCombobox";
 export { List, ListItem, type ListProps, type ListItemProps } from "./components/List";
 export { Modal, type ModalProps } from "./components/Modal";
 export {

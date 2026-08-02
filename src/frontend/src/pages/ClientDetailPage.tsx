@@ -9,6 +9,7 @@ import {
   Heading,
   Input,
   Label,
+  LocalityCombobox,
   PageSizeSelect,
   Pagination,
   Spinner,
@@ -17,6 +18,7 @@ import {
   TabsList,
   TabsTrigger,
   Text,
+  type Locality,
 } from "@design-system";
 import { femmeJson, femmePutJson, femmePostJson } from "../api/femmeClient";
 import {
@@ -32,6 +34,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
+import { useLocalitySearch } from "../hooks/useLocalitySearch";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
 import { isValidEmail } from "../lib/validateEmail";
@@ -48,7 +51,22 @@ type Client = {
   ruc: string | null;
   active: boolean;
   visitCount: number;
+  address?: string | null;
+  departmentCode?: string | null;
+  departmentName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
 };
+
+function localityFromClient(c: Client): Locality | null {
+  if (!c.departmentCode || !c.departmentName || !c.cityCode || !c.cityName) return null;
+  return {
+    departmentCode: c.departmentCode,
+    departmentName: c.departmentName,
+    cityCode: c.cityCode,
+    cityName: c.cityName,
+  };
+}
 
 function formatHistoryDateTime(iso: string, locale: string): string {
   try {
@@ -113,6 +131,9 @@ export default function ClientDetailPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [ruc, setRuc] = useState("");
+  const [address, setAddress] = useState("");
+  const [locality, setLocality] = useState<Locality | null>(null);
+  const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
     ruc?: string;
@@ -153,6 +174,8 @@ export default function ClientDetailPage() {
       setPhone(data.phone ?? "");
       setEmail(data.email ?? "");
       setRuc(data.ruc ?? "");
+      setAddress(data.address ?? "");
+      setLocality(localityFromClient(data));
     } catch {
       setLoadError(t("femme.clients.profileLoadError"));
     } finally {
@@ -272,12 +295,19 @@ export default function ClientDetailPage() {
         phone: phone.trim() || null,
         email: email.trim() || null,
         ruc: ruc.trim() || null,
+        address: address.trim() || null,
+        departmentCode: locality?.departmentCode ?? null,
+        departmentName: locality?.departmentName ?? null,
+        cityCode: locality?.cityCode ?? null,
+        cityName: locality?.cityName ?? null,
       });
       setClient(updated);
       setFullName(updated.fullName);
       setPhone(updated.phone ?? "");
       setEmail(updated.email ?? "");
       setRuc(updated.ruc ?? "");
+      setAddress(updated.address ?? "");
+      setLocality(localityFromClient(updated));
       setSaveSuccess(true);
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
@@ -492,6 +522,39 @@ export default function ClientDetailPage() {
                   {t("femme.clients.rucHint")}
                 </Text>
                 <FieldValidationError id="detail-ruc-err">{fieldError?.ruc}</FieldValidationError>
+              </div>
+
+              <div>
+                <Label htmlFor="detail-address">{t("femme.clients.address")}</Label>
+                <Input
+                  id="detail-address"
+                  value={address}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setSaveSuccess(false);
+                  }}
+                  placeholder={t("femme.clients.addressPlaceholder")}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="detail-locality">{t("femme.clients.locality")}</Label>
+                <LocalityCombobox
+                  id="detail-locality"
+                  value={locality}
+                  onChange={(next) => {
+                    setLocality(next);
+                    setSaveSuccess(false);
+                  }}
+                  onSearch={localitySearch.search}
+                  options={localitySearch.options}
+                  loading={localitySearch.loading}
+                  placeholder={t("femme.clients.localityPlaceholder")}
+                  noResultsLabel={t("femme.clients.localityNoResults")}
+                />
+                <Text variant="muted" className="mt-1 text-sm">
+                  {t("femme.clients.localityHint")}
+                </Text>
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

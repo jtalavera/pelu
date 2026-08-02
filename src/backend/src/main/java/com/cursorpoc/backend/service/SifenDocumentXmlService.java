@@ -239,15 +239,6 @@ public class SifenDocumentXmlService {
   }
 
   /**
-   * D3: receptor. Known gap inherited from HU-02: {@code department}/{@code city} are free text on
-   * {@code Client}, not DNIT catalog codes, so D219/D223 (cDepRec/cCiuRec) can't be populated even
-   * when an address is present — only D213/dDirRec is emitted.
-   *
-   * <p>D205/iTiContRec (persona física vs jurídica of a receiver with RUC) has no source field on
-   * {@code Client} either — defaults to "1" (persona física) when a RUC is present, a best-effort
-   * assumption documented here rather than left unset, since the field is otherwise mandatory.
-   */
-  /**
    * D3: receptor. {@code documentType} affects two SIFEN-HU-14-era rules confirmed live: (a)
    * Autofactura (C002=4) requires {@code iTiOpe=2} (B2C) unconditionally (D202a/1316), regardless
    * of whether the "receiver" (the issuer self-billing) has a RUC; (b) Nota de Remisión (C002=7)
@@ -287,6 +278,18 @@ public class SifenDocumentXmlService {
     if (!isBlank(receiver.address())) {
       el(doc, gDatRec, "dDirRec", receiver.address());
       el(doc, gDatRec, "dNumCasRec", "0");
+      // SIFEN HU-02 AC-07: D219/D220 (cDepRec/dDesDepRec) and D223/D224 (cCiuRec/dDesCiuRec) —
+      // "obligatorio si se informa D213 [dDirRec] y D202 [iTiOpe] != 4" (B2F/exterior, a value
+      // this domain never sets — see iTiOpe above, always "1" or "2"). Only emitted when the
+      // client actually has DNIT catalog codes on file (not every client with an address does).
+      if (!isBlank(receiver.departmentCode())) {
+        el(doc, gDatRec, "cDepRec", receiver.departmentCode());
+        el(doc, gDatRec, "dDesDepRec", receiver.departmentName());
+      }
+      if (!isBlank(receiver.cityCode())) {
+        el(doc, gDatRec, "cCiuRec", receiver.cityCode());
+        el(doc, gDatRec, "dDesCiuRec", receiver.cityName());
+      }
     }
   }
 

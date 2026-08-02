@@ -186,13 +186,22 @@ public class SifenInvoiceHeaderService {
             : (client != null ? client.getIdentityDocumentNumber() : null);
     String address = client != null ? client.getAddress() : null;
     boolean hasAddress = address != null && !address.isBlank();
+    boolean hasDepartmentAndCity =
+        hasAddress
+            && client != null
+            && client.getDepartmentCode() != null
+            && !client.getDepartmentCode().isBlank()
+            && client.getCityCode() != null
+            && !client.getCityCode().isBlank();
     return new SifenReceiverData(
         ruc,
         identityDocument,
         invoice.getClientDisplayName(),
         address,
-        hasAddress && client != null ? client.getDepartment() : null,
-        hasAddress && client != null ? client.getCity() : null);
+        hasDepartmentAndCity ? client.getDepartmentCode() : null,
+        hasDepartmentAndCity ? client.getDepartmentName() : null,
+        hasDepartmentAndCity ? client.getCityCode() : null,
+        hasDepartmentAndCity ? client.getCityName() : null);
   }
 
   private static void requireIssuerDataComplete(BusinessProfile profile) {

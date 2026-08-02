@@ -400,6 +400,8 @@ class SifenHomologationInvoiceSubmissionLiveTest {
             "Cliente Homologación HU-13",
             null,
             null,
+            null,
+            null,
             null);
 
     SifenInvoiceHeader header =

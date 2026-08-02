@@ -409,7 +409,8 @@ class SifenHomologationEventsLiveTest {
             "5044",
             "FERNANDO DE LA MORA");
     SifenReceiverData receiver =
-        new SifenReceiverData(null, "4123456", "Cliente Homologación HU-16", null, null, null);
+        new SifenReceiverData(
+            null, "4123456", "Cliente Homologación HU-16", null, null, null, null, null);
 
     SifenInvoiceHeader header =
         new SifenInvoiceHeader(

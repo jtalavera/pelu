@@ -10,5 +10,7 @@ public record ClientResponse(
     int visitCount,
     String identityDocumentNumber,
     String address,
-    String department,
-    String city) {}
+    String departmentCode,
+    String departmentName,
+    String cityCode,
+    String cityName) {}

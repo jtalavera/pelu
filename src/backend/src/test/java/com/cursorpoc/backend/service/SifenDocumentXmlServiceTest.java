@@ -50,7 +50,7 @@ class SifenDocumentXmlServiceTest {
             "5044",
             "FERNANDO DE LA MORA");
     SifenReceiverData receiver =
-        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null);
+        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null);
     header =
         new SifenInvoiceHeader(
             cdc,
@@ -220,7 +220,8 @@ class SifenDocumentXmlServiceTest {
 
   @Test
   void buildDocument_anonymousReceiver_usesInnominado() throws Exception {
-    SifenReceiverData anonymous = new SifenReceiverData(null, null, null, null, null, null);
+    SifenReceiverData anonymous =
+        new SifenReceiverData(null, null, null, null, null, null, null, null);
     SifenInvoiceHeader anonymousHeader =
         new SifenInvoiceHeader(
             header.controlNumber(),
@@ -239,6 +240,72 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='iTipIDRec']")).isEqualTo("5");
     assertThat(xpath(doc, "//*[local-name()='dNumIDRec']")).isEqualTo("0");
     assertThat(xpath(doc, "//*[local-name()='dNomRec']")).isEqualTo("Sin Nombre");
+  }
+
+  /**
+   * AC-07: si se informa la dirección del cliente (con sus códigos DNIT), el documento también
+   * incluye su departamento y ciudad — D219/D220/D223/D224.
+   */
+  @Test
+  void buildDocument_receiverWithAddressAndGeographicCodes_includesDepartmentAndCity()
+      throws Exception {
+    SifenReceiverData receiverWithAddress =
+        new SifenReceiverData(
+            null,
+            "4123456",
+            "Cliente Demo",
+            "Avda. Mcal. López 456",
+            "12",
+            "CENTRAL",
+            "5044",
+            "FERNANDO DE LA MORA");
+    SifenInvoiceHeader headerWithAddress =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            header.issuer(),
+            receiverWithAddress,
+            header.testEnvironmentNotice());
+
+    Document doc = service.buildDocument(headerWithAddress, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='dDirRec']")).isEqualTo("Avda. Mcal. López 456");
+    assertThat(xpath(doc, "//*[local-name()='cDepRec']")).isEqualTo("12");
+    assertThat(xpath(doc, "//*[local-name()='dDesDepRec']")).isEqualTo("CENTRAL");
+    assertThat(xpath(doc, "//*[local-name()='cCiuRec']")).isEqualTo("5044");
+    assertThat(xpath(doc, "//*[local-name()='dDesCiuRec']")).isEqualTo("FERNANDO DE LA MORA");
+  }
+
+  /** AC-07 (negative): an address without department/city codes on file emits neither field. */
+  @Test
+  void buildDocument_receiverWithAddressButNoGeographicCodes_omitsDepartmentAndCity()
+      throws Exception {
+    SifenReceiverData receiverWithAddress =
+        new SifenReceiverData(
+            null, "4123456", "Cliente Demo", "Avda. Mcal. López 456", null, null, null, null);
+    SifenInvoiceHeader headerWithAddress =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            header.issuer(),
+            receiverWithAddress,
+            header.testEnvironmentNotice());
+
+    Document doc = service.buildDocument(headerWithAddress, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='dDirRec']")).isEqualTo("Avda. Mcal. López 456");
+    assertThat(((NodeList) xpathNodes(doc, "//*[local-name()='cDepRec']")).getLength()).isZero();
+    assertThat(((NodeList) xpathNodes(doc, "//*[local-name()='cCiuRec']")).getLength()).isZero();
   }
 
   /** AC-01 (HU-03): one <gCamItem> per billed service. */

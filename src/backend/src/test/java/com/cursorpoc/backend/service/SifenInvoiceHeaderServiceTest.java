@@ -163,30 +163,52 @@ class SifenInvoiceHeaderServiceTest {
   void buildHeader_clientWithAddress_includesDepartmentAndCity() {
     Client client = new Client();
     client.setAddress("Mcal. López 456");
-    client.setDepartment("Central");
-    client.setCity("Fernando de la Mora");
+    client.setDepartmentCode("12");
+    client.setDepartmentName("CENTRAL");
+    client.setCityCode("5044");
+    client.setCityName("FERNANDO DE LA MORA");
     invoice.setClient(client);
 
     SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
 
     assertThat(header.receiver().address()).isEqualTo("Mcal. López 456");
-    assertThat(header.receiver().department()).isEqualTo("Central");
-    assertThat(header.receiver().city()).isEqualTo("Fernando de la Mora");
+    assertThat(header.receiver().departmentCode()).isEqualTo("12");
+    assertThat(header.receiver().departmentName()).isEqualTo("CENTRAL");
+    assertThat(header.receiver().cityCode()).isEqualTo("5044");
+    assertThat(header.receiver().cityName()).isEqualTo("FERNANDO DE LA MORA");
   }
 
   /** AC-07 (negative): without an address, departamento/ciudad are not fabricated. */
   @Test
   void buildHeader_clientWithoutAddress_doesNotIncludeDepartmentOrCity() {
     Client client = new Client();
-    client.setDepartment("Central");
-    client.setCity("Fernando de la Mora");
+    client.setDepartmentCode("12");
+    client.setDepartmentName("CENTRAL");
+    client.setCityCode("5044");
+    client.setCityName("FERNANDO DE LA MORA");
     invoice.setClient(client);
 
     SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
 
     assertThat(header.receiver().address()).isNull();
-    assertThat(header.receiver().department()).isNull();
-    assertThat(header.receiver().city()).isNull();
+    assertThat(header.receiver().departmentCode()).isNull();
+    assertThat(header.receiver().cityCode()).isNull();
+  }
+
+  /**
+   * AC-07 (negative): with an address but no department/city codes on file, none are fabricated.
+   */
+  @Test
+  void buildHeader_clientWithAddressButNoGeographicCodes_doesNotIncludeDepartmentOrCity() {
+    Client client = new Client();
+    client.setAddress("Mcal. López 456");
+    invoice.setClient(client);
+
+    SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
+
+    assertThat(header.receiver().address()).isEqualTo("Mcal. López 456");
+    assertThat(header.receiver().departmentCode()).isNull();
+    assertThat(header.receiver().cityCode()).isNull();
   }
 
   /** AC-08: en ambiente de prueba, la razón social se reemplaza por la leyenda obligatoria. */
