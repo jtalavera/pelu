@@ -1,2 +1,3 @@
 # Scratch folder for locally-provided secrets (certificates, PSC toolkits, etc.) — never commit.
 /temp/
+.DS_Store
