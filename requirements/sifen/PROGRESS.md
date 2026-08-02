@@ -443,6 +443,15 @@ el evento de identificación de cliente. Corregido a `"SIFEN event signed"`, gen
 - Ambos verificados con los campos de auditoría (AC-05 de ambas historias) correctamente persistidos,
   confirmado con `GET` fresco tras cada operación.
 
+**Nota post-fix: `SifenHomologationEventsLiveTest` (HU-16) corrida como parte de la suite completa**
+(`./gradlew test`, no aislada) mostró un `FALLO` puntual — `AC-01 cancelación 3/5` volvió
+`dCodRes=0100 "Error Inesperado"` en vez de `0600`, mientras las otras 4/5 cancelaciones idénticas
+(mismo código, mismo tipo de petición) sí aprobaron. Mismo patrón de ruido de transporte puntual del
+sandbox de SIFEN que HU-12 ya documentó (`1001 CDC duplicado` bajo ráfaga) — no una regresión: la
+misma clase corrió aislada minutos antes con aserción dura 100% en verde. No se agregó reintento
+específico para `0100` (sería sobre-ingeniería para un blip raro y no determinístico); si se repite
+con frecuencia en corridas futuras, ahí sí ameritaría revisarse.
+
 **Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
 - `SifenInvoiceSubmissionPersistenceService.java` — `SIFEN_CLOCK_SKEW_BUFFER` (Bug 1).
 - `SifenInvoiceCancellationService.java` — `SIFEN_CLOCK_SKEW_BUFFER` anclado a `sifenSubmittedAt`
