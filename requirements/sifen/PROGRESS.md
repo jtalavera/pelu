@@ -3204,6 +3204,12 @@ limitación conocida, igual que el precedente ya sentado en HU-02 (departamento/
 libre). Si una futura historia necesita soportar servicios con impuesto mixto, hay que extender
 `Tax`/`SalonService` antes de que esto sea alcanzable — no es un cambio aislado a este servicio.
 
+**Reconfirmado 2026-08-02 (auditoría de status post-cierre del plan):** revisado explícitamente con
+el usuario si `EXONERADO`/`GRAVADO_PARCIAL` ameritaban cerrarse — decisión: **fuera de alcance
+permanente**, esta peluquería no vende servicios exonerados por ley especial (Art. 83) ni servicios
+con IVA mixto dentro de una misma línea. No es una limitación pendiente de una futura historia; es
+un cierre deliberado.
+
 **AC-05 (descuento se refleja en el total): el descuento por línea y el descuento global de la
 factura son casos distintos.** El descuento por línea (`InvoiceLine.discountType/discountValue`) ya
 está incluido en `InvoiceLine.lineTotal` (no hace falta recalcularlo — `grossLineTotal - lineTotal`
@@ -3342,6 +3348,11 @@ extender lo mismo al secreto JWT ya que comparte el mismo patrón de riesgo. No 
 loop porque es una historia de infraestructura transversal, no una de las 22 HU numeradas del plan
 de fases — se necesita indicación del usuario sobre si crear una HU nueva para esto o manejarlo
 como chore de infraestructura.
+
+**Reconfirmado 2026-08-02 (auditoría de status post-cierre del plan):** sigue sin resolverse,
+deliberadamente — fuera del alcance de la sesión de cierre de gaps que terminó con HU-02/HU-03/
+HU-06/HU-10/HU-11/HU-15/HU-16/HU-17 (ver Adendas 2 y 3 arriba). Sigue pendiente la misma indicación
+del usuario sobre HU nueva vs. chore de infraestructura.
 
 ## HU-20 — Calcular el estado de cada certificado según su vigencia (Done)
 
