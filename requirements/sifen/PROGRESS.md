@@ -19,12 +19,22 @@ vivo del propio `SiConsRUC` de SIFEN para diagnosticar el estado real del RUC pi
 enmascararlos.
 
 **Actualización 2026-08-01 (sesión posterior, "Adenda 2") — cerrados los gaps que la Adenda original
-había dejado pendientes en HU-15/HU-16/HU-17.** Ver "Adenda 2 (2026-08-01)" (justo antes de
-"## HU-22" más abajo). Las 6 historias de `EP-05` (HU-12..HU-17) pasan hoy con aserción dura, sin
-ningún `Assumptions.assumeTrue` activado en una corrida en vivo limpia — la única excepción
-documentada y permanente es el veredicto "SIFEN reconoce el QR como válido" de HU-17 AC-02, fuera de
-alcance por diseño (se renderiza client-side en la SPA de SIFEN). Sigue pendiente re-ejecutar
+había dejado pendientes en HU-15/HU-16/HU-17.** Ver "Adenda 2 (2026-08-01)" (antes de "## Adenda 3"
+más abajo). Las 6 historias de `EP-05` (HU-12..HU-17) pasan hoy con aserción dura, sin ningún
+`Assumptions.assumeTrue` activado en una corrida en vivo limpia — la única excepción documentada y
+permanente es el veredicto "SIFEN reconoce el QR como válido" de HU-17 AC-02, fuera de alcance por
+diseño (se renderiza client-side en la SPA de SIFEN). Sigue pendiente re-ejecutar
 `SifenHomologationFinalReportTest` (el reporte consolidado) para que refleje este estado.
+
+**Actualización 2026-08-01 (tercera sesión, "Adenda 3") — HU-10/HU-11 verificados en vivo por primera
+vez a través del flujo real de producción (no solo tests aislados), encontrando y corrigiendo 4 bugs
+reales de producción en el camino.** Ver "Adenda 3 (2026-08-01)" (antes de "## HU-22" más abajo): un
+margen de reloj que EP-05 ya tenía pero nunca se había portado a código de producción (`dCodRes=1004`
+en toda emisión real), el mismo bug de auto-invocación `@Transactional` que HU-11 ya había corregido
+pero nunca portado a `SifenInvoiceCancellationService` (una cancelación real no persistía nada), un
+refinamiento del margen de reloj específico de cancelación (`dCodRes=4009`, anclado a la aprobación
+real de la factura), y un mensaje de log engañoso. Con los 4 corregidos: **HU-10 AC-03 y HU-11 AC-05
+confirmados en vivo, `dCodRes=0600` genuino, por primera vez en toda esta integración.**
 
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
@@ -38,13 +48,13 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-02 Datos identificación/timbrado/emisor/receptor | ✅ Done | Ver detalle abajo. |
 | HU-03 Servicios facturados y totales | ✅ Done | Ver detalle abajo. |
 | HU-04 Firmar digitalmente | ✅ Done | Ver detalle abajo. |
-| HU-06 Enviar factura y registrar resultado | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (rechazo); ver limitación de "Aprobado" abajo. |
+| HU-06 Enviar factura y registrar resultado | ✅ Done | Ver detalle abajo + "Adenda 3 (2026-08-01)". **Verificado en vivo `Aprobado` real (`0260`) a través del flujo completo de producción** (no solo tests aislados) — encontró y corrigió un bug real: ningún código de producción tenía el margen de seguridad de reloj que EP-05 sí tenía, causando `dCodRes=1004` en toda emisión real (`SIFEN_CLOCK_SKEW_BUFFER`, ver Adenda 3). |
 | HU-07 Verificar estado de una factura pendiente | ✅ Done | Ver detalle abajo. Verificado en vivo contra SIFEN real (CDC inexistente); primera historia con pantalla + controller propios. |
 | HU-19 Ver listado de certificados | ✅ Done | Ver detalle abajo. Sin interacción con SIFEN (N/A) — 100% lectura de datos locales. |
 | HU-08 Generar comprobante PDF (KuDE) | ✅ Done | Ver detalle abajo. Verificado en vivo: el fix de `gCamFuFD/dCarQR` cierra ese gap específico; quedan 3 gaps menores ya documentados por HU-06, sin "Aprobado" real todavía. |
 | HU-09 Revalidar en SIFEN una factura | ✅ Done | Ver detalle abajo. **Cierra Fase 2.** Verificado en vivo: la URL real (`consultas-test/qr?...`) responde HTTP 200 con la app "Consultas" real de SIFEN. |
-| HU-10 Cancelar una factura ya aprobada | ✅ Done | Ver detalle abajo. Verificado en vivo (real HTTP 200, forma de respuesta confirmada); el "Aprobado" real del evento queda como limitación abierta, ver detalle. |
-| HU-11 Identificar al cliente en una factura sin datos | ✅ Done | Ver detalle abajo. **Cierra Fase 3.** Verificado en vivo (real HTTP 200, mismo `0160` que HU-10); evento no documentado en el Manual V150, encontrado solo en el XSD real en vivo. |
+| HU-10 Cancelar una factura ya aprobada | ✅ Done | Ver detalle abajo + "Adenda 3 (2026-08-01)". **AC-03 (SIFEN aprueba la cancelación) confirmado en vivo, `dCodRes=0600`, por primera vez en toda esta integración** — encontró y corrigió 2 bugs reales: el mismo bug de auto-invocación `@Transactional` que HU-11 ya había corregido pero nunca se había portado acá (una cancelación real no persistía nada), y un margen de reloj que podía quedar antes de la aprobación real (`dCodRes=4009`), ver Adenda 3. |
+| HU-11 Identificar al cliente en una factura sin datos | ✅ Done | Ver detalle abajo + "Adenda 3 (2026-08-01)". **Cierra Fase 3.** **AC-05 (SIFEN aprueba la identificación) confirmado en vivo, `dCodRes=0600`, por primera vez** — evento no documentado en el Manual V150, encontrado solo en el XSD real en vivo. |
 | HU-12 Probar la conexión segura contra todos los servicios | ✅ Done | Ver detalle abajo. **Primer paso de Fase 4.** Los 7 servicios nombrados por AC-01 (6 endpoints reales distintos) verificados en vivo: certificado válido aceptado, certificado inválido rechazado, en los 14 casos. |
 | HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo + "Adenda 2026-08-01". **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`). AC-02 (incorrectas rechazadas) y **AC-01 (correctas aprobadas, 5/5) verificados en vivo con aserción dura — el bloqueo externo `dCodRes=1252` que impedía esto se resolvió el 2026-08-01, y 2 gaps reales más (departamento/ciudad del emisor, descripción del tipo de documento de identidad del receptor) quedaron cerrados en la misma sesión.** |
 | HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo + "Adenda 2026-08-01". Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **AC-01 y AC-02 (correctas aprobadas Y incorrectas rechazadas, 5/5 por tipo, los 4 tipos) verificados en vivo con aserción dura** — cerrada una cadena larga de gaps reales de schema/contenido específicos de cada tipo (ver Adenda), la última confirmación de que `SifenDocumentXmlService` cubre correctamente los 5 tipos de documento electrónico que homologación exige. |
@@ -317,6 +327,138 @@ anterior con el bug de duplicados sin corregir).
 
 **Playwright**: ninguno — mismo patrón que toda historia de EP-05 (capacidad de prueba de
 homologación, sin pantalla propia).
+
+## Adenda 3 (2026-08-01) — HU-10/HU-11 verificados en vivo por primera vez a través del flujo real de producción, y 4 bugs reales de producción encontrados en el camino
+
+Sesión posterior a la Adenda 2. Objetivo: re-verificar el camino feliz de HU-10 (cancelar) y HU-11
+(identificar cliente) contra un documento genuinamente aprobado — algo que, a diferencia de EP-05
+(HU-12..17), **nunca se había probado a través del flujo real de producción** (`InvoiceController` →
+`InvoiceService.issueInvoice` → `SifenInvoiceSubmissionService` → `SifenInvoiceCancellationService`/
+`SifenInvoiceClientIdentificationService`), solo a través de tests aislados que construyen su propio
+documento en memoria. Para esto, se levantó el backend real (`SPRING_PROFILES_ACTIVE=e2e` para la
+semilla de datos demo + H2, pero con `app.femme.sifen.connection.test-base-url` sobreescrito de
+vuelta al `sifen-test.set.gov.py` real vía `--args` de `bootRun`, en vez del puerto discard que usa
+`e2e` normalmente) y se emitió/canceló/identificó una factura real a mano, con `curl`, exactamente el
+mismo patrón que HU-22 ya había usado para su propia verificación en vivo.
+
+**Este intento destapó 4 bugs reales de producción, ninguno relacionado con el bloqueo externo
+`1252`** (ya resuelto) — el primer intento de emitir una factura real a través del flujo completo de
+producción, apuntando al SIFEN real, en la historia de esta integración:
+
+### Bug 1 — ningún código de producción tenía el margen de seguridad de reloj que EP-05 sí tenía (`dCodRes=1004`)
+
+El primer intento de emitir devolvió `dCodRes=1004 "La fecha y hora de la firma digital es
+adelantada"` — el mismo hallazgo de reloj que HU-13 documentó y que cada test "Live" de EP-05 ya
+resolvía restando 2 minutos (`CLOCK_SAFETY_BUFFER`) al construir su propio documento en memoria. Pero
+**ese margen nunca se portó al código real de producción** — `SifenInvoiceSubmissionPersistenceService
+.prepareForSubmission` (la única fuente real de `dFecFirma` para una factura normal) usaba
+`LocalDateTime.now(...)` sin ningún ajuste. Nunca se había detectado porque ningún test anterior
+—incluido HU-22, que sí corrió `submit()` a través de un contexto Spring real— había llegado a
+intentar una aprobación genuina contra el SIFEN real (HU-22 corrió contra el puerto discard de `e2e`,
+donde este código nunca llega a importar). Confirmado que el reloj del propio sandbox de SIFEN corre
+detrás del real (verificado con el header `Date` de una respuesta HTTP externa confiable en el mismo
+instante) — no es un problema del reloj de esta máquina.
+
+**Corregido:** el mismo margen de 2 minutos (`SIFEN_CLOCK_SKEW_BUFFER`), aplicado solo al valor
+persistido como `sifenSignedAt`/enviado como `dFecFirma` — el chequeo local de la ventana de 72 horas
+(AC-07) sigue comparando contra el `now` real, sin margen. Mismo patrón aplicado a
+`SifenInvoiceCancellationService.prepareForCancellation` y
+`SifenInvoiceClientIdentificationService.prepareForIdentification` (los eventos también necesitan
+este margen para su propia `dFecFirma`/GDE004).
+
+### Bug 2 — `SifenInvoiceCancellationService` tenía el mismo bug de auto-invocación que HU-11 ya había encontrado y corregido, pero nunca portado
+
+Con el Bug 1 corregido, una factura real llegó a `Aprobado` (`0260`) por primera vez a través del
+flujo normal de la aplicación. Al cancelarla, SIFEN respondió con un resultado real (`REJECTED` en el
+primer intento, por el Bug 3 de abajo) — pero **ninguno de los campos de auditoría de la cancelación
+se persistió**, ni siquiera `sifenCancellationRequestedAt` (que HU-10 documenta como escrito *antes*
+de cualquier llamada de red). Causa raíz: exactamente el mismo bug de auto-invocación de
+`@Transactional` que HU-11 ya había encontrado y corregido para
+`SifenInvoiceClientIdentificationService` (proxy AOP de Spring, que solo intercepta llamadas que
+llegan desde *fuera* del bean) — HU-11 documentó explícitamente no portar la corrección a
+`SifenInvoiceCancellationService` por no tener cómo ejercitarlo en ese momento. Esta sesión fue la
+primera vez que `cancel()` corrió a través de un contexto Spring real sin ningún atajo de test,
+exactamente el escenario que expone el problema (mismo patrón que HU-22 ya estableció para
+`SifenInvoiceSubmissionService`).
+
+**Corregido:** mismo patrón `@Autowired @Lazy` de auto-proxy que `SifenInvoiceClientIdentificationService`
+ya usa — `prepareForCancellation`/`recordCancellationResult` ahora se llaman a través de `self()`, no
+de `this.` directo. Verificado con una segunda corrida en vivo: los campos de auditoría (incluido
+`sifenCancellationResultCode`/`sifenCancellationMessage`) ahora sí persisten, confirmado con un `GET`
+fresco después del `POST` de cancelación.
+
+### Bug 3 — el margen de reloj de cancelación podía quedar *antes* de la aprobación real (`dCodRes=4009`)
+
+Con el Bug 2 corregido, la cancelación devolvió `dCodRes=4009 "Plazo de solicitud de cancelación de
+una FE extemporáneo"` (GDE004a, Manual Técnico V150 sección 11.6.1: la fecha de firma del evento de
+cancelación no puede superar las 48 horas desde la aprobación en SIFEN) — al cancelar apenas segundos
+después de emitir, restar 2 minutos a `now` dejaba la fecha declarada del evento *antes* de que la
+aprobación real hubiera ocurrido, la misma regla disparada desde el lado contrario (idéntico hallazgo
+al que motivó `postApprovalSignatureInstant()` en `SifenHomologationEventsLiveTest`, Adenda 2 arriba).
+**Corregido:** en vez de restar el margen incondicionalmente, `prepareForCancellation` ahora usa
+`max(now - 2min, invoice.sifenSubmittedAt + 1s)` — nunca antes de la aprobación real registrada, y
+solo aplica el margen de reloj completo cuando la factura se cancela bastante después de aprobada
+(donde `sifenSubmittedAt` ya queda muy en el pasado y no cambia el resultado). **Confirmado en vivo,
+tercer intento: `dCodRes=0600 "Evento registrado correctamente"`, la aprobación real de una
+cancelación por primera vez en toda esta integración**, con `sifenSubmissionStatus` pasando a
+`CANCELLED`. Nota: `SifenInvoiceClientIdentificationService` no necesitó este mismo ajuste — probado
+en vivo que el margen simple (sin anclar a la aprobación) ya funciona para el evento de nominación,
+consistente con que el Manual Técnico solo documenta esta regla de "plazo desde aprobación" (GDE004a)
+para el evento de cancelación específicamente, no para nominación.
+
+### Bug 4 (menor, cosmético) — el log de firma de eventos siempre decía "cancellation" sin importar el tipo real
+
+`SifenDocumentSigningService.signEvent` logueaba `"SIFEN cancellation event signed"`
+incondicionalmente, para cualquier tipo de evento (anulación de numeración, eventos de receptor,
+etc.) — un mensaje engañoso que casi lleva a un diagnóstico equivocado durante esta sesión al firmar
+el evento de identificación de cliente. Corregido a `"SIFEN event signed"`, genérico.
+
+### Hallazgos operativos (no bugs de código) al armar la verificación en vivo
+
+- El timbrado local sembrado por defecto (`FemmeDataInitializer`, `"12345678"`) es un valor de
+  prueba interno de esta app — no corresponde al timbrado real registrado ante SIFEN para el RUC
+  piloto (`"1137152"`, el mismo valor que `STAMP_NUMBER` en todos los tests de EP-05). Sin este ajuste,
+  SIFEN rechaza con `dCodRes=1101 "Número de timbrado inválido"`.
+- La descripción de actividad económica debe coincidir exactamente (con tilde) con el catálogo real
+  de SIFEN: `"Peluquería y otros tratamientos de belleza"` para el código `96020` — una versión sin
+  tilde ("Peluqueria") es rechazada con `dCodRes=1262 "Descripción de la actividad económica no
+  corresponde al código"`.
+- Un servicio sembrado con tasa de IVA `Exento` (0%) dispara `dCodRes=1905 "Proporción gravada del
+  IVA incorrecta para forma de afectación Exonerado o Exento"` — confirma en vivo el gap ya
+  documentado de HU-03 (`EXONERADO`/`GRAVADO_PARCIAL` genuinamente rotos, ver "Deuda técnica"/plan de
+  gaps). Para esta verificación se usó un servicio con IVA 10% (`GRAVADO`), fuera del alcance de ese
+  gap.
+- El número de emisión de un timbrado, una vez usado contra el SIFEN real, no se puede reutilizar
+  nunca más (`dCodRes=1002 "Documento electrónico duplicado"`) — cada verificación en vivo con un
+  backend recién levantado (H2 en memoria, contador de numeración reiniciado) necesita un
+  `initialEmissionNumber` nuevo, nunca reutilizado en una sesión anterior contra el mismo RUC/timbrado
+  piloto.
+
+**Resultado final, confirmado en vivo:**
+- **HU-10 AC-03** (SIFEN aprueba la cancelación → estado `CANCELLED`): confirmado, `dCodRes=0600`,
+  factura genuinamente aprobada y genuinamente cancelada, por primera vez a través del flujo real de
+  producción.
+- **HU-11 AC-05** (SIFEN aprueba la identificación → datos del cliente registrados): confirmado,
+  `dCodRes=0600 "Evento registrado correctamente"`, `sifenClientIdentified=true`.
+- Ambos verificados con los campos de auditoría (AC-05 de ambas historias) correctamente persistidos,
+  confirmado con `GET` fresco tras cada operación.
+
+**Backend** (`src/backend/src/main/java/com/cursorpoc/backend/service/`):
+- `SifenInvoiceSubmissionPersistenceService.java` — `SIFEN_CLOCK_SKEW_BUFFER` (Bug 1).
+- `SifenInvoiceCancellationService.java` — `SIFEN_CLOCK_SKEW_BUFFER` anclado a `sifenSubmittedAt`
+  (Bug 1 + 3), auto-proxy `@Autowired @Lazy`/`self()` (Bug 2).
+- `SifenInvoiceClientIdentificationService.java` — `SIFEN_CLOCK_SKEW_BUFFER` (Bug 1).
+- `SifenDocumentSigningService.java` — mensaje de log genérico (Bug 4).
+
+**Tests backend**: `SifenInvoiceSubmissionServiceTest`/`SifenInvoiceCancellationServiceTest`/
+`SifenInvoiceClientIdentificationServiceTest` — sin cambios de aserciones, verificados que siguen
+pasando (ninguno depende de un valor exacto de timestamp).
+
+**Playwright**: sin cambios — HU-10/HU-11 ya cubren el camino feliz vía el patrón de fabricación
+(`prepare-with-status-hours-ago`/`fabricate-cancellation-result`), que sigue siendo la forma correcta
+de probar la UI sin depender de una llamada real a SIFEN. Esta sesión fue exclusivamente verificación
+manual en vivo del backend real, no un test automatizado nuevo — mismo patrón que la verificación en
+vivo de HU-22 (curl manual, documentado en PROGRESS.md, no un test guardado).
 
 ## HU-22 — Activar o desactivar la facturación electrónica para un tenant (Done)
 

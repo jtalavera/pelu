@@ -203,8 +203,11 @@ public class SifenDocumentSigningService {
         eventId,
         CanonicalizationMethod.EXCLUSIVE);
 
+    // Not "cancellation event" — this signs every event type (cancellation, anulación de
+    // numeración, receptor events), a real, misleading finding from live diagnosis: the log
+    // previously always said "cancellation" here regardless of what was actually being signed.
     log.info(
-        "SIFEN cancellation event signed tenantId={} eventId={} certificateId={}",
+        "SIFEN event signed tenantId={} eventId={} certificateId={}",
         tenantId,
         eventId,
         material.certificateId());

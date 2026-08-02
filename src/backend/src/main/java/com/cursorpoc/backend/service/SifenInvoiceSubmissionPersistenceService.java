@@ -42,6 +42,22 @@ class SifenInvoiceSubmissionPersistenceService {
    */
   static final Duration SIGNATURE_TRANSMISSION_WINDOW = Duration.ofHours(72);
 
+  /**
+   * Real finding, confirmed live against the actual SIFEN test sandbox through this exact
+   * production code path (not just a test fixture): SIFEN's own server clock runs measurably behind
+   * real UTC (verified against an external HTTP Date header at diagnosis time), so a
+   * correctly-timestamped {@code dFecFirma} routinely gets rejected as {@code dCodRes=1004} "La
+   * fecha y hora de la firma digital es adelantada". Every EP-05 homologación live test already
+   * worked around this with its own local buffer (see e.g. {@code
+   * SifenHomologationInvoiceSubmissionLiveTest}'s {@code CLOCK_SAFETY_BUFFER}) — this was
+   * previously undocumented as a production-code gap because no test before this exercised {@code
+   * prepareForSubmission} against the real sandbox through the real Spring-wired service (every
+   * prior "live" test built its own document in isolation). Applied only to the value persisted as
+   * {@code sifenSignedAt}/sent as {@code dFecFirma} — the local AC-07 window check below still
+   * compares against the true, unbuffered {@code now}.
+   */
+  private static final Duration SIFEN_CLOCK_SKEW_BUFFER = Duration.ofMinutes(2);
+
   private final InvoiceRepository invoiceRepository;
   private final FemmeTimeProperties timeProperties;
 
@@ -63,7 +79,7 @@ class SifenInvoiceSubmissionPersistenceService {
     LocalDateTime now = LocalDateTime.now(timeProperties.zoneId());
     LocalDateTime signedAt = invoice.getSifenSignedAt();
     if (signedAt == null) {
-      signedAt = now;
+      signedAt = now.minus(SIFEN_CLOCK_SKEW_BUFFER);
       invoice.setSifenSignedAt(signedAt);
     }
 

@@ -7,6 +7,7 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
 import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -57,6 +58,15 @@ public class SifenInvoiceClientIdentificationService {
 
   private static final Logger log =
       LoggerFactory.getLogger(SifenInvoiceClientIdentificationService.class);
+
+  /**
+   * Real finding, confirmed live: SIFEN's own test sandbox clock runs measurably behind real UTC
+   * (see {@code SifenInvoiceSubmissionPersistenceService}'s own javadoc for the diagnosis) — an
+   * event's declared signature date/time needs this same margin, or SIFEN rejects it as being ahead
+   * of its own clock. Applied only to the value used as the event's signature timestamp — the audit
+   * fields persisted below intentionally keep the true, unbuffered now.
+   */
+  private static final Duration SIFEN_CLOCK_SKEW_BUFFER = Duration.ofMinutes(2);
 
   private final InvoiceRepository invoiceRepository;
   private final SifenInvoiceHeaderService headerService;
@@ -173,7 +183,7 @@ public class SifenInvoiceClientIdentificationService {
     // rEve's own Id attribute — epoch seconds, same rationale as SifenCancellationEventXmlService's
     // (tdIdEve is 1-10 digits; epoch millis would already overflow it).
     long eventId = Instant.now().getEpochSecond();
-    return new IdentificationRequest(cdc, data, eventId, now);
+    return new IdentificationRequest(cdc, data, eventId, now.minus(SIFEN_CLOCK_SKEW_BUFFER));
   }
 
   @Transactional

@@ -10,6 +10,8 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,11 +58,38 @@ public class SifenInvoiceCancellationService {
    */
   static final Duration CANCELLATION_WINDOW = Duration.ofHours(48);
 
+  /**
+   * Real finding, confirmed live: SIFEN's own test sandbox clock runs measurably behind real UTC
+   * (see {@code SifenInvoiceSubmissionPersistenceService}'s own javadoc for the diagnosis and the
+   * EP-05 homologación live tests' own {@code CLOCK_SAFETY_BUFFER}) — an event's declared signature
+   * date/time (GDE004) needs this same margin, or SIFEN rejects it as being ahead of its own clock.
+   * Applied only to the value used as the event's signature timestamp — the local AC-02 window
+   * check below still compares against the true, unbuffered {@code now}.
+   */
+  private static final Duration SIFEN_CLOCK_SKEW_BUFFER = Duration.ofMinutes(2);
+
   private final InvoiceRepository invoiceRepository;
   private final SifenCancellationEventXmlService eventXmlService;
   private final SifenDocumentSigningService signingService;
   private final SifenEventClient eventClient;
   private final FemmeTimeProperties timeProperties;
+
+  /**
+   * Real bug, confirmed live: {@code cancel()}'s calls to {@code prepareForCancellation}/{@code
+   * recordCancellationResult} were plain {@code this.} self-invocations, which bypass Spring's
+   * {@code @Transactional} proxy entirely (a same-class call never goes through the proxy) — every
+   * mutation those two methods made to the {@code Invoice} entity was silently lost, since the
+   * short-lived read session {@code requireInvoice} opens closes immediately after the read. This
+   * was previously documented as known tech debt (the identical bug {@code
+   * SifenInvoiceClientIdentificationService} already found and fixed for HU-11, deliberately not
+   * backported here since nothing had exercised {@code cancel()} through a real Spring context) —
+   * confirmed as a real, live, reproducible data-loss bug: a genuinely-approved invoice's
+   * cancellation attempt got a real SIFEN response (approved or rejected) but persisted absolutely
+   * nothing, not even the AC-05 audit trail. Same {@code @Autowired @Lazy} self-proxy fix as
+   * HU-11's; see that class's javadoc for why field injection (not a constructor param) and
+   * {@code @Lazy} are both required.
+   */
+  @Autowired @Lazy private SifenInvoiceCancellationService selfProxy;
 
   public SifenInvoiceCancellationService(
       InvoiceRepository invoiceRepository,
@@ -75,6 +104,10 @@ public class SifenInvoiceCancellationService {
     this.timeProperties = timeProperties;
   }
 
+  private SifenInvoiceCancellationService self() {
+    return selfProxy != null ? selfProxy : this;
+  }
+
   /**
    * AC-01/AC-02: validates eligibility and records the attempt, builds+signs+sends the cancellation
    * event, then persists SIFEN's result — AC-03 (approved: invoice becomes {@code CANCELLED}) or
@@ -85,7 +118,7 @@ public class SifenInvoiceCancellationService {
   public SifenSubmissionResult cancel(
       long tenantId, long invoiceId, long userId, String userEmail, String reason) {
     CancellationRequest request =
-        prepareForCancellation(tenantId, invoiceId, userId, userEmail, reason);
+        self().prepareForCancellation(tenantId, invoiceId, userId, userEmail, reason);
 
     Document unsigned =
         eventXmlService.buildCancellationEvent(
@@ -104,7 +137,7 @@ public class SifenInvoiceCancellationService {
     }
 
     SifenSubmissionResult result = response.get();
-    recordCancellationResult(tenantId, invoiceId, result);
+    self().recordCancellationResult(tenantId, invoiceId, result);
     log.info(
         "SIFEN cancellation resolved tenantId={} invoiceId={} controlNumber={} status={}",
         tenantId,
@@ -130,7 +163,23 @@ public class SifenInvoiceCancellationService {
     // rEve's own Id attribute (tdIdEve, 1-10 digits) — epoch seconds, not millis (see
     // SifenCancellationEventXmlService's javadoc for why millis would overflow it).
     long eventId = Instant.now().getEpochSecond();
-    return new CancellationRequest(cdc, eventId, now);
+    // Real finding, confirmed live: unconditionally subtracting SIFEN_CLOCK_SKEW_BUFFER can push
+    // the event's signature timestamp (GDE004) to *before* the invoice's own real SIFEN approval
+    // instant when cancelling shortly after approval (dCodRes=4009 "Plazo de solicitud de
+    // cancelación... extemporáneo", same rule from the opposite direction — see
+    // SifenHomologationEventsLiveTest's postApprovalSignatureInstant() for the same finding in
+    // EP-05's own test). Never earlier than one second after invoice.getSifenSubmittedAt() (the
+    // closest available proxy for SIFEN's own approval instant, per this class's javadoc) guards
+    // against that while still keeping the clock-skew margin for invoices cancelled well after
+    // approval, where sifenSubmittedAt is safely in the past already.
+    LocalDateTime signatureInstant = now.minus(SIFEN_CLOCK_SKEW_BUFFER);
+    if (invoice.getSifenSubmittedAt() != null) {
+      LocalDateTime earliestAfterApproval = invoice.getSifenSubmittedAt().plusSeconds(1);
+      if (signatureInstant.isBefore(earliestAfterApproval)) {
+        signatureInstant = earliestAfterApproval;
+      }
+    }
+    return new CancellationRequest(cdc, eventId, signatureInstant);
   }
 
   @Transactional
