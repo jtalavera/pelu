@@ -52,9 +52,11 @@ export default function SettingsLayout() {
           className="max-md:border-r-0 max-md:border-b max-md:border-[var(--color-stone-md)]"
           aria-label={t("femme.settings.sectionTitle")}
         >
-          <NavLink to="/app/settings/business" className={navClass} end>
-            {t("femme.settings.tabBusiness")}
-          </NavLink>
+          {isTenantAdmin ? (
+            <NavLink to="/app/settings/business" className={navClass} end>
+              {t("femme.settings.tabBusiness")}
+            </NavLink>
+          ) : null}
           <NavLink to="/app/settings/fiscal-stamp" className={navClass}>
             {t("femme.settings.tabFiscalStamp")}
           </NavLink>

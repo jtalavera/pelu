@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Spinner, Text } from "@design-system";
+import {
+  Alert,
+  Heading,
+  Label,
+  LocalityCombobox,
+  Radio,
+  RadioGroup,
+  Spinner,
+  Text,
+  type Locality,
+} from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
 import { looksLikeRucValidationError, parseApiErrorMessage, translateApiError } from "../api/parseApiErrorMessage";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
@@ -10,8 +20,12 @@ import {
 } from "../lib/paraguayPhone";
 import { isValidEmail } from "../lib/validateEmail";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { useLocalitySearch } from "../hooks/useLocalitySearch";
+import { useMe } from "../hooks/useMe";
 import { useTour } from "../tour/useTour";
 import { businessSettingsSteps } from "../tour/steps/businessSettings";
+
+type TaxpayerType = "INDIVIDUAL" | "LEGAL_ENTITY";
 
 type BusinessProfileResponse = {
   businessName: string;
@@ -21,7 +35,31 @@ type BusinessProfileResponse = {
   contactEmail: string | null;
   logoDataUrl: string | null;
   rucValidForInvoicing: boolean;
+  taxpayerType: TaxpayerType | null;
+  economicActivityCode: string | null;
+  economicActivityDescription: string | null;
+  sifenDepartmentCode: string | null;
+  sifenDepartmentName: string | null;
+  sifenCityCode: string | null;
+  sifenCityName: string | null;
 };
+
+function localityFromProfile(data: BusinessProfileResponse): Locality | null {
+  if (
+    !data.sifenDepartmentCode ||
+    !data.sifenDepartmentName ||
+    !data.sifenCityCode ||
+    !data.sifenCityName
+  ) {
+    return null;
+  }
+  return {
+    departmentCode: data.sifenDepartmentCode,
+    departmentName: data.sifenDepartmentName,
+    cityCode: data.sifenCityCode,
+    cityName: data.sifenCityName,
+  };
+}
 
 const MAX_LOGO_BYTES = 1_500_000;
 
@@ -76,9 +114,13 @@ function buildInputStyle(
 
 export default function BusinessSettingsPage() {
   const { t } = useTranslation();
+  const { me } = useMe();
+  const isTenantAdmin = me?.role === "ADMIN";
+  const sifenInvoicingEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   useTour("business-settings", businessSettingsSteps, undefined, guidedTourEnabled);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const localitySearch = useLocalitySearch();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -91,6 +133,10 @@ export default function BusinessSettingsPage() {
   const [contactEmail, setContactEmail] = useState("");
   /** null = server had no logo; "" = user cleared; string = image data URL */
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [taxpayerType, setTaxpayerType] = useState<TaxpayerType | "">("");
+  const [economicActivityCode, setEconomicActivityCode] = useState("");
+  const [economicActivityDescription, setEconomicActivityDescription] = useState("");
+  const [locality, setLocality] = useState<Locality | null>(null);
   const [rucError, setRucError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [contactEmailError, setContactEmailError] = useState<string | null>(null);
@@ -102,6 +148,10 @@ export default function BusinessSettingsPage() {
   const [focusField, setFocusField] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!isTenantAdmin) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError(null);
     try {
@@ -113,13 +163,17 @@ export default function BusinessSettingsPage() {
       setContactEmail(data.contactEmail ?? "");
       setLogoDataUrl(data.logoDataUrl ?? null);
       setLogoFileLabel(null);
+      setTaxpayerType(data.taxpayerType ?? "");
+      setEconomicActivityCode(data.economicActivityCode ?? "");
+      setEconomicActivityDescription(data.economicActivityDescription ?? "");
+      setLocality(localityFromProfile(data));
     } catch {
       setLoadError(t("femme.businessSettings.loadError"));
       setSuccess(false);
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, isTenantAdmin]);
 
   useEffect(() => {
     void load();
@@ -221,6 +275,13 @@ export default function BusinessSettingsPage() {
         contactEmail: emailTrim.length === 0 ? null : emailTrim,
         logoDataUrl:
           logoDataUrl === null ? null : logoDataUrl === "" ? "" : logoDataUrl,
+        taxpayerType: taxpayerType || null,
+        economicActivityCode: economicActivityCode.trim() || null,
+        economicActivityDescription: economicActivityDescription.trim() || null,
+        sifenDepartmentCode: locality?.departmentCode ?? null,
+        sifenDepartmentName: locality?.departmentName ?? null,
+        sifenCityCode: locality?.cityCode ?? null,
+        sifenCityName: locality?.cityName ?? null,
       });
       setSuccess(true);
       await load();
@@ -268,6 +329,19 @@ export default function BusinessSettingsPage() {
     color: "var(--color-danger)",
     marginTop: 3,
   };
+
+  if (!isTenantAdmin) {
+    return (
+      <div>
+        <Heading as="h2" className="text-[var(--color-ink)]">
+          {t("femme.businessSettings.title")}
+        </Heading>
+        <p className="mt-2 text-sm text-[var(--color-ink-2)]" role="alert">
+          {t("femme.businessSettings.forbidden")}
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -485,6 +559,99 @@ export default function BusinessSettingsPage() {
             ) : null}
           </div>
         </div>
+
+        {sifenInvoicingEnabled ? (
+          <>
+            <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionSifen")}</div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <div style={{ gridColumn: "1 / -1" }}>
+                <Label id="taxpayer-type-label">
+                  {t("femme.businessSettings.taxpayerTypeLabel")}
+                </Label>
+                <RadioGroup
+                  aria-labelledby="taxpayer-type-label"
+                  value={taxpayerType}
+                  onChange={(value) => {
+                    setTaxpayerType(value as TaxpayerType);
+                    if (saveValidationError) setSaveValidationError(null);
+                  }}
+                  className="flex-row gap-4 mt-1"
+                  name="taxpayer-type"
+                >
+                  <label className="flex items-center gap-2 text-sm">
+                    <Radio value="INDIVIDUAL" />
+                    {t("femme.businessSettings.taxpayerTypeIndividual")}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Radio value="LEGAL_ENTITY" />
+                    {t("femme.businessSettings.taxpayerTypeLegalEntity")}
+                  </label>
+                </RadioGroup>
+              </div>
+              <div>
+                <label htmlFor="economicActivityCode" style={labelStyle}>
+                  {t("femme.businessSettings.economicActivityCode")}
+                </label>
+                <input
+                  id="economicActivityCode"
+                  value={economicActivityCode}
+                  onChange={(e) => {
+                    setEconomicActivityCode(e.target.value);
+                    if (saveValidationError) setSaveValidationError(null);
+                  }}
+                  aria-describedby="economicActivityCode-hint"
+                  onFocus={() => setFocusField("economicActivityCode")}
+                  onBlur={() => setFocusField(null)}
+                  style={buildInputStyle(false, focusField === "economicActivityCode")}
+                />
+                <p id="economicActivityCode-hint" style={hintStyle}>
+                  {t("femme.businessSettings.economicActivityCodeHint")}
+                </p>
+              </div>
+              <div>
+                <label htmlFor="economicActivityDescription" style={labelStyle}>
+                  {t("femme.businessSettings.economicActivityDescription")}
+                </label>
+                <input
+                  id="economicActivityDescription"
+                  value={economicActivityDescription}
+                  onChange={(e) => {
+                    setEconomicActivityDescription(e.target.value);
+                    if (saveValidationError) setSaveValidationError(null);
+                  }}
+                  onFocus={() => setFocusField("economicActivityDescription")}
+                  onBlur={() => setFocusField(null)}
+                  style={buildInputStyle(false, focusField === "economicActivityDescription")}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <Label htmlFor="business-locality">{t("femme.clients.locality")}</Label>
+                <LocalityCombobox
+                  id="business-locality"
+                  value={locality}
+                  onChange={(next) => {
+                    setLocality(next);
+                    if (saveValidationError) setSaveValidationError(null);
+                  }}
+                  onSearch={localitySearch.search}
+                  options={localitySearch.options}
+                  loading={localitySearch.loading}
+                  placeholder={t("femme.clients.localityPlaceholder")}
+                  noResultsLabel={t("femme.clients.localityNoResults")}
+                />
+                <Text variant="muted" className="mt-1 text-sm">
+                  {t("femme.clients.localityHint")}
+                </Text>
+              </div>
+            </div>
+          </>
+        ) : null}
 
         <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionLogo")}</div>
         <div data-tour="settings-logo" style={{ gridColumn: "1 / -1" }}>

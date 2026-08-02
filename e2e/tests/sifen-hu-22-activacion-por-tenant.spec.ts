@@ -11,7 +11,7 @@ import {
   seedCategoryServiceProfessional,
   seedClient,
 } from "../fixtures/api";
-import { loginAs } from "../fixtures/auth";
+import { loginAs, loginAsDemo } from "../fixtures/auth";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
 //
@@ -219,5 +219,77 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
       "/api/invoices?page=0&size=10",
     );
     expect(list.content.some((i) => i.id === invoice.id)).toBeTruthy();
+  });
+
+  // Adenda (2026-08-02): the UAT walkthrough found taxpayerType/economicActivity/department-city
+  // (required by SifenInvoiceHeaderService.requireIssuerDataComplete before HU-01..HU-06 can build
+  // a header at all) had no UI — the only way to set them was a raw curl PUT. This closes that gap:
+  // a real "Datos fiscales para SIFEN" section on Settings → Business, shown only once the flag is
+  // on, plus gating the whole page (and PUT /api/business-profile) to tenant ADMIN. See PROGRESS.md.
+  test("HU-22 · Adenda con el flag activo, un ADMIN completa los datos fiscales SIFEN desde la UI", async ({
+    page,
+    request,
+  }) => {
+    await setTenantFlag(request, true);
+    await loginAsDemo(page);
+    await page.goto("/app/settings/business");
+
+    await expect(page.getByText("SIFEN tax data")).toBeVisible();
+    await page.getByRole("radio", { name: "Legal entity" }).click();
+    await page.getByLabel("Economic activity code").fill("96020");
+    await page
+      .getByLabel("Economic activity description")
+      .fill("Peluquería y otros tratamientos de belleza");
+    await page.getByLabel("Department and city").fill("Fernando de la Mora");
+    await expect(page.getByRole("option", { name: /FERNANDO DE LA MORA \(CENTRAL\)/ })).toBeVisible();
+    await page.getByRole("option", { name: /FERNANDO DE LA MORA \(CENTRAL\)/ }).click();
+
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByText("Your business details were saved.")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("radio", { name: "Legal entity" })).toBeChecked();
+    await expect(page.getByLabel("Economic activity code")).toHaveValue("96020");
+    await expect(page.getByLabel("Department and city")).toHaveValue(
+      "FERNANDO DE LA MORA (CENTRAL)",
+    );
+  });
+
+  test("HU-22 · Adenda con el flag desactivado, la sección de datos fiscales SIFEN no aparece", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/settings/business");
+    await expect(page.getByLabel("Business name")).toBeVisible();
+    await expect(page.getByText("SIFEN tax data")).toHaveCount(0);
+  });
+
+  test("HU-22 · Adenda un system admin (no ADMIN del tenant) no puede gestionar Datos del negocio", async ({
+    page,
+  }) => {
+    await loginAs(page, SYS_ADMIN_EMAIL, SYS_ADMIN_PASSWORD);
+    await page.goto("/app/settings/taxes");
+    await expect(page.getByRole("link", { name: "Business", exact: true })).toHaveCount(0);
+
+    await page.goto("/app/settings/business");
+    await expect(
+      page.getByText("Only the business administrator can manage business settings."),
+    ).toBeVisible();
+  });
+
+  test("HU-22 · Adenda PUT /api/business-profile devuelve 403 para un system admin, GET sigue abierto", async ({
+    request,
+  }) => {
+    const token = await loginSystemAdminApi(request);
+    const putRes = await request.put(`${apiBaseUrl()}/api/business-profile`, {
+      headers: authHeaders(token),
+      data: { businessName: "Should be rejected" },
+    });
+    expect(putRes.status()).toBe(403);
+
+    const getRes = await request.get(`${apiBaseUrl()}/api/business-profile`, {
+      headers: authHeaders(token),
+    });
+    expect(getRes.ok(), await getRes.text()).toBeTruthy();
   });
 });

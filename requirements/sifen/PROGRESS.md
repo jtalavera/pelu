@@ -614,6 +614,52 @@ listado de facturas sigue funcionando con el flag activo). Corridas también, si
 pruebas Playwright preexistentes de HU-07/09/10/11 (afectadas indirectamente por el fix de
 persistencia).
 
+### Adenda 2026-08-02 — UI real para los campos fiscales del emisor + ADMIN-gateo de Datos del negocio
+
+Un UAT manual (sección "User Acceptance Test" al final de este documento) encontró que subir un
+certificado en Configuración → SIFEN y activar el flag no alcanzaba para que una factura realmente
+llegara a SIFEN: `SifenInvoiceHeaderService.requireIssuerDataComplete` también exige
+`taxpayerType`, `economicActivityCode`/`Description` y el departamento/ciudad del propio emisor
+(`sifenDepartmentCode/Name`, `sifenCityCode/Name`) — campos que el backend ya soportaba de punta a
+punta (`BusinessProfileUpdateRequest`/`Response`, HU-02) pero que `BusinessSettingsPage.tsx` nunca
+llegó a exponer. La única forma de completarlos era un `curl PUT /api/business-profile` directo.
+
+**Cerrado sin cambios de backend más allá del gateo de rol** (los DTOs/servicio/validación ya
+existían):
+
+- `BusinessSettingsPage.tsx` — nueva sección "Datos fiscales para SIFEN" (radio tipo de
+  contribuyente, dos inputs de actividad económica, y el mismo `LocalityCombobox`/
+  `useLocalitySearch()` que ya usa Clientes para el departamento/ciudad del emisor), visible **sólo
+  cuando el flag `SIFEN_ELECTRONIC_INVOICING` está activo para el tenant**
+  (`useFeatureFlag`, mismo patrón que el tour guiado que esta página ya usaba) — decisión explícita
+  del usuario: mostrarla siempre habría permitido completarla antes de que existiera la obligación
+  real, pero se prefirió atarla a la señal que la vuelve relevante.
+- **Gateo a `ADMIN` de toda la pantalla `/app/settings/business`** (no sólo de los campos nuevos) —
+  también decisión explícita del usuario, ampliando el pedido original. `SettingsLayout.tsx` oculta
+  la pestaña "Business" para todo el que no sea `ADMIN` (mismo patrón que la pestaña "SIFEN"), y la
+  página en sí muestra el mismo mensaje "Solo el administrador del negocio puede gestionar..." que
+  ya usaba `SifenCertificatesPage`.
+- **`PUT /api/business-profile` ahora exige `ADMIN`** (`BusinessProfileController.requireTenantAdmin`,
+  mismo patrón que `SifenCertificateController`) — **`GET` se dejó abierto a cualquier rol
+  autenticado**, porque `BillingPage.tsx` lo llama para todo usuario que emite una factura (aviso de
+  RUC no válido para facturar); gatearlo también habría roto ese aviso para roles no-`ADMIN`. Ningún
+  controller de este backend tenía tests unitarios (`@WebMvcTest`/`MockMvc`) — tampoco
+  `SifenCertificateController`, que usa el mismo patrón — así que el 403/200 se verificó por e2e, no
+  por un test nuevo de ese estilo.
+- Se añadieron a `femme.apiErrors.*` (ambos locales) las traducciones que faltaban para
+  `SIFEN_TAXPAYER_TYPE_NOT_CONFIGURED`, `SIFEN_ECONOMIC_ACTIVITY_NOT_CONFIGURED`,
+  `SIFEN_ISSUER_LOCATION_NOT_CONFIGURED`, `SIFEN_ISSUER_RUC_INVALID`, `SIFEN_ISSUER_ADDRESS_MISSING`,
+  `SIFEN_ISSUER_CONTACT_INFO_MISSING`, `INVALID_TAXPAYER_TYPE` — existían en el backend desde HU-02
+  pero nunca se habían traducido porque nada en la UI las disparaba todavía.
+- **E2E**: 4 casos nuevos agregados a `e2e/tests/sifen-hu-22-activacion-por-tenant.spec.ts` (reutiliza
+  sus helpers de flag/certificado existentes) — guardar los campos vía UI con el flag activo y
+  confirmar persistencia tras recargar; sección ausente con el flag apagado; un `SYSTEM_ADMIN` sin
+  pestaña "Business" y con el mensaje de prohibido al navegar directo a la ruta; `PUT` 403 /
+  `GET` 200 para ese mismo rol. Corridas también sin regresión las specs preexistentes que ya
+  escriben `business-profile` (`hu-02`, `hu-02b`, `hu-14`, `hu-16`, `hu-17`, `hu-26`, `hu-29`,
+  `hu-30`, `issue-94/96/102`, `high-priority-fixes`, `hu-35`) — todas usan el token `ADMIN` de
+  `loginAsDemoApi`, ninguna se ve afectada por el nuevo gateo.
+
 ## HU-17 — Probar la consulta de documentos y la generación de comprobantes de todos los tipos (Done)
 
 Épica EP-05, Fase 4. **La última historia de la fase** — converge el trabajo de HU-14 (otros tipos
@@ -3433,3 +3479,159 @@ plan de fases y avanzar con HU-05 en la próxima iteración del loop.
   controller, como en `FeatureFlagController.requireSystemAdmin()`.
 - **Config con env var**: seguir el patrón `app.femme.<x>=${ENV_VAR:dev-default}` de
   `application.properties` (ver `app.femme.jwt.secret` / `app.femme.sifen.cert-encryption-key`).
+
+## User Acceptance Test
+
+Guía manual para un humano no técnico que quiera verificar de punta a punta la integración SIFEN
+a través de la UI. Basado en el estado real del código a 2026-08-02 (22/22 HU cerradas). Marca
+cada paso Pass/Fail/N-A en la tabla de resultados al final.
+
+### Credenciales
+
+| Rol | Email | Password | Tenant |
+|---|---|---|---|
+| SYSTEM_ADMIN | `root@pelu` | `.The.Super@admin.1982` | 1 |
+| ADMIN (tenant) | `isabelzymanscki@gmail.com` | `Demo123!` | 1 ("Demo salon") |
+
+Ambos ya están sembrados por `FemmeDataInitializer` — no hace falta crear nada nuevo. ⚠️ Sólo se
+siembran si el backend corre con `femme.data-init.enabled=true` (no está activo en el profile
+default, sólo en `e2e`) — arrancar con
+`./gradlew bootRun --no-daemon --args='--femme.data-init.enabled=true'`. ⚠️ No existe ningún
+override de `app.femme.system-admin.password` en todo el repo (ni `application*.properties` ni
+`infrastructure_v2/`), así que esta password es la misma en todo ambiente salvo que alguien la haya
+cambiado fuera del repo (p.ej. App Settings de Azure) — vale la pena confirmarlo antes de ir a
+producción.
+
+### 0. Preparación (una sola vez)
+
+1. `podman machine start` (si no está corriendo) y `cd src/backend && podman compose up -d` (o
+   `docker compose up -d` si tenés Docker Desktop) para el SQL Server local.
+2. Backend: `./gradlew bootRun --no-daemon --args='--femme.data-init.enabled=true'` en
+   `src/backend/`.
+3. Frontend: `npm run dev` en `src/frontend/` → http://localhost:5173.
+
+### 1. Línea base — reproducir el comportamiento reportado (flag apagado)
+
+1. Iniciar sesión como `isabelzymanscki@gmail.com` / `Demo123!`.
+2. Ir a **Facturación** → pestaña "Nuevo comprobante", emitir una factura cualquiera.
+3. Abrir el detalle (pestaña "Historial" → "Ver"). **Esperado:** no aparece ninguna sección "Estado
+   en SIFEN". Descargar el PDF: **esperado** el formato tradicional de dos paneles, sin QR ni CDC.
+   Esto confirma que subir sólo el certificado (sin el flag) no activa nada — comportamiento
+   esperado, no un bug.
+
+### 2. Activar el circuito completo de SIFEN (una sola vez por tenant)
+
+> **Actualización 2026-08-02:** el gap "sin UI todavía" para `taxpayerType`/`economicActivityCode`/
+> `Description`/departamento-ciudad del emisor, que esta sección documentaba con un workaround por
+> `curl`, ya está cerrado — ver "Adenda 2026-08-02" al final de la sección `## HU-22` más abajo. Los
+> pasos de abajo reflejan la UI real. Nota de orden: **la sección de datos fiscales SIFEN sólo
+> aparece con el flag activo**, así que el flag se activa primero (paso 1).
+
+1. **Activar el flag** — iniciar como `root@pelu` / `.The.Super@admin.1982` (`SYSTEM_ADMIN`), ir a
+   `/app/settings/feature-flags` (sólo visible para ese rol) y activar `SIFEN_ELECTRONIC_INVOICING`
+   (global o vía override del tenant 1). **Esperado:** aparece una línea de historial con tu email
+   y la hora del cambio.
+2. **Datos del negocio** — cerrar sesión, iniciar como `isabelzymanscki@gmail.com` / `Demo123!`
+   (`ADMIN`; esta pantalla completa es ahora exclusiva de ese rol, ver Adenda), ir a
+   `/app/settings/business` y completar nombre, RUC, dirección, teléfono, email de contacto, logo.
+3. **Datos fiscales para SIFEN** — en la misma pantalla, ahora visible porque el flag está activo:
+   sección "Datos fiscales para SIFEN" con tipo de contribuyente (radio Persona física/Persona
+   jurídica), código y descripción de actividad económica, y el mismo buscador de "Departamento y
+   ciudad" que ya usa Clientes. Completar y **Guardar cambios**.
+4. **Timbrado** (`/app/settings/fiscal-stamp`): en "Agregar timbrado" cargar un número, rango de
+   fechas vigente (hoy incluido) y rango de numeración; guardar y confirmar que quede activado
+   (badge **Vigente**).
+5. **Certificado SIFEN** (`/app/settings/sifen`, sólo ADMIN): subir
+   `requirements/sifen/LUCIA_ZYMANSCKI_DE_ONIEVA_VIT_S_A.p12` con la password de
+   `requirements/sifen/.secrets/lucia-cert-password.txt`. **Esperado:** mensaje de éxito, el
+   certificado aparece listado con estado **Vigente**.
+6. **Cliente con localidad**: en **Clientes**, editar o crear un cliente y usar el campo
+   "Departamento y ciudad" (buscador) para asignarle una localidad real; guardar.
+
+### 3. Camino feliz — factura emitida realmente a través de SIFEN
+
+1. Iniciar sesión de nuevo como `isabelzymanscki@gmail.com`. En **Facturación** → "Nuevo
+   comprobante", emitir una factura para el cliente con localidad del paso 2.5, monto < Gs.
+   7.000.000.
+2. Abrir el detalle. **Esperado:** ahora sí aparece la sección **"Estado en SIFEN"** con
+   número de control (CDC) visible y un badge de estado (`Pendiente de verificación` o
+   `Aprobado`/`Aprobado con observación`).
+3. Si quedó **"Pendiente de verificación"**: click en **"Verificar estado en SIFEN"** — esperado
+   un alert y el badge actualizándose.
+4. Una vez **Aprobado**/**Aprobado con observación**: click **"Descargar KuDE (PDF)"** — esperado
+   un PDF distinto al tradicional, con QR/CDC/leyenda de tipo de documento.
+5. Completar el campo de email y click **"Enviar"** — esperado alert verde de confirmación (el
+   envío real de correo depende de la config de mail del entorno; el alert de éxito es lo que hay
+   que verificar acá).
+6. Click **"Revalidar en SIFEN"** — esperado que abra en una pestaña nueva la página pública de
+   verificación de SIFEN. **Nota:** no hay ninguna imagen de QR renderizada en la app — este botón
+   es la única representación del QR; no es un bug si no ves una imagen de QR en pantalla.
+
+### 4. Umbral de monto alto (HU-02 AC-05)
+
+1. En "Nuevo comprobante", cargar una factura ≥ Gs. 7.000.000 sin RUC ni documento de identidad del
+   cliente. **Esperado:** bloqueo del lado del cliente con el mensaje "Las ventas de Gs. 7.000.000 o
+   más exigen identificar al cliente con RUC o documento de identidad."
+2. Completar RUC o documento y reintentar — esperado que ahora sí se pueda emitir.
+
+### 5. Identificar cliente después de emitir (HU-11)
+
+1. Si el formulario de facturación permite emitir sin datos del cliente, hacerlo así una vez.
+2. En el detalle de esa factura, si aparece el botón **"Identificar cliente"**, completarlo (probar
+   al menos una variante: Persona, Empresa o Cliente del exterior) y confirmar. **Esperado:** o bien
+   un bloque **"Registro de identificación del cliente"**, o un alert rojo **"SIFEN rechazó la
+   identificación"** con el motivo.
+
+### 6. Cancelar una factura aprobada (HU-10)
+
+1. Sobre una factura del paso 3 con estado Aprobado/Aprobado con observación, dentro de las 48 h de
+   su aprobación: click **"Cancelar factura en SIFEN"**, escribir un motivo (≥ 5 caracteres),
+   confirmar. **Esperado:** el estado pasa a **Cancelada** y aparece un bloque **"Registro de
+   cancelación"** permanente.
+2. (Informativo, no requiere acción) Pasadas las 48 h el botón se deshabilita solo y muestra el
+   aviso de plazo vencido — no hace falta esperar 48 h reales para validar esto manualmente.
+
+### 7. Volver a apagar el flag — sin efecto retroactivo (HU-22 AC-06/AC-07)
+
+1. Como `root@pelu`, desactivar `SIFEN_ELECTRONIC_INVOICING` para el tenant (botón "Reset a
+   global" o apagar el override).
+2. Emitir una factura nueva — esperado que vuelva a comportarse como en la sección 1 (sin sección
+   SIFEN, PDF tradicional).
+3. Reabrir la factura del paso 3/6 — esperado que su estado SIFEN (Aprobada/Cancelada) siga
+   intacto, sin cambios.
+
+### 8. Controles de permisos
+
+1. Sin sesión de ADMIN (con un usuario `PROFESSIONAL`, si existe uno sembrado), ir a
+   `/app/settings/sifen` — esperado el mensaje "Solo el administrador del negocio puede gestionar
+   los certificados de SIFEN." en vez del formulario de carga.
+2. Con sesión de ADMIN (no SYSTEM_ADMIN), confirmar que la pestaña "Configuración de funciones" /
+   Feature flags ni siquiera aparece en el menú de Configuración.
+3. Como `root@pelu` (`SYSTEM_ADMIN`, no `ADMIN`): confirmar que la pestaña "Business" tampoco
+   aparece en el menú, y que navegar directo a `/app/settings/business` muestra "Solo el
+   administrador del negocio puede gestionar los datos del negocio." (ver Adenda 2026-08-02).
+
+### Fuera de alcance de esta UAT (documentado, no es un gap a reportar)
+
+- Nota de crédito/débito, nota de remisión, autofactura (HU-14): sólo backend/tests, sin UI.
+- Aislamiento entre dos tenants (HU-18 AC-07 / HU-22 AC-02): no hay forma de crear un segundo
+  tenant desde la UI en este repo; verificado sólo a nivel unitario.
+- Veredicto "SIFEN reconoce el QR como válido": se renderiza y valida client-side en la SPA de
+  SIFEN; esta app nunca lo interpreta (por diseño).
+- Tipos de afectación IVA `EXONERADO`/`GRAVADO_PARCIAL`: fuera de alcance permanente (una sola tasa
+  por línea de servicio).
+
+### Resultados
+
+| # | Paso | Resultado (Pass/Fail/N-A) | Notas |
+|---|---|---|---|
+| 1 | Línea base (flag off) | | |
+| 2 | Setup completo (perfil, timbrado, cert, localidad, flag on) | | |
+| 3 | Camino feliz (emisión + estado + KuDE + email + revalidar) | | |
+| 4 | Umbral Gs. 7.000.000 | | |
+| 5 | Identificar cliente | | |
+| 6 | Cancelación | | |
+| 7 | Flag off sin efecto retroactivo | | |
+| 8 | Permisos | | |
+
+_Tester: **\_\_\_\_** — Fecha: **\_\_\_\_** — Ambiente SIFEN: TEST (sifen-test.set.gov.py)._
