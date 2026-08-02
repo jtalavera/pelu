@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.config.SifenConnectionProperties;
+import com.cursorpoc.backend.config.SifenQrProperties;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.cursorpoc.backend.service.SifenReceptorEventXmlService.ConformityType;
 import com.cursorpoc.backend.service.SifenReceptorEventXmlService.ReceiverIdentity;
@@ -16,9 +18,11 @@ import java.security.KeyStore;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import javax.xml.crypto.dsig.XMLSignature;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Document;
@@ -97,6 +101,11 @@ class SifenHomologationEventsLiveTest {
 
   private static final int EXPEDITION_POINT = 1;
 
+  private static final LocalDate STAMP_VALID_FROM = LocalDate.of(2026, 7, 27);
+  private static final BigDecimal LINE_UNIT_PRICE = BigDecimal.valueOf(110_000);
+  private static final BigDecimal LINE_TAXABLE_BASE = BigDecimal.valueOf(100_000);
+  private static final BigDecimal LINE_TAX_AMOUNT = BigDecimal.valueOf(10_000);
+
   private final SifenControlNumberService controlNumberService = new SifenControlNumberService();
   private final SifenCancellationEventXmlService cancellationXmlService =
       new SifenCancellationEventXmlService();
@@ -109,9 +118,21 @@ class SifenHomologationEventsLiveTest {
   private final SifenEventClient eventClient =
       new SifenEventClient(null, connectionProperties, timeProperties);
 
+  // Document-side infra (AC-01/AC-03/AC-05 now seed genuinely-approved documents to react to,
+  // instead of only synthetic never-approved CDCs — same envío inmediato pattern HU-13/14/15/17
+  // already use for their own seed invoices).
+  private final SifenDocumentXmlService xmlService = new SifenDocumentXmlService();
+  private final SifenDocumentSigningService signingService =
+      new SifenDocumentSigningService(null, null, null, null, null, null, null);
+  private final SifenQrCodeService qrCodeService =
+      new SifenQrCodeService(new SifenQrProperties(), connectionProperties);
+  private final SifenDocumentReceptionClient receptionClient =
+      new SifenDocumentReceptionClient(null, connectionProperties, timeProperties);
+
   private SifenActiveCertificateMaterial material;
   private HttpClient client;
   private long idSequence;
+  private long documentNumberCursor;
 
   @Test
   void everyRequiredEventTypeIsRegistered() throws Exception {
@@ -161,6 +182,11 @@ class SifenHomologationEventsLiveTest {
     this.material = material;
     this.client = client;
     this.idSequence = System.currentTimeMillis() / 1000;
+    // Real finding: left at its default 0, this collides with document numbers a previous run of
+    // this same test already sent for real (dCodRes=1002 "Documento electrónico duplicado") —
+    // same session-uniqueness need HU-13/14/15/17 already established for their own seed
+    // invoices.
+    this.documentNumberCursor = Math.max(10, (System.currentTimeMillis() / 1000) % 9_000_000L);
 
     var report = new SifenHomologationReport();
 
@@ -192,36 +218,49 @@ class SifenHomologationEventsLiveTest {
       recordApproval(report, "AC-02 anulación numeración " + type, result);
     }
 
-    // === AC-01 (channel-health half) + AC-05 (channel-health half): a cancellation attempt for a
-    // syntactically valid but never-approved CDC must come back with the specific "CDC no
-    // existente"
-    // reason (4002), never the generic 0160 the fixed envelope bug used to produce — hard evidence
-    // the event channel itself works end to end, independent of whether SIFEN has approved any
-    // document from this environment yet.
-    String neverApprovedCdc = buildSyntheticCdc(200);
-    Optional<SifenSubmissionResult> firstCancelAttempt =
-        sendWithRetry(
-            signEvent(
-                cancellationXmlService.buildCancellationEvent(
-                    neverApprovedCdc,
-                    "HU-16 AC-01/AC-05 - cancelación de prueba 1",
-                    nextId(),
-                    signatureInstant())),
-            "cancelación 1/2 (canal)");
-    recordSpecificRejection(
-        report, "AC-01/AC-05 cancelación 1/2 sobre CDC nunca aprobado", firstCancelAttempt, "4002");
+    // === AC-01: cancel 5 genuinely SIFEN-approved documents (any type — "cualquier tipo" per the
+    // spec, so 5 facturas is a valid instance; the 5 required document types are already exercised
+    // exhaustively by HU-13/14/15/17, not re-proven here). Needs the external RUC-active state
+    // (dCodRes=1252, see HU-13) to hold — this test seeds its own documents live rather than
+    // assuming one exists, but remains exposed to the same external condition if it ever regresses.
+    List<String> approvedCdcs = new ArrayList<>();
+    for (int i = 1; i <= 5; i++) {
+      approvedCdcs.add(sendApprovedSeedDocument(report, "para AC-01 cancelación " + i + "/5"));
+    }
+    for (int i = 0; i < approvedCdcs.size(); i++) {
+      Optional<SifenSubmissionResult> cancelResult =
+          sendWithRetry(
+              signEvent(
+                  cancellationXmlService.buildCancellationEvent(
+                      approvedCdcs.get(i),
+                      "HU-16 AC-01 - cancelación de documento aprobado " + (i + 1) + "/5",
+                      nextId(),
+                      postApprovalSignatureInstant())),
+              "cancelación aprobado " + (i + 1) + "/5");
+      recordApproval(
+          report,
+          "AC-01 cancelación " + (i + 1) + "/5 sobre documento genuinamente aprobado",
+          cancelResult);
+    }
 
-    Optional<SifenSubmissionResult> secondCancelAttempt =
+    // === AC-05: a second cancellation attempt on a document already cancelled above must be
+    // rejected by SIFEN. The exact rejection code isn't documented anywhere in this repo's source
+    // material (checked Manual Técnico V150 and Especificacion_SIFEN_Peluqueria.md) — recorded as
+    // whatever SIFEN's real, specific reason turns out to be, not a generic 0160.
+    String alreadyCancelledCdc = approvedCdcs.get(0);
+    Optional<SifenSubmissionResult> secondCancelOnApproved =
         sendWithRetry(
             signEvent(
                 cancellationXmlService.buildCancellationEvent(
-                    neverApprovedCdc,
-                    "HU-16 AC-01/AC-05 - cancelación de prueba 2",
+                    alreadyCancelledCdc,
+                    "HU-16 AC-05 - segundo intento de cancelación",
                     nextId(),
-                    signatureInstant())),
-            "cancelación 2/2 (canal)");
-    recordSpecificRejection(
-        report, "AC-01/AC-05 cancelación 2/2 sobre el mismo CDC", secondCancelAttempt, "4002");
+                    postApprovalSignatureInstant())),
+            "cancelación 2/2 sobre documento ya cancelado");
+    recordRejectedWithSpecificReason(
+        report,
+        "AC-05 segundo intento de cancelación sobre documento ya cancelado",
+        secondCancelOnApproved);
 
     // === AC-03: the four receptor events, at least twice each (original + "corrección" per Tabla
     // K), acting as the CDC's receptor. Desconocimiento doesn't require the CDC to already exist —
@@ -273,44 +312,46 @@ class SifenHomologationEventsLiveTest {
           report, "AC-03 notificación de recepción " + i + "/2 (\"notificar recepción\")", result);
     }
 
-    // Conformidad ("confirmarla") and Disconformidad ("cuestionarla"): confirmed live these DO
-    // require the CDC to genuinely exist in SIFEN (dCodRes=4152/4202 "CDC del DTE es inexistente")
-    // — unlike the three event types above. Each gets one attempt here (hard-asserted as a
-    // specific,
-    // real, content-level rejection — never the generic 0160); the literal "aprobado" half is
-    // deferred to the Assumptions block below, same as AC-01.
-    String conformidadCdc = buildSyntheticCdc(400);
+    // Conformidad ("confirmarla") y Disconformidad ("cuestionarla"): confirmed live (HU-16's first
+    // pass, before this fix) that these DO require the CDC to genuinely exist in SIFEN — unlike the
+    // two event types above. Each now reacts to a real, genuinely-approved seed document instead of
+    // a synthetic never-approved CDC.
+    String conformidadCdc = sendApprovedSeedDocument(report, "para AC-03 conformidad");
     Optional<SifenSubmissionResult> conformidadResult =
         sendWithRetry(
             signEvent(
                 receptorXmlService.buildConformity(
-                    conformidadCdc, ConformityType.TOTAL, null, nextId(), signatureInstant())),
+                    conformidadCdc,
+                    ConformityType.TOTAL,
+                    null,
+                    nextId(),
+                    postApprovalSignatureInstant())),
             "conformidad");
-    recordSpecificRejection(
-        report, "AC-03 conformidad (\"confirmarla\")", conformidadResult, "4152");
+    recordApproval(
+        report, "AC-03 conformidad (\"confirmarla\") sobre documento aprobado", conformidadResult);
 
+    String disconformidadCdc = sendApprovedSeedDocument(report, "para AC-03 disconformidad");
     Optional<SifenSubmissionResult> disconformidadResult =
         sendWithRetry(
             signEvent(
                 receptorXmlService.buildDisconformity(
-                    buildSyntheticCdc(500),
+                    disconformidadCdc,
                     "HU-16 AC-03 - cuestiono el monto facturado",
                     nextId(),
-                    signatureInstant())),
+                    postApprovalSignatureInstant())),
             "disconformidad");
-    recordSpecificRejection(
-        report, "AC-03 disconformidad (\"cuestionarla\")", disconformidadResult, "4202");
+    recordApproval(
+        report,
+        "AC-03 disconformidad (\"cuestionarla\") sobre documento aprobado",
+        disconformidadResult);
 
     // "Corregir un evento anterior" (AC-03's 5th action): Manual Técnico V150's Tabla K scopes this
     // correction mechanism to Conformidad/Disconformidad/Desconocimiento only ("solo se puede
-    // registrar un evento de corrección sobre cada evento mencionado") — confirmed live it
-    // genuinely
-    // needs BOTH a real approved DTE AND a real first event already registered on it (even
-    // Desconocimiento's own standalone approval above doesn't make a CDC "exist" for a later
-    // Conformidad/Disconformidad attempt on the same CDC — still 4152/"inexistente"). Registering
-    // Disconformidad right after Conformidad on the same CDC — the shape a correction would take —
-    // still hits the same existence check first, hard-asserted below as further channel-health
-    // evidence; the literal "corrección de un evento realmente existente" is deferred with AC-01.
+    // registrar un evento de corrección sobre cada evento mencionado") — registering Disconformidad
+    // right after Conformidad on the SAME genuinely-approved CDC is the shape a correction takes.
+    // The exact outcome (accepted as a valid correction, or rejected by some business rule) isn't
+    // documented anywhere in this repo's source material — recorded as whatever SIFEN's real,
+    // specific result turns out to be, not a generic 0160.
     Optional<SifenSubmissionResult> correctionAttempt =
         sendWithRetry(
             signEvent(
@@ -318,12 +359,150 @@ class SifenHomologationEventsLiveTest {
                     conformidadCdc,
                     "HU-16 AC-03 - corrección del evento anterior (Tabla K)",
                     nextId(),
-                    signatureInstant())),
+                    postApprovalSignatureInstant())),
             "corrección (Tabla K)");
-    recordSpecificRejection(
-        report, "AC-03 corrección de un evento anterior (Tabla K)", correctionAttempt, "4202");
+    recordSpecificResult(
+        report, "AC-03 corrección de un evento anterior (Tabla K)", correctionAttempt);
 
     return report;
+  }
+
+  /**
+   * Sends one real factura electrónica via envío inmediato (same construction shape HU-13/14/15/17
+   * already use for their own seed invoices) and returns its CDC once SIFEN genuinely approves it —
+   * lets AC-01/AC-03/AC-05 react to a document that actually exists in SIFEN's registry, instead of
+   * only a syntactically-valid-but-never-sent CDC.
+   */
+  private String sendApprovedSeedDocument(SifenHomologationReport report, String label)
+      throws InterruptedException {
+    long documentNumber = ++documentNumberCursor;
+    LocalDateTime issueDateTime = LocalDateTime.now(timeProperties.zoneId());
+
+    SifenControlNumberFields cdcFields =
+        new SifenControlNumberFields(
+            SifenDocumentType.FACTURA.sifenCode(),
+            ISSUER_RUC,
+            ISSUER_RUC_CHECK_DIGIT,
+            ESTABLISHMENT,
+            EXPEDITION_POINT,
+            documentNumber,
+            SifenTaxpayerType.LEGAL_ENTITY.sifenCode(),
+            issueDateTime.toLocalDate(),
+            1,
+            controlNumberService.generateSecurityCode(documentNumber));
+    String cdc = controlNumberService.build(cdcFields);
+
+    SifenIssuerData issuer =
+        new SifenIssuerData(
+            ISSUER_RUC,
+            ISSUER_RUC_CHECK_DIGIT,
+            SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND,
+            null,
+            "Avda. España 123",
+            SifenTaxpayerType.LEGAL_ENTITY,
+            "96020",
+            "Peluquería y otros tratamientos de belleza",
+            "021555000",
+            "facturacion@example.com",
+            "12",
+            "CENTRAL",
+            "5044",
+            "FERNANDO DE LA MORA");
+    SifenReceiverData receiver =
+        new SifenReceiverData(null, "4123456", "Cliente Homologación HU-16", null, null, null);
+
+    SifenInvoiceHeader header =
+        new SifenInvoiceHeader(
+            cdc,
+            issueDateTime,
+            STAMP_NUMBER,
+            ESTABLISHMENT,
+            EXPEDITION_POINT,
+            STAMP_VALID_FROM,
+            STAMP_VALID_FROM.plusYears(5),
+            issuer,
+            receiver,
+            true);
+
+    SifenInvoiceLine line =
+        new SifenInvoiceLine(
+            "SVC-1",
+            "Corte de cabello",
+            null,
+            1,
+            "77",
+            LINE_UNIT_PRICE,
+            BigDecimal.ZERO,
+            LINE_UNIT_PRICE,
+            SifenTaxAffectation.GRAVADO,
+            BigDecimal.valueOf(100),
+            BigDecimal.valueOf(10),
+            LINE_TAXABLE_BASE,
+            LINE_TAX_AMOUNT);
+    SifenInvoiceTotals totals =
+        new SifenInvoiceTotals(
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            LINE_UNIT_PRICE,
+            LINE_UNIT_PRICE,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            LINE_UNIT_PRICE,
+            BigDecimal.ZERO,
+            LINE_TAXABLE_BASE,
+            LINE_TAXABLE_BASE,
+            BigDecimal.ZERO,
+            LINE_TAX_AMOUNT,
+            LINE_TAX_AMOUNT);
+    SifenInvoiceDetail detail =
+        new SifenInvoiceDetail(
+            List.of(line), totals, 1, List.of(new SifenPaymentDetail(1, LINE_UNIT_PRICE)));
+
+    LocalDateTime signatureTimestamp = issueDateTime.minusMinutes(2);
+    Document unsigned =
+        xmlService.buildDocument(
+            header, detail, cdcFields, signatureTimestamp, SifenDocumentTypeExtras.NONE);
+    SifenSignedDocument signed = signingService.sign(material, unsigned, signatureTimestamp);
+
+    String digestValueBase64 = extractDigestValueBase64(signed.document());
+    SifenQrCodeService.SifenQrResult qr =
+        qrCodeService.build(header, detail.totals(), detail.lines().size(), digestValueBase64);
+    xmlService.appendQrGroup(signed.document(), qr.qrUrl());
+
+    String signedXml = SifenDocumentXmlService.serialize(signed.document());
+    Optional<SifenSubmissionResult> result = sendDocumentWithRetry(signedXml, cdc);
+    boolean approved = result.isPresent() && isApproved(result.get().status());
+    report.add(
+        "HU-16",
+        "seed factura " + label + " (envío inmediato, para referenciar) — CDC " + cdc,
+        "APROBADO",
+        describe(result),
+        approved);
+    return cdc;
+  }
+
+  private Optional<SifenSubmissionResult> sendDocumentWithRetry(String xml, String cdc)
+      throws InterruptedException {
+    Optional<SifenSubmissionResult> result = Optional.empty();
+    for (int attempt = 1; attempt <= MAX_ATTEMPTS_ON_TRANSPORT_FAILURE; attempt++) {
+      Thread.sleep(PACING_DELAY.toMillis());
+      result = receptionClient.sendWithClient(client, xml, cdc);
+      if (result.isPresent()) {
+        return result;
+      }
+    }
+    return result;
+  }
+
+  private static boolean isApproved(SifenSubmissionStatus status) {
+    return status == SifenSubmissionStatus.APPROVED
+        || status == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION;
+  }
+
+  private static String extractDigestValueBase64(Document signedRDe) {
+    var nodes = signedRDe.getElementsByTagNameNS(XMLSignature.XMLNS, "DigestValue");
+    return nodes.item(0).getTextContent().trim();
   }
 
   /**
@@ -333,28 +512,9 @@ class SifenHomologationEventsLiveTest {
    * these JUnit assertions.
    */
   private void assertHu16ChannelHealthAndAssumptions(SifenHomologationReport report) {
-    // AC-01/AC-05/AC-03(conformidad/disconformidad/corrección) channel-health half (hard): every
-    // rejection above must be the SPECIFIC real SIFEN reason recorded, never the generic 0160 "XML
-    // mal formado" that used to mask all of this.
-    List<SifenHomologationReport.Row> channelHealthFailures =
-        report.rows().stream()
-            .filter(
-                row ->
-                    row.scenario().contains("canal)")
-                        || row.scenario().contains("confirmarla")
-                        || row.scenario().contains("cuestionarla")
-                        || row.scenario().contains("corrección"))
-            .filter(row -> !row.passed())
-            .toList();
-    assertThat(channelHealthFailures)
-        .as(
-            "the event channel must return SIFEN's real, specific rejection reason (never the"
-                + " generic 0160 this story fixed): %s",
-            report.render())
-        .isEmpty();
-
-    // AC-03 (hard): desconocimiento and notificación de recepción don't need a prior existing DTE —
-    // every one of these rows must be genuinely approved.
+    // AC-03 (hard, unaffected by any external condition): desconocimiento and notificación de
+    // recepción don't need a prior existing DTE — every one of these rows must be genuinely
+    // approved.
     List<SifenHomologationReport.Row> standaloneApprovableFailures =
         report.rows().stream()
             .filter(
@@ -370,24 +530,85 @@ class SifenHomologationEventsLiveTest {
             report.render())
         .isEmpty();
 
-    // AC-01/AC-03(conformidad/disconformidad/corrección)/AC-05 (soft): today these need a genuinely
-    // SIFEN-approved DTE to react to — blocked by the same external dCodRes=1252 "El RUC del emisor
-    // se encuentra inactivo" state HU-13/14/15 documented (re-confirmed live at the start of this
-    // story). Every row above already proves the channel itself is healthy; this only documents
-    // that
-    // the literal "aprobado sobre un DTE real" half of these ACs is still pending an external SIFEN
-    // state change, not a code defect.
+    // Everything below (AC-01, AC-05, and the conformidad/disconformidad/corrección half of AC-03)
+    // needs a genuinely SIFEN-approved seed document to react to — contingent on the same external
+    // dCodRes=1252 "El RUC del emisor se encuentra inactivo" state HU-13/14/15 documented
+    // (re-confirmed live at the start of this story). If every seed document above was approved,
+    // everything below is hard-asserted; if that external condition ever regresses, this aborts
+    // instead of failing, same convention as every other Fase 4 story.
+    List<SifenHomologationReport.Row> seedFailures =
+        report.rows().stream()
+            .filter(row -> row.scenario().startsWith("seed factura"))
+            .filter(row -> !row.passed())
+            .toList();
     Assumptions.assumeTrue(
-        false,
+        seedFailures.isEmpty(),
         () ->
-            "AC-01/AC-03 (conformidad/disconformidad/corrección de un evento anterior)/AC-05: these"
-                + " ACs' literal happy path needs a genuinely SIFEN-approved DTE to cancel/react to,"
-                + " which this environment still can't produce — see"
-                + " requirements/sifen/PROGRESS.md's HU-13 section for the external dCodRes=1252 'RUC"
-                + " inactivo' block re-confirmed at the start of this story. Every row above already"
-                + " hard-asserts the event channel itself (built, signed, sent, parsed) is healthy"
-                + " end to end: "
+            "AC-01/AC-03 (conformidad/disconformidad/corrección de un evento anterior)/AC-05:"
+                + " couldn't seed a genuinely SIFEN-approved document just now — see"
+                + " requirements/sifen/PROGRESS.md's HU-13 section for the external dCodRes=1252"
+                + " 'RUC inactivo' state, not a code defect, before treating this as a regression: "
                 + report.render());
+
+    // AC-01 (hard): every cancellation of a genuinely-approved document must be approved by SIFEN.
+    List<SifenHomologationReport.Row> ac01Failures =
+        report.rows().stream()
+            .filter(row -> row.scenario().startsWith("AC-01 cancelación"))
+            .filter(row -> !row.passed())
+            .toList();
+    assertThat(ac01Failures)
+        .as(
+            "AC-01: every cancellation of a genuinely-approved document must be approved by SIFEN:"
+                + " %s",
+            report.render())
+        .isEmpty();
+
+    // AC-05 (hard): a second cancellation attempt on an already-cancelled document must be
+    // rejected by SIFEN with a specific, real reason — never the generic 0160, never silently
+    // approved.
+    List<SifenHomologationReport.Row> ac05Failures =
+        report.rows().stream()
+            .filter(row -> row.scenario().startsWith("AC-05"))
+            .filter(row -> !row.passed())
+            .toList();
+    assertThat(ac05Failures)
+        .as(
+            "AC-05: a second cancellation of an already-cancelled document must be rejected by"
+                + " SIFEN with a specific reason: %s",
+            report.render())
+        .isEmpty();
+
+    // AC-03 conformidad/disconformidad (hard): reacting to a genuinely-approved document.
+    List<SifenHomologationReport.Row> reactionFailures =
+        report.rows().stream()
+            .filter(
+                row ->
+                    row.scenario().contains("confirmarla")
+                        || row.scenario().contains("cuestionarla"))
+            .filter(row -> !row.passed())
+            .toList();
+    assertThat(reactionFailures)
+        .as(
+            "AC-03: conformidad/disconformidad over a genuinely-approved document must be approved"
+                + " by SIFEN: %s",
+            report.render())
+        .isEmpty();
+
+    // AC-03 corrección (hard, channel-health only): the exact accept/reject verdict for
+    // "correcting" an event isn't documented anywhere in this repo's source material, so this only
+    // asserts SIFEN gave a real, specific, interpretable result — never a transport failure or the
+    // generic 0160 this story fixed.
+    List<SifenHomologationReport.Row> correctionFailures =
+        report.rows().stream()
+            .filter(row -> row.scenario().contains("corrección"))
+            .filter(row -> !row.passed())
+            .toList();
+    assertThat(correctionFailures)
+        .as(
+            "AC-03: registering a correction (Tabla K) must get a specific, interpretable SIFEN"
+                + " result, never the generic 0160: %s",
+            report.render())
+        .isEmpty();
   }
 
   private Optional<SifenSubmissionResult> sendWithRetry(Document signedEvent, String label)
@@ -439,6 +660,41 @@ class SifenHomologationEventsLiveTest {
         matchesExpectedCode);
   }
 
+  /**
+   * AC-05: no expected rejection code is documented anywhere in this repo's source material for
+   * "cancel an already-cancelled document" — records whatever SIFEN's real, specific reason turns
+   * out to be, as long as it's an actual rejection with an identifiable reason, never a transport
+   * failure, never a silent approval, and never the generic 0160 this story fixed.
+   */
+  private void recordRejectedWithSpecificReason(
+      SifenHomologationReport report, String scenario, Optional<SifenSubmissionResult> result) {
+    boolean rejectedWithReason =
+        result.isPresent()
+            && result.get().status() == SifenSubmissionStatus.REJECTED
+            && result.get().resultCode() != null
+            && !result.get().resultCode().isBlank()
+            && !"0160".equals(result.get().resultCode());
+    report.add(
+        "HU-16", scenario, "RECHAZADO (motivo específico)", describe(result), rejectedWithReason);
+  }
+
+  /**
+   * Tabla K's "corrección de un evento anterior" has no documented expected verdict (accepted or
+   * rejected) anywhere in this repo's source material — records whatever SIFEN's real, specific,
+   * interpretable result turns out to be, never a transport failure and never the generic 0160 this
+   * story fixed.
+   */
+  private void recordSpecificResult(
+      SifenHomologationReport report, String scenario, Optional<SifenSubmissionResult> result) {
+    boolean interpretable =
+        result.isPresent()
+            && result.get().resultCode() != null
+            && !result.get().resultCode().isBlank()
+            && !"0160".equals(result.get().resultCode());
+    report.add(
+        "HU-16", scenario, "RESULTADO ESPECÍFICO INTERPRETABLE", describe(result), interpretable);
+  }
+
   private static String describe(Optional<SifenSubmissionResult> result) {
     if (result.isEmpty()) {
       return "SIN RESPUESTA";
@@ -454,6 +710,25 @@ class SifenHomologationEventsLiveTest {
   private LocalDateTime signatureInstant() {
     // Same clock-skew safety margin HU-13 established for this sandbox (see its Javadoc).
     return LocalDateTime.now(timeProperties.zoneId()).minusMinutes(2);
+  }
+
+  /**
+   * Real finding while extending this story to react to genuinely-approved documents: Manual
+   * Técnico V150's GDE004a rule ({@code dCodRes=4009} "Plazo de solicitud de cancelación... es
+   * extemporáneo") computes the cancellation/reaction deadline from the event's own signature
+   * date/time relative to the document's real SIFEN approval instant — subtracting {@link
+   * #signatureInstant()}'s 2-minute clock-safety buffer here reliably puts the event's declared
+   * timestamp <em>before</em> that approval ever happened (the seed document's own signature is
+   * already 2 minutes in the past when it's sent, and building/sending the reaction event takes
+   * more real time on top of that), tripping the same rule from the opposite direction. Confirmed
+   * live: every cancellation attempt in this method failed with 4009 until this buffer was dropped
+   * for events that react to a same-run approval. The real wall-clock time that elapses sending the
+   * seed document and building this event is already enough margin against SIFEN's clock running
+   * ahead (the reason {@link #signatureInstant()} exists at all) without an artificial buffer
+   * working against us here.
+   */
+  private LocalDateTime postApprovalSignatureInstant() {
+    return LocalDateTime.now(timeProperties.zoneId());
   }
 
   private String buildSyntheticCdc(long documentNumberOffset) {

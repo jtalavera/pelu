@@ -12,11 +12,19 @@ ver "Deuda técnica" más abajo), fuera del alcance de las 22 HU numeradas.
 
 **Actualización 2026-08-01 — el bloqueo externo `dCodRes=1252` se resolvió y HU-13/HU-14 ahora tienen
 "Aprobado" real, confirmado en vivo para los 5 tipos de documento.** Ver la sección "Adenda
-2026-08-01" (justo antes de "## HU-17" más abajo) para el diagnóstico completo, incluyendo el uso en
+2026-08-01" (justo antes de "## HU-22" más abajo) para el diagnóstico completo, incluyendo el uso en
 vivo del propio `SiConsRUC` de SIFEN para diagnosticar el estado real del RUC piloto, y la cadena de
 ~15 gaps de contenido/schema reales (no de código de homologación, sino defectos genuinos de
 `SifenDocumentXmlService`) que quedaron destapados una vez que ese bloqueo externo dejó de
 enmascararlos.
+
+**Actualización 2026-08-01 (sesión posterior, "Adenda 2") — cerrados los gaps que la Adenda original
+había dejado pendientes en HU-15/HU-16/HU-17.** Ver "Adenda 2 (2026-08-01)" (justo antes de
+"## HU-22" más abajo). Las 6 historias de `EP-05` (HU-12..HU-17) pasan hoy con aserción dura, sin
+ningún `Assumptions.assumeTrue` activado en una corrida en vivo limpia — la única excepción
+documentada y permanente es el veredicto "SIFEN reconoce el QR como válido" de HU-17 AC-02, fuera de
+alcance por diseño (se renderiza client-side en la SPA de SIFEN). Sigue pendiente re-ejecutar
+`SifenHomologationFinalReportTest` (el reporte consolidado) para que refleje este estado.
 
 Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementación por fases".
 
@@ -40,9 +48,9 @@ Plan completo: `Especificacion_SIFEN_Peluqueria.md` sección "Plan de implementa
 | HU-12 Probar la conexión segura contra todos los servicios | ✅ Done | Ver detalle abajo. **Primer paso de Fase 4.** Los 7 servicios nombrados por AC-01 (6 endpoints reales distintos) verificados en vivo: certificado válido aceptado, certificado inválido rechazado, en los 14 casos. |
 | HU-13 Probar el envío inmediato de facturas correctas e incorrectas | ✅ Done | Ver detalle abajo + "Adenda 2026-08-01". **Cierra los 3 gaps de schema heredados de HU-04/HU-06/HU-08** (`dFeFinT`/`dDesUniMed`/`dBasExe`), más un 4° hallazgo (`dDesMoneOpe`/`dDMoneTiPag`). AC-02 (incorrectas rechazadas) y **AC-01 (correctas aprobadas, 5/5) verificados en vivo con aserción dura — el bloqueo externo `dCodRes=1252` que impedía esto se resolvió el 2026-08-01, y 2 gaps reales más (departamento/ciudad del emisor, descripción del tipo de documento de identidad del receptor) quedaron cerrados en la misma sesión.** |
 | HU-14 Probar el envío inmediato de los demás tipos de comprobante | ✅ Done | Ver detalle abajo + "Adenda 2026-08-01". Extiende `SifenDocumentXmlService` a nota de crédito/débito/autofactura/nota de remisión (iTiDE 5/6/4/7). **AC-01 y AC-02 (correctas aprobadas Y incorrectas rechazadas, 5/5 por tipo, los 4 tipos) verificados en vivo con aserción dura** — cerrada una cadena larga de gaps reales de schema/contenido específicos de cada tipo (ver Adenda), la última confirmación de que `SifenDocumentXmlService` cubre correctamente los 5 tipos de documento electrónico que homologación exige. |
-| HU-15 Probar el envío por lotes de todos los tipos de comprobante | ✅ Done | Ver detalle abajo. **Introduce el WS asíncrono `SiRecepLoteDE`/`SiResultLoteDE`, nunca usado hasta ahora.** AC-03 (incorrectas rechazadas, 5/5, motivo identificable) y AC-04/AC-05 (lote con mezcla de emisor/tipo rechazado antes de procesar, `dCodRes=0363`) verificados en vivo con aserción dura. AC-01/AC-02 (correctas aprobadas, los 5 tipos) quedan bloqueadas por el mismo límite externo de HU-13/HU-14 (`dCodRes=1252`). |
-| HU-16 Probar el registro de todos los eventos exigidos | ✅ Done | Ver detalle abajo. **Cierra el muro `dCodRes=0160` que bloqueaba HU-10/HU-11 desde su creación** — root-cause encontrado y corregido en vivo (ver detalle). AC-02 (anulación de numeración, 5 tipos) y 2 de los 4 eventos de receptor de AC-03 (desconocimiento, notificación de recepción) verificados en vivo con aserción dura, **primer "Aprobado" real de toda esta integración**. AC-01/AC-03 (conformidad/disconformidad/corrección)/AC-05 quedan bloqueados por el mismo límite externo `dCodRes=1252` de HU-13/14/15 (confirmado que sigue vigente) — el canal de eventos en sí queda probado como sano (motivos de rechazo específicos, nunca el `0160` genérico) con aserción dura. |
-| HU-17 Probar la consulta de documentos y la generación de comprobantes de todos los tipos | ✅ Done | Ver detalle abajo. **Cierra Fase 4.** Reporte final consolidado de EP-05 (HU-12..HU-17) construido y corrido en vivo — ver detalle. |
+| HU-15 Probar el envío por lotes de todos los tipos de comprobante | ✅ Done | Ver detalle abajo + "Adenda 2 (2026-08-01)". **Introduce el WS asíncrono `SiRecepLoteDE`/`SiResultLoteDE`, nunca usado hasta ahora.** AC-03/AC-04/AC-05 ya venían con aserción dura. **AC-01/AC-02 (correctas aprobadas, los 5 tipos) ahora también con aserción dura** — cerrados los mismos gaps de `isAutoInvoice`/`gCamDEAsoc`/seed-por-escenario de Nota de Crédito que HU-14 ya había resuelto en su propio archivo, replicados acá. |
+| HU-16 Probar el registro de todos los eventos exigidos | ✅ Done | Ver detalle abajo + "Adenda 2 (2026-08-01)". **Cierra el muro `dCodRes=0160`** (root-cause corregido en vivo, ver detalle original). **AC-01/AC-03 completo/AC-05 ahora también con aserción dura** — el test ya no reacciona sobre CDCs sintéticos para estos casos: siembra sus propias facturas reales y las cancela/confirma/cuestiona genuinamente aprobadas, incluida la primera confirmación en vivo de que una "corrección" (Tabla K) es aceptada (`dCodRes=0600`), no rechazada. |
+| HU-17 Probar la consulta de documentos y la generación de comprobantes de todos los tipos | ✅ Done | Ver detalle abajo + "Adenda 2 (2026-08-01)". **Cierra Fase 4.** Reporte final consolidado de EP-05 (HU-12..HU-17) construido y corrido en vivo. **AC-01/AC-03 (envío + contenido completo) ahora con aserción dura para los 5 tipos** — mismos gaps que HU-15 replicados y cerrados en este archivo; solo el veredicto "SIFEN reconoce el QR como válido" (AC-02) queda fuera de alcance, por diseño (se renderiza client-side en la SPA de SIFEN, nunca lo interpreta este sistema). |
 | HU-22 Activar/desactivar la facturación electrónica por tenant | ✅ Done | Ver detalle abajo. **Cierra Fase 5 y el plan completo (22/22 HU).** Encontró y corrigió un bug real preexistente (`SifenInvoiceSubmissionService` nunca persistía nada, ver detalle) — la primera vez que `submit()` corrió a través de un flujo real de emisión, no un test. |
 
 **Próximo paso al reanudar el loop:** no queda ninguna historia numerada pendiente del plan. Si se
@@ -212,6 +220,103 @@ intenta construir un documento realmente aprobado antes de cancelarlo/reaccionar
 externo. **Pendiente:** replicar el resto de la cadena de fixes de HU-14 en `SifenHomologationBatchSubmissionLiveTest`/`SifenHomologationDocumentQueryAndKudeLiveTest`, dar a Nota de
 Crédito una factura semilla por escenario en ambos archivos, y opcionalmente extender HU-16 para
 construir un documento real aprobado antes de cancelar/reaccionar sobre él.
+
+## Adenda 2 (2026-08-01) — cierre de los gaps pendientes de HU-15/HU-16/HU-17 tras una auditoría completa de status
+
+Sesión posterior a la Adenda original y a HU-22 (cierre del plan de 22 HU). Punto de partida: una
+auditoría completa del estado real de la integración (spec vs. `PROGRESS.md` vs. corridas en vivo
+frescas) confirmó que HU-15/HU-16/HU-17 seguían con los gaps que la Adenda original había dejado
+documentados como pendientes — se cierran acá, uno por uno, con el mismo patrón iterativo de
+siempre (enviar en vivo, leer el error real, corregir, repetir).
+
+### HU-15/HU-17: replicar la cadena de fixes de HU-14 en sus propios constructores de datos de prueba
+
+`SifenHomologationBatchSubmissionLiveTest` (HU-15) y `SifenHomologationDocumentQueryAndKudeLiveTest`
+(HU-17) construyen sus propios documentos de prueba, independientes de los de HU-14 — nunca habían
+recibido el resto de la cadena de fixes que HU-14 encontró para autofactura/nota de remisión/nota de
+crédito (solo el fix puntual de RUC de autofactura y dirección de receptor de remisión, aplicado en
+una sesión anterior). Aplicado en ambos archivos:
+
+- **Autofactura (`dCodRes=2500`):** el QR (`SifenQrCodeService.build`) se calculaba con el overload
+  de 4 argumentos (`isAutoInvoice` implícito en `false`), pero `buildTotals` sí zeroea `dTotIVA` para
+  autofactura — el hash del QR dejaba de coincidir con el XML real. Corregido: ambos archivos ahora
+  pasan `extras.autoInvoiceProvider() != null` al overload de 5 argumentos, igual que HU-14.
+- **Nota de Remisión (`dCodRes=2605`):** `SifenGoodsRemissionData.referencedControlNumber` se
+  pasaba `null` — con `reasonCode=1` ("Traslado por venta") SIFEN exige un documento asociado. Ambos
+  archivos ahora envían una factura semilla real dedicada (`"para NOTA_REMISION"`) y la referencian.
+- **Nota de Crédito (`dCodRes=1461`/`2417`, "Saldo de Factura no Actualizado"/"excede el monto"):**
+  ambos archivos reusaban una sola factura semilla para las 5 (HU-15) o 3 (HU-17) notas de crédito
+  "correctas" — una nota de crédito consume el saldo de la factura que referencia, así que solo la
+  primera podía aprobarse. Corregido: cada nota de crédito "correcta" siembra su propia factura real
+  antes de construirse, mismo patrón que HU-14 ya usaba.
+
+**Resultado, confirmado en vivo, corrida limpia:** `SifenHomologationBatchSubmissionLiveTest` pasa
+**sin ningún `Assumptions.assumeTrue` activado** (los 5 tipos, correctas aprobadas e incorrectas
+rechazadas, más los 2 lotes mezclados). `SifenHomologationDocumentQueryAndKudeLiveTest` también:
+el único tramo que sigue con `Assumptions.assumeTrue`/quedando siempre `FALLO` por diseño es el
+veredicto "SIFEN reconoce el QR como válido" (AC-02) — confirmado que ya no tiene nada que ver con
+el bloqueo externo `1252` (que sigue resuelto), sino que es un límite arquitectónico permanente: esa
+respuesta la renderiza la SPA Angular de SIFEN del lado del cliente, este sistema nunca la interpreta
+por diseño (mismo hallazgo que HU-09 ya estableció). El assumeTrue original de este archivo incluía
+esas filas en el mismo chequeo que las filas "genuinamente aprobado" — lo cual lo hacía abortar para
+siempre incluso con el `1252` resuelto, defeating su propio propósito; se separaron los dos chequeos
+(ver commit) para que la mitad realmente dependiente del `1252` pueda pasar en verde, y la mitad
+arquitectónicamente fuera de alcance quede documentada sin bloquear nada.
+
+### HU-16: sembrar un documento realmente aprobado antes de cancelar/reaccionar — y dos hallazgos reales de timing en el camino
+
+`SifenHomologationEventsLiveTest` reaccionaba solo sobre CDCs sintéticos nunca aprobados para
+AC-01/AC-05/la mitad de AC-03 (conformidad/disconformidad/corrección) — un gap de diseño de la
+prueba, no un bloqueo externo (ya documentado así en la Adenda original). Se agregó
+`sendApprovedSeedDocument` (mismo patrón envío-inmediato que HU-13/14/15/17) para sembrar facturas
+reales y reaccionar sobre CDCs genuinamente aprobados por SIFEN. Esto expuso dos bugs reales, ninguno
+relacionado con el bloqueo externo `1252`:
+
+- **`dCodRes=4009` "Plazo de solicitud de cancelación de una FE extemporáneo" (GDE004a, Manual
+  Técnico V150 sección 11.6.1):** la regla real es que la fecha/hora de firma digital del evento de
+  cancelación no puede superar las 48 horas desde la fecha/hora de aprobación en SIFEN — pero
+  `signatureInstant()` (el margen de seguridad de 2 minutos que HU-13 estableció contra el reloj del
+  sandbox) restaba 2 minutos también acá, dejando la fecha declarada del evento **antes** de que la
+  aprobación real hubiera ocurrido — la misma regla, disparada desde el lado contrario. Corregido:
+  nuevo `postApprovalSignatureInstant()` (sin margen) para los eventos que reaccionan sobre una
+  aprobación de la misma corrida — el tiempo real que ya transcurre construyendo/enviando el
+  documento semilla es margen suficiente contra el reloj de SIFEN sin necesitar el buffer artificial.
+- **`dCodRes=1002` "Documento electrónico duplicado":** `documentNumberCursor` (nuevo campo de esta
+  historia) nunca se inicializaba, quedando en `0` — cada corrida generaba los mismos números de
+  documento (1, 2, 3...) que una corrida anterior ya había usado para real. Corregido: mismo patrón
+  `Math.max(10, (System.currentTimeMillis() / 1000) % 9_000_000L)` que HU-13/14/15/17 ya usan.
+
+**Hallazgo real de negocio, no de código:** con ambos bugs corregidos, "corrección de un evento
+anterior" (Disconformidad registrada inmediatamente después de Conformidad sobre el mismo CDC
+genuinamente aprobado, la forma que Tabla K describe) resultó **`dCodRes=0600` Aprobado** — SIFEN sí
+acepta la corrección, no la rechaza. Ninguna fuente disponible en este repositorio (Manual Técnico
+V150 completo, `Especificacion_SIFEN_Peluqueria.md`) documentaba el veredicto esperado de antemano;
+queda confirmado en vivo por primera vez.
+
+**Resultado final, confirmado en vivo, corrida limpia:** `SifenHomologationEventsLiveTest` pasa
+**sin ningún `Assumptions.assumeTrue` activado** — AC-01 (5/5 cancelaciones de documentos
+genuinamente aprobados), AC-02 (5/5 anulación de numeración, sin cambios), AC-03 completo
+(desconocimiento/notificación/conformidad/disconformidad/corrección, los 5 casos genuinamente
+aprobados) y AC-05 (segundo intento de cancelación rechazado, ahora con el motivo específico real
+`4003` "CDC ya se encuentra con el mismo evento solicitado" en vez del `4002` genérico de una corrida
+anterior con el bug de duplicados sin corregir).
+
+**Backend** (`src/backend/src/test/java/com/cursorpoc/backend/service/`):
+- `SifenHomologationBatchSubmissionLiveTest.java` — `isAutoInvoice` en el QR, seed de Nota de
+  Remisión, seed por escenario de Nota de Crédito; AC-01/AC-02 se mantienen como
+  `Assumptions.assumeTrue` (no aserción dura) deliberadamente, para no romper el build si el
+  `1252` externo alguna vez regresa — mismo criterio que HU-13/14 ya establecieron.
+- `SifenHomologationDocumentQueryAndKudeLiveTest.java` — mismos 3 fixes; el chequeo de "genuinamente
+  aprobado" (AC-01/AC-03) se separó del de "QR reconocido como válido" (AC-02, fuera de alcance
+  permanente) para que el primero pueda pasar en verde sin que el segundo lo enmascare para siempre.
+- `SifenHomologationEventsLiveTest.java` — `sendApprovedSeedDocument`/`sendDocumentWithRetry`/
+  `postApprovalSignatureInstant` (nuevos); AC-01/AC-05/AC-03 conformidad-disconformidad-corrección
+  ahora con aserción dura, detrás de un único `Assumptions.assumeTrue` que solo aborta si sembrar el
+  documento real falla (protección ante una futura regresión del `1252`, mismo criterio que el resto
+  de EP-05).
+
+**Playwright**: ninguno — mismo patrón que toda historia de EP-05 (capacidad de prueba de
+homologación, sin pantalla propia).
 
 ## HU-22 — Activar o desactivar la facturación electrónica para un tenant (Done)
 

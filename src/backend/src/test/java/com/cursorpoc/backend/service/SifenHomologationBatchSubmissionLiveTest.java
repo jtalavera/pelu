@@ -195,9 +195,11 @@ class SifenHomologationBatchSubmissionLiveTest {
             report.render())
         .isEmpty();
 
-    // AC-01/AC-02: aborts, not fails, if SIFEN's registry still reports the pilot RUC inactive
-    // (dCodRes=1252) — see class Javadoc and HU-13/HU-14's PROGRESS.md sections for why this is a
-    // known external limitation, not a code defect.
+    // AC-01/AC-02: aborts, not fails, if SIFEN's registry ever reports the pilot RUC inactive
+    // again (dCodRes=1252) — see class Javadoc and HU-13/HU-14's PROGRESS.md sections. Resolved as
+    // of this story's fix (all 5 types now genuinely approved by batch); kept as assumeTrue rather
+    // than a hard assertion so a future regression of that specific external condition aborts
+    // instead of raising a false alarm, same convention as HU-13/HU-14.
     List<SifenHomologationReport.Row> correctFailures =
         report.rows().stream()
             .filter(row -> row.scenario().contains("correcta") && !row.scenario().contains("seed"))
@@ -226,16 +228,23 @@ class SifenHomologationBatchSubmissionLiveTest {
 
     var report = new SifenHomologationReport();
 
-    // AC-02 (nota de crédito/débito need a document to reference): one real, actually-submitted
-    // CDC via envío inmediato, same trick HU-14 used for the same reason.
-    String referenceCdc = sendSeedInvoiceForReference(report, material, client);
+    // AC-02 (nota de débito needs a document to reference): one real, actually-submitted CDC via
+    // envío inmediato, same trick HU-14 used for the same reason. Nota de crédito seeds its own
+    // reference per scenario inside runCorrectBatch (see the dCodRes=1461/2417 note there).
+    String debitNoteReferenceCdc =
+        sendSeedInvoiceForReference(report, material, client, "para NOTA_DEBITO");
+    // dCodRes=2605 gap (see SifenGoodsRemissionData's javadoc): reasonCode=1 ("Traslado por
+    // venta") requires a documento asociado — one real seed invoice to reference.
+    String remissionReferenceCdc =
+        sendSeedInvoiceForReference(report, material, client, "para NOTA_REMISION");
 
     // AC-01: factura, and AC-02: the other 4 types — one batch of 5 correct documents each.
     runCorrectBatch(report, material, client, SifenDocumentType.FACTURA, null);
-    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_CREDITO, referenceCdc);
-    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_DEBITO, referenceCdc);
+    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_CREDITO, null);
+    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_DEBITO, debitNoteReferenceCdc);
     runCorrectBatch(report, material, client, SifenDocumentType.AUTOFACTURA, null);
-    runCorrectBatch(report, material, client, SifenDocumentType.NOTA_REMISION, null);
+    runCorrectBatch(
+        report, material, client, SifenDocumentType.NOTA_REMISION, remissionReferenceCdc);
 
     // AC-03: one batch of 5 incorrect facturas, distinct errors.
     runIncorrectFacturaBatch(report, material, client);
@@ -261,12 +270,16 @@ class SifenHomologationBatchSubmissionLiveTest {
       throws InterruptedException {
     List<String> signedDocuments = new ArrayList<>();
     for (int i = 0; i < 5; i++) {
-      signedDocuments.add(
-          buildAndSign(
-              material,
-              type,
-              Scenario.correct(type + " correcta " + (i + 1) + "/5"),
-              referencedCdc));
+      String label = type + " correcta " + (i + 1) + "/5";
+      // dCodRes=1461/2417 gap (same finding as HU-14's Javadoc): a nota de crédito can't exceed
+      // its referenced invoice's balance, so reusing one seed invoice for all 5 "correcta"
+      // scenarios lets only the first one through — each needs its own freshly-sent seed. Every
+      // other type reuses the single shared referencedCdc passed in.
+      String scenarioCdc =
+          type == SifenDocumentType.NOTA_CREDITO
+              ? sendSeedInvoiceForReference(report, material, client, "para " + label)
+              : referencedCdc;
+      signedDocuments.add(buildAndSign(material, type, Scenario.correct(label), scenarioCdc));
     }
 
     Optional<SifenBatchSubmissionResult> ack =
@@ -457,15 +470,19 @@ class SifenHomologationBatchSubmissionLiveTest {
   // ---------------------------------------------------------------------------------------------
 
   private String sendSeedInvoiceForReference(
-      SifenHomologationReport report, SifenActiveCertificateMaterial material, HttpClient client)
+      SifenHomologationReport report,
+      SifenActiveCertificateMaterial material,
+      HttpClient client,
+      String label)
       throws InterruptedException {
     String signed =
-        buildAndSign(material, SifenDocumentType.FACTURA, Scenario.correct("seed factura"), null);
+        buildAndSign(
+            material, SifenDocumentType.FACTURA, Scenario.correct("seed factura " + label), null);
     Optional<SifenSubmissionResult> result = sendImmediateWithRetry(client, signed);
     boolean approved = result.isPresent() && isApproved(result.get().status());
     report.add(
         "HU-15",
-        "seed factura (envío inmediato, para referenciar desde NC/ND) — CDC",
+        "seed factura " + label + " (envío inmediato, para referenciar) — CDC",
         "APROBADO",
         result
             .map(
@@ -708,7 +725,12 @@ class SifenHomologationBatchSubmissionLiveTest {
     // SIFEN HU-08: the QR group is mandatory on every DE, regardless of type.
     String digestValueBase64 = extractDigestValueBase64(signed.document());
     SifenQrCodeService.SifenQrResult qr =
-        qrCodeService.build(header, detail.totals(), detail.lines().size(), digestValueBase64);
+        qrCodeService.build(
+            header,
+            detail.totals(),
+            detail.lines().size(),
+            digestValueBase64,
+            extras.autoInvoiceProvider() != null);
     xmlService.appendQrGroup(signed.document(), qr.qrUrl());
 
     return SifenDocumentXmlService.serialize(signed.document());
@@ -757,7 +779,7 @@ class SifenHomologationBatchSubmissionLiveTest {
                   "FERNANDO DE LA MORA"));
       case NOTA_REMISION ->
           SifenDocumentTypeExtras.goodsRemission(
-              new SifenGoodsRemissionData(1, 1, 25, 1, 1, null, 1));
+              new SifenGoodsRemissionData(1, 1, 25, 1, 1, referencedCdc, 1));
     };
   }
 

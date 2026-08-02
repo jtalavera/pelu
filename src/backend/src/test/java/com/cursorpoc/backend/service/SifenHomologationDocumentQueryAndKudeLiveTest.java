@@ -195,22 +195,34 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
             report.render())
         .isEmpty();
 
-    // AC-01/AC-02/AC-03's literal "sobre un documento genuinamente aprobado" half: blocked by the
-    // same external dCodRes=1252 "RUC inactivo" every Fase 4 story since HU-13 has documented.
-    List<SifenHomologationReport.Row> approvalDependentFailures =
+    // AC-01/AC-03's literal "sobre un documento genuinamente aprobado" half (envío + contenido
+    // completo): excludes the QR-verdict rows below, which are a permanent scope boundary, not an
+    // external-block symptom — including them here would make this assumeTrue abort forever even
+    // once dCodRes=1252 (see HU-13) is resolved, which defeats its purpose. Kept as assumeTrue
+    // (not a hard assertion) so a future regression of that specific external condition aborts
+    // instead of raising a false alarm, same convention as HU-13/HU-14/HU-15.
+    List<SifenHomologationReport.Row> genuineApprovalFailures =
         report.rows().stream()
-            .filter(row -> row.scenario().contains("(aprobado)"))
+            .filter(
+                row ->
+                    row.scenario().contains("(aprobado)")
+                        && !row.scenario().contains("QR reconocido como válido"))
             .filter(row -> !row.passed())
             .toList();
     Assumptions.assumeTrue(
-        approvalDependentFailures.isEmpty(),
+        genuineApprovalFailures.isEmpty(),
         () ->
-            "AC-01/AC-02/AC-03: the literal 'sobre un documento aprobado' half didn't hold just"
-                + " now — see requirements/sifen/PROGRESS.md's HU-13 section for why this is"
-                + " currently a known external SIFEN test-registry limitation (pilot RUC 1137152-8"
-                + " reported inactive, dCodRes=1252), not a code defect, before treating this as a"
-                + " regression: "
+            "AC-01/AC-03: not every 'genuinely approved' scenario (envío + contenido completo)"
+                + " held just now — see requirements/sifen/PROGRESS.md's HU-13 section for why"
+                + " this is currently a known external SIFEN test-registry limitation (pilot RUC"
+                + " 1137152-8 reported inactive, dCodRes=1252), not a code defect, before treating"
+                + " this as a regression: "
                 + report.render());
+
+    // AC-02's "SIFEN reconoce el documento como válido" verdict is rendered client-side by SIFEN's
+    // own Angular SPA (confirmed live by HU-09) — this system never interprets it, by design. Not
+    // a gap and never affected by the 1252 block: a permanent scope boundary, documented as an
+    // always-FALLO row in the report above for DNIT's benefit, but not gated on here.
   }
 
   /**
@@ -224,28 +236,41 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
     documentNumberCursor = Math.max(10, (System.currentTimeMillis() / 1000) % 9_000_000L);
     var report = new SifenHomologationReport();
 
-    // AC-03 (nota de crédito/débito need a real, actually-submitted CDC to reference).
-    String creditNoteReferenceCdc = sendSeedInvoiceForReference(report, material, mtlsClient);
+    // AC-03 (nota de débito needs a real, actually-submitted CDC to reference). Nota de crédito
+    // seeds its own reference per document inside runDocumentType (see the dCodRes=1461/2417 note
+    // there — a nota de crédito can't exceed its referenced invoice's balance, so one shared seed
+    // can't back more than one approved credit note).
+    String debitNoteReferenceCdc =
+        sendSeedInvoiceForReference(report, material, mtlsClient, "para NOTA_DEBITO");
+    // dCodRes=2605 gap (see SifenGoodsRemissionData's javadoc): reasonCode=1 ("Traslado por
+    // venta") requires a documento asociado — one real seed invoice to reference.
+    String remissionReferenceCdc =
+        sendSeedInvoiceForReference(report, material, mtlsClient, "para NOTA_REMISION");
 
     for (SifenDocumentType type : SifenDocumentType.values()) {
       String referencedCdc =
-          (type == SifenDocumentType.NOTA_CREDITO || type == SifenDocumentType.NOTA_DEBITO)
-              ? creditNoteReferenceCdc
-              : null;
+          switch (type) {
+            case NOTA_DEBITO -> debitNoteReferenceCdc;
+            case NOTA_REMISION -> remissionReferenceCdc;
+            default -> null;
+          };
       runDocumentType(report, material, mtlsClient, plainClient, type, referencedCdc);
     }
     return report;
   }
 
   private String sendSeedInvoiceForReference(
-      SifenHomologationReport report, SifenActiveCertificateMaterial material, HttpClient client)
+      SifenHomologationReport report,
+      SifenActiveCertificateMaterial material,
+      HttpClient client,
+      String label)
       throws InterruptedException {
     long documentNumber = ++documentNumberCursor;
     BuiltDocument built = buildAndSign(material, SifenDocumentType.FACTURA, documentNumber, null);
     Optional<SifenSubmissionResult> result = sendWithRetry(client, built.signedXml(), built.cdc());
     report.add(
         "HU-17",
-        "seed factura para referencia — CDC " + built.cdc(),
+        "seed factura " + label + " para referencia — CDC " + built.cdc(),
         "ENVIADO",
         describeActual(result),
         result.isPresent());
@@ -268,7 +293,15 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
     List<BuiltDocument> documents = new ArrayList<>();
     for (int i = 0; i < 3; i++) {
       long documentNumber = ++documentNumberCursor;
-      BuiltDocument built = buildAndSign(material, type, documentNumber, referencedCdc);
+      // dCodRes=1461/2417 gap (same finding as HU-14/HU-15): a nota de crédito can't exceed its
+      // referenced invoice's balance, so reusing one seed invoice for all 3 documents of this type
+      // lets only the first one through — each needs its own freshly-sent seed.
+      String documentReferencedCdc =
+          type == SifenDocumentType.NOTA_CREDITO
+              ? sendSeedInvoiceForReference(
+                  report, material, mtlsClient, "para " + type + " " + (i + 1) + "/3")
+              : referencedCdc;
+      BuiltDocument built = buildAndSign(material, type, documentNumber, documentReferencedCdc);
       Optional<SifenSubmissionResult> sendResult =
           sendWithRetry(mtlsClient, built.signedXml(), built.cdc());
       report.add(
@@ -584,7 +617,12 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
 
     String digestValueBase64 = extractDigestValueBase64(signed.document());
     SifenQrCodeService.SifenQrResult qr =
-        qrCodeService.build(header, detail.totals(), detail.lines().size(), digestValueBase64);
+        qrCodeService.build(
+            header,
+            detail.totals(),
+            detail.lines().size(),
+            digestValueBase64,
+            extras.autoInvoiceProvider() != null);
     xmlService.appendQrGroup(signed.document(), qr.qrUrl());
 
     Instant issuedAtInstant = issueDateTime.toInstant(ZoneOffset.UTC);
@@ -620,7 +658,7 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
                   "FERNANDO DE LA MORA"));
       case NOTA_REMISION ->
           SifenDocumentTypeExtras.goodsRemission(
-              new SifenGoodsRemissionData(1, 1, 25, 1, 1, null, 1));
+              new SifenGoodsRemissionData(1, 1, 25, 1, 1, referencedCdc, 1));
     };
   }
 
