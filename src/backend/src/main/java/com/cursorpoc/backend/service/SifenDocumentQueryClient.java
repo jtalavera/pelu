@@ -70,6 +70,8 @@ public class SifenDocumentQueryClient {
   /** Confirmed live: the WSDL's own soap12:address, i.e. the WSDL path minus "?wsdl". */
   private static final String CONSULTA_PATH = "/de/ws/consultas/consulta.wsdl";
 
+  private static final String OPERATION = "SiConsDE";
+
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
   /** Sección 9.4.2, Tabla G: "RUC del certificado utilizado en la conexión no tiene permiso". */
@@ -126,6 +128,7 @@ public class SifenDocumentQueryClient {
               .header("Content-Type", "application/soap+xml; charset=utf-8")
               .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8))
               .build();
+      log.info("[SIFEN req] operation={} {} cdc={}", OPERATION, logContext, cdc);
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
       return handleResponse(logContext, cdc, response.body(), response.statusCode());
@@ -148,6 +151,12 @@ public class SifenDocumentQueryClient {
           httpStatus);
       return Optional.empty();
     }
+    log.info(
+        "[SIFEN resp] operation={} {} code={} message={}",
+        OPERATION,
+        logContext,
+        parsed.resultCode(),
+        parsed.message());
     if (RESULT_CODE_RUC_NOT_AUTHORIZED.equals(parsed.resultCode())) {
       log.error(
           "SIFEN status query rejected: querying certificate's RUC has no permission {} cdc={}",

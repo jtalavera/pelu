@@ -8,6 +8,7 @@ import com.cursorpoc.backend.config.SifenConnectionProperties;
 import com.cursorpoc.backend.config.SifenConnectionProperties.Environment;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import java.io.ByteArrayInputStream;
@@ -67,6 +68,27 @@ class SifenConnectionServiceTest {
     SifenConnectionResult result = service.connect(1L, trustManagersFor(material.certificate()));
 
     assertThat(result.environment()).isEqualTo(Environment.TEST);
+  }
+
+  @Test
+  void connect_logsSifenReqAndRespLines_withOperationAndHttpStatus() throws Exception {
+    SifenActiveCertificateMaterial material = loadMaterial("sifen/ruc-fixture.p12", "TestPass123!");
+    mockServer = startMockServer(material, 200, null);
+
+    var service = newService(mockServer.getAddress().getPort());
+    when(certificateService.requireActiveCertificate(1L)).thenReturn(material);
+    when(businessProfileRepository.findByTenantId(1L))
+        .thenReturn(Optional.of(businessProfileWithRuc(RUC_MATCHING_TENANT)));
+
+    try (LogCapture logs = new LogCapture(SifenConnectionService.class)) {
+      service.connect(1L, trustManagersFor(material.certificate()));
+
+      assertThat(logs.messages())
+          .anyMatch(m -> m.startsWith("[SIFEN req] operation=connect") && m.contains("tenantId=1"));
+      assertThat(logs.messages())
+          .anyMatch(
+              m -> m.startsWith("[SIFEN resp] operation=connect") && m.contains("httpStatus=200"));
+    }
   }
 
   @Test

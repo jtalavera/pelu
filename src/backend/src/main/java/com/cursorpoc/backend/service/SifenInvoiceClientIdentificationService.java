@@ -134,7 +134,8 @@ public class SifenInvoiceClientIdentificationService {
     Document signed = signingService.signEvent(tenantId, unsigned);
     String xml = SifenDocumentXmlService.serialize(signed);
 
-    Optional<SifenSubmissionResult> response = eventClient.send(tenantId, xml);
+    Optional<SifenSubmissionResult> response =
+        eventClient.send(tenantId, xml, "client-identification");
     if (response.isEmpty()) {
       log.error(
           "SIFEN client identification got no response tenantId={} invoiceId={} controlNumber={}",

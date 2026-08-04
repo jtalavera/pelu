@@ -102,7 +102,7 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   @Test
   void identifyClient_whenSifenApproves_marksIdentifiedAndUpdatesClientFields() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -125,7 +125,7 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   @Test
   void identifyClient_whenSifenRejects_leavesInvoiceUntouchedButRecordsTheReason() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -148,7 +148,7 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   @Test
   void identifyClient_alwaysRecordsWhoRequestedItAndTheSubmittedData() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -226,7 +226,7 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   @Test
   void identifyClient_company_acceptsAValidRuc() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -267,7 +267,7 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   @Test
   void identifyClient_foreign_acceptsAnAddressAndSupportedCountry() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -299,7 +299,7 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   @Test
   void identifyClient_throwsWhenSifenNeverResponds() {
-    when(eventClient.send(eq(TENANT_ID), anyString())).thenReturn(Optional.empty());
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString())).thenReturn(Optional.empty());
 
     assertThatThrownBy(
             () ->
@@ -313,7 +313,7 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   @Test
   void identifyClient_signsTheEventBuiltFromTheInvoicesOwnControlNumber() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -330,6 +330,6 @@ class SifenInvoiceClientIdentificationServiceTest {
 
   private void verifyNoEventSent() {
     verify(signingService, never()).signEvent(anyLong(), any());
-    verify(eventClient, never()).send(anyLong(), anyString());
+    verify(eventClient, never()).send(anyLong(), anyString(), anyString());
   }
 }

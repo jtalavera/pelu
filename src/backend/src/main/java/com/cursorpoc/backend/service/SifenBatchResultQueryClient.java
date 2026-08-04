@@ -48,6 +48,8 @@ public class SifenBatchResultQueryClient {
   /** Confirmed live: the WSDL's own soap12:address, i.e. the WSDL path minus "?wsdl". */
   private static final String CONSULTA_LOTE_PATH = "/de/ws/consultas/consulta-lote.wsdl";
 
+  private static final String OPERATION = "SiResultLoteDE";
+
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
   private final SifenConnectionService connectionService;
@@ -87,6 +89,7 @@ public class SifenBatchResultQueryClient {
               .header("Content-Type", "application/soap+xml; charset=utf-8")
               .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8))
               .build();
+      log.info("[SIFEN req] operation={} {} batchNumber={}", OPERATION, logContext, batchNumber);
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
       Optional<SifenBatchQueryResult> result = parseResponse(response.body());
@@ -95,6 +98,14 @@ public class SifenBatchResultQueryClient {
             "SIFEN batch query response could not be parsed {} httpStatus={}",
             logContext,
             response.statusCode());
+      } else {
+        SifenBatchQueryResult r = result.get();
+        log.info(
+            "[SIFEN resp] operation={} {} code={} message={}",
+            OPERATION,
+            logContext,
+            r.batchResultCode(),
+            r.batchResultMessage());
       }
       return result;
     } catch (IOException | InterruptedException e) {

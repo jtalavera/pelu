@@ -83,7 +83,7 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
         contactEmail: "contacto@e2e-sifen.test",
         logoDataUrl: null,
         taxpayerType: "INDIVIDUAL",
-        economicActivityCode: "9602",
+        economicActivityCode: "96020",
         economicActivityDescription: "Peluqueria y otros tratamientos de belleza",
         sifenDepartmentCode: "12",
         sifenDepartmentName: "CENTRAL",

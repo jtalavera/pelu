@@ -75,6 +75,8 @@ public class SifenEventClient {
   /** Confirmed live: the WSDL's own soap12:address, i.e. the WSDL path minus "?wsdl". */
   private static final String EVENTOS_PATH = "/de/ws/eventos/evento.wsdl";
 
+  private static final String OPERATION = "SiRecepEvento";
+
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
   private final SifenConnectionService connectionService;
@@ -96,16 +98,25 @@ public class SifenEventClient {
    * connection. Returns {@link Optional#empty()} — never throws for a transport-level failure —
    * when no interpretable response was received, mirroring {@link
    * SifenDocumentReceptionClient#send} and {@link SifenDocumentQueryClient#query}'s contract.
+   *
+   * @param eventLabel free-text event type for the {@code [SIFEN req]}/{@code [SIFEN resp]} log
+   *     lines (e.g. {@code "cancellation"}, {@code "client-identification"}) — this client is
+   *     generic across event types, so callers are the only ones who know which one this is.
    */
-  public Optional<SifenSubmissionResult> send(long tenantId, String signedEventXml) {
-    return send(tenantId, signedEventXml, null);
+  public Optional<SifenSubmissionResult> send(
+      long tenantId, String signedEventXml, String eventLabel) {
+    return send(tenantId, signedEventXml, eventLabel, null);
   }
 
   Optional<SifenSubmissionResult> send(
-      long tenantId, String signedEventXml, javax.net.ssl.TrustManager[] testTrustManagers) {
+      long tenantId,
+      String signedEventXml,
+      String eventLabel,
+      javax.net.ssl.TrustManager[] testTrustManagers) {
     try {
       HttpClient client = connectionService.buildAuthenticatedClient(tenantId, testTrustManagers);
-      return sendWithClient(client, signedEventXml, "tenantId=" + tenantId);
+      return sendWithClient(
+          client, signedEventXml, "tenantId=" + tenantId + " eventLabel=" + eventLabel);
     } catch (GeneralSecurityException e) {
       log.error(
           "SIFEN cancellation event got no response tenantId={} error={}", tenantId, e.toString());
@@ -130,6 +141,11 @@ public class SifenEventClient {
               .header("Content-Type", "application/soap+xml; charset=utf-8")
               .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8))
               .build();
+      log.info(
+          "[SIFEN req] operation={} {} payloadChars={}",
+          OPERATION,
+          logContext,
+          signedEventXml.length());
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
       Optional<SifenSubmissionResult> result =
@@ -139,6 +155,14 @@ public class SifenEventClient {
             "SIFEN cancellation event response could not be parsed {} httpStatus={}",
             logContext,
             response.statusCode());
+      } else {
+        SifenSubmissionResult r = result.get();
+        log.info(
+            "[SIFEN resp] operation={} {} code={} message={}",
+            OPERATION,
+            logContext,
+            r.resultCode(),
+            r.message());
       }
       return result;
     } catch (IOException | InterruptedException e) {

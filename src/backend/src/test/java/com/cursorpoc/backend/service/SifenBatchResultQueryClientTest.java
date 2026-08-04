@@ -8,6 +8,7 @@ import com.cursorpoc.backend.config.SifenConnectionProperties.Environment;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import java.io.ByteArrayInputStream;
@@ -76,6 +77,39 @@ class SifenBatchResultQueryClientTest {
     assertThat(result.get().stillProcessing()).isTrue();
     assertThat(result.get().concluded()).isFalse();
     assertThat(result.get().documents()).isEmpty();
+  }
+
+  @Test
+  void query_logsSifenReqAndRespLines_withOperationBatchNumberCodeAndMessage() throws Exception {
+    String batchNumber = "1234567890123";
+    String responseBody =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"><env:Body>\
+        <ns2:rResEnviConsLoteDe xmlns:ns2="http://ekuatia.set.gov.py/sifen/xsd">\
+        <ns2:dFecProc></ns2:dFecProc><ns2:dCodResLot>0361</ns2:dCodResLot>\
+        <ns2:dMsgResLot>Lote en procesamiento</ns2:dMsgResLot>\
+        </ns2:rResEnviConsLoteDe></env:Body></env:Envelope>""";
+    SifenActiveCertificateMaterial material = loadMaterial("sifen/ruc-fixture.p12", "TestPass123!");
+    mockServer = startMockServer(material, 200, req -> responseBody);
+    var client = newClient(material, mockServer.getAddress().getPort());
+
+    try (LogCapture logs = new LogCapture(SifenBatchResultQueryClient.class)) {
+      client.query(1L, batchNumber, trustManagersFor(material));
+
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN req] operation=SiResultLoteDE")
+                      && m.contains("tenantId=1")
+                      && m.contains("batchNumber=" + batchNumber));
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN resp] operation=SiResultLoteDE")
+                      && m.contains("code=0361")
+                      && m.contains("message=Lote en procesamiento"));
+    }
   }
 
   @Test

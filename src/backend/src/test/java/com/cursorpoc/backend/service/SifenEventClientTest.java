@@ -9,6 +9,7 @@ import com.cursorpoc.backend.config.SifenConnectionProperties.Environment;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import java.io.ByteArrayInputStream;
@@ -74,13 +75,49 @@ class SifenEventClientTest {
     var client = newClient(material, mockServer.getAddress().getPort());
 
     Optional<SifenSubmissionResult> result =
-        client.send(1L, "<rGesEve/>", trustManagersFor(material));
+        client.send(1L, "<rGesEve/>", "test-event", trustManagersFor(material));
 
     assertThat(result).isPresent();
     assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.APPROVED);
     assertThat(result.get().protocolNumber()).isEqualTo("987654321");
     assertThat(result.get().resultCode()).isEqualTo("0600");
     assertThat(result.get().message()).isEqualTo("Evento registrado correctamente");
+  }
+
+  @Test
+  void send_logsSifenReqAndRespLines_withOperationEventLabelCodeAndMessage() throws Exception {
+    String responseBody =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"><env:Body>\
+        <ns2:rRetEnviEventoDe xmlns:ns2="http://ekuatia.set.gov.py/sifen/xsd">\
+        <ns2:dFecProc>2026-07-28T12:15:07-03:00</ns2:dFecProc>\
+        <ns2:gResProcEVe><ns2:dEstRes>Aprobado</ns2:dEstRes>\
+        <ns2:dProtAut>987654321</ns2:dProtAut><ns2:id>123</ns2:id>\
+        <ns2:gResProc><ns2:dCodRes>0600</ns2:dCodRes>\
+        <ns2:dMsgRes>Evento registrado correctamente</ns2:dMsgRes></ns2:gResProc>\
+        </ns2:gResProcEVe></ns2:rRetEnviEventoDe></env:Body></env:Envelope>""";
+    SifenActiveCertificateMaterial material = loadMaterial("sifen/ruc-fixture.p12", "TestPass123!");
+    mockServer = startMockServer(material, 200, req -> responseBody);
+    var client = newClient(material, mockServer.getAddress().getPort());
+
+    try (LogCapture logs = new LogCapture(SifenEventClient.class)) {
+      client.send(1L, "<rGesEve/>", "cancellation", trustManagersFor(material));
+
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN req] operation=SiRecepEvento")
+                      && m.contains("tenantId=1")
+                      && m.contains("eventLabel=cancellation"));
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN resp] operation=SiRecepEvento")
+                      && m.contains("eventLabel=cancellation")
+                      && m.contains("code=0600")
+                      && m.contains("message=Evento registrado correctamente"));
+    }
   }
 
   @Test
@@ -101,7 +138,7 @@ class SifenEventClientTest {
     var client = newClient(material, mockServer.getAddress().getPort());
 
     Optional<SifenSubmissionResult> result =
-        client.send(1L, "<rGesEve/>", trustManagersFor(material));
+        client.send(1L, "<rGesEve/>", "test-event", trustManagersFor(material));
 
     assertThat(result).isPresent();
     assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.REJECTED);
@@ -114,7 +151,7 @@ class SifenEventClientTest {
     SifenActiveCertificateMaterial material = loadMaterial("sifen/ruc-fixture.p12", "TestPass123!");
     var client = newClient(material, 1); // reserved port, nothing listens there
 
-    Optional<SifenSubmissionResult> result = client.send(1L, "<rGesEve/>", null);
+    Optional<SifenSubmissionResult> result = client.send(1L, "<rGesEve/>", "test-event", null);
 
     assertThat(result).isEmpty();
   }
@@ -126,7 +163,7 @@ class SifenEventClientTest {
     var client = newClient(material, mockServer.getAddress().getPort());
 
     Optional<SifenSubmissionResult> result =
-        client.send(1L, "<rGesEve/>", trustManagersFor(material));
+        client.send(1L, "<rGesEve/>", "test-event", trustManagersFor(material));
 
     assertThat(result).isEmpty();
   }
@@ -154,7 +191,8 @@ class SifenEventClientTest {
             });
     var client = newClient(material, mockServer.getAddress().getPort());
 
-    client.send(1L, "<rGesEve><rEve Id=\"1\"/></rGesEve>", trustManagersFor(material));
+    client.send(
+        1L, "<rGesEve><rEve Id=\"1\"/></rGesEve>", "test-event", trustManagersFor(material));
 
     String sent = capturedRequest.toString();
     assertThat(sent).contains("<soap:Envelope");

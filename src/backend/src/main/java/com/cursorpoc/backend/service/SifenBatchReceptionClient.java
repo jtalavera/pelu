@@ -80,6 +80,8 @@ public class SifenBatchReceptionClient {
   /** Confirmed live: the WSDL's own soap12:address, i.e. the WSDL path minus "?wsdl". */
   private static final String ASYNC_RECIBE_LOTE_PATH = "/de/ws/async/recibe-lote.wsdl";
 
+  private static final String OPERATION = "SiRecepLoteDE";
+
   /**
    * A batch can carry up to 50 documents (up to 10.000 KB) — allow more time than a single send.
    */
@@ -137,6 +139,11 @@ public class SifenBatchReceptionClient {
               .header("Content-Type", "application/soap+xml; charset=utf-8")
               .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8))
               .build();
+      log.info(
+          "[SIFEN req] operation={} {} batchSize={}",
+          OPERATION,
+          logContext,
+          signedDocumentXmls.size());
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
       Optional<SifenBatchSubmissionResult> result = parseResponse(response.body());
@@ -145,6 +152,14 @@ public class SifenBatchReceptionClient {
             "SIFEN batch submission response could not be parsed {} httpStatus={}",
             logContext,
             response.statusCode());
+      } else {
+        SifenBatchSubmissionResult r = result.get();
+        log.info(
+            "[SIFEN resp] operation={} {} code={} message={}",
+            OPERATION,
+            logContext,
+            r.resultCode(),
+            r.message());
       }
       return result;
     } catch (IOException | InterruptedException e) {

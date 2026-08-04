@@ -9,6 +9,7 @@ import com.cursorpoc.backend.config.SifenConnectionProperties.Environment;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import java.io.ByteArrayInputStream;
@@ -113,6 +114,40 @@ class SifenDocumentQueryClientTest {
     assertThat(result).isPresent();
     assertThat(result.get().submissionResult().status()).isEqualTo(SifenSubmissionStatus.APPROVED);
     assertThat(result.get().documentContent()).isEqualTo("<rContDe>...</rContDe>");
+  }
+
+  @Test
+  void query_logsSifenReqAndRespLines_withOperationCdcCodeAndMessage() throws Exception {
+    String cdc = "01011371528001001999990122026072811234567800";
+    String responseBody =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"><env:Body>\
+        <ns2:rEnviConsDeResponse xmlns:ns2="http://ekuatia.set.gov.py/sifen/xsd">\
+        <ns2:dFecProc>2026-07-28T12:00:00-03:00</ns2:dFecProc><ns2:dCodRes>0422</ns2:dCodRes>\
+        <ns2:dMsgRes>CDC encontrado</ns2:dMsgRes>\
+        <ns2:xContenDE>&lt;rContDe&gt;...&lt;/rContDe&gt;</ns2:xContenDE>\
+        </ns2:rEnviConsDeResponse></env:Body></env:Envelope>""";
+    SifenActiveCertificateMaterial material = loadMaterial("sifen/ruc-fixture.p12", "TestPass123!");
+    mockServer = startMockServer(material, 200, req -> responseBody);
+    var client = newClient(material, mockServer.getAddress().getPort());
+
+    try (LogCapture logs = new LogCapture(SifenDocumentQueryClient.class)) {
+      client.query(1L, cdc, trustManagersFor(material));
+
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN req] operation=SiConsDE")
+                      && m.contains("tenantId=1")
+                      && m.contains("cdc=" + cdc));
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN resp] operation=SiConsDE")
+                      && m.contains("code=0422")
+                      && m.contains("message=CDC encontrado"));
+    }
   }
 
   @Test

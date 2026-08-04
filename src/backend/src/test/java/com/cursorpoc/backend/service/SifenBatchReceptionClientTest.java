@@ -7,6 +7,7 @@ import com.cursorpoc.backend.config.SifenConnectionProperties;
 import com.cursorpoc.backend.config.SifenConnectionProperties.Environment;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import java.io.ByteArrayInputStream;
@@ -101,6 +102,39 @@ class SifenBatchReceptionClientTest {
     assertThat(result.get().resultCode()).isEqualTo("0300");
     assertThat(result.get().batchNumber()).isEqualTo("1234567890123");
     assertThat(result.get().recommendedWaitSeconds()).isEqualTo(12);
+  }
+
+  @Test
+  void send_logsSifenReqAndRespLines_withOperationBatchSizeCodeAndMessage() throws Exception {
+    String responseBody =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"><env:Body>\
+        <ns2:rResEnviLoteDe xmlns:ns2="http://ekuatia.set.gov.py/sifen/xsd">\
+        <ns2:dFecProc>2026-07-28T12:15:07-03:00</ns2:dFecProc>\
+        <ns2:dCodRes>0300</ns2:dCodRes><ns2:dMsgRes>Lote recibido con éxito</ns2:dMsgRes>\
+        <ns2:dProtConsLote>1234567890123</ns2:dProtConsLote><ns2:dTpoProces>12</ns2:dTpoProces>\
+        </ns2:rResEnviLoteDe></env:Body></env:Envelope>""";
+    SifenActiveCertificateMaterial material = loadMaterial("sifen/ruc-fixture.p12", "TestPass123!");
+    mockServer = startMockServer(material, 200, req -> responseBody);
+    var client = newClient(material, mockServer.getAddress().getPort());
+
+    try (LogCapture logs = new LogCapture(SifenBatchReceptionClient.class)) {
+      client.send(1L, List.of("<rDE/>", "<rDE/>"), trustManagersFor(material));
+
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN req] operation=SiRecepLoteDE")
+                      && m.contains("tenantId=1")
+                      && m.contains("batchSize=2"));
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN resp] operation=SiRecepLoteDE")
+                      && m.contains("code=0300")
+                      && m.contains("message=Lote recibido con éxito"));
+    }
   }
 
   @Test

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.cursorpoc.backend.config.SifenConnectionProperties;
 import com.cursorpoc.backend.config.SifenConnectionProperties.Environment;
 import com.cursorpoc.backend.service.SifenServiceConnectivityChecker.Outcome;
+import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import java.io.ByteArrayInputStream;
@@ -19,6 +20,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -61,6 +63,32 @@ class SifenServiceConnectivityCheckerTest {
     assertThat(result.actual()).isEqualTo(Outcome.ACCEPTED);
     assertThat(result.httpStatus()).isEqualTo(200);
     assertThat(result.matchesExpectation()).isTrue();
+  }
+
+  @Test
+  void check_logsSifenReqAndRespLines_withOperationAndHttpStatus() throws Exception {
+    SifenHomologationEndpoint endpoint = SifenHomologationEndpoint.IMMEDIATE_RECEPTION;
+    Fixture fixture = loadFixture("sifen/ruc-fixture.p12", "TestPass123!");
+    mockServer = startMockServer(endpoint.wsdlPath(), 200, null, fixture);
+
+    var checker = newChecker(mockServer.getAddress().getPort());
+
+    try (LogCapture logs = new LogCapture(SifenServiceConnectivityChecker.class)) {
+      checker.check(
+          endpoint,
+          fixture.keyStore(),
+          fixture.password(),
+          Outcome.ACCEPTED,
+          trustManagersFor(fixture.certificate()));
+
+      assertThat(logs.messages())
+          .anyMatch(m -> m.startsWith("[SIFEN req] operation=" + endpoint.displayName()));
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN resp] operation=" + endpoint.displayName())
+                      && m.contains("httpStatus=200"));
+    }
   }
 
   @ParameterizedTest

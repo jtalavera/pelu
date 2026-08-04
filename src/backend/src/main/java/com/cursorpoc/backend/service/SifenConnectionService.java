@@ -51,6 +51,8 @@ public class SifenConnectionService {
    */
   private static final String SYNC_RECIBE_WSDL_PATH = "/de/ws/sync/recibe.wsdl?wsdl";
 
+  private static final String OPERATION = "connect";
+
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
 
   /** RFC 2253 directoryName SANs render unrecognized OIDs as {@code 2.5.4.5=#<hex DER>}. */
@@ -101,7 +103,14 @@ public class SifenConnectionService {
               .timeout(CONNECT_TIMEOUT)
               .GET()
               .build();
+      log.info(
+          "[SIFEN req] operation={} tenantId={} environment={}", OPERATION, tenantId, environment);
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+      log.info(
+          "[SIFEN resp] operation={} tenantId={} httpStatus={}",
+          OPERATION,
+          tenantId,
+          response.statusCode());
 
       if (response.statusCode() != 200) {
         log.error(

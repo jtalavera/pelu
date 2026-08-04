@@ -87,7 +87,10 @@ public class SifenServiceConnectivityChecker {
               .timeout(CONNECT_TIMEOUT)
               .GET()
               .build();
+      log.info("[SIFEN req] operation={} expected={}", endpoint.displayName(), expected);
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+      log.info(
+          "[SIFEN resp] operation={} httpStatus={}", endpoint.displayName(), response.statusCode());
 
       Outcome actual = response.statusCode() == 200 ? Outcome.ACCEPTED : Outcome.REJECTED;
       log.info(

@@ -9,6 +9,7 @@ import com.cursorpoc.backend.config.SifenConnectionProperties.Environment;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import java.io.ByteArrayInputStream;
@@ -131,6 +132,38 @@ class SifenDocumentReceptionClientTest {
     assertThat(result).isPresent();
     assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.APPROVED);
     assertThat(result.get().protocolNumber()).isEqualTo("1234567890");
+  }
+
+  @Test
+  void send_logsSifenReqAndRespLines_withOperationCodeAndMessage() throws Exception {
+    String responseBody =
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"><env:Body>\
+        <ns2:rRetEnviDe xmlns:ns2="http://ekuatia.set.gov.py/sifen/xsd"><ns2:rProtDe>\
+        <ns2:Id>01011371528001001000000122026072817606765985</ns2:Id>\
+        <ns2:dFecProc>2026-07-28T12:15:07-03:00</ns2:dFecProc>\
+        <ns2:dDigVal>abc123==</ns2:dDigVal><ns2:dEstRes>Aprobado</ns2:dEstRes>\
+        <ns2:gResProc><ns2:dProtAut>1234567890</ns2:dProtAut>\
+        <ns2:dCodRes>0260</ns2:dCodRes><ns2:dMsgRes>Autorizado</ns2:dMsgRes></ns2:gResProc>\
+        </ns2:rProtDe></ns2:rRetEnviDe></env:Body></env:Envelope>""";
+    SifenActiveCertificateMaterial material = loadMaterial("sifen/ruc-fixture.p12", "TestPass123!");
+    mockServer = startMockServer(material, 200, req -> responseBody);
+    var client = newClient(material, mockServer.getAddress().getPort());
+
+    try (LogCapture logs = new LogCapture(SifenDocumentReceptionClient.class)) {
+      client.send(1L, "<rDE/>", trustManagersFor(material));
+
+      assertThat(logs.messages())
+          .anyMatch(
+              m -> m.startsWith("[SIFEN req] operation=SiRecepDE") && m.contains("tenantId=1"));
+      assertThat(logs.messages())
+          .anyMatch(
+              m ->
+                  m.startsWith("[SIFEN resp] operation=SiRecepDE")
+                      && m.contains("code=0260")
+                      && m.contains("message=Autorizado"));
+    }
   }
 
   @Test

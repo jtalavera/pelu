@@ -126,7 +126,7 @@ public class SifenInvoiceCancellationService {
     Document signed = signingService.signEvent(tenantId, unsigned);
     String xml = SifenDocumentXmlService.serialize(signed);
 
-    Optional<SifenSubmissionResult> response = eventClient.send(tenantId, xml);
+    Optional<SifenSubmissionResult> response = eventClient.send(tenantId, xml, "cancellation");
     if (response.isEmpty()) {
       log.error(
           "SIFEN cancellation got no response tenantId={} invoiceId={} controlNumber={}",

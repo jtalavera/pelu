@@ -78,7 +78,7 @@ class SifenInvoiceCancellationServiceTest {
 
   @Test
   void cancel_whenSifenApproves_movesTheInvoiceToCancelled() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -100,7 +100,7 @@ class SifenInvoiceCancellationServiceTest {
 
   @Test
   void cancel_whenSifenApprovesWithObservation_alsoMovesTheInvoiceToCancelled() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -117,7 +117,7 @@ class SifenInvoiceCancellationServiceTest {
 
   @Test
   void cancel_whenSifenRejects_leavesThePreviousStatusUntouchedButRecordsTheReason() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -139,7 +139,7 @@ class SifenInvoiceCancellationServiceTest {
 
   @Test
   void cancel_alwaysRecordsWhoRequestedItAndWhenAndWhy_regardlessOfOutcome() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -200,7 +200,7 @@ class SifenInvoiceCancellationServiceTest {
   @Test
   void cancel_allowsAnInvoiceJustWithinThe48HourWindow() {
     invoice.setSifenSubmittedAt(LocalDateTime.now().minusHours(47).minusMinutes(30));
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -213,7 +213,7 @@ class SifenInvoiceCancellationServiceTest {
 
   @Test
   void cancel_throwsWhenSifenNeverResponds() {
-    when(eventClient.send(eq(TENANT_ID), anyString())).thenReturn(Optional.empty());
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString())).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.cancel(TENANT_ID, INVOICE_ID, USER_ID, USER_EMAIL, REASON))
         .isInstanceOf(ResponseStatusException.class)
@@ -226,7 +226,7 @@ class SifenInvoiceCancellationServiceTest {
 
   @Test
   void cancel_signsTheEventBuiltFromTheInvoicesOwnControlNumberAndReason() {
-    when(eventClient.send(eq(TENANT_ID), anyString()))
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
@@ -244,6 +244,6 @@ class SifenInvoiceCancellationServiceTest {
 
   private void verifyNoEventSent() {
     verify(signingService, never()).signEvent(anyLong(), any());
-    verify(eventClient, never()).send(anyLong(), anyString());
+    verify(eventClient, never()).send(anyLong(), anyString(), anyString());
   }
 }
