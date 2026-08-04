@@ -210,7 +210,7 @@ function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
 
 // ─── InvoiceHistoryTab ────────────────────────────────────────────────────────
 
-function InvoiceHistoryTab() {
+function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
@@ -271,6 +271,19 @@ function InvoiceHistoryTab() {
       if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     };
   }, [filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, loadInvoices]);
+
+  // Every click on the History tab bumps refreshTrigger (see BillingPage), so the list is always
+  // fresh when the tab is opened, even if the filters/paging haven't changed since the last visit.
+  // Skips the initial mount: the effect above already fetches once with the default filters.
+  const isFirstRefreshRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRefreshRef.current) {
+      isFirstRefreshRef.current = false;
+      return;
+    }
+    void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   function handleClear() {
     const d = getDefaultInvoiceHistoryDateRange();
@@ -2239,6 +2252,7 @@ export default function BillingPage() {
     navState?.activeTab ?? "session",
   );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
   >(navState?.selectedClient ?? null);
@@ -2358,7 +2372,10 @@ export default function BillingPage() {
               role="tab"
               aria-selected={activeTab === tabKey}
               style={activeTab === tabKey ? tabActive : tabBase}
-              onClick={() => setActiveTab(tabKey)}
+              onClick={() => {
+                setActiveTab(tabKey);
+                if (tabKey === "history") setHistoryRefresh((k) => k + 1);
+              }}
             >
               {t(`femme.billing.tabs.${tabKey}`)}
             </button>
@@ -2392,7 +2409,7 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "history"}>
-        <InvoiceHistoryTab />
+        <InvoiceHistoryTab refreshTrigger={historyRefresh} />
       </div>
     </div>
   );
