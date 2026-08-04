@@ -32,6 +32,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { useLocalitySearch } from "../hooks/useLocalitySearch";
@@ -722,6 +723,9 @@ export default function ClientDetailPage() {
                               <th className="py-2 pr-2 font-medium">
                                 {t("femme.clients.colStatus")}
                               </th>
+                              <th className="py-2 pr-2 font-medium">
+                                {t("femme.billing.history.colSifenStatus")}
+                              </th>
                               <th className="py-2 font-medium" />
                             </tr>
                           </thead>
@@ -742,6 +746,9 @@ export default function ClientDetailPage() {
                                 </td>
                                 <td className="py-2 pr-2 align-top">
                                   <HistoryInvoiceStatusPill status={inv.status} />
+                                </td>
+                                <td className="py-2 pr-2 align-top">
+                                  <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                                 </td>
                                 <td className="py-2 align-top text-right">
                                   <Button

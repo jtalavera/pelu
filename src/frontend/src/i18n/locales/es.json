@@ -507,6 +507,7 @@
         "colClient": "Cliente",
         "colTotal": "Total",
         "colStatus": "Estado",
+        "colSifenStatus": "Estado SIFEN",
         "statusIssued": "Emitido",
         "statusVoided": "Anulado",
         "filterFrom": "Desde",

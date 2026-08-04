@@ -64,7 +64,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await expect(page.getByRole("columnheader", { name: "Date" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Client" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Total" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Status", exact: true })).toBeVisible();
   });
 
   test("HU-16 · 4 abrir la pestaña Historial siempre refresca la lista, sin recargar la página", async ({

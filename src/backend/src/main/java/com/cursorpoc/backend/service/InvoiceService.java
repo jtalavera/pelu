@@ -506,7 +506,8 @@ public class InvoiceService {
         i.getTotal(),
         i.getIssuedAt(),
         buildServicesSummary(i),
-        buildPaymentMethodsSummary(i));
+        buildPaymentMethodsSummary(i),
+        i.getSifenSubmissionStatus() != null ? i.getSifenSubmissionStatus().name() : null);
   }
 
   private static String buildServicesSummary(Invoice i) {

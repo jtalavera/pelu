@@ -19,6 +19,7 @@ import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
@@ -406,12 +407,13 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
               style={{ tableLayout: "fixed" }}
             >
               <colgroup>
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "30%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "16%" }} />
                 <col style={{ width: "10%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "13%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -421,6 +423,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     { key: "colClient", align: "left" },
                     { key: "colTotal", align: "right" },
                     { key: "colStatus", align: "center" },
+                    { key: "colSifenStatus", align: "center" },
                     { key: "", align: "right" },
                   ].map(({ key, align }, i) => (
                     <th
@@ -474,6 +477,9 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                           ? t("femme.billing.history.statusIssued")
                           : t("femme.billing.history.statusVoided")}
                       </Badge>
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                     </td>
                     <td
                       style={{ padding: "10px 12px", textAlign: "right" }}
@@ -2099,13 +2105,14 @@ function CashSessionTab({
                 }}
               >
                 <colgroup>
-                  <col style={{ width: "13%" }} />
-                  <col style={{ width: "22%" }} />
-                  <col style={{ width: "18%" }} />
-                  <col style={{ width: "13%" }} />
                   <col style={{ width: "12%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "16%" }} />
                   <col style={{ width: "12%" }} />
-                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "6%" }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -2126,6 +2133,9 @@ function CashSessionTab({
                     </th>
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
                       {t("femme.billing.history.colStatus")}
+                    </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.history.colSifenStatus")}
                     </th>
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }} />
                   </tr>
@@ -2176,6 +2186,9 @@ function CashSessionTab({
                         </td>
                         <td style={cell}>
                           <InvoiceStatusBadge status={inv.status} />
+                        </td>
+                        <td style={cell}>
+                          <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                         </td>
                         <td style={{ ...cell, textAlign: "right" }}>
                           <Button

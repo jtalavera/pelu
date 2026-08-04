@@ -21,6 +21,7 @@ import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude, sendSifenKudeByEmail } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "./FieldValidationError";
+import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
@@ -117,28 +118,6 @@ const FOREIGN_COUNTRY_CODES = [
   "CHN",
   "JPN",
 ] as const;
-
-/** SIFEN HU-07: badge variant + i18n key per sifenSubmissionStatus literal. */
-function sifenStatusLabelKey(status: string): string {
-  switch (status) {
-    case "APPROVED":
-      return "femme.billing.history.detail.sifen.statusApproved";
-    case "APPROVED_WITH_OBSERVATION":
-      return "femme.billing.history.detail.sifen.statusApprovedWithObservation";
-    case "REJECTED":
-      return "femme.billing.history.detail.sifen.statusRejected";
-    case "CANCELLED":
-      return "femme.billing.history.detail.sifen.statusCancelled";
-    default:
-      return "femme.billing.history.detail.sifen.statusPendingVerification";
-  }
-}
-
-function sifenStatusBadgeVariant(status: string): "success" | "destructive" | "warning" {
-  if (status === "APPROVED" || status === "APPROVED_WITH_OBSERVATION") return "success";
-  if (status === "REJECTED" || status === "CANCELLED") return "destructive";
-  return "warning";
-}
 
 /** SIFEN HU-10 AC-02: splits milliseconds remaining into whole hours + minutes for the countdown. */
 function remainingHoursMinutes(remainingMs: number): { hours: number; minutes: number } {
@@ -600,9 +579,7 @@ export function InvoiceDetailModal({
               >
                 <div className="flex items-center gap-3 flex-wrap">
                   <Text className="font-medium">{t("femme.billing.history.detail.sifen.title")}</Text>
-                  <Badge variant={sifenStatusBadgeVariant(invoice.sifenSubmissionStatus)}>
-                    {t(sifenStatusLabelKey(invoice.sifenSubmissionStatus))}
-                  </Badge>
+                  <SifenStatusBadge status={invoice.sifenSubmissionStatus} />
                 </div>
                 {invoice.sifenControlNumber && (
                   <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
