@@ -22,4 +22,6 @@ public interface FiscalStampRepository extends JpaRepository<FiscalStamp, Long> 
   long countByTenant_Id(Long tenantId);
 
   long deleteByTenant_Id(Long tenantId);
+
+  long deleteByTenant_IdAndLockedAfterInvoiceFalse(Long tenantId);
 }

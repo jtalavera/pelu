@@ -78,11 +78,16 @@ public class FiscalStampService {
   @Transactional
   public FiscalStampResponse update(long tenantId, long id, FiscalStampUpdateRequest request) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
-    if (stamp.isLockedAfterInvoice()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
-    }
     validateDateOrder(request.validFrom(), request.validUntil());
     validateEmissionInRange(request.nextEmissionNumber(), stamp.getRangeFrom(), stamp.getRangeTo());
+    // Once an invoice has been issued against this stamp, its number can only ever move forward:
+    // rewinding it would let a later invoice reuse a number an existing one already claimed. A
+    // forward move stays allowed — it's the only way to skip a number SIFEN rejected as a
+    // duplicate (dCodRes=1002) after the stamp was already locked.
+    if (stamp.isLockedAfterInvoice()
+        && request.nextEmissionNumber() < stamp.getNextEmissionNumber()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
+    }
     stamp.setValidFrom(request.validFrom());
     stamp.setValidUntil(request.validUntil());
     stamp.setNextEmissionNumber(request.nextEmissionNumber());
@@ -107,7 +112,7 @@ public class FiscalStampService {
   }
 
   /**
-   * Call when an invoice is issued (HU-14) so stamp number and range can no longer be edited.
+   * Call when an invoice is issued (HU-14) so the emission number can no longer move backward.
    * Idempotent.
    */
   @Transactional

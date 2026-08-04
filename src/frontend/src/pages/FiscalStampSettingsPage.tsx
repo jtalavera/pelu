@@ -304,6 +304,8 @@ export default function FiscalStampSettingsPage() {
         from: row.rangeFrom,
         to: row.rangeTo,
       });
+    } else if (row && row.lockedAfterInvoice && nextN < row.nextEmissionNumber) {
+      err.editStartingEmission = t("femme.fiscalStamp.cannotMoveBackwardLocked");
     }
     setFieldErrors((prev) => ({ ...prev, ...err }));
     if (Object.keys(err).length > 0) return;
@@ -328,6 +330,7 @@ export default function FiscalStampSettingsPage() {
 
   const activeRow = rows.find((r) => r.active);
   const otherRows = rows.filter((r) => !r.active);
+  const editingRow = rows.find((r) => r.id === editingId) ?? null;
 
   const filteredOtherRows = useMemo(
     () =>
@@ -400,11 +403,9 @@ export default function FiscalStampSettingsPage() {
             <Button type="button" variant="secondary" className="min-h-11" onClick={() => void onDeactivate(activeRow.id)}>
               {t("femme.fiscalStamp.deactivate")}
             </Button>
-            {!activeRow.lockedAfterInvoice ? (
-              <Button type="button" variant="secondary" className="min-h-11" onClick={() => openEdit(activeRow)}>
-                {t("femme.fiscalStamp.edit")}
-              </Button>
-            ) : null}
+            <Button type="button" variant="secondary" className="min-h-11" onClick={() => openEdit(activeRow)}>
+              {t("femme.fiscalStamp.edit")}
+            </Button>
           </div>
         </>
       ) : rows.length === 0 ? (
@@ -481,11 +482,9 @@ export default function FiscalStampSettingsPage() {
                   <Button type="button" variant="primary" className="min-h-11" onClick={() => void onActivate(row.id)}>
                     {t("femme.fiscalStamp.activate")}
                   </Button>
-                  {!row.lockedAfterInvoice ? (
-                    <Button type="button" variant="secondary" className="min-h-11" onClick={() => openEdit(row)}>
-                      {t("femme.fiscalStamp.edit")}
-                    </Button>
-                  ) : null}
+                  <Button type="button" variant="secondary" className="min-h-11" onClick={() => openEdit(row)}>
+                    {t("femme.fiscalStamp.edit")}
+                  </Button>
                 </div>
               </div>
             ))}
@@ -681,7 +680,9 @@ export default function FiscalStampSettingsPage() {
                 </FieldValidationError>
                 {!fieldErrors.editStartingEmission ? (
                   <p id="edit-start-hint" style={hintStyle}>
-                    {t("femme.fiscalStamp.initialEmissionHint")}
+                    {editingRow?.lockedAfterInvoice
+                      ? t("femme.fiscalStamp.initialEmissionHintLocked")
+                      : t("femme.fiscalStamp.initialEmissionHint")}
                   </p>
                 ) : null}
               </div>

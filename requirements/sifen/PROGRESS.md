@@ -469,6 +469,53 @@ de probar la UI sin depender de una llamada real a SIFEN. Esta sesión fue exclu
 manual en vivo del backend real, no un test automatizado nuevo — mismo patrón que la verificación en
 vivo de HU-22 (curl manual, documentado en PROGRESS.md, no un test guardado).
 
+## Adenda 4 (2026-08-04) — clave real de duplicado de SIFEN (`dCodRes=1002`) y por qué no se podía recuperar el timbrado real ya bloqueado
+
+Sesión posterior al cierre de Fase 5, con `SIFEN_ELECTRONIC_INVOICING` ya activo para el tenant 1
+(ver HU-22 abajo) y el timbrado real `1137152` ya creado/activado vía la pantalla de administración
+de timbrados. Al emitir una factura real desde la UI, SIFEN respondió `dCodRes=1002 "Documento
+electrónico duplicado"` sobre ese timbrado real.
+
+**Hallazgo confirmado: la clave de duplicado de SIFEN es RUC + timbrado + establecimiento + punto de
+expedición + tipo de documento + número de documento — no el CDC completo de 44 caracteres.** El
+código de seguridad aleatorio de 9 dígitos (`dCodSeg`, generado en `SifenControlNumberService`) hace
+que el CDC completo cambie en cada intento, pero SIFEN igual rechaza como duplicado la reutilización
+de un número de emisión ya enviado contra ese RUC/timbrado — consistente con lo ya documentado en
+"Adenda 3" (línea ~431 arriba) y con el truco de `documentNumberCursor`/`idSequence` derivado de
+`System.currentTimeMillis()` que `SifenHomologationInvoiceSubmissionLiveTest`/
+`SifenHomologationEventsLiveTest` ya usan para nunca reutilizar un número entre corridas.
+
+Al intentar recuperar el timbrado real avanzando su `nextEmissionNumber` vía la pantalla de
+administración, se encontraron 2 bugs reales que bloqueaban la única vía de recuperación soportada:
+
+**Bug 1 — `FiscalStampService.update()` bloqueaba CUALQUIER edición una vez bloqueado el timbrado,
+no solo las que debía bloquear.** `InvoiceService` marca `lockedAfterInvoice=true` en cuanto sale la
+primera factura contra un timbrado. `update()` rechazaba entonces cualquier cambio — incluido avanzar
+`nextEmissionNumber` hacia adelante para saltar un número ya quemado — a pesar de que
+`FiscalStampUpdateRequest` nunca tocó `stampNumber`/rango (los campos que el propio javadoc del
+bloqueo decía proteger). Resultado: una vez emitida una sola factura contra un timbrado, no había
+forma soportada de recuperarse de un `1002` real. Corregido: `update()` ahora solo rechaza mover
+`nextEmissionNumber` **hacia atrás** estando bloqueado; una corrección hacia adelante (o los cambios
+de vigencia) siguen permitidos.
+
+**Bug 2 — `SeedResetService.resetDemoTenant()` podía borrar el timbrado real silenciosamente.**
+Borraba incondicionalmente **todos** los `fiscal_stamps` del tenant 1 (reales o de prueba) antes de
+volver a sembrar el placeholder falso `"12345678"`/`nextEmissionNumber=1` de `FemmeDataInitializer`
+— es decir, cualquier reset futuro habría vuelto a introducir este mismo bug reemplazando el timbrado
+real `1137152` por el falso. Corregido: el borrado ahora solo alcanza timbrados no bloqueados
+(`deleteByTenant_IdAndLockedAfterInvoiceFalse`); un timbrado ya usado para una emisión real sobrevive
+a un reset intacto.
+
+**Backend**: `FiscalStampService.java` (guardia de bloqueo), `FiscalStampRepository.java` (nuevo
+`deleteByTenant_IdAndLockedAfterInvoiceFalse`), `SeedResetService.java` (usa el nuevo método).
+**Tests**: `FiscalStampServiceTest` (casos de avance/retroceso con timbrado bloqueado),
+`SeedResetServiceTest` (nuevo — no existía cobertura unitaria de este servicio).
+
+**Paso operativo (no de código):** avanzar manualmente `nextEmissionNumber` del timbrado real
+`1137152` del tenant 1 a un valor nunca antes enviado contra `sifen-test.set.gov.py` para ese
+RUC/timbrado — no hay forma de consultarle a SIFEN "cuál fue el último número aceptado", así que se
+recomienda un salto generoso (mismo criterio que ya usan los tests en vivo con `System.currentTimeMillis()`).
+
 ## HU-22 — Activar o desactivar la facturación electrónica para un tenant (Done)
 
 Épica EP-07, **Fase 5 — la última fase del plan.** Conecta, por fin, el flujo real de SIFEN
@@ -3510,48 +3557,36 @@ producción.
    `src/backend/`.
 3. Frontend: `npm run dev` en `src/frontend/` → http://localhost:5173.
 
-### 1. Línea base — reproducir el comportamiento reportado (flag apagado)
-
-1. Iniciar sesión como `isabelzymanscki@gmail.com` / `Demo123!`.
-2. Ir a **Facturación** → pestaña "Nuevo comprobante", emitir una factura cualquiera.
-3. Abrir el detalle (pestaña "Historial" → "Ver"). **Esperado:** no aparece ninguna sección "Estado
-   en SIFEN". Descargar el PDF: **esperado** el formato tradicional de dos paneles, sin QR ni CDC.
-   Esto confirma que subir sólo el certificado (sin el flag) no activa nada — comportamiento
-   esperado, no un bug.
-
-### 2. Activar el circuito completo de SIFEN (una sola vez por tenant)
+### 1. Configurar los datos del emisor para SIFEN (una sola vez por tenant)
 
 > **Actualización 2026-08-02:** el gap "sin UI todavía" para `taxpayerType`/`economicActivityCode`/
 > `Description`/departamento-ciudad del emisor, que esta sección documentaba con un workaround por
-> `curl`, ya está cerrado — ver "Adenda 2026-08-02" al final de la sección `## HU-22` más abajo. Los
-> pasos de abajo reflejan la UI real. Nota de orden: **la sección de datos fiscales SIFEN sólo
-> aparece con el flag activo**, así que el flag se activa primero (paso 1).
+> `curl`, ya está cerrado — ver "Adenda 2026-08-02" al final de la sección `## HU-22` más abajo.
+> `SIFEN_ELECTRONIC_INVOICING` ya está activo para el tenant 1 en todo ambiente (migración `V30`),
+> así que la sección "Datos fiscales para SIFEN" ya aparece de entrada, sin ningún paso de
+> activación previo.
 
-1. **Activar el flag** — iniciar como `root@pelu` / `.The.Super@admin.1982` (`SYSTEM_ADMIN`), ir a
-   `/app/settings/feature-flags` (sólo visible para ese rol) y activar `SIFEN_ELECTRONIC_INVOICING`
-   (global o vía override del tenant 1). **Esperado:** aparece una línea de historial con tu email
-   y la hora del cambio.
-2. **Datos del negocio** — cerrar sesión, iniciar como `isabelzymanscki@gmail.com` / `Demo123!`
-   (`ADMIN`; esta pantalla completa es ahora exclusiva de ese rol, ver Adenda), ir a
-   `/app/settings/business` y completar nombre, RUC, dirección, teléfono, email de contacto, logo.
-3. **Datos fiscales para SIFEN** — en la misma pantalla, ahora visible porque el flag está activo:
-   sección "Datos fiscales para SIFEN" con tipo de contribuyente (radio Persona física/Persona
-   jurídica), código y descripción de actividad económica, y el mismo buscador de "Departamento y
-   ciudad" que ya usa Clientes. Completar y **Guardar cambios**.
-4. **Timbrado** (`/app/settings/fiscal-stamp`): en "Agregar timbrado" cargar un número, rango de
+1. **Datos del negocio** — iniciar como `isabelzymanscki@gmail.com` / `Demo123!` (`ADMIN`; esta
+   pantalla completa es exclusiva de ese rol, ver Adenda), ir a `/app/settings/business` y completar
+   nombre, RUC, dirección, teléfono, email de contacto, logo.
+2. **Datos fiscales para SIFEN** — en la misma pantalla: sección "Datos fiscales para SIFEN" con
+   tipo de contribuyente (radio Persona física/Persona jurídica), código y descripción de actividad
+   económica, y el mismo buscador de "Departamento y ciudad" que ya usa Clientes. Completar y
+   **Guardar cambios**.
+3. **Timbrado** (`/app/settings/fiscal-stamp`): en "Agregar timbrado" cargar un número, rango de
    fechas vigente (hoy incluido) y rango de numeración; guardar y confirmar que quede activado
    (badge **Vigente**).
-5. **Certificado SIFEN** (`/app/settings/sifen`, sólo ADMIN): subir
+4. **Certificado SIFEN** (`/app/settings/sifen`, sólo ADMIN): subir
    `requirements/sifen/LUCIA_ZYMANSCKI_DE_ONIEVA_VIT_S_A.p12` con la password de
    `requirements/sifen/.secrets/lucia-cert-password.txt`. **Esperado:** mensaje de éxito, el
    certificado aparece listado con estado **Vigente**.
-6. **Cliente con localidad**: en **Clientes**, editar o crear un cliente y usar el campo
+5. **Cliente con localidad**: en **Clientes**, editar o crear un cliente y usar el campo
    "Departamento y ciudad" (buscador) para asignarle una localidad real; guardar.
 
-### 3. Camino feliz — factura emitida realmente a través de SIFEN
+### 2. Camino feliz — factura emitida realmente a través de SIFEN
 
 1. Iniciar sesión de nuevo como `isabelzymanscki@gmail.com`. En **Facturación** → "Nuevo
-   comprobante", emitir una factura para el cliente con localidad del paso 2.5, monto < Gs.
+   comprobante", emitir una factura para el cliente con localidad del paso 1.5, monto < Gs.
    7.000.000.
 2. Abrir el detalle. **Esperado:** ahora sí aparece la sección **"Estado en SIFEN"** con
    número de control (CDC) visible y un badge de estado (`Pendiente de verificación` o
@@ -3567,14 +3602,14 @@ producción.
    verificación de SIFEN. **Nota:** no hay ninguna imagen de QR renderizada en la app — este botón
    es la única representación del QR; no es un bug si no ves una imagen de QR en pantalla.
 
-### 4. Umbral de monto alto (HU-02 AC-05)
+### 3. Umbral de monto alto (HU-02 AC-05)
 
 1. En "Nuevo comprobante", cargar una factura ≥ Gs. 7.000.000 sin RUC ni documento de identidad del
    cliente. **Esperado:** bloqueo del lado del cliente con el mensaje "Las ventas de Gs. 7.000.000 o
    más exigen identificar al cliente con RUC o documento de identidad."
 2. Completar RUC o documento y reintentar — esperado que ahora sí se pueda emitir.
 
-### 5. Identificar cliente después de emitir (HU-11)
+### 4. Identificar cliente después de emitir (HU-11)
 
 1. Si el formulario de facturación permite emitir sin datos del cliente, hacerlo así una vez.
 2. En el detalle de esa factura, si aparece el botón **"Identificar cliente"**, completarlo (probar
@@ -3582,25 +3617,16 @@ producción.
    un bloque **"Registro de identificación del cliente"**, o un alert rojo **"SIFEN rechazó la
    identificación"** con el motivo.
 
-### 6. Cancelar una factura aprobada (HU-10)
+### 5. Cancelar una factura aprobada (HU-10)
 
-1. Sobre una factura del paso 3 con estado Aprobado/Aprobado con observación, dentro de las 48 h de
+1. Sobre una factura del paso 2 con estado Aprobado/Aprobado con observación, dentro de las 48 h de
    su aprobación: click **"Cancelar factura en SIFEN"**, escribir un motivo (≥ 5 caracteres),
    confirmar. **Esperado:** el estado pasa a **Cancelada** y aparece un bloque **"Registro de
    cancelación"** permanente.
 2. (Informativo, no requiere acción) Pasadas las 48 h el botón se deshabilita solo y muestra el
    aviso de plazo vencido — no hace falta esperar 48 h reales para validar esto manualmente.
 
-### 7. Volver a apagar el flag — sin efecto retroactivo (HU-22 AC-06/AC-07)
-
-1. Como `root@pelu`, desactivar `SIFEN_ELECTRONIC_INVOICING` para el tenant (botón "Reset a
-   global" o apagar el override).
-2. Emitir una factura nueva — esperado que vuelva a comportarse como en la sección 1 (sin sección
-   SIFEN, PDF tradicional).
-3. Reabrir la factura del paso 3/6 — esperado que su estado SIFEN (Aprobada/Cancelada) siga
-   intacto, sin cambios.
-
-### 8. Controles de permisos
+### 6. Controles de permisos
 
 1. Sin sesión de ADMIN (con un usuario `PROFESSIONAL`, si existe uno sembrado), ir a
    `/app/settings/sifen` — esperado el mensaje "Solo el administrador del negocio puede gestionar
@@ -3625,13 +3651,11 @@ producción.
 
 | # | Paso | Resultado (Pass/Fail/N-A) | Notas |
 |---|---|---|---|
-| 1 | Línea base (flag off) | | |
-| 2 | Setup completo (perfil, timbrado, cert, localidad, flag on) | | |
-| 3 | Camino feliz (emisión + estado + KuDE + email + revalidar) | | |
-| 4 | Umbral Gs. 7.000.000 | | |
-| 5 | Identificar cliente | | |
-| 6 | Cancelación | | |
-| 7 | Flag off sin efecto retroactivo | | |
-| 8 | Permisos | | |
+| 1 | Setup completo (perfil, timbrado, cert, localidad) | | |
+| 2 | Camino feliz (emisión + estado + KuDE + email + revalidar) | | |
+| 3 | Umbral Gs. 7.000.000 | | |
+| 4 | Identificar cliente | | |
+| 5 | Cancelación | | |
+| 6 | Permisos | | |
 
 _Tester: **\_\_\_\_** — Fecha: **\_\_\_\_** — Ambiente SIFEN: TEST (sifen-test.set.gov.py)._

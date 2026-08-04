@@ -3,9 +3,12 @@ import {
   API_BASE,
   apiPostJson,
   apiPutJson,
+  ensureCashSessionOpenApi,
   isoDateLocal,
   listFiscalStamps,
   loginAsDemoApi,
+  seedClient,
+  seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -162,6 +165,87 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await expect(dlg.getByLabel(/Validity start|Inicio de vigencia/)).toHaveCount(0);
     await expect(dlg.getByLabel(/Validity end|Fin de vigencia/)).toHaveCount(0);
     await expect(dlg.getByLabel(/Stamp number|Número de timbrado/)).toHaveCount(0);
+  });
+
+  test("HU-02b · 9 timbrado bloqueado: se puede avanzar el número de inicio, pero no retrocederlo", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const todayStr = isoDateLocal(new Date());
+    const until = new Date();
+    until.setFullYear(until.getFullYear() + 1);
+    const stampNumber = `6${Date.now().toString().slice(-7)}`;
+    const created = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
+      stampNumber,
+      validFrom: todayStr,
+      validUntil: isoDateLocal(until),
+      rangeFrom: 6_500_100,
+      rangeTo: 6_500_199,
+      initialEmissionNumber: 6_500_110,
+    });
+    await apiPostJson(request, token, `/api/fiscal-stamps/${created.id}/activate`, {});
+
+    // Issuing one invoice against the stamp sets lockedAfterInvoice=true (InvoiceService), the
+    // same state a real SIFEN dCodRes=1002 "Documento electrónico duplicado" recovery needs to
+    // work from — see FiscalStampService.update().
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU02b9 ${Date.now()}`);
+    await apiPostJson(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 55000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 55000 }],
+    });
+
+    const afterInvoice = await listFiscalStamps(request, token);
+    const lockedRow = afterInvoice.find((s) => s.stampNumber === stampNumber);
+    expect(lockedRow).toBeTruthy();
+    expect(lockedRow!.lockedAfterInvoice).toBe(true);
+
+    await loginAsDemo(page);
+    await page.goto("/app/settings/fiscal-stamp");
+    const stampLbl = page.getByText(stampNumber, { exact: true });
+    await expect(stampLbl).toBeVisible({ timeout: 30_000 });
+    const editButton = page
+      .locator('[data-tour="fiscal-stamp-header"]')
+      .getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ });
+    await expect(editButton).toBeVisible();
+    await editButton.click();
+
+    const dlg = page.getByRole("dialog");
+    const startInput = dlg.getByLabel(/Starting invoice number|Número de inicio de emisión/);
+    await expect(startInput).toBeVisible();
+
+    // Backward move is rejected client-side, without a round trip to the backend.
+    await startInput.fill(String(lockedRow!.nextEmissionNumber - 1));
+    await dlg.getByRole("button", { name: /^(Save|Guardar)$/ }).click();
+    await expect(
+      dlg.getByText(
+        /can only move forward, not backward|solo puede avanzar, no retroceder/,
+      ),
+    ).toBeVisible();
+    await expect(dlg).toBeVisible();
+
+    // Forward move (skipping the number SIFEN already rejected) is accepted.
+    const advancedTo = lockedRow!.nextEmissionNumber + 5;
+    await startInput.fill(String(advancedTo));
+    await dlg.getByRole("button", { name: /^(Save|Guardar)$/ }).click();
+    await expect(dlg).toHaveCount(0);
+
+    const afterEdit = await listFiscalStamps(request, token);
+    const editedRow = afterEdit.find((s) => s.stampNumber === stampNumber);
+    expect(editedRow!.nextEmissionNumber).toBe(advancedTo);
   });
 
   test("HU-02b · 7 alerta de rango de numeración bajo 10%", async ({ page, request }) => {
