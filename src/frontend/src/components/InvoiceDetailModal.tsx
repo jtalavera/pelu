@@ -20,6 +20,7 @@ import { isValidParaguayRuc } from "../util/paraguayRuc";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude, sendSifenKudeByEmail } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { FieldValidationError } from "./FieldValidationError";
 import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
@@ -182,6 +183,9 @@ export function InvoiceDetailModal({
 }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
+  /** HU-33 AC-01/AC-03: once SIFEN is active, the traditional PDF format is retired — only the
+   * KuDE download (already gated on the invoice's own Approved status further below) remains. */
+  const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -1161,7 +1165,7 @@ export function InvoiceDetailModal({
 
             {/* Actions */}
             <div className="flex flex-wrap gap-3 pt-2">
-              {invoice.status === "ISSUED" && (
+              {invoice.status === "ISSUED" && !sifenEnabled && (
                 <Button
                   variant="outline"
                   size="sm"

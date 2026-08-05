@@ -51,11 +51,22 @@ public class SifenKudeController {
       @PathVariable long id, @AuthenticationPrincipal FemmeUserPrincipal principal) {
     requireAuthenticated(principal);
     log.info("GET /api/invoices/{}/sifen/kude tenantId={}", id, principal.getTenantId());
-    SifenKudePdfService.KudePdfResult result = pdfService.buildKudePdf(principal.getTenantId(), id);
-    log.info("GET /api/invoices/{}/sifen/kude tenantId={} status=200", id, principal.getTenantId());
-    return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.filename() + "\"")
-        .body(result.bytes());
+    try {
+      SifenKudePdfService.KudePdfResult result =
+          pdfService.buildKudePdf(principal.getTenantId(), id);
+      log.info(
+          "GET /api/invoices/{}/sifen/kude tenantId={} status=200", id, principal.getTenantId());
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.filename() + "\"")
+          .body(result.bytes());
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/invoices/{}/sifen/kude tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 
   /** AC-17: sends the same KuDE by email, directly from the system. */
@@ -66,13 +77,22 @@ public class SifenKudeController {
       @AuthenticationPrincipal FemmeUserPrincipal principal) {
     requireAuthenticated(principal);
     log.info("POST /api/invoices/{}/sifen/kude/email tenantId={}", id, principal.getTenantId());
-    String requestedEmail = request != null ? request.email() : null;
-    emailService.sendByEmail(principal.getTenantId(), id, requestedEmail, KUDE_LOCALE);
-    log.info(
-        "POST /api/invoices/{}/sifen/kude/email tenantId={} status=204",
-        id,
-        principal.getTenantId());
-    return ResponseEntity.noContent().build();
+    try {
+      String requestedEmail = request != null ? request.email() : null;
+      emailService.sendByEmail(principal.getTenantId(), id, requestedEmail, KUDE_LOCALE);
+      log.info(
+          "POST /api/invoices/{}/sifen/kude/email tenantId={} status=204",
+          id,
+          principal.getTenantId());
+      return ResponseEntity.noContent().build();
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/invoices/{}/sifen/kude/email tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 
   private static void requireAuthenticated(FemmeUserPrincipal principal) {

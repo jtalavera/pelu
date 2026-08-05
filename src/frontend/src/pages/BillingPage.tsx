@@ -21,6 +21,7 @@ import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
+import { downloadSifenKude } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
@@ -606,6 +607,8 @@ function NewInvoiceTab({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
+  const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
   const effectiveInitialClient = initialClient ?? initialPrefillServiceRecord?.client ?? null;
   const initialSelection: ClientSelection = effectiveInitialClient
     ? {
@@ -1155,7 +1158,11 @@ function NewInvoiceTab({
     if (!lastInvoiceId) return;
     setPdfError(null);
     try {
-      await downloadInvoicePdf(lastInvoiceId);
+      if (sifenEnabled) {
+        await downloadSifenKude(lastInvoiceId);
+      } else {
+        await downloadInvoicePdf(lastInvoiceId);
+      }
     } catch (err) {
       setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     }

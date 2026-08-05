@@ -811,6 +811,8 @@
       "SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES": "El KuDE solo puede generarse para facturas Aprobadas o Aprobadas con observación por SIFEN.",
       "SIFEN_KUDE_MISSING_QR_DATA": "A esta factura le falta el dato del código QR necesario para generar su KuDE.",
       "SIFEN_KUDE_EMAIL_REQUIRED": "Ingresá un correo electrónico, o seleccioná un cliente con correo registrado.",
+      "EMAIL_SEND_FAILED": "No fue posible enviar el correo electrónico. Intentá de nuevo más tarde.",
+      "SIFEN_LEGACY_PDF_DISABLED": "Esta factura usa facturación electrónica SIFEN — descargá el KuDE en su lugar.",
       "SIFEN_INVOICE_NOT_APPROVED": "Solo se pueden cancelar facturas Aprobadas o Aprobadas con observación por SIFEN.",
       "SIFEN_INVOICE_CANCELLATION_WINDOW_EXPIRED": "Venció el plazo de 48 horas para cancelar esta factura en SIFEN.",
       "SIFEN_CANCELLATION_NO_RESPONSE": "SIFEN no respondió a la solicitud de cancelación. Intentá de nuevo más tarde.",

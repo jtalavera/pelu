@@ -29,6 +29,34 @@ export function authHeaders(token: string): Record<string, string> {
   };
 }
 
+const SYS_ADMIN_EMAIL = "root@pelu";
+const SYS_ADMIN_PASSWORD = ".The.Super@admin.1982";
+
+export async function loginSystemAdminApi(request: APIRequestContext): Promise<string> {
+  const res = await request.post(`${API_BASE}/api/auth/login`, {
+    data: { email: SYS_ADMIN_EMAIL, password: SYS_ADMIN_PASSWORD },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  const json = (await res.json()) as { accessToken: string };
+  return json.accessToken;
+}
+
+/** Sets a tenant's override for a feature flag (e.g. SIFEN_ELECTRONIC_INVOICING) via the
+ * system-admin endpoint — same write path as the toggle at /app/settings/feature-flags. */
+export async function setTenantFeatureFlag(
+  request: APIRequestContext,
+  tenantId: number,
+  flagKey: string,
+  enabled: boolean,
+): Promise<void> {
+  const token = await loginSystemAdminApi(request);
+  const res = await request.put(`${API_BASE}/api/admin/feature-flags/tenants/${tenantId}/${flagKey}`, {
+    headers: authHeaders(token),
+    data: { enabled },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
 export async function apiGetJson<T>(
   request: APIRequestContext,
   token: string,
