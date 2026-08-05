@@ -6,7 +6,9 @@
 -- present, else Innominado) — see ClientIdentityDocumentType's javadoc.
 ALTER TABLE clients ADD identity_document_type NVARCHAR(20) NULL;
 ALTER TABLE invoices ADD client_identity_document_type_override NVARCHAR(20) NULL;
+GO
 
+-- Separate batch: SQL Server can't resolve a column in the same batch that added it via ALTER TABLE.
 -- Backfill: only rows that already carry a RUC or a document number get an explicit type,
 -- reproducing exactly the detection logic being replaced. Rows with neither are left NULL on
 -- purpose (a blank client record isn't the same thing as an explicit "Innominado" tag).
