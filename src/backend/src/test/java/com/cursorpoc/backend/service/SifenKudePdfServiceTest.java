@@ -243,7 +243,7 @@ class SifenKudePdfServiceTest {
     assertThat(grouped.replace(" ", "")).isEqualTo(CDC);
   }
 
-  /** AC-09/AC-10/AC-15: legends and the public consultation URL appear alongside the CDC. */
+  /** AC-09/AC-10: legends and the public consultation URL appear alongside the CDC. */
   @Test
   void buildKudePdf_showsLegendsAndPublicConsultationUrl() throws Exception {
     var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
@@ -251,31 +251,7 @@ class SifenKudePdfServiceTest {
 
     assertThat(page1).contains("Representación gráfica de un Documento Electrónico");
     assertThat(page1).contains(CONSULTATION_URL);
-    assertThat(page1).contains("sin valor comercial ni fiscal");
     assertThat(page1).contains(SifenKudePdfService.groupControlNumber(CDC));
-  }
-
-  /** AC-15: a production-environment KuDE never shows the test-only legend. */
-  @Test
-  void buildKudePdf_productionEnvironment_omitsTestLegend() throws Exception {
-    SifenInvoiceHeader productionHeader =
-        new SifenInvoiceHeader(
-            header.controlNumber(),
-            header.issueDateTime(),
-            header.stampNumber(),
-            header.establishment(),
-            header.expeditionPoint(),
-            header.stampValidFrom(),
-            header.stampValidUntil(),
-            header.issuer(),
-            header.receiver(),
-            false);
-    when(headerService.buildHeader(TENANT_ID, INVOICE_ID)).thenReturn(productionHeader);
-
-    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
-    String page1 = extractPage(result.bytes(), 1);
-
-    assertThat(page1).doesNotContain("sin valor comercial ni fiscal");
   }
 
   /** AC-06/AC-07: item detail (split by tax rate) and totals appear. */
@@ -291,6 +267,31 @@ class SifenKudePdfServiceTest {
     assertThat(allPages).contains("Total en Guaraníes");
     assertThat(allPages).contains("Total IVA");
     assertThat(allPages).contains("9.091");
+  }
+
+  /**
+   * Manual Técnico page 196/198: the Exentas/5%/10% columns render under one merged "Valor de
+   * Venta" header, matching the DNIT's reference KuDE table shape.
+   */
+  @Test
+  void buildKudePdf_showsMergedValorDeVentaHeader() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).contains("Valor de Venta");
+  }
+
+  /**
+   * Manual Técnico page 195's field-reference diagram shows a "LOGO" placeholder box in the
+   * emisor's reserved logo space; the KuDE must render the same placeholder until a real business
+   * logo is configured.
+   */
+  @Test
+  void buildKudePdf_showsLogoPlaceholderWhenNoLogoConfigured() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).contains("LOGO");
   }
 
   /** AC-12: every page shows "Página N / M". */

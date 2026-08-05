@@ -216,23 +216,25 @@ public class SifenKudePdfService {
       Font labelFont = new Font(Font.HELVETICA, 9, Font.BOLD);
       Font bodyFont = new Font(Font.HELVETICA, 9);
       Font legendFont = new Font(Font.HELVETICA, 8, Font.ITALIC);
-      Font testLegendFont = new Font(Font.HELVETICA, 9, Font.BOLD, java.awt.Color.RED);
 
-      addHeaderBlock(document, header, profile, titleFont, subtitleFont, bodyFont);
-      addTimbradoAndSaleBlock(
-          document, documentType, issuedAt, documentNumber, header, labelFont, bodyFont);
-      if (isReceiverIdentified(header)) {
-        addClientBlock(document, client, header, labelFont, bodyFont);
-      }
-      addQrAndControlNumberBlock(
+      // Manual Técnico V150, Gráfica N° 09: one continuous bordered "card" — every section below
+      // is a PdfPTable whose default (bordered) cells form the section's box and, stacked with no
+      // spacing, the ruled lines between sections. The QR/CDC block is placed right after the
+      // header/sale data (not at the very bottom as in the manual's single-page example) so it
+      // stays guaranteed on page 1 per AC-13 even when the item table spills onto later pages.
+      addHeaderBlock(
           document,
-          qrUrl,
-          publicConsultationUrl,
+          documentType,
+          documentNumber,
           header,
-          bodyFont,
+          profile,
+          titleFont,
+          subtitleFont,
           labelFont,
-          legendFont,
-          testLegendFont);
+          bodyFont);
+      addSaleAndReceiverBlock(document, issuedAt, header, client, labelFont, bodyFont);
+      addQrAndControlNumberBlock(
+          document, qrUrl, publicConsultationUrl, header, bodyFont, labelFont, legendFont);
       addItemsTable(document, detail, labelFont, bodyFont);
       addTotalsBlock(document, detail.totals(), labelFont, bodyFont);
       addOptionalMessage(document, profile, bodyFont);
@@ -244,48 +246,111 @@ public class SifenKudePdfService {
     }
   }
 
+  /**
+   * Manual Técnico page 198 style "encabezado" box: logo (or a placeholder box, per the manual's
+   * own field-reference diagram on page 195), then the business's identifying data, then the
+   * timbrado data and, in bold, the document type and number — matching the sample's "FACTURA
+   * ELECTRÓNICA / 001-001-0000001" block.
+   */
   private void addHeaderBlock(
       Document document,
+      SifenDocumentType documentType,
+      int documentNumber,
       SifenInvoiceHeader header,
       BusinessProfile profile,
       Font titleFont,
       Font subtitleFont,
+      Font labelFont,
       Font bodyFont)
       throws DocumentException {
     SifenIssuerData issuer = header.issuer();
     String logoDataUrl = profile != null ? profile.getLogoDataUrl() : null;
 
+    // Flat 3-column table (not nested) so the business-name column keeps enough width to avoid
+    // mid-name wrapping: logo | business info | timbrado data, roughly 11% / 63% / 26%.
+    PdfPTable table = new PdfPTable(3);
+    table.setWidthPercentage(100);
+    table.setWidths(new float[] {2f, 12f, 5f});
+    table.addCell(logoCell(logoDataUrl));
+
     Paragraph businessInfo = new Paragraph();
     businessInfo.add(new Chunk(issuer.businessName() + "\n", titleFont));
-    if (issuer.fantasyName() != null && !issuer.fantasyName().isBlank()) {
+    if (hasText(issuer.fantasyName())) {
       businessInfo.add(new Chunk(issuer.fantasyName() + "\n", subtitleFont));
     }
-    if (issuer.economicActivityDescription() != null) {
+    if (hasText(issuer.economicActivityDescription())) {
       businessInfo.add(new Chunk(issuer.economicActivityDescription() + "\n", bodyFont));
     }
-    if (issuer.address() != null) {
+    if (hasText(issuer.address())) {
       businessInfo.add(new Chunk(issuer.address() + "\n", bodyFont));
     }
     String city = joinNonBlank(", ", issuer.cityName(), issuer.departmentName());
     if (!city.isBlank()) {
       businessInfo.add(new Chunk(city, bodyFont));
     }
+    PdfPCell businessCell = new PdfPCell();
+    businessCell.setPadding(6);
+    businessCell.addElement(businessInfo);
+    table.addCell(businessCell);
 
-    if (logoDataUrl != null && logoDataUrl.startsWith("data:image/")) {
-      PdfPTable table = new PdfPTable(2);
-      table.setWidthPercentage(100);
-      table.setWidths(new float[] {1f, 3f});
-      PdfPCell logoCell = new PdfPCell(logoImage(logoDataUrl), true);
-      logoCell.setBorder(0);
-      PdfPCell textCell = new PdfPCell();
-      textCell.setBorder(0);
-      textCell.addElement(businessInfo);
-      table.addCell(logoCell);
-      table.addCell(textCell);
-      document.add(table);
-    } else {
-      document.add(businessInfo);
+    Paragraph timbradoInfo = new Paragraph();
+    addLine(timbradoInfo, "RUC", issuer.ruc() + "-" + issuer.rucCheckDigit(), labelFont, bodyFont);
+    addLine(timbradoInfo, "Timbrado N°", header.stampNumber(), labelFont, bodyFont);
+    // Manual Técnico page 195: "Fecha de fin de vigencia" (C005) is marked removed (struck
+    // through in red in both the field-reference table and the populated example) — the
+    // populated example on page 198 only shows RUC/Timbrado/Fecha de Inicio de Vigencia.
+    addLine(
+        timbradoInfo,
+        "Fecha de Inicio de Vigencia",
+        DATE_FORMAT.format(header.stampValidFrom()),
+        labelFont,
+        bodyFont);
+
+    // Same font as the RUC/Timbrado labels to its left — no separate, larger doc-type font.
+    Paragraph docTypeInfo = new Paragraph();
+    docTypeInfo.setSpacingBefore(6);
+    docTypeInfo.setAlignment(Element.ALIGN_RIGHT);
+    docTypeInfo.add(new Chunk(documentType.description() + "\n", labelFont));
+    docTypeInfo.add(
+        new Chunk(
+            String.format(
+                "%03d-%03d-%07d", header.establishment(), header.expeditionPoint(), documentNumber),
+            labelFont));
+
+    PdfPCell rightCell = new PdfPCell();
+    rightCell.setPadding(6);
+    rightCell.addElement(timbradoInfo);
+    rightCell.addElement(docTypeInfo);
+    table.addCell(rightCell);
+
+    document.add(table);
+  }
+
+  /**
+   * AC-11's first permitted exception: the business's own logo, read verbatim from {@link
+   * BusinessProfile}, never sent to SIFEN. Until one is configured, renders a bordered "LOGO"
+   * placeholder box instead — the same idea as the manual's own field-reference diagram (page 195:
+   * "Espacio reservado para el logo del emisor (opcional)") — so the header box's grid stays
+   * identical before and after a real logo is uploaded.
+   */
+  private PdfPCell logoCell(String logoDataUrl) {
+    Image logo =
+        logoDataUrl != null && logoDataUrl.startsWith("data:image/")
+            ? logoImage(logoDataUrl)
+            : null;
+    if (logo != null) {
+      PdfPCell cell = new PdfPCell(logo, true);
+      cell.setFixedHeight(70f);
+      return cell;
     }
+    PdfPCell placeholder =
+        new PdfPCell(
+            new com.lowagie.text.Phrase(
+                "LOGO", new Font(Font.HELVETICA, 9, Font.BOLD, java.awt.Color.GRAY)));
+    placeholder.setFixedHeight(70f);
+    placeholder.setHorizontalAlignment(Element.ALIGN_CENTER);
+    placeholder.setVerticalAlignment(Element.ALIGN_MIDDLE);
+    return placeholder;
   }
 
   private Image logoImage(String logoDataUrl) {
@@ -301,51 +366,65 @@ public class SifenKudePdfService {
     }
   }
 
-  private void addTimbradoAndSaleBlock(
+  /**
+   * Manual Técnico page 198 style "datos generales" + "datos del receptor" box: one continuous
+   * bordered grid, touching the header box directly above it. Sale data always renders; receptor
+   * rows only when the invoice has an identified client (same gate HU-08 AC-05 always used).
+   */
+  private void addSaleAndReceiverBlock(
       Document document,
-      SifenDocumentType documentType,
       Instant issuedAt,
-      int documentNumber,
       SifenInvoiceHeader header,
+      Client client,
       Font labelFont,
       Font bodyFont)
       throws DocumentException {
     ZoneId zone = timeProperties.zoneId();
-    Paragraph p = new Paragraph();
-    p.setSpacingBefore(8);
-    // SIFEN HU-17: the only per-type visual difference this KuDE needs — see class Javadoc.
-    addLine(p, "Tipo de comprobante", documentType.description(), labelFont, bodyFont);
-    addLine(
-        p,
-        "RUC",
-        header.issuer().ruc() + "-" + header.issuer().rucCheckDigit(),
-        labelFont,
-        bodyFont);
-    addLine(p, "Timbrado N°", header.stampNumber(), labelFont, bodyFont);
-    addLine(
-        p,
-        "Vigencia del timbrado",
-        DATE_FORMAT.format(header.stampValidFrom())
-            + " - "
-            + DATE_FORMAT.format(header.stampValidUntil()),
-        labelFont,
-        bodyFont);
-    addLine(
-        p,
-        "Comprobante N°",
-        String.format(
-            "%03d-%03d-%07d", header.establishment(), header.expeditionPoint(), documentNumber),
-        labelFont,
-        bodyFont);
-    addLine(
-        p,
-        "Fecha y hora de emisión",
+    PdfPTable table = new PdfPTable(6);
+    table.setWidthPercentage(100);
+
+    addGridCell(
+        table,
+        "Fecha y hora de Emisión",
         DATE_TIME_FORMAT.format(issuedAt.atZone(zone)),
+        3,
         labelFont,
         bodyFont);
-    addLine(p, "Condición de venta", "Contado", labelFont, bodyFont);
-    addLine(p, "Moneda", "Guaraníes (PYG)", labelFont, bodyFont);
-    document.add(p);
+    addGridCell(table, "Condición de Venta", "Contado", 3, labelFont, bodyFont);
+    addGridCell(table, "Cuotas", "", 2, labelFont, bodyFont);
+    addGridCell(table, "Moneda", "Guaraníes (PYG)", 2, labelFont, bodyFont);
+    addGridCell(table, "Tipo de Cambio", "", 2, labelFont, bodyFont);
+
+    if (isReceiverIdentified(header)) {
+      SifenReceiverData receiver = header.receiver();
+      if (hasText(receiver.ruc())) {
+        addGridCell(table, "RUC del Cliente", receiver.ruc(), 6, labelFont, bodyFont);
+      } else if (hasText(receiver.identityDocumentNumber())) {
+        addGridCell(
+            table,
+            "Documento del Cliente",
+            receiver.identityDocumentNumber(),
+            6,
+            labelFont,
+            bodyFont);
+      }
+      if (hasText(receiver.name())) {
+        addGridCell(table, "Nombre o Razón Social", receiver.name(), 6, labelFont, bodyFont);
+      }
+      if (hasText(receiver.address())) {
+        addGridCell(table, "Dirección", receiver.address(), 6, labelFont, bodyFont);
+      }
+      String phone = client != null ? client.getPhone() : null;
+      String email = client != null ? client.getEmail() : null;
+      if (hasText(phone) || hasText(email)) {
+        addGridCell(table, "Teléfono", hasText(phone) ? phone : "", 3, labelFont, bodyFont);
+        addGridCell(
+            table, "Correo Electrónico", hasText(email) ? email : "", 3, labelFont, bodyFont);
+      }
+      addGridCell(table, "Tipo de Operación", "Operación presencial", 6, labelFont, bodyFont);
+    }
+
+    document.add(table);
   }
 
   private static boolean isReceiverIdentified(SifenInvoiceHeader header) {
@@ -353,31 +432,16 @@ public class SifenKudePdfService {
     return hasText(r.ruc()) || hasText(r.identityDocumentNumber()) || hasText(r.name());
   }
 
-  private void addClientBlock(
-      Document document, Client client, SifenInvoiceHeader header, Font labelFont, Font bodyFont)
-      throws DocumentException {
-    SifenReceiverData receiver = header.receiver();
+  /** One bordered "label: value" cell spanning {@code colspan} of the grid's 6 columns. */
+  private static void addGridCell(
+      PdfPTable table, String label, String value, int colspan, Font labelFont, Font bodyFont) {
+    PdfPCell cell = new PdfPCell();
+    cell.setColspan(colspan);
+    cell.setPadding(4);
     Paragraph p = new Paragraph();
-    p.setSpacingBefore(8);
-    if (hasText(receiver.ruc())) {
-      addLine(p, "RUC del cliente", receiver.ruc(), labelFont, bodyFont);
-    } else if (hasText(receiver.identityDocumentNumber())) {
-      addLine(p, "Documento del cliente", receiver.identityDocumentNumber(), labelFont, bodyFont);
-    }
-    if (hasText(receiver.name())) {
-      addLine(p, "Cliente", receiver.name(), labelFont, bodyFont);
-    }
-    if (hasText(receiver.address())) {
-      addLine(p, "Dirección", receiver.address(), labelFont, bodyFont);
-    }
-    if (client != null && hasText(client.getPhone())) {
-      addLine(p, "Teléfono", client.getPhone(), labelFont, bodyFont);
-    }
-    if (client != null && hasText(client.getEmail())) {
-      addLine(p, "Correo electrónico", client.getEmail(), labelFont, bodyFont);
-    }
-    addLine(p, "Tipo de transacción", "Operación presencial", labelFont, bodyFont);
-    document.add(p);
+    addLine(p, label, value, labelFont, bodyFont);
+    cell.addElement(p);
+    table.addCell(cell);
   }
 
   private void addQrAndControlNumberBlock(
@@ -387,13 +451,8 @@ public class SifenKudePdfService {
       SifenInvoiceHeader header,
       Font bodyFont,
       Font labelFont,
-      Font legendFont,
-      Font testLegendFont)
+      Font legendFont)
       throws DocumentException {
-    Paragraph spacer = new Paragraph(" ");
-    spacer.setSpacingBefore(8);
-    document.add(spacer);
-
     PdfPTable table = new PdfPTable(2);
     table.setWidthPercentage(100);
     table.setWidths(new float[] {1f, 3f});
@@ -407,8 +466,9 @@ public class SifenKudePdfService {
       throw new IllegalStateException("Failed to embed QR image", e);
     }
     PdfPCell qrCell = new PdfPCell(qrImage, false);
-    qrCell.setBorder(0);
-    qrCell.setPadding(4);
+    qrCell.setPadding(6);
+    qrCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+    qrCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
     table.addCell(qrCell);
 
     Paragraph info = new Paragraph();
@@ -419,18 +479,12 @@ public class SifenKudePdfService {
         groupControlNumber(header.controlNumber()),
         labelFont,
         bodyFont);
-    info.add(new Chunk("Consulte este comprobante en: " + publicConsultationUrl + "\n", bodyFont));
+    info.add(new Chunk("Consulte este comprobante en: " + publicConsultationUrl, bodyFont));
     // AC-09: legend identifying this as a graphical representation of an electronic document.
     info.add(
-        new Chunk("KuDE - Representación gráfica de un Documento Electrónico (DE)\n", legendFont));
-    // AC-15: test-environment KuDEs must show the "no commercial/fiscal value" legend.
-    if (header.testEnvironmentNotice()) {
-      info.add(
-          new Chunk(
-              "DE generado en ambiente de prueba - sin valor comercial ni fiscal", testLegendFont));
-    }
+        new Chunk("\nKuDE - Representación gráfica de un Documento Electrónico (DE)", legendFont));
     PdfPCell infoCell = new PdfPCell();
-    infoCell.setBorder(0);
+    infoCell.setPadding(6);
     infoCell.addElement(info);
     table.addCell(infoCell);
 
@@ -455,22 +509,21 @@ public class SifenKudePdfService {
   private void addItemsTable(
       Document document, SifenInvoiceDetail detail, Font labelFont, Font bodyFont)
       throws DocumentException {
-    Paragraph spacer = new Paragraph(" ");
-    spacer.setSpacingBefore(8);
-    document.add(spacer);
-
     PdfPTable table = new PdfPTable(9);
     table.setWidthPercentage(100);
     table.setWidths(new float[] {8, 22, 8, 6, 10, 8, 10, 10, 10});
-    addHeaderCell(table, "Código", labelFont);
-    addHeaderCell(table, "Descripción", labelFont);
-    addHeaderCell(table, "Unidad", labelFont);
-    addHeaderCell(table, "Cant.", labelFont);
-    addHeaderCell(table, "P. Unitario", labelFont);
-    addHeaderCell(table, "Descuento", labelFont);
-    addHeaderCell(table, "Exento", labelFont);
-    addHeaderCell(table, "IVA 5%", labelFont);
-    addHeaderCell(table, "IVA 10%", labelFont);
+    // Manual Técnico page 196/198: Exentas/5%/10% render as sub-columns under one merged "Valor
+    // de Venta" header, with the other 6 columns spanning both header rows.
+    addHeaderCell(table, "Código", labelFont, 2, 1);
+    addHeaderCell(table, "Descripción", labelFont, 2, 1);
+    addHeaderCell(table, "Unidad", labelFont, 2, 1);
+    addHeaderCell(table, "Cant.", labelFont, 2, 1);
+    addHeaderCell(table, "P. Unitario", labelFont, 2, 1);
+    addHeaderCell(table, "Desc.", labelFont, 2, 1);
+    addHeaderCell(table, "Valor de Venta", labelFont, 1, 3);
+    addHeaderCell(table, "Exentas", labelFont, 1, 1);
+    addHeaderCell(table, "5%", labelFont, 1, 1);
+    addHeaderCell(table, "10%", labelFont, 1, 1);
 
     for (SifenInvoiceLine line : detail.lines()) {
       addCell(table, line.internalCode(), bodyFont, Element.ALIGN_LEFT);
@@ -499,20 +552,57 @@ public class SifenKudePdfService {
     document.add(table);
   }
 
+  /**
+   * The 7 columns rows 1-3 (colspan 6 + 1) and the IVA row (7 discrete cells) both fill. Weights
+   * sum to 92, matching {@link #addItemsTable}'s column widths exactly, so the divider before the
+   * last column (82/92) lines up with the items table's divider between its "5%" and "10%" columns
+   * (also 82/92 — 8+22+8+6+10+8+10=82 of a 92 total).
+   */
+  private static final float[] TOTALS_COLUMN_WEIGHTS = {26f, 10f, 11f, 10f, 11f, 14f, 10f};
+
   private void addTotalsBlock(
       Document document, SifenInvoiceTotals totals, Font labelFont, Font bodyFont)
       throws DocumentException {
     // AC-12: this is the last content added to the flowing document, so it always lands on the
-    // real last page — no manual page-break bookkeeping needed.
-    Paragraph p = new Paragraph();
-    p.setSpacingBefore(10);
-    addLine(p, "Subtotal", formatMoney(totals.grossTotal()), labelFont, bodyFont);
-    addLine(p, "Total de la operación", formatMoney(totals.netTotal()), labelFont, bodyFont);
-    addLine(p, "Total en Guaraníes", formatMoney(totals.netTotal()), labelFont, bodyFont);
-    addLine(p, "Liquidación IVA 5%", formatMoney(totals.iva5()), labelFont, bodyFont);
-    addLine(p, "Liquidación IVA 10%", formatMoney(totals.iva10()), labelFont, bodyFont);
-    addLine(p, "Total IVA", formatMoney(totals.totalIva()), labelFont, bodyFont);
-    document.add(p);
+    // real last page — no manual page-break bookkeeping needed. Manual Técnico section 13.4.3
+    // ("Ejemplo de subtotales y totales de KuDE (FE)"): Subtotal/Total/Total en Guaraníes each on
+    // their own line, but the IVA breakdown (5%, 10%, Total IVA) all renders on one line.
+    PdfPTable table = new PdfPTable(TOTALS_COLUMN_WEIGHTS);
+    table.setWidthPercentage(100);
+    addTotalsRow(table, "Subtotal", formatMoney(totals.grossTotal()), labelFont, bodyFont);
+    addTotalsRow(
+        table, "Total de la operación", formatMoney(totals.netTotal()), labelFont, bodyFont);
+    addTotalsRow(table, "Total en Guaraníes", formatMoney(totals.netTotal()), labelFont, bodyFont);
+
+    addTotalsCell(table, "Liquidación IVA:", labelFont, Element.ALIGN_LEFT);
+    addTotalsCell(table, "(5%)", labelFont, Element.ALIGN_LEFT);
+    addTotalsCell(table, formatMoney(totals.iva5()), bodyFont, Element.ALIGN_RIGHT);
+    addTotalsCell(table, "(10%)", labelFont, Element.ALIGN_LEFT);
+    addTotalsCell(table, formatMoney(totals.iva10()), bodyFont, Element.ALIGN_RIGHT);
+    addTotalsCell(table, "Total IVA:", labelFont, Element.ALIGN_LEFT);
+    addTotalsCell(table, formatMoney(totals.totalIva()), bodyFont, Element.ALIGN_RIGHT);
+
+    document.add(table);
+  }
+
+  /** One "label spans everything but the last column, value in the last column" row. */
+  private static void addTotalsRow(
+      PdfPTable table, String label, String value, Font labelFont, Font bodyFont) {
+    PdfPCell labelCell = new PdfPCell(new com.lowagie.text.Phrase(label, labelFont));
+    labelCell.setColspan(TOTALS_COLUMN_WEIGHTS.length - 1);
+    labelCell.setPadding(4);
+    table.addCell(labelCell);
+    PdfPCell valueCell = new PdfPCell(new com.lowagie.text.Phrase(value, bodyFont));
+    valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+    valueCell.setPadding(4);
+    table.addCell(valueCell);
+  }
+
+  private static void addTotalsCell(PdfPTable table, String text, Font font, int align) {
+    PdfPCell cell = new PdfPCell(new com.lowagie.text.Phrase(text, font));
+    cell.setHorizontalAlignment(align);
+    cell.setPadding(4);
+    table.addCell(cell);
   }
 
   private void addOptionalMessage(Document document, BusinessProfile profile, Font bodyFont)
@@ -532,10 +622,14 @@ public class SifenKudePdfService {
     p.add(new Chunk((value != null ? value : "") + "\n", bodyFont));
   }
 
-  private static void addHeaderCell(PdfPTable table, String text, Font font) {
+  private static void addHeaderCell(
+      PdfPTable table, String text, Font font, int rowspan, int colspan) {
     PdfPCell cell = new PdfPCell(new com.lowagie.text.Phrase(text, font));
     cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+    cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
     cell.setGrayFill(0.9f);
+    cell.setRowspan(rowspan);
+    cell.setColspan(colspan);
     table.addCell(cell);
   }
 
