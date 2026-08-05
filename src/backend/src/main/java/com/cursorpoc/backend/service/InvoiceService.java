@@ -9,6 +9,7 @@ import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
@@ -177,6 +178,15 @@ public class InvoiceService {
         && !request.clientIdentityDocumentOverride().isBlank()) {
       invoice.setClientIdentityDocumentOverride(request.clientIdentityDocumentOverride().trim());
     }
+    if (request.clientIdentityDocumentTypeOverride() != null
+        && !request.clientIdentityDocumentTypeOverride().isBlank()) {
+      try {
+        invoice.setClientIdentityDocumentTypeOverride(
+            ClientIdentityDocumentType.valueOf(request.clientIdentityDocumentTypeOverride()));
+      } catch (IllegalArgumentException e) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
+      }
+    }
 
     // Snapshot the salon RUC at issue time so PDF reprints remain faithful
     businessProfileRepository
@@ -325,18 +335,22 @@ public class InvoiceService {
     // document), sin excepción — checked here so it blocks issuance up front, before payments.
     if (total.compareTo(CLIENT_IDENTIFICATION_THRESHOLD) >= 0) {
       Client linkedClient = invoice.getClient();
-      boolean hasRuc =
+      String ruc =
           (invoice.getClientRucOverride() != null && !invoice.getClientRucOverride().isBlank())
-              || (linkedClient != null
-                  && linkedClient.getRuc() != null
-                  && !linkedClient.getRuc().isBlank());
-      boolean hasIdentityDocument =
+              ? invoice.getClientRucOverride()
+              : (linkedClient != null ? linkedClient.getRuc() : null);
+      String identityDocument =
           (invoice.getClientIdentityDocumentOverride() != null
                   && !invoice.getClientIdentityDocumentOverride().isBlank())
-              || (linkedClient != null
-                  && linkedClient.getIdentityDocumentNumber() != null
-                  && !linkedClient.getIdentityDocumentNumber().isBlank());
-      if (!hasRuc && !hasIdentityDocument) {
+              ? invoice.getClientIdentityDocumentOverride()
+              : (linkedClient != null ? linkedClient.getIdentityDocumentNumber() : null);
+      ClientIdentityDocumentType explicitType =
+          invoice.getClientIdentityDocumentTypeOverride() != null
+              ? invoice.getClientIdentityDocumentTypeOverride()
+              : (linkedClient != null ? linkedClient.getIdentityDocumentType() : null);
+      ClientIdentityDocumentType resolvedType =
+          ClientIdentityDocumentType.resolve(explicitType, ruc, identityDocument);
+      if (resolvedType == ClientIdentityDocumentType.INNOMINADO) {
         throw new ResponseStatusException(
             HttpStatus.BAD_REQUEST, "SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
       }
@@ -570,6 +584,9 @@ public class InvoiceService {
         i.getClientDisplayName(),
         i.getClientRucOverride(),
         i.getClientIdentityDocumentOverride(),
+        i.getClientIdentityDocumentTypeOverride() != null
+            ? i.getClientIdentityDocumentTypeOverride().name()
+            : null,
         i.getBusinessRuc(),
         i.getStatus().name(),
         i.getSubtotal(),

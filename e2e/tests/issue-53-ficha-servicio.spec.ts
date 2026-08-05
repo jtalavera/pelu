@@ -224,7 +224,8 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
     await expect(page.getByText(client.fullName)).toBeVisible();
     // Issue #119 AC9: the client's RUC is carried over from the ficha into the invoice form.
-    await expect(page.locator("#client-ruc")).toHaveValue("80000005-6");
+    await expect(page.locator("#client-identity-document-type")).toHaveValue("RUC");
+    await expect(page.locator("#client-identity-document-number")).toHaveValue("80000005-6");
     await expect(page.locator("#line-price-0")).toHaveValue("50.000");
     await expect(page.locator("#billing-tips-amount")).toHaveValue("4.000");
     // Payment auto-fills to cover total + tips = 54.000.

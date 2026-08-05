@@ -542,7 +542,46 @@ type InitialClientForBilling = {
   email: string | null;
   ruc: string | null;
   identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
 };
+
+/**
+ * Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve): an explicit type
+ * wins, otherwise RUC if present, else Cédula paraguaya if a document number is present, else RUC
+ * as the default empty state — so pre-existing clients without a stored type still preselect the
+ * option that matches what they already have on file.
+ */
+function resolveIdentityDocumentTypeAndNumber(
+  client:
+    | { ruc?: string | null; identityDocumentNumber?: string | null; identityDocumentType?: string | null }
+    | null
+    | undefined,
+): { type: string; number: string } {
+  if (!client) return { type: "RUC", number: "" };
+  if (client.identityDocumentType) {
+    const number =
+      client.identityDocumentType === "RUC"
+        ? (client.ruc ?? "")
+        : (client.identityDocumentNumber ?? "");
+    return { type: client.identityDocumentType, number };
+  }
+  if (client.ruc) return { type: "RUC", number: client.ruc };
+  if (client.identityDocumentNumber) {
+    return { type: "CEDULA_PARAGUAYA", number: client.identityDocumentNumber };
+  }
+  return { type: "RUC", number: "" };
+}
+
+const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
+  { value: "RUC", labelKey: "femme.clients.identityDocumentTypeRuc" },
+  { value: "CEDULA_PARAGUAYA", labelKey: "femme.clients.identityDocumentTypeCedulaParaguaya" },
+  { value: "PASAPORTE", labelKey: "femme.clients.identityDocumentTypePasaporte" },
+  { value: "CEDULA_EXTRANJERA", labelKey: "femme.clients.identityDocumentTypeCedulaExtranjera" },
+  { value: "CARNET_RESIDENCIA", labelKey: "femme.clients.identityDocumentTypeCarnetResidencia" },
+  { value: "TARJETA_DIPLOMATICA", labelKey: "femme.clients.identityDocumentTypeTarjetaDiplomatica" },
+  { value: "OTRO", labelKey: "femme.clients.identityDocumentTypeOtro" },
+  { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
+] as const;
 
 type PrefillServiceRecordLine = { serviceId: number; description: string; unitPrice: string };
 type PrefillServiceRecord = {
@@ -578,6 +617,7 @@ function NewInvoiceTab({
           email: effectiveInitialClient.email,
           ruc: effectiveInitialClient.ruc,
           identityDocumentNumber: effectiveInitialClient.identityDocumentNumber,
+          identityDocumentType: effectiveInitialClient.identityDocumentType,
         },
       }
     : null;
@@ -587,11 +627,12 @@ function NewInvoiceTab({
   const [clientDisplayName, setClientDisplayName] = useState(
     effectiveInitialClient?.fullName ?? "",
   );
-  const [clientRucOverride, setClientRucOverride] = useState(
-    effectiveInitialClient?.ruc ?? "",
+  const initialDocTypeAndNumber = resolveIdentityDocumentTypeAndNumber(effectiveInitialClient);
+  const [clientIdentityDocumentType, setClientIdentityDocumentType] = useState(
+    initialDocTypeAndNumber.type,
   );
-  const [clientIdentityDocumentOverride, setClientIdentityDocumentOverride] = useState(
-    effectiveInitialClient?.identityDocumentNumber ?? "",
+  const [clientIdentityDocumentNumber, setClientIdentityDocumentNumber] = useState(
+    initialDocTypeAndNumber.number,
   );
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
@@ -678,12 +719,13 @@ function NewInvoiceTab({
     setClientSelection(sel);
     if (sel?.type === "client") {
       setClientDisplayName(sel.client.fullName);
-      setClientRucOverride(sel.client.ruc ?? "");
-      setClientIdentityDocumentOverride(sel.client.identityDocumentNumber ?? "");
+      const resolved = resolveIdentityDocumentTypeAndNumber(sel.client);
+      setClientIdentityDocumentType(resolved.type);
+      setClientIdentityDocumentNumber(resolved.number);
     } else if (sel?.type === "occasional") {
       setClientDisplayName("");
-      setClientRucOverride("");
-      setClientIdentityDocumentOverride("");
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
     }
   }
 
@@ -958,21 +1000,19 @@ function NewInvoiceTab({
     });
 
     {
-      const rucTrim = clientRucOverride.trim();
-      if (rucTrim && !validateRuc(rucTrim)) {
+      const isRucType = clientIdentityDocumentType === "RUC";
+      const isInnominado = clientIdentityDocumentType === "INNOMINADO";
+      const numberTrim = isInnominado ? "" : clientIdentityDocumentNumber.trim();
+      if (isRucType && numberTrim && !validateRuc(numberTrim)) {
         errors.push(t("femme.clients.rucInvalid"));
       }
       // Issue #101: name is required only when a RUC is provided; a blank RUC allows a blank
       // name too (Issue #96: the PDF then prints "Sin nombre" for a selected client).
-      if (rucTrim && !clientDisplayName.trim()) {
+      if (isRucType && numberTrim && !clientDisplayName.trim()) {
         errors.push(t("femme.billing.invoice.clientDisplayNameRequiredWithRuc"));
       }
-      // SIFEN HU-02 AC-05: Gs. 7.000.000+ requires a RUC or an identity document, sin excepción.
-      if (
-        total >= SIFEN_CLIENT_IDENTIFICATION_THRESHOLD &&
-        !rucTrim &&
-        !clientIdentityDocumentOverride.trim()
-      ) {
+      // SIFEN HU-02 AC-05: Gs. 7.000.000+ requires identifying the client, sin excepción.
+      if (total >= SIFEN_CLIENT_IDENTIFICATION_THRESHOLD && (isInnominado || !numberTrim)) {
         errors.push(t("femme.billing.invoice.clientIdentificationRequiredThreshold"));
       }
     }
@@ -999,9 +1039,12 @@ function NewInvoiceTab({
       // Build an ordered list of candidate field IDs and focus the first with an error
       const firstErrorId = (() => {
         {
-          const rucTrim = clientRucOverride.trim();
-          if (rucTrim && !validateRuc(rucTrim)) return "client-ruc";
-          if (rucTrim && !clientDisplayName.trim()) return "client-display-name";
+          const isRucType = clientIdentityDocumentType === "RUC";
+          const numberTrim = clientIdentityDocumentNumber.trim();
+          if (isRucType && numberTrim && !validateRuc(numberTrim)) {
+            return "client-identity-document-number";
+          }
+          if (isRucType && numberTrim && !clientDisplayName.trim()) return "client-display-name";
         }
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
@@ -1026,11 +1069,15 @@ function NewInvoiceTab({
       return;
     }
 
+    const isInnominado = clientIdentityDocumentType === "INNOMINADO";
+    const numberTrim = isInnominado ? "" : clientIdentityDocumentNumber.trim();
+    const isRucType = clientIdentityDocumentType === "RUC";
     const payload = {
       clientId: clientSelection?.type === "client" ? clientSelection.client.id : null,
       clientDisplayName: clientDisplayName.trim() || null,
-      clientRucOverride: clientRucOverride.trim() || null,
-      clientIdentityDocumentOverride: clientIdentityDocumentOverride.trim() || null,
+      clientRucOverride: isRucType ? numberTrim || null : null,
+      clientIdentityDocumentOverride: !isRucType && !isInnominado ? numberTrim || null : null,
+      clientIdentityDocumentTypeOverride: numberTrim ? clientIdentityDocumentType : null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
         discountType !== "NONE" && discountValue
@@ -1073,8 +1120,8 @@ function NewInvoiceTab({
       setClientSearchKey((k) => k + 1);
       setLinesKey((k) => k + 1);
       setClientDisplayName("");
-      setClientRucOverride("");
-      setClientIdentityDocumentOverride("");
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
       setDiscountType("NONE");
       setDiscountValue("");
       setDiscountValueError(null);
@@ -1199,24 +1246,32 @@ function NewInvoiceTab({
               />
             </div>
             <div>
-              <Label htmlFor="client-ruc">{t("femme.billing.invoice.clientRucOverride")}</Label>
-              <Input
-                id="client-ruc"
-                value={clientRucOverride}
-                onChange={(e) => setClientRucOverride(e.target.value)}
-                placeholder={t("femme.billing.invoice.clientRucOverridePlaceholder")}
+              <Label htmlFor="client-identity-document-type">
+                {t("femme.clients.identityDocumentType")}
+              </Label>
+              <Select
+                id="client-identity-document-type"
+                value={clientIdentityDocumentType}
+                onChange={(e) => setClientIdentityDocumentType(e.target.value)}
                 className="mt-1 w-full"
-              />
+              >
+                {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {t(opt.labelKey)}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div>
-              <Label htmlFor="client-identity-doc">
-                {t("femme.billing.invoice.clientIdentityDocumentOverride")}
+              <Label htmlFor="client-identity-document-number">
+                {t("femme.clients.identityDocumentNumber")}
               </Label>
               <Input
-                id="client-identity-doc"
-                value={clientIdentityDocumentOverride}
-                onChange={(e) => setClientIdentityDocumentOverride(e.target.value)}
-                placeholder={t("femme.billing.invoice.clientIdentityDocumentOverridePlaceholder")}
+                id="client-identity-document-number"
+                value={clientIdentityDocumentNumber}
+                onChange={(e) => setClientIdentityDocumentNumber(e.target.value)}
+                placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                disabled={clientIdentityDocumentType === "INNOMINADO"}
                 className="mt-1 w-full"
               />
             </div>

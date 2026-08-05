@@ -847,6 +847,69 @@ class InvoiceServiceTest {
     assertThat(result.clientId()).isEqualTo(7L);
   }
 
+  /** AC-05: an explicit Innominado type override blocks issuance even if a RUC is also sent. */
+  @Test
+  void issueInvoice_atThreshold_withExplicitInnominadoTypeOverride_throwsBadRequest() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            null,
+            null,
+            "80000005-6",
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            "INNOMINADO");
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
+  }
+
+  /** AC-05: an explicit non-RUC type override (e.g. Pasaporte) satisfies the threshold. */
+  @Test
+  void issueInvoice_atThreshold_withExplicitPasaporteTypeOverride_succeeds() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            null,
+            null,
+            null,
+            "AB123456",
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            "PASAPORTE");
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.clientIdentityDocumentTypeOverride()).isEqualTo("PASAPORTE");
+  }
+
   private Invoice buildIssuedInvoice() {
     Invoice invoice = new Invoice();
     invoice.setId(100L);

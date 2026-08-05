@@ -22,7 +22,9 @@ public record InvoiceCreateRequest(
      * Optional tips collected alongside this invoice. Added to the required payment sum but never
      * to subtotal/discount/total — tips are not part of the fiscal comprobante.
      */
-    BigDecimal tipsAmount) {
+    BigDecimal tipsAmount,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
+    String clientIdentityDocumentTypeOverride) {
 
   public InvoiceCreateRequest(
       Long clientId,
@@ -44,6 +46,32 @@ public record InvoiceCreateRequest(
         lines,
         payments,
         serviceRecordId,
-        tipsAmount);
+        tipsAmount,
+        null);
+  }
+
+  public InvoiceCreateRequest(
+      Long clientId,
+      String clientDisplayName,
+      String clientRucOverride,
+      String clientIdentityDocumentOverride,
+      String discountType,
+      BigDecimal discountValue,
+      List<InvoiceLineRequest> lines,
+      List<InvoicePaymentAllocationRequest> payments,
+      Long serviceRecordId,
+      BigDecimal tipsAmount) {
+    this(
+        clientId,
+        clientDisplayName,
+        clientRucOverride,
+        clientIdentityDocumentOverride,
+        discountType,
+        discountValue,
+        lines,
+        payments,
+        serviceRecordId,
+        tipsAmount,
+        null);
   }
 }

@@ -85,7 +85,7 @@ class SifenDocumentSigningServiceTest {
             "5044",
             "FERNANDO DE LA MORA");
     SifenReceiverData receiver =
-        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null);
+        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null, null);
     header =
         new SifenInvoiceHeader(
             cdc,

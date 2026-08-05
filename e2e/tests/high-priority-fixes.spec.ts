@@ -241,7 +241,7 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
   // Override the name and RUC for THIS invoice only
   const altName = `Otra Razon Social ${Date.now()}`;
   await page.locator("#client-display-name").fill(altName);
-  await page.locator("#client-ruc").fill("80000005-6");
+  await page.locator("#client-identity-document-number").fill("80000005-6");
 
   await pickServiceLine(page, seed.serviceFullName, 0);
   await page.locator("#line-price-0").fill("50000");

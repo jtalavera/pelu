@@ -12,6 +12,7 @@ import {
   LocalityCombobox,
   PageSizeSelect,
   Pagination,
+  Select,
   Spinner,
   Tabs,
   TabsContent,
@@ -57,7 +58,36 @@ type Client = {
   departmentName?: string | null;
   cityCode?: string | null;
   cityName?: string | null;
+  identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
 };
+
+const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
+  { value: "RUC", labelKey: "femme.clients.identityDocumentTypeRuc" },
+  { value: "CEDULA_PARAGUAYA", labelKey: "femme.clients.identityDocumentTypeCedulaParaguaya" },
+  { value: "PASAPORTE", labelKey: "femme.clients.identityDocumentTypePasaporte" },
+  { value: "CEDULA_EXTRANJERA", labelKey: "femme.clients.identityDocumentTypeCedulaExtranjera" },
+  { value: "CARNET_RESIDENCIA", labelKey: "femme.clients.identityDocumentTypeCarnetResidencia" },
+  { value: "TARJETA_DIPLOMATICA", labelKey: "femme.clients.identityDocumentTypeTarjetaDiplomatica" },
+  { value: "OTRO", labelKey: "femme.clients.identityDocumentTypeOtro" },
+  { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
+] as const;
+
+/** Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve). */
+function resolveIdentityDocumentTypeAndNumber(client: Client): { type: string; number: string } {
+  if (client.identityDocumentType) {
+    const number =
+      client.identityDocumentType === "RUC"
+        ? (client.ruc ?? "")
+        : (client.identityDocumentNumber ?? "");
+    return { type: client.identityDocumentType, number };
+  }
+  if (client.ruc) return { type: "RUC", number: client.ruc };
+  if (client.identityDocumentNumber) {
+    return { type: "CEDULA_PARAGUAYA", number: client.identityDocumentNumber };
+  }
+  return { type: "RUC", number: "" };
+}
 
 function localityFromClient(c: Client): Locality | null {
   if (!c.departmentCode || !c.departmentName || !c.cityCode || !c.cityName) return null;
@@ -131,13 +161,14 @@ export default function ClientDetailPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [ruc, setRuc] = useState("");
+  const [identityDocumentType, setIdentityDocumentType] = useState("RUC");
+  const [identityDocumentNumber, setIdentityDocumentNumber] = useState("");
   const [address, setAddress] = useState("");
   const [locality, setLocality] = useState<Locality | null>(null);
   const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
-    ruc?: string;
+    identityDocumentNumber?: string;
     phone?: string;
     email?: string;
   } | null>(null);
@@ -174,7 +205,9 @@ export default function ClientDetailPage() {
       setFullName(data.fullName);
       setPhone(data.phone ?? "");
       setEmail(data.email ?? "");
-      setRuc(data.ruc ?? "");
+      const resolved = resolveIdentityDocumentTypeAndNumber(data);
+      setIdentityDocumentType(resolved.type);
+      setIdentityDocumentNumber(resolved.number);
       setAddress(data.address ?? "");
       setLocality(localityFromClient(data));
     } catch {
@@ -275,8 +308,11 @@ export default function ClientDetailPage() {
     if (!fullName.trim()) {
       nextErr.fullName = t("femme.clients.fullNameRequired");
     }
-    if (ruc.trim() && !validateRuc(ruc)) {
-      nextErr.ruc = t("femme.clients.rucInvalid");
+    const isRucType = identityDocumentType === "RUC";
+    const isInnominado = identityDocumentType === "INNOMINADO";
+    const documentNumberTrim = isInnominado ? "" : identityDocumentNumber.trim();
+    if (isRucType && documentNumberTrim && !validateRuc(documentNumberTrim)) {
+      nextErr.identityDocumentNumber = t("femme.clients.rucInvalid");
     }
     if (phone.trim() && !isCompleteParaguayPhone(phone.trim())) {
       nextErr.phone = t("femme.clients.phoneInvalid");
@@ -295,7 +331,9 @@ export default function ClientDetailPage() {
         fullName: fullName.trim(),
         phone: phone.trim() || null,
         email: email.trim() || null,
-        ruc: ruc.trim() || null,
+        ruc: isRucType ? documentNumberTrim || null : null,
+        identityDocumentNumber: !isRucType && !isInnominado ? documentNumberTrim || null : null,
+        identityDocumentType: documentNumberTrim ? identityDocumentType : null,
         address: address.trim() || null,
         departmentCode: locality?.departmentCode ?? null,
         departmentName: locality?.departmentName ?? null,
@@ -306,7 +344,9 @@ export default function ClientDetailPage() {
       setFullName(updated.fullName);
       setPhone(updated.phone ?? "");
       setEmail(updated.email ?? "");
-      setRuc(updated.ruc ?? "");
+      const resolved = resolveIdentityDocumentTypeAndNumber(updated);
+      setIdentityDocumentType(resolved.type);
+      setIdentityDocumentNumber(resolved.number);
       setAddress(updated.address ?? "");
       setLocality(localityFromClient(updated));
       setSaveSuccess(true);
@@ -510,19 +550,53 @@ export default function ClientDetailPage() {
               </div>
 
               <div>
-                <Label htmlFor="detail-ruc">{t("femme.clients.ruc")}</Label>
+                <Label htmlFor="detail-identity-document-type">
+                  {t("femme.clients.identityDocumentType")}
+                </Label>
+                <Select
+                  id="detail-identity-document-type"
+                  value={identityDocumentType}
+                  onChange={(e) => {
+                    setIdentityDocumentType(e.target.value);
+                    setSaveSuccess(false);
+                  }}
+                >
+                  {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {t(opt.labelKey)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="detail-identity-document-number">
+                  {t("femme.clients.identityDocumentNumber")}
+                </Label>
                 <Input
-                  id="detail-ruc"
-                  value={ruc}
-                  onChange={(e) => { setRuc(e.target.value); setSaveSuccess(false); }}
-                  placeholder="80000005-6"
-                  aria-invalid={fieldError?.ruc ? "true" : "false"}
-                  aria-describedby={fieldError?.ruc ? "detail-ruc-err" : undefined}
+                  id="detail-identity-document-number"
+                  value={identityDocumentNumber}
+                  onChange={(e) => {
+                    setIdentityDocumentNumber(e.target.value);
+                    setSaveSuccess(false);
+                  }}
+                  placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                  disabled={identityDocumentType === "INNOMINADO"}
+                  aria-invalid={fieldError?.identityDocumentNumber ? "true" : "false"}
+                  aria-describedby={
+                    fieldError?.identityDocumentNumber
+                      ? "detail-identity-document-number-err"
+                      : undefined
+                  }
                 />
-                <Text variant="muted" className="mt-1 text-sm">
-                  {t("femme.clients.rucHint")}
-                </Text>
-                <FieldValidationError id="detail-ruc-err">{fieldError?.ruc}</FieldValidationError>
+                {identityDocumentType === "RUC" && (
+                  <Text variant="muted" className="mt-1 text-sm">
+                    {t("femme.clients.rucHint")}
+                  </Text>
+                )}
+                <FieldValidationError id="detail-identity-document-number-err">
+                  {fieldError?.identityDocumentNumber}
+                </FieldValidationError>
               </div>
 
               <div>

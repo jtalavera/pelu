@@ -135,7 +135,8 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
       ),
     ).toBeVisible();
 
-    await page.getByLabel("Client identity document (override for this invoice)").fill("4123456");
+    await page.locator("#client-identity-document-type").selectOption("CEDULA_PARAGUAYA");
+    await page.locator("#client-identity-document-number").fill("4123456");
     await clickIssueInvoiceAndExpectSuccess(page);
   });
 

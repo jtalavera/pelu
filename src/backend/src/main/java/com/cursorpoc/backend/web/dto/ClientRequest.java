@@ -17,9 +17,36 @@ public record ClientRequest(
     /** SIFEN HU-02 AC-07 — D223/cCiuRec, código DNIT de la ciudad. */
     String cityCode,
     /** SIFEN HU-02 AC-07 — D224/dDesCiuRec. */
-    String cityName) {
+    String cityName,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
+    String identityDocumentType) {
 
   public ClientRequest(String fullName, String phone, String email, String ruc) {
-    this(fullName, phone, email, ruc, null, null, null, null, null, null);
+    this(fullName, phone, email, ruc, null, null, null, null, null, null, null);
+  }
+
+  public ClientRequest(
+      String fullName,
+      String phone,
+      String email,
+      String ruc,
+      String identityDocumentNumber,
+      String address,
+      String departmentCode,
+      String departmentName,
+      String cityCode,
+      String cityName) {
+    this(
+        fullName,
+        phone,
+        email,
+        ruc,
+        identityDocumentNumber,
+        address,
+        departmentCode,
+        departmentName,
+        cityCode,
+        cityName,
+        null);
   }
 }

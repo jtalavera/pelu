@@ -94,7 +94,7 @@ class SifenQrCodeServiceTest {
   @Test
   void build_reproducesTheManualsWorkedExampleHashExactly() {
     SifenReceiverData receiver =
-        new SifenReceiverData("88899990-1", null, "Cliente", null, null, null, null, null);
+        new SifenReceiverData("88899990-1", null, "Cliente", null, null, null, null, null, null);
     SifenQrCodeService service = productionService();
 
     SifenQrCodeService.SifenQrResult result =
@@ -106,7 +106,7 @@ class SifenQrCodeServiceTest {
   @Test
   void build_reproducesTheManualsWorkedExampleUrlCharacterForCharacter() {
     SifenReceiverData receiver =
-        new SifenReceiverData("88899990-1", null, "Cliente", null, null, null, null, null);
+        new SifenReceiverData("88899990-1", null, "Cliente", null, null, null, null, null, null);
     SifenQrCodeService service = productionService();
 
     SifenQrCodeService.SifenQrResult result =
@@ -132,7 +132,7 @@ class SifenQrCodeServiceTest {
   @Test
   void build_anonymousReceiver_usesDNumIDRecWithZero() {
     SifenReceiverData anonymous =
-        new SifenReceiverData(null, null, "Sin Nombre", null, null, null, null, null);
+        new SifenReceiverData(null, null, "Sin Nombre", null, null, null, null, null, null);
     SifenQrCodeService service = testService();
 
     SifenQrCodeService.SifenQrResult result =
@@ -145,7 +145,7 @@ class SifenQrCodeServiceTest {
   @Test
   void build_receiverIdentifiedByDocument_usesDNumIDRecWithTheDocumentNumber() {
     SifenReceiverData withDocument =
-        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null);
+        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null, null);
     SifenQrCodeService service = testService();
 
     SifenQrCodeService.SifenQrResult result =
@@ -157,7 +157,7 @@ class SifenQrCodeServiceTest {
   @Test
   void build_testEnvironment_usesTestConsultationHosts() {
     SifenReceiverData receiver =
-        new SifenReceiverData(null, null, "Sin Nombre", null, null, null, null, null);
+        new SifenReceiverData(null, null, "Sin Nombre", null, null, null, null, null, null);
     SifenQrCodeService service = testService();
 
     SifenQrCodeService.SifenQrResult result =

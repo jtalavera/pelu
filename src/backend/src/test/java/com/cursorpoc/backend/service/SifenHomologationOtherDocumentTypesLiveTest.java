@@ -535,13 +535,22 @@ class SifenHomologationOtherDocumentTypesLiveTest {
   private SifenReceiverData buildReceiverFor(SifenDocumentType type, Scenario scenario) {
     if (scenario.receiverRuc() != null) {
       return new SifenReceiverData(
-          scenario.receiverRuc(), null, "Cliente Homologación HU-14", null, null, null, null, null);
+          scenario.receiverRuc(),
+          null,
+          "Cliente Homologación HU-14",
+          null,
+          null,
+          null,
+          null,
+          null,
+          null);
     }
     if (type == SifenDocumentType.AUTOFACTURA) {
       return new SifenReceiverData(
           ISSUER_RUC + "-" + ISSUER_RUC_CHECK_DIGIT,
           null,
           SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND,
+          null,
           null,
           null,
           null,
@@ -559,10 +568,11 @@ class SifenHomologationOtherDocumentTypesLiveTest {
           null,
           null,
           null,
+          null,
           null);
     }
     return new SifenReceiverData(
-        null, "4123456", "Cliente Homologación HU-14", null, null, null, null, null);
+        null, "4123456", "Cliente Homologación HU-14", null, null, null, null, null, null);
   }
 
   /** Flips a CDC's last digit so it references no real document, never producing the same CDC. */

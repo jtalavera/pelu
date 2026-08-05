@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
@@ -184,6 +185,12 @@ public class SifenInvoiceHeaderService {
         invoice.getClientIdentityDocumentOverride() != null
             ? invoice.getClientIdentityDocumentOverride()
             : (client != null ? client.getIdentityDocumentNumber() : null);
+    ClientIdentityDocumentType explicitType =
+        invoice.getClientIdentityDocumentTypeOverride() != null
+            ? invoice.getClientIdentityDocumentTypeOverride()
+            : (client != null ? client.getIdentityDocumentType() : null);
+    ClientIdentityDocumentType type =
+        ClientIdentityDocumentType.resolve(explicitType, ruc, identityDocument);
     String address = client != null ? client.getAddress() : null;
     boolean hasAddress = address != null && !address.isBlank();
     boolean hasDepartmentAndCity =
@@ -201,7 +208,8 @@ public class SifenInvoiceHeaderService {
         hasDepartmentAndCity ? client.getDepartmentCode() : null,
         hasDepartmentAndCity ? client.getDepartmentName() : null,
         hasDepartmentAndCity ? client.getCityCode() : null,
-        hasDepartmentAndCity ? client.getCityName() : null);
+        hasDepartmentAndCity ? client.getCityName() : null,
+        type);
   }
 
   private static void requireIssuerDataComplete(BusinessProfile profile) {

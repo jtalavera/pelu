@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
@@ -56,6 +57,14 @@ public class Invoice {
   /** Cédula u otro documento de identidad para un cliente ocasional — SIFEN HU-02 AC-05. */
   @Column(name = "client_identity_document_override", length = 32)
   private String clientIdentityDocumentOverride;
+
+  /**
+   * Tipo explícito de identificación del override (RUC, cédula, pasaporte, ...). Nullable: facturas
+   * legadas sin tipo se resuelven por la misma detección implícita al armar el XML.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "client_identity_document_type_override", length = 20)
+  private ClientIdentityDocumentType clientIdentityDocumentTypeOverride;
 
   /** Número de control (CDC), generado una sola vez y reutilizado — SIFEN HU-01 AC-06. */
   @Column(name = "sifen_control_number", length = 44)
@@ -313,6 +322,15 @@ public class Invoice {
 
   public void setClientIdentityDocumentOverride(String clientIdentityDocumentOverride) {
     this.clientIdentityDocumentOverride = clientIdentityDocumentOverride;
+  }
+
+  public ClientIdentityDocumentType getClientIdentityDocumentTypeOverride() {
+    return clientIdentityDocumentTypeOverride;
+  }
+
+  public void setClientIdentityDocumentTypeOverride(
+      ClientIdentityDocumentType clientIdentityDocumentTypeOverride) {
+    this.clientIdentityDocumentTypeOverride = clientIdentityDocumentTypeOverride;
   }
 
   public String getSifenControlNumber() {

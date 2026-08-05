@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
 import java.io.StringWriter;
@@ -252,7 +253,10 @@ public class SifenDocumentXmlService {
       SifenReceiverData receiver,
       SifenDocumentType documentType) {
     Element gDatRec = el(doc, gDatGralOpe, "gDatRec", null);
-    boolean hasRuc = !isBlank(receiver.ruc());
+    ClientIdentityDocumentType type =
+        ClientIdentityDocumentType.resolve(
+            receiver.identityDocumentType(), receiver.ruc(), receiver.identityDocumentNumber());
+    boolean hasRuc = type == ClientIdentityDocumentType.RUC;
     boolean isAutoInvoice = documentType == SifenDocumentType.AUTOFACTURA;
     el(doc, gDatRec, "iNatRec", hasRuc ? "1" : "2");
     el(doc, gDatRec, "iTiOpe", isAutoInvoice ? "2" : hasRuc ? "1" : "2");
@@ -264,13 +268,18 @@ public class SifenDocumentXmlService {
       el(doc, gDatRec, "iTiContRec", "1");
       el(doc, gDatRec, "dRucRec", rucParts.base());
       el(doc, gDatRec, "dDVRec", String.valueOf(rucParts.checkDigit()));
-    } else if (!isBlank(receiver.identityDocumentNumber())) {
-      el(doc, gDatRec, "iTipIDRec", "1");
-      el(doc, gDatRec, "dDTipIDRec", identityDocumentTypeDescription(1));
+    } else if (type != ClientIdentityDocumentType.INNOMINADO
+        && !isBlank(receiver.identityDocumentNumber())) {
+      el(doc, gDatRec, "iTipIDRec", String.valueOf(type.sifenCode()));
+      el(doc, gDatRec, "dDTipIDRec", type.description());
       el(doc, gDatRec, "dNumIDRec", receiver.identityDocumentNumber());
     } else {
-      el(doc, gDatRec, "iTipIDRec", "5");
-      el(doc, gDatRec, "dDTipIDRec", identityDocumentTypeDescription(5));
+      el(
+          doc,
+          gDatRec,
+          "iTipIDRec",
+          String.valueOf(ClientIdentityDocumentType.INNOMINADO.sifenCode()));
+      el(doc, gDatRec, "dDTipIDRec", ClientIdentityDocumentType.INNOMINADO.description());
       el(doc, gDatRec, "dNumIDRec", "0");
     }
 
@@ -408,6 +417,11 @@ public class SifenDocumentXmlService {
     el(doc, gCamAE, "dDesCiuProv", provider.cityName());
   }
 
+  /**
+   * E4/{@code dDTipIDVen} catálogo del proveedor de autofactura ({@link
+   * #buildAutoInvoiceProviderGroup}) — narrower than D3/D209's receiver catalog (no códigos 5/6/9),
+   * por eso no se reusa para el receptor: ver {@link ClientIdentityDocumentType#description()}.
+   */
   private static String identityDocumentTypeDescription(int code) {
     return switch (code) {
       case 1 -> "Cédula paraguaya";

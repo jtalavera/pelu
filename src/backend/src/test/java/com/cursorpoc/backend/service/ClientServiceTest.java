@@ -119,6 +119,113 @@ class ClientServiceTest {
   }
 
   @Test
+  void create_withCedulaParaguayaType_skipsRucFormatCheck() {
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Ana García",
+                null,
+                null,
+                null,
+                "4123456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "CEDULA_PARAGUAYA"));
+
+    assertThat(response.identityDocumentType()).isEqualTo("CEDULA_PARAGUAYA");
+    assertThat(response.identityDocumentNumber()).isEqualTo("4123456");
+    assertThat(response.ruc()).isNull();
+  }
+
+  @Test
+  void create_withExplicitRucType_stillValidatesFormat() {
+    assertThatThrownBy(
+            () ->
+                clientService.create(
+                    1L,
+                    new ClientRequest(
+                        "Ana", null, null, "12345", null, null, null, null, null, null, "RUC")))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
+  void create_withNonRucTypeAndRucAlsoSent_clearsRucKeepsDocumentNumber() {
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Ana",
+                null,
+                null,
+                "80000005-6",
+                "AB123456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "PASAPORTE"));
+
+    assertThat(response.identityDocumentType()).isEqualTo("PASAPORTE");
+    assertThat(response.identityDocumentNumber()).isEqualTo("AB123456");
+    assertThat(response.ruc()).isNull();
+  }
+
+  @Test
+  void create_withInnominadoType_clearsBothRucAndDocumentNumber() {
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Ana",
+                null,
+                null,
+                "80000005-6",
+                "AB123456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "INNOMINADO"));
+
+    assertThat(response.identityDocumentType()).isEqualTo("INNOMINADO");
+    assertThat(response.identityDocumentNumber()).isNull();
+    assertThat(response.ruc()).isNull();
+  }
+
+  @Test
+  void create_withInvalidIdentityDocumentType_throwsBadRequest() {
+    assertThatThrownBy(
+            () ->
+                clientService.create(
+                    1L,
+                    new ClientRequest(
+                        "Ana", null, null, null, null, null, null, null, null, null, "NOT_A_TYPE")))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
   void create_duplicatePhone_throwsConflict() {
     Client existing = buildClient(2L, "Other", "0981000001", null, null);
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));

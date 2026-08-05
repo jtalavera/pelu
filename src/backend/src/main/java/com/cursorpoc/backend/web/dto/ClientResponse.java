@@ -13,4 +13,6 @@ public record ClientResponse(
     String departmentCode,
     String departmentName,
     String cityCode,
-    String cityName) {}
+    String cityName,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
+    String identityDocumentType) {}

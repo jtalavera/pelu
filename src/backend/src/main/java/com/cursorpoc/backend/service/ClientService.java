@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
@@ -65,9 +66,14 @@ public class ClientService {
     String fullName = request.fullName().trim();
     String phone = blankToNull(request.phone());
     String email = blankToNull(request.email());
-    String ruc = blankToNull(request.ruc());
+    ClientIdentityDocumentType type = parseDocumentType(request.identityDocumentType());
+    String[] rucAndDocument =
+        applyDocumentTypeInvariant(
+            type, blankToNull(request.ruc()), blankToNull(request.identityDocumentNumber()));
+    String ruc = rucAndDocument[0];
+    String identityDocumentNumber = rucAndDocument[1];
 
-    if (ruc != null && !ParaguayRucValidator.isValid(ruc)) {
+    if (isRucFormatCheckApplicable(type) && ruc != null && !ParaguayRucValidator.isValid(ruc)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
@@ -95,7 +101,8 @@ public class ClientService {
     client.setRuc(ruc);
     client.setActive(true);
     client.setVisitCount(0);
-    client.setIdentityDocumentNumber(blankToNull(request.identityDocumentNumber()));
+    client.setIdentityDocumentNumber(identityDocumentNumber);
+    client.setIdentityDocumentType(type);
     client.setAddress(blankToNull(request.address()));
     client.setDepartmentCode(blankToNull(request.departmentCode()));
     client.setDepartmentName(blankToNull(request.departmentName()));
@@ -125,9 +132,14 @@ public class ClientService {
     String fullName = request.fullName().trim();
     String phone = blankToNull(request.phone());
     String email = blankToNull(request.email());
-    String ruc = blankToNull(request.ruc());
+    ClientIdentityDocumentType type = parseDocumentType(request.identityDocumentType());
+    String[] rucAndDocument =
+        applyDocumentTypeInvariant(
+            type, blankToNull(request.ruc()), blankToNull(request.identityDocumentNumber()));
+    String ruc = rucAndDocument[0];
+    String identityDocumentNumber = rucAndDocument[1];
 
-    if (ruc != null && !ParaguayRucValidator.isValid(ruc)) {
+    if (isRucFormatCheckApplicable(type) && ruc != null && !ParaguayRucValidator.isValid(ruc)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
@@ -151,7 +163,8 @@ public class ClientService {
     client.setPhone(phone);
     client.setEmail(email);
     client.setRuc(ruc);
-    client.setIdentityDocumentNumber(blankToNull(request.identityDocumentNumber()));
+    client.setIdentityDocumentNumber(identityDocumentNumber);
+    client.setIdentityDocumentType(type);
     client.setAddress(blankToNull(request.address()));
     client.setDepartmentCode(blankToNull(request.departmentCode()));
     client.setDepartmentName(blankToNull(request.departmentName()));
@@ -190,6 +203,39 @@ public class ClientService {
     return value.trim();
   }
 
+  private static ClientIdentityDocumentType parseDocumentType(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return ClientIdentityDocumentType.valueOf(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
+    }
+  }
+
+  /**
+   * Enforces that RUC and identity-document-number never coexist once a type is explicit: {@code
+   * RUC} clears the document number, any other concrete type clears the RUC, and {@code INNOMINADO}
+   * clears both. A {@code null} type (legacy caller not sending one) leaves both fields untouched,
+   * preserving pre-existing behavior.
+   */
+  private static String[] applyDocumentTypeInvariant(
+      ClientIdentityDocumentType type, String ruc, String identityDocumentNumber) {
+    if (type == ClientIdentityDocumentType.RUC) {
+      return new String[] {ruc, null};
+    }
+    if (type == ClientIdentityDocumentType.INNOMINADO) {
+      return new String[] {null, null};
+    }
+    if (type != null) {
+      return new String[] {null, identityDocumentNumber};
+    }
+    return new String[] {ruc, identityDocumentNumber};
+  }
+
+  private static boolean isRucFormatCheckApplicable(ClientIdentityDocumentType type) {
+    return type == null || type == ClientIdentityDocumentType.RUC;
+  }
+
   /**
    * Phone duplicate check compares digits only: clients may be created with formatted numbers (e.g.
    * "(0981) 123-456") or raw digits (e.g. via API integrations), and both represent the same phone
@@ -223,6 +269,7 @@ public class ClientService {
         c.getDepartmentCode(),
         c.getDepartmentName(),
         c.getCityCode(),
-        c.getCityName());
+        c.getCityName(),
+        c.getIdentityDocumentType() == null ? null : c.getIdentityDocumentType().name());
   }
 }

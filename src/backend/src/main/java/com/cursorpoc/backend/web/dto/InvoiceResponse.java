@@ -13,6 +13,8 @@ public record InvoiceResponse(
     String clientDisplayName,
     String clientRucOverride,
     String clientIdentityDocumentOverride,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
+    String clientIdentityDocumentTypeOverride,
     String businessRuc,
     String status,
     BigDecimal subtotal,

@@ -141,9 +141,9 @@ describe("ClientDetailPage", () => {
   it("validates invalid RUC format on save", async () => {
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
-    const rucInput = screen.getByLabelText(/^ruc/i);
-    await userEvent.clear(rucInput);
-    await userEvent.type(rucInput, "invalidruc");
+    const documentNumberInput = screen.getByLabelText(/document number/i);
+    await userEvent.clear(documentNumberInput);
+    await userEvent.type(documentNumberInput, "invalidruc");
     await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/invalid ruc/i)).toBeTruthy();
   });

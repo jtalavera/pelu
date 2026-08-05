@@ -73,9 +73,9 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     // Selecting the client auto-fills both fields — clear them to test the blank scenario.
     await expect(page.locator("#client-display-name")).toHaveValue(client.fullName);
-    await expect(page.locator("#client-ruc")).toHaveValue(clientRuc);
+    await expect(page.locator("#client-identity-document-number")).toHaveValue(clientRuc);
     await page.locator("#client-display-name").fill("");
-    await page.locator("#client-ruc").fill("");
+    await page.locator("#client-identity-document-number").fill("");
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");

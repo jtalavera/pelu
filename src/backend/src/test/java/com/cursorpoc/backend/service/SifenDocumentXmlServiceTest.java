@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import java.math.BigDecimal;
@@ -50,7 +51,7 @@ class SifenDocumentXmlServiceTest {
             "5044",
             "FERNANDO DE LA MORA");
     SifenReceiverData receiver =
-        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null);
+        new SifenReceiverData(null, "4123456", "Cliente Demo", null, null, null, null, null, null);
     header =
         new SifenInvoiceHeader(
             cdc,
@@ -221,7 +222,7 @@ class SifenDocumentXmlServiceTest {
   @Test
   void buildDocument_anonymousReceiver_usesInnominado() throws Exception {
     SifenReceiverData anonymous =
-        new SifenReceiverData(null, null, null, null, null, null, null, null);
+        new SifenReceiverData(null, null, null, null, null, null, null, null, null);
     SifenInvoiceHeader anonymousHeader =
         new SifenInvoiceHeader(
             header.controlNumber(),
@@ -242,6 +243,97 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='dNomRec']")).isEqualTo("Sin Nombre");
   }
 
+  @Test
+  void buildDocument_receiverWithExplicitPasaporteType_usesCorrectCodeAndDescription()
+      throws Exception {
+    SifenReceiverData passport =
+        new SifenReceiverData(
+            null,
+            "AB123456",
+            "Cliente Extranjero",
+            null,
+            null,
+            null,
+            null,
+            null,
+            ClientIdentityDocumentType.PASAPORTE);
+    SifenInvoiceHeader passportHeader =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            header.issuer(),
+            passport,
+            header.testEnvironmentNotice());
+
+    Document doc = service.buildDocument(passportHeader, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iTipIDRec']")).isEqualTo("2");
+    assertThat(xpath(doc, "//*[local-name()='dDTipIDRec']")).isEqualTo("Pasaporte");
+    assertThat(xpath(doc, "//*[local-name()='dNumIDRec']")).isEqualTo("AB123456");
+  }
+
+  @Test
+  void buildDocument_receiverWithExplicitOtroType_usesGenericLabel() throws Exception {
+    SifenReceiverData otro =
+        new SifenReceiverData(
+            null,
+            "X-999",
+            "Cliente Raro",
+            null,
+            null,
+            null,
+            null,
+            null,
+            ClientIdentityDocumentType.OTRO);
+    SifenInvoiceHeader otroHeader =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            header.issuer(),
+            otro,
+            header.testEnvironmentNotice());
+
+    Document doc = service.buildDocument(otroHeader, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iTipIDRec']")).isEqualTo("9");
+    assertThat(xpath(doc, "//*[local-name()='dDTipIDRec']")).isEqualTo("Otro");
+  }
+
+  @Test
+  void buildDocument_receiverWithExplicitInnominadoType_usesInnominadoEvenIfDetected()
+      throws Exception {
+    SifenReceiverData explicitAnonymous =
+        new SifenReceiverData(
+            null, null, null, null, null, null, null, null, ClientIdentityDocumentType.INNOMINADO);
+    SifenInvoiceHeader anonymousHeader =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            header.issuer(),
+            explicitAnonymous,
+            header.testEnvironmentNotice());
+
+    Document doc = service.buildDocument(anonymousHeader, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iTipIDRec']")).isEqualTo("5");
+    assertThat(xpath(doc, "//*[local-name()='dNumIDRec']")).isEqualTo("0");
+  }
+
   /**
    * AC-07: si se informa la dirección del cliente (con sus códigos DNIT), el documento también
    * incluye su departamento y ciudad — D219/D220/D223/D224.
@@ -258,7 +350,8 @@ class SifenDocumentXmlServiceTest {
             "12",
             "CENTRAL",
             "5044",
-            "FERNANDO DE LA MORA");
+            "FERNANDO DE LA MORA",
+            null);
     SifenInvoiceHeader headerWithAddress =
         new SifenInvoiceHeader(
             header.controlNumber(),
@@ -287,7 +380,7 @@ class SifenDocumentXmlServiceTest {
       throws Exception {
     SifenReceiverData receiverWithAddress =
         new SifenReceiverData(
-            null, "4123456", "Cliente Demo", "Avda. Mcal. López 456", null, null, null, null);
+            null, "4123456", "Cliente Demo", "Avda. Mcal. López 456", null, null, null, null, null);
     SifenInvoiceHeader headerWithAddress =
         new SifenInvoiceHeader(
             header.controlNumber(),

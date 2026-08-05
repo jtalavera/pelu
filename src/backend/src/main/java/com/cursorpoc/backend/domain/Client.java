@@ -1,7 +1,10 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -43,6 +46,15 @@ public class Client {
   /** Cédula u otro documento de identidad, para clientes sin RUC — SIFEN HU-02 AC-05. */
   @Column(name = "identity_document_number", length = 32)
   private String identityDocumentNumber;
+
+  /**
+   * Tipo explícito de identificación (RUC, cédula, pasaporte, ...), reemplaza la detección
+   * implícita por presencia de ruc/identityDocumentNumber. Nullable: registros legados sin tipo se
+   * resuelven por la misma detección implícita al armar el XML SIFEN.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "identity_document_type", length = 20)
+  private ClientIdentityDocumentType identityDocumentType;
 
   @Column(length = 500)
   private String address;
@@ -133,6 +145,14 @@ public class Client {
 
   public void setIdentityDocumentNumber(String identityDocumentNumber) {
     this.identityDocumentNumber = identityDocumentNumber;
+  }
+
+  public ClientIdentityDocumentType getIdentityDocumentType() {
+    return identityDocumentType;
+  }
+
+  public void setIdentityDocumentType(ClientIdentityDocumentType identityDocumentType) {
+    this.identityDocumentType = identityDocumentType;
   }
 
   public String getAddress() {
