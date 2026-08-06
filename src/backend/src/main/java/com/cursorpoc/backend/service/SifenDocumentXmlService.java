@@ -661,12 +661,20 @@ public class SifenDocumentXmlService {
       BigDecimal totalBruto = line.unitPrice().multiply(BigDecimal.valueOf(line.quantity()));
       el(doc, gValorItem, "dTotBruOpeItem", totalBruto.toPlainString());
 
-      // E8.1.1: HU-03 already folds the per-line discount and the prorated invoice-level global
-      // discount into one combined SifenInvoiceLine.discountAmount (EA002) — so EA004 is always 0
-      // here, it's not a second, separate discount.
+      // E8.1.1: EA002/EA004 (SifenInvoiceLine.itemDiscountAmount/globalDiscountAmount) are already
+      // per-unit — see SifenInvoiceDetailService.buildLine.
       Element gValorRestaItem = el(doc, gValorItem, "gValorRestaItem", null);
-      el(doc, gValorRestaItem, "dDescItem", line.discountAmount().toPlainString());
-      el(doc, gValorRestaItem, "dDescGloItem", "0");
+      el(doc, gValorRestaItem, "dDescItem", line.itemDiscountAmount().toPlainString());
+      // EA003/dPorcDesIt: mandatory whenever EA002 > 0 (dCodRes=1852 otherwise), formula
+      // EA002*100/E721 — omitted (not zeroed) when there's no item-level discount.
+      if (line.itemDiscountAmount().signum() > 0) {
+        BigDecimal discountPercent =
+            line.itemDiscountAmount()
+                .multiply(BigDecimal.valueOf(100))
+                .divide(line.unitPrice(), 8, RoundingMode.HALF_UP);
+        el(doc, gValorRestaItem, "dPorcDesIt", discountPercent.toPlainString());
+      }
+      el(doc, gValorRestaItem, "dDescGloItem", line.globalDiscountAmount().toPlainString());
       el(doc, gValorRestaItem, "dTotOpeItem", line.netTotal().toPlainString());
     }
 
@@ -730,10 +738,10 @@ public class SifenDocumentXmlService {
     el(doc, gTotSub, "dTotDescGlotem", totals.globalDiscountTotal().toPlainString());
     el(doc, gTotSub, "dTotAntItem", "0");
     el(doc, gTotSub, "dTotAnt", "0");
-    el(doc, gTotSub, "dPorcDescTotal", discountPercent(totals).toPlainString());
+    el(doc, gTotSub, "dPorcDescTotal", totals.globalDiscountPercent().toPlainString());
     el(doc, gTotSub, "dDescTotal", totals.totalDiscount().toPlainString());
     el(doc, gTotSub, "dAnticipo", "0");
-    el(doc, gTotSub, "dRedon", "0");
+    el(doc, gTotSub, "dRedon", totals.roundingAdjustment().toPlainString());
     el(doc, gTotSub, "dTotGralOpe", totals.netTotal().toPlainString());
     el(doc, gTotSub, "dIVA5", isAutoInvoice ? "0" : totals.iva5().toPlainString());
     el(doc, gTotSub, "dIVA10", isAutoInvoice ? "0" : totals.iva10().toPlainString());
@@ -745,16 +753,6 @@ public class SifenDocumentXmlService {
         gTotSub,
         "dTBasGraIVA",
         isAutoInvoice ? "0" : totals.totalTaxableBase().toPlainString());
-  }
-
-  private static BigDecimal discountPercent(SifenInvoiceTotals totals) {
-    if (totals.grossTotal().signum() == 0) {
-      return BigDecimal.ZERO;
-    }
-    return totals
-        .totalDiscount()
-        .multiply(BigDecimal.valueOf(100))
-        .divide(totals.grossTotal(), 8, RoundingMode.HALF_UP);
   }
 
   private static String paymentTypeDescription(int code) {

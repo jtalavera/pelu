@@ -16,9 +16,14 @@ import java.math.BigDecimal;
  * @param unitOfMeasureCode E709/cUniMed — always {@code "77"} (Unidad, Tabla 5): every service in
  *     this domain is billed per unit, never by weight/volume/package.
  * @param unitPrice E721/dPUniProSer, IVA-incluido (AC-01).
- * @param discountAmount EA002 (per-line discount) + EA004 (this line's prorated share of an
- *     invoice-level global discount), combined — AC-05.
- * @param netTotal EA008: (unitPrice * quantity) - discountAmount, IVA-incluido.
+ * @param itemDiscountAmount EA002/dDescItem, per-unit — this line's own particular discount
+ *     (AC-05).
+ * @param globalDiscountAmount EA004/dDescGloItem, per-unit — the invoice-level global discount
+ *     percentage applied to this line's own unit price. Per the manual, this is a flat percentage
+ *     applied uniformly to every line, not the discount amount split by each line's weight (see
+ *     {@code SifenInvoiceDetailService.globalDiscountPercent} javadoc).
+ * @param netTotal EA008: (unitPrice - itemDiscountAmount - globalDiscountAmount) * quantity,
+ *     IVA-incluido.
  * @param taxAffectation E731/iAfecIVA (AC-03).
  * @param taxProportion E733/dPropIVA — always 100 (see {@link SifenTaxAffectation} javadoc: no
  *     split gravado/exento within one line is representable today).
@@ -33,10 +38,21 @@ public record SifenInvoiceLine(
     int quantity,
     String unitOfMeasureCode,
     BigDecimal unitPrice,
-    BigDecimal discountAmount,
+    BigDecimal itemDiscountAmount,
+    BigDecimal globalDiscountAmount,
     BigDecimal netTotal,
     SifenTaxAffectation taxAffectation,
     BigDecimal taxProportion,
     BigDecimal taxRatePercent,
     BigDecimal taxableBase,
-    BigDecimal taxAmount) {}
+    BigDecimal taxAmount) {
+
+  /**
+   * Combined discount for the whole line, for display (e.g. the printed KuDE PDF) — not a SIFEN XML
+   * field itself, so unlike {@link #itemDiscountAmount}/{@link #globalDiscountAmount} this one is a
+   * full-line total, not per-unit.
+   */
+  public BigDecimal totalDiscountAmount() {
+    return itemDiscountAmount.add(globalDiscountAmount).multiply(BigDecimal.valueOf(quantity));
+  }
+}

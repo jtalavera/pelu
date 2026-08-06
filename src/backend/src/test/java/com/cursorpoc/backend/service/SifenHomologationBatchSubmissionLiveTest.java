@@ -668,6 +668,7 @@ class SifenHomologationBatchSubmissionLiveTest {
             scenario.invalidUnitCode() ? "999" : "77",
             LINE_UNIT_PRICE,
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             LINE_UNIT_PRICE,
             SifenTaxAffectation.GRAVADO,
             BigDecimal.valueOf(100),
@@ -690,7 +691,9 @@ class SifenHomologationBatchSubmissionLiveTest {
             LINE_TAXABLE_BASE,
             BigDecimal.ZERO,
             LINE_TAX_AMOUNT,
-            LINE_TAX_AMOUNT);
+            LINE_TAX_AMOUNT,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
     SifenInvoiceTotals totals =
         scenario.corruptTotals()
             ? new SifenInvoiceTotals(
@@ -707,7 +710,9 @@ class SifenHomologationBatchSubmissionLiveTest {
                 correctTotals.totalTaxableBase(),
                 correctTotals.iva5(),
                 correctTotals.iva10(),
-                correctTotals.totalIva())
+                correctTotals.totalIva(),
+                correctTotals.globalDiscountPercent(),
+                correctTotals.roundingAdjustment())
             : correctTotals;
 
     SifenInvoiceDetail detail =

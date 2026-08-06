@@ -578,6 +578,7 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
             "77",
             LINE_A_UNIT_PRICE,
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             LINE_A_UNIT_PRICE,
             SifenTaxAffectation.GRAVADO,
             BigDecimal.valueOf(100),
@@ -592,6 +593,7 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
             1,
             "77",
             LINE_B_UNIT_PRICE,
+            BigDecimal.ZERO,
             BigDecimal.ZERO,
             LINE_B_UNIT_PRICE,
             SifenTaxAffectation.GRAVADO,
@@ -615,7 +617,9 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
             LINE_A_TAXABLE_BASE.add(LINE_B_TAXABLE_BASE),
             BigDecimal.ZERO,
             LINE_A_TAX_AMOUNT.add(LINE_B_TAX_AMOUNT),
-            LINE_A_TAX_AMOUNT.add(LINE_B_TAX_AMOUNT));
+            LINE_A_TAX_AMOUNT.add(LINE_B_TAX_AMOUNT),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
 
     SifenInvoiceDetail detail =
         new SifenInvoiceDetail(

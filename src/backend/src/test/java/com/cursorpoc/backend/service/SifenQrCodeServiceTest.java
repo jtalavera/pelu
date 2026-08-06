@@ -72,7 +72,9 @@ class SifenQrCodeServiceTest {
         BigDecimal.ZERO,
         BigDecimal.ZERO,
         iva,
-        iva);
+        iva,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO);
   }
 
   /**

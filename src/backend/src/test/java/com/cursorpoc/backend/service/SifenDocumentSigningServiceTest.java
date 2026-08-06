@@ -108,6 +108,7 @@ class SifenDocumentSigningServiceTest {
             "77",
             BigDecimal.valueOf(100_000),
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             BigDecimal.valueOf(100_000),
             SifenTaxAffectation.GRAVADO,
             BigDecimal.valueOf(100),
@@ -129,7 +130,9 @@ class SifenDocumentSigningServiceTest {
             BigDecimal.valueOf(90909.09),
             BigDecimal.ZERO,
             BigDecimal.valueOf(9090.91),
-            BigDecimal.valueOf(9090.91));
+            BigDecimal.valueOf(9090.91),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
     detail =
         new SifenInvoiceDetail(
             List.of(line),

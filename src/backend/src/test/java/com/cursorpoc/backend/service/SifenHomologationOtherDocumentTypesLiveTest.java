@@ -438,6 +438,7 @@ class SifenHomologationOtherDocumentTypesLiveTest {
             "77",
             LINE_A_UNIT_PRICE,
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             LINE_A_UNIT_PRICE,
             SifenTaxAffectation.GRAVADO,
             BigDecimal.valueOf(100),
@@ -452,6 +453,7 @@ class SifenHomologationOtherDocumentTypesLiveTest {
             1,
             "77",
             LINE_B_UNIT_PRICE,
+            BigDecimal.ZERO,
             BigDecimal.ZERO,
             LINE_B_UNIT_PRICE,
             SifenTaxAffectation.GRAVADO,
@@ -475,7 +477,9 @@ class SifenHomologationOtherDocumentTypesLiveTest {
             LINE_A_TAXABLE_BASE.add(LINE_B_TAXABLE_BASE),
             BigDecimal.ZERO,
             LINE_A_TAX_AMOUNT.add(LINE_B_TAX_AMOUNT),
-            LINE_A_TAX_AMOUNT.add(LINE_B_TAX_AMOUNT));
+            LINE_A_TAX_AMOUNT.add(LINE_B_TAX_AMOUNT),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
     SifenInvoiceTotals totals =
         scenario.corruptTotals()
             ? new SifenInvoiceTotals(
@@ -494,7 +498,9 @@ class SifenHomologationOtherDocumentTypesLiveTest {
                 correctTotals.totalTaxableBase(),
                 correctTotals.iva5(),
                 correctTotals.iva10(),
-                correctTotals.totalIva())
+                correctTotals.totalIva(),
+                correctTotals.globalDiscountPercent(),
+                correctTotals.roundingAdjustment())
             : correctTotals;
 
     SifenInvoiceDetail detail =

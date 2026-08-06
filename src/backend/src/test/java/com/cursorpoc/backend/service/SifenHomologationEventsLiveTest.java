@@ -434,6 +434,7 @@ class SifenHomologationEventsLiveTest {
             "77",
             LINE_UNIT_PRICE,
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             LINE_UNIT_PRICE,
             SifenTaxAffectation.GRAVADO,
             BigDecimal.valueOf(100),
@@ -455,7 +456,9 @@ class SifenHomologationEventsLiveTest {
             LINE_TAXABLE_BASE,
             BigDecimal.ZERO,
             LINE_TAX_AMOUNT,
-            LINE_TAX_AMOUNT);
+            LINE_TAX_AMOUNT,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
     SifenInvoiceDetail detail =
         new SifenInvoiceDetail(
             List.of(line), totals, 1, List.of(new SifenPaymentDetail(1, LINE_UNIT_PRICE)));

@@ -74,6 +74,7 @@ class SifenDocumentXmlServiceTest {
             "77",
             BigDecimal.valueOf(100_000),
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             BigDecimal.valueOf(100_000),
             SifenTaxAffectation.GRAVADO,
             BigDecimal.valueOf(100),
@@ -95,7 +96,9 @@ class SifenDocumentXmlServiceTest {
             BigDecimal.valueOf(90909.09),
             BigDecimal.ZERO,
             BigDecimal.valueOf(9090.91),
-            BigDecimal.valueOf(9090.91));
+            BigDecimal.valueOf(9090.91),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
     detail =
         new SifenInvoiceDetail(
             List.of(line),
@@ -490,6 +493,7 @@ class SifenDocumentXmlServiceTest {
             "77",
             BigDecimal.valueOf(100_000),
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             BigDecimal.valueOf(100_000),
             SifenTaxAffectation.GRAVADO_PARCIAL,
             BigDecimal.valueOf(50),
@@ -709,6 +713,188 @@ class SifenDocumentXmlServiceTest {
       NodeList nodes = (NodeList) xpathNodes(doc, "//*[local-name()='" + tag + "']");
       assertThat(nodes.getLength()).as(tag + " must not be present on a factura").isZero();
     }
+  }
+
+  /**
+   * SIFEN live rejection fix (dCodRes=1852, "Porcentaje de descuento particular por ítem no
+   * informado"): dPorcDesIt (EA003) must be emitted, computed per-unit, whenever the item carries
+   * its own discount — quantity &gt; 1 here to prove the per-unit conversion (not the full-line
+   * total) is what's reported.
+   */
+  @Test
+  void buildDocument_itemDiscountOnly_emitsPerUnitAmountAndPercentage() throws Exception {
+    // 10,000/unit item discount on a 100,000 unit price = 10%; quantity 2 proves this is the
+    // per-unit amount SIFEN expects, not a full-line total.
+    SifenInvoiceLine line =
+        exemptLine(
+            BigDecimal.valueOf(100_000), 2, new BigDecimal("10000.00"), new BigDecimal("0.00"));
+    SifenInvoiceDetail detailWithLine = singleLineDetail(line);
+
+    Document doc = service.buildDocument(header, detailWithLine, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='dDescItem']")).isEqualTo("10000.00");
+    assertThat(xpath(doc, "//*[local-name()='dPorcDesIt']")).isEqualTo("10.00000000");
+    assertThat(xpath(doc, "//*[local-name()='dDescGloItem']")).isEqualTo("0.00");
+  }
+
+  /** EA003 has occurrence 0-1 and "debe existir si EA002 es mayor a 0" — omitted, not zeroed. */
+  @Test
+  void buildDocument_noItemDiscount_omitsPercentageField() throws Exception {
+    SifenInvoiceLine line =
+        exemptLine(BigDecimal.valueOf(100_000), 1, new BigDecimal("0.00"), new BigDecimal("0.00"));
+    SifenInvoiceDetail detailWithLine = singleLineDetail(line);
+
+    Document doc = service.buildDocument(header, detailWithLine, cdcFields, LocalDateTime.now());
+
+    NodeList porcDesIt = (NodeList) xpathNodes(doc, "//*[local-name()='dPorcDesIt']");
+    assertThat(porcDesIt.getLength()).isZero();
+  }
+
+  /**
+   * SIFEN live rejection fix (dCodRes=1862): dDescGloItem (EA004) must reflect the item's real
+   * global-discount share instead of the previous hardcoded "0", and dPorcDescTotal (F010) must
+   * equal the same global percentage applied to reach that per-unit amount.
+   */
+  @Test
+  void buildDocument_globalDiscountOnly_emitsGloItemAndMatchingPorcDescTotal() throws Exception {
+    // 20,000/unit global discount on a 100,000 unit price = 20%.
+    SifenInvoiceLine line =
+        exemptLine(
+            BigDecimal.valueOf(100_000), 1, new BigDecimal("0.00"), new BigDecimal("20000.00"));
+    SifenInvoiceTotals totals =
+        exemptTotals(
+            line.netTotal(),
+            BigDecimal.ZERO,
+            new BigDecimal("20000.00"),
+            new BigDecimal("20.00000000"));
+    SifenInvoiceDetail detailWithLine =
+        new SifenInvoiceDetail(List.of(line), totals, 1, detail.payments());
+
+    Document doc = service.buildDocument(header, detailWithLine, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='dDescGloItem']")).isEqualTo("20000.00");
+    NodeList porcDesIt = (NodeList) xpathNodes(doc, "//*[local-name()='dPorcDesIt']");
+    assertThat(porcDesIt.getLength()).isZero();
+    assertThat(xpath(doc, "//*[local-name()='dPorcDescTotal']")).isEqualTo("20.00000000");
+  }
+
+  /**
+   * The exact scenario that broke live: an item-level discount on one line combined with an
+   * invoice-level global discount shared across lines (one with quantity &gt; 1). Both lines get
+   * the SAME global-discount percentage (10%) applied to their own unit price — not a value-
+   * weighted split — so F010 stays exactly 10% even though line A also carries its own particular
+   * discount.
+   */
+  @Test
+  void buildDocument_itemAndGlobalDiscountCombined_reportsBothIndependentlyPerItem()
+      throws Exception {
+    // Line A: 40,000 unit price, qty 2 — 4,000/unit item discount (10%) AND 4,000/unit global
+    // discount (10%).
+    SifenInvoiceLine lineA =
+        exemptLine(
+            BigDecimal.valueOf(40_000), 2, new BigDecimal("4000.00"), new BigDecimal("4000.00"));
+    // Line B: 30,000 unit price, qty 1 — no item discount, 3,000/unit global discount (also 10%).
+    SifenInvoiceLine lineB =
+        exemptLine(
+            BigDecimal.valueOf(30_000), 1, new BigDecimal("0.00"), new BigDecimal("3000.00"));
+    SifenInvoiceTotals totals =
+        exemptTotals(
+            lineA.netTotal().add(lineB.netTotal()),
+            new BigDecimal("8000.00"), // F009: lineA's 4,000/unit * 2
+            new BigDecimal("11000.00"), // F033: (4,000*2) + (3,000*1)
+            new BigDecimal("10.00000000"));
+    SifenInvoiceDetail detailWithLines =
+        new SifenInvoiceDetail(List.of(lineA, lineB), totals, 1, detail.payments());
+
+    Document doc = service.buildDocument(header, detailWithLines, cdcFields, LocalDateTime.now());
+
+    NodeList items = (NodeList) xpathNodes(doc, "//*[local-name()='gCamItem']");
+    assertThat(items.getLength()).isEqualTo(2);
+
+    assertThat(xpath(doc, "(//*[local-name()='gCamItem'])[1]//*[local-name()='dDescItem']"))
+        .isEqualTo("4000.00");
+    assertThat(xpath(doc, "(//*[local-name()='gCamItem'])[1]//*[local-name()='dPorcDesIt']"))
+        .isEqualTo("10.00000000");
+    assertThat(xpath(doc, "(//*[local-name()='gCamItem'])[1]//*[local-name()='dDescGloItem']"))
+        .isEqualTo("4000.00");
+
+    assertThat(xpath(doc, "(//*[local-name()='gCamItem'])[2]//*[local-name()='dDescItem']"))
+        .isEqualTo("0.00");
+    NodeList lineBPorcDesIt =
+        (NodeList)
+            xpathNodes(doc, "(//*[local-name()='gCamItem'])[2]//*[local-name()='dPorcDesIt']");
+    assertThat(lineBPorcDesIt.getLength()).isZero();
+    assertThat(xpath(doc, "(//*[local-name()='gCamItem'])[2]//*[local-name()='dDescGloItem']"))
+        .isEqualTo("3000.00");
+
+    // F010 must reflect the flat 10% global rate — identical for both lines even though line A
+    // also has its own particular discount, unlike the old (buggy) value-weighted proration.
+    assertThat(xpath(doc, "//*[local-name()='dPorcDescTotal']")).isEqualTo("10.00000000");
+  }
+
+  /**
+   * Builds a line with the given per-unit item/global discount amounts (EA002/EA004), computing
+   * netTotal via the manual's own EA008 formula: {@code (E721 - EA002 - EA004) * E711}.
+   */
+  private static SifenInvoiceLine exemptLine(
+      BigDecimal unitPrice,
+      int quantity,
+      BigDecimal itemDiscountPerUnit,
+      BigDecimal globalDiscountPerUnit) {
+    BigDecimal netTotal =
+        unitPrice
+            .subtract(itemDiscountPerUnit)
+            .subtract(globalDiscountPerUnit)
+            .multiply(BigDecimal.valueOf(quantity));
+    return new SifenInvoiceLine(
+        "SVC-1",
+        "Servicio",
+        null,
+        quantity,
+        "77",
+        unitPrice,
+        itemDiscountPerUnit,
+        globalDiscountPerUnit,
+        netTotal,
+        SifenTaxAffectation.EXENTO,
+        BigDecimal.valueOf(100),
+        BigDecimal.ZERO,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO);
+  }
+
+  private static SifenInvoiceTotals exemptTotals(
+      BigDecimal netTotal,
+      BigDecimal itemDiscountTotal,
+      BigDecimal globalDiscountTotal,
+      BigDecimal globalDiscountPercent) {
+    return new SifenInvoiceTotals(
+        netTotal,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO,
+        netTotal,
+        itemDiscountTotal,
+        globalDiscountTotal,
+        itemDiscountTotal.add(globalDiscountTotal),
+        netTotal,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO,
+        BigDecimal.ZERO,
+        globalDiscountPercent,
+        BigDecimal.ZERO);
+  }
+
+  private SifenInvoiceDetail singleLineDetail(SifenInvoiceLine line) {
+    SifenInvoiceTotals totals =
+        exemptTotals(
+            line.netTotal(),
+            line.itemDiscountAmount().multiply(BigDecimal.valueOf(line.quantity())),
+            line.globalDiscountAmount().multiply(BigDecimal.valueOf(line.quantity())),
+            BigDecimal.ZERO);
+    return new SifenInvoiceDetail(List.of(line), totals, 1, detail.payments());
   }
 
   private static String xpath(Document doc, String expression) throws Exception {

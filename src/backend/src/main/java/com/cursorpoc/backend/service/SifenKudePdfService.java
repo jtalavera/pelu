@@ -531,7 +531,7 @@ public class SifenKudePdfService {
       addCell(table, "Unidad", bodyFont, Element.ALIGN_CENTER);
       addCell(table, String.valueOf(line.quantity()), bodyFont, Element.ALIGN_RIGHT);
       addCell(table, formatMoney(line.unitPrice()), bodyFont, Element.ALIGN_RIGHT);
-      addCell(table, formatMoney(line.discountAmount()), bodyFont, Element.ALIGN_RIGHT);
+      addCell(table, formatMoney(line.totalDiscountAmount()), bodyFont, Element.ALIGN_RIGHT);
       BigDecimal rate = line.taxRatePercent();
       addCell(
           table,

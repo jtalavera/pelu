@@ -104,6 +104,7 @@ class SifenKudePdfServiceTest {
             "77",
             BigDecimal.valueOf(100_000),
             BigDecimal.ZERO,
+            BigDecimal.ZERO,
             BigDecimal.valueOf(100_000),
             SifenTaxAffectation.GRAVADO,
             BigDecimal.valueOf(100),
@@ -125,7 +126,9 @@ class SifenKudePdfServiceTest {
             BigDecimal.valueOf(90909),
             BigDecimal.ZERO,
             BigDecimal.valueOf(9091),
-            BigDecimal.valueOf(9091));
+            BigDecimal.valueOf(9091),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
     detail =
         new SifenInvoiceDetail(
             List.of(line),

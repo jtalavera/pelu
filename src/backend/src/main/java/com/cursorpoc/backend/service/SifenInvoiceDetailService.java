@@ -61,62 +61,72 @@ public class SifenInvoiceDetailService {
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
 
-    List<SifenInvoiceLine> lines = buildLines(invoice);
-    SifenInvoiceTotals totals = buildTotals(invoice, lines);
+    BigDecimal globalDiscountPercent = globalDiscountPercent(invoice);
+    List<SifenInvoiceLine> lines = buildLines(invoice, globalDiscountPercent);
+    SifenInvoiceTotals totals = buildTotals(invoice, lines, globalDiscountPercent);
     List<SifenPaymentDetail> payments = buildPayments(invoice);
 
     return new SifenInvoiceDetail(lines, totals, PAYMENT_CONDITION_CASH, payments);
   }
 
   /**
-   * AC-01/AC-02/AC-03/AC-05: una línea por servicio, con su monto neto de descuentos (propio +
-   * prorrateo del descuento global de la factura, si existe) y su clasificación de IVA.
-   *
-   * <p>El descuento global de {@code Invoice} (distinto del descuento por línea, que ya está
-   * incluido en {@code InvoiceLine.lineTotal}) no tiene un desglose por ítem propio — se prorratea
-   * proporcionalmente al peso de cada línea sobre el subtotal, y la última línea absorbe el resto
-   * del redondeo para garantizar que la suma de las líneas sea exactamente el total de la factura
-   * (AC-04).
+   * EA004/dDescGloItem (Manual Técnico V150, E8.1.1): "Si se cuenta con un descuento global, debe
+   * ser aplicado (no es prorrateado) a cada uno de los ítems, independientemente que un ítem cuente
+   * con un descuento particular" — a single percentage, applied uniformly to every line's own unit
+   * price, not the invoice-level discount amount split by each line's weight (which is what this
+   * used to do, and which SIFEN rejected live — dCodRes=1862 — the moment a line also carried its
+   * own particular discount, since that skews a value-weighted split away from a flat rate).
+   * Computed once against the gross (pre-any-discount) total of every line, so the same percentage
+   * ties out exactly across the whole invoice regardless of per-line item discounts.
    */
-  private List<SifenInvoiceLine> buildLines(Invoice invoice) {
-    List<InvoiceLine> source = invoice.getLines();
+  private static BigDecimal globalDiscountPercent(Invoice invoice) {
     BigDecimal subtotal = invoice.getSubtotal();
     BigDecimal globalDiscount = subtotal.subtract(invoice.getTotal());
     if (globalDiscount.compareTo(BigDecimal.ZERO) < 0) {
       globalDiscount = BigDecimal.ZERO;
     }
+    BigDecimal grossSubtotal =
+        invoice.getLines().stream()
+            .map(l -> l.getUnitPrice().multiply(BigDecimal.valueOf(l.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (globalDiscount.signum() == 0 || grossSubtotal.signum() == 0) {
+      return BigDecimal.ZERO;
+    }
+    return globalDiscount
+        .multiply(BigDecimal.valueOf(100))
+        .divide(grossSubtotal, 8, RoundingMode.HALF_UP);
+  }
 
-    List<SifenInvoiceLine> result = new ArrayList<>(source.size());
-    BigDecimal proratedSoFar = BigDecimal.ZERO;
-    for (int i = 0; i < source.size(); i++) {
-      InvoiceLine line = source.get(i);
-      boolean isLast = i == source.size() - 1;
-
-      BigDecimal proratedGlobalDiscount;
-      if (globalDiscount.compareTo(BigDecimal.ZERO) == 0
-          || subtotal.compareTo(BigDecimal.ZERO) == 0) {
-        proratedGlobalDiscount = BigDecimal.ZERO;
-      } else if (isLast) {
-        proratedGlobalDiscount = globalDiscount.subtract(proratedSoFar);
-      } else {
-        proratedGlobalDiscount =
-            globalDiscount.multiply(line.getLineTotal()).divide(subtotal, 2, RoundingMode.HALF_UP);
-        proratedSoFar = proratedSoFar.add(proratedGlobalDiscount);
-      }
-
-      BigDecimal grossLineTotal =
-          line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity()));
-      BigDecimal perLineDiscount = grossLineTotal.subtract(line.getLineTotal());
-      BigDecimal netTotal = line.getLineTotal().subtract(proratedGlobalDiscount);
-      BigDecimal discountAmount = perLineDiscount.add(proratedGlobalDiscount);
-
-      result.add(buildLine(line, netTotal, discountAmount));
+  /** AC-01/AC-02/AC-03/AC-05: una línea por servicio, con su desglose de descuentos e IVA. */
+  private List<SifenInvoiceLine> buildLines(Invoice invoice, BigDecimal globalDiscountPercent) {
+    List<SifenInvoiceLine> result = new ArrayList<>(invoice.getLines().size());
+    for (InvoiceLine line : invoice.getLines()) {
+      result.add(buildLine(line, globalDiscountPercent));
     }
     return result;
   }
 
-  private SifenInvoiceLine buildLine(
-      InvoiceLine line, BigDecimal netTotal, BigDecimal discountAmount) {
+  private SifenInvoiceLine buildLine(InvoiceLine line, BigDecimal globalDiscountPercent) {
+    BigDecimal quantity = BigDecimal.valueOf(line.getQuantity());
+    BigDecimal grossLineTotal = line.getUnitPrice().multiply(quantity);
+    // EA002/dDescItem, per-unit — this line's own particular discount, isolated to itself.
+    BigDecimal itemDiscountAmount =
+        grossLineTotal.subtract(line.getLineTotal()).divide(quantity, 2, RoundingMode.HALF_UP);
+    // EA004/dDescGloItem, per-unit — the flat global-discount percentage applied to this line's
+    // own unit price (see globalDiscountPercent's javadoc for why it isn't prorated).
+    BigDecimal globalDiscountAmount =
+        line.getUnitPrice()
+            .multiply(globalDiscountPercent)
+            .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    // EA008/dTotOpeItem: (E721 - EA002 - EA004) * E711 — the manual's own formula (regla EA008,
+    // código 1853, checks this arithmetic directly), not a value-weighted proration of
+    // Invoice.total.
+    BigDecimal netTotal =
+        line.getUnitPrice()
+            .subtract(itemDiscountAmount)
+            .subtract(globalDiscountAmount)
+            .multiply(quantity);
+
     BigDecimal taxRate = line.getTaxRate() != null ? line.getTaxRate() : BigDecimal.ZERO;
     boolean taxed = taxRate.compareTo(BigDecimal.ZERO) > 0;
 
@@ -165,7 +175,8 @@ public class SifenInvoiceDetailService {
         line.getQuantity(),
         UNIT_OF_MEASURE_CODE,
         line.getUnitPrice(),
-        discountAmount,
+        itemDiscountAmount,
+        globalDiscountAmount,
         netTotal,
         affectation,
         BigDecimal.valueOf(100),
@@ -185,7 +196,8 @@ public class SifenInvoiceDetailService {
   }
 
   /** AC-03/AC-04: sumas derivadas de las líneas ya construidas — siempre consistentes con ellas. */
-  private SifenInvoiceTotals buildTotals(Invoice invoice, List<SifenInvoiceLine> lines) {
+  private SifenInvoiceTotals buildTotals(
+      Invoice invoice, List<SifenInvoiceLine> lines, BigDecimal globalDiscountPercent) {
     BigDecimal exempt = BigDecimal.ZERO;
     BigDecimal taxed5 = BigDecimal.ZERO;
     BigDecimal taxed10 = BigDecimal.ZERO;
@@ -193,15 +205,13 @@ public class SifenInvoiceDetailService {
     BigDecimal base10 = BigDecimal.ZERO;
     BigDecimal iva5 = BigDecimal.ZERO;
     BigDecimal iva10 = BigDecimal.ZERO;
-    BigDecimal perLineDiscount = BigDecimal.ZERO;
+    BigDecimal itemDiscountTotal = BigDecimal.ZERO;
+    BigDecimal globalDiscountTotal = BigDecimal.ZERO;
 
-    List<InvoiceLine> source = invoice.getLines();
-    for (int i = 0; i < lines.size(); i++) {
-      SifenInvoiceLine line = lines.get(i);
-      InvoiceLine sourceLine = source.get(i);
-      BigDecimal grossLineTotal =
-          sourceLine.getUnitPrice().multiply(BigDecimal.valueOf(sourceLine.getQuantity()));
-      perLineDiscount = perLineDiscount.add(grossLineTotal.subtract(sourceLine.getLineTotal()));
+    for (SifenInvoiceLine line : lines) {
+      BigDecimal quantity = BigDecimal.valueOf(line.quantity());
+      itemDiscountTotal = itemDiscountTotal.add(line.itemDiscountAmount().multiply(quantity));
+      globalDiscountTotal = globalDiscountTotal.add(line.globalDiscountAmount().multiply(quantity));
 
       if (line.taxAffectation() == SifenTaxAffectation.EXENTO) {
         exempt = exempt.add(line.netTotal());
@@ -217,27 +227,29 @@ public class SifenInvoiceDetailService {
     }
 
     BigDecimal gross = exempt.add(taxed5).add(taxed10);
-    BigDecimal subtotal = invoice.getSubtotal();
-    BigDecimal globalDiscount = subtotal.subtract(invoice.getTotal());
-    if (globalDiscount.compareTo(BigDecimal.ZERO) < 0) {
-      globalDiscount = BigDecimal.ZERO;
-    }
+    // F012/dRedon: the manual's own plug for the (typically zero, occasionally a few céntimos)
+    // rounding gap between the formula-driven per-item totals (EA008, summed here as `gross`) and
+    // what Invoice.total actually charged — expected whenever a discount percentage doesn't divide
+    // evenly across every item (the same reason SIFEN gives EA003a/EA004 a ±0.8 tolerance).
+    BigDecimal roundingAdjustment = gross.subtract(invoice.getTotal());
 
     return new SifenInvoiceTotals(
         exempt,
         taxed5,
         taxed10,
         gross,
-        perLineDiscount,
-        globalDiscount,
-        perLineDiscount.add(globalDiscount),
-        gross, // F014 = F008 - dRedon(0) + dComi(0): sin redondeo ni comisión en este dominio
+        itemDiscountTotal,
+        globalDiscountTotal,
+        itemDiscountTotal.add(globalDiscountTotal),
+        invoice.getTotal(), // F014/dTotGralOpe: siempre el total real cobrado (AC-04)
         base5,
         base10,
         base5.add(base10),
         iva5,
         iva10,
-        iva5.add(iva10));
+        iva5.add(iva10),
+        globalDiscountPercent,
+        roundingAdjustment);
   }
 
   /** AC-06: forma de pago de cada asignación — venta siempre al contado en este dominio. */

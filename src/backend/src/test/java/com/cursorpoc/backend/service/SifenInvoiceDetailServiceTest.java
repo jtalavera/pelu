@@ -243,11 +243,68 @@ class SifenInvoiceDetailServiceTest {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     assertThat(sumOfLines).isEqualByComparingTo(invoice.getTotal());
     assertThat(detail.totals().globalDiscountTotal()).isEqualByComparingTo("40.00");
-    // Proportional to each line's share of the subtotal: 100/400*40=10, 300/400*40=30.
+    // 40/400 gross = 10% global rate, applied to each line's own unit price: 100*10%=10,
+    // 300*10%=30.
     assertThat(detail.lines().get(0).netTotal()).isEqualByComparingTo("90.00");
     assertThat(detail.lines().get(1).netTotal()).isEqualByComparingTo("270.00");
-    assertThat(detail.lines().get(0).discountAmount()).isEqualByComparingTo("10.00");
-    assertThat(detail.lines().get(1).discountAmount()).isEqualByComparingTo("30.00");
+    assertThat(detail.lines().get(0).globalDiscountAmount()).isEqualByComparingTo("10.00");
+    assertThat(detail.lines().get(1).globalDiscountAmount()).isEqualByComparingTo("30.00");
+    assertThat(detail.lines().get(0).itemDiscountAmount()).isEqualByComparingTo("0");
+    assertThat(detail.lines().get(1).itemDiscountAmount()).isEqualByComparingTo("0");
+  }
+
+  /**
+   * AC-05 (contrast): an item-level discount alone (no global discount) is reported only as
+   * itemDiscountAmount — globalDiscountAmount stays zero.
+   */
+  @Test
+  void buildDetail_itemDiscountOnly_isReportedSeparatelyFromGlobalDiscount() {
+    InvoiceLine line = addLine("Corte", 1, new BigDecimal("100.00"), BigDecimal.ZERO);
+    line.setLineTotal(new BigDecimal("80.00"));
+    finalizeTotals(BigDecimal.ZERO);
+
+    SifenInvoiceLine detailLine = service.buildDetail(TENANT_ID, INVOICE_ID).lines().get(0);
+
+    assertThat(detailLine.itemDiscountAmount()).isEqualByComparingTo("20.00");
+    assertThat(detailLine.globalDiscountAmount()).isEqualByComparingTo("0");
+    assertThat(detailLine.netTotal()).isEqualByComparingTo("80.00");
+  }
+
+  /**
+   * AC-05: an item with its own discount AND a share of the invoice-level global discount reports
+   * both independently, including for a line with quantity &gt; 1 — the exact combination that was
+   * rejected live (SIFEN error 1852, "Porcentaje de descuento particular por ítem no informado",
+   * and then 1862, "El descuento global ... no coincidente con lo informado", once 1852 was fixed).
+   *
+   * <p>The global discount must be the SAME percentage on every line's own unit price — not each
+   * line's weighted share of the invoice total — precisely because line A also has a particular
+   * discount: weighting by each line's (already-discounted) value would skew the percentage away
+   * from a flat rate, which is exactly what triggered the live 1862 rejection.
+   */
+  @Test
+  void buildDetail_itemAndGlobalDiscountCombined_reportsBothIndependently() {
+    InvoiceLine lineA = addLine("Corte", 1, new BigDecimal("100.00"), BigDecimal.ZERO);
+    lineA.setLineTotal(new BigDecimal("80.00")); // Rebaja de 20 (item-level discount)
+    addLine("Manicura", 2, new BigDecimal("150.00"), BigDecimal.ZERO); // qty > 1, no item discount
+    finalizeTotals(new BigDecimal("38.00"));
+
+    SifenInvoiceDetail detail = service.buildDetail(TENANT_ID, INVOICE_ID);
+    SifenInvoiceLine detailLineA = detail.lines().get(0);
+    SifenInvoiceLine detailLineB = detail.lines().get(1);
+
+    assertThat(detailLineA.itemDiscountAmount()).isEqualByComparingTo("20.00");
+    // Global rate = 38 / (100*1 + 150*2) gross = 9.5%, applied to each line's OWN unit price:
+    // 100*9.5%=9.50, 150*9.5%=14.25 — identical 9.5% for both lines despite line A's own discount.
+    assertThat(detailLineA.globalDiscountAmount()).isEqualByComparingTo("9.50");
+    assertThat(detailLineB.itemDiscountAmount()).isEqualByComparingTo("0");
+    assertThat(detailLineB.globalDiscountAmount()).isEqualByComparingTo("14.25");
+    assertThat(detail.totals().globalDiscountPercent()).isEqualByComparingTo("9.50000000");
+
+    BigDecimal sumOfLines =
+        detail.lines().stream()
+            .map(SifenInvoiceLine::netTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    assertThat(sumOfLines).isEqualByComparingTo(invoice.getTotal());
   }
 
   /** AC-06: each payment allocation maps to SIFEN's payment-type code; sale is always Contado. */
