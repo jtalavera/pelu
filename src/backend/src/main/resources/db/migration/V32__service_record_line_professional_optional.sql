@@ -1,4 +1,4 @@
--- ── V18: Ficha de servicio — professional is optional per line ─────────────
+-- ── V32: Ficha de servicio — professional is optional per line ─────────────
 -- A ficha only requires a client; a service line can be added before a
 -- professional is assigned to it.
 
