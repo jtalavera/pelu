@@ -203,11 +203,13 @@ reconciliación), no por un fallback offline.
     backend se cae entre crear la factura y encolar el mensaje): comparar facturas
     `PENDING_VERIFICATION` en base contra lo que hay en la cola, y re-encolar lo que falte.
 
-  Requiere: agregar el recurso Azure Service Bus (namespace + cola, tier Basic) en Terraform
-  (`infrastructure_v2/`), con la Managed Identity del Container App como identidad de acceso (mismo
-  patrón que Key Vault en RT-10); dependencia `spring-cloud-azure-starter-servicebus` en el
-  backend; remover el intento síncrono actual de `InvoiceController.issue` /
-  `SifenInvoiceSubmissionService.submit`.
+  Requiere: agregar el recurso Azure Service Bus (namespace + cola, tier **Basic**) en Terraform
+  (`infrastructure_v2/`), aplicado en **ambos ambientes** (`environments/dev` y
+  `environments/prod`, ver RT-19) — no solo producción, ya que dev/testing también necesita
+  procesar contra el ambiente `TEST` de SIFEN de forma asíncrona; con la Managed Identity del
+  Container App como identidad de acceso (mismo patrón que Key Vault en RT-10); dependencia
+  `spring-cloud-azure-starter-servicebus` en el backend; remover el intento síncrono actual de
+  `InvoiceController.issue` / `SifenInvoiceSubmissionService.submit`.
 
 - **RT-21 [CRÍTICA] — Observabilidad real de las llamadas a SIFEN en producción.** Application
   Insights está aprovisionado en Terraform (`main.tf:82-90`, connection string inyectada al
