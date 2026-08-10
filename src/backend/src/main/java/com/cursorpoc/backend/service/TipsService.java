@@ -20,6 +20,8 @@ import com.cursorpoc.backend.web.dto.TipReportRowResponse;
 import com.cursorpoc.backend.web.dto.TipWithdrawalHistoryItemResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +59,8 @@ public class TipsService {
       long tenantId, Instant fromDate, Instant toDate, List<Long> professionalIds) {
     List<Long> resolvedProfessionalIds = resolveProfessionalIds(tenantId, professionalIds);
     if (resolvedProfessionalIds.isEmpty()) {
-      return new TipReportResponse(List.of(), List.of(), BigDecimal.ZERO);
+      return new TipReportResponse(
+          List.of(), List.of(), BigDecimal.ZERO, BigDecimal.ZERO, List.of());
     }
     List<ServiceRecordTip> tips =
         serviceRecordTipRepository.findForReport(
@@ -88,7 +91,45 @@ public class TipsService {
       grandTotal = grandTotal.add(row.amount());
     }
 
-    return new TipReportResponse(rows, List.copyOf(totalsByProfessional.values()), grandTotal);
+    // Withdrawals made within the same window must reduce the totals they were drawn from, or a
+    // professional's report subtotal never reflects money they already took out.
+    List<TipWithdrawal> withdrawalsInRange =
+        tipWithdrawalRepository.findForReport(tenantId, fromDate, toDate, resolvedProfessionalIds);
+    Map<Long, TipReportProfessionalTotalResponse> withdrawalsByProfessional = new LinkedHashMap<>();
+    for (TipWithdrawal withdrawal : withdrawalsInRange) {
+      Long professionalId = withdrawal.getProfessional().getId();
+      TipReportProfessionalTotalResponse existing = withdrawalsByProfessional.get(professionalId);
+      BigDecimal newTotal =
+          (existing != null ? existing.total() : BigDecimal.ZERO).add(withdrawal.getAmount());
+      withdrawalsByProfessional.put(
+          professionalId,
+          new TipReportProfessionalTotalResponse(
+              professionalId, withdrawal.getProfessional().getFullName(), newTotal));
+    }
+    BigDecimal withdrawalsTotal = BigDecimal.ZERO;
+    for (TipReportProfessionalTotalResponse withdrawalTotal : withdrawalsByProfessional.values()) {
+      withdrawalsTotal = withdrawalsTotal.add(withdrawalTotal.total());
+      TipReportProfessionalTotalResponse existing =
+          totalsByProfessional.get(withdrawalTotal.professionalId());
+      // A professional can withdraw within the window without having any tip rows in it (e.g. the
+      // tip was earned earlier) — still surface them as their own group with a negative subtotal,
+      // rather than silently dropping their withdrawal from the report.
+      BigDecimal baseTotal = existing != null ? existing.total() : BigDecimal.ZERO;
+      totalsByProfessional.put(
+          withdrawalTotal.professionalId(),
+          new TipReportProfessionalTotalResponse(
+              withdrawalTotal.professionalId(),
+              withdrawalTotal.professionalName(),
+              baseTotal.subtract(withdrawalTotal.total())));
+      grandTotal = grandTotal.subtract(withdrawalTotal.total());
+    }
+
+    return new TipReportResponse(
+        rows,
+        List.copyOf(totalsByProfessional.values()),
+        grandTotal,
+        withdrawalsTotal,
+        List.copyOf(withdrawalsByProfessional.values()));
   }
 
   @Transactional(readOnly = true)
@@ -128,23 +169,43 @@ public class TipsService {
     BigDecimal newBalance = balance.subtract(amount);
     return new CreateTipWithdrawalResponse(
         new TipWithdrawalHistoryItemResponse(
-            withdrawal.getId(), withdrawal.getAmount(), withdrawal.getWithdrawnAt()),
+            withdrawal.getId(),
+            professional.getFullName(),
+            withdrawal.getAmount(),
+            withdrawal.getWithdrawnAt()),
         newBalance);
   }
 
+  /**
+   * {@code professionalId} is optional: when omitted, returns the tenant-wide withdrawal history
+   * (every professional) for the last 3 months — the always-visible default view in the Retiro de
+   * propinas screen. When given, returns that professional's full all-time history, unchanged from
+   * before this became optional.
+   */
   @Transactional(readOnly = true)
   public PagedTipWithdrawalsResponse listWithdrawals(
-      long tenantId, long professionalId, int page, int size) {
-    requireProfessional(tenantId, professionalId);
-    Page<TipWithdrawal> result =
-        tipWithdrawalRepository.findByTenant_IdAndProfessional_IdOrderByWithdrawnAtDesc(
-            tenantId, professionalId, PageRequest.of(page, size));
+      long tenantId, Long professionalId, int page, int size) {
+    Page<TipWithdrawal> result;
+    if (professionalId != null) {
+      requireProfessional(tenantId, professionalId);
+      result =
+          tipWithdrawalRepository.findByTenant_IdAndProfessional_IdOrderByWithdrawnAtDesc(
+              tenantId, professionalId, PageRequest.of(page, size));
+    } else {
+      Instant threeMonthsAgo = ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3).toInstant();
+      result =
+          tipWithdrawalRepository.findByTenantSince(
+              tenantId, threeMonthsAgo, PageRequest.of(page, size));
+    }
     List<TipWithdrawalHistoryItemResponse> content =
         result.getContent().stream()
             .map(
                 w ->
                     new TipWithdrawalHistoryItemResponse(
-                        w.getId(), w.getAmount(), w.getWithdrawnAt()))
+                        w.getId(),
+                        w.getProfessional().getFullName(),
+                        w.getAmount(),
+                        w.getWithdrawnAt()))
             .toList();
     return new PagedTipWithdrawalsResponse(
         content, page, size, result.getTotalElements(), result.getTotalPages());

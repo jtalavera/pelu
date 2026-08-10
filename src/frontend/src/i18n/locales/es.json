@@ -490,8 +490,7 @@
         "linesRequired": "Agregá al menos un ítem.",
         "paymentsRequired": "Agregá al menos un método de pago.",
         "paymentSumHint": "Total asignado: {{assigned}} de {{total}}",
-        "tips": "Propinas",
-        "tipsPlaceholder": "0"
+        "tips": "Propinas"
       },
       "history": {
         "title": "Historial de comprobantes",
@@ -1267,6 +1266,7 @@
         "filterProfessionalFilterPlaceholder": "Buscar profesionales…",
         "filterProfessionalNoResults": "No se encontraron profesionales.",
         "filterProfessionalSummary": "{count} seleccionadas",
+        "clear": "Limpiar",
         "search": "Buscar",
         "exportPdf": "Exportar PDF",
         "exporting": "Exportando…",
@@ -1279,6 +1279,7 @@
         "colClient": "Cliente",
         "colDateTime": "Fecha y hora de servicio",
         "subtotalLabel": "Subtotal — {{name}}",
+        "withdrawalRowLabel": "Retiro manual — {{name}}",
         "grandTotalLabel": "Total general"
       },
       "withdrawal": {
@@ -1295,7 +1296,8 @@
         "submitting": "Retirando…",
         "success": "Retiro realizado con éxito.",
         "historyTitle": "Historial de retiros",
-        "historyEmpty": "Todavía no hay retiros para esta profesional.",
+        "historyEmpty": "No hay retiros en los últimos 3 meses.",
+        "historyColProfessional": "Profesional",
         "historyColDate": "Fecha",
         "historyColAmount": "Monto"
       }

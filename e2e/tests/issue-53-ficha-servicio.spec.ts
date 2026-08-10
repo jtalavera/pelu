@@ -80,6 +80,20 @@ async function findHistoryRow(page: Page, query: string) {
   return page.locator("tbody tr").filter({ hasText: query }).first();
 }
 
+/**
+ * The dashboard's "Today's service records" grid caps at 12 cards with a "More" button that
+ * reveals the rest in place. When other tests (or other tenants' demo activity) have already
+ * created same-day records, a freshly-created card may not land in that first page — click
+ * "More" until every fetched record is visible so assertions don't depend on how much unrelated
+ * "today" activity already exists.
+ */
+async function revealAllTodayRecords(page: Page): Promise<void> {
+  const moreButton = page.getByTestId("dashboard-service-records-more");
+  for (let i = 0; i < 10 && (await moreButton.isVisible().catch(() => false)); i++) {
+    await moreButton.click();
+  }
+}
+
 test.describe("Issue #53 · Ficha de servicio", () => {
   let seed: SeededSalon;
   let secondProfessional: { id: number; fullName: string };
@@ -115,6 +129,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 6));
     await page.getByRole("button", { name: client.fullName }).click();
 
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
 
@@ -188,6 +203,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page).toHaveURL(/\/app\/service-records/);
     await expect(page.getByLabel("Search or select client")).toHaveValue(newClientName);
 
+    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
     await page.getByRole("button", { name: "Save record" }).click();
@@ -201,7 +217,10 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    const client = await seedClient(request, token, `E2E GenInv ${Date.now()}`, undefined, "80000005-6");
+    // Unique per run: the Client entity enforces per-tenant RUC uniqueness, and this spec can
+    // run alongside others (e.g. issue-96) that also create a client with a RUC.
+    const clientRuc = `800${Date.now()}-6`;
+    const client = await seedClient(request, token, `E2E GenInv ${Date.now()}`, undefined, clientRuc);
     const record = await createServiceRecordApi(request, token, {
       clientId: client.id,
       lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
@@ -227,7 +246,8 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.locator("#client-identity-document-type")).toHaveValue("RUC");
     await expect(page.locator("#client-identity-document-number")).toHaveValue("80000005-6");
     await expect(page.locator("#line-price-0")).toHaveValue("50.000");
-    await expect(page.locator("#billing-tips-amount")).toHaveValue("4.000");
+    // Issue #137: Propinas is a read-only text value (like Subtotal/Pendiente), not an input.
+    await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
     // Payment auto-fills to cover total + tips = 54.000.
     await expect(page.locator("#pay-amount-0")).toHaveValue("54.000");
 
@@ -322,6 +342,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await loginAsDemo(page);
     await page.goto("/app");
     await expect(page.getByText("Today's service records")).toBeVisible();
+    await revealAllTodayRecords(page);
     await expect(page.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(olderClient.fullName)).toBeVisible();
 
@@ -336,6 +357,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
       data: { voidReason: "E2E void for ordering test" },
     });
     await page.reload();
+    await revealAllTodayRecords(page);
     await expect(page.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(newerClient.fullName)).toBeVisible();
     const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/ });
@@ -343,7 +365,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     expect(firstCardAfterVoid).toContain(olderClient.fullName);
   });
 
-  test("AC10 · el dashboard muestra un máximo de 14 fichas y un botón Más hacia el Historial", async ({
+  test("AC10 · el dashboard muestra un máximo de 12 fichas en una grilla y un botón Más que revela el resto en el lugar", async ({
     page,
     request,
   }) => {
@@ -365,12 +387,12 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     const cards = page.locator("button", { hasText: capMarker });
-    await expect(cards).toHaveCount(14);
-    const moreLink = page.getByRole("link", { name: "More", exact: true });
-    await expect(moreLink).toBeVisible();
-    await moreLink.click();
-    await expect(page).toHaveURL(/\/app\/service-records/);
-    await expect(page.getByRole("tab", { name: "History", selected: true })).toBeVisible();
+    await expect(cards).toHaveCount(12);
+    const moreButton = page.getByRole("button", { name: "More", exact: true });
+    await expect(moreButton).toBeVisible();
+    await moreButton.click();
+    await expect(cards).toHaveCount(15);
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
   test("AC8 · historial de fichas con filtros de búsqueda", async ({ page, request }) => {

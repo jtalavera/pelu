@@ -21,6 +21,8 @@ export type TipReportResponse = {
   rows: TipReportRow[];
   professionalTotals: TipReportProfessionalTotal[];
   grandTotal: number;
+  withdrawalsTotal: number;
+  withdrawalsByProfessional: TipReportProfessionalTotal[];
 };
 
 export type ProfessionalTipBalance = {
@@ -31,6 +33,7 @@ export type ProfessionalTipBalance = {
 
 export type TipWithdrawalHistoryItem = {
   id: number;
+  professionalName: string;
   amount: number;
   withdrawnAt: string;
 };
@@ -99,7 +102,8 @@ export function createTipWithdrawal(
 }
 
 export type ListTipWithdrawalsParams = {
-  professionalId: number;
+  /** Omit to get the tenant-wide history (all professionals) for the last 3 months. */
+  professionalId?: number;
   page?: number;
   size?: number;
 };
@@ -108,7 +112,7 @@ export function listTipWithdrawalsPaged(
   params: ListTipWithdrawalsParams,
 ): Promise<PageResponse<TipWithdrawalHistoryItem>> {
   const qs = new URLSearchParams();
-  qs.set("professionalId", String(params.professionalId));
+  if (params.professionalId != null) qs.set("professionalId", String(params.professionalId));
   if (params.page != null) qs.set("page", String(params.page));
   if (params.size != null) qs.set("size", String(params.size));
   return femmeJson<PageResponse<TipWithdrawalHistoryItem>>(`/api/propinas/withdrawals?${qs.toString()}`);

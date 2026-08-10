@@ -214,18 +214,15 @@ public class ServiceRecordService {
 
   private void applyLinesAndTips(
       ServiceRecord record, ServiceRecordRequest request, long tenantId) {
-    if (request.lines() == null || request.lines().isEmpty()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LINES_REQUIRED");
-    }
     BigDecimal total = BigDecimal.ZERO;
     Set<Long> lineProfessionalIds = new LinkedHashSet<>();
     Map<Long, Professional> professionalsById = new LinkedHashMap<>();
     for (ServiceRecordLineRequest lr : request.lines()) {
-      if (lr.quantity() == null || lr.quantity() < 1) {
+      if (lr.quantity() != null && lr.quantity() < 1) {
         throw new ResponseStatusException(
             HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LINE_QUANTITY_INVALID");
       }
-      if (lr.unitPrice() == null || lr.unitPrice().compareTo(BigDecimal.ZERO) <= 0) {
+      if (lr.unitPrice() != null && lr.unitPrice().compareTo(BigDecimal.ZERO) <= 0) {
         throw new ResponseStatusException(
             HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LINE_UNIT_PRICE_INVALID");
       }
@@ -235,25 +232,33 @@ public class ServiceRecordService {
               .orElseThrow(
                   () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND"));
       Professional professional =
-          professionalRepository
-              .findByIdAndTenant_Id(lr.professionalId(), tenantId)
-              .orElseThrow(
-                  () ->
-                      new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+          lr.professionalId() != null
+              ? professionalRepository
+                  .findByIdAndTenant_Id(lr.professionalId(), tenantId)
+                  .orElseThrow(
+                      () ->
+                          new ResponseStatusException(
+                              HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"))
+              : null;
 
       ServiceRecordLine line = new ServiceRecordLine();
       line.setServiceRecord(record);
       line.setSalonService(salonService);
       line.setProfessional(professional);
       line.setDescription(salonService.getName());
-      BigDecimal unitPrice = lr.unitPrice().setScale(2, RoundingMode.HALF_UP);
+      int quantity = lr.quantity() != null ? lr.quantity() : 1;
+      BigDecimal unitPrice =
+          (lr.unitPrice() != null ? lr.unitPrice() : BigDecimal.ZERO)
+              .setScale(2, RoundingMode.HALF_UP);
       line.setUnitPrice(unitPrice);
-      line.setQuantity(lr.quantity());
+      line.setQuantity(quantity);
       record.getLines().add(line);
 
-      total = total.add(unitPrice.multiply(BigDecimal.valueOf(lr.quantity())));
-      lineProfessionalIds.add(professional.getId());
-      professionalsById.put(professional.getId(), professional);
+      total = total.add(unitPrice.multiply(BigDecimal.valueOf(quantity)));
+      if (professional != null) {
+        lineProfessionalIds.add(professional.getId());
+        professionalsById.put(professional.getId(), professional);
+      }
     }
     record.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
 
@@ -324,8 +329,8 @@ public class ServiceRecordService {
                         l.getUnitPrice()
                             .multiply(BigDecimal.valueOf(l.getQuantity()))
                             .setScale(2, RoundingMode.HALF_UP),
-                        l.getProfessional().getId(),
-                        l.getProfessional().getFullName()))
+                        l.getProfessional() != null ? l.getProfessional().getId() : null,
+                        l.getProfessional() != null ? l.getProfessional().getFullName() : null))
             .collect(Collectors.toList());
 
     List<ServiceRecordTipResponse> tips =

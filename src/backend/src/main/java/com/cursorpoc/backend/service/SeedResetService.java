@@ -20,6 +20,7 @@ import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TipWithdrawalRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,7 @@ public class SeedResetService {
   private final CashSessionRepository cashSessionRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final AppUserTourStateRepository appUserTourStateRepository;
+  private final TipWithdrawalRepository tipWithdrawalRepository;
   private final FemmeDataInitializer femmeDataInitializer;
 
   public SeedResetService(
@@ -71,6 +73,7 @@ public class SeedResetService {
       CashSessionRepository cashSessionRepository,
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
+      TipWithdrawalRepository tipWithdrawalRepository,
       FemmeDataInitializer femmeDataInitializer) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
@@ -89,6 +92,7 @@ public class SeedResetService {
     this.cashSessionRepository = cashSessionRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.appUserTourStateRepository = appUserTourStateRepository;
+    this.tipWithdrawalRepository = tipWithdrawalRepository;
     this.femmeDataInitializer = femmeDataInitializer;
   }
 
@@ -126,6 +130,10 @@ public class SeedResetService {
 
     long deletedCashSessions = cashSessionRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} cash_sessions", deletedCashSessions);
+
+    // Must run before deleting professionals below: tip_withdrawals has a FK to professionals.
+    long deletedTipWithdrawals = tipWithdrawalRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} tip_withdrawals", deletedTipWithdrawals);
 
     long deletedSchedules =
         professionalScheduleRepository.deleteByProfessional_Tenant_Id(DEMO_TENANT_ID);

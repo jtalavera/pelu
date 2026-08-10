@@ -15,6 +15,7 @@ import com.lowagie.text.pdf.BaseFont;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
+import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -61,6 +62,7 @@ public class TipsReportPdfService {
       Font headerFont = new Font(bfBold, 9);
       Font bodyFont = new Font(bf, 9);
       Font boldFont = new Font(bfBold, 9);
+      Font redBoldFont = new Font(bfBold, 9, Font.NORMAL, Color.RED);
 
       document.add(new Paragraph("Reporte de propinas", titleFont));
       document.add(new Paragraph(dateRangeLabel(from, to, zone), bodyFont));
@@ -77,15 +79,19 @@ public class TipsReportPdfService {
       for (TipReportRowResponse row : report.rows()) {
         rowsByProfessional.computeIfAbsent(row.professionalId(), k -> new ArrayList<>()).add(row);
       }
-
-      boolean showSubtotals = rowsByProfessional.size() > 1;
-      Map<Long, TipReportProfessionalTotalResponse> totalsById = new LinkedHashMap<>();
-      for (TipReportProfessionalTotalResponse t : report.professionalTotals()) {
-        totalsById.put(t.professionalId(), t);
+      Map<Long, TipReportProfessionalTotalResponse> withdrawalsById = new LinkedHashMap<>();
+      for (TipReportProfessionalTotalResponse w : report.withdrawalsByProfessional()) {
+        withdrawalsById.put(w.professionalId(), w);
       }
 
-      for (Map.Entry<Long, List<TipReportRowResponse>> group : rowsByProfessional.entrySet()) {
-        for (TipReportRowResponse row : group.getValue()) {
+      // Iterate professionalTotals (not rowsByProfessional) — a professional can appear here with
+      // only a withdrawal and no tip rows in the window (see TipsService#getReport), and must
+      // still get their own group/subtotal instead of silently disappearing from the PDF.
+      boolean showSubtotals = report.professionalTotals().size() > 1;
+
+      for (TipReportProfessionalTotalResponse total : report.professionalTotals()) {
+        for (TipReportRowResponse row :
+            rowsByProfessional.getOrDefault(total.professionalId(), List.of())) {
           addCell(table, row.professionalName(), bodyFont, Element.ALIGN_LEFT);
           addCell(table, formatMoneyGs(row.amount()), bodyFont, Element.ALIGN_RIGHT);
           addCell(table, row.clientName(), bodyFont, Element.ALIGN_LEFT);
@@ -95,26 +101,22 @@ public class TipsReportPdfService {
               bodyFont,
               Element.ALIGN_LEFT);
         }
-        if (showSubtotals) {
-          TipReportProfessionalTotalResponse total = totalsById.get(group.getKey());
-          PdfPCell label =
-              new PdfPCell(
-                  new Phrase(
-                      "Subtotal " + (total != null ? total.professionalName() : ""), boldFont));
-          label.setColspan(1);
-          label.setBorder(0);
-          table.addCell(label);
+        TipReportProfessionalTotalResponse withdrawal = withdrawalsById.get(total.professionalId());
+        if (withdrawal != null) {
           addCell(
               table,
-              total != null ? formatMoneyGs(total.total()) : "",
-              boldFont,
-              Element.ALIGN_RIGHT);
-          PdfPCell blank1 = new PdfPCell(new Phrase(""));
-          blank1.setBorder(0);
-          table.addCell(blank1);
-          PdfPCell blank2 = new PdfPCell(new Phrase(""));
-          blank2.setBorder(0);
-          table.addCell(blank2);
+              "Retiro manual - " + withdrawal.professionalName(),
+              redBoldFont,
+              Element.ALIGN_LEFT);
+          addCell(table, formatMoneyGs(withdrawal.total()), redBoldFont, Element.ALIGN_RIGHT);
+          addBlankCell(table);
+          addBlankCell(table);
+        }
+        if (showSubtotals) {
+          addCell(table, "Subtotal " + total.professionalName(), boldFont, Element.ALIGN_LEFT);
+          addCell(table, formatMoneyGs(total.total()), boldFont, Element.ALIGN_RIGHT);
+          addBlankCell(table);
+          addBlankCell(table);
         }
       }
 
@@ -143,6 +145,12 @@ public class TipsReportPdfService {
     table.addCell(cell);
   }
 
+  private static void addBlankCell(PdfPTable table) {
+    PdfPCell cell = new PdfPCell(new Phrase(""));
+    cell.setBorder(0);
+    table.addCell(cell);
+  }
+
   private String dateRangeLabel(Instant from, Instant to, ZoneId zone) {
     DateTimeFormatter dateFmt =
         DateTimeFormatter.ofPattern("dd/MM/yyyy")
@@ -155,13 +163,13 @@ public class TipsReportPdfService {
 
   private static String formatMoneyGs(BigDecimal v) {
     if (v == null) {
-      return "0";
+      return "Gs. 0";
     }
     DecimalFormatSymbols sym = DecimalFormatSymbols.getInstance(Locale.forLanguageTag("es-PY"));
     sym.setGroupingSeparator('.');
     DecimalFormat df = new DecimalFormat("#,##0", sym);
     df.setMaximumFractionDigits(0);
     df.setMinimumFractionDigits(0);
-    return df.format(v.setScale(0, RoundingMode.HALF_UP));
+    return "Gs. " + df.format(v.setScale(0, RoundingMode.HALF_UP));
   }
 }

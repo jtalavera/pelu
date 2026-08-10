@@ -158,6 +158,72 @@ class ServiceRecordServiceTest {
   }
 
   @Test
+  void createServiceRecord_noLines_allowed() {
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+    when(serviceRecordRepository.save(org.mockito.ArgumentMatchers.any(ServiceRecord.class)))
+        .thenAnswer(
+            inv -> {
+              ServiceRecord r = inv.getArgument(0);
+              r.setId(103L);
+              return r;
+            });
+
+    var request = new ServiceRecordRequest(7L, List.of(), List.of());
+
+    ServiceRecordResponse result = serviceRecordService.createServiceRecord(1L, request);
+
+    assertThat(result.lines()).isEmpty();
+    assertThat(result.totalAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+  }
+
+  @Test
+  void createServiceRecord_lineWithoutProfessional_allowed() {
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(serviceRecordRepository.save(org.mockito.ArgumentMatchers.any(ServiceRecord.class)))
+        .thenAnswer(
+            inv -> {
+              ServiceRecord r = inv.getArgument(0);
+              r.setId(104L);
+              return r;
+            });
+
+    var line = new ServiceRecordLineRequest(9L, null, 1, new BigDecimal("50000"));
+    var request = new ServiceRecordRequest(7L, List.of(line), List.of());
+
+    ServiceRecordResponse result = serviceRecordService.createServiceRecord(1L, request);
+
+    assertThat(result.lines()).hasSize(1);
+    assertThat(result.lines().get(0).professionalId()).isNull();
+    assertThat(result.lines().get(0).professionalName()).isNull();
+  }
+
+  @Test
+  void createServiceRecord_lineWithoutUnitPriceOrQuantity_defaultsApplied() {
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(serviceRecordRepository.save(org.mockito.ArgumentMatchers.any(ServiceRecord.class)))
+        .thenAnswer(
+            inv -> {
+              ServiceRecord r = inv.getArgument(0);
+              r.setId(105L);
+              return r;
+            });
+
+    var line = new ServiceRecordLineRequest(9L, null, null, null);
+    var request = new ServiceRecordRequest(7L, List.of(line), List.of());
+
+    ServiceRecordResponse result = serviceRecordService.createServiceRecord(1L, request);
+
+    assertThat(result.lines().get(0).quantity()).isEqualTo(1);
+    assertThat(result.lines().get(0).unitPrice()).isEqualByComparingTo(BigDecimal.ZERO);
+    assertThat(result.totalAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+  }
+
+  @Test
   void toDetailDto_includesClientRuc() {
     client.setRuc("80000005-6");
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));

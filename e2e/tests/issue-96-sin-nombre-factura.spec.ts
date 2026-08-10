@@ -52,7 +52,9 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
     const seed = await seedCategoryServiceProfessional(request, token);
 
     // Client has a real profile name + RUC — both must NOT leak into the PDF once cleared.
-    const clientRuc = "80000005-6";
+    // RUC must be unique per run: the Client entity enforces per-tenant RUC uniqueness, and this
+    // spec can run alongside others (e.g. issue-53) that also create a client with a RUC.
+    const clientRuc = `800${Date.now()}-6`;
     const client = await apiPostJson<{ id: number; fullName: string }>(
       request,
       token,
