@@ -32,6 +32,14 @@ class SifenInvoiceSubmissionServiceTest {
   private static final long TENANT_ID = 1L;
   private static final long INVOICE_ID = 100L;
 
+  /**
+   * The service computes "now" in the business zone ({@link FemmeTimeProperties}), never the JVM
+   * default zone — boundary-sensitive timestamps below must use this same zone, or they only pass
+   * by coincidence on a machine whose default zone happens to match (as this repo's local dev
+   * default does, unlike CI runners, which default to UTC).
+   */
+  private static final java.time.ZoneId BUSINESS_ZONE = new FemmeTimeProperties().zoneId();
+
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenDocumentReceptionClient receptionClient;
@@ -170,7 +178,7 @@ class SifenInvoiceSubmissionServiceTest {
   /** AC-07: signed more than 72h ago and never actually sent before -> blocked. */
   @Test
   void submit_rejects_whenSignedMoreThan72HoursAgoAndNeverReceivedAResponse() {
-    invoice.setSifenSignedAt(LocalDateTime.now().minusHours(73));
+    invoice.setSifenSignedAt(LocalDateTime.now(BUSINESS_ZONE).minusHours(73));
 
     assertThatThrownBy(() -> service.submit(TENANT_ID, INVOICE_ID))
         .isInstanceOf(ResponseStatusException.class)
@@ -182,7 +190,7 @@ class SifenInvoiceSubmissionServiceTest {
   /** AC-07: comfortably under 72h since signing is allowed. */
   @Test
   void submit_allows_whenSignedLessThan72HoursAgo() {
-    invoice.setSifenSignedAt(LocalDateTime.now().minusHours(71));
+    invoice.setSifenSignedAt(LocalDateTime.now(BUSINESS_ZONE).minusHours(71));
     when(receptionClient.send(eq(TENANT_ID), any())).thenReturn(Optional.empty());
 
     service.submit(TENANT_ID, INVOICE_ID);

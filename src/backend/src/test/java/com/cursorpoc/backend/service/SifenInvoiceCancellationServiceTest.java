@@ -43,6 +43,14 @@ class SifenInvoiceCancellationServiceTest {
   private static final String USER_EMAIL = "isabelzymanscki@gmail.com";
   private static final String REASON = "Error en el monto facturado al cliente";
 
+  /**
+   * The service computes "now" in the business zone ({@link FemmeTimeProperties}), never the JVM
+   * default zone — boundary-sensitive timestamps below must use this same zone, or they only pass
+   * by coincidence on a machine whose default zone happens to match (as this repo's local dev
+   * default does, unlike CI runners, which default to UTC).
+   */
+  private static final java.time.ZoneId BUSINESS_ZONE = new FemmeTimeProperties().zoneId();
+
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenEventClient eventClient;
@@ -188,7 +196,7 @@ class SifenInvoiceCancellationServiceTest {
    */
   @Test
   void cancel_rejectsAnInvoicePastThe48HourWindow() {
-    invoice.setSifenSubmittedAt(LocalDateTime.now().minusHours(49));
+    invoice.setSifenSubmittedAt(LocalDateTime.now(BUSINESS_ZONE).minusHours(49));
 
     assertThatThrownBy(() -> service.cancel(TENANT_ID, INVOICE_ID, USER_ID, USER_EMAIL, REASON))
         .isInstanceOf(ResponseStatusException.class)
@@ -199,7 +207,7 @@ class SifenInvoiceCancellationServiceTest {
   /** AC-02: right at the boundary (within 48h) still works. */
   @Test
   void cancel_allowsAnInvoiceJustWithinThe48HourWindow() {
-    invoice.setSifenSubmittedAt(LocalDateTime.now().minusHours(47).minusMinutes(30));
+    invoice.setSifenSubmittedAt(LocalDateTime.now(BUSINESS_ZONE).minusHours(47).minusMinutes(30));
     when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
         .thenReturn(
             Optional.of(
