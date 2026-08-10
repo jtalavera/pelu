@@ -41,6 +41,9 @@ public class FiscalStampService {
     validateRange(request.rangeFrom(), request.rangeTo());
     validateEmissionInRange(
         request.initialEmissionNumber(), request.rangeFrom(), request.rangeTo());
+    int establishment = validateSifenCdcField(request.establishment(), "INVALID_ESTABLISHMENT");
+    int expeditionPoint =
+        validateSifenCdcField(request.expeditionPoint(), "INVALID_EXPEDITION_POINT");
 
     FiscalStamp stamp = new FiscalStamp();
     stamp.setTenant(tenant);
@@ -52,18 +55,39 @@ public class FiscalStampService {
     stamp.setNextEmissionNumber(request.initialEmissionNumber());
     stamp.setActive(false);
     stamp.setLockedAfterInvoice(false);
+    stamp.setEstablishment(establishment);
+    stamp.setExpeditionPoint(expeditionPoint);
     fiscalStampRepository.save(stamp);
     return toDto(stamp);
+  }
+
+  /**
+   * SIFEN HU-02 AC-02: establecimiento/punto de expedición ocupan 3 dígitos en el CDC (000-999).
+   * Null defaults to 1 ("001") so existing callers that predate this field keep working.
+   */
+  private static int validateSifenCdcField(Integer value, String errorCode) {
+    if (value == null) {
+      return 1;
+    }
+    if (value < 0 || value > 999) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorCode);
+    }
+    return value;
   }
 
   @Transactional
   public FiscalStampResponse update(long tenantId, long id, FiscalStampUpdateRequest request) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
-    if (stamp.isLockedAfterInvoice()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
-    }
     validateDateOrder(request.validFrom(), request.validUntil());
     validateEmissionInRange(request.nextEmissionNumber(), stamp.getRangeFrom(), stamp.getRangeTo());
+    // Once an invoice has been issued against this stamp, its number can only ever move forward:
+    // rewinding it would let a later invoice reuse a number an existing one already claimed. A
+    // forward move stays allowed — it's the only way to skip a number SIFEN rejected as a
+    // duplicate (dCodRes=1002) after the stamp was already locked.
+    if (stamp.isLockedAfterInvoice()
+        && request.nextEmissionNumber() < stamp.getNextEmissionNumber()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
+    }
     stamp.setValidFrom(request.validFrom());
     stamp.setValidUntil(request.validUntil());
     stamp.setNextEmissionNumber(request.nextEmissionNumber());
@@ -88,7 +112,7 @@ public class FiscalStampService {
   }
 
   /**
-   * Call when an invoice is issued (HU-14) so stamp number and range can no longer be edited.
+   * Call when an invoice is issued (HU-14) so the emission number can no longer move backward.
    * Idempotent.
    */
   @Transactional
@@ -147,6 +171,8 @@ public class FiscalStampService {
         s.getRangeTo(),
         s.getNextEmissionNumber(),
         s.isActive(),
-        s.isLockedAfterInvoice());
+        s.isLockedAfterInvoice(),
+        s.getEstablishment(),
+        s.getExpeditionPoint());
   }
 }

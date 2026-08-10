@@ -10,6 +10,8 @@ public record InvoiceCreateRequest(
     Long clientId,
     String clientDisplayName,
     String clientRucOverride,
+    /** Cédula u otro documento de identidad para un cliente ocasional — SIFEN HU-02 AC-05. */
+    String clientIdentityDocumentOverride,
     String discountType,
     BigDecimal discountValue,
     @NotEmpty @Valid List<InvoiceLineRequest> lines,
@@ -20,4 +22,56 @@ public record InvoiceCreateRequest(
      * Optional tips collected alongside this invoice. Added to the required payment sum but never
      * to subtotal/discount/total — tips are not part of the fiscal comprobante.
      */
-    BigDecimal tipsAmount) {}
+    BigDecimal tipsAmount,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
+    String clientIdentityDocumentTypeOverride) {
+
+  public InvoiceCreateRequest(
+      Long clientId,
+      String clientDisplayName,
+      String clientRucOverride,
+      String discountType,
+      BigDecimal discountValue,
+      List<InvoiceLineRequest> lines,
+      List<InvoicePaymentAllocationRequest> payments,
+      Long serviceRecordId,
+      BigDecimal tipsAmount) {
+    this(
+        clientId,
+        clientDisplayName,
+        clientRucOverride,
+        null,
+        discountType,
+        discountValue,
+        lines,
+        payments,
+        serviceRecordId,
+        tipsAmount,
+        null);
+  }
+
+  public InvoiceCreateRequest(
+      Long clientId,
+      String clientDisplayName,
+      String clientRucOverride,
+      String clientIdentityDocumentOverride,
+      String discountType,
+      BigDecimal discountValue,
+      List<InvoiceLineRequest> lines,
+      List<InvoicePaymentAllocationRequest> payments,
+      Long serviceRecordId,
+      BigDecimal tipsAmount) {
+    this(
+        clientId,
+        clientDisplayName,
+        clientRucOverride,
+        clientIdentityDocumentOverride,
+        discountType,
+        discountValue,
+        lines,
+        payments,
+        serviceRecordId,
+        tipsAmount,
+        null);
+  }
+}

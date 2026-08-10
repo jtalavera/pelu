@@ -164,7 +164,13 @@ public class SeedResetService {
     long deletedTenantFlags = tenantFeatureFlagRepository.deleteByTenantId(DEMO_TENANT_ID);
     log.info("Deleted {} tenant_feature_flags", deletedTenantFlags);
 
-    long deletedFiscalStamps = fiscalStampRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    // Only unlocked (never-invoiced) stamps are reseedable placeholders. A stamp already
+    // referenced by a real invoice (lockedAfterInvoice=true, e.g. tenant 1's real SIFEN timbrado)
+    // must survive a reset — deleting it would let FemmeDataInitializer recreate the fake
+    // "12345678" placeholder with nextEmissionNumber back at 1, reintroducing SIFEN
+    // dCodRes=1002 "Documento electrónico duplicado" the next time an invoice is submitted.
+    long deletedFiscalStamps =
+        fiscalStampRepository.deleteByTenant_IdAndLockedAfterInvoiceFalse(DEMO_TENANT_ID);
     log.info("Deleted {} fiscal_stamps", deletedFiscalStamps);
 
     businessProfileRepository.deleteById(DEMO_TENANT_ID);

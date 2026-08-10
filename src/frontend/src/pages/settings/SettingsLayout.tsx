@@ -6,6 +6,7 @@ export default function SettingsLayout() {
   const { t } = useTranslation();
   const { me } = useMe();
   const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
+  const isTenantAdmin = me?.role === "ADMIN";
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -51,9 +52,11 @@ export default function SettingsLayout() {
           className="max-md:border-r-0 max-md:border-b max-md:border-[var(--color-stone-md)]"
           aria-label={t("femme.settings.sectionTitle")}
         >
-          <NavLink to="/app/settings/business" className={navClass} end>
-            {t("femme.settings.tabBusiness")}
-          </NavLink>
+          {isTenantAdmin ? (
+            <NavLink to="/app/settings/business" className={navClass} end>
+              {t("femme.settings.tabBusiness")}
+            </NavLink>
+          ) : null}
           <NavLink to="/app/settings/fiscal-stamp" className={navClass}>
             {t("femme.settings.tabFiscalStamp")}
           </NavLink>
@@ -63,6 +66,11 @@ export default function SettingsLayout() {
           {isSystemAdmin ? (
             <NavLink to="/app/settings/feature-flags" className={navClass}>
               {t("femme.settings.tabFeatureFlags")}
+            </NavLink>
+          ) : null}
+          {isTenantAdmin ? (
+            <NavLink to="/app/settings/sifen" className={navClass}>
+              {t("femme.settings.tabSifen")}
             </NavLink>
           ) : null}
         </nav>

@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
@@ -59,7 +60,28 @@ public class BusinessProfileService {
         bp.setLogoDataUrl(request.logoDataUrl());
       }
     }
+    bp.setTaxpayerType(parseTaxpayerType(request.taxpayerType()));
+    bp.setEconomicActivityCode(blankToNull(request.economicActivityCode()));
+    bp.setEconomicActivityDescription(blankToNull(request.economicActivityDescription()));
+    bp.setSifenDepartmentCode(blankToNull(request.sifenDepartmentCode()));
+    bp.setSifenDepartmentName(blankToNull(request.sifenDepartmentName()));
+    bp.setSifenCityCode(blankToNull(request.sifenCityCode()));
+    bp.setSifenCityName(blankToNull(request.sifenCityName()));
+    bp.setSifenFantasyName(blankToNull(request.sifenFantasyName()));
+    bp.setKudeFooterMessage(blankToNull(request.kudeFooterMessage()));
     return toDto(bp);
+  }
+
+  private static SifenTaxpayerType parseTaxpayerType(String raw) {
+    String trimmed = blankToNull(raw);
+    if (trimmed == null) {
+      return null;
+    }
+    try {
+      return SifenTaxpayerType.valueOf(trimmed);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TAXPAYER_TYPE");
+    }
   }
 
   private BusinessProfile loadOrThrow(long tenantId) {
@@ -91,7 +113,16 @@ public class BusinessProfileService {
         bp.getPhone(),
         bp.getContactEmail(),
         bp.getLogoDataUrl(),
-        rucValid);
+        rucValid,
+        bp.getTaxpayerType() != null ? bp.getTaxpayerType().name() : null,
+        bp.getEconomicActivityCode(),
+        bp.getEconomicActivityDescription(),
+        bp.getSifenDepartmentCode(),
+        bp.getSifenDepartmentName(),
+        bp.getSifenCityCode(),
+        bp.getSifenCityName(),
+        bp.getSifenFantasyName(),
+        bp.getKudeFooterMessage());
   }
 
   private static void validateLogoDataUrl(String dataUrl) {

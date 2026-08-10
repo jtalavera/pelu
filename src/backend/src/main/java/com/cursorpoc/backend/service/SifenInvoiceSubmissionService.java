@@ -1,0 +1,138 @@
+package com.cursorpoc.backend.service;
+
+import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.w3c.dom.Document;
+
+/**
+ * SIFEN HU-06: sends a document firmado (HU-04) to SIFEN's synchronous reception service ({@link
+ * SifenDocumentReceptionClient}) and registers the result on the invoice. SIFEN HU-07: also queries
+ * SIFEN directly ({@link SifenDocumentQueryClient}) for the real status of an invoice this system
+ * marked 'pendiente de verificación' — both the manual trigger (AC-04, a controller calls {@link
+ * #checkPendingStatus}) and the automatic one (AC-05, {@link #submit} checks first before blindly
+ * resending).
+ *
+ * <p>SIFEN HU-22 (Fase 5) wires {@link #submit} into real invoice issuance ({@code
+ * InvoiceController#issue}) — the first caller that isn't a test or the test-support controller.
+ * HU-07 has its own controller ({@code InvoiceController}) for {@link #checkPendingStatus} — see
+ * PROGRESS.md.
+ *
+ * <p>Deliberately not itself {@code @Transactional}: the network call to SIFEN can take up to 30s,
+ * and must not hold a database transaction/connection open for that long. The DB reads/writes this
+ * method needs before and after that call live in {@link SifenInvoiceSubmissionPersistenceService}
+ * instead — see that class's javadoc for why this split is required, not just a style choice.
+ */
+@Service
+public class SifenInvoiceSubmissionService {
+
+  private static final Logger log = LoggerFactory.getLogger(SifenInvoiceSubmissionService.class);
+
+  private final SifenInvoiceSubmissionPersistenceService persistence;
+  private final SifenDocumentSigningService signingService;
+  private final SifenDocumentReceptionClient receptionClient;
+  private final SifenDocumentQueryClient queryClient;
+  private final FemmeTimeProperties timeProperties;
+
+  public SifenInvoiceSubmissionService(
+      SifenInvoiceSubmissionPersistenceService persistence,
+      SifenDocumentSigningService signingService,
+      SifenDocumentReceptionClient receptionClient,
+      SifenDocumentQueryClient queryClient,
+      FemmeTimeProperties timeProperties) {
+    this.persistence = persistence;
+    this.signingService = signingService;
+    this.receptionClient = receptionClient;
+    this.queryClient = queryClient;
+    this.timeProperties = timeProperties;
+  }
+
+  public SifenSubmissionResult submit(long tenantId, long invoiceId) {
+    // HU-07 AC-05: a pending-verification invoice gets queried first, instead of blindly resending
+    // the same document — only fall through to a fresh submission attempt below if SIFEN still
+    // gives no answer (still ambiguous).
+    if (persistence.isPendingVerification(tenantId, invoiceId)) {
+      Optional<SifenSubmissionResult> resolved = checkPendingStatus(tenantId, invoiceId);
+      if (resolved.isPresent()) {
+        return resolved.get();
+      }
+    }
+
+    LocalDateTime signedAt = persistence.prepareForSubmission(tenantId, invoiceId);
+
+    SifenSignedDocument signed = signingService.signInvoice(tenantId, invoiceId, signedAt);
+    Document document = signed.document();
+    String xml = SifenDocumentXmlService.serialize(document);
+
+    // SIFEN HU-08: persisted regardless of what SIFEN answers below — the QR is a property of the
+    // document actually transmitted, not of SIFEN's response to it (AC-11's "sent invoice" data).
+    persistence.persistQrData(tenantId, invoiceId, signed.qrUrl(), signed.publicConsultationUrl());
+
+    Optional<SifenSubmissionResult> response = receptionClient.send(tenantId, xml);
+    SifenSubmissionResult result =
+        response.orElseGet(
+            () ->
+                new SifenSubmissionResult(
+                    SifenSubmissionStatus.PENDING_VERIFICATION,
+                    null,
+                    null,
+                    null,
+                    LocalDateTime.now(timeProperties.zoneId())));
+
+    persistence.recordResult(tenantId, invoiceId, result, response.isPresent(), null);
+
+    if (response.isPresent()) {
+      log.info(
+          "SIFEN submission recorded tenantId={} invoiceId={} controlNumber={} status={}",
+          tenantId,
+          invoiceId,
+          signed.controlNumber(),
+          result.status());
+    } else {
+      log.error(
+          "SIFEN submission marked pending verification (no response) tenantId={} invoiceId={} "
+              + "controlNumber={}",
+          tenantId,
+          invoiceId,
+          signed.controlNumber());
+    }
+    return result;
+  }
+
+  /**
+   * HU-07 AC-01/AC-02/AC-03/AC-04: queries SIFEN directly for the real status of an invoice this
+   * system marked 'pendiente de verificación'. Returns {@link Optional#empty()} — and leaves the
+   * invoice untouched — if SIFEN still gives no interpretable answer; otherwise the invoice's
+   * status (and, for AC-03, its full document content when found) is persisted and the resolved
+   * result returned. Throws {@code SIFEN_INVOICE_NOT_PENDING_VERIFICATION} (409) if called on an
+   * invoice that isn't currently pending verification — this check only ever makes sense for one.
+   */
+  public Optional<SifenSubmissionResult> checkPendingStatus(long tenantId, long invoiceId) {
+    String cdc = persistence.requirePendingInvoiceControlNumber(tenantId, invoiceId);
+
+    Optional<SifenQueryResult> queried = queryClient.query(tenantId, cdc);
+    if (queried.isEmpty()) {
+      log.error(
+          "SIFEN status check got no answer tenantId={} invoiceId={} controlNumber={}",
+          tenantId,
+          invoiceId,
+          cdc);
+      return Optional.empty();
+    }
+
+    SifenQueryResult result = queried.get();
+    persistence.recordResult(
+        tenantId, invoiceId, result.submissionResult(), true, result.documentContent());
+    log.info(
+        "SIFEN status check resolved tenantId={} invoiceId={} controlNumber={} status={}",
+        tenantId,
+        invoiceId,
+        cdc,
+        result.submissionResult().status());
+    return Optional.of(result.submissionResult());
+  }
+}

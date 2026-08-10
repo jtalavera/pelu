@@ -30,7 +30,8 @@ public class InvoiceLine {
   @JoinColumn(name = "service_id")
   private SalonService salonService;
 
-  @Column(nullable = false, length = 500)
+  /** SIFEN HU-03 AC-02: up to 2000 chars so a service can be described in detail. */
+  @Column(nullable = false, length = 2000)
   private String description;
 
   @Column(nullable = false)

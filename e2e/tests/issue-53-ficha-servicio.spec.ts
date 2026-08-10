@@ -243,7 +243,8 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
     await expect(page.getByText(client.fullName)).toBeVisible();
     // Issue #119 AC9: the client's RUC is carried over from the ficha into the invoice form.
-    await expect(page.locator("#client-ruc")).toHaveValue(clientRuc);
+    await expect(page.locator("#client-identity-document-type")).toHaveValue("RUC");
+    await expect(page.locator("#client-identity-document-number")).toHaveValue("80000005-6");
     await expect(page.locator("#line-price-0")).toHaveValue("50.000");
     // Issue #137: Propinas is a read-only text value (like Subtotal/Pendiente), not an input.
     await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");

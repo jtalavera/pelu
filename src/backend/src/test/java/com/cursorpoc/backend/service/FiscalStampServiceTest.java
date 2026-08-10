@@ -91,7 +91,7 @@ class FiscalStampServiceTest {
   }
 
   @Test
-  void update_rejectsWhenLocked() {
+  void update_rejectsBackwardMoveWhenLocked() {
     FiscalStamp s = new FiscalStamp();
     s.setId(3L);
     s.setTenant(tenant);
@@ -104,9 +104,30 @@ class FiscalStampServiceTest {
     s.setLockedAfterInvoice(true);
     when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
 
-    var req = new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 5);
+    var req = new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 3);
     assertThatThrownBy(() -> service.update(1L, 3L, req))
         .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void update_allowsForwardMoveWhenLocked() {
+    FiscalStamp s = new FiscalStamp();
+    s.setId(3L);
+    s.setTenant(tenant);
+    s.setStampNumber("1");
+    s.setValidFrom(LocalDate.of(2025, 1, 1));
+    s.setValidUntil(LocalDate.of(2027, 1, 1));
+    s.setRangeFrom(1);
+    s.setRangeTo(100);
+    s.setNextEmissionNumber(5);
+    s.setLockedAfterInvoice(true);
+    when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
+
+    var req = new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 42);
+    var dto = service.update(1L, 3L, req);
+
+    assertThat(dto.nextEmissionNumber()).isEqualTo(42);
+    assertThat(s.isLockedAfterInvoice()).isTrue();
   }
 
   @Test

@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -36,7 +37,10 @@ class InvoicePdfServiceTest {
   private InvoicePdfService newService() {
     FemmeTimeProperties time = new FemmeTimeProperties();
     return new InvoicePdfService(
-        mock(InvoiceRepository.class), mock(BusinessProfileService.class), time);
+        mock(InvoiceRepository.class),
+        mock(BusinessProfileService.class),
+        time,
+        mock(FeatureFlagService.class));
   }
 
   private Invoice baseInvoice(List<InvoiceLine> lines, List<InvoicePaymentAllocation> payments) {
@@ -143,6 +147,24 @@ class InvoicePdfServiceTest {
       positions.add(new float[] {Float.parseFloat(m.group(1)), Float.parseFloat(m.group(2))});
     }
     return positions;
+  }
+
+  // ─── HU-33 AC-01/AC-03: the legacy format is retired once SIFEN is active ──
+
+  @Test
+  void buildInvoicePdf_rejectsWhenSifenElectronicInvoicingEnabled() {
+    FeatureFlagService flags = mock(FeatureFlagService.class);
+    when(flags.isEnabled("SIFEN_ELECTRONIC_INVOICING", 1L)).thenReturn(true);
+    InvoicePdfService svc =
+        new InvoicePdfService(
+            mock(InvoiceRepository.class),
+            mock(BusinessProfileService.class),
+            new FemmeTimeProperties(),
+            flags);
+
+    assertThatThrownBy(() -> svc.buildInvoicePdf(99L, 1L))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_LEGACY_PDF_DISABLED");
   }
 
   // ─── Existing functional tests ────────────────────────────────────────────

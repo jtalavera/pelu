@@ -126,6 +126,20 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag GUIDED_TOUR (enabled=true)");
       }
 
+      // SIFEN HU-22 (Fase 5): same idempotent seed as GUIDED_TOUR above. V28's Flyway INSERT only
+      // reaches dev/prod (Flyway is disabled for the `e2e` profile, JPA create-drop only builds the
+      // schema, not row data), so this runner is what actually makes the flag exist for Playwright.
+      if (featureFlagRepository.findByFlagKey("SIFEN_ELECTRONIC_INVOICING").isEmpty()) {
+        FeatureFlag sifenElectronicInvoicing = new FeatureFlag();
+        sifenElectronicInvoicing.setFlagKey("SIFEN_ELECTRONIC_INVOICING");
+        sifenElectronicInvoicing.setEnabled(false);
+        sifenElectronicInvoicing.setDescription(
+            "Route new invoices through the SIFEN electronic-invoicing pipeline instead of the"
+                + " traditional generator");
+        featureFlagRepository.save(sifenElectronicInvoicing);
+        log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=false)");
+      }
+
       if (appUserRepository.count() == 0) {
         Tenant tenant =
             tenantRepository

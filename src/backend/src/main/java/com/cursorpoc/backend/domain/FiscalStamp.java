@@ -47,6 +47,14 @@ public class FiscalStamp {
   @Column(name = "locked_after_invoice", nullable = false)
   private boolean lockedAfterInvoice;
 
+  /** Establecimiento (SIFEN C005/dEst) — SIFEN HU-02 AC-02. */
+  @Column(nullable = false)
+  private int establishment = 1;
+
+  /** Punto de expedición (SIFEN C006/dPunExp) — SIFEN HU-02 AC-02. */
+  @Column(name = "expedition_point", nullable = false)
+  private int expeditionPoint = 1;
+
   public Long getId() {
     return id;
   }
@@ -125,5 +133,21 @@ public class FiscalStamp {
 
   public void setLockedAfterInvoice(boolean lockedAfterInvoice) {
     this.lockedAfterInvoice = lockedAfterInvoice;
+  }
+
+  public int getEstablishment() {
+    return establishment;
+  }
+
+  public void setEstablishment(int establishment) {
+    this.establishment = establishment;
+  }
+
+  public int getExpeditionPoint() {
+    return expeditionPoint;
+  }
+
+  public void setExpeditionPoint(int expeditionPoint) {
+    this.expeditionPoint = expeditionPoint;
   }
 }

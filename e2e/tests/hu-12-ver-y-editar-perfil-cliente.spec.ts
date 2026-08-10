@@ -118,7 +118,7 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${c.id}`);
-    await page.locator("#detail-ruc").fill("bad");
+    await page.locator("#detail-identity-document-number").fill("bad");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       page.getByText("Invalid RUC. Use digits, one hyphen, and digits (e.g. 80000005-6).", {

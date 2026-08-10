@@ -1,0 +1,3 @@
+- Cuando se usa facturacion elecontronica integrada a SIFEN, el PDF de la factura siempre lleva el formato del KUDE. El formato anterior ya no se usa. Al hacer click en descargar PDF siempre usa el formato del KUDE.
+- Al usar la funcionalidad de Enviar por Correo Electronico disponible en el dialog de Ver de la factura, la aplicacion da un error generico.
+- En el dialogo de Ver la factura hay 2 botones para descargar la factura en PDF. Solo la version de Kude debe quedar cuando esta activo el flag de integracion con SIFEn

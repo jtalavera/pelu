@@ -14,6 +14,27 @@ vi.mock("../api/femmeClient", () => ({
   femmePutJson: (...args: unknown[]) => femmePutJsonMock(...args),
 }));
 
+let meRole: "ADMIN" | "PROFESSIONAL" | "SYSTEM_ADMIN" = "ADMIN";
+vi.mock("../hooks/useMe", () => ({
+  useMe: () => ({
+    me: {
+      userId: 1,
+      tenantId: 1,
+      email: "isabelzymanscki@gmail.com",
+      role: meRole,
+      professionalId: null,
+      previewTenantId: null,
+    },
+    loading: false,
+  }),
+}));
+
+let sifenInvoicingFlagEnabled = false;
+vi.mock("../hooks/useFeatureFlags", () => ({
+  useFeatureFlag: (key: string) =>
+    key === "SIFEN_ELECTRONIC_INVOICING" ? sifenInvoicingFlagEnabled : false,
+}));
+
 function renderPage() {
   return render(
     <I18nextProvider i18n={i18n}>
@@ -27,6 +48,8 @@ function renderPage() {
 describe("BusinessSettingsPage", () => {
   beforeEach(() => {
     void i18n.changeLanguage("en");
+    meRole = "ADMIN";
+    sifenInvoicingFlagEnabled = false;
     femmeJsonMock.mockReset();
     femmePutJsonMock.mockReset();
     femmeJsonMock.mockResolvedValue({
@@ -37,6 +60,13 @@ describe("BusinessSettingsPage", () => {
       contactEmail: null,
       logoDataUrl: null,
       rucValidForInvoicing: false,
+      taxpayerType: null,
+      economicActivityCode: null,
+      economicActivityDescription: null,
+      sifenDepartmentCode: null,
+      sifenDepartmentName: null,
+      sifenCityCode: null,
+      sifenCityName: null,
     });
     femmePutJsonMock.mockResolvedValue({});
   });
@@ -94,5 +124,52 @@ describe("BusinessSettingsPage", () => {
     await user.click(saveBtns[0]);
     expect(await screen.findAllByText(/Enter a valid email/i)).toBeTruthy();
     expect(femmePutJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a forbidden message and never loads data for a non-admin role", async () => {
+    meRole = "PROFESSIONAL";
+    renderPage();
+    expect(
+      await screen.findByText(/Only the business administrator can manage business settings/i),
+    ).toBeTruthy();
+    expect(femmeJsonMock).not.toHaveBeenCalledWith("/api/business-profile");
+  });
+
+  it("hides the SIFEN tax data section when the feature flag is off", async () => {
+    renderPage();
+    await screen.findByLabelText(/business name/i);
+    expect(screen.queryByText(/SIFEN tax data/i)).toBeNull();
+  });
+
+  it("shows the SIFEN tax data section and saves it when the feature flag is on", async () => {
+    sifenInvoicingFlagEnabled = true;
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByLabelText(/business name/i);
+    expect(screen.getByText(/SIFEN tax data/i)).toBeTruthy();
+
+    await user.click(screen.getByRole("radio", { name: /legal entity/i }));
+    await user.type(screen.getByLabelText(/economic activity code/i), "96020");
+    await user.type(
+      screen.getByLabelText(/economic activity description/i),
+      "Peluquería y otros tratamientos de belleza",
+    );
+
+    const saveBtns = screen.getAllByRole("button", { name: /save changes/i });
+    await user.click(saveBtns[0]);
+
+    expect(await screen.findByText("Saved")).toBeTruthy();
+    expect(femmePutJsonMock).toHaveBeenCalledWith(
+      "/api/business-profile",
+      expect.objectContaining({
+        taxpayerType: "LEGAL_ENTITY",
+        economicActivityCode: "96020",
+        economicActivityDescription: "Peluquería y otros tratamientos de belleza",
+        sifenDepartmentCode: null,
+        sifenDepartmentName: null,
+        sifenCityCode: null,
+        sifenCityName: null,
+      }),
+    );
   });
 });

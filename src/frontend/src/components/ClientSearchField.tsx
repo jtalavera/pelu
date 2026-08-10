@@ -9,6 +9,8 @@ type Client = {
   phone: string | null;
   email: string | null;
   ruc: string | null;
+  identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
   active?: boolean;
 };
 

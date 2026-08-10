@@ -86,4 +86,28 @@ describe("FeatureFlagsPage (acceptance: system admin can review guided tour flag
     });
     expect(refetch).toHaveBeenCalled();
   });
+
+  it("shows the last-change history when present (SIFEN HU-22 AC-05)", async () => {
+    vi.mocked(femmeClient.femmeJson).mockResolvedValue([
+      {
+        flagKey: "SIFEN_ELECTRONIC_INVOICING",
+        description: "Route new invoices through SIFEN",
+        globalEnabled: false,
+        hasOverride: true,
+        overrideEnabled: true,
+        lastChange: {
+          changedAt: "2026-08-01T15:30:00Z",
+          changedByEmail: "root@pelu",
+          previousEnabled: false,
+          newEnabled: true,
+        },
+      },
+    ]);
+
+    renderPage();
+    const history = await screen.findByTestId("feature-flag-history-SIFEN_ELECTRONIC_INVOICING");
+    expect(history.textContent).toContain("root@pelu");
+    expect(history.textContent).toContain("Off");
+    expect(history.textContent).toContain("On");
+  });
 });

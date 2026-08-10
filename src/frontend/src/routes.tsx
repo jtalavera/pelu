@@ -19,6 +19,7 @@ import SettingsLayout from "./pages/settings/SettingsLayout";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
 import FeatureFlagsPage from "./pages/FeatureFlagsPage";
+import SifenCertificatesPage from "./pages/SifenCertificatesPage";
 
 export function AppRoutes() {
   return (
@@ -49,6 +50,7 @@ export function AppRoutes() {
           <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
           <Route path="taxes" element={<TaxSettingsPage />} />
           <Route path="feature-flags" element={<FeatureFlagsPage />} />
+          <Route path="sifen" element={<SifenCertificatesPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />

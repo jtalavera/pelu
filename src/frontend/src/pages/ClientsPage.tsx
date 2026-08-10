@@ -7,11 +7,14 @@ import {
   Input,
   KebabMenu,
   Label,
+  LocalityCombobox,
   Modal,
   PageSizeSelect,
   Pagination,
+  Select,
   Spinner,
   Text,
+  type Locality,
 } from "@design-system";
 import { femmePostJson } from "../api/femmeClient";
 import { listClientsAll, listClientsPaged, type ClientListFilterParams } from "../api/clients";
@@ -22,6 +25,7 @@ import { SearchInput } from "../components/ui/SearchInput";
 import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
+import { useLocalitySearch } from "../hooks/useLocalitySearch";
 import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
 import { isValidEmail } from "../lib/validateEmail";
 import { validateRuc } from "../lib/validateRuc";
@@ -41,7 +45,25 @@ type Client = {
   visitCount: number;
   lastVisitAt?: string | null;
   createdAt?: string | null;
+  address?: string | null;
+  departmentCode?: string | null;
+  departmentName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
+  identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
 };
+
+const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
+  { value: "RUC", labelKey: "femme.clients.identityDocumentTypeRuc" },
+  { value: "CEDULA_PARAGUAYA", labelKey: "femme.clients.identityDocumentTypeCedulaParaguaya" },
+  { value: "PASAPORTE", labelKey: "femme.clients.identityDocumentTypePasaporte" },
+  { value: "CEDULA_EXTRANJERA", labelKey: "femme.clients.identityDocumentTypeCedulaExtranjera" },
+  { value: "CARNET_RESIDENCIA", labelKey: "femme.clients.identityDocumentTypeCarnetResidencia" },
+  { value: "TARJETA_DIPLOMATICA", labelKey: "femme.clients.identityDocumentTypeTarjetaDiplomatica" },
+  { value: "OTRO", labelKey: "femme.clients.identityDocumentTypeOtro" },
+  { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
+] as const;
 
 type FilterKey = "all" | "active" | "ruc" | "new";
 
@@ -120,10 +142,14 @@ export default function ClientsPage() {
   const [fullName, setFullName]     = useState("");
   const [phone, setPhone]           = useState("");
   const [email, setEmail]           = useState("");
-  const [ruc, setRuc]               = useState("");
+  const [identityDocumentType, setIdentityDocumentType] = useState("RUC");
+  const [identityDocumentNumber, setIdentityDocumentNumber] = useState("");
+  const [address, setAddress]       = useState("");
+  const [locality, setLocality]     = useState<Locality | null>(null);
+  const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
-    ruc?: string;
+    identityDocumentNumber?: string;
     phone?: string;
     email?: string;
   } | null>(null);
@@ -181,7 +207,10 @@ export default function ClientsPage() {
       setFullName(st.prefilledName?.trim() ?? "");
       setPhone("");
       setEmail("");
-      setRuc("");
+      setIdentityDocumentType("RUC");
+      setIdentityDocumentNumber("");
+      setAddress("");
+      setLocality(null);
       setFieldError(null);
       setSaveError(null);
       setModalOpen(true);
@@ -199,7 +228,10 @@ export default function ClientsPage() {
     setFullName("");
     setPhone("");
     setEmail("");
-    setRuc("");
+    setIdentityDocumentType("RUC");
+    setIdentityDocumentNumber("");
+    setAddress("");
+    setLocality(null);
     setFieldError(null);
     setSaveError(null);
     setModalOpen(true);
@@ -210,7 +242,12 @@ export default function ClientsPage() {
     setSaveError(null);
     const nextErr: NonNullable<typeof fieldError> = {};
     if (!fullName.trim()) nextErr.fullName = t("femme.clients.fullNameRequired");
-    if (ruc.trim() && !validateRuc(ruc)) nextErr.ruc = t("femme.clients.rucInvalid");
+    const isRucType = identityDocumentType === "RUC";
+    const isInnominado = identityDocumentType === "INNOMINADO";
+    const documentNumberTrim = isInnominado ? "" : identityDocumentNumber.trim();
+    if (isRucType && documentNumberTrim && !validateRuc(documentNumberTrim)) {
+      nextErr.identityDocumentNumber = t("femme.clients.rucInvalid");
+    }
     if (phone.trim() && !isCompleteParaguayPhone(phone.trim()))
       nextErr.phone = t("femme.clients.phoneInvalid");
     if (email.trim() && !isValidEmail(email.trim()))
@@ -225,7 +262,14 @@ export default function ClientsPage() {
         fullName: fullName.trim(),
         phone: phone.trim() || null,
         email: email.trim() || null,
-        ruc: ruc.trim() || null,
+        ruc: isRucType ? documentNumberTrim || null : null,
+        identityDocumentNumber: !isRucType && !isInnominado ? documentNumberTrim || null : null,
+        identityDocumentType: documentNumberTrim ? identityDocumentType : null,
+        address: address.trim() || null,
+        departmentCode: locality?.departmentCode ?? null,
+        departmentName: locality?.departmentName ?? null,
+        cityCode: locality?.cityCode ?? null,
+        cityName: locality?.cityName ?? null,
       });
       setModalOpen(false);
       if (returnAfterCreate) {
@@ -240,6 +284,8 @@ export default function ClientsPage() {
               phone: created.phone,
               email: created.email,
               ruc: created.ruc,
+              identityDocumentNumber: created.identityDocumentNumber,
+              identityDocumentType: created.identityDocumentType,
             },
           },
         });
@@ -763,19 +809,72 @@ export default function ClientsPage() {
           </div>
 
           <div>
-            <Label htmlFor="client-ruc">{t("femme.clients.ruc")}</Label>
+            <Label htmlFor="client-identity-document-type">
+              {t("femme.clients.identityDocumentType")}
+            </Label>
+            <Select
+              id="client-identity-document-type"
+              value={identityDocumentType}
+              onChange={(e) => setIdentityDocumentType(e.target.value)}
+            >
+              {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(opt.labelKey)}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="client-identity-document-number">
+              {t("femme.clients.identityDocumentNumber")}
+            </Label>
             <Input
-              id="client-ruc"
-              value={ruc}
-              onChange={(e) => setRuc(e.target.value)}
-              placeholder="80000005-6"
-              aria-invalid={fieldError?.ruc ? "true" : "false"}
-              aria-describedby={fieldError?.ruc ? "client-ruc-err" : undefined}
+              id="client-identity-document-number"
+              value={identityDocumentNumber}
+              onChange={(e) => setIdentityDocumentNumber(e.target.value)}
+              placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+              disabled={identityDocumentType === "INNOMINADO"}
+              aria-invalid={fieldError?.identityDocumentNumber ? "true" : "false"}
+              aria-describedby={
+                fieldError?.identityDocumentNumber ? "client-identity-document-number-err" : undefined
+              }
+            />
+            {identityDocumentType === "RUC" && (
+              <Text variant="muted" className="mt-1 text-sm">
+                {t("femme.clients.rucHint")}
+              </Text>
+            )}
+            <FieldValidationError id="client-identity-document-number-err">
+              {fieldError?.identityDocumentNumber}
+            </FieldValidationError>
+          </div>
+
+          <div>
+            <Label htmlFor="client-address">{t("femme.clients.address")}</Label>
+            <Input
+              id="client-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={t("femme.clients.addressPlaceholder")}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="client-locality">{t("femme.clients.locality")}</Label>
+            <LocalityCombobox
+              id="client-locality"
+              value={locality}
+              onChange={setLocality}
+              onSearch={localitySearch.search}
+              options={localitySearch.options}
+              loading={localitySearch.loading}
+              placeholder={t("femme.clients.localityPlaceholder")}
+              noResultsLabel={t("femme.clients.localityNoResults")}
             />
             <Text variant="muted" className="mt-1 text-sm">
-              {t("femme.clients.rucHint")}
+              {t("femme.clients.localityHint")}
             </Text>
-            <FieldValidationError id="client-ruc-err">{fieldError?.ruc}</FieldValidationError>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

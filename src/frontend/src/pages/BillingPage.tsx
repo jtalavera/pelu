@@ -19,7 +19,9 @@ import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
+import { downloadSifenKude } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
@@ -133,6 +135,9 @@ function InvoiceStatusBadge({ status }: { status: string }) {
   );
 }
 
+/** SIFEN HU-02 AC-05: Gs. 7.000.000+ requires identifying the client (RUC or identity document). */
+const SIFEN_CLIENT_IDENTIFICATION_THRESHOLD = 7_000_000;
+
 const PAYMENT_METHODS = [
   "CASH",
   "DEBIT_CARD",
@@ -207,7 +212,7 @@ function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
 
 // ─── InvoiceHistoryTab ────────────────────────────────────────────────────────
 
-function InvoiceHistoryTab() {
+function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
@@ -268,6 +273,19 @@ function InvoiceHistoryTab() {
       if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     };
   }, [filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, loadInvoices]);
+
+  // Every click on the History tab bumps refreshTrigger (see BillingPage), so the list is always
+  // fresh when the tab is opened, even if the filters/paging haven't changed since the last visit.
+  // Skips the initial mount: the effect above already fetches once with the default filters.
+  const isFirstRefreshRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRefreshRef.current) {
+      isFirstRefreshRef.current = false;
+      return;
+    }
+    void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   function handleClear() {
     const d = getDefaultInvoiceHistoryDateRange();
@@ -390,12 +408,13 @@ function InvoiceHistoryTab() {
               style={{ tableLayout: "fixed" }}
             >
               <colgroup>
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "30%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "16%" }} />
                 <col style={{ width: "10%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "13%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -405,6 +424,7 @@ function InvoiceHistoryTab() {
                     { key: "colClient", align: "left" },
                     { key: "colTotal", align: "right" },
                     { key: "colStatus", align: "center" },
+                    { key: "colSifenStatus", align: "center" },
                     { key: "", align: "right" },
                   ].map(({ key, align }, i) => (
                     <th
@@ -458,6 +478,9 @@ function InvoiceHistoryTab() {
                           ? t("femme.billing.history.statusIssued")
                           : t("femme.billing.history.statusVoided")}
                       </Badge>
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                     </td>
                     <td
                       style={{ padding: "10px 12px", textAlign: "right" }}
@@ -519,7 +542,47 @@ type InitialClientForBilling = {
   phone: string | null;
   email: string | null;
   ruc: string | null;
+  identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
 };
+
+/**
+ * Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve): an explicit type
+ * wins, otherwise RUC if present, else Cédula paraguaya if a document number is present, else RUC
+ * as the default empty state — so pre-existing clients without a stored type still preselect the
+ * option that matches what they already have on file.
+ */
+function resolveIdentityDocumentTypeAndNumber(
+  client:
+    | { ruc?: string | null; identityDocumentNumber?: string | null; identityDocumentType?: string | null }
+    | null
+    | undefined,
+): { type: string; number: string } {
+  if (!client) return { type: "RUC", number: "" };
+  if (client.identityDocumentType) {
+    const number =
+      client.identityDocumentType === "RUC"
+        ? (client.ruc ?? "")
+        : (client.identityDocumentNumber ?? "");
+    return { type: client.identityDocumentType, number };
+  }
+  if (client.ruc) return { type: "RUC", number: client.ruc };
+  if (client.identityDocumentNumber) {
+    return { type: "CEDULA_PARAGUAYA", number: client.identityDocumentNumber };
+  }
+  return { type: "RUC", number: "" };
+}
+
+const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
+  { value: "RUC", labelKey: "femme.clients.identityDocumentTypeRuc" },
+  { value: "CEDULA_PARAGUAYA", labelKey: "femme.clients.identityDocumentTypeCedulaParaguaya" },
+  { value: "PASAPORTE", labelKey: "femme.clients.identityDocumentTypePasaporte" },
+  { value: "CEDULA_EXTRANJERA", labelKey: "femme.clients.identityDocumentTypeCedulaExtranjera" },
+  { value: "CARNET_RESIDENCIA", labelKey: "femme.clients.identityDocumentTypeCarnetResidencia" },
+  { value: "TARJETA_DIPLOMATICA", labelKey: "femme.clients.identityDocumentTypeTarjetaDiplomatica" },
+  { value: "OTRO", labelKey: "femme.clients.identityDocumentTypeOtro" },
+  { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
+] as const;
 
 type PrefillServiceRecordLine = { serviceId: number; description: string; unitPrice: string };
 type PrefillServiceRecord = {
@@ -544,6 +607,8 @@ function NewInvoiceTab({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
+  const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
   const effectiveInitialClient = initialClient ?? initialPrefillServiceRecord?.client ?? null;
   const initialSelection: ClientSelection = effectiveInitialClient
     ? {
@@ -554,6 +619,8 @@ function NewInvoiceTab({
           phone: effectiveInitialClient.phone,
           email: effectiveInitialClient.email,
           ruc: effectiveInitialClient.ruc,
+          identityDocumentNumber: effectiveInitialClient.identityDocumentNumber,
+          identityDocumentType: effectiveInitialClient.identityDocumentType,
         },
       }
     : null;
@@ -563,8 +630,12 @@ function NewInvoiceTab({
   const [clientDisplayName, setClientDisplayName] = useState(
     effectiveInitialClient?.fullName ?? "",
   );
-  const [clientRucOverride, setClientRucOverride] = useState(
-    effectiveInitialClient?.ruc ?? "",
+  const initialDocTypeAndNumber = resolveIdentityDocumentTypeAndNumber(effectiveInitialClient);
+  const [clientIdentityDocumentType, setClientIdentityDocumentType] = useState(
+    initialDocTypeAndNumber.type,
+  );
+  const [clientIdentityDocumentNumber, setClientIdentityDocumentNumber] = useState(
+    initialDocTypeAndNumber.number,
   );
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
@@ -651,10 +722,13 @@ function NewInvoiceTab({
     setClientSelection(sel);
     if (sel?.type === "client") {
       setClientDisplayName(sel.client.fullName);
-      setClientRucOverride(sel.client.ruc ?? "");
+      const resolved = resolveIdentityDocumentTypeAndNumber(sel.client);
+      setClientIdentityDocumentType(resolved.type);
+      setClientIdentityDocumentNumber(resolved.number);
     } else if (sel?.type === "occasional") {
       setClientDisplayName("");
-      setClientRucOverride("");
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
     }
   }
 
@@ -929,14 +1003,20 @@ function NewInvoiceTab({
     });
 
     {
-      const rucTrim = clientRucOverride.trim();
-      if (rucTrim && !validateRuc(rucTrim)) {
+      const isRucType = clientIdentityDocumentType === "RUC";
+      const isInnominado = clientIdentityDocumentType === "INNOMINADO";
+      const numberTrim = isInnominado ? "" : clientIdentityDocumentNumber.trim();
+      if (isRucType && numberTrim && !validateRuc(numberTrim)) {
         errors.push(t("femme.clients.rucInvalid"));
       }
       // Issue #101: name is required only when a RUC is provided; a blank RUC allows a blank
       // name too (Issue #96: the PDF then prints "Sin nombre" for a selected client).
-      if (rucTrim && !clientDisplayName.trim()) {
+      if (isRucType && numberTrim && !clientDisplayName.trim()) {
         errors.push(t("femme.billing.invoice.clientDisplayNameRequiredWithRuc"));
+      }
+      // SIFEN HU-02 AC-05: Gs. 7.000.000+ requires identifying the client, sin excepción.
+      if (total >= SIFEN_CLIENT_IDENTIFICATION_THRESHOLD && (isInnominado || !numberTrim)) {
+        errors.push(t("femme.billing.invoice.clientIdentificationRequiredThreshold"));
       }
     }
 
@@ -962,9 +1042,12 @@ function NewInvoiceTab({
       // Build an ordered list of candidate field IDs and focus the first with an error
       const firstErrorId = (() => {
         {
-          const rucTrim = clientRucOverride.trim();
-          if (rucTrim && !validateRuc(rucTrim)) return "client-ruc";
-          if (rucTrim && !clientDisplayName.trim()) return "client-display-name";
+          const isRucType = clientIdentityDocumentType === "RUC";
+          const numberTrim = clientIdentityDocumentNumber.trim();
+          if (isRucType && numberTrim && !validateRuc(numberTrim)) {
+            return "client-identity-document-number";
+          }
+          if (isRucType && numberTrim && !clientDisplayName.trim()) return "client-display-name";
         }
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
@@ -989,10 +1072,15 @@ function NewInvoiceTab({
       return;
     }
 
+    const isInnominado = clientIdentityDocumentType === "INNOMINADO";
+    const numberTrim = isInnominado ? "" : clientIdentityDocumentNumber.trim();
+    const isRucType = clientIdentityDocumentType === "RUC";
     const payload = {
       clientId: clientSelection?.type === "client" ? clientSelection.client.id : null,
       clientDisplayName: clientDisplayName.trim() || null,
-      clientRucOverride: clientRucOverride.trim() || null,
+      clientRucOverride: isRucType ? numberTrim || null : null,
+      clientIdentityDocumentOverride: !isRucType && !isInnominado ? numberTrim || null : null,
+      clientIdentityDocumentTypeOverride: numberTrim ? clientIdentityDocumentType : null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
         discountType !== "NONE" && discountValue
@@ -1035,7 +1123,8 @@ function NewInvoiceTab({
       setClientSearchKey((k) => k + 1);
       setLinesKey((k) => k + 1);
       setClientDisplayName("");
-      setClientRucOverride("");
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
       setDiscountType("NONE");
       setDiscountValue("");
       setDiscountValueError(null);
@@ -1069,7 +1158,11 @@ function NewInvoiceTab({
     if (!lastInvoiceId) return;
     setPdfError(null);
     try {
-      await downloadInvoicePdf(lastInvoiceId);
+      if (sifenEnabled) {
+        await downloadSifenKude(lastInvoiceId);
+      } else {
+        await downloadInvoicePdf(lastInvoiceId);
+      }
     } catch (err) {
       setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     }
@@ -1160,12 +1253,32 @@ function NewInvoiceTab({
               />
             </div>
             <div>
-              <Label htmlFor="client-ruc">{t("femme.billing.invoice.clientRucOverride")}</Label>
+              <Label htmlFor="client-identity-document-type">
+                {t("femme.clients.identityDocumentType")}
+              </Label>
+              <Select
+                id="client-identity-document-type"
+                value={clientIdentityDocumentType}
+                onChange={(e) => setClientIdentityDocumentType(e.target.value)}
+                className="mt-1 w-full"
+              >
+                {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {t(opt.labelKey)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="client-identity-document-number">
+                {t("femme.clients.identityDocumentNumber")}
+              </Label>
               <Input
-                id="client-ruc"
-                value={clientRucOverride}
-                onChange={(e) => setClientRucOverride(e.target.value)}
-                placeholder={t("femme.billing.invoice.clientRucOverridePlaceholder")}
+                id="client-identity-document-number"
+                value={clientIdentityDocumentNumber}
+                onChange={(e) => setClientIdentityDocumentNumber(e.target.value)}
+                placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                disabled={clientIdentityDocumentType === "INNOMINADO"}
                 className="mt-1 w-full"
               />
             </div>
@@ -2047,13 +2160,14 @@ function CashSessionTab({
                 }}
               >
                 <colgroup>
-                  <col style={{ width: "13%" }} />
-                  <col style={{ width: "22%" }} />
-                  <col style={{ width: "18%" }} />
-                  <col style={{ width: "13%" }} />
                   <col style={{ width: "12%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "16%" }} />
                   <col style={{ width: "12%" }} />
-                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "6%" }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -2074,6 +2188,9 @@ function CashSessionTab({
                     </th>
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
                       {t("femme.billing.history.colStatus")}
+                    </th>
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.history.colSifenStatus")}
                     </th>
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }} />
                   </tr>
@@ -2124,6 +2241,9 @@ function CashSessionTab({
                         </td>
                         <td style={cell}>
                           <InvoiceStatusBadge status={inv.status} />
+                        </td>
+                        <td style={cell}>
+                          <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                         </td>
                         <td style={{ ...cell, textAlign: "right" }}>
                           <Button
@@ -2200,6 +2320,7 @@ export default function BillingPage() {
     navState?.activeTab ?? "session",
   );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
   >(navState?.selectedClient ?? null);
@@ -2319,7 +2440,10 @@ export default function BillingPage() {
               role="tab"
               aria-selected={activeTab === tabKey}
               style={activeTab === tabKey ? tabActive : tabBase}
-              onClick={() => setActiveTab(tabKey)}
+              onClick={() => {
+                setActiveTab(tabKey);
+                if (tabKey === "history") setHistoryRefresh((k) => k + 1);
+              }}
             >
               {t(`femme.billing.tabs.${tabKey}`)}
             </button>
@@ -2353,7 +2477,7 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "history"}>
-        <InvoiceHistoryTab />
+        <InvoiceHistoryTab refreshTrigger={historyRefresh} />
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
+  apiPostJson,
   apiPutJson,
   ensureActiveFiscalStampForInvoices,
+  ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
@@ -44,8 +46,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
-    // Navigate fresh to billing to ensure History loads up-to-date data
-    await page.goto("/app/billing");
+    // Clicking the History tab (no page reload) refreshes the list on its own — see HU-16 · 4.
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
@@ -63,6 +64,50 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await expect(page.getByRole("columnheader", { name: "Date" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Client" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Total" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Status", exact: true })).toBeVisible();
+  });
+
+  test("HU-16 · 4 abrir la pestaña Historial siempre refresca la lista, sin recargar la página", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    // Visit History once before the invoice exists, so the fetch that follows this test's
+    // later re-click is a genuine refresh, not the tab's very first (mount-time) fetch.
+    await page.getByRole("tab", { name: "History" }).click();
+    await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
+
+    // Create the invoice out-of-band (API), while the browser tab stays on Billing/History —
+    // nothing here triggers a page reload or touches any filter, so the History tab itself must
+    // be responsible for picking up the new row.
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU16-4 ${Date.now()}`);
+    await apiPostJson(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 5000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 5000 }],
+    });
+
+    // Switch away from History, then back — no page.goto, no manual "Refresh" click, no filter
+    // change. Re-entering the tab must be enough to show the invoice created above.
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("tab", { name: "History" }).click();
+
+    const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    await expect(histRow).toBeVisible({ timeout: 30_000 });
   });
 });

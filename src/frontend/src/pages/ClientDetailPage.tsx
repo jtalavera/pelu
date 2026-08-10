@@ -9,14 +9,17 @@ import {
   Heading,
   Input,
   Label,
+  LocalityCombobox,
   PageSizeSelect,
   Pagination,
+  Select,
   Spinner,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
   Text,
+  type Locality,
 } from "@design-system";
 import { femmeJson, femmePutJson, femmePostJson } from "../api/femmeClient";
 import {
@@ -30,8 +33,10 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
+import { useLocalitySearch } from "../hooks/useLocalitySearch";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
 import { isValidEmail } from "../lib/validateEmail";
@@ -48,7 +53,51 @@ type Client = {
   ruc: string | null;
   active: boolean;
   visitCount: number;
+  address?: string | null;
+  departmentCode?: string | null;
+  departmentName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
+  identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
 };
+
+const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
+  { value: "RUC", labelKey: "femme.clients.identityDocumentTypeRuc" },
+  { value: "CEDULA_PARAGUAYA", labelKey: "femme.clients.identityDocumentTypeCedulaParaguaya" },
+  { value: "PASAPORTE", labelKey: "femme.clients.identityDocumentTypePasaporte" },
+  { value: "CEDULA_EXTRANJERA", labelKey: "femme.clients.identityDocumentTypeCedulaExtranjera" },
+  { value: "CARNET_RESIDENCIA", labelKey: "femme.clients.identityDocumentTypeCarnetResidencia" },
+  { value: "TARJETA_DIPLOMATICA", labelKey: "femme.clients.identityDocumentTypeTarjetaDiplomatica" },
+  { value: "OTRO", labelKey: "femme.clients.identityDocumentTypeOtro" },
+  { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
+] as const;
+
+/** Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve). */
+function resolveIdentityDocumentTypeAndNumber(client: Client): { type: string; number: string } {
+  if (client.identityDocumentType) {
+    const number =
+      client.identityDocumentType === "RUC"
+        ? (client.ruc ?? "")
+        : (client.identityDocumentNumber ?? "");
+    return { type: client.identityDocumentType, number };
+  }
+  if (client.ruc) return { type: "RUC", number: client.ruc };
+  if (client.identityDocumentNumber) {
+    return { type: "CEDULA_PARAGUAYA", number: client.identityDocumentNumber };
+  }
+  return { type: "RUC", number: "" };
+}
+
+function localityFromClient(c: Client): Locality | null {
+  if (!c.departmentCode || !c.departmentName || !c.cityCode || !c.cityName) return null;
+  return {
+    departmentCode: c.departmentCode,
+    departmentName: c.departmentName,
+    cityCode: c.cityCode,
+    cityName: c.cityName,
+  };
+}
 
 function formatHistoryDateTime(iso: string, locale: string): string {
   try {
@@ -112,10 +161,14 @@ export default function ClientDetailPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [ruc, setRuc] = useState("");
+  const [identityDocumentType, setIdentityDocumentType] = useState("RUC");
+  const [identityDocumentNumber, setIdentityDocumentNumber] = useState("");
+  const [address, setAddress] = useState("");
+  const [locality, setLocality] = useState<Locality | null>(null);
+  const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
-    ruc?: string;
+    identityDocumentNumber?: string;
     phone?: string;
     email?: string;
   } | null>(null);
@@ -152,7 +205,11 @@ export default function ClientDetailPage() {
       setFullName(data.fullName);
       setPhone(data.phone ?? "");
       setEmail(data.email ?? "");
-      setRuc(data.ruc ?? "");
+      const resolved = resolveIdentityDocumentTypeAndNumber(data);
+      setIdentityDocumentType(resolved.type);
+      setIdentityDocumentNumber(resolved.number);
+      setAddress(data.address ?? "");
+      setLocality(localityFromClient(data));
     } catch {
       setLoadError(t("femme.clients.profileLoadError"));
     } finally {
@@ -251,8 +308,11 @@ export default function ClientDetailPage() {
     if (!fullName.trim()) {
       nextErr.fullName = t("femme.clients.fullNameRequired");
     }
-    if (ruc.trim() && !validateRuc(ruc)) {
-      nextErr.ruc = t("femme.clients.rucInvalid");
+    const isRucType = identityDocumentType === "RUC";
+    const isInnominado = identityDocumentType === "INNOMINADO";
+    const documentNumberTrim = isInnominado ? "" : identityDocumentNumber.trim();
+    if (isRucType && documentNumberTrim && !validateRuc(documentNumberTrim)) {
+      nextErr.identityDocumentNumber = t("femme.clients.rucInvalid");
     }
     if (phone.trim() && !isCompleteParaguayPhone(phone.trim())) {
       nextErr.phone = t("femme.clients.phoneInvalid");
@@ -271,13 +331,24 @@ export default function ClientDetailPage() {
         fullName: fullName.trim(),
         phone: phone.trim() || null,
         email: email.trim() || null,
-        ruc: ruc.trim() || null,
+        ruc: isRucType ? documentNumberTrim || null : null,
+        identityDocumentNumber: !isRucType && !isInnominado ? documentNumberTrim || null : null,
+        identityDocumentType: documentNumberTrim ? identityDocumentType : null,
+        address: address.trim() || null,
+        departmentCode: locality?.departmentCode ?? null,
+        departmentName: locality?.departmentName ?? null,
+        cityCode: locality?.cityCode ?? null,
+        cityName: locality?.cityName ?? null,
       });
       setClient(updated);
       setFullName(updated.fullName);
       setPhone(updated.phone ?? "");
       setEmail(updated.email ?? "");
-      setRuc(updated.ruc ?? "");
+      const resolved = resolveIdentityDocumentTypeAndNumber(updated);
+      setIdentityDocumentType(resolved.type);
+      setIdentityDocumentNumber(resolved.number);
+      setAddress(updated.address ?? "");
+      setLocality(localityFromClient(updated));
       setSaveSuccess(true);
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
@@ -479,19 +550,86 @@ export default function ClientDetailPage() {
               </div>
 
               <div>
-                <Label htmlFor="detail-ruc">{t("femme.clients.ruc")}</Label>
+                <Label htmlFor="detail-identity-document-type">
+                  {t("femme.clients.identityDocumentType")}
+                </Label>
+                <Select
+                  id="detail-identity-document-type"
+                  value={identityDocumentType}
+                  onChange={(e) => {
+                    setIdentityDocumentType(e.target.value);
+                    setSaveSuccess(false);
+                  }}
+                >
+                  {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {t(opt.labelKey)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="detail-identity-document-number">
+                  {t("femme.clients.identityDocumentNumber")}
+                </Label>
                 <Input
-                  id="detail-ruc"
-                  value={ruc}
-                  onChange={(e) => { setRuc(e.target.value); setSaveSuccess(false); }}
-                  placeholder="80000005-6"
-                  aria-invalid={fieldError?.ruc ? "true" : "false"}
-                  aria-describedby={fieldError?.ruc ? "detail-ruc-err" : undefined}
+                  id="detail-identity-document-number"
+                  value={identityDocumentNumber}
+                  onChange={(e) => {
+                    setIdentityDocumentNumber(e.target.value);
+                    setSaveSuccess(false);
+                  }}
+                  placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                  disabled={identityDocumentType === "INNOMINADO"}
+                  aria-invalid={fieldError?.identityDocumentNumber ? "true" : "false"}
+                  aria-describedby={
+                    fieldError?.identityDocumentNumber
+                      ? "detail-identity-document-number-err"
+                      : undefined
+                  }
+                />
+                {identityDocumentType === "RUC" && (
+                  <Text variant="muted" className="mt-1 text-sm">
+                    {t("femme.clients.rucHint")}
+                  </Text>
+                )}
+                <FieldValidationError id="detail-identity-document-number-err">
+                  {fieldError?.identityDocumentNumber}
+                </FieldValidationError>
+              </div>
+
+              <div>
+                <Label htmlFor="detail-address">{t("femme.clients.address")}</Label>
+                <Input
+                  id="detail-address"
+                  value={address}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setSaveSuccess(false);
+                  }}
+                  placeholder={t("femme.clients.addressPlaceholder")}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="detail-locality">{t("femme.clients.locality")}</Label>
+                <LocalityCombobox
+                  id="detail-locality"
+                  value={locality}
+                  onChange={(next) => {
+                    setLocality(next);
+                    setSaveSuccess(false);
+                  }}
+                  onSearch={localitySearch.search}
+                  options={localitySearch.options}
+                  loading={localitySearch.loading}
+                  placeholder={t("femme.clients.localityPlaceholder")}
+                  noResultsLabel={t("femme.clients.localityNoResults")}
                 />
                 <Text variant="muted" className="mt-1 text-sm">
-                  {t("femme.clients.rucHint")}
+                  {t("femme.clients.localityHint")}
                 </Text>
-                <FieldValidationError id="detail-ruc-err">{fieldError?.ruc}</FieldValidationError>
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -659,6 +797,9 @@ export default function ClientDetailPage() {
                               <th className="py-2 pr-2 font-medium">
                                 {t("femme.clients.colStatus")}
                               </th>
+                              <th className="py-2 pr-2 font-medium">
+                                {t("femme.billing.history.colSifenStatus")}
+                              </th>
                               <th className="py-2 font-medium" />
                             </tr>
                           </thead>
@@ -679,6 +820,9 @@ export default function ClientDetailPage() {
                                 </td>
                                 <td className="py-2 pr-2 align-top">
                                   <HistoryInvoiceStatusPill status={inv.status} />
+                                </td>
+                                <td className="py-2 pr-2 align-top">
+                                  <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                                 </td>
                                 <td className="py-2 align-top text-right">
                                   <Button

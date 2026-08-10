@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
@@ -8,10 +9,12 @@ import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
@@ -33,6 +36,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -52,6 +56,13 @@ public class InvoiceService {
 
   private static final String OCCASIONAL_CLIENT_DISPLAY_NAME = "CONSUMIDOR FINAL";
 
+  /**
+   * SIFEN HU-02 AC-05: a general DNIT invoicing rule (not SIFEN-specific) — any sale at or above
+   * this amount requires identifying the client (RUC or identity document), regardless of whether
+   * the tenant issues through SIFEN or the traditional generator.
+   */
+  private static final BigDecimal CLIENT_IDENTIFICATION_THRESHOLD = new BigDecimal("7000000");
+
   /** Maximum inclusive calendar months that date filters may span (6 months = ~180 days). */
   public static final int MAX_INVOICE_LIST_MONTHS = 6;
 
@@ -63,6 +74,8 @@ public class InvoiceService {
   private final SalonServiceRepository salonServiceRepository;
   private final BusinessProfileRepository businessProfileRepository;
   private final ServiceRecordRepository serviceRecordRepository;
+  private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -72,7 +85,9 @@ public class InvoiceService {
       TenantRepository tenantRepository,
       SalonServiceRepository salonServiceRepository,
       BusinessProfileRepository businessProfileRepository,
-      ServiceRecordRepository serviceRecordRepository) {
+      ServiceRecordRepository serviceRecordRepository,
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceHeaderService sifenInvoiceHeaderService) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -81,6 +96,8 @@ public class InvoiceService {
     this.salonServiceRepository = salonServiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.serviceRecordRepository = serviceRecordRepository;
+    this.timeProperties = timeProperties;
+    this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
   }
 
   @Transactional
@@ -156,6 +173,19 @@ public class InvoiceService {
 
     if (request.clientRucOverride() != null && !request.clientRucOverride().isBlank()) {
       invoice.setClientRucOverride(request.clientRucOverride().trim());
+    }
+    if (request.clientIdentityDocumentOverride() != null
+        && !request.clientIdentityDocumentOverride().isBlank()) {
+      invoice.setClientIdentityDocumentOverride(request.clientIdentityDocumentOverride().trim());
+    }
+    if (request.clientIdentityDocumentTypeOverride() != null
+        && !request.clientIdentityDocumentTypeOverride().isBlank()) {
+      try {
+        invoice.setClientIdentityDocumentTypeOverride(
+            ClientIdentityDocumentType.valueOf(request.clientIdentityDocumentTypeOverride()));
+      } catch (IllegalArgumentException e) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
+      }
     }
 
     // Snapshot the salon RUC at issue time so PDF reprints remain faithful
@@ -300,6 +330,31 @@ public class InvoiceService {
       total = BigDecimal.ZERO;
     }
     invoice.setTotal(total);
+
+    // 6b. SIFEN HU-02 AC-05: Gs. 7.000.000+ requires client identification (RUC or identity
+    // document), sin excepción — checked here so it blocks issuance up front, before payments.
+    if (total.compareTo(CLIENT_IDENTIFICATION_THRESHOLD) >= 0) {
+      Client linkedClient = invoice.getClient();
+      String ruc =
+          (invoice.getClientRucOverride() != null && !invoice.getClientRucOverride().isBlank())
+              ? invoice.getClientRucOverride()
+              : (linkedClient != null ? linkedClient.getRuc() : null);
+      String identityDocument =
+          (invoice.getClientIdentityDocumentOverride() != null
+                  && !invoice.getClientIdentityDocumentOverride().isBlank())
+              ? invoice.getClientIdentityDocumentOverride()
+              : (linkedClient != null ? linkedClient.getIdentityDocumentNumber() : null);
+      ClientIdentityDocumentType explicitType =
+          invoice.getClientIdentityDocumentTypeOverride() != null
+              ? invoice.getClientIdentityDocumentTypeOverride()
+              : (linkedClient != null ? linkedClient.getIdentityDocumentType() : null);
+      ClientIdentityDocumentType resolvedType =
+          ClientIdentityDocumentType.resolve(explicitType, ruc, identityDocument);
+      if (resolvedType == ClientIdentityDocumentType.INNOMINADO) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
+      }
+    }
 
     // 7. Payments
     if (request.payments() == null || request.payments().isEmpty()) {
@@ -465,7 +520,8 @@ public class InvoiceService {
         i.getTotal(),
         i.getIssuedAt(),
         buildServicesSummary(i),
-        buildPaymentMethodsSummary(i));
+        buildPaymentMethodsSummary(i),
+        i.getSifenSubmissionStatus() != null ? i.getSifenSubmissionStatus().name() : null);
   }
 
   private static String buildServicesSummary(Invoice i) {
@@ -496,7 +552,7 @@ public class InvoiceService {
         .collect(Collectors.joining(", "));
   }
 
-  private static InvoiceResponse toDetailDto(Invoice i) {
+  private InvoiceResponse toDetailDto(Invoice i) {
     List<InvoiceLineResponse> lines =
         i.getLines().stream()
             .map(
@@ -527,6 +583,10 @@ public class InvoiceService {
         i.getClient() != null ? i.getClient().getId() : null,
         i.getClientDisplayName(),
         i.getClientRucOverride(),
+        i.getClientIdentityDocumentOverride(),
+        i.getClientIdentityDocumentTypeOverride() != null
+            ? i.getClientIdentityDocumentTypeOverride().name()
+            : null,
         i.getBusinessRuc(),
         i.getStatus().name(),
         i.getSubtotal(),
@@ -539,7 +599,73 @@ public class InvoiceService {
         i.getTipsAmount(),
         i.getServiceRecord() != null ? i.getServiceRecord().getId() : null,
         lines,
-        payments);
+        payments,
+        i.getSifenControlNumber(),
+        i.getSifenSubmissionStatus() != null ? i.getSifenSubmissionStatus().name() : null,
+        i.getSifenSubmissionProtocolNumber(),
+        i.getSifenSubmissionResultCode(),
+        i.getSifenSubmissionMessage(),
+        i.getSifenQueryDocumentContent(),
+        i.getSifenQrUrl(),
+        sifenCancellationDeadline(i),
+        toInstant(i.getSifenCancellationRequestedAt()),
+        i.getSifenCancellationRequestedByEmail(),
+        i.getSifenCancellationReason(),
+        i.getSifenCancellationResultCode(),
+        i.getSifenCancellationMessage(),
+        sifenClientIdentificationEligible(i),
+        i.isSifenClientIdentified(),
+        toInstant(i.getSifenClientIdentificationRequestedAt()),
+        i.getSifenClientIdentificationRequestedByEmail(),
+        i.getSifenClientIdentificationClientType(),
+        i.getSifenClientIdentificationName(),
+        i.getSifenClientIdentificationRuc(),
+        i.getSifenClientIdentificationIdentityDocument(),
+        i.getSifenClientIdentificationAddress(),
+        i.getSifenClientIdentificationCountryCode(),
+        i.getSifenClientIdentificationResultCode(),
+        i.getSifenClientIdentificationMessage());
+  }
+
+  /**
+   * SIFEN HU-11 AC-01: the "identify client" option only appears for an invoice currently Aprobado/
+   * Aprobado con observación, issued without client data (an anonymous/"Innominado" receiver — see
+   * {@link SifenInvoiceHeaderService#isReceiverUnidentified}), and not already identified.
+   */
+  private boolean sifenClientIdentificationEligible(Invoice i) {
+    SifenSubmissionStatus status = i.getSifenSubmissionStatus();
+    if (status != SifenSubmissionStatus.APPROVED
+        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+      return false;
+    }
+    if (i.isSifenClientIdentified()) {
+      return false;
+    }
+    return sifenInvoiceHeaderService.isReceiverUnidentified(i);
+  }
+
+  /**
+   * SIFEN HU-10 AC-02: only present while the invoice is actually eligible to be cancelled — i.e.
+   * currently Aprobado/Aprobado con observación (never once it's Cancelada, or if it was never
+   * approved at all) — so the frontend can show a countdown/disabled-state without reimplementing
+   * this system's own eligibility rules ({@code SifenInvoiceCancellationService.requireCancellable}
+   * is still the authoritative check the cancel endpoint itself re-validates).
+   */
+  private Instant sifenCancellationDeadline(Invoice i) {
+    SifenSubmissionStatus status = i.getSifenSubmissionStatus();
+    if (status != SifenSubmissionStatus.APPROVED
+        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+      return null;
+    }
+    LocalDateTime approvedAt = i.getSifenSubmittedAt();
+    if (approvedAt == null) {
+      return null;
+    }
+    return toInstant(approvedAt.plus(SifenInvoiceCancellationService.CANCELLATION_WINDOW));
+  }
+
+  private Instant toInstant(LocalDateTime localDateTime) {
+    return localDateTime == null ? null : localDateTime.atZone(timeProperties.zoneId()).toInstant();
   }
 
   private static String formatInvoiceNumber(int number) {
