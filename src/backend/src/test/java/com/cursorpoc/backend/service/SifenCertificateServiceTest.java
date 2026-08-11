@@ -36,6 +36,14 @@ class SifenCertificateServiceTest {
 
   private static final String FIXTURE_PASSWORD = "TestPass123!";
 
+  /**
+   * The service computes "today" in the business zone ({@link FemmeTimeProperties}), never the JVM
+   * default zone — boundary-sensitive dates below must use this same zone, or they only pass by
+   * coincidence on a machine whose default zone happens to match (as this repo's local dev default
+   * does, unlike CI runners, which default to UTC).
+   */
+  private static final java.time.ZoneId BUSINESS_ZONE = new FemmeTimeProperties().zoneId();
+
   @Mock private TenantRepository tenantRepository;
   @Mock private AppUserRepository appUserRepository;
   @Mock private SifenCertificateRepository sifenCertificateRepository;
@@ -90,8 +98,8 @@ class SifenCertificateServiceTest {
     SifenCertificateResponse dto = service.upload(1L, 7L, request);
 
     assertThat(dto.id()).isEqualTo(99L);
-    assertThat(dto.notBefore()).isBeforeOrEqualTo(LocalDate.now());
-    assertThat(dto.notAfter()).isAfter(LocalDate.now());
+    assertThat(dto.notBefore()).isBeforeOrEqualTo(LocalDate.now(BUSINESS_ZONE));
+    assertThat(dto.notAfter()).isAfter(LocalDate.now(BUSINESS_ZONE));
 
     ArgumentCaptor<SifenCertificate> captor = ArgumentCaptor.forClass(SifenCertificate.class);
     verify(sifenCertificateRepository).save(captor.capture());
@@ -138,8 +146,8 @@ class SifenCertificateServiceTest {
     SifenCertificate own = new SifenCertificate();
     own.setId(1L);
     own.setUploadedAt(java.time.Instant.now());
-    own.setNotBefore(LocalDate.now());
-    own.setNotAfter(LocalDate.now().plusYears(1));
+    own.setNotBefore(LocalDate.now(BUSINESS_ZONE));
+    own.setNotAfter(LocalDate.now(BUSINESS_ZONE).plusYears(1));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(own));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(2L)).thenReturn(List.of());
@@ -159,7 +167,10 @@ class SifenCertificateServiceTest {
   @Test
   void list_certificateWithinValidityWindow_hasValidStatus() {
     SifenCertificate cert =
-        certificate(1L, LocalDate.now().minusDays(10), LocalDate.now().plusDays(10));
+        certificate(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(10),
+            LocalDate.now(BUSINESS_ZONE).plusDays(10));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(cert));
 
@@ -169,8 +180,10 @@ class SifenCertificateServiceTest {
   @Test
   void list_certificateOnValidityBoundaries_isStillValid() {
     // AC-01: today equal to notBefore or notAfter counts as valid (both bounds inclusive).
-    SifenCertificate onNotBefore = certificate(1L, LocalDate.now(), LocalDate.now().plusDays(1));
-    SifenCertificate onNotAfter = certificate(2L, LocalDate.now().minusDays(1), LocalDate.now());
+    SifenCertificate onNotBefore =
+        certificate(1L, LocalDate.now(BUSINESS_ZONE), LocalDate.now(BUSINESS_ZONE).plusDays(1));
+    SifenCertificate onNotAfter =
+        certificate(2L, LocalDate.now(BUSINESS_ZONE).minusDays(1), LocalDate.now(BUSINESS_ZONE));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(onNotBefore, onNotAfter));
 
@@ -183,7 +196,10 @@ class SifenCertificateServiceTest {
   @Test
   void list_certificatePastNotAfter_hasExpiredStatus() {
     SifenCertificate cert =
-        certificate(1L, LocalDate.now().minusDays(30), LocalDate.now().minusDays(1));
+        certificate(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(30),
+            LocalDate.now(BUSINESS_ZONE).minusDays(1));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(cert));
 
@@ -193,7 +209,10 @@ class SifenCertificateServiceTest {
   @Test
   void list_certificateBeforeNotBefore_hasNotYetValidStatus() {
     SifenCertificate cert =
-        certificate(1L, LocalDate.now().plusDays(1), LocalDate.now().plusDays(30));
+        certificate(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).plusDays(1),
+            LocalDate.now(BUSINESS_ZONE).plusDays(30));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(cert));
 
@@ -205,9 +224,15 @@ class SifenCertificateServiceTest {
     // AC-05: more than one "Vigente" certificate at once is not an error; HU-21 decides which is
     // used.
     SifenCertificate first =
-        certificate(1L, LocalDate.now().minusDays(5), LocalDate.now().plusDays(5));
+        certificate(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(5),
+            LocalDate.now(BUSINESS_ZONE).plusDays(5));
     SifenCertificate second =
-        certificate(2L, LocalDate.now().minusDays(1), LocalDate.now().plusDays(365));
+        certificate(
+            2L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(1),
+            LocalDate.now(BUSINESS_ZONE).plusDays(365));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(first, second));
 
@@ -226,7 +251,10 @@ class SifenCertificateServiceTest {
   @Test
   void list_exposesOnlyTheFourAllowedFieldsPerCertificate_neverPrivateKeyOrPassword() {
     SifenCertificate cert =
-        certificate(1L, LocalDate.now().minusDays(10), LocalDate.now().plusDays(10));
+        certificate(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(10),
+            LocalDate.now(BUSINESS_ZONE).plusDays(10));
     cert.setEncryptedP12Base64("super-secret-p12-bytes");
     cert.setEncryptedPasswordBase64("super-secret-password");
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
@@ -250,9 +278,15 @@ class SifenCertificateServiceTest {
     // AC-06: uploading new certificates never hides older ones from the listing (HU-18 AC-10
     // already guarantees they aren't deleted; this proves list() doesn't filter them out either).
     SifenCertificate oldest =
-        certificate(1L, LocalDate.now().minusYears(3), LocalDate.now().minusYears(2));
+        certificate(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusYears(3),
+            LocalDate.now(BUSINESS_ZONE).minusYears(2));
     SifenCertificate newest =
-        certificate(2L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(1));
+        certificate(
+            2L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(1),
+            LocalDate.now(BUSINESS_ZONE).plusYears(1));
     // Repository method is *OrderByUploadedAtDesc — most recent upload first.
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(newest, oldest));
@@ -284,7 +318,10 @@ class SifenCertificateServiceTest {
   @Test
   void requireActiveCertificate_decryptsRealMaterial_forSingleValidCertificate() {
     SifenCertificate cert =
-        certificateWithMaterial(5L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(1));
+        certificateWithMaterial(
+            5L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(1),
+            LocalDate.now(BUSINESS_ZONE).plusYears(1));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(cert));
 
@@ -300,9 +337,15 @@ class SifenCertificateServiceTest {
   void requireActiveCertificate_picksFurthestExpiry_whenMultipleValid() {
     // AC-03: consistently the same one — furthest notAfter.
     SifenCertificate soonerExpiry =
-        certificateWithMaterial(1L, LocalDate.now().minusDays(5), LocalDate.now().plusDays(30));
+        certificateWithMaterial(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(5),
+            LocalDate.now(BUSINESS_ZONE).plusDays(30));
     SifenCertificate furtherExpiry =
-        certificateWithMaterial(2L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(5));
+        certificateWithMaterial(
+            2L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(1),
+            LocalDate.now(BUSINESS_ZONE).plusYears(5));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(soonerExpiry, furtherExpiry));
 
@@ -324,7 +367,10 @@ class SifenCertificateServiceTest {
     // AC-02/AC-05: an expired (or not-yet-valid) certificate never gets chosen, even if it is the
     // only one on file — the operation must be blocked exactly as if there were none.
     SifenCertificate expired =
-        certificateWithMaterial(1L, LocalDate.now().minusDays(30), LocalDate.now().minusDays(1));
+        certificateWithMaterial(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(30),
+            LocalDate.now(BUSINESS_ZONE).minusDays(1));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(expired));
 
@@ -337,7 +383,10 @@ class SifenCertificateServiceTest {
   void requireActiveCertificate_onlyEverResolvesFromTheRequestedTenant() {
     // AC-04: no cache exists across calls, so a lookup for one tenant can never return another's.
     SifenCertificate tenantOnesCert =
-        certificateWithMaterial(1L, LocalDate.now().minusDays(1), LocalDate.now().plusYears(1));
+        certificateWithMaterial(
+            1L,
+            LocalDate.now(BUSINESS_ZONE).minusDays(1),
+            LocalDate.now(BUSINESS_ZONE).plusYears(1));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(tenantOnesCert));
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(2L)).thenReturn(List.of());
