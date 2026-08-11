@@ -92,7 +92,7 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("E2E HU33 KuDE siempre");
+    await page.getByLabel("Client name / business name").fill("E2E HU33 KuDE siempre");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");

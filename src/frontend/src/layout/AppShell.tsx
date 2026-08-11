@@ -650,15 +650,15 @@ function AppShellInner() {
               tourId="nav-professionals"
             />
             <SideNavItem to="/app/clients" label={t("femme.nav.clients")} icon={<ClientsIcon />} tourId="nav-clients" />
-
-            <SectionLabel label={t("femme.nav.sectionFinance")} />
-            <SideNavItem to="/app/billing" label={t("femme.nav.billing")} icon={<BillingIcon />} tourId="nav-billing" />
             <SideNavItem
               to="/app/service-records"
               label={t("femme.nav.serviceRecords")}
               icon={<ServiceRecordIcon />}
               tourId="nav-service-records"
             />
+
+            <SectionLabel label={t("femme.nav.sectionFinance")} />
+            <SideNavItem to="/app/billing" label={t("femme.nav.billing")} icon={<BillingIcon />} tourId="nav-billing" />
             <SideNavItem
               to="/app/propinas"
               label={t("femme.nav.propinas")}

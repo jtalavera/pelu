@@ -764,10 +764,11 @@ function NewInvoiceTab({
   const discountAmount = perItemDiscountTotal + globalDiscount;
   const total = Math.max(0, subtotal - discountAmount);
   // Tips are collected alongside the invoice but never affect subtotal/discount/total
-  // (fiscal fields) or the printed comprobante — they only add to the amount to collect.
+  // (fiscal fields), the printed comprobante, the amount to collect, or the default
+  // cash payment fill — they're shown separately and settled outside the invoice math.
   const tipsAmountNum = parseMaskedMoney(tipsAmount);
   const showTips = serviceRecordId != null || tipsAmount !== "";
-  const amountToCollect = total + tipsAmountNum;
+  const amountToCollect = total;
 
   const assignedPayments = payments.reduce(
     (acc, p) => acc + parseMaskedMoney(p.amount),
@@ -775,10 +776,10 @@ function NewInvoiceTab({
   );
   const remaining = amountToCollect - assignedPayments;
 
-  // When the invoice total (or tips) changes, auto-fill any CASH payment row
-  // with the amount needed to cover the remaining balance. Watching `amountToCollect`
-  // (not `remaining`) avoids a circular dependency: setting the CASH amount would
-  // change `remaining`, re-firing the effect forever.
+  // When the invoice total changes, auto-fill any CASH payment row with the amount
+  // needed to cover the remaining balance. Watching `amountToCollect` (not `remaining`)
+  // avoids a circular dependency: setting the CASH amount would change `remaining`,
+  // re-firing the effect forever.
   useEffect(() => {
     if (amountToCollect <= 0) return;
     setPayments((prev) => {
@@ -915,7 +916,12 @@ function NewInvoiceTab({
   }
 
   function addPayment() {
-    setPayments((prev) => [...prev, { method: "CASH", amount: "" }]);
+    setPayments((prev) => {
+      const used = new Set(prev.map((p) => p.method));
+      const next = PAYMENT_METHODS.find((m) => !used.has(m));
+      if (!next) return prev;
+      return [...prev, { method: next, amount: "" }];
+    });
   }
 
   function removePayment(idx: number) {
@@ -1504,7 +1510,7 @@ function NewInvoiceTab({
             </div>
             {showTips && (
               <div className="flex justify-between">
-                <span className="text-[rgb(var(--color-muted-foreground))]">
+                <span className="text-red-600 dark:text-red-400">
                   {t("femme.billing.invoice.tips")}
                 </span>
                 <span id="billing-tips-amount">{formatAmountDecimal(tipsAmountNum.toFixed(2))}</span>
@@ -1532,7 +1538,11 @@ function NewInvoiceTab({
                     className="mt-1 w-full"
                   >
                     {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>
+                      <option
+                        key={m}
+                        value={m}
+                        disabled={payments.some((p, i) => i !== idx && p.method === m)}
+                      >
                         {t(`femme.billing.invoice.paymentMethod${capitalize(m)}`)}
                       </option>
                     ))}
@@ -1581,6 +1591,7 @@ function NewInvoiceTab({
             size="sm"
             className="w-fit"
             onClick={addPayment}
+            disabled={payments.length >= PAYMENT_METHODS.length}
           >
             {t("femme.billing.invoice.addPayment")}
           </Button>

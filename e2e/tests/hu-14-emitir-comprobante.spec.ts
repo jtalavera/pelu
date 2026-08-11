@@ -81,7 +81,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("Occ E2E");
+    await page.getByLabel("Client name / business name").fill("Occ E2E");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("15000");
     await expect(page.locator("#line-price-0")).toHaveValue("15.000");
@@ -108,7 +108,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Discount type").selectOption("PERCENT");
     await page.getByLabel(/Discount value/i).fill("10");
-    await page.getByLabel("Client display name").fill("Disc E2E");
+    await page.getByLabel("Client name / business name").fill("Disc E2E");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");
@@ -138,7 +138,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("No stamp");
+    await page.getByLabel("Client name / business name").fill("No stamp");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("1000");
     await expect(page.locator("#line-price-0")).toHaveValue("1.000");
@@ -202,7 +202,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("Walk-in");
+    await page.getByLabel("Client name / business name").fill("Walk-in");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");

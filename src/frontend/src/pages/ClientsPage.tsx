@@ -154,6 +154,7 @@ export default function ClientsPage() {
     email?: string;
   } | null>(null);
   const [saveError, setSaveError]   = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [saving, setSaving]         = useState(false);
 
   // ── Server-side filtered + paged loader ────────────────────────────────────
@@ -213,6 +214,7 @@ export default function ClientsPage() {
       setLocality(null);
       setFieldError(null);
       setSaveError(null);
+      setSaveSuccess(false);
       setModalOpen(true);
       if (st.returnTo) {
         setReturnAfterCreate({ path: st.returnTo, tab: st.returnTab });
@@ -234,12 +236,14 @@ export default function ClientsPage() {
     setLocality(null);
     setFieldError(null);
     setSaveError(null);
+    setSaveSuccess(false);
     setModalOpen(true);
   }
 
   async function saveClient() {
     setFieldError(null);
     setSaveError(null);
+    setSaveSuccess(false);
     const nextErr: NonNullable<typeof fieldError> = {};
     if (!fullName.trim()) nextErr.fullName = t("femme.clients.fullNameRequired");
     const isRucType = identityDocumentType === "RUC";
@@ -292,6 +296,7 @@ export default function ClientsPage() {
         return;
       }
       reload();
+      setSaveSuccess(true);
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
     } finally {
@@ -443,6 +448,13 @@ export default function ClientsPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Success ── */}
+      {saveSuccess && (
+        <Alert variant="success" title={t("femme.clients.createSuccessTitle")}>
+          {t("femme.clients.createSuccessBody")}
+        </Alert>
+      )}
 
       {/* ── Error ── */}
       {error && (

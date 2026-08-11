@@ -376,9 +376,9 @@ public class InvoiceService {
       paymentsSum = paymentsSum.add(pr.amount());
     }
 
-    // 8. Validate payment sum equals total + tips (tips are collected but not fiscal)
-    BigDecimal requiredPayment = total.add(tipsAmount);
-    if (paymentsSum.setScale(2, RoundingMode.HALF_UP).compareTo(requiredPayment) != 0) {
+    // 8. Validate payment sum equals total (issue #139: tips are collected/stored separately
+    // and never factor into the invoiced amount to reconcile against payment methods).
+    if (paymentsSum.setScale(2, RoundingMode.HALF_UP).compareTo(total) != 0) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENT_SUM_MISMATCH");
     }
 
@@ -511,11 +511,14 @@ public class InvoiceService {
   private static InvoiceListItemResponse toListItemDto(Invoice i) {
     Hibernate.initialize(i.getLines());
     Hibernate.initialize(i.getPaymentAllocations());
+    if (i.getClient() != null) {
+      Hibernate.initialize(i.getClient());
+    }
     return new InvoiceListItemResponse(
         i.getId(),
         i.getInvoiceNumber(),
         formatInvoiceNumber(i.getInvoiceNumber()),
-        i.getClientDisplayName(),
+        i.getClient() != null ? i.getClient().getFullName() : i.getClientDisplayName(),
         i.getStatus().name(),
         i.getTotal(),
         i.getIssuedAt(),

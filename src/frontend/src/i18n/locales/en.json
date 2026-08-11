@@ -427,7 +427,7 @@
         "clientId": "Client (optional)",
         "clientPlaceholder": "Search or select a client…",
         "occasionalClient": "Occasional client (no record)",
-        "clientDisplayName": "Client display name",
+        "clientDisplayName": "Client name / business name",
         "clientDisplayNamePlaceholder": "CONSUMIDOR FINAL",
         "clientDisplayNameRequiredWithRuc": "Enter a client name — required when a RUC is provided.",
         "clientIdentificationRequiredThreshold": "Sales of Gs. 7,000,000 or more require identifying the client with a RUC or an identity document.",
@@ -490,7 +490,7 @@
         "linesRequired": "Add at least one item.",
         "paymentsRequired": "Add at least one payment method.",
         "paymentSumHint": "Total assigned: {{assigned}} of {{total}}",
-        "tips": "Tips"
+        "tips": "Tip (non-invoiceable)"
       },
       "history": {
         "title": "Invoice history",
@@ -674,6 +674,8 @@
       "loadError": "Could not load clients.",
       "saveError": "Could not save. Check your data and try again.",
       "errorTitle": "Error",
+      "createSuccessTitle": "Client created",
+      "createSuccessBody": "The client was created successfully.",
       "saving": "Saving…",
       "save": "Save",
       "cancel": "Cancel",
@@ -837,7 +839,7 @@
       "CLIENT_NOT_FOUND": "Client not found.",
       "CLIENT_PHONE_DUPLICATE": "A client with this phone number already exists.",
       "CLIENT_EMAIL_DUPLICATE": "A client with this email address already exists.",
-      "CLIENT_RUC_DUPLICATE": "A client with this RUC already exists.",
+      "CLIENT_RUC_DUPLICATE": "A client with the same RUC already exists.",
       "INVOICE_LIST_RANGE_INCOMPLETE": "Both start and end dates are required.",
       "INVOICE_LIST_INVALID_RANGE": "The start date must be before the end date.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "The date range cannot exceed 31 days (inclusive).",

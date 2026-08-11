@@ -427,7 +427,7 @@
         "clientId": "Cliente (opcional)",
         "clientPlaceholder": "Buscar o seleccionar cliente…",
         "occasionalClient": "Cliente ocasional (sin registro)",
-        "clientDisplayName": "Nombre del cliente",
+        "clientDisplayName": "Nombre o Razón social",
         "clientDisplayNamePlaceholder": "CONSUMIDOR FINAL",
         "clientDisplayNameRequiredWithRuc": "Ingresá el nombre del cliente: es obligatorio cuando se carga un RUC.",
         "clientIdentificationRequiredThreshold": "Las ventas de Gs. 7.000.000 o más exigen identificar al cliente con RUC o documento de identidad.",
@@ -490,7 +490,7 @@
         "linesRequired": "Agregá al menos un ítem.",
         "paymentsRequired": "Agregá al menos un método de pago.",
         "paymentSumHint": "Total asignado: {{assigned}} de {{total}}",
-        "tips": "Propinas"
+        "tips": "Propina (no facturable)"
       },
       "history": {
         "title": "Historial de comprobantes",
@@ -674,6 +674,8 @@
       "loadError": "No se pudo cargar la lista de clientes.",
       "saveError": "No se pudo guardar. Revisá los datos e intentá de nuevo.",
       "errorTitle": "Error",
+      "createSuccessTitle": "Cliente creado",
+      "createSuccessBody": "El cliente se creó correctamente.",
       "saving": "Guardando…",
       "save": "Guardar",
       "cancel": "Cancelar",
@@ -839,7 +841,7 @@
       "CLIENT_NOT_FOUND": "Cliente no encontrado.",
       "CLIENT_PHONE_DUPLICATE": "Ya existe un cliente con ese número de teléfono.",
       "CLIENT_EMAIL_DUPLICATE": "Ya existe un cliente con ese correo electrónico.",
-      "CLIENT_RUC_DUPLICATE": "Ya existe un cliente con ese RUC.",
+      "CLIENT_RUC_DUPLICATE": "Ya existe un cliente con el mismo RUC ingresado.",
       "INVOICE_LIST_RANGE_INCOMPLETE": "Tenés que indicar fecha desde y fecha hasta.",
       "INVOICE_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "El rango de fechas no puede superar 31 días (incluidos).",
