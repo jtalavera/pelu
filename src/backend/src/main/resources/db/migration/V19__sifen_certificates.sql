@@ -1,4 +1,4 @@
--- ── V18: SIFEN — digital certificates uploaded per tenant (HU-18) ───────────
+-- ── V19: SIFEN — digital certificates uploaded per tenant (HU-18) ───────────
 
 -- One row per .p12 certificate+key uploaded by a tenant admin. The p12 file
 -- and its password are stored encrypted at rest (AES-GCM, see

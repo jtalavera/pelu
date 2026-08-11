@@ -7,7 +7,7 @@ VALUES ('SIFEN_ELECTRONIC_INVOICING', 0, 'Route new invoices through the SIFEN e
 -- AC-05: "registro histórico de cada cambio de estado del flag: fecha, hora, usuario, valor
 -- anterior y nuevo". Same "single last value, overwritten on each attempt" convention already
 -- established for every other historical-record AC in this integration (see
--- sifen_cancellation_requested_at/etc. on invoices, V26/V27) rather than a growing audit-log
+-- sifen_cancellation_requested_at/etc. on invoices, V27/V28) rather than a growing audit-log
 -- table. Kept as its own table (not columns on tenant_feature_flags) so that resetting a tenant's
 -- override to the global default — which deletes the tenant_feature_flags row — doesn't also wipe
 -- the record of that very reset.
