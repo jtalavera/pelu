@@ -87,6 +87,14 @@ public class SifenBatchReceptionClient {
    */
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
 
+  /**
+   * RT-27 (Hardening_SIFEN.md): the manual's own 10.000 KB-per-lote limit, enforced explicitly
+   * instead of only documented — this class isn't wired into any production flow today (only
+   * homologación support), so the risk of a caller exceeding it is low, but a caller shouldn't have
+   * to remember the number to stay safe once this is used for real.
+   */
+  static final int MAX_LOTE_ZIP_BYTES = 10_000 * 1024;
+
   private static final String ZIP_ENTRY_NAME = "lote.xml";
 
   private final SifenConnectionService connectionService;
@@ -206,7 +214,18 @@ public class SifenBatchReceptionClient {
       zos.write(rLoteDe.getBytes(StandardCharsets.UTF_8));
       zos.closeEntry();
     }
-    return Base64.getEncoder().encodeToString(baos.toByteArray());
+    byte[] zipBytes = baos.toByteArray();
+    // RT-27: enforced on the compressed .zip itself — the manual's limit is on that file, not on
+    // the base64 text it becomes once embedded in xDE.
+    if (zipBytes.length > MAX_LOTE_ZIP_BYTES) {
+      throw new IllegalArgumentException(
+          "SIFEN_BATCH_TOO_LARGE: compressed lote is "
+              + zipBytes.length
+              + " bytes, exceeding the 10.000 KB ("
+              + MAX_LOTE_ZIP_BYTES
+              + " bytes) limit (Manual Técnico V150 sección 9.2)");
+    }
+    return Base64.getEncoder().encodeToString(zipBytes);
   }
 
   /**

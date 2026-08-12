@@ -15,8 +15,11 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -45,6 +48,9 @@ public class SifenCertificateService {
    * Generous cap for a .p12 file (typically a few KB); guards against abuse via the JSON payload.
    */
   private static final int MAX_FILE_BYTES = 1_000_000;
+
+  /** RFC 5280 id-kp-clientAuth — "TLS Web Client Authentication". */
+  private static final String CLIENT_AUTH_EKU_OID = "1.3.6.1.5.5.7.3.2";
 
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
@@ -78,6 +84,9 @@ public class SifenCertificateService {
       long tenantId, long uploadedByUserId, SifenCertificateUploadRequest request) {
     byte[] fileBytes = decodeFile(request.fileBase64());
     X509Certificate leafCertificate = parseAndValidate(fileBytes, request.password());
+    // RT-26: checked alongside the rest of the file's own validity, before any DB lookup — same
+    // "fail fast on the input itself" ordering as parseAndValidate above.
+    validateTablaERequirements(leafCertificate);
 
     Tenant tenant =
         tenantRepository
@@ -189,6 +198,33 @@ public class SifenCertificateService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_CERT_INVALID_FILE");
     } catch (GeneralSecurityException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_CERT_INVALID_FILE");
+    }
+  }
+
+  /**
+   * RT-26 (Hardening_SIFEN.md): Manual Técnico V150, Tabla E requires an RSA key of 2048 or 4096
+   * bits and the "TLS Web Client Authentication" (clientAuth) extended key usage. Validating this
+   * here — at upload — gives the tenant admin an actionable, specific error instead of a
+   * certificate that only fails once {@link SifenConnectionService} tries to connect with it.
+   */
+  private static void validateTablaERequirements(X509Certificate certificate) {
+    PublicKey publicKey = certificate.getPublicKey();
+    if (!(publicKey instanceof RSAPublicKey rsaPublicKey)) {
+      // Tabla E only allows RSA — any other algorithm (e.g. EC) is non-conformant by definition.
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_CERT_INVALID_KEY_SIZE");
+    }
+    int keySizeBits = rsaPublicKey.getModulus().bitLength();
+    if (keySizeBits != 2048 && keySizeBits != 4096) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_CERT_INVALID_KEY_SIZE");
+    }
+
+    try {
+      List<String> extendedKeyUsage = certificate.getExtendedKeyUsage();
+      if (extendedKeyUsage == null || !extendedKeyUsage.contains(CLIENT_AUTH_EKU_OID)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_CERT_MISSING_CLIENT_AUTH");
+      }
+    } catch (CertificateParsingException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_CERT_MISSING_CLIENT_AUTH");
     }
   }
 

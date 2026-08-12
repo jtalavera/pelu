@@ -150,14 +150,51 @@ class SifenKudePdfServiceTest {
         .thenReturn(Optional.empty());
   }
 
-  /** AC-01: only Aprobado/Aprobado con observación invoices can generate a KuDE. */
+  /**
+   * RT-28 (Hardening_SIFEN.md): Rejected/Cancelled/never-submitted invoices still can't generate a
+   * KuDE — only Aprobado/Aprobado con observación/Pendiente de verificación can.
+   */
   @Test
-  void buildKudePdf_rejectsInvoicesNotApproved() {
+  void buildKudePdf_rejectsInvoicesNotApprovedOrPending() {
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.REJECTED);
 
     assertThatThrownBy(() -> service.buildKudePdf(TENANT_ID, INVOICE_ID))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES");
+  }
+
+  @Test
+  void buildKudePdf_rejectsCancelledInvoices() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
+
+    assertThatThrownBy(() -> service.buildKudePdf(TENANT_ID, INVOICE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES");
+  }
+
+  /**
+   * RT-28: the Manual Técnico's general "validación posterior" model lets the KuDE be delivered
+   * before SIFEN answers — the CDC and QR are already persisted at this point (see {@code
+   * persistQrData} in {@link SifenInvoiceSubmissionService}), so the PDF renders normally, plus a
+   * legend flagging that validity is conditioned on SIFEN's later approval.
+   */
+  @Test
+  void buildKudePdf_allowsPendingVerificationInvoice_andShowsPendingValidationLegend()
+      throws Exception {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).contains("SUJETO A VALIDACIÓN POR LA SET");
+  }
+
+  @Test
+  void buildKudePdf_approvedInvoice_doesNotShowPendingValidationLegend() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).doesNotContain("SUJETO A VALIDACIÓN POR LA SET");
   }
 
   @Test
@@ -318,6 +355,34 @@ class SifenKudePdfServiceTest {
     String allPages = extractAllPages(result.bytes());
 
     assertThat(allPages).contains("¡Gracias por tu visita!");
+  }
+
+  /**
+   * RT-16 (Hardening_SIFEN.md): formalizes existing behavior — the same KuDE generation logic is
+   * used for every tenant, with no per-tenant template file and no caching of {@link
+   * BusinessProfile}; every call to {@link SifenKudePdfService#buildKudePdf} re-reads it fresh from
+   * the database. Two calls with a mutated profile in between must render the change, proving
+   * there's nothing to break by introducing a profile cache in the future.
+   */
+  @Test
+  void buildKudePdf_rereadsBusinessProfileFreshOnEveryCall_noCaching() throws Exception {
+    BusinessProfile profile = new BusinessProfile();
+    profile.setBusinessName("Salon Demo");
+    profile.setKudeFooterMessage("Mensaje original");
+    when(businessProfileRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.of(profile));
+
+    String firstCallText = extractAllPages(service.buildKudePdf(TENANT_ID, INVOICE_ID).bytes());
+    assertThat(firstCallText).contains("Mensaje original");
+    assertThat(firstCallText).doesNotContain("Mensaje actualizado");
+
+    // Mutate the same profile object between calls — a cache keyed by tenantId would return the
+    // stale instance either way, so this only passes if buildKudePdf truly re-reads from the
+    // repository on every invocation.
+    profile.setKudeFooterMessage("Mensaje actualizado");
+
+    String secondCallText = extractAllPages(service.buildKudePdf(TENANT_ID, INVOICE_ID).bytes());
+    assertThat(secondCallText).contains("Mensaje actualizado");
+    assertThat(secondCallText).doesNotContain("Mensaje original");
   }
 
   /** AC-13: the QR image is embedded on page 1, at least the minimum required width. */

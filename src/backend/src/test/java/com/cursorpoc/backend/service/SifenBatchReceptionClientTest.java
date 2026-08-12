@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.SifenConnectionProperties;
@@ -76,6 +77,28 @@ class SifenBatchReceptionClientTest {
     assertThat(unzipped).contains("<rDE Id=\"cdc1\"/>");
     assertThat(unzipped).contains("<rDE Id=\"cdc2\"/>");
     assertThat(unzipped).endsWith("</rLoteDE>");
+  }
+
+  /**
+   * RT-27 (Hardening_SIFEN.md): enforces the manual's 10.000 KB-per-lote limit explicitly rather
+   * than only documenting it. Near-random, low-ASCII content resists DEFLATE compression, so a ~13
+   * MB document reliably compresses to well over {@link
+   * SifenBatchReceptionClient#MAX_LOTE_ZIP_BYTES} (10.000 KB) without needing anywhere near SIFEN's
+   * real per-document size to prove the guard fires.
+   */
+  @Test
+  void buildCompressedLotePayload_rejectsPayloadExceedingSifenLimit() {
+    byte[] randomBytes = new byte[13_000 * 1024];
+    new java.util.Random(42).nextBytes(randomBytes);
+    for (int i = 0; i < randomBytes.length; i++) {
+      randomBytes[i] = (byte) (randomBytes[i] & 0x7F);
+    }
+    String oversizedContent = new String(randomBytes, StandardCharsets.US_ASCII);
+    List<String> oneHugeDocument = List.of("<rDE Id=\"cdc1\">" + oversizedContent + "</rDE>");
+
+    assertThatThrownBy(() -> SifenBatchReceptionClient.buildCompressedLotePayload(oneHugeDocument))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("SIFEN_BATCH_TOO_LARGE");
   }
 
   @Test

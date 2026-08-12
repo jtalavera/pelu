@@ -665,9 +665,22 @@ export function InvoiceDetailModal({
                     </Button>
                   </div>
                 )}
+                {/* RT-28 (Hardening_SIFEN.md): the KuDE is deliverable while pending SIFEN's
+                    validation too — the Manual Técnico's general "validación posterior" model
+                    lets the receiver walk out with it, conditioned on later approval. */}
                 {(invoice.sifenSubmissionStatus === "APPROVED" ||
-                  invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION") && (
+                  invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION" ||
+                  invoice.sifenSubmissionStatus === "PENDING_VERIFICATION") && (
                   <div className="flex flex-col gap-2 pt-2 border-t border-[rgb(var(--color-border))]">
+                    {invoice.sifenSubmissionStatus === "PENDING_VERIFICATION" && (
+                      <Text
+                        variant="small"
+                        className="text-[rgb(var(--color-muted-foreground))]"
+                        data-testid="sifen-kude-pending-validation-note"
+                      >
+                        {t("femme.billing.history.detail.sifen.kudePendingValidationNote")}
+                      </Text>
+                    )}
                     {kudeError && (
                       <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
                         {kudeError}
