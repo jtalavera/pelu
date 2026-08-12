@@ -53,9 +53,16 @@ export function ServiceRecordDetailModal({
           </div>
         )}
         {loadError && (
-          <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
-            {loadError}
-          </Alert>
+          <>
+            <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
+              {loadError}
+            </Alert>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="secondary" size="sm" onClick={onClose}>
+                {t("femme.serviceRecords.close")}
+              </Button>
+            </div>
+          </>
         )}
         {record && (
           <ServiceRecordEditor
@@ -63,13 +70,9 @@ export function ServiceRecordDetailModal({
             allowClientCreateNew={false}
             onSaved={() => onChanged?.()}
             onVoided={() => onChanged?.()}
+            onClose={onClose}
           />
         )}
-        <div className="flex justify-end pt-2">
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            {t("femme.serviceRecords.close")}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

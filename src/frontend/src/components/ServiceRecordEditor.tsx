@@ -71,6 +71,7 @@ export function ServiceRecordEditor({
   onInitialClientOverrideConsumed,
   onSaved,
   onVoided,
+  onClose,
 }: {
   initial: ServiceRecordDetail | null;
   allowClientCreateNew: boolean;
@@ -79,6 +80,8 @@ export function ServiceRecordEditor({
   onInitialClientOverrideConsumed?: () => void;
   onSaved?: (record: ServiceRecordDetail) => void;
   onVoided?: (record: ServiceRecordDetail) => void;
+  /** Present only in modal/detail contexts — renders "Cerrar" next to "Anular ficha". */
+  onClose?: () => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -433,6 +436,7 @@ export function ServiceRecordEditor({
                   setClientSelection(sel);
                   setClientError(null);
                 }}
+                activeOnly
                 hideOccasional
                 onCreateNew={
                   allowClientCreateNew
@@ -685,6 +689,30 @@ export function ServiceRecordEditor({
                 {t("femme.serviceRecords.voidCancel")}
               </Button>
             )}
+            {onClose && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onClose}
+                data-testid="service-record-close"
+              >
+                {t("femme.serviceRecords.close")}
+              </Button>
+            )}
+          </div>
+        )}
+        {isReadOnly && onClose && (
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+              data-testid="service-record-close"
+            >
+              {t("femme.serviceRecords.close")}
+            </Button>
           </div>
         )}
       </form>
