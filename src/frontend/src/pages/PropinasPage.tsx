@@ -29,7 +29,7 @@ import { SearchableSelect } from "../components/SearchableSelect";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
-import { formatParaguayDate, formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 
 type Professional = { id: number; fullName: string; active: boolean };
 
@@ -524,7 +524,7 @@ function WithdrawalTab({ professionals }: { professionals: Professional[] }) {
                   {history.content.map((item) => (
                     <tr key={item.id} style={{ borderTop: "var(--border-default)" }}>
                       <td style={{ padding: "10px 12px" }}>{item.professionalName}</td>
-                      <td style={{ padding: "10px 12px" }}>{formatParaguayDate(item.withdrawnAt, dateLocale)}</td>
+                      <td style={{ padding: "10px 12px" }}>{formatParaguayDateTime(item.withdrawnAt, dateLocale)}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right" }}>
                         {formatGuaraniesGs(item.amount)}
                       </td>

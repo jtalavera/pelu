@@ -99,7 +99,7 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("E2E HU35 sin RUC");
+    await page.getByLabel("Client name / business name").fill("E2E HU35 sin RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
@@ -191,7 +191,7 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await page.getByRole("tab", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("E2E HU35 con RUC");
+    await page.getByLabel("Client name / business name").fill("E2E HU35 con RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");

@@ -73,7 +73,7 @@ async function seedClosedTip(
         discountValue: null,
       },
     ],
-    payments: [{ method: "CASH", amount: params.unitPrice + params.tipAmount }],
+    payments: [{ method: "CASH", amount: params.unitPrice }],
     serviceRecordId: record.id,
     tipsAmount: params.tipAmount,
   });
@@ -107,17 +107,19 @@ test.describe("Issue #120 · Propinas", () => {
     seed = await seedCategoryServiceProfessional(request, token);
   });
 
-  test("AC1 · el módulo Propinas aparece debajo de Ficha de servicio y navega correctamente", async ({
+  test("AC1 · el módulo Propinas aparece en Finanzas y navega correctamente", async ({
     page,
   }) => {
     await loginAsDemo(page);
     const sidebar = page.locator('[data-tour="nav-sidebar"]');
     const links = sidebar.getByRole("link");
     const labels = await links.allTextContents();
-    const serviceRecordsIdx = labels.findIndex((l) => l.includes("Service records"));
+    // Issue #139: "Service records" (Ficha de servicio) moved to Management, so Tips
+    // (Propinas) no longer sits directly below it — it now follows Billing in Finance.
+    const billingIdx = labels.findIndex((l) => l.includes("Billing"));
     const propinasIdx = labels.findIndex((l) => l.includes("Tips"));
-    expect(serviceRecordsIdx).toBeGreaterThanOrEqual(0);
-    expect(propinasIdx).toBe(serviceRecordsIdx + 1);
+    expect(billingIdx).toBeGreaterThanOrEqual(0);
+    expect(propinasIdx).toBe(billingIdx + 1);
 
     await links.nth(propinasIdx).click();
     await expect(page).toHaveURL(/\/app\/propinas/);
