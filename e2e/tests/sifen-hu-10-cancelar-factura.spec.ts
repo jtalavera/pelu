@@ -174,6 +174,76 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await expect(history).toContainText("Error en el monto facturado al cliente");
   });
 
+  test("Issue #145 · una cancelación aprobada por SIFEN también anula el comprobante", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const { invoice, client } = await createInvoice(request, token);
+    await prepareApprovedHoursAgo(request, invoice.id, 1);
+    await fabricateCancellationResult(request, invoice.id, true);
+
+    await loginAsDemo(page);
+    await openInvoiceDetail(page, client.fullName);
+
+    // The merged action voids the invoice record too, not just the SIFEN submission.
+    await expect(page.getByTestId("invoice-status-badge")).toHaveText("Voided");
+    // The standalone "Anular comprobante" action must not appear alongside the SIFEN outcome.
+    await expect(page.getByRole("button", { name: "Void invoice" })).toHaveCount(0);
+  });
+
+  test("Issue #145 · el botón standalone 'Anular comprobante' no aparece mientras la cancelación en SIFEN está disponible", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const { invoice, client } = await createInvoice(request, token);
+    await prepareApprovedHoursAgo(request, invoice.id, 1);
+
+    await loginAsDemo(page);
+    await openInvoiceDetail(page, client.fullName);
+
+    await expect(page.getByTestId("sifen-cancel-button")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Void invoice" })).toHaveCount(0);
+  });
+
+  test("Issue #145 · la cancelación aprobada anula el comprobante incluso con la caja ya cerrada", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const { invoice, client } = await createInvoice(request, token);
+    await prepareApprovedHoursAgo(request, invoice.id, 1);
+    await apiPostJson(request, token, "/api/cash-sessions/close", { countedCashAmount: 0 });
+    await fabricateCancellationResult(request, invoice.id, true);
+
+    await loginAsDemo(page);
+    await openInvoiceDetail(page, client.fullName);
+
+    // The cash session being closed would normally block a plain void
+    // (CASH_SESSION_CLOSED_CANNOT_VOID) — the merged SIFEN-cancel flow bypasses that guard.
+    await expect(page.getByTestId("invoice-status-badge")).toHaveText("Voided");
+  });
+
+  test("Issue #145 · cancelar en SIFEN inmediatamente después de la aprobación queda bloqueado con un mensaje claro", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const { invoice, client } = await createInvoice(request, token);
+    await prepareApprovedHoursAgo(request, invoice.id, 0);
+
+    await loginAsDemo(page);
+    await openInvoiceDetail(page, client.fullName);
+
+    await expect(page.getByTestId("sifen-cancel-too-soon")).toBeVisible();
+    await expect(page.getByTestId("sifen-cancel-button")).toBeDisabled();
+  });
+
   test("HU-10 · AC-04 SIFEN rechaza la cancelación: muestra el motivo y mantiene el estado anterior", async ({
     page,
     request,

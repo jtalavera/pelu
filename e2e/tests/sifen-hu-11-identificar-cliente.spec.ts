@@ -226,7 +226,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await page.getByTestId("sifen-identify-client-button").click();
-    await page.getByLabel("Name / business name").fill("Comercial ABC S.A.");
+    await page.locator("#identify-client-name").fill("Comercial ABC S.A.");
     await page.getByLabel("Company").click();
     await page.locator("#identify-client-ruc").fill("not-a-ruc");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
@@ -248,7 +248,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await page.getByTestId("sifen-identify-client-button").click();
-    await page.getByLabel("Name / business name").fill("John Smith");
+    await page.locator("#identify-client-name").fill("John Smith");
     await page.getByLabel("Client from abroad").click();
     await page.locator("#identify-client-document").fill("AB123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
@@ -286,7 +286,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await page.getByTestId("sifen-identify-client-button").click();
-    await page.getByLabel("Name / business name").fill("María Fernanda Duarte");
+    await page.locator("#identify-client-name").fill("María Fernanda Duarte");
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
 

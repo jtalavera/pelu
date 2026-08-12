@@ -25,7 +25,7 @@ import { FieldValidationError } from "./FieldValidationError";
 import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 
 export type InvoiceLine = {
   id: number;
@@ -77,6 +77,8 @@ export type InvoiceDetail = {
   sifenVerificationUrl?: string | null;
   /** SIFEN HU-10 AC-02: present only while the invoice is actually eligible to be cancelled. */
   sifenCancellationDeadlineAt?: string | null;
+  /** Issue #145: present only while eligible — the instant cancellation actually becomes allowed. */
+  sifenCancellationAvailableAt?: string | null;
   /** SIFEN HU-10 AC-05: historical record of the last cancellation attempt, either outcome. */
   sifenCancellationRequestedAt?: string | null;
   sifenCancellationRequestedByEmail?: string | null;
@@ -426,6 +428,13 @@ export function InvoiceDetailModal({
     }
   }
 
+  // Issue #145: "Cancelar factura en Sifen" merges the standalone "Anular comprobante" action for
+  // any invoice currently eligible for SIFEN cancellation — same condition the SIFEN cancel block
+  // below already gates on, kept in sync here so only one of the two ever renders.
+  const sifenCancelEligible =
+    invoice?.sifenSubmissionStatus === "APPROVED" ||
+    invoice?.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION";
+
   return (
     <Modal
       open
@@ -471,6 +480,7 @@ export function InvoiceDetailModal({
             <div className="flex items-center gap-3 flex-wrap">
               <Badge
                 variant={invoice.status === "ISSUED" ? "success" : "destructive"}
+                data-testid="invoice-status-badge"
               >
                 {invoice.status === "ISSUED"
                   ? t("femme.billing.history.statusIssued")
@@ -752,6 +762,13 @@ export function InvoiceDetailModal({
                         const remainingMs = deadlineMs - nowMs;
                         const expired = remainingMs <= 0;
                         const { hours, minutes } = remainingHoursMinutes(remainingMs);
+                        // Issue #145: SIFEN rejects a cancellation attempted too soon after approval
+                        // ("Plazo de solicitud de cancelación... extemporáneo") — block the attempt
+                        // client-side with a clear message instead of surfacing that raw rejection.
+                        const availableAtMs = invoice.sifenCancellationAvailableAt
+                          ? new Date(invoice.sifenCancellationAvailableAt).getTime()
+                          : null;
+                        const tooSoon = availableAtMs != null && nowMs < availableAtMs;
                         return (
                           <>
                             <Text
@@ -770,12 +787,23 @@ export function InvoiceDetailModal({
                                     minutes,
                                   })}
                             </Text>
+                            {tooSoon && (
+                              <Text
+                                variant="small"
+                                className="text-[rgb(var(--color-muted-foreground))]"
+                                data-testid="sifen-cancel-too-soon"
+                              >
+                                {t("femme.billing.history.detail.sifen.cancelTooSoon", {
+                                  time: formatParaguayTime(availableAtMs!, dateLocale),
+                                })}
+                              </Text>
+                            )}
                             {!showCancelForm && (
                               <div>
                                 <Button
                                   variant="danger"
                                   size="sm"
-                                  disabled={expired}
+                                  disabled={expired || tooSoon}
                                   data-testid="sifen-cancel-button"
                                   onClick={() => setShowCancelForm(true)}
                                 >
@@ -792,6 +820,13 @@ export function InvoiceDetailModal({
                         onSubmit={(e) => void handleCancelInvoice(e)}
                         noValidate
                       >
+                        <Text
+                          variant="small"
+                          className="text-[rgb(var(--color-muted-foreground))]"
+                          data-testid="sifen-cancel-also-voids-hint"
+                        >
+                          {t("femme.billing.history.detail.sifen.cancelAlsoVoidsHint")}
+                        </Text>
                         <div>
                           <Label htmlFor="cancel-reason">
                             {t("femme.billing.history.detail.sifen.cancelReasonLabel")}
@@ -1174,7 +1209,7 @@ export function InvoiceDetailModal({
                   {t("femme.billing.history.detail.downloadPdf")}
                 </Button>
               )}
-              {allowVoid && invoice.status === "ISSUED" && !showVoidForm && (
+              {allowVoid && invoice.status === "ISSUED" && !showVoidForm && !sifenCancelEligible && (
                 <Button
                   variant="danger"
                   size="sm"
@@ -1189,7 +1224,7 @@ export function InvoiceDetailModal({
             </div>
 
             {/* Void form */}
-            {allowVoid && showVoidForm && invoice.status === "ISSUED" && (
+            {allowVoid && showVoidForm && invoice.status === "ISSUED" && !sifenCancelEligible && (
               <form
                 className="border-t border-[rgb(var(--color-border))] pt-4 flex flex-col gap-3"
                 onSubmit={(e) => void handleVoid(e)}

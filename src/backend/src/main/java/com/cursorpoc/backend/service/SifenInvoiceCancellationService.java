@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import java.time.Duration;
@@ -67,6 +68,20 @@ public class SifenInvoiceCancellationService {
    * check below still compares against the true, unbuffered {@code now}.
    */
   private static final Duration SIFEN_CLOCK_SKEW_BUFFER = Duration.ofMinutes(2);
+
+  /**
+   * Issue #145: cancelling an invoice within {@link #SIFEN_CLOCK_SKEW_BUFFER} of its own approval
+   * reproduced a real SIFEN rejection ("Plazo de solicitud de cancelación... extemporáneo", dCodRes
+   * 4009) that the {@code earliestAfterApproval} clamp below could not itself avoid: for a
+   * cancellation attempted that soon after approval, "after {@code sifenSubmittedAt}" and "behind
+   * SIFEN's own lagging clock by {@code SIFEN_CLOCK_SKEW_BUFFER}" become mutually exclusive
+   * constraints — there is no valid signature timestamp satisfying both yet. Rather than let the
+   * clamp silently discard the skew buffer (and risk the same rejection), block the attempt up
+   * front with a clear, translated error until enough real time has passed for both constraints to
+   * be satisfiable together.
+   */
+  static final Duration MINIMUM_CANCELLATION_DELAY =
+      SIFEN_CLOCK_SKEW_BUFFER.plus(Duration.ofMinutes(1));
 
   private final InvoiceRepository invoiceRepository;
   private final SifenCancellationEventXmlService eventXmlService;
@@ -194,6 +209,12 @@ public class SifenInvoiceCancellationService {
     if (result.status() == SifenSubmissionStatus.APPROVED
         || result.status() == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
       invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
+      // Issue #145: "Cancelar factura en Sifen" now merges the standalone "Anular comprobante"
+      // action — a successful SIFEN cancellation also voids the invoice record, deliberately
+      // bypassing InvoiceService.voidInvoice's cash-session-closed guard: the fiscal cancellation
+      // with SIFEN is irreversible, so the internal record must not be left inconsistent with it.
+      invoice.setStatus(InvoiceStatus.VOIDED);
+      invoice.setVoidReason(invoice.getSifenCancellationReason());
     }
   }
 
@@ -211,6 +232,9 @@ public class SifenInvoiceCancellationService {
     LocalDateTime approvedAt = invoice.getSifenSubmittedAt();
     if (approvedAt == null) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_INVOICE_NOT_APPROVED");
+    }
+    if (now.isBefore(approvedAt.plus(MINIMUM_CANCELLATION_DELAY))) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_INVOICE_CANCELLATION_TOO_SOON");
     }
     LocalDateTime deadline = approvedAt.plus(CANCELLATION_WINDOW);
     if (now.isAfter(deadline)) {

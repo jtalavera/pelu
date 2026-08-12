@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import java.time.LocalDateTime;
@@ -74,7 +75,7 @@ class SifenInvoiceCancellationServiceTest {
     invoice = new Invoice();
     invoice.setSifenControlNumber("01011371528001001999990122026072811234567800");
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
-    invoice.setSifenSubmittedAt(LocalDateTime.now().minusHours(1));
+    invoice.setSifenSubmittedAt(LocalDateTime.now(BUSINESS_ZONE).minusHours(1));
 
     lenient()
         .when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
@@ -104,6 +105,9 @@ class SifenInvoiceCancellationServiceTest {
     assertThat(invoice.getSifenCancellationResultCode()).isEqualTo("0600");
     assertThat(invoice.getSifenCancellationProtocolNumber()).isEqualTo("987654321");
     assertThat(invoice.getSifenCancellationMessage()).isEqualTo("Evento registrado correctamente");
+    // Issue #145: a successful SIFEN cancellation also voids the invoice record.
+    assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.VOIDED);
+    assertThat(invoice.getVoidReason()).isEqualTo(REASON);
   }
 
   @Test
@@ -121,6 +125,7 @@ class SifenInvoiceCancellationServiceTest {
     service.cancel(TENANT_ID, INVOICE_ID, USER_ID, USER_EMAIL, REASON);
 
     assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.CANCELLED);
+    assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.VOIDED);
   }
 
   @Test
@@ -143,6 +148,8 @@ class SifenInvoiceCancellationServiceTest {
     assertThat(invoice.getSifenCancellationResultCode()).isEqualTo("4009");
     assertThat(invoice.getSifenCancellationMessage())
         .isEqualTo("Plazo de solicitud de cancelación de una FE extemporáneo");
+    // Issue #145: a rejected cancellation must not void the invoice.
+    assertThat(invoice.getStatus()).isNull();
   }
 
   @Test
@@ -189,6 +196,38 @@ class SifenInvoiceCancellationServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_INVOICE_NOT_APPROVED");
     verifyNoEventSent();
+  }
+
+  /**
+   * Issue #145: cancelling within {@code MINIMUM_CANCELLATION_DELAY} of approval is refused up
+   * front, instead of silently discarding the clock-skew buffer and risking a real SIFEN
+   * "extemporáneo" rejection.
+   */
+  @Test
+  void cancel_rejectsAnInvoiceCancelledTooSoonAfterApproval() {
+    invoice.setSifenSubmittedAt(LocalDateTime.now(BUSINESS_ZONE));
+
+    assertThatThrownBy(() -> service.cancel(TENANT_ID, INVOICE_ID, USER_ID, USER_EMAIL, REASON))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_INVOICE_CANCELLATION_TOO_SOON");
+    verifyNoEventSent();
+  }
+
+  /** Issue #145: once MINIMUM_CANCELLATION_DELAY has elapsed, cancellation proceeds normally. */
+  @Test
+  void cancel_allowsAnInvoiceCancelledAfterTheMinimumDelay() {
+    invoice.setSifenSubmittedAt(
+        LocalDateTime.now(BUSINESS_ZONE)
+            .minus(SifenInvoiceCancellationService.MINIMUM_CANCELLATION_DELAY));
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
+        .thenReturn(
+            Optional.of(
+                new SifenSubmissionResult(
+                    SifenSubmissionStatus.APPROVED, "1", "0600", "ok", LocalDateTime.now())));
+
+    service.cancel(TENANT_ID, INVOICE_ID, USER_ID, USER_EMAIL, REASON);
+
+    assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.CANCELLED);
   }
 
   /**

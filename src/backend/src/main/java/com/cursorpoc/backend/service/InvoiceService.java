@@ -611,6 +611,7 @@ public class InvoiceService {
         i.getSifenQueryDocumentContent(),
         i.getSifenQrUrl(),
         sifenCancellationDeadline(i),
+        sifenCancellationAvailableAt(i),
         toInstant(i.getSifenCancellationRequestedAt()),
         i.getSifenCancellationRequestedByEmail(),
         i.getSifenCancellationReason(),
@@ -665,6 +666,26 @@ public class InvoiceService {
       return null;
     }
     return toInstant(approvedAt.plus(SifenInvoiceCancellationService.CANCELLATION_WINDOW));
+  }
+
+  /**
+   * Issue #145: the instant from which SIFEN cancellation is actually accepted — same eligibility
+   * gate as {@link #sifenCancellationDeadline}, offset by {@code MINIMUM_CANCELLATION_DELAY}
+   * instead of the 48h window, so the frontend can disable the cancel button and show a cooldown
+   * message instead of letting the user hit SIFEN's "extemporáneo" rejection for a just-approved
+   * invoice.
+   */
+  private Instant sifenCancellationAvailableAt(Invoice i) {
+    SifenSubmissionStatus status = i.getSifenSubmissionStatus();
+    if (status != SifenSubmissionStatus.APPROVED
+        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+      return null;
+    }
+    LocalDateTime approvedAt = i.getSifenSubmittedAt();
+    if (approvedAt == null) {
+      return null;
+    }
+    return toInstant(approvedAt.plus(SifenInvoiceCancellationService.MINIMUM_CANCELLATION_DELAY));
   }
 
   private Instant toInstant(LocalDateTime localDateTime) {

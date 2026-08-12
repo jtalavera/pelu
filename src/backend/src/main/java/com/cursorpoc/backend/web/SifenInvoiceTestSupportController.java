@@ -1,9 +1,11 @@
 package com.cursorpoc.backend.web;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.cursorpoc.backend.repository.AppUserRepository;
@@ -88,6 +90,7 @@ public class SifenInvoiceTestSupportController {
   private final SifenInvoiceHeaderService headerService;
   private final SifenInvoiceDetailService detailService;
   private final SifenQrCodeService qrCodeService;
+  private final FemmeTimeProperties timeProperties;
 
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
@@ -98,7 +101,8 @@ public class SifenInvoiceTestSupportController {
       SifenCertificateRepository certificateRepository,
       SifenInvoiceHeaderService headerService,
       SifenInvoiceDetailService detailService,
-      SifenQrCodeService qrCodeService) {
+      SifenQrCodeService qrCodeService,
+      FemmeTimeProperties timeProperties) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
@@ -108,6 +112,7 @@ public class SifenInvoiceTestSupportController {
     this.headerService = headerService;
     this.detailService = detailService;
     this.qrCodeService = qrCodeService;
+    this.timeProperties = timeProperties;
   }
 
   /**
@@ -218,7 +223,13 @@ public class SifenInvoiceTestSupportController {
             .findById(id)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
-    invoice.setSifenSubmittedAt(LocalDateTime.now().minusHours(hoursAgo));
+    // Issue #145: zoned consistently with how the real submission flow
+    // (SifenDocumentReceptionClient)
+    // and the cancellation eligibility check (SifenInvoiceCancellationService) both compute "now" —
+    // a bare LocalDateTime.now() here would drift from the business zone by the JVM's default-zone
+    // offset, corrupting any fabricated hoursAgo value close to SifenInvoiceCancellationService's
+    // MINIMUM_CANCELLATION_DELAY window.
+    invoice.setSifenSubmittedAt(LocalDateTime.now(timeProperties.zoneId()).minusHours(hoursAgo));
   }
 
   /**
@@ -251,6 +262,10 @@ public class SifenInvoiceTestSupportController {
       invoice.setSifenCancellationMessage("Evento registrado correctamente");
       invoice.setSifenCancellationProtocolNumber("987654321");
       invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
+      // Issue #145: mirrors SifenInvoiceCancellationService.recordCancellationResult, which also
+      // voids the invoice record on a successful SIFEN cancellation.
+      invoice.setStatus(InvoiceStatus.VOIDED);
+      invoice.setVoidReason(invoice.getSifenCancellationReason());
     } else {
       invoice.setSifenCancellationResultCode("4009");
       invoice.setSifenCancellationMessage(
