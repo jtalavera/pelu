@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Heading, Input, Label, Spinner, Text } from "@design-system";
-import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
+import { femmeDeleteJson, femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ListSearchField } from "../components/ListSearchField";
+import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -21,6 +23,7 @@ type FiscalStampRow = {
   nextEmissionNumber: number;
   active: boolean;
   lockedAfterInvoice: boolean;
+  hasInvoices: boolean;
 };
 
 function parsePositiveInt(raw: string): number | null {
@@ -37,37 +40,6 @@ function fmtDateShort(iso: string, locale: string): string {
   } catch {
     return iso;
   }
-}
-
-/** Days until end of validity (local calendar). Negative if expired. */
-function daysUntilValidUntil(validUntilIso: string): number {
-  const end = new Date(validUntilIso.includes("T") ? validUntilIso : `${validUntilIso}T12:00:00`);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  return Math.round((end.getTime() - now.getTime()) / 86400000);
-}
-
-type Health = "valid" | "expiring" | "expired";
-
-function stampHealth(row: FiscalStampRow): Health {
-  const d = daysUntilValidUntil(row.validUntil);
-  if (d < 0) return "expired";
-  if (d < 30) return "expiring";
-  return "valid";
-}
-
-function rangeUsagePct(row: FiscalStampRow): number {
-  const total = row.rangeTo - row.rangeFrom + 1;
-  if (total <= 0) return 0;
-  const used = row.nextEmissionNumber - row.rangeFrom;
-  return Math.min(100, Math.max(0, (used / total) * 100));
-}
-
-function fillColor(pct: number): string {
-  if (pct > 90) return "var(--color-danger)";
-  if (pct >= 70) return "var(--color-warning)";
-  return "var(--color-timbrado-valid-meter)";
 }
 
 const labelStyle: React.CSSProperties = {
@@ -133,13 +105,16 @@ function buildInputStyle(hasError: boolean, focused: boolean): React.CSSProperti
 
 export default function FiscalStampSettingsPage() {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   useTour("fiscal-stamp", fiscalStampSteps, undefined, guidedTourEnabled);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<FiscalStampRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FiscalStampRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [creating, setCreating] = useState(false);
   const [stampNumber, setStampNumber] = useState("");
@@ -214,7 +189,7 @@ export default function FiscalStampSettingsPage() {
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-    setSuccess(false);
+    setSuccessMessage(null);
     const err = validateCreateForm();
     setFieldErrors(err);
     if (Object.keys(err).length > 0) return;
@@ -234,7 +209,7 @@ export default function FiscalStampSettingsPage() {
         rangeTo: rt,
         initialEmissionNumber: ie,
       });
-      setSuccess(true);
+      setSuccessMessage(t("femme.fiscalStamp.savedBody"));
       setStampNumber("");
       setValidFrom("");
       setValidUntil("");
@@ -251,10 +226,10 @@ export default function FiscalStampSettingsPage() {
 
   async function onActivate(id: number) {
     setSaveError(null);
-    setSuccess(false);
+    setSuccessMessage(null);
     try {
       await femmePostJson<FiscalStampRow>(`/api/fiscal-stamps/${id}/activate`, {});
-      setSuccess(true);
+      setSuccessMessage(t("femme.fiscalStamp.savedBody"));
       await load();
     } catch (err) {
       setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
@@ -263,13 +238,31 @@ export default function FiscalStampSettingsPage() {
 
   async function onDeactivate(id: number) {
     setSaveError(null);
-    setSuccess(false);
+    setSuccessMessage(null);
     try {
       await femmePostJson<FiscalStampRow>(`/api/fiscal-stamps/${id}/deactivate`, {});
-      setSuccess(true);
+      setSuccessMessage(t("femme.fiscalStamp.savedBody"));
       await load();
     } catch (err) {
       setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
+    }
+  }
+
+  async function confirmDelete() {
+    const target = deleteTarget;
+    if (!target) return;
+    setDeleteTarget(null);
+    setSaveError(null);
+    setSuccessMessage(null);
+    setDeleting(true);
+    try {
+      await femmeDeleteJson(`/api/fiscal-stamps/${target.id}`);
+      setSuccessMessage(t("femme.fiscalStamp.deleteSuccess"));
+      await load();
+    } catch (err) {
+      setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -318,7 +311,7 @@ export default function FiscalStampSettingsPage() {
         validUntil: editValidUntil,
         nextEmissionNumber: nextN!,
       });
-      setSuccess(true);
+      setSuccessMessage(t("femme.fiscalStamp.savedBody"));
       closeEdit();
       await load();
     } catch (err) {
@@ -328,13 +321,16 @@ export default function FiscalStampSettingsPage() {
     }
   }
 
-  const activeRow = rows.find((r) => r.active);
-  const otherRows = rows.filter((r) => !r.active);
   const editingRow = rows.find((r) => r.id === editingId) ?? null;
 
-  const filteredOtherRows = useMemo(
+  const sortedRows = useMemo(
+    () => [...rows].sort((a, b) => Number(b.active) - Number(a.active)),
+    [rows],
+  );
+
+  const filteredRows = useMemo(
     () =>
-      filterByListQuery(otherRows, stampListQuery, (r) => [
+      filterByListQuery(sortedRows, stampListQuery, (r) => [
         r.stampNumber,
         String(r.rangeFrom),
         String(r.rangeTo),
@@ -342,7 +338,7 @@ export default function FiscalStampSettingsPage() {
         r.validFrom,
         r.validUntil,
       ]),
-    [otherRows, stampListQuery],
+    [sortedRows, stampListQuery],
   );
 
   const primaryBtn: React.CSSProperties = {
@@ -354,6 +350,18 @@ export default function FiscalStampSettingsPage() {
     fontSize: 12,
     fontWeight: 500,
     cursor: "pointer",
+  };
+
+  const thStyle: React.CSSProperties = {
+    padding: "9px 12px",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--color-ink-3)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    textAlign: "left",
+    background: "var(--color-stone)",
+    whiteSpace: "nowrap",
   };
 
   if (loading) {
@@ -377,50 +385,23 @@ export default function FiscalStampSettingsPage() {
           {saveError}
         </Alert>
       ) : null}
-      {success ? (
+      {successMessage ? (
         <Alert variant="success" title={t("femme.businessSettings.savedTitle")}>
-          {t("femme.fiscalStamp.savedBody")}
+          {successMessage}
         </Alert>
       ) : null}
 
-      <section
-        data-tour="fiscal-stamp-header"
-        data-testid="fiscal-stamp-current-section"
-        style={sectionCardStyle}
-      >
-      <div style={{ ...sectionTitleStyle, marginTop: 0 }}>
-        {t("femme.fiscalStamp.currentSectionTitle")}
-      </div>
-      {activeRow ? (
-        <>
-          <ActiveStampCard row={activeRow} />
-          {activeRow.lockedAfterInvoice ? (
-            <p style={{ marginBottom: 14, fontSize: 12, color: "var(--color-ink-3)" }}>
-              {t("femme.fiscalStamp.lockedHint")}
-            </p>
-          ) : null}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-            <Button type="button" variant="secondary" className="min-h-11" onClick={() => void onDeactivate(activeRow.id)}>
-              {t("femme.fiscalStamp.deactivate")}
-            </Button>
-            <Button type="button" variant="secondary" className="min-h-11" onClick={() => openEdit(activeRow)}>
-              {t("femme.fiscalStamp.edit")}
-            </Button>
+      {rows.length === 0 ? (
+        <section data-testid="fiscal-stamp-current-section" style={sectionCardStyle}>
+          <div style={{ ...sectionTitleStyle, marginTop: 0 }}>
+            {t("femme.fiscalStamp.registeredTitle")}
           </div>
-        </>
-      ) : rows.length === 0 ? (
-        <Text variant="muted" style={{ marginBottom: 14 }}>
-          {t("femme.fiscalStamp.empty")}
-        </Text>
+          <Text variant="muted">{t("femme.fiscalStamp.empty")}</Text>
+        </section>
       ) : (
-        <Text variant="muted">{t("femme.fiscalStamp.noActiveStamp")}</Text>
-      )}
-      </section>
-
-      {otherRows.length > 0 ? (
         <div data-tour="fiscal-stamp-list" style={{ marginBottom: 16 }}>
-          <div style={sectionTitleStyle}>
-            {activeRow ? t("femme.fiscalStamp.otherStampsTitle") : t("femme.fiscalStamp.registeredTitle")}
+          <div style={{ ...sectionTitleStyle, marginTop: 0 }}>
+            {t("femme.fiscalStamp.registeredTitle")}
           </div>
           <div style={{ marginBottom: 12 }}>
             <ListSearchField
@@ -431,67 +412,110 @@ export default function FiscalStampSettingsPage() {
               placeholder={t("femme.listFilter.placeholder")}
             />
           </div>
-          {filteredOtherRows.length === 0 ? (
-            <Text variant="muted" style={{ marginBottom: 8 }}>
-              {t("femme.listFilter.noMatches")}
-            </Text>
-          ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {filteredOtherRows.map((row) => (
-              <div
-                key={row.id}
-                style={{
-                  border: "var(--border-default)",
-                  borderRadius: "var(--radius-md)",
-                  padding: 12,
-                  background: "var(--color-white)",
-                }}
-              >
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontWeight: 500, fontSize: 13 }}>{row.stampNumber}</span>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 500,
-                      padding: "2px 8px",
-                      borderRadius: "var(--radius-pill)",
-                      background: "var(--color-stone)",
-                      color: "var(--color-ink-2)",
-                    }}
-                  >
-                    {t("femme.fiscalStamp.inactive")}
-                  </span>
-                </div>
-                <Text variant="small" style={{ marginTop: 6, color: "var(--color-ink-3)", fontSize: 11 }}>
-                  {t("femme.fiscalStamp.rangeLabel", { from: row.rangeFrom, to: row.rangeTo })}
-                  {" · "}
-                  {t("femme.fiscalStamp.nextLabel")}: {row.nextEmissionNumber}
-                </Text>
-                <Text variant="small" style={{ marginTop: 4, color: "var(--color-ink-3)", fontSize: 11 }}>
-                  {t("femme.fiscalStamp.validityLabel", {
-                    from: row.validFrom,
-                    until: row.validUntil,
-                  })}
-                </Text>
-                {row.lockedAfterInvoice ? (
-                  <p style={{ marginTop: 8, fontSize: 12, color: "var(--color-ink-3)" }}>
-                    {t("femme.fiscalStamp.lockedHint")}
-                  </p>
-                ) : null}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                  <Button type="button" variant="primary" className="min-h-11" onClick={() => void onActivate(row.id)}>
-                    {t("femme.fiscalStamp.activate")}
-                  </Button>
-                  <Button type="button" variant="secondary" className="min-h-11" onClick={() => openEdit(row)}>
-                    {t("femme.fiscalStamp.edit")}
-                  </Button>
-                </div>
-              </div>
-            ))}
+          <div
+            data-testid="fiscal-stamp-current-section"
+            style={{
+              background: "var(--color-white)",
+              borderRadius: "var(--radius-xl)",
+              border: "var(--border-default)",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableStampNumber")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableStatus")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableValidFrom")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableValidUntil")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableRangeFrom")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableRangeTo")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableNextEmission")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableActions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        style={{ padding: "24px 12px", textAlign: "center", fontSize: 12, color: "var(--color-ink-3)" }}
+                      >
+                        {t("femme.listFilter.noMatches")}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((row) => {
+                      const tdStyle: React.CSSProperties = {
+                        padding: "10px 12px",
+                        fontSize: 12,
+                        color: "var(--color-ink)",
+                        verticalAlign: "middle",
+                        borderBottom: "0.5px solid var(--color-stone)",
+                      };
+                      return (
+                        <tr key={row.id} data-testid={`fiscal-stamp-row-${row.id}`}>
+                          <td style={{ ...tdStyle, fontWeight: 500 }}>{row.stampNumber}</td>
+                          <td style={tdStyle}>
+                            <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} />
+                          </td>
+                          <td style={tdStyle}>{fmtDateShort(row.validFrom, dateLocale)}</td>
+                          <td style={tdStyle}>{fmtDateShort(row.validUntil, dateLocale)}</td>
+                          <td style={tdStyle}>{row.rangeFrom}</td>
+                          <td style={tdStyle}>{row.rangeTo}</td>
+                          <td style={tdStyle}>{row.nextEmissionNumber}</td>
+                          <td style={tdStyle}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openEdit(row)}
+                              >
+                                {t("femme.fiscalStamp.edit")}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={!row.active}
+                                onClick={() => void onDeactivate(row.id)}
+                              >
+                                {t("femme.fiscalStamp.deactivate")}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                disabled={row.active}
+                                onClick={() => void onActivate(row.id)}
+                              >
+                                {t("femme.fiscalStamp.activate")}
+                              </Button>
+                              {!row.hasInvoices ? (
+                                <Button
+                                  type="button"
+                                  variant="danger"
+                                  size="sm"
+                                  disabled={deleting}
+                                  onClick={() => setDeleteTarget(row)}
+                                >
+                                  {t("femme.fiscalStamp.delete")}
+                                </Button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          )}
         </div>
-      ) : null}
+      )}
 
       <section data-testid="fiscal-stamp-create-section" style={createSectionCardStyle}>
       <div style={{ ...sectionTitleStyle, marginTop: 0 }}>{t("femme.fiscalStamp.addTitle")}</div>
@@ -698,117 +722,21 @@ export default function FiscalStampSettingsPage() {
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
 
-function ActiveStampCard({ row }: { row: FiscalStampRow }) {
-  const { t } = useTranslation();
-  const dateLocale = useDateLocale();
-  const health = stampHealth(row);
-  const pct = rangeUsagePct(row);
-  const fill = fillColor(pct);
-
-  const iconBg =
-    health === "expired"
-      ? "var(--color-danger-lt)"
-      : health === "expiring"
-        ? "var(--color-warning-lt)"
-        : "var(--color-timbrado-valid-icon)";
-
-  const badge =
-    health === "expired" ? (
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 500,
-          padding: "2px 8px",
-          borderRadius: "var(--radius-pill)",
-          background: "var(--color-danger-lt)",
-          color: "var(--color-danger)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {t("femme.fiscalStamp.statusExpired")}
-      </span>
-    ) : health === "expiring" ? (
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 500,
-          padding: "2px 8px",
-          borderRadius: "var(--radius-pill)",
-          background: "var(--color-warning-lt)",
-          color: "var(--color-warning)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {t("femme.fiscalStamp.statusExpiringSoon")}
-      </span>
-    ) : (
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          padding: "2px 8px",
-          borderRadius: "var(--radius-pill)",
-          background: "var(--color-timbrado-valid-bg)",
-          color: "var(--color-timbrado-valid-fg)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {t("femme.fiscalStamp.statusValid")}
-      </span>
-    );
-
-  return (
-    <div
-      style={{
-        background: "var(--color-stone)",
-        borderRadius: "var(--radius-md)",
-        border: "var(--border-default)",
-        padding: 14,
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        marginBottom: 14,
-      }}
-    >
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: "var(--radius-md)",
-          background: iconBg,
-          flexShrink: 0,
-        }}
-      />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>{row.stampNumber}</div>
-        <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-          {t("femme.fiscalStamp.activeCardMeta", {
-            until: fmtDateShort(row.validUntil, dateLocale),
-            from: row.rangeFrom,
-            to: row.rangeTo,
+      {deleteTarget ? (
+        <ConfirmDialog
+          open
+          title={t("femme.fiscalStamp.deleteConfirmTitle")}
+          description={t("femme.fiscalStamp.deleteConfirmBody", {
+            stampNumber: deleteTarget.stampNumber,
           })}
-        </div>
-      </div>
-      <div style={{ marginLeft: "auto", textAlign: "right", flexShrink: 0 }}>
-        {badge}
-        <div
-          style={{
-            width: 80,
-            height: 4,
-            background: "var(--color-stone-md)",
-            borderRadius: 2,
-            marginTop: 6,
-            marginLeft: "auto",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ width: `${pct}%`, height: "100%", background: fill }} />
-        </div>
-      </div>
+          cancelLabel={t("femme.fiscalStamp.cancel")}
+          confirmLabel={t("femme.fiscalStamp.delete")}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => void confirmDelete()}
+        />
+      ) : null}
     </div>
   );
 }
+

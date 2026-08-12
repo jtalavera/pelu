@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
+import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.FiscalStampCreateRequest;
 import com.cursorpoc.backend.web.dto.FiscalStampUpdateRequest;
@@ -29,6 +30,7 @@ class FiscalStampServiceTest {
 
   @Mock private TenantRepository tenantRepository;
   @Mock private FiscalStampRepository fiscalStampRepository;
+  @Mock private InvoiceRepository invoiceRepository;
 
   @InjectMocks private FiscalStampService service;
 
@@ -122,12 +124,14 @@ class FiscalStampServiceTest {
     s.setNextEmissionNumber(5);
     s.setLockedAfterInvoice(true);
     when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(1L, 3L)).thenReturn(true);
 
     var req = new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 42);
     var dto = service.update(1L, 3L, req);
 
     assertThat(dto.nextEmissionNumber()).isEqualTo(42);
     assertThat(s.isLockedAfterInvoice()).isTrue();
+    assertThat(dto.hasInvoices()).isTrue();
   }
 
   @Test
@@ -136,11 +140,32 @@ class FiscalStampServiceTest {
     FiscalStamp b = stamp(2L, false);
     when(fiscalStampRepository.findByTenant_IdOrderByIdAsc(1L)).thenReturn(List.of(a, b));
     when(fiscalStampRepository.findById(2L)).thenReturn(Optional.of(b));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(1L, 2L)).thenReturn(false);
 
     service.activate(1L, 2L);
 
     assertThat(a.isActive()).isFalse();
     assertThat(b.isActive()).isTrue();
+  }
+
+  @Test
+  void delete_removesStampWithNoInvoices() {
+    FiscalStamp s = stamp(5L, false);
+    when(fiscalStampRepository.findById(5L)).thenReturn(Optional.of(s));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(1L, 5L)).thenReturn(false);
+
+    service.delete(1L, 5L);
+
+    verify(fiscalStampRepository).delete(s);
+  }
+
+  @Test
+  void delete_rejectsStampWithInvoices() {
+    FiscalStamp s = stamp(6L, false);
+    when(fiscalStampRepository.findById(6L)).thenReturn(Optional.of(s));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(1L, 6L)).thenReturn(true);
+
+    assertThatThrownBy(() -> service.delete(1L, 6L)).isInstanceOf(ResponseStatusException.class);
   }
 
   private static FiscalStamp stamp(long id, boolean active) {

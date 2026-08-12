@@ -7,20 +7,26 @@ import com.cursorpoc.backend.web.dto.FiscalStampResponse;
 import com.cursorpoc.backend.web.dto.FiscalStampUpdateRequest;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/fiscal-stamps")
 public class FiscalStampController {
+
+  private static final Logger log = LoggerFactory.getLogger(FiscalStampController.class);
 
   private final FiscalStampService fiscalStampService;
 
@@ -63,6 +69,25 @@ public class FiscalStampController {
       @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
     requirePrincipal(principal);
     return fiscalStampService.deactivate(principal.getTenantId(), id);
+  }
+
+  @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void delete(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
+    requirePrincipal(principal);
+    log.info("DELETE /api/fiscal-stamps/{} tenantId={}", id, principal.getTenantId());
+    try {
+      fiscalStampService.delete(principal.getTenantId(), id);
+      log.info("DELETE /api/fiscal-stamps/{} tenantId={} status=204", id, principal.getTenantId());
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "DELETE /api/fiscal-stamps/{} tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode());
+      throw ex;
+    }
   }
 
   private static void requirePrincipal(FemmeUserPrincipal principal) {

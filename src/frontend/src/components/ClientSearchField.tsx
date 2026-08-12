@@ -30,6 +30,8 @@ type Props = {
   placeholder?: string;
   /** Hides the "occasional client" option — for flows that require a real client record. */
   hideOccasional?: boolean;
+  /** Restricts search results to active clients only (e.g. invoice issuance). */
+  activeOnly?: boolean;
 };
 
 const DEBOUNCE_MS = 300;
@@ -42,6 +44,7 @@ export function ClientSearchField({
   label,
   placeholder,
   hideOccasional,
+  activeOnly,
 }: Props) {
   const { t } = useTranslation();
   const inputId = id ?? "client-search-field";
@@ -98,10 +101,11 @@ export function ClientSearchField({
   async function doSearch(q: string) {
     setSearching(true);
     try {
-      const url =
-        q.length > 0
-          ? `/api/clients?q=${encodeURIComponent(q)}`
-          : "/api/clients";
+      const params = new URLSearchParams();
+      if (q.length > 0) params.set("q", q);
+      if (activeOnly) params.set("active", "true");
+      const qs = params.toString();
+      const url = qs.length > 0 ? `/api/clients?${qs}` : "/api/clients";
       const data = await femmeJson<Client[]>(url);
       setResults(Array.isArray(data) ? data : []);
       setOpen(true);

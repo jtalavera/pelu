@@ -371,7 +371,19 @@
       "rangeOrder": "The “to” number must be greater than or equal to “from”.",
       "validUntilBeforeFrom": "The end of validity must be after the start date.",
       "initialEmissionRange": "Must be between {{from}} and {{to}} (inclusive). Example: if the range is {{from}}–{{to}}, use {{from}} to start at the beginning.",
-      "nextEmissionRange": "Must be between {{from}} and {{to}} (inclusive)."
+      "nextEmissionRange": "Must be between {{from}} and {{to}} (inclusive).",
+      "tableStampNumber": "Stamp no.",
+      "tableStatus": "Status",
+      "tableValidFrom": "Validity start",
+      "tableValidUntil": "Validity end",
+      "tableRangeFrom": "No. from",
+      "tableRangeTo": "No. to",
+      "tableNextEmission": "Starting invoice no.",
+      "tableActions": "Actions",
+      "delete": "Delete",
+      "deleteConfirmTitle": "Delete stamp",
+      "deleteConfirmBody": "Are you sure you want to delete stamp {{stampNumber}}? This action cannot be undone.",
+      "deleteSuccess": "Stamp deleted successfully."
     },
     "placeholder": {
       "title": "Coming soon",
@@ -828,6 +840,7 @@
       "INVALID_CATEGORY_ACCENT": "Choose a valid category color from the palette.",
       "SERVICE_NOT_FOUND": "Service not found.",
       "FISCAL_STAMP_NOT_FOUND": "Fiscal stamp not found.",
+      "FISCAL_STAMP_HAS_INVOICES": "Cannot delete a fiscal stamp that has associated invoices.",
       "STAMP_LOCKED_AFTER_INVOICE": "Cannot move the starting number backward on a stamp already used on invoices.",
       "STAMP_NUMBER_DIGITS_ONLY": "Stamp number must contain digits only (e.g. 12345678).",
       "VALIDITY_END_BEFORE_START": "The end of validity must be after the start date.",
@@ -1399,7 +1412,7 @@
       },
       "fiscalStamp": {
         "header": { "title": "Active fiscal stamp", "content": "Shows the currently active timbrado (fiscal stamp number), its validity dates, and the remaining invoice numbers." },
-        "list": { "title": "Other stamps", "content": "Previously registered or inactive fiscal stamps. You can activate one from here if needed." },
+        "list": { "title": "Registered stamps", "content": "All registered fiscal stamps, with the active one shown first. Edit, activate, deactivate, or delete any of them from here." },
         "form": { "title": "Register new stamp", "content": "Enter the timbrado number, validity dates, and the invoice number range authorised by SET Paraguay." }
       }
     }
