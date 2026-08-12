@@ -13,4 +13,5 @@ public record FiscalStampResponse(
     boolean active,
     boolean lockedAfterInvoice,
     int establishment,
-    int expeditionPoint) {}
+    int expeditionPoint,
+    boolean hasInvoices) {}

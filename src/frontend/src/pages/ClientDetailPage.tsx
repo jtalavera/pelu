@@ -469,7 +469,7 @@ export default function ClientDetailPage() {
         <TabsContent value="info">
           <Card data-tour="client-detail-edit" className="p-6">
             {saveSuccess ? (
-              <Alert variant="default" title={t("femme.clients.editSuccess")} className="mb-4" />
+              <Alert variant="success" title={t("femme.clients.editSuccess")} className="mb-4" />
             ) : null}
             {saveError ? (
               <Alert variant="destructive" title={t("femme.clients.errorTitle")} className="mb-4">

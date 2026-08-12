@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
+import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.FiscalStampCreateRequest;
 import com.cursorpoc.backend.web.dto.FiscalStampResponse;
@@ -19,18 +20,26 @@ public class FiscalStampService {
 
   private final TenantRepository tenantRepository;
   private final FiscalStampRepository fiscalStampRepository;
+  private final InvoiceRepository invoiceRepository;
 
   public FiscalStampService(
-      TenantRepository tenantRepository, FiscalStampRepository fiscalStampRepository) {
+      TenantRepository tenantRepository,
+      FiscalStampRepository fiscalStampRepository,
+      InvoiceRepository invoiceRepository) {
     this.tenantRepository = tenantRepository;
     this.fiscalStampRepository = fiscalStampRepository;
+    this.invoiceRepository = invoiceRepository;
   }
 
   @Transactional(readOnly = true)
   public List<FiscalStampResponse> list(long tenantId) {
     return fiscalStampRepository.findByTenant_IdOrderByIdAsc(tenantId).stream()
-        .map(FiscalStampService::toDto)
+        .map(s -> toDto(s, hasInvoices(tenantId, s.getId())))
         .collect(Collectors.toList());
+  }
+
+  private boolean hasInvoices(long tenantId, long fiscalStampId) {
+    return invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(tenantId, fiscalStampId);
   }
 
   @Transactional
@@ -58,7 +67,7 @@ public class FiscalStampService {
     stamp.setEstablishment(establishment);
     stamp.setExpeditionPoint(expeditionPoint);
     fiscalStampRepository.save(stamp);
-    return toDto(stamp);
+    return toDto(stamp, false);
   }
 
   /**
@@ -91,7 +100,7 @@ public class FiscalStampService {
     stamp.setValidFrom(request.validFrom());
     stamp.setValidUntil(request.validUntil());
     stamp.setNextEmissionNumber(request.nextEmissionNumber());
-    return toDto(stamp);
+    return toDto(stamp, hasInvoices(tenantId, id));
   }
 
   @Transactional
@@ -101,14 +110,14 @@ public class FiscalStampService {
     for (FiscalStamp s : all) {
       s.setActive(s.getId().equals(stamp.getId()));
     }
-    return toDto(stamp);
+    return toDto(stamp, hasInvoices(tenantId, id));
   }
 
   @Transactional
   public FiscalStampResponse deactivate(long tenantId, long id) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
     stamp.setActive(false);
-    return toDto(stamp);
+    return toDto(stamp, hasInvoices(tenantId, id));
   }
 
   /**
@@ -119,6 +128,16 @@ public class FiscalStampService {
   public void markLockedAfterInvoice(long tenantId, long fiscalStampId) {
     FiscalStamp stamp = loadForTenant(tenantId, fiscalStampId);
     stamp.setLockedAfterInvoice(true);
+  }
+
+  /** Only allowed when no invoice has ever been issued against this stamp. */
+  @Transactional
+  public void delete(long tenantId, long id) {
+    FiscalStamp stamp = loadForTenant(tenantId, id);
+    if (hasInvoices(tenantId, id)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "FISCAL_STAMP_HAS_INVOICES");
+    }
+    fiscalStampRepository.delete(stamp);
   }
 
   private FiscalStamp loadForTenant(long tenantId, long id) {
@@ -161,7 +180,7 @@ public class FiscalStampService {
     }
   }
 
-  private static FiscalStampResponse toDto(FiscalStamp s) {
+  private static FiscalStampResponse toDto(FiscalStamp s, boolean hasInvoices) {
     return new FiscalStampResponse(
         s.getId(),
         s.getStampNumber(),
@@ -173,6 +192,7 @@ public class FiscalStampService {
         s.isActive(),
         s.isLockedAfterInvoice(),
         s.getEstablishment(),
-        s.getExpeditionPoint());
+        s.getExpeditionPoint(),
+        hasInvoices);
   }
 }

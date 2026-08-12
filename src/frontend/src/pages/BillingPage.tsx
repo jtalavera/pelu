@@ -1232,6 +1232,7 @@ function NewInvoiceTab({
             id="billing-client-search"
             value={clientSelection}
             onChange={handleClientSelectionChange}
+            activeOnly
             onCreateNew={(q) =>
               navigate("/app/clients", {
                 state: {

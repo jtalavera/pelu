@@ -371,7 +371,19 @@
       "rangeOrder": "El número “hasta” debe ser mayor o igual que “desde”.",
       "validUntilBeforeFrom": "El fin de vigencia debe ser posterior al inicio.",
       "initialEmissionRange": "Debe estar entre {{from}} y {{to}} (inclusive). Ejemplo: si el rango es {{from}}–{{to}}, usá {{from}} para empezar al inicio.",
-      "nextEmissionRange": "Debe estar entre {{from}} y {{to}} (inclusive)."
+      "nextEmissionRange": "Debe estar entre {{from}} y {{to}} (inclusive).",
+      "tableStampNumber": "Nro. timbrado",
+      "tableStatus": "Estado",
+      "tableValidFrom": "Inicio de vigencia",
+      "tableValidUntil": "Fin de vigencia",
+      "tableRangeFrom": "Nro. desde",
+      "tableRangeTo": "Nro. hasta",
+      "tableNextEmission": "Nro. de inicio de emisión",
+      "tableActions": "Acciones",
+      "delete": "Borrar",
+      "deleteConfirmTitle": "Borrar timbrado",
+      "deleteConfirmBody": "¿Seguro que querés borrar el timbrado {{stampNumber}}? Esta acción no se puede deshacer.",
+      "deleteSuccess": "Timbrado borrado correctamente."
     },
     "placeholder": {
       "title": "Próximamente",
@@ -830,6 +842,7 @@
       "INVALID_CATEGORY_ACCENT": "Elegí un color de categoría válido de la paleta.",
       "SERVICE_NOT_FOUND": "Servicio no encontrado.",
       "FISCAL_STAMP_NOT_FOUND": "Timbrado no encontrado.",
+      "FISCAL_STAMP_HAS_INVOICES": "No se puede borrar un timbrado con facturas asociadas.",
       "STAMP_LOCKED_AFTER_INVOICE": "No se puede retroceder el número de inicio en un timbrado ya usado en facturas.",
       "STAMP_NUMBER_DIGITS_ONLY": "El número de timbrado debe contener solo dígitos (ej.: 12345678).",
       "VALIDITY_END_BEFORE_START": "El fin de vigencia debe ser posterior al inicio.",
@@ -1399,7 +1412,7 @@
       },
       "fiscalStamp": {
         "header": { "title": "Timbrado activo", "content": "Muestra el timbrado fiscal activo, sus fechas de vigencia y los números de comprobante disponibles." },
-        "list": { "title": "Otros timbrados", "content": "Timbrados registrados anteriores o inactivos. Podés activar uno desde aquí si es necesario." },
+        "list": { "title": "Timbrados registrados", "content": "Todos los timbrados registrados, con el activo en primer lugar. Desde aquí podés editar, activar, desactivar o borrar cualquiera de ellos." },
         "form": { "title": "Registrar nuevo timbrado", "content": "Ingresá el número de timbrado, las fechas de vigencia y el rango de numeración habilitado por la SET." }
       }
     }

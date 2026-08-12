@@ -80,8 +80,10 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
-    await expect(page.getByText("Inactive", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Valid", { exact: true }).first()).toBeVisible();
+    const previousRow = page.getByTestId(`fiscal-stamp-row-${active!.id}`);
+    const newRow = page.getByTestId(`fiscal-stamp-row-${newStamp.id}`);
+    await expect(newRow.getByText("Active", { exact: true })).toBeVisible();
+    await expect(previousRow.getByText("Inactive", { exact: true })).toBeVisible();
   });
 
   test("HU-02b · 6 alerta de vencimiento en menos de 30 días en el dashboard", async ({
@@ -150,13 +152,10 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
-    const stampLbl = page.getByText(stampNumber, { exact: true });
-    await expect(stampLbl).toBeVisible({ timeout: 30_000 });
-    await stampLbl.scrollIntoViewIfNeeded();
-    await page
-      .locator('[data-tour="fiscal-stamp-header"]')
-      .getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ })
-      .click();
+    const stampRow = page.getByTestId(`fiscal-stamp-row-${created.id}`);
+    await expect(stampRow).toBeVisible({ timeout: 30_000 });
+    await stampRow.scrollIntoViewIfNeeded();
+    await stampRow.getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ }).click();
     const dlg = page.getByRole("dialog");
     await expect(
       dlg.getByRole("heading", { name: /^(Edit stamp|Editar timbrado)$/ }),
@@ -215,11 +214,9 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
-    const stampLbl = page.getByText(stampNumber, { exact: true });
-    await expect(stampLbl).toBeVisible({ timeout: 30_000 });
-    const editButton = page
-      .locator('[data-tour="fiscal-stamp-header"]')
-      .getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ });
+    const stampRow = page.getByTestId(`fiscal-stamp-row-${created.id}`);
+    await expect(stampRow).toBeVisible({ timeout: 30_000 });
+    const editButton = stampRow.getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ });
     await expect(editButton).toBeVisible();
     await editButton.click();
 

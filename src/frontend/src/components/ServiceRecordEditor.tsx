@@ -670,9 +670,19 @@ export function ServiceRecordEditor({
                 {t("femme.serviceRecords.generateInvoice")}
               </Button>
             )}
-            {record && isOpen && !showVoidForm && (
-              <Button type="button" variant="danger" onClick={() => setShowVoidForm(true)}>
+            {record && isOpen && (
+              <Button
+                type="button"
+                variant="danger"
+                disabled={showVoidForm}
+                onClick={() => setShowVoidForm(true)}
+              >
                 {t("femme.serviceRecords.voidButton")}
+              </Button>
+            )}
+            {record && isOpen && showVoidForm && (
+              <Button type="button" variant="secondary" onClick={() => setShowVoidForm(false)}>
+                {t("femme.serviceRecords.voidCancel")}
               </Button>
             )}
           </div>
@@ -710,9 +720,6 @@ export function ServiceRecordEditor({
           <div className="flex gap-2">
             <Button type="submit" variant="danger" size="sm" disabled={voiding}>
               {voiding ? t("femme.serviceRecords.voiding") : t("femme.serviceRecords.voidConfirm")}
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setShowVoidForm(false)}>
-              {t("femme.serviceRecords.voidCancel")}
             </Button>
           </div>
         </form>
