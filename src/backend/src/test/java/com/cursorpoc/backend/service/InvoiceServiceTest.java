@@ -542,6 +542,28 @@ class InvoiceServiceTest {
             submittedAt.plusHours(48).atZone(java.time.ZoneId.of("America/Asuncion")).toInstant());
   }
 
+  /**
+   * Issue #145: mirrors the deadline field above, but offset by {@code MINIMUM_CANCELLATION_DELAY}
+   * instead of the 48h window — the instant from which cancellation actually becomes accepted.
+   */
+  @Test
+  void getInvoice_approvedInvoice_exposesTheCancellationAvailableAtAfterMinimumDelay() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    java.time.LocalDateTime submittedAt = java.time.LocalDateTime.of(2026, 7, 28, 10, 0, 0);
+    invoice.setSifenSubmittedAt(submittedAt);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenCancellationAvailableAt())
+        .isEqualTo(
+            submittedAt
+                .plus(SifenInvoiceCancellationService.MINIMUM_CANCELLATION_DELAY)
+                .atZone(java.time.ZoneId.of("America/Asuncion"))
+                .toInstant());
+  }
+
   @Test
   void getInvoice_pendingVerificationInvoice_hasNoCancellationDeadline() {
     Invoice invoice = buildIssuedInvoice();
@@ -552,6 +574,7 @@ class InvoiceServiceTest {
     InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
 
     assertThat(result.sifenCancellationDeadlineAt()).isNull();
+    assertThat(result.sifenCancellationAvailableAt()).isNull();
   }
 
   /** AC-05: once cancelled, no more deadline is exposed — the option is gone for good. */
@@ -571,6 +594,7 @@ class InvoiceServiceTest {
     InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
 
     assertThat(result.sifenCancellationDeadlineAt()).isNull();
+    assertThat(result.sifenCancellationAvailableAt()).isNull();
     assertThat(result.sifenCancellationRequestedAt())
         .isEqualTo(requestedAt.atZone(java.time.ZoneId.of("America/Asuncion")).toInstant());
     assertThat(result.sifenCancellationRequestedByEmail()).isEqualTo("isabelzymanscki@gmail.com");

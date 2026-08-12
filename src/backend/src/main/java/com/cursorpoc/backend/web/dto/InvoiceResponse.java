@@ -39,6 +39,11 @@ public record InvoiceResponse(
     // still possible — null whenever the invoice isn't currently eligible (never approved, or
     // already cancelled) so the frontend doesn't need to reimplement that eligibility logic.
     Instant sifenCancellationDeadlineAt,
+    // Issue #145: the instant (sifenSubmittedAt + MINIMUM_CANCELLATION_DELAY) from which
+    // cancellation is actually accepted — same null-guard as sifenCancellationDeadlineAt, so the
+    // frontend can disable the cancel button and show a short cooldown message instead of letting
+    // the user hit SIFEN's own "extemporáneo" rejection for a just-approved invoice.
+    Instant sifenCancellationAvailableAt,
     // AC-05: historical record of the last cancellation attempt, whichever outcome it had.
     Instant sifenCancellationRequestedAt,
     String sifenCancellationRequestedByEmail,
