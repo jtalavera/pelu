@@ -33,14 +33,27 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
 
   @Mock private InvoiceRepository invoiceRepository;
 
+  private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private SifenInvoiceSubmissionPersistenceService persistence;
   private Invoice invoice;
 
   @BeforeEach
   void setUp() {
-    persistence =
-        new SifenInvoiceSubmissionPersistenceService(invoiceRepository, new FemmeTimeProperties());
+    persistence = new SifenInvoiceSubmissionPersistenceService(invoiceRepository, timeProperties);
     invoice = new Invoice();
+  }
+
+  /**
+   * {@code claimForSubmission} compares against {@code LocalDateTime.now(timeProperties.zoneId())}
+   * (business zone, {@code America/Asuncion} by default), not the JVM's default zone — a bare
+   * {@code LocalDateTime.now()} here only agreed with it by coincidence on a machine whose system
+   * zone happens to also be America/Asuncion, and silently disagreed (by the zone offset, several
+   * hours) on CI runners defaulting to UTC, flipping the lease-expiry comparison. Real bug, found
+   * by a CI-only failure of {@code claimForSubmission_claims_whenThePreviousLeaseHasExpired} that
+   * never reproduced locally.
+   */
+  private LocalDateTime businessNow() {
+    return LocalDateTime.now(timeProperties.zoneId());
   }
 
   @Test
@@ -73,7 +86,7 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
 
   @Test
   void claimForSubmission_refusesToClaim_whenAnUnexpiredLeaseIsAlreadyHeld() {
-    invoice.setSifenProcessingStartedAt(LocalDateTime.now());
+    invoice.setSifenProcessingStartedAt(businessNow());
     when(invoiceRepository.lockByIdAndTenantId(INVOICE_ID, TENANT_ID))
         .thenReturn(Optional.of(invoice));
 
@@ -86,7 +99,7 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
 
   @Test
   void claimForSubmission_claims_whenThePreviousLeaseHasExpired() {
-    invoice.setSifenProcessingStartedAt(LocalDateTime.now().minus(LEASE_TTL).minusSeconds(1));
+    invoice.setSifenProcessingStartedAt(businessNow().minus(LEASE_TTL).minusSeconds(1));
     when(invoiceRepository.lockByIdAndTenantId(INVOICE_ID, TENANT_ID))
         .thenReturn(Optional.of(invoice));
 
