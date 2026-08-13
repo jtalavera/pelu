@@ -59,11 +59,11 @@ import org.springframework.web.server.ResponseStatusException;
  * SifenDocumentType#FACTURA}; {@link #buildHomologationKudePdf} is the new entry point HU-17 added
  * for the other 4 document types the DNIT's homologación requires (nota de crédito/débito,
  * autofactura, nota de remisión), none of which this app persists as an {@link Invoice} — it skips
- * {@link #requireApprovedInvoice} entirely since there is no DB-backed invoice to check, by design
- * (this is homologation-only scope, per EP-05's own intro, not a new production capability). Every
- * other layout choice (items table, totals, QR/legend block, page numbering) is shared unchanged
- * across all 5 types — the DNIT manual and HU-08's own findings don't call for a materially
- * different KuDE structure per type, only the correct type legend.
+ * {@link #requireDeliverableInvoice} entirely since there is no DB-backed invoice to check, by
+ * design (this is homologation-only scope, per EP-05's own intro, not a new production capability).
+ * Every other layout choice (items table, totals, QR/legend block, page numbering) is shared
+ * unchanged across all 5 types — the DNIT manual and HU-08's own findings don't call for a
+ * materially different KuDE structure per type, only the correct type legend.
  */
 @Service
 public class SifenKudePdfService {
@@ -102,10 +102,19 @@ public class SifenKudePdfService {
 
   public record KudePdfResult(byte[] bytes, String filename) {}
 
-  /** AC-01: only invoices SIFEN itself returned Aprobado/Aprobado con observación for. */
+  /**
+   * RT-28 (Hardening_SIFEN.md): the Manual Técnico V150's general "validación posterior" model
+   * (pág. 19, 24) lets the KuDE be delivered at the point of sale before SIFEN approves — the
+   * document's legal validity is simply conditioned on that later approval, and the receiver is
+   * expected to verify it via the CDC/QR already printed (AC-08/AC-13). {@link
+   * #requireDeliverableInvoice} therefore also accepts {@link
+   * SifenSubmissionStatus#PENDING_VERIFICATION} (previously: only Aprobado/Aprobado con
+   * observación), and {@link #render} prints a legend flagging that the document is still pending
+   * SIFEN's validation in that case.
+   */
   @Transactional(readOnly = true)
   public KudePdfResult buildKudePdf(long tenantId, long invoiceId) {
-    Invoice invoice = requireApprovedInvoice(tenantId, invoiceId);
+    Invoice invoice = requireDeliverableInvoice(tenantId, invoiceId);
     SifenInvoiceHeader header = headerService.buildHeader(tenantId, invoiceId);
     SifenInvoiceDetail detail = detailService.buildDetail(tenantId, invoiceId);
     BusinessProfile profile = businessProfileRepository.findByTenantId(tenantId).orElse(null);
@@ -120,7 +129,8 @@ public class SifenKudePdfService {
             header,
             detail,
             profile,
-            invoice.getClient());
+            invoice.getClient(),
+            invoice.getSifenSubmissionStatus() == SifenSubmissionStatus.PENDING_VERIFICATION);
     return new KudePdfResult(
         pdf, buildFilename(header, invoice.getIssuedAt(), invoice.getInvoiceNumber()));
   }
@@ -129,7 +139,7 @@ public class SifenKudePdfService {
    * SIFEN HU-17 (EP-05, Fase 4, homologación): renders a KuDE for one of the 4 additional document
    * types the DNIT's homologación requires — nota de crédito/débito, autofactura, nota de remisión
    * — none of which this peluquería persists as an {@link Invoice} in real operation (it never
-   * issues them). Deliberately bypasses {@link #requireApprovedInvoice} (there's no DB-backed
+   * issues them). Deliberately bypasses {@link #requireDeliverableInvoice} (there's no DB-backed
    * invoice to check) — the caller is responsible for only calling this with data SIFEN genuinely
    * returned {@code Aprobado}/{@code Aprobado con observación} for, same discipline {@link
    * #buildKudePdf} enforces via the database for real invoices.
@@ -152,12 +162,20 @@ public class SifenKudePdfService {
             header,
             detail,
             null,
-            null);
+            null,
+            false);
     return new KudePdfResult(pdf, buildFilename(header, issuedAt, documentNumber));
   }
 
+  /**
+   * RT-28: widened from "only Aprobado/Aprobado con observación" to also accept {@code
+   * PENDING_VERIFICATION} — a submitted-but-not-yet-answered invoice already has everything the
+   * KuDE needs (CDC + QR are persisted by {@link SifenInvoiceSubmissionService} before it ever
+   * calls SIFEN — see {@code persistQrData}). {@code REJECTED}, {@code CANCELLED} and {@code null}
+   * (never submitted) still 409.
+   */
   @Transactional(readOnly = true)
-  Invoice requireApprovedInvoice(long tenantId, long invoiceId) {
+  Invoice requireDeliverableInvoice(long tenantId, long invoiceId) {
     Invoice invoice =
         invoiceRepository
             .findByIdAndTenant_Id(invoiceId, tenantId)
@@ -165,13 +183,14 @@ public class SifenKudePdfService {
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
     SifenSubmissionStatus status = invoice.getSifenSubmissionStatus();
     if (status != SifenSubmissionStatus.APPROVED
-        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION
+        && status != SifenSubmissionStatus.PENDING_VERIFICATION) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES");
     }
     if (invoice.getSifenQrUrl() == null || invoice.getSifenQrUrl().isBlank()) {
-      // Defensive only: every invoice that reached APPROVED went through submit(), which always
-      // persists this first — should be unreachable in practice.
+      // Defensive only: every invoice that reached at least PENDING_VERIFICATION went through
+      // submit(), which always persists this first — should be unreachable in practice.
       throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_KUDE_MISSING_QR_DATA");
     }
     if (invoice.getClient() != null) {
@@ -202,7 +221,8 @@ public class SifenKudePdfService {
       SifenInvoiceHeader header,
       SifenInvoiceDetail detail,
       BusinessProfile profile,
-      Client client) {
+      Client client,
+      boolean pendingValidation) {
     try {
       Document document = new Document(PageSize.A4, 36, 36, 36, 50);
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -234,7 +254,14 @@ public class SifenKudePdfService {
           bodyFont);
       addSaleAndReceiverBlock(document, issuedAt, header, client, labelFont, bodyFont);
       addQrAndControlNumberBlock(
-          document, qrUrl, publicConsultationUrl, header, bodyFont, labelFont, legendFont);
+          document,
+          qrUrl,
+          publicConsultationUrl,
+          header,
+          bodyFont,
+          labelFont,
+          legendFont,
+          pendingValidation);
       addItemsTable(document, detail, labelFont, bodyFont);
       addTotalsBlock(document, detail.totals(), labelFont, bodyFont);
       addOptionalMessage(document, profile, bodyFont);
@@ -451,7 +478,8 @@ public class SifenKudePdfService {
       SifenInvoiceHeader header,
       Font bodyFont,
       Font labelFont,
-      Font legendFont)
+      Font legendFont,
+      boolean pendingValidation)
       throws DocumentException {
     PdfPTable table = new PdfPTable(2);
     table.setWidthPercentage(100);
@@ -483,6 +511,17 @@ public class SifenKudePdfService {
     // AC-09: legend identifying this as a graphical representation of an electronic document.
     info.add(
         new Chunk("\nKuDE - Representación gráfica de un Documento Electrónico (DE)", legendFont));
+    if (pendingValidation) {
+      // RT-28: the manual imposes no fixed legend text for this case (unlike the test-environment
+      // legend), only that validity is conditioned on SIFEN's later approval — bold + distinct
+      // from the legend above so it reads as a status flag, not part of the standard KuDE legend.
+      Font pendingFont = new Font(Font.HELVETICA, 8, Font.BOLD, java.awt.Color.RED);
+      info.add(
+          new Chunk(
+              "\nDOCUMENTO SUJETO A VALIDACIÓN POR LA SET - válido condicionado a la aprobación"
+                  + " del DE en SIFEN",
+              pendingFont));
+    }
     PdfPCell infoCell = new PdfPCell();
     infoCell.setPadding(6);
     infoCell.addElement(info);

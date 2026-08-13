@@ -165,6 +165,47 @@ class SifenCertificateServiceTest {
         .hasMessageContaining("SIFEN_CERT_INVALID_FILE");
   }
 
+  /**
+   * RT-26 (Hardening_SIFEN.md): Manual Técnico V150, Tabla E requires an RSA key of 2048 or 4096
+   * bits. {@code weak-key-cert.p12} carries a 1024-bit RSA key (and a conformant clientAuth EKU, to
+   * isolate this one check).
+   */
+  @Test
+  void upload_weakRsaKey_rejectedWithSpecificError() throws IOException {
+    String weakKeyBase64 = readFixtureBase64("sifen/weak-key-cert.p12");
+    var request = new SifenCertificateUploadRequest(weakKeyBase64, FIXTURE_PASSWORD);
+
+    assertThatThrownBy(() -> service.upload(1L, 7L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_CERT_INVALID_KEY_SIZE");
+  }
+
+  /**
+   * RT-26: Manual Técnico V150, Tabla E requires the "TLS Web Client Authentication" (clientAuth)
+   * extended key usage. {@code no-client-auth-cert.p12} carries a conformant 2048-bit RSA key but
+   * only the serverAuth EKU, to isolate this one check.
+   */
+  @Test
+  void upload_missingClientAuthEku_rejectedWithSpecificError() throws IOException {
+    String noClientAuthBase64 = readFixtureBase64("sifen/no-client-auth-cert.p12");
+    var request = new SifenCertificateUploadRequest(noClientAuthBase64, FIXTURE_PASSWORD);
+
+    assertThatThrownBy(() -> service.upload(1L, 7L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_CERT_MISSING_CLIENT_AUTH");
+  }
+
+  private static String readFixtureBase64(String classpathResource) throws IOException {
+    byte[] bytes =
+        Files.readAllBytes(
+            java.nio.file.Path.of(
+                SifenCertificateServiceTest.class
+                    .getClassLoader()
+                    .getResource(classpathResource)
+                    .getPath()));
+    return Base64.getEncoder().encodeToString(bytes);
+  }
+
   // Also covers HU-19 AC-04 (the certificate listing screen never shows another tenant's
   // certificates) — HU-19 reuses this same list() unchanged. Same precedent as HU-18's own AC-07:
   // no second-tenant fixture exists yet for Playwright (see PROGRESS.md "Desviación conocida"), so
