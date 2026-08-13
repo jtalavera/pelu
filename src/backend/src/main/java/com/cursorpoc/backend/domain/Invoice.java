@@ -107,6 +107,32 @@ public class Invoice {
   private LocalDateTime sifenSubmittedAt;
 
   /**
+   * RT-20 (Hardening_SIFEN.md): how many transmit attempts {@code SifenSubmissionQueueListener} has
+   * made — incremented by {@code SifenInvoiceSubmissionPersistenceService#claimForSubmission} on
+   * every claim, drives both the backoff schedule and the {@code max_delivery_count}-equivalent
+   * give-up threshold.
+   */
+  @Column(name = "sifen_attempt_count", nullable = false)
+  private int sifenAttemptCount;
+
+  /**
+   * RT-20: when the next transmit attempt is due — set by the queue listener after a retriable
+   * outcome (still {@code PENDING_VERIFICATION}), read by {@code SifenSubmissionReconciler} to
+   * re-enqueue. {@code null} means either never attempted or already resolved.
+   */
+  @Column(name = "sifen_next_attempt_at")
+  private LocalDateTime sifenNextAttemptAt;
+
+  /**
+   * RT-20: a lease, not a lock — Basic-tier Service Bus has no sessions, so PeekLock alone can't
+   * guarantee only one consumer processes this invoice at a time. {@code
+   * SifenInvoiceSubmissionPersistenceService#claimForSubmission} claims this under a pessimistic
+   * row lock before any SIFEN call; {@code null} or older than the lease TTL means unclaimed.
+   */
+  @Column(name = "sifen_processing_started_at")
+  private LocalDateTime sifenProcessingStartedAt;
+
+  /**
    * SIFEN HU-07 AC-03: full document content ({@code xContenDE}) SIFEN returns from the consulta
    * (query) service when the CDC is found — only ever populated once a query resolves to APPROVED,
    * never by the reception service (HU-06), which doesn't return this.
@@ -395,6 +421,30 @@ public class Invoice {
 
   public void setSifenSubmittedAt(LocalDateTime sifenSubmittedAt) {
     this.sifenSubmittedAt = sifenSubmittedAt;
+  }
+
+  public int getSifenAttemptCount() {
+    return sifenAttemptCount;
+  }
+
+  public void setSifenAttemptCount(int sifenAttemptCount) {
+    this.sifenAttemptCount = sifenAttemptCount;
+  }
+
+  public LocalDateTime getSifenNextAttemptAt() {
+    return sifenNextAttemptAt;
+  }
+
+  public void setSifenNextAttemptAt(LocalDateTime sifenNextAttemptAt) {
+    this.sifenNextAttemptAt = sifenNextAttemptAt;
+  }
+
+  public LocalDateTime getSifenProcessingStartedAt() {
+    return sifenProcessingStartedAt;
+  }
+
+  public void setSifenProcessingStartedAt(LocalDateTime sifenProcessingStartedAt) {
+    this.sifenProcessingStartedAt = sifenProcessingStartedAt;
   }
 
   public String getSifenQueryDocumentContent() {

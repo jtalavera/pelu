@@ -650,6 +650,19 @@ export function InvoiceDetailModal({
                     {sifenCheckMessage}
                   </Alert>
                 )}
+                {/* RT-20 (Hardening_SIFEN.md): while QUEUED, the invoice hasn't been transmitted
+                    yet at all — querying SIFEN for a CDC it never received would be pointless, so
+                    this shows an informational line instead of the "check status" button below
+                    (which only ever makes sense once something was actually sent). */}
+                {invoice.sifenSubmissionStatus === "QUEUED" && (
+                  <Text
+                    variant="small"
+                    className="text-[rgb(var(--color-muted-foreground))]"
+                    data-testid="sifen-submission-in-progress-note"
+                  >
+                    {t("femme.billing.history.detail.sifen.submissionInProgressNote")}
+                  </Text>
+                )}
                 {invoice.sifenSubmissionStatus === "PENDING_VERIFICATION" && (
                   <div>
                     <Button
@@ -667,12 +680,16 @@ export function InvoiceDetailModal({
                 )}
                 {/* RT-28 (Hardening_SIFEN.md): the KuDE is deliverable while pending SIFEN's
                     validation too — the Manual Técnico's general "validación posterior" model
-                    lets the receiver walk out with it, conditioned on later approval. */}
+                    lets the receiver walk out with it, conditioned on later approval. RT-20
+                    (Hardening_SIFEN.md): QUEUED already has a CDC/QR by the time it's ever shown
+                    (prepareAndSign persists both before marking QUEUED), so it's deliverable too. */}
                 {(invoice.sifenSubmissionStatus === "APPROVED" ||
                   invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION" ||
+                  invoice.sifenSubmissionStatus === "QUEUED" ||
                   invoice.sifenSubmissionStatus === "PENDING_VERIFICATION") && (
                   <div className="flex flex-col gap-2 pt-2 border-t border-[rgb(var(--color-border))]">
-                    {invoice.sifenSubmissionStatus === "PENDING_VERIFICATION" && (
+                    {(invoice.sifenSubmissionStatus === "QUEUED" ||
+                      invoice.sifenSubmissionStatus === "PENDING_VERIFICATION") && (
                       <Text
                         variant="small"
                         className="text-[rgb(var(--color-muted-foreground))]"

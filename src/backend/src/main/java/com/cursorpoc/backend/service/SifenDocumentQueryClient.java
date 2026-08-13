@@ -79,11 +79,15 @@ public class SifenDocumentQueryClient {
 
   private final SifenConnectionService connectionService;
   private final SifenConnectionProperties connectionProperties;
+  private final SifenCallMetrics metrics;
 
   public SifenDocumentQueryClient(
-      SifenConnectionService connectionService, SifenConnectionProperties connectionProperties) {
+      SifenConnectionService connectionService,
+      SifenConnectionProperties connectionProperties,
+      SifenCallMetrics metrics) {
     this.connectionService = connectionService;
     this.connectionProperties = connectionProperties;
+    this.metrics = metrics;
   }
 
   /**
@@ -96,7 +100,7 @@ public class SifenDocumentQueryClient {
    * instead of being swallowed here — same pattern as {@link SifenDocumentReceptionClient}.
    */
   public Optional<SifenQueryResult> query(long tenantId, String cdc) {
-    return query(tenantId, cdc, null);
+    return metrics.record("consulta", tenantId, () -> query(tenantId, cdc, null));
   }
 
   Optional<SifenQueryResult> query(

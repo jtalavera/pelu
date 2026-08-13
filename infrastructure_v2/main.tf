@@ -262,6 +262,69 @@ resource "azurerm_monitor_diagnostic_setting" "key_vault" {
 }
 
 # ---------------------------------------------------------------------------
+# Service Bus — RT-20 (Hardening_SIFEN.md): asynchronous SIFEN transmission. The issue request
+# never calls SIFEN synchronously; it signs the document and enqueues a transmit attempt here
+# instead. Basic tier: queues + scheduled messages only — no topics, no sessions, no duplicate
+# detection, no transactions. Deployed in BOTH environments (dev/testing also needs to process
+# against SIFEN's TEST environment asynchronously, not just prod). Write-only in this PR: apply
+# per environment when ready.
+# ---------------------------------------------------------------------------
+
+resource "azurerm_servicebus_namespace" "main" {
+  name                = "${var.name_prefix}-sb-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "Basic"
+  # Managed Identity only — no SAS keys to leak (same posture as SQL's Entra-only auth).
+  local_auth_enabled = false
+  tags               = local.tags
+
+  # Basic-tier constraints — Premium-only attributes that MUST NOT be set here:
+  #   capacity, premium_messaging_partitions, zone_redundant, customer_managed_key, network_rule_set
+}
+
+resource "azurerm_servicebus_queue" "sifen_submission" {
+  name         = "sifen-submission"
+  namespace_id = azurerm_servicebus_namespace.main.id
+
+  # Matches SifenSubmissionQueueListener.MAX_ATTEMPTS (initial attempt + 5 backoff retries).
+  max_delivery_count = 6
+  # Longer than the ~30s SIFEN timeout; Basic tier's maximum.
+  lock_duration = "PT5M"
+  # Basic tier's maximum (14 days) is not needed — the 72h signature transmission window is the
+  # real bound on how long a message can usefully stay queued.
+  default_message_ttl                  = "P7D"
+  dead_lettering_on_message_expiration = true
+
+  # Basic-tier constraints — setting any of these fails the apply:
+  #   requires_session, requires_duplicate_detection, forward_to,
+  #   forward_dead_lettered_messages_to, max_message_size_in_kilobytes (Premium only)
+}
+
+# Two narrow roles rather than one "Azure Service Bus Data Owner".
+resource "azurerm_role_assignment" "backend_sb_sender" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Sender"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "backend_sb_receiver" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Receiver"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "service_bus" {
+  name                       = "sb-diag"
+  target_resource_id         = azurerm_servicebus_namespace.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "OperationalLogs"
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Container App Environment + Backend Container App
 # ---------------------------------------------------------------------------
 
@@ -374,6 +437,23 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "FEMME_KEYVAULT_URI"
         value = azurerm_key_vault.main.vault_uri
+      }
+
+      env {
+        name  = "FEMME_SERVICEBUS_ENABLED"
+        value = "true"
+      }
+
+      env {
+        # ServiceBusClientBuilder.fullyQualifiedNamespace() wants the FQDN, not
+        # azurerm_servicebus_namespace.main.endpoint (an https://…:443/ URL).
+        name  = "FEMME_SERVICEBUS_NAMESPACE"
+        value = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
+      }
+
+      env {
+        name  = "FEMME_SERVICEBUS_QUEUE"
+        value = azurerm_servicebus_queue.sifen_submission.name
       }
 
       # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on

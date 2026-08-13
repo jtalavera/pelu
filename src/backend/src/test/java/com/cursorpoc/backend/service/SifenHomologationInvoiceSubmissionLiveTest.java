@@ -8,6 +8,7 @@ import com.cursorpoc.backend.config.SifenQrProperties;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
@@ -104,6 +105,10 @@ import org.w3c.dom.Document;
  */
 class SifenHomologationInvoiceSubmissionLiveTest {
 
+  private static SifenCallMetrics testMetrics() {
+    return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
+  }
+
   /** Same real-server pacing HU-12 established (see its Javadoc's "Real-server finding"). */
   private static final Duration PACING_DELAY = Duration.ofMillis(700);
 
@@ -146,7 +151,8 @@ class SifenHomologationInvoiceSubmissionLiveTest {
       new SifenQrCodeService(new SifenQrProperties(), new SifenConnectionProperties());
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private final SifenDocumentReceptionClient receptionClient =
-      new SifenDocumentReceptionClient(null, new SifenConnectionProperties(), timeProperties);
+      new SifenDocumentReceptionClient(
+          null, new SifenConnectionProperties(), timeProperties, testMetrics());
 
   /**
    * One invoice-building recipe. {@code null}/{@code false} fields mean "use the correct default" —

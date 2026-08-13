@@ -54,16 +54,20 @@ public class SifenBatchResultQueryClient {
 
   private final SifenConnectionService connectionService;
   private final SifenConnectionProperties connectionProperties;
+  private final SifenCallMetrics metrics;
 
   public SifenBatchResultQueryClient(
-      SifenConnectionService connectionService, SifenConnectionProperties connectionProperties) {
+      SifenConnectionService connectionService,
+      SifenConnectionProperties connectionProperties,
+      SifenCallMetrics metrics) {
     this.connectionService = connectionService;
     this.connectionProperties = connectionProperties;
+    this.metrics = metrics;
   }
 
   /** AC-01/AC-02/AC-03: queries {@code batchNumber}'s current status. */
   public Optional<SifenBatchQueryResult> query(long tenantId, String batchNumber) {
-    return query(tenantId, batchNumber, null);
+    return metrics.record("consulta_lote", tenantId, () -> query(tenantId, batchNumber, null));
   }
 
   Optional<SifenBatchQueryResult> query(

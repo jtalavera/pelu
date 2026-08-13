@@ -71,14 +71,17 @@ public class SifenDocumentReceptionClient {
   private final SifenConnectionService connectionService;
   private final SifenConnectionProperties connectionProperties;
   private final FemmeTimeProperties timeProperties;
+  private final SifenCallMetrics metrics;
 
   public SifenDocumentReceptionClient(
       SifenConnectionService connectionService,
       SifenConnectionProperties connectionProperties,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenCallMetrics metrics) {
     this.connectionService = connectionService;
     this.connectionProperties = connectionProperties;
     this.timeProperties = timeProperties;
+    this.metrics = metrics;
   }
 
   /**
@@ -88,9 +91,13 @@ public class SifenDocumentReceptionClient {
    * of retrying automatically. A {@link org.springframework.web.server.ResponseStatusException}
    * from resolving the tenant's certificate (no valid certificate, RUC mismatch) is a configuration
    * error, not a communication failure, so it propagates instead of being swallowed here.
+   *
+   * <p>RT-21 (Hardening_SIFEN.md): the only entry point instrumented with {@link SifenCallMetrics}
+   * — homologación calls go through {@link #sendWithClient} directly and aren't real tenant
+   * traffic.
    */
   public Optional<SifenSubmissionResult> send(long tenantId, String signedDocumentXml) {
-    return send(tenantId, signedDocumentXml, null);
+    return metrics.record("recepcion", tenantId, () -> send(tenantId, signedDocumentXml, null));
   }
 
   Optional<SifenSubmissionResult> send(

@@ -151,8 +151,8 @@ class SifenKudePdfServiceTest {
   }
 
   /**
-   * RT-28 (Hardening_SIFEN.md): Rejected/Cancelled/never-submitted invoices still can't generate a
-   * KuDE — only Aprobado/Aprobado con observación/Pendiente de verificación can.
+   * RT-28/RT-20 (Hardening_SIFEN.md): Rejected/Cancelled/never-submitted invoices still can't
+   * generate a KuDE — only Aprobado/Aprobado con observación/En cola/Pendiente de verificación can.
    */
   @Test
   void buildKudePdf_rejectsInvoicesNotApprovedOrPending() {
@@ -195,6 +195,20 @@ class SifenKudePdfServiceTest {
     String page1 = extractPage(result.bytes(), 1);
 
     assertThat(page1).doesNotContain("SUJETO A VALIDACIÓN POR LA SET");
+  }
+
+  /**
+   * RT-20 (Hardening_SIFEN.md): a QUEUED invoice already has its CDC/QR persisted by {@code
+   * prepareAndSign} before it's ever transmitted — same deliverability as PENDING_VERIFICATION.
+   */
+  @Test
+  void buildKudePdf_allowsQueuedInvoice_andShowsPendingValidationLegend() throws Exception {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.QUEUED);
+
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).contains("SUJETO A VALIDACIÓN POR LA SET");
   }
 
   @Test

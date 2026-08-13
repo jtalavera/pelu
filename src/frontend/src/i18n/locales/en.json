@@ -566,6 +566,7 @@
           "sifen": {
             "title": "SIFEN status",
             "controlNumber": "Control number (CDC)",
+            "statusQueued": "Queued",
             "statusPendingVerification": "Pending verification",
             "statusApproved": "Approved",
             "statusApprovedWithObservation": "Approved with observation",
@@ -573,6 +574,7 @@
             "statusCancelled": "Cancelled",
             "resultMessage": "SIFEN message",
             "protocolNumber": "Protocol number",
+            "submissionInProgressNote": "This invoice is queued for submission to SIFEN. This updates automatically once it's sent — no action needed here.",
             "checkStatusButton": "Check status in SIFEN",
             "checkingStatus": "Checking…",
             "checkStatusStillPending": "SIFEN has not answered yet. The invoice is still pending verification.",

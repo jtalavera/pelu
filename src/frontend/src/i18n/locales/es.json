@@ -566,6 +566,7 @@
           "sifen": {
             "title": "Estado en SIFEN",
             "controlNumber": "Número de control (CDC)",
+            "statusQueued": "En cola",
             "statusPendingVerification": "Pendiente de verificación",
             "statusApproved": "Aprobado",
             "statusApprovedWithObservation": "Aprobado con observación",
@@ -573,6 +574,7 @@
             "statusCancelled": "Cancelada",
             "resultMessage": "Mensaje de SIFEN",
             "protocolNumber": "Número de trámite",
+            "submissionInProgressNote": "Esta factura está en cola para enviarse a SIFEN. Esto se actualiza automáticamente una vez enviada — no hace falta ninguna acción acá.",
             "checkStatusButton": "Verificar estado en SIFEN",
             "checkingStatus": "Verificando…",
             "checkStatusStillPending": "SIFEN todavía no respondió. La factura sigue pendiente de verificación.",

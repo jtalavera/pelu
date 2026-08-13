@@ -33,6 +33,13 @@ dependencies {
     // live in Azure Key Vault outside the e2e profile, resolved via the DefaultAzureCredential
     // (Managed Identity) already pulled in by azure-identity above.
     implementation("com.azure:azure-security-keyvault-secrets:4.10.4")
+    // RT-20 (Hardening_SIFEN.md): asynchronous SIFEN transmission via Azure Service Bus (Basic
+    // tier) — see SifenSubmissionQueueListener/ServiceBusSifenSubmissionQueue.
+    implementation("com.azure:azure-messaging-servicebus:7.17.19")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // RT-21: per-operation SIFEN metrics exported to the Application Insights resource Terraform
+    // already provisions (APPLICATIONINSIGHTS_CONNECTION_STRING) — see SifenCallMetrics.
+    implementation("io.micrometer:micrometer-registry-azure-monitor:1.17.0")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2")
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")

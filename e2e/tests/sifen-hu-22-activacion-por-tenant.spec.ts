@@ -17,13 +17,20 @@ import { loginAs, loginAsDemo } from "../fixtures/auth";
 //
 // HU-22 (Fase 5, the last story of this integration) is the real per-tenant switch between the
 // SIFEN pipeline (HU-01..HU-21) and the traditional generator, wired in InvoiceController.issue().
-// Before this story, nothing in the app ever called SifenInvoiceSubmissionService.submit() for a
-// real, normally-issued invoice — every other SIFEN e2e spec fabricates state via
+// Before this story, nothing in the app ever called SifenInvoiceSubmissionService for a real,
+// normally-issued invoice — every other SIFEN e2e spec fabricates state via
 // /api/admin/sifen-test-support/*. This spec is the first to drive a real POST /api/invoices
 // through the entire HU-01..HU-06 chain (control number, header/receiver, totals, real XML-DSig
 // signing, and a real network attempt) — application-e2e.properties points the SIFEN endpoints at
 // 127.0.0.1:9 (the "discard" port), so that real attempt always lands in PENDING_VERIFICATION
 // (HU-06 AC-05's "no response" branch), never a fabricated status.
+//
+// RT-20 (Hardening_SIFEN.md): POST /api/invoices no longer waits on SIFEN at all — it returns as
+// soon as the document is signed (status QUEUED, with a real CDC already populated), and a
+// background attempt (LocalAsyncSifenSubmissionQueue in this profile — see
+// application-e2e.properties's app.femme.servicebus.enabled=false) transmits it moments later,
+// landing in PENDING_VERIFICATION for the same "no response" reason as before. waitForSifenStatus
+// polls for that transition instead of asserting it synchronously.
 //
 // A full BusinessProfile with every SIFEN issuer field (RUC, address, taxpayer type, economic
 // activity, department/city codes) is required for SifenInvoiceHeaderService to build a header at
@@ -96,7 +103,12 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     expect(res.ok(), await res.text()).toBeTruthy();
   }
 
-  type IssuedInvoice = { id: number; status: string; sifenSubmissionStatus: string | null };
+  type IssuedInvoice = {
+    id: number;
+    status: string;
+    sifenSubmissionStatus: string | null;
+    sifenControlNumber: string | null;
+  };
 
   async function invoiceLinesPayload(request: APIRequestContext, token: string, namePrefix: string) {
     const seed = await seedCategoryServiceProfessional(request, token);
@@ -121,6 +133,32 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
   async function createInvoice(request: APIRequestContext, token: string): Promise<IssuedInvoice> {
     const payload = await invoiceLinesPayload(request, token, "E2E HU22");
     return apiPostJson<IssuedInvoice>(request, token, "/api/invoices", payload);
+  }
+
+  /**
+   * RT-20: the transmit attempt runs on LocalAsyncSifenSubmissionQueue's background thread, not
+   * inline with the POST — poll instead of asserting the terminal status synchronously.
+   */
+  async function waitForSifenStatus(
+    request: APIRequestContext,
+    token: string,
+    invoiceId: number,
+    expectedStatus: string,
+  ): Promise<IssuedInvoice> {
+    await expect
+      .poll(
+        async () => {
+          const current = await apiGetJson<IssuedInvoice>(
+            request,
+            token,
+            `/api/invoices/${invoiceId}`,
+          );
+          return current.sifenSubmissionStatus;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(expectedStatus);
+    return apiGetJson<IssuedInvoice>(request, token, `/api/invoices/${invoiceId}`);
   }
 
   test("HU-22 · AC-01 existe el toggle por tenant para un system admin", async ({ page }) => {
@@ -161,10 +199,20 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await ensureSifenIssuerBusinessProfile(request, token);
     await request.post(`${apiBaseUrl()}/api/admin/sifen-test-support/ensure-valid-certificate`);
 
+    const issuedAt = Date.now();
     const sifenInvoice = await createInvoice(request, token);
-    // e2e's SIFEN endpoint is deliberately unreachable (application-e2e.properties) — this is the
-    // real "no response" branch (HU-06 AC-05), not a fabricated status.
-    expect(sifenInvoice.sifenSubmissionStatus).toBe("PENDING_VERIFICATION");
+    // RT-20: the response comes back before SIFEN is ever contacted — already QUEUED, already
+    // carrying a real CDC (minted synchronously by prepareAndSign), well under the old synchronous
+    // request's own latency budget.
+    expect(sifenInvoice.sifenSubmissionStatus).toBe("QUEUED");
+    expect(sifenInvoice.sifenControlNumber).toBeTruthy();
+    expect(sifenInvoice.sifenControlNumber).toHaveLength(44);
+    expect(Date.now() - issuedAt).toBeLessThan(5_000);
+
+    // e2e's SIFEN endpoint is deliberately unreachable (application-e2e.properties) — the
+    // background transmit attempt (LocalAsyncSifenSubmissionQueue) lands in the real "no response"
+    // branch (HU-06 AC-05) moments later, never a fabricated status.
+    await waitForSifenStatus(request, token, sifenInvoice.id, "PENDING_VERIFICATION");
 
     // AC-06: disabling the flag afterward never touches an invoice already sent to SIFEN.
     await setTenantFlag(request, false);

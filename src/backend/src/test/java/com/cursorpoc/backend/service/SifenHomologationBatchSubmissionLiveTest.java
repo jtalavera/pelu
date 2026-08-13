@@ -8,6 +8,7 @@ import com.cursorpoc.backend.config.SifenQrProperties;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
@@ -92,6 +93,10 @@ import org.w3c.dom.Document;
  */
 class SifenHomologationBatchSubmissionLiveTest {
 
+  private static SifenCallMetrics testMetrics() {
+    return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
+  }
+
   /** Same real-server pacing HU-12/HU-13/HU-14 established. */
   private static final Duration PACING_DELAY = Duration.ofMillis(700);
 
@@ -137,11 +142,12 @@ class SifenHomologationBatchSubmissionLiveTest {
       new SifenQrCodeService(new SifenQrProperties(), new SifenConnectionProperties());
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private final SifenDocumentReceptionClient receptionClient =
-      new SifenDocumentReceptionClient(null, new SifenConnectionProperties(), timeProperties);
+      new SifenDocumentReceptionClient(
+          null, new SifenConnectionProperties(), timeProperties, testMetrics());
   private final SifenBatchReceptionClient batchClient =
-      new SifenBatchReceptionClient(null, new SifenConnectionProperties());
+      new SifenBatchReceptionClient(null, new SifenConnectionProperties(), testMetrics());
   private final SifenBatchResultQueryClient queryClient =
-      new SifenBatchResultQueryClient(null, new SifenConnectionProperties());
+      new SifenBatchResultQueryClient(null, new SifenConnectionProperties(), testMetrics());
 
   private long documentNumberCursor;
 

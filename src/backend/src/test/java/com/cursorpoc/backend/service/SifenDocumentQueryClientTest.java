@@ -12,6 +12,7 @@ import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
@@ -255,7 +256,11 @@ class SifenDocumentQueryClientTest {
     SifenConnectionService connectionService =
         new SifenConnectionService(
             certificateService, businessProfileRepository, connectionProperties);
-    return new SifenDocumentQueryClient(connectionService, connectionProperties);
+    return new SifenDocumentQueryClient(connectionService, connectionProperties, testMetrics());
+  }
+
+  private static SifenCallMetrics testMetrics() {
+    return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
   }
 
   private static SifenActiveCertificateMaterial loadMaterial(String resourcePath, String password)
