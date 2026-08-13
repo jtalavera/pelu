@@ -8,7 +8,6 @@ import org.springframework.context.annotation.Configuration;
   FemmeJwtProperties.class,
   FemmeTimeProperties.class,
   FemmeSystemAdminProperties.class,
-  SifenCertificateProperties.class,
   SifenConnectionProperties.class,
   SifenQrProperties.class
 })

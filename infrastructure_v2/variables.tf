@@ -147,3 +147,20 @@ variable "frontend_custom_domains" {
   type        = list(string)
   default     = []
 }
+
+variable "key_vault_soft_delete_retention_days" {
+  description = "RT-12 (Hardening_SIFEN.md): soft-delete retention for the Key Vault holding SIFEN certificate secrets and the JWT secret. Azure allows 7-90 days."
+  type        = number
+  default     = 7
+
+  validation {
+    condition     = var.key_vault_soft_delete_retention_days >= 7 && var.key_vault_soft_delete_retention_days <= 90
+    error_message = "key_vault_soft_delete_retention_days must be between 7 and 90."
+  }
+}
+
+variable "key_vault_purge_protection_enabled" {
+  description = "RT-12: blocks permanently purging the Key Vault before soft-delete retention elapses, even by an owner. IRREVERSIBLE once true — recommended for prod (holds fiscal signing keys), not required for test."
+  type        = bool
+  default     = false
+}

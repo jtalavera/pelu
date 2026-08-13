@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
-import com.cursorpoc.backend.config.SifenCertificateProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.SifenCertificate;
 import com.cursorpoc.backend.domain.Tenant;
@@ -26,6 +25,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -44,11 +44,16 @@ class SifenCertificateServiceTest {
    */
   private static final java.time.ZoneId BUSINESS_ZONE = new FemmeTimeProperties().zoneId();
 
+  @TempDir private java.nio.file.Path tempDir;
+
   @Mock private TenantRepository tenantRepository;
   @Mock private AppUserRepository appUserRepository;
   @Mock private SifenCertificateRepository sifenCertificateRepository;
 
-  private SifenCertificateEncryptionService encryptionService;
+  // RT-12 (Hardening_SIFEN.md): a real LocalFileSifenCertificateSecretStore over a @TempDir, not a
+  // mock — keeps the upload -> requireActiveCertificate round trip genuinely exercised end to end,
+  // same discipline the fixture .p12 already gave this suite pre-RT-12.
+  private LocalFileSifenCertificateSecretStore secretStore;
   private SifenCertificateService service;
 
   private Tenant tenant;
@@ -57,15 +62,13 @@ class SifenCertificateServiceTest {
 
   @BeforeEach
   void setUp() throws IOException {
-    SifenCertificateProperties props = new SifenCertificateProperties();
-    props.setCertEncryptionKey("enOvRBV4YK7cD2WVPl0pMOLFRq5xGVCnGBNLse2/XUY=");
-    encryptionService = new SifenCertificateEncryptionService(props);
+    secretStore = new LocalFileSifenCertificateSecretStore(tempDir.toString());
     service =
         new SifenCertificateService(
             tenantRepository,
             appUserRepository,
             sifenCertificateRepository,
-            encryptionService,
+            secretStore,
             new FemmeTimeProperties());
 
     tenant = new Tenant();
@@ -83,7 +86,7 @@ class SifenCertificateServiceTest {
   }
 
   @Test
-  void upload_validCertificate_extractsDatesAndStoresEncrypted() {
+  void upload_validCertificate_storesOnlySecretRefsNeverRawMaterial() {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     when(appUserRepository.findById(7L)).thenReturn(Optional.of(uploader));
     when(sifenCertificateRepository.save(any(SifenCertificate.class)))
@@ -104,11 +107,36 @@ class SifenCertificateServiceTest {
     ArgumentCaptor<SifenCertificate> captor = ArgumentCaptor.forClass(SifenCertificate.class);
     verify(sifenCertificateRepository).save(captor.capture());
     SifenCertificate saved = captor.getValue();
-    // AC-06: neither the private key material nor the password are recoverable without decrypting.
-    assertThat(saved.getEncryptedP12Base64()).doesNotContain(FIXTURE_PASSWORD);
-    assertThat(saved.getEncryptedPasswordBase64()).doesNotContain(FIXTURE_PASSWORD);
-    assertThat(encryptionService.decryptToString(saved.getEncryptedPasswordBase64()))
-        .isEqualTo(FIXTURE_PASSWORD);
+    // RT-12: the entity holds only references — neither the password nor any p12 bytes are ever
+    // set on it directly, and the reference names carry the RT-13 per-tenant naming convention.
+    assertThat(saved.getP12SecretName()).matches("^sifen-cert-t1-[0-9a-f-]+-p12$");
+    assertThat(saved.getPasswordSecretName()).matches("^sifen-cert-t1-[0-9a-f-]+-pwd$");
+    assertThat(saved.getP12SecretVersion()).isNotBlank();
+    assertThat(saved.getPasswordSecretVersion()).isNotBlank();
+
+    // And loading it back through the store round-trips the real material.
+    var loaded =
+        secretStore.load(
+            1L,
+            new SifenCertificateSecretStore.StoredSecretRef(
+                saved.getP12SecretName(),
+                saved.getP12SecretVersion(),
+                saved.getPasswordSecretName(),
+                saved.getPasswordSecretVersion()));
+    assertThat(loaded.password()).isEqualTo(FIXTURE_PASSWORD);
+    assertThat(Base64.getEncoder().encodeToString(loaded.p12Bytes())).isEqualTo(validP12Base64);
+  }
+
+  /** RT-12: capped by the Key Vault secret value limit (25 KB) — see MAX_FILE_BYTES's javadoc. */
+  @Test
+  void upload_fileOverKeyVaultSecretLimit_rejectedAsTooLarge() {
+    byte[] oversized = new byte[20_000];
+    String oversizedBase64 = Base64.getEncoder().encodeToString(oversized);
+    var request = new SifenCertificateUploadRequest(oversizedBase64, FIXTURE_PASSWORD);
+
+    assertThatThrownBy(() -> service.upload(1L, 7L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_CERT_FILE_TOO_LARGE");
   }
 
   @Test
@@ -255,8 +283,10 @@ class SifenCertificateServiceTest {
             1L,
             LocalDate.now(BUSINESS_ZONE).minusDays(10),
             LocalDate.now(BUSINESS_ZONE).plusDays(10));
-    cert.setEncryptedP12Base64("super-secret-p12-bytes");
-    cert.setEncryptedPasswordBase64("super-secret-password");
+    cert.setP12SecretName("sifen-cert-t1-fixture-p12");
+    cert.setP12SecretVersion("1");
+    cert.setPasswordSecretName("sifen-cert-t1-fixture-pwd");
+    cert.setPasswordSecretVersion("1");
     when(sifenCertificateRepository.findByTenant_IdOrderByUploadedAtDesc(1L))
         .thenReturn(List.of(cert));
 
@@ -310,8 +340,11 @@ class SifenCertificateServiceTest {
   private SifenCertificate certificateWithMaterial(
       long id, LocalDate notBefore, LocalDate notAfter) {
     SifenCertificate c = certificate(id, notBefore, notAfter);
-    c.setEncryptedP12Base64(encryptionService.encrypt(Base64.getDecoder().decode(validP12Base64)));
-    c.setEncryptedPasswordBase64(encryptionService.encrypt(FIXTURE_PASSWORD));
+    var ref = secretStore.store(1L, Base64.getDecoder().decode(validP12Base64), FIXTURE_PASSWORD);
+    c.setP12SecretName(ref.p12SecretName());
+    c.setP12SecretVersion(ref.p12SecretVersion());
+    c.setPasswordSecretName(ref.passwordSecretName());
+    c.setPasswordSecretVersion(ref.passwordSecretVersion());
     return c;
   }
 

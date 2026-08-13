@@ -5,6 +5,10 @@ resource "random_string" "suffix" {
   upper   = false
 }
 
+# RT-12/RT-18 (Hardening_SIFEN.md): the tenant this deployment's credentials belong to, needed to
+# create the Key Vault (Entra tenant ID, not this app's own multi-tenant "tenant" concept).
+data "azurerm_client_config" "current" {}
+
 # ---------------------------------------------------------------------------
 # Locals
 # ---------------------------------------------------------------------------
@@ -202,6 +206,62 @@ resource "azurerm_communication_service_email_domain_association" "main" {
 }
 
 # ---------------------------------------------------------------------------
+# Key Vault — RT-12/RT-13/RT-18 (Hardening_SIFEN.md): per-tenant SIFEN certificate secrets
+# (.p12 + password, one pair per tenant, see KeyVaultSifenCertificateSecretStore) and the
+# app-wide JWT signing secret (see KeyVaultSecretsEnvironmentPostProcessor). RBAC authorization
+# only — no access policies, no SAS/connection-string auth. Write-only in this PR: apply per
+# environment when ready (see infrastructure_v2.md post-apply steps for what has to happen
+# immediately after, including a manual re-upload of every tenant's SIFEN certificate — RT-17).
+# ---------------------------------------------------------------------------
+
+resource "azurerm_key_vault" "main" {
+  name                = "${var.name_prefix}-kv-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+
+  rbac_authorization_enabled = true
+
+  # test: 7 days + no purge protection, cheap to tear down. prod: 90 days + purge protection is
+  # IRREVERSIBLE once applied (a vault holding fiscal signing keys should not be purgeable).
+  soft_delete_retention_days = var.key_vault_soft_delete_retention_days
+  purge_protection_enabled   = var.key_vault_purge_protection_enabled
+
+  # Container Apps here run outside a VNet (same reason azurerm_mssql_firewall_rule.allow_azure_services
+  # allows 0.0.0.0/0) — access control is RBAC + Managed Identity, not network isolation.
+  public_network_access_enabled = true
+
+  tags = local.tags
+}
+
+# The app CREATES secrets on certificate upload (SifenCertificateService.upload), so read-only
+# "Key Vault Secrets User" is not enough — it needs "Secrets Officer".
+resource "azurerm_role_assignment" "backend_kv_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+# So an operator can seed app-femme-jwt-secret post-apply (see infrastructure_v2.md) — its value
+# must never enter Terraform state, so it's set out-of-band via `az keyvault secret set`.
+resource "azurerm_role_assignment" "deployer_kv_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "key_vault" {
+  name                       = "kv-diag"
+  target_resource_id         = azurerm_key_vault.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "AuditEvent"
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Container App Environment + Backend Container App
 # ---------------------------------------------------------------------------
 
@@ -304,6 +364,16 @@ resource "azurerm_container_app" "backend" {
       env {
         name        = "APPLICATIONINSIGHTS_CONNECTION_STRING"
         secret_name = "appinsights-connection-string"
+      }
+
+      env {
+        name  = "FEMME_KEYVAULT_ENABLED"
+        value = "true"
+      }
+
+      env {
+        name  = "FEMME_KEYVAULT_URI"
+        value = azurerm_key_vault.main.vault_uri
       }
 
       # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on

@@ -13,6 +13,7 @@ import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.service.SifenCertificateSecretStore;
 import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.service.SifenInvoiceDetail;
 import com.cursorpoc.backend.service.SifenInvoiceDetailService;
@@ -87,6 +88,7 @@ public class SifenInvoiceTestSupportController {
   private final AppUserRepository appUserRepository;
   private final SifenCertificateService certificateService;
   private final SifenCertificateRepository certificateRepository;
+  private final SifenCertificateSecretStore certificateSecretStore;
   private final SifenInvoiceHeaderService headerService;
   private final SifenInvoiceDetailService detailService;
   private final SifenQrCodeService qrCodeService;
@@ -99,6 +101,7 @@ public class SifenInvoiceTestSupportController {
       AppUserRepository appUserRepository,
       SifenCertificateService certificateService,
       SifenCertificateRepository certificateRepository,
+      SifenCertificateSecretStore certificateSecretStore,
       SifenInvoiceHeaderService headerService,
       SifenInvoiceDetailService detailService,
       SifenQrCodeService qrCodeService,
@@ -109,6 +112,7 @@ public class SifenInvoiceTestSupportController {
     this.appUserRepository = appUserRepository;
     this.certificateService = certificateService;
     this.certificateRepository = certificateRepository;
+    this.certificateSecretStore = certificateSecretStore;
     this.headerService = headerService;
     this.detailService = detailService;
     this.qrCodeService = qrCodeService;
@@ -130,6 +134,9 @@ public class SifenInvoiceTestSupportController {
     log.info("POST /api/admin/sifen-test-support/certificates/clear tenantId={}", DEMO_TENANT_ID);
     certificateRepository.deleteAll(
         certificateRepository.findByTenant_IdOrderByUploadedAtDesc(DEMO_TENANT_ID));
+    // RT-12: the .p12/password themselves live in the secret store, not the DB row above — clear
+    // those too so a re-run doesn't accumulate orphaned local files across the same demo tenant.
+    certificateSecretStore.deleteAll(DEMO_TENANT_ID);
   }
 
   @PostMapping("/invoices/{id}/prepare-for-status-check")
