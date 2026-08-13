@@ -57,14 +57,17 @@ public class SifenSubmissionQueueListener {
   private final SifenInvoiceSubmissionPersistenceService persistence;
   private final SifenInvoiceSubmissionService submissionService;
   private final FemmeTimeProperties timeProperties;
+  private final SifenNumberVoidingService numberVoidingService;
 
   public SifenSubmissionQueueListener(
       SifenInvoiceSubmissionPersistenceService persistence,
       SifenInvoiceSubmissionService submissionService,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenNumberVoidingService numberVoidingService) {
     this.persistence = persistence;
     this.submissionService = submissionService;
     this.timeProperties = timeProperties;
+    this.numberVoidingService = numberVoidingService;
   }
 
   /**
@@ -87,7 +90,7 @@ public class SifenSubmissionQueueListener {
         SifenSubmissionResult result = submissionService.transmit(tenantId, invoiceId);
         return handleResult(tenantId, invoiceId, claimed.get(), result.status());
       } catch (ResponseStatusException e) {
-        return handleTerminalException(tenantId, invoiceId, e);
+        return handleException(tenantId, invoiceId, claimed.get(), e);
       } catch (RuntimeException e) {
         log.error(
             "SIFEN transmit failed unexpectedly tenantId={} invoiceId={} error={}",
@@ -109,6 +112,11 @@ public class SifenSubmissionQueueListener {
     if (TERMINAL_STATUSES.contains(status)) {
       persistence.clearRetrySchedule(tenantId, invoiceId);
       persistence.releaseLease(tenantId, invoiceId);
+      if (status == SifenSubmissionStatus.REJECTED) {
+        // RT-25: the rejected invoice's number will never be reused under this CDC — record it as
+        // a pending inutilización for an admin to review and submit, per Manual Técnico V150.
+        numberVoidingService.recordPendingForRejectedInvoice(tenantId, invoiceId);
+      }
       log.info(
           "SIFEN transmit resolved tenantId={} invoiceId={} attempt={} status={}",
           tenantId,
@@ -120,41 +128,24 @@ public class SifenSubmissionQueueListener {
 
     // Still PENDING_VERIFICATION (or, defensively, QUEUED if transmit somehow didn't advance it) —
     // SIFEN gave no answer yet; schedule another check rather than resending blindly.
-    if (attempt >= MAX_ATTEMPTS) {
-      persistence.releaseLease(tenantId, invoiceId);
-      log.error(
-          "SIFEN transmit exhausted all attempts, giving up tenantId={} invoiceId={} attempt={}",
-          tenantId,
-          invoiceId,
-          attempt);
-      return Outcome.DEAD_LETTERED;
-    }
-    Duration backoff = BACKOFF[Math.min(attempt, BACKOFF.length) - 1];
-    LocalDateTime nextAttemptAt = LocalDateTime.now(timeProperties.zoneId()).plus(backoff);
-    persistence.scheduleRetry(tenantId, invoiceId, nextAttemptAt);
-    persistence.releaseLease(tenantId, invoiceId);
-    log.info(
-        "SIFEN transmit still pending, scheduled retry tenantId={} invoiceId={} attempt={} "
-            + "nextAttemptAt={}",
-        tenantId,
-        invoiceId,
-        attempt,
-        nextAttemptAt);
-    return Outcome.RETRY_SCHEDULED;
+    return scheduleRetryOrGiveUp(tenantId, invoiceId, attempt, "still pending");
   }
 
   /**
    * {@code SIFEN_INVOICE_ALREADY_APPROVED} (409) and {@code SIFEN_SIGNATURE_EXPIRED} (412) are the
-   * two guards {@code prepareForSubmission} can throw — both terminal: the first means another path
-   * already resolved it (nothing left to do), the second means the 72h window elapsed (no point
-   * retrying; needs manual attention, hence dead-lettered rather than silently dropped).
+   * two guards {@code prepareForSubmission} can throw. RT-22 (Hardening_SIFEN.md): {@code
+   * SIFEN_RATE_LIMIT_EXCEEDED} (429, {@link SifenRateLimiter}) is the third — unlike the other two,
+   * it isn't a fact about this invoice at all, just this tenant's SIFEN traffic momentarily
+   * exceeding its own budget, so it's retriable exactly like "still pending" rather than terminal.
+   * {@code SIFEN_INVOICE_ALREADY_APPROVED} means another path already resolved it (nothing left to
+   * do); {@code SIFEN_SIGNATURE_EXPIRED} means the 72h window elapsed (no point retrying; needs
+   * manual attention, hence dead-lettered rather than silently dropped).
    */
-  private Outcome handleTerminalException(
-      long tenantId, long invoiceId, ResponseStatusException e) {
-    boolean alreadyApproved = e.getStatusCode() == HttpStatus.CONFLICT;
-    persistence.releaseLease(tenantId, invoiceId);
-    persistence.clearRetrySchedule(tenantId, invoiceId);
-    if (alreadyApproved) {
+  private Outcome handleException(
+      long tenantId, long invoiceId, int attempt, ResponseStatusException e) {
+    if (e.getStatusCode() == HttpStatus.CONFLICT) {
+      persistence.releaseLease(tenantId, invoiceId);
+      persistence.clearRetrySchedule(tenantId, invoiceId);
       log.info(
           "SIFEN transmit no-op, invoice already resolved tenantId={} invoiceId={} reason={}",
           tenantId,
@@ -162,12 +153,49 @@ public class SifenSubmissionQueueListener {
           e.getReason());
       return Outcome.COMPLETED;
     }
+    if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+      log.warn(
+          "SIFEN transmit rate-limited tenantId={} invoiceId={} attempt={}",
+          tenantId,
+          invoiceId,
+          attempt);
+      return scheduleRetryOrGiveUp(tenantId, invoiceId, attempt, "rate limited");
+    }
+    persistence.releaseLease(tenantId, invoiceId);
+    persistence.clearRetrySchedule(tenantId, invoiceId);
     log.error(
         "SIFEN transmit terminally failed tenantId={} invoiceId={} reason={}",
         tenantId,
         invoiceId,
         e.getReason());
     return Outcome.DEAD_LETTERED;
+  }
+
+  private Outcome scheduleRetryOrGiveUp(long tenantId, long invoiceId, int attempt, String reason) {
+    if (attempt >= MAX_ATTEMPTS) {
+      persistence.releaseLease(tenantId, invoiceId);
+      log.error(
+          "SIFEN transmit exhausted all attempts, giving up tenantId={} invoiceId={} attempt={} "
+              + "reason={}",
+          tenantId,
+          invoiceId,
+          attempt,
+          reason);
+      return Outcome.DEAD_LETTERED;
+    }
+    Duration backoff = BACKOFF[Math.min(attempt, BACKOFF.length) - 1];
+    LocalDateTime nextAttemptAt = LocalDateTime.now(timeProperties.zoneId()).plus(backoff);
+    persistence.scheduleRetry(tenantId, invoiceId, nextAttemptAt);
+    persistence.releaseLease(tenantId, invoiceId);
+    log.info(
+        "SIFEN transmit scheduled retry tenantId={} invoiceId={} attempt={} reason={} "
+            + "nextAttemptAt={}",
+        tenantId,
+        invoiceId,
+        attempt,
+        reason,
+        nextAttemptAt);
+    return Outcome.RETRY_SCHEDULED;
   }
 
   public enum Outcome {

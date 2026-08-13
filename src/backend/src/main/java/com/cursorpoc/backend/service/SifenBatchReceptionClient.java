@@ -100,18 +100,22 @@ public class SifenBatchReceptionClient {
   private final SifenConnectionService connectionService;
   private final SifenConnectionProperties connectionProperties;
   private final SifenCallMetrics metrics;
+  private final SifenRateLimiter rateLimiter;
 
   public SifenBatchReceptionClient(
       SifenConnectionService connectionService,
       SifenConnectionProperties connectionProperties,
-      SifenCallMetrics metrics) {
+      SifenCallMetrics metrics,
+      SifenRateLimiter rateLimiter) {
     this.connectionService = connectionService;
     this.connectionProperties = connectionProperties;
     this.metrics = metrics;
+    this.rateLimiter = rateLimiter;
   }
 
   /** AC-01/AC-02: sends a batch (1-50 signed {@code <rDE>} documents) and awaits the ack. */
   public Optional<SifenBatchSubmissionResult> send(long tenantId, List<String> signedDocumentXmls) {
+    rateLimiter.requireCapacity(tenantId);
     return metrics.record("lote", tenantId, () -> send(tenantId, signedDocumentXmls, null));
   }
 

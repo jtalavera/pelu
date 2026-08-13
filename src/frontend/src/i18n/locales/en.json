@@ -235,6 +235,30 @@
       "statusExpired": "Expired",
       "statusNotYetValid": "Not yet valid"
     },
+    "sifenNumberVoiding": {
+      "title": "Voided document numbers",
+      "lead": "Numbers reported to SIFEN as never issued (\"inutilización\") — recorded automatically when SIFEN rejects an invoice, since that number can't be reused under the same control number. Report each one to SIFEN within the deadline shown.",
+      "loading": "Loading…",
+      "loadError": "Could not load voided document numbers.",
+      "empty": "No voided document numbers.",
+      "colRange": "Range",
+      "colStatus": "Status",
+      "colDeadline": "Deadline",
+      "statusPending": "Pending submission",
+      "statusApproved": "Approved",
+      "statusApprovedWithObservation": "Approved with observation",
+      "statusRejected": "Rejected",
+      "automaticBadge": "Automatic",
+      "deadlineDaysLeft_one": "{{count}} day left",
+      "deadlineDaysLeft_other": "{{count}} days left",
+      "deadlineOverdue": "Deadline passed",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Explain why this number range is being voided (at least 5 characters).",
+      "reasonTooShort": "Enter a reason of at least 5 characters.",
+      "submit": "Submit to SIFEN",
+      "submitting": "Submitting…",
+      "resultMessage": "SIFEN response: {{message}}"
+    },
     "taxes": {
       "pageTitle": "Taxes",
       "pageSubtitle": "Configure tax types applied to services.",
@@ -276,7 +300,17 @@
       "resetToGlobal": "Reset to global",
       "globalSwitchAria": "Global default for {{key}}",
       "tenantSwitchAria": "This organization for {{key}}",
-      "lastChange": "Last change: {{date}} by {{email}} — {{previous}} → {{next}}"
+      "lastChange": "Last change: {{date}} by {{email}} — {{previous}} → {{next}}",
+      "sifenHomologation": {
+        "title": "SIFEN homologación",
+        "statusPending": "Pending",
+        "statusApproved": "Approved",
+        "notMarked": "Not recorded yet",
+        "markedBy": "Marked {{status}} by {{email}} on {{date}}",
+        "markApproved": "Mark as approved",
+        "markPending": "Mark as pending",
+        "pendingWarning": "This organization is not marked as having completed SIFEN homologación (SET pilot testing) yet. Review before relying on electronic invoicing in production."
+      }
     },
     "businessSettings": {
       "title": "Business settings",
@@ -821,6 +855,10 @@
       "SIFEN_ISSUER_CONTACT_INFO_MISSING": "Configure the business phone and contact email in Settings → Business before issuing SIFEN invoices.",
       "SIFEN_ISSUER_LOCATION_NOT_CONFIGURED": "Configure the business department and city in Settings → Business before issuing SIFEN invoices.",
       "SIFEN_CERT_RUC_MISMATCH": "The certificate's RUC does not match this business's configured RUC. Connection refused.",
+      "SIFEN_RATE_LIMIT_EXCEEDED": "Too many SIFEN requests for this business right now. This is retried automatically shortly.",
+      "SIFEN_NUMBER_VOIDING_NO_RESPONSE": "SIFEN did not respond to the voiding request. Try again shortly.",
+      "SIFEN_NUMBER_VOIDING_ALREADY_APPROVED": "This voiding request was already approved by SIFEN.",
+      "SIFEN_NUMBER_VOIDING_NOT_FOUND": "Voiding request not found.",
       "SIFEN_CONNECTION_REJECTED": "Could not establish a secure connection with SIFEN. Try again later.",
       "SIFEN_CLIENT_IDENTIFICATION_REQUIRED": "Sales of Gs. 7,000,000 or more require identifying the client with a RUC or an identity document.",
       "SIFEN_INVOICE_NOT_PENDING_VERIFICATION": "This invoice is not pending verification with SIFEN.",

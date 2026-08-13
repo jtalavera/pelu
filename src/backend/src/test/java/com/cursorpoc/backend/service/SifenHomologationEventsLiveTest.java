@@ -92,6 +92,10 @@ class SifenHomologationEventsLiveTest {
     return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
   }
 
+  private static SifenRateLimiter testRateLimiter() {
+    return new SifenRateLimiter(1_000_000, 60);
+  }
+
   private static final Duration PACING_DELAY = Duration.ofMillis(700);
 
   private static final int MAX_ATTEMPTS_ON_TRANSPORT_FAILURE = 3;
@@ -121,7 +125,8 @@ class SifenHomologationEventsLiveTest {
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private final SifenConnectionProperties connectionProperties = new SifenConnectionProperties();
   private final SifenEventClient eventClient =
-      new SifenEventClient(null, connectionProperties, timeProperties, testMetrics());
+      new SifenEventClient(
+          null, connectionProperties, timeProperties, testMetrics(), testRateLimiter());
 
   // Document-side infra (AC-01/AC-03/AC-05 now seed genuinely-approved documents to react to,
   // instead of only synthetic never-approved CDCs — same envío inmediato pattern HU-13/14/15/17
@@ -132,7 +137,8 @@ class SifenHomologationEventsLiveTest {
   private final SifenQrCodeService qrCodeService =
       new SifenQrCodeService(new SifenQrProperties(), connectionProperties);
   private final SifenDocumentReceptionClient receptionClient =
-      new SifenDocumentReceptionClient(null, connectionProperties, timeProperties, testMetrics());
+      new SifenDocumentReceptionClient(
+          null, connectionProperties, timeProperties, testMetrics(), testRateLimiter());
 
   private SifenActiveCertificateMaterial material;
   private HttpClient client;

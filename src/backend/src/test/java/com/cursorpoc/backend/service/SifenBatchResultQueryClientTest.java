@@ -245,11 +245,16 @@ class SifenBatchResultQueryClientTest {
     SifenConnectionService connectionService =
         new SifenConnectionService(
             certificateService, businessProfileRepository, connectionProperties);
-    return new SifenBatchResultQueryClient(connectionService, connectionProperties, testMetrics());
+    return new SifenBatchResultQueryClient(
+        connectionService, connectionProperties, testMetrics(), testRateLimiter());
   }
 
   private static SifenCallMetrics testMetrics() {
     return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
+  }
+
+  private static SifenRateLimiter testRateLimiter() {
+    return new SifenRateLimiter(1_000_000, 60);
   }
 
   private static SifenActiveCertificateMaterial loadMaterial(String resourcePath, String password)
