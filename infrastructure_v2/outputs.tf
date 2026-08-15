@@ -69,3 +69,13 @@ output "application_insights_app_id" {
   description = "Application Insights application ID."
   value       = azurerm_application_insights.main.app_id
 }
+
+output "key_vault_uri" {
+  description = "Vault URI for the Key Vault holding SIFEN certificate secrets and the JWT secret (RT-12/RT-18). Use with `az keyvault secret set --vault-name <name-from-key_vault_name-output> --name app-femme-jwt-secret --value ...` post-apply."
+  value       = azurerm_key_vault.main.vault_uri
+}
+
+output "key_vault_name" {
+  description = "Name of the Key Vault (for az keyvault CLI commands)."
+  value       = azurerm_key_vault.main.name
+}

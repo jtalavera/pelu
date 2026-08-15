@@ -157,3 +157,5 @@ cd src/backend && docker compose up -d
 ```
 
 Flyway runs on boot. If checksums mismatch (e.g. after editing an applied migration), run `bash scripts/flyway-repair.sh`.
+
+The default profile expects Azure Key Vault (`app.femme.keyvault.enabled=true` by default — RT-12/RT-18, `Hardening_SIFEN.md`) for the JWT secret and SIFEN certificate storage. Without a real vault to point at, `bootRun` locally with `FEMME_KEYVAULT_ENABLED=false APP_FEMME_JWT_SECRET=<32+ char string> ./gradlew bootRun --no-daemon` to fall back to local file storage for certificates and a literal JWT secret (via Spring Boot's standard relaxed env-var binding — no property placeholder needed), same opt-out `application-e2e.properties` uses.

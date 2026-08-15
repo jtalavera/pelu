@@ -132,6 +132,43 @@ sqlcmd -S "$SERVER_FQDN" -d "$DB_NAME" \
 
 `db_ddladmin` is required so Flyway can run migrations on startup.
 
+## Post-apply: seed the Key Vault JWT secret (RT-12/RT-18)
+
+After the first `terraform apply` that includes the Key Vault, the backend expects
+`app-femme-jwt-secret` to already exist — it fetches this at boot
+(`KeyVaultSecretsEnvironmentPostProcessor`) and **fails to start if it's missing**. Seed it
+**before** deploying a backend image built from this story, using the *current* effective JWT
+secret value (whatever `FEMME_JWT_SECRET` was set to previously, or the hardcoded dev default if
+it was never overridden) — this migrates the value verbatim and rotates nothing, so no active
+session is invalidated. Any *later* rotation (a genuinely new value) does invalidate every active
+session — expected, not a bug.
+
+```bash
+KEY_VAULT_NAME="<terraform output -raw key_vault_name>"
+az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name app-femme-jwt-secret \
+  --value "<the current JWT secret value>"
+```
+
+Requires the "Key Vault Secrets Officer" role on the vault — already granted by Terraform to
+`entra_sql_admin_object_id` (see `azurerm_role_assignment.deployer_kv_secrets_officer`).
+
+**Expect the first revision after a fresh apply to crash-loop for a few minutes** while the
+Container App's "Key Vault Secrets Officer" role assignment propagates through Entra RBAC — this
+is normal, not a sign anything is misconfigured.
+
+**RT-17 — every tenant with a SIFEN certificate must re-upload it.** The migration that moves
+certificate storage to Key Vault (`V34__sifen_certificates_keyvault_refs.sql`) deletes existing
+`sifen_certificates` rows — there is deliberately no automated migration script (see the
+migration's own header comment and RT-17 in `Hardening_SIFEN.md` for why). **Coordinate with every
+tenant that has a certificate uploaded before applying this migration in an environment with real
+tenant data** — after it runs, `SIFEN_ELECTRONIC_INVOICING` tenants cannot issue an invoice until
+they re-upload via the existing certificate screen (`InvoiceController.issue` blocks on
+`SIFEN_NO_VALID_CERTIFICATE` otherwise). Check the blast radius first:
+
+```sql
+SELECT tenant_id, COUNT(*) FROM sifen_certificates GROUP BY tenant_id;
+```
+
 ## SQL free-limit grant (not enabled — known limitation)
 
 Azure grants one serverless General Purpose database per subscription up to

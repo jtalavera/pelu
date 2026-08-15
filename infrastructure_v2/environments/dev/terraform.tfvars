@@ -23,3 +23,7 @@ backend_max_replicas = 1
 sql_backup_storage_redundancy = "Local"
 
 log_analytics_daily_quota_gb = 0.5
+
+# RT-12 (Hardening_SIFEN.md): cheap-to-tear-down settings for test — no purge protection.
+key_vault_soft_delete_retention_days = 7
+key_vault_purge_protection_enabled   = false

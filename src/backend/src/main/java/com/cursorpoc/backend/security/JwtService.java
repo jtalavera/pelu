@@ -23,6 +23,13 @@ public class JwtService {
 
   public JwtService(FemmeJwtProperties properties) {
     this.properties = properties;
+    // RT-18: outside e2e/test, absent here means KeyVaultSecretsEnvironmentPostProcessor either
+    // didn't run (misconfigured app.femme.keyvault.uri) or Key Vault itself is unreachable at
+    // boot — either way this must fail loudly, not silently sign tokens with no real secret.
+    if (properties.getSecret() == null) {
+      throw new IllegalStateException(
+          "FEMME_JWT_SECRET_NOT_CONFIGURED: app.femme.jwt.secret is not set");
+    }
     byte[] bytes = properties.getSecret().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     if (bytes.length < 32) {
       throw new IllegalStateException("app.femme.jwt.secret must be at least 32 bytes");

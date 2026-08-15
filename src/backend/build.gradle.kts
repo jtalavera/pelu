@@ -29,6 +29,10 @@ dependencies {
     implementation("com.microsoft.sqlserver:mssql-jdbc")
     implementation("com.microsoft.azure:msal4j:1.17.2")
     implementation("com.azure:azure-identity:1.15.4")
+    // RT-12/RT-18 (Hardening_SIFEN.md): per-tenant SIFEN certificate secrets + the app JWT secret
+    // live in Azure Key Vault outside the e2e profile, resolved via the DefaultAzureCredential
+    // (Managed Identity) already pulled in by azure-identity above.
+    implementation("com.azure:azure-security-keyvault-secrets:4.10.4")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2")
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")

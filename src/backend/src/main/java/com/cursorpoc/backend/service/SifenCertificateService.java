@@ -8,6 +8,8 @@ import com.cursorpoc.backend.domain.enums.SifenCertificateStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.service.SifenCertificateSecretStore.RawCertificateMaterial;
+import com.cursorpoc.backend.service.SifenCertificateSecretStore.StoredSecretRef;
 import com.cursorpoc.backend.web.dto.SifenCertificateResponse;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
 import java.io.ByteArrayInputStream;
@@ -35,9 +37,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-18: upload and list SIFEN digital certificates (.p12 + password) for a tenant. Certificates
- * are stored encrypted at rest; only metadata (upload/validity dates) is ever exposed back to the
- * frontend.
+ * HU-18: upload and list SIFEN digital certificates (.p12 + password) for a tenant. RT-12
+ * (Hardening_SIFEN.md): the actual bytes never touch the database — {@link
+ * SifenCertificateSecretStore} stores them (Key Vault outside {@code e2e}, local files inside it)
+ * and this service only ever persists the resulting reference plus non-sensitive metadata
+ * (upload/validity dates).
  */
 @Service
 public class SifenCertificateService {
@@ -45,9 +49,11 @@ public class SifenCertificateService {
   private static final Logger log = LoggerFactory.getLogger(SifenCertificateService.class);
 
   /**
-   * Generous cap for a .p12 file (typically a few KB); guards against abuse via the JSON payload.
+   * RT-12: capped by the Key Vault secret value limit (25 KB), not an arbitrary app choice — base64
+   * inflates by 4/3, so this is the largest raw .p12 whose base64 form still fits. Real Paraguayan
+   * qualified certificates run 3-8 KB, comfortably under this.
    */
-  private static final int MAX_FILE_BYTES = 1_000_000;
+  static final int MAX_FILE_BYTES = 18_000;
 
   /** RFC 5280 id-kp-clientAuth — "TLS Web Client Authentication". */
   private static final String CLIENT_AUTH_EKU_OID = "1.3.6.1.5.5.7.3.2";
@@ -55,19 +61,19 @@ public class SifenCertificateService {
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
   private final SifenCertificateRepository sifenCertificateRepository;
-  private final SifenCertificateEncryptionService encryptionService;
+  private final SifenCertificateSecretStore secretStore;
   private final FemmeTimeProperties timeProperties;
 
   public SifenCertificateService(
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       SifenCertificateRepository sifenCertificateRepository,
-      SifenCertificateEncryptionService encryptionService,
+      SifenCertificateSecretStore secretStore,
       FemmeTimeProperties timeProperties) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.sifenCertificateRepository = sifenCertificateRepository;
-    this.encryptionService = encryptionService;
+    this.secretStore = secretStore;
     this.timeProperties = timeProperties;
   }
 
@@ -98,11 +104,15 @@ public class SifenCertificateService {
             .findById(uploadedByUserId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND"));
 
+    StoredSecretRef ref = secretStore.store(tenantId, fileBytes, request.password());
+
     SifenCertificate entity = new SifenCertificate();
     entity.setTenant(tenant);
     entity.setUploadedBy(uploadedBy);
-    entity.setEncryptedP12Base64(encryptionService.encrypt(fileBytes));
-    entity.setEncryptedPasswordBase64(encryptionService.encrypt(request.password()));
+    entity.setP12SecretName(ref.p12SecretName());
+    entity.setP12SecretVersion(ref.p12SecretVersion());
+    entity.setPasswordSecretName(ref.passwordSecretName());
+    entity.setPasswordSecretVersion(ref.passwordSecretVersion());
     entity.setNotBefore(toLocalDate(leafCertificate.getNotBefore()));
     entity.setNotAfter(toLocalDate(leafCertificate.getNotAfter()));
     entity.setUploadedAt(Instant.now());
@@ -140,7 +150,7 @@ public class SifenCertificateService {
                       HttpStatus.PRECONDITION_FAILED, "SIFEN_NO_VALID_CERTIFICATE");
                 });
 
-    SifenActiveCertificateMaterial material = decryptMaterial(chosen);
+    SifenActiveCertificateMaterial material = loadMaterial(tenantId, chosen);
     log.info(
         "SIFEN active-certificate resolved tenantId={} certificateId={}",
         tenantId,
@@ -148,9 +158,17 @@ public class SifenCertificateService {
     return material;
   }
 
-  private SifenActiveCertificateMaterial decryptMaterial(SifenCertificate c) {
-    byte[] p12Bytes = encryptionService.decryptToBytes(c.getEncryptedP12Base64());
-    String password = encryptionService.decryptToString(c.getEncryptedPasswordBase64());
+  private SifenActiveCertificateMaterial loadMaterial(long tenantId, SifenCertificate c) {
+    RawCertificateMaterial raw =
+        secretStore.load(
+            tenantId,
+            new StoredSecretRef(
+                c.getP12SecretName(),
+                c.getP12SecretVersion(),
+                c.getPasswordSecretName(),
+                c.getPasswordSecretVersion()));
+    byte[] p12Bytes = raw.p12Bytes();
+    String password = raw.password();
     try {
       KeyStore keyStore = KeyStore.getInstance("PKCS12");
       keyStore.load(new ByteArrayInputStream(p12Bytes), password.toCharArray());

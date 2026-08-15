@@ -27,16 +27,23 @@ public class SifenCertificate {
   private Tenant tenant;
 
   /**
-   * Base64 of AES-GCM(nonce || ciphertext || tag) over the raw .p12 file bytes. Matches Flyway:
-   * NVARCHAR(MAX). Do not use @Lob — SQL Server maps LOB to CLOB and validation fails (see
-   * BusinessProfile.logoDataUrl).
+   * RT-12 (Hardening_SIFEN.md): the actual .p12 bytes live in {@code SifenCertificateSecretStore}
+   * (Azure Key Vault outside {@code e2e}) — this is only the secret's name, never the material
+   * itself. Paired with {@link #p12SecretVersion} because Key Vault secret versions are immutable,
+   * so pinning both makes "which bytes did we sign with" deterministic.
    */
-  @Column(name = "encrypted_p12_base64", columnDefinition = "NVARCHAR(MAX)", nullable = false)
-  private String encryptedP12Base64;
+  @Column(name = "p12_secret_name", length = 127, nullable = false)
+  private String p12SecretName;
 
-  /** Same AES-GCM scheme as {@link #encryptedP12Base64}, applied to the keystore password. */
-  @Column(name = "encrypted_password_base64", columnDefinition = "NVARCHAR(MAX)", nullable = false)
-  private String encryptedPasswordBase64;
+  @Column(name = "p12_secret_version", length = 64, nullable = false)
+  private String p12SecretVersion;
+
+  /** Same reference scheme as {@link #p12SecretName}, for the keystore password's own secret. */
+  @Column(name = "password_secret_name", length = 127, nullable = false)
+  private String passwordSecretName;
+
+  @Column(name = "password_secret_version", length = 64, nullable = false)
+  private String passwordSecretVersion;
 
   @Column(name = "not_before", nullable = false)
   private LocalDate notBefore;
@@ -68,20 +75,36 @@ public class SifenCertificate {
     this.tenant = tenant;
   }
 
-  public String getEncryptedP12Base64() {
-    return encryptedP12Base64;
+  public String getP12SecretName() {
+    return p12SecretName;
   }
 
-  public void setEncryptedP12Base64(String encryptedP12Base64) {
-    this.encryptedP12Base64 = encryptedP12Base64;
+  public void setP12SecretName(String p12SecretName) {
+    this.p12SecretName = p12SecretName;
   }
 
-  public String getEncryptedPasswordBase64() {
-    return encryptedPasswordBase64;
+  public String getP12SecretVersion() {
+    return p12SecretVersion;
   }
 
-  public void setEncryptedPasswordBase64(String encryptedPasswordBase64) {
-    this.encryptedPasswordBase64 = encryptedPasswordBase64;
+  public void setP12SecretVersion(String p12SecretVersion) {
+    this.p12SecretVersion = p12SecretVersion;
+  }
+
+  public String getPasswordSecretName() {
+    return passwordSecretName;
+  }
+
+  public void setPasswordSecretName(String passwordSecretName) {
+    this.passwordSecretName = passwordSecretName;
+  }
+
+  public String getPasswordSecretVersion() {
+    return passwordSecretVersion;
+  }
+
+  public void setPasswordSecretVersion(String passwordSecretVersion) {
+    this.passwordSecretVersion = passwordSecretVersion;
   }
 
   public LocalDate getNotBefore() {
