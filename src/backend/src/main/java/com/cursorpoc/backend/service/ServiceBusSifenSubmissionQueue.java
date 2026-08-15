@@ -2,9 +2,6 @@ package com.cursorpoc.backend.service;
 
 import com.azure.messaging.servicebus.ServiceBusMessage;
 import com.azure.messaging.servicebus.ServiceBusSenderClient;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -13,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * RT-20 (Hardening_SIFEN.md): the real, production {@link SifenSubmissionQueue} — Azure Service
@@ -49,12 +47,7 @@ public class ServiceBusSifenSubmissionQueue implements SifenSubmissionQueue {
             attempt,
             correlationId,
             Instant.now());
-    String json;
-    try {
-      json = objectMapper.writeValueAsString(payload);
-    } catch (JsonProcessingException e) {
-      throw new UncheckedIOException(e);
-    }
+    String json = objectMapper.writeValueAsString(payload);
 
     ServiceBusMessage message = new ServiceBusMessage(json);
     message.setMessageId("sifen-tx-" + tenantId + "-" + invoiceId + "-" + attempt);

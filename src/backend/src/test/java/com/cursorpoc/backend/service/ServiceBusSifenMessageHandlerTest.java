@@ -12,13 +12,13 @@ import com.azure.core.util.BinaryData;
 import com.azure.messaging.servicebus.ServiceBusReceivedMessage;
 import com.azure.messaging.servicebus.ServiceBusReceivedMessageContext;
 import com.azure.messaging.servicebus.models.DeadLetterOptions;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 /** RT-20 (Hardening_SIFEN.md). */
 @ExtendWith(MockitoExtension.class)
@@ -32,10 +32,9 @@ class ServiceBusSifenMessageHandlerTest {
 
   @BeforeEach
   void setUp() {
-    // The real ObjectMapper bean is Spring Boot's own, auto-registered with JavaTimeModule
-    // (jackson-datatype-jsr310) — replicate that here so Instant fields deserialize the same way.
-    handler =
-        new ServiceBusSifenMessageHandler(listener, new ObjectMapper().findAndRegisterModules());
+    // Jackson 3's ObjectMapper (the one Spring Boot 4 auto-configures) has java.time support
+    // built into jackson-databind itself, so no module registration is needed here.
+    handler = new ServiceBusSifenMessageHandler(listener, new ObjectMapper());
     when(context.getMessage()).thenReturn(message);
   }
 
