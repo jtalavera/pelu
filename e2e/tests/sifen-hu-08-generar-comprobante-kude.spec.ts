@@ -36,7 +36,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await ensureCashSessionOpenApi(request, token);
   });
 
-  test("HU-08 · AC-16 el botón de descarga del KuDE aparece solo para una factura aprobada y descarga un PDF real", async ({
+  test("HU-08 · AC-16 el botón de descarga del KuDE aparece solo para una factura enviada y descarga un PDF real", async ({
     page,
     request,
   }) => {
@@ -69,15 +69,18 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.getByRole("button", { name: "View" }).click();
 
-    // AC-01: no KuDE section/button at all before the invoice is approved.
+    // RT-28 (Hardening_SIFEN.md): before the invoice was ever submitted to SIFEN at all (no CDC/QR
+    // yet), there's still nothing deliverable — no KuDE section/button.
     await expect(page.getByTestId("sifen-kude-download-button")).toHaveCount(0);
     // Two "Close" buttons exist (the modal's icon close + the footer button) — the footer one is
     // the last in DOM order.
     await page.getByRole("button", { name: "Close", exact: true }).last().click();
 
-    // Test-only setup (e2e profile only, see file header): fabricates the "Aprobado" precondition.
+    // Test-only setup (e2e profile only, see file header): fabricates the "pendiente de
+    // verificación" precondition — RT-28 requires the KuDE to be deliverable even before SIFEN
+    // answers, as long as the invoice was actually signed and sent (CDC/QR persisted).
     const prep = await request.post(
-      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-with-status/PENDING_VERIFICATION`,
     );
     expect(prep.ok(), await prep.text()).toBeTruthy();
 
@@ -90,7 +93,10 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     const section = page.getByTestId("sifen-status-section");
     await expect(section).toBeVisible();
-    await expect(section.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
+
+    // RT-28: the pending-validation note renders alongside the download button.
+    await expect(page.getByTestId("sifen-kude-pending-validation-note")).toBeVisible();
 
     const downloadButton = page.getByTestId("sifen-kude-download-button");
     await expect(downloadButton).toBeVisible();
@@ -105,6 +111,48 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(kudeResponse.ok(), await kudeResponse.text()).toBeTruthy();
     expect(kudeResponse.headers()["content-type"]).toContain("application/pdf");
     expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
+  });
+
+  test("HU-08 · RT-28 una vez aprobada, el KuDE ya no muestra la nota de validación pendiente", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU08c ${Date.now()}`);
+
+    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 60000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 60000 }],
+    });
+
+    const prep = await request.post(
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.getByRole("button", { name: "View" }).click();
+
+    await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-kude-pending-validation-note")).toHaveCount(0);
   });
 
   test("HU-08 · AC-17 el KuDE puede enviarse por correo electrónico desde la pantalla de detalle", async ({
