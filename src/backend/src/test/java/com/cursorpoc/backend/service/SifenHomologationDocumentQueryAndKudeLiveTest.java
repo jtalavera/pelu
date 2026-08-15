@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.parser.PdfTextExtractor;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -87,6 +88,10 @@ import org.w3c.dom.Document;
  */
 class SifenHomologationDocumentQueryAndKudeLiveTest {
 
+  private static SifenCallMetrics testMetrics() {
+    return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
+  }
+
   /** Same real-server pacing HU-12 through HU-16 established. */
   private static final Duration PACING_DELAY = Duration.ofMillis(700);
 
@@ -125,9 +130,10 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
       new SifenQrCodeService(new SifenQrProperties(), new SifenConnectionProperties());
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private final SifenDocumentReceptionClient receptionClient =
-      new SifenDocumentReceptionClient(null, new SifenConnectionProperties(), timeProperties);
+      new SifenDocumentReceptionClient(
+          null, new SifenConnectionProperties(), timeProperties, testMetrics());
   private final SifenDocumentQueryClient queryClient =
-      new SifenDocumentQueryClient(null, new SifenConnectionProperties());
+      new SifenDocumentQueryClient(null, new SifenConnectionProperties(), testMetrics());
   private final SifenKudePdfService kudePdfService =
       new SifenKudePdfService(null, null, null, null, new SifenQrImageService(), timeProperties);
 

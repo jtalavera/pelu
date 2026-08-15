@@ -169,6 +169,30 @@ they re-upload via the existing certificate screen (`InvoiceController.issue` bl
 SELECT tenant_id, COUNT(*) FROM sifen_certificates GROUP BY tenant_id;
 ```
 
+## Operational notes: Service Bus (RT-20)
+
+- **Scale-to-zero and the queue consumer.** `SifenSubmissionQueueListener` (the Service Bus
+  consumer) runs *inside* the backend Container App. Both environments keep
+  `backend_min_replicas = 0` — a deliberate decision, not an oversight — so while the container is
+  scaled to zero, queued invoices are not transmitted until an unrelated HTTP request wakes it, or
+  until prod's wake schedule (07:00–20:00 Mon–Sat, `backend_wake_schedule_enabled`) brings it up.
+  `SifenSubmissionReconciler` (the retry/safety-net job) only runs while the app is alive, same as
+  everything else in the JVM — it does not itself keep the container awake. Outside those hours,
+  transmission latency for a queued invoice is bounded only by the next request that happens to
+  arrive. If this latency becomes a real problem, the fix is `backend_min_replicas = 1` for
+  SIFEN-enabled environments (an always-on cost) or a KEDA `azure-servicebus` scale rule — neither
+  is wired up here.
+- **Dead-letter queue.** A message lands in the DLQ (`sifen-submission/$deadletterqueue`) either
+  because the consumer classified the failure as terminal (see `SifenSubmissionQueueListener`'s
+  `Outcome.DEAD_LETTERED`) or because `max_delivery_count` (6) was exceeded. Per RT-20: an invoice
+  in the DLQ is a fiscal document the app has given up on resolving by itself — it needs a human to
+  look at it. No automated alert is wired up in this Terraform (there's no existing action
+  group/alerting pipeline in this stack to hook into yet); until one exists, check manually:
+  ```bash
+  az servicebus queue show --resource-group <rg> --namespace-name <namespace-from-service_bus_namespace-output> \
+    --name sifen-submission --query countDetails.deadLetterMessageCount
+  ```
+
 ## SQL free-limit grant (not enabled — known limitation)
 
 Azure grants one serverless General Purpose database per subscription up to

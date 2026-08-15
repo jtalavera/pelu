@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.config;
 
+import com.cursorpoc.backend.security.CorrelationIdFilter;
 import com.cursorpoc.backend.security.JwtAuthenticationFilter;
 import com.cursorpoc.backend.security.JwtService;
 import java.util.ArrayList;
@@ -36,9 +37,18 @@ public class SecurityConfig {
     return new JwtAuthenticationFilter(jwtService);
   }
 
+  /** RT-21 (Hardening_SIFEN.md): see the filter's own javadoc for why it runs after JWT auth. */
+  @Bean
+  public CorrelationIdFilter correlationIdFilter() {
+    return new CorrelationIdFilter();
+  }
+
   @Bean
   public SecurityFilterChain securityFilterChain(
-      HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+      HttpSecurity http,
+      JwtAuthenticationFilter jwtAuthenticationFilter,
+      CorrelationIdFilter correlationIdFilter)
+      throws Exception {
     return http.csrf(csrf -> csrf.disable())
         .cors(Customizer.withDefaults())
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -61,6 +71,7 @@ public class SecurityConfig {
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(correlationIdFilter, JwtAuthenticationFilter.class)
         .build();
   }
 
@@ -83,7 +94,8 @@ public class SecurityConfig {
     configuration.setAllowedOriginPatterns(originPatterns);
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(List.of("*"));
-    configuration.setExposedHeaders(List.of(HttpHeaders.CONTENT_DISPOSITION));
+    configuration.setExposedHeaders(
+        List.of(HttpHeaders.CONTENT_DISPOSITION, CorrelationIdFilter.CORRELATION_ID_HEADER));
     configuration.setAllowCredentials(true);
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);

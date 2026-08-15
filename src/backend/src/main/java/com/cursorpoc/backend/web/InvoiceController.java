@@ -7,6 +7,7 @@ import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
 import com.cursorpoc.backend.service.SifenInvoiceClientIdentificationService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
+import com.cursorpoc.backend.service.SifenSubmissionQueue;
 import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
@@ -14,7 +15,9 @@ import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import jakarta.validation.Valid;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -48,6 +51,7 @@ public class InvoiceController {
   private final SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService;
   private final FeatureFlagService featureFlagService;
   private final SifenCertificateService sifenCertificateService;
+  private final SifenSubmissionQueue sifenSubmissionQueue;
 
   public InvoiceController(
       InvoiceService invoiceService,
@@ -55,23 +59,30 @@ public class InvoiceController {
       SifenInvoiceCancellationService sifenInvoiceCancellationService,
       SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService,
       FeatureFlagService featureFlagService,
-      SifenCertificateService sifenCertificateService) {
+      SifenCertificateService sifenCertificateService,
+      SifenSubmissionQueue sifenSubmissionQueue) {
     this.invoiceService = invoiceService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
     this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
     this.sifenInvoiceClientIdentificationService = sifenInvoiceClientIdentificationService;
     this.featureFlagService = featureFlagService;
     this.sifenCertificateService = sifenCertificateService;
+    this.sifenSubmissionQueue = sifenSubmissionQueue;
   }
 
   /**
    * SIFEN HU-22 AC-03/AC-04: routes between the traditional generator and the SIFEN pipeline based
    * on the tenant's {@value #SIFEN_ELECTRONIC_INVOICING_FLAG_KEY} flag. When enabled, a valid
    * certificate is required *before* the invoice is created (AC-04: blocks issuance entirely,
-   * nothing is persisted, if {@link SifenCertificateService#requireActiveCertificate} throws), and
-   * the freshly persisted invoice is immediately submitted to SIFEN (HU-06) once it exists. When
-   * disabled, the invoice is issued exactly as before this story — the traditional generator is
-   * simply "no SIFEN fields ever get populated" (AC-03), not a separate code path.
+   * nothing is persisted, if {@link SifenCertificateService#requireActiveCertificate} throws).
+   *
+   * <p>RT-20 (Hardening_SIFEN.md): the freshly persisted invoice is signed synchronously — {@link
+   * SifenInvoiceSubmissionService#prepareAndSign} mints the CDC/QR and marks it {@code QUEUED},
+   * with zero calls to SIFEN — and a transmit attempt is enqueued for the async consumer to pick
+   * up. This request never waits on SIFEN itself; the response already carries the CDC/QR, which is
+   * what makes the KuDE (RT-28) downloadable the instant this returns, before SIFEN has answered.
+   * When the flag is disabled, the invoice is issued exactly as before this story — the traditional
+   * generator is simply "no SIFEN fields ever get populated" (AC-03), not a separate code path.
    */
   @PostMapping
   public ResponseEntity<InvoiceResponse> issue(
@@ -87,7 +98,9 @@ public class InvoiceController {
     }
     InvoiceResponse response = invoiceService.issueInvoice(tenantId, request);
     if (sifenEnabled) {
-      sifenInvoiceSubmissionService.submit(tenantId, response.id());
+      sifenInvoiceSubmissionService.prepareAndSign(tenantId, response.id());
+      String correlationId = UUID.randomUUID().toString();
+      sifenSubmissionQueue.enqueue(tenantId, response.id(), 1, Duration.ZERO, correlationId);
       response = invoiceService.getInvoice(tenantId, response.id());
     }
     log.info("POST /api/invoices tenantId={} status=201", tenantId);

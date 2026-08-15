@@ -79,3 +79,13 @@ output "key_vault_name" {
   description = "Name of the Key Vault (for az keyvault CLI commands)."
   value       = azurerm_key_vault.main.name
 }
+
+output "service_bus_namespace" {
+  description = "Fully qualified Service Bus namespace (RT-20) — matches FEMME_SERVICEBUS_NAMESPACE on the backend."
+  value       = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
+}
+
+output "service_bus_queue_name" {
+  description = "Name of the SIFEN submission queue (for az servicebus CLI commands, e.g. checking the dead-letter queue depth)."
+  value       = azurerm_servicebus_queue.sifen_submission.name
+}

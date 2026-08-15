@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,6 +93,62 @@ class SifenInvoiceSubmissionPersistenceService {
     Invoice invoice = requireInvoice(tenantId, invoiceId);
     invoice.setSifenQrUrl(qrUrl);
     invoice.setSifenPublicConsultationUrl(publicConsultationUrl);
+  }
+
+  /**
+   * RT-20: marks the invoice deliverable-but-not-yet-transmitted, right after signing and before
+   * any network call to SIFEN — the state {@code InvoiceController#issue} leaves it in when it
+   * returns, and what makes the KuDE (RT-28) already downloadable at that point.
+   */
+  @Transactional
+  void markQueued(long tenantId, long invoiceId) {
+    Invoice invoice = requireInvoice(tenantId, invoiceId);
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.QUEUED);
+  }
+
+  /**
+   * RT-20: claims exclusive processing rights for one transmit attempt under a pessimistic row lock
+   * (see {@code InvoiceRepository#lockByIdAndTenantId}) — the actual defense against two Service
+   * Bus consumers transmitting the same fiscal document twice, since Basic-tier PeekLock alone only
+   * guarantees one consumer per message, not per invoice. Returns the attempt number
+   * (post-increment) if claimed, empty if another attempt already holds an unexpired lease.
+   */
+  @Transactional
+  Optional<Integer> claimForSubmission(long tenantId, long invoiceId, Duration leaseTtl) {
+    Invoice invoice =
+        invoiceRepository
+            .lockByIdAndTenantId(invoiceId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    LocalDateTime now = LocalDateTime.now(timeProperties.zoneId());
+    LocalDateTime processingStartedAt = invoice.getSifenProcessingStartedAt();
+    boolean leaseAvailable =
+        processingStartedAt == null || processingStartedAt.isBefore(now.minus(leaseTtl));
+    if (!leaseAvailable) {
+      return Optional.empty();
+    }
+    invoice.setSifenProcessingStartedAt(now);
+    int attempt = invoice.getSifenAttemptCount() + 1;
+    invoice.setSifenAttemptCount(attempt);
+    return Optional.of(attempt);
+  }
+
+  /** RT-20: releases the lease {@link #claimForSubmission} took, regardless of the outcome. */
+  @Transactional
+  void releaseLease(long tenantId, long invoiceId) {
+    requireInvoice(tenantId, invoiceId).setSifenProcessingStartedAt(null);
+  }
+
+  /** RT-20: schedules the next backoff attempt — read back by {@code SifenSubmissionReconciler}. */
+  @Transactional
+  void scheduleRetry(long tenantId, long invoiceId, LocalDateTime nextAttemptAt) {
+    requireInvoice(tenantId, invoiceId).setSifenNextAttemptAt(nextAttemptAt);
+  }
+
+  /** RT-20: clears the retry schedule once an invoice reaches a terminal outcome. */
+  @Transactional
+  void clearRetrySchedule(long tenantId, long invoiceId) {
+    requireInvoice(tenantId, invoiceId).setSifenNextAttemptAt(null);
   }
 
   /**

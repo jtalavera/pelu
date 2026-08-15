@@ -2,19 +2,53 @@ package com.cursorpoc.backend.repository;
 
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
   Optional<Invoice> findByIdAndTenant_Id(Long id, Long tenantId);
+
+  /**
+   * RT-20: same pessimistic-row-lock pattern as {@code FiscalStampRepository.lockByIdAndTenantId} —
+   * used by {@code SifenInvoiceSubmissionPersistenceService#claimForSubmission} so two concurrent
+   * claims for the same invoice can never both see "unclaimed" (a plain read-then-write would race;
+   * the second transaction blocks here until the first commits).
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT i FROM Invoice i WHERE i.id = :id AND i.tenant.id = :tenantId")
+  Optional<Invoice> lockByIdAndTenantId(@Param("id") Long id, @Param("tenantId") Long tenantId);
+
+  /**
+   * RT-20: drives {@code SifenSubmissionReconciler} — covers both invoices never enqueued at all
+   * (QUEUED, sifenNextAttemptAt still null) and invoices due for a backoff retry
+   * (PENDING_VERIFICATION, sifenNextAttemptAt elapsed), skipping anything another instance
+   * currently holds the lease on.
+   */
+  @Query(
+      """
+      SELECT i FROM Invoice i
+      WHERE i.sifenSubmissionStatus IN :statuses
+      AND (i.sifenNextAttemptAt IS NULL OR i.sifenNextAttemptAt <= :now)
+      AND (i.sifenProcessingStartedAt IS NULL OR i.sifenProcessingStartedAt < :leaseExpiry)
+      AND i.sifenAttemptCount < :maxAttempts
+      """)
+  List<Invoice> findDueForSifenRetry(
+      @Param("statuses") List<SifenSubmissionStatus> statuses,
+      @Param("now") LocalDateTime now,
+      @Param("leaseExpiry") LocalDateTime leaseExpiry,
+      @Param("maxAttempts") int maxAttempts);
 
   boolean existsByTenant_IdAndFiscalStamp_Id(Long tenantId, Long fiscalStampId);
 

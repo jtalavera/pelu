@@ -92,6 +92,40 @@ test.describe("Estado SIFEN column on invoice tables", () => {
     await expect(historyRow.getByText("Approved", { exact: true })).toBeVisible();
   });
 
+  test("an invoice queued for SIFEN submission shows the Queued badge", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E SifenColQueued ${Date.now()}`);
+    const invoice = await createInvoice(
+      request,
+      token,
+      client.id,
+      client.fullName,
+      seed.serviceId,
+      seed.serviceFullName,
+    );
+
+    // RT-20 (Hardening_SIFEN.md): fabricates the "signed, not yet transmitted" state
+    // prepareAndSign leaves an invoice in — same test-support fixture pattern the other cases in
+    // this file already use.
+    const prep = await request.post(
+      `${apiBaseUrl()}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-with-status/QUEUED`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(row.getByText("Queued", { exact: true })).toBeVisible();
+  });
+
   test("an invoice never submitted to SIFEN shows a dash instead of a badge", async ({
     page,
     request,

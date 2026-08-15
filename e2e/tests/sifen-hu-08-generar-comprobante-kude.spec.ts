@@ -113,6 +113,68 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
   });
 
+  test("HU-08 · RT-20 el KuDE ya es descargable apenas la factura queda en cola (QUEUED)", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU08d ${Date.now()}`);
+
+    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 60000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 60000 }],
+    });
+
+    // RT-20 (Hardening_SIFEN.md): fabricates the "signed, not yet transmitted" state
+    // prepareAndSign leaves an invoice in — the CDC/QR already exist, so the KuDE must already be
+    // deliverable, before any transmit attempt to SIFEN ever happens.
+    const prep = await request.post(
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-with-status/QUEUED`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.getByRole("button", { name: "View" }).click();
+
+    const section = page.getByTestId("sifen-status-section");
+    await expect(section).toBeVisible();
+    await expect(section.getByText("Queued", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("sifen-submission-in-progress-note")).toBeVisible();
+    await expect(page.getByTestId("sifen-check-status-button")).toHaveCount(0);
+
+    await expect(page.getByTestId("sifen-kude-pending-validation-note")).toBeVisible();
+    const downloadButton = page.getByTestId("sifen-kude-download-button");
+    await expect(downloadButton).toBeVisible();
+
+    const [download, kudeResponse] = await Promise.all([
+      page.waitForEvent("download"),
+      page.waitForResponse(
+        (r) => r.url().includes("/sifen/kude") && r.request().method() === "GET",
+      ),
+      downloadButton.click(),
+    ]);
+    expect(kudeResponse.ok(), await kudeResponse.text()).toBeTruthy();
+    expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
+  });
+
   test("HU-08 · RT-28 una vez aprobada, el KuDE ya no muestra la nota de validación pendiente", async ({
     page,
     request,

@@ -1,9 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Badge } from "@design-system";
 
-/** SIFEN HU-07: badge variant + i18n key per sifenSubmissionStatus literal. */
+/** SIFEN HU-07/RT-20: badge variant + i18n key per sifenSubmissionStatus literal. */
 function sifenStatusLabelKey(status: string): string {
   switch (status) {
+    case "QUEUED":
+      return "femme.billing.history.detail.sifen.statusQueued";
     case "APPROVED":
       return "femme.billing.history.detail.sifen.statusApproved";
     case "APPROVED_WITH_OBSERVATION":
@@ -17,7 +19,10 @@ function sifenStatusLabelKey(status: string): string {
   }
 }
 
-function sifenStatusBadgeVariant(status: string): "success" | "destructive" | "warning" {
+function sifenStatusBadgeVariant(
+  status: string,
+): "success" | "destructive" | "warning" | "info" {
+  if (status === "QUEUED") return "info";
   if (status === "APPROVED" || status === "APPROVED_WITH_OBSERVATION") return "success";
   if (status === "REJECTED" || status === "CANCELLED") return "destructive";
   return "warning";

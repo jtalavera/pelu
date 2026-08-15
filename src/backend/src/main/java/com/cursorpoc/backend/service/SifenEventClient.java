@@ -82,14 +82,17 @@ public class SifenEventClient {
   private final SifenConnectionService connectionService;
   private final SifenConnectionProperties connectionProperties;
   private final FemmeTimeProperties timeProperties;
+  private final SifenCallMetrics metrics;
 
   public SifenEventClient(
       SifenConnectionService connectionService,
       SifenConnectionProperties connectionProperties,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenCallMetrics metrics) {
     this.connectionService = connectionService;
     this.connectionProperties = connectionProperties;
     this.timeProperties = timeProperties;
+    this.metrics = metrics;
   }
 
   /**
@@ -105,7 +108,8 @@ public class SifenEventClient {
    */
   public Optional<SifenSubmissionResult> send(
       long tenantId, String signedEventXml, String eventLabel) {
-    return send(tenantId, signedEventXml, eventLabel, null);
+    return metrics.record(
+        "evento", tenantId, () -> send(tenantId, signedEventXml, eventLabel, null));
   }
 
   Optional<SifenSubmissionResult> send(

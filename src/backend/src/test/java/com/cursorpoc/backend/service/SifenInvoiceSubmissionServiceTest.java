@@ -72,21 +72,21 @@ class SifenInvoiceSubmissionServiceTest {
                 LocalDateTime.now(),
                 "https://ekuatia.set.gov.py/consultas-test/qr?nVersion=150",
                 "https://ekuatia.set.gov.py/consultas-test/"));
-    // AC-05 default: SIFEN gives no answer when queried, so submit() falls through to a normal
+    // AC-05 default: SIFEN gives no answer when queried, so transmit() falls through to a normal
     // (re)send for every pre-existing test below that doesn't care about the query step itself.
     lenient().when(queryClient.query(eq(TENANT_ID), any())).thenReturn(Optional.empty());
   }
 
   /** AC-02: an approved result, including the protocol number, is persisted on the invoice. */
   @Test
-  void submit_recordsApprovedResult() {
+  void transmit_recordsApprovedResult() {
     when(receptionClient.send(eq(TENANT_ID), any()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
                     SifenSubmissionStatus.APPROVED, "1234567890", "0260", "Autorizado", now())));
 
-    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
 
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.APPROVED);
     assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.APPROVED);
@@ -102,7 +102,7 @@ class SifenInvoiceSubmissionServiceTest {
 
   /** AC-03: an approved-with-observation result is persisted distinctly from a plain approval. */
   @Test
-  void submit_recordsApprovedWithObservationResult() {
+  void transmit_recordsApprovedWithObservationResult() {
     when(receptionClient.send(eq(TENANT_ID), any()))
         .thenReturn(
             Optional.of(
@@ -113,7 +113,7 @@ class SifenInvoiceSubmissionServiceTest {
                     "Observación menor",
                     now())));
 
-    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
 
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
     assertThat(invoice.getSifenSubmissionStatus())
@@ -123,14 +123,14 @@ class SifenInvoiceSubmissionServiceTest {
 
   /** AC-04: a rejected result and its reason are persisted. */
   @Test
-  void submit_recordsRejectedResult() {
+  void transmit_recordsRejectedResult() {
     when(receptionClient.send(eq(TENANT_ID), any()))
         .thenReturn(
             Optional.of(
                 new SifenSubmissionResult(
                     SifenSubmissionStatus.REJECTED, null, "0160", "XML Mal Formado.", now())));
 
-    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
 
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.REJECTED);
     assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.REJECTED);
@@ -142,10 +142,10 @@ class SifenInvoiceSubmissionServiceTest {
    * other outcomes — never sets sifenSubmittedAt, since no response was actually received.
    */
   @Test
-  void submit_marksPendingVerification_whenNoResponseIsReceived() {
+  void transmit_marksPendingVerification_whenNoResponseIsReceived() {
     when(receptionClient.send(eq(TENANT_ID), any())).thenReturn(Optional.empty());
 
-    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
 
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
     assertThat(invoice.getSifenSubmissionStatus())
@@ -155,10 +155,10 @@ class SifenInvoiceSubmissionServiceTest {
 
   /** AC-06: an already-approved invoice can never be sent again. */
   @Test
-  void submit_rejects_whenInvoiceAlreadyApproved() {
+  void transmit_rejects_whenInvoiceAlreadyApproved() {
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
 
-    assertThatThrownBy(() -> service.submit(TENANT_ID, INVOICE_ID))
+    assertThatThrownBy(() -> service.transmit(TENANT_ID, INVOICE_ID))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_INVOICE_ALREADY_APPROVED");
 
@@ -167,20 +167,20 @@ class SifenInvoiceSubmissionServiceTest {
 
   /** AC-06: same guard applies to "Aprobado con observación", not just a plain approval. */
   @Test
-  void submit_rejects_whenInvoiceApprovedWithObservation() {
+  void transmit_rejects_whenInvoiceApprovedWithObservation() {
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
 
-    assertThatThrownBy(() -> service.submit(TENANT_ID, INVOICE_ID))
+    assertThatThrownBy(() -> service.transmit(TENANT_ID, INVOICE_ID))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_INVOICE_ALREADY_APPROVED");
   }
 
   /** AC-07: signed more than 72h ago and never actually sent before -> blocked. */
   @Test
-  void submit_rejects_whenSignedMoreThan72HoursAgoAndNeverReceivedAResponse() {
+  void transmit_rejects_whenSignedMoreThan72HoursAgoAndNeverReceivedAResponse() {
     invoice.setSifenSignedAt(LocalDateTime.now(BUSINESS_ZONE).minusHours(73));
 
-    assertThatThrownBy(() -> service.submit(TENANT_ID, INVOICE_ID))
+    assertThatThrownBy(() -> service.transmit(TENANT_ID, INVOICE_ID))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_SIGNATURE_EXPIRED");
 
@@ -189,11 +189,11 @@ class SifenInvoiceSubmissionServiceTest {
 
   /** AC-07: comfortably under 72h since signing is allowed. */
   @Test
-  void submit_allows_whenSignedLessThan72HoursAgo() {
+  void transmit_allows_whenSignedLessThan72HoursAgo() {
     invoice.setSifenSignedAt(LocalDateTime.now(BUSINESS_ZONE).minusHours(71));
     when(receptionClient.send(eq(TENANT_ID), any())).thenReturn(Optional.empty());
 
-    service.submit(TENANT_ID, INVOICE_ID);
+    service.transmit(TENANT_ID, INVOICE_ID);
 
     verify(receptionClient, times(1)).send(eq(TENANT_ID), any());
   }
@@ -204,7 +204,7 @@ class SifenInvoiceSubmissionServiceTest {
    * document past 72h is a different concern — HU-07's status check — not this one).
    */
   @Test
-  void submit_allowsRetry_whenSignedMoreThan72HoursAgoButAlreadyReceivedAResponseBefore() {
+  void transmit_allowsRetry_whenSignedMoreThan72HoursAgoButAlreadyReceivedAResponseBefore() {
     invoice.setSifenSignedAt(LocalDateTime.now().minusHours(100));
     invoice.setSifenSubmittedAt(LocalDateTime.now().minusHours(90));
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.REJECTED);
@@ -214,33 +214,81 @@ class SifenInvoiceSubmissionServiceTest {
                 new SifenSubmissionResult(
                     SifenSubmissionStatus.REJECTED, null, "0160", "still broken", now())));
 
-    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
 
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.REJECTED);
   }
 
   /** The first submission persists sifenSignedAt; a later retry reuses it, not a fresh "now". */
   @Test
-  void submit_persistsSignedAtOnce_andReusesItOnRetry() {
+  void transmit_persistsSignedAtOnce_andReusesItOnRetry() {
     when(receptionClient.send(eq(TENANT_ID), any())).thenReturn(Optional.empty());
 
-    service.submit(TENANT_ID, INVOICE_ID);
+    service.transmit(TENANT_ID, INVOICE_ID);
     LocalDateTime firstSignedAt = invoice.getSifenSignedAt();
     assertThat(firstSignedAt).isNotNull();
 
-    service.submit(TENANT_ID, INVOICE_ID);
+    service.transmit(TENANT_ID, INVOICE_ID);
 
     assertThat(invoice.getSifenSignedAt()).isEqualTo(firstSignedAt);
     verify(signingService, times(2)).signInvoice(TENANT_ID, INVOICE_ID, firstSignedAt);
   }
 
   @Test
-  void submit_throwsInvoiceNotFound_whenInvoiceDoesNotBelongToTenant() {
+  void transmit_throwsInvoiceNotFound_whenInvoiceDoesNotBelongToTenant() {
     when(invoiceRepository.findByIdAndTenant_Id(999L, TENANT_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.submit(TENANT_ID, 999L))
+    assertThatThrownBy(() -> service.transmit(TENANT_ID, 999L))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("INVOICE_NOT_FOUND");
+  }
+
+  // --- RT-20 (Hardening_SIFEN.md): prepareAndSign makes zero calls to SIFEN ---
+
+  /**
+   * The core RT-20 regression: signing and marking an invoice QUEUED must never touch the network.
+   * If this ever starts calling receptionClient/queryClient, the "issue request never waits on
+   * SIFEN" guarantee the whole async redesign exists for would silently break.
+   */
+  @Test
+  void prepareAndSign_signsAndMarksQueued_withoutAnyCallToSifen() {
+    service.prepareAndSign(TENANT_ID, INVOICE_ID);
+
+    assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.QUEUED);
+    assertThat(invoice.getSifenSignedAt()).isNotNull();
+    assertThat(invoice.getSifenQrUrl())
+        .isEqualTo("https://ekuatia.set.gov.py/consultas-test/qr?nVersion=150");
+    verify(signingService, times(1)).signInvoice(eq(TENANT_ID), eq(INVOICE_ID), any());
+    verify(receptionClient, never()).send(anyLong(), any());
+    verify(queryClient, never()).query(anyLong(), any());
+  }
+
+  @Test
+  void prepareAndSign_rejects_whenInvoiceAlreadyApproved() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+
+    assertThatThrownBy(() -> service.prepareAndSign(TENANT_ID, INVOICE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_INVOICE_ALREADY_APPROVED");
+
+    verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
+  }
+
+  /** transmit() re-signs from the exact sifenSignedAt prepareAndSign already pinned. */
+  @Test
+  void transmit_afterPrepareAndSign_reusesThePinnedSignedAt() {
+    service.prepareAndSign(TENANT_ID, INVOICE_ID);
+    LocalDateTime signedAt = invoice.getSifenSignedAt();
+    when(receptionClient.send(eq(TENANT_ID), any()))
+        .thenReturn(
+            Optional.of(
+                new SifenSubmissionResult(
+                    SifenSubmissionStatus.APPROVED, "1234567890", "0260", "Autorizado", now())));
+
+    service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(invoice.getSifenSignedAt()).isEqualTo(signedAt);
+    verify(signingService, times(2)).signInvoice(TENANT_ID, INVOICE_ID, signedAt);
   }
 
   // --- HU-07 AC-01/AC-02/AC-03/AC-04: checkPendingStatus (manual "check status" button) ---
@@ -327,11 +375,11 @@ class SifenInvoiceSubmissionServiceTest {
         .hasMessageContaining("SIFEN_INVOICE_MISSING_CONTROL_NUMBER");
   }
 
-  // --- HU-07 AC-05: submit() checks status automatically before blindly resending ---
+  // --- HU-07 AC-05: transmit() checks status automatically before blindly resending ---
 
-  /** A resolved query (Aprobado) short-circuits submit(): no fresh sign/send attempt. */
+  /** A resolved query (Aprobado) short-circuits transmit(): no fresh sign/send attempt. */
   @Test
-  void submit_resolvesViaStatusCheck_andSkipsResend_whenPendingVerificationGetsAnAnswer() {
+  void transmit_resolvesViaStatusCheck_andSkipsResend_whenPendingVerificationGetsAnAnswer() {
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
     when(queryClient.query(TENANT_ID, "cdc-123"))
         .thenReturn(
@@ -341,16 +389,16 @@ class SifenInvoiceSubmissionServiceTest {
                         SifenSubmissionStatus.APPROVED, null, "0422", "CDC encontrado", now()),
                     null)));
 
-    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
 
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.APPROVED);
     verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
     verify(receptionClient, never()).send(anyLong(), any());
   }
 
-  /** No answer from the automatic check -> submit() falls through to a fresh resend attempt. */
+  /** No answer from the automatic check -> transmit() falls through to a fresh resend attempt. */
   @Test
-  void submit_fallsThroughToResend_whenPendingVerificationStatusCheckStillGivesNoAnswer() {
+  void transmit_fallsThroughToResend_whenPendingVerificationStatusCheckStillGivesNoAnswer() {
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
     when(receptionClient.send(eq(TENANT_ID), any()))
         .thenReturn(
@@ -358,7 +406,7 @@ class SifenInvoiceSubmissionServiceTest {
                 new SifenSubmissionResult(
                     SifenSubmissionStatus.REJECTED, null, "0160", "still broken", now())));
 
-    SifenSubmissionResult result = service.submit(TENANT_ID, INVOICE_ID);
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
 
     verify(queryClient, times(1)).query(TENANT_ID, "cdc-123");
     verify(signingService, times(1)).signInvoice(eq(TENANT_ID), eq(INVOICE_ID), any());

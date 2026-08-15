@@ -111,6 +111,11 @@ public class SifenKudePdfService {
    * SifenSubmissionStatus#PENDING_VERIFICATION} (previously: only Aprobado/Aprobado con
    * observación), and {@link #render} prints a legend flagging that the document is still pending
    * SIFEN's validation in that case.
+   *
+   * <p>RT-20 (Hardening_SIFEN.md): also accepts {@link SifenSubmissionStatus#QUEUED} — signing (and
+   * persisting the CDC/QR) now happens synchronously in {@code
+   * SifenInvoiceSubmissionService#prepareAndSign} before the invoice is ever transmitted, so a
+   * QUEUED invoice already has everything the KuDE needs, same as PENDING_VERIFICATION.
    */
   @Transactional(readOnly = true)
   public KudePdfResult buildKudePdf(long tenantId, long invoiceId) {
@@ -119,6 +124,10 @@ public class SifenKudePdfService {
     SifenInvoiceDetail detail = detailService.buildDetail(tenantId, invoiceId);
     BusinessProfile profile = businessProfileRepository.findByTenantId(tenantId).orElse(null);
 
+    SifenSubmissionStatus status = invoice.getSifenSubmissionStatus();
+    boolean pendingValidation =
+        status == SifenSubmissionStatus.QUEUED
+            || status == SifenSubmissionStatus.PENDING_VERIFICATION;
     byte[] pdf =
         render(
             SifenDocumentType.FACTURA,
@@ -130,7 +139,7 @@ public class SifenKudePdfService {
             detail,
             profile,
             invoice.getClient(),
-            invoice.getSifenSubmissionStatus() == SifenSubmissionStatus.PENDING_VERIFICATION);
+            pendingValidation);
     return new KudePdfResult(
         pdf, buildFilename(header, invoice.getIssuedAt(), invoice.getInvoiceNumber()));
   }
@@ -171,8 +180,9 @@ public class SifenKudePdfService {
    * RT-28: widened from "only Aprobado/Aprobado con observación" to also accept {@code
    * PENDING_VERIFICATION} — a submitted-but-not-yet-answered invoice already has everything the
    * KuDE needs (CDC + QR are persisted by {@link SifenInvoiceSubmissionService} before it ever
-   * calls SIFEN — see {@code persistQrData}). {@code REJECTED}, {@code CANCELLED} and {@code null}
-   * (never submitted) still 409.
+   * calls SIFEN — see {@code persistQrData}). RT-20: also {@code QUEUED}, for the same reason —
+   * {@code prepareAndSign} persists both before the invoice is ever transmitted. {@code REJECTED},
+   * {@code CANCELLED} and {@code null} (never submitted) still 409.
    */
   @Transactional(readOnly = true)
   Invoice requireDeliverableInvoice(long tenantId, long invoiceId) {
@@ -184,13 +194,14 @@ public class SifenKudePdfService {
     SifenSubmissionStatus status = invoice.getSifenSubmissionStatus();
     if (status != SifenSubmissionStatus.APPROVED
         && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION
-        && status != SifenSubmissionStatus.PENDING_VERIFICATION) {
+        && status != SifenSubmissionStatus.PENDING_VERIFICATION
+        && status != SifenSubmissionStatus.QUEUED) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES");
     }
     if (invoice.getSifenQrUrl() == null || invoice.getSifenQrUrl().isBlank()) {
-      // Defensive only: every invoice that reached at least PENDING_VERIFICATION went through
-      // submit(), which always persists this first — should be unreachable in practice.
+      // Defensive only: every invoice that reached at least QUEUED went through prepareAndSign,
+      // which always persists this first — should be unreachable in practice.
       throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_KUDE_MISSING_QR_DATA");
     }
     if (invoice.getClient() != null) {
