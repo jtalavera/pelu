@@ -1652,12 +1652,12 @@ function CashSessionTab({
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const loadTodayInvoices = useCallback(
-    async (q: string, page: number, size: number) => {
+    async (q: string, page: number, size: number, silent = false) => {
       if (!currentSession) {
         setTodayPage(null);
         return;
       }
-      setTodayLoading(true);
+      if (!silent) setTodayLoading(true);
       try {
         const { from, to } = todayRangeIso();
         const data = await listInvoicesPaged({
@@ -1669,9 +1669,9 @@ function CashSessionTab({
         });
         setTodayPage(data);
       } catch {
-        setTodayPage(null);
+        if (!silent) setTodayPage(null);
       } finally {
-        setTodayLoading(false);
+        if (!silent) setTodayLoading(false);
       }
     },
     [currentSession],
@@ -1683,6 +1683,20 @@ function CashSessionTab({
   }, [loadTodayInvoices, refreshTrigger, currentSession?.id, sessionListQuery, todayPageNum, todayPageSize]);
 
   const visibleTodayInvoices = todayPage?.content ?? [];
+  const hasQueuedTodayInvoice = visibleTodayInvoices.some(
+    (inv) => inv.sifenSubmissionStatus === "QUEUED",
+  );
+
+  // RT-20: SIFEN submission is async — an invoice sitting at "En Cola" (QUEUED) can flip to its
+  // final status (transmitted, rejected, etc.) within seconds without any user action, so poll
+  // silently (no loading spinner) while at least one row on this page is still queued.
+  useEffect(() => {
+    if (!hasQueuedTodayInvoice) return;
+    const id = window.setInterval(() => {
+      void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize, true);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [hasQueuedTodayInvoice, loadTodayInvoices, sessionListQuery, todayPageNum, todayPageSize]);
   const dayTotalIssued = todayPage?.issuedTotal ?? 0;
   const todayTotalElements = todayPage?.totalElements ?? 0;
   const todayTotalPages = todayPage?.totalPages ?? 0;
