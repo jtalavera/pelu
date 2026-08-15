@@ -218,7 +218,12 @@ resource "azurerm_communication_service_email_domain_association" "main" {
 # (environments/dev|prod/terraform.tfvars): dev runs with it off so the vault is cheap to tear
 # down, prod always sets it true. Semgrep can't evaluate the variable statically, so it flags this
 # every time regardless of which environment applies — suppressed with justification below.
-resource "azurerm_key_vault" "main" { # nosemgrep: terraform.azure.security.keyvault.keyvault-purge-enabled.keyvault-purge-enabled
+#
+# network_acls default_action is "Allow" rather than "Deny": Container Apps is not on Key
+# Vault's trusted-services bypass list, and this app runs outside a VNet, so a "Deny" default
+# would block the backend's own data-plane calls regardless of its RBAC grant. Access control
+# here is RBAC + Managed Identity by design, not network isolation — also suppressed below.
+resource "azurerm_key_vault" "main" { # nosemgrep: terraform.azure.security.keyvault.keyvault-purge-enabled.keyvault-purge-enabled, terraform.azure.security.keyvault.keyvault-specify-network-acl.keyvault-specify-network-acl
   name                = "${var.name_prefix}-kv-${random_string.suffix.result}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
@@ -233,13 +238,14 @@ resource "azurerm_key_vault" "main" { # nosemgrep: terraform.azure.security.keyv
   purge_protection_enabled   = var.key_vault_purge_protection_enabled
 
   # Container Apps here run outside a VNet (same reason azurerm_mssql_firewall_rule.allow_azure_services
-  # allows 0.0.0.0/0) — access control is RBAC + Managed Identity, not network isolation. The network
-  # ACL below still denies non-Azure traffic by default; "AzureServices" covers the backend Container
-  # App and any operator running `az keyvault secret set` from Azure Cloud Shell.
+  # allows 0.0.0.0/0) — access control is RBAC + Managed Identity, not network isolation.
+  # default_action must be "Allow": Container Apps is NOT on Key Vault's trusted-services
+  # bypass list, so a "Deny" default blocks the backend's own data-plane calls (and any
+  # operator running `az keyvault secret set` from outside Azure) regardless of RBAC grants.
   public_network_access_enabled = true
 
   network_acls {
-    default_action = "Deny"
+    default_action = "Allow"
     bypass         = "AzureServices"
   }
 
