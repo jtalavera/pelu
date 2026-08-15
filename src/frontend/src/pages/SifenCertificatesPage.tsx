@@ -17,6 +17,20 @@ type SifenCertificateRow = {
   status: SifenCertificateStatus;
 };
 
+type SifenNumberVoidingStatus = "PENDING" | "APPROVED" | "APPROVED_WITH_OBSERVATION" | "REJECTED";
+
+type SifenNumberVoidingRow = {
+  id: number;
+  documentType: string;
+  rangeFrom: number;
+  rangeTo: number;
+  reason: string | null;
+  status: SifenNumberVoidingStatus;
+  deadlineDate: string;
+  message: string | null;
+  invoiceId: number | null;
+};
+
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 11,
@@ -72,6 +86,12 @@ export default function SifenCertificatesPage() {
   const [success, setSuccess] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const [voidingRows, setVoidingRows] = useState<SifenNumberVoidingRow[] | null>(null);
+  const [voidingLoadError, setVoidingLoadError] = useState<string | null>(null);
+  const [voidingReasons, setVoidingReasons] = useState<Record<number, string>>({});
+  const [voidingSubmitting, setVoidingSubmitting] = useState<number | null>(null);
+  const [voidingSubmitErrors, setVoidingSubmitErrors] = useState<Record<number, string>>({});
+
   const load = useCallback(async () => {
     if (!isTenantAdmin) {
       setLoading(false);
@@ -79,6 +99,7 @@ export default function SifenCertificatesPage() {
     }
     setLoading(true);
     setLoadError(null);
+    setVoidingLoadError(null);
     try {
       const data = await femmeJson<SifenCertificateRow[]>("/api/sifen/certificates");
       setRows(data);
@@ -87,11 +108,96 @@ export default function SifenCertificatesPage() {
     } finally {
       setLoading(false);
     }
+    try {
+      const voiding = await femmeJson<SifenNumberVoidingRow[]>("/api/sifen/number-voiding");
+      setVoidingRows(voiding);
+    } catch {
+      setVoidingLoadError(t("femme.sifenNumberVoiding.loadError"));
+    }
   }, [t, isTenantAdmin]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function submitVoiding(id: number) {
+    const reason = (voidingReasons[id] ?? "").trim();
+    setVoidingSubmitErrors((prev) => ({ ...prev, [id]: "" }));
+    if (reason.length < 5) {
+      setVoidingSubmitErrors((prev) => ({
+        ...prev,
+        [id]: t("femme.sifenNumberVoiding.reasonTooShort"),
+      }));
+      return;
+    }
+    setVoidingSubmitting(id);
+    try {
+      const updated = await femmePostJson<SifenNumberVoidingRow>(
+        `/api/sifen/number-voiding/${id}/submit`,
+        { reason },
+      );
+      setVoidingRows((prev) => (prev ? prev.map((r) => (r.id === id ? updated : r)) : prev));
+    } catch (err) {
+      setVoidingSubmitErrors((prev) => ({
+        ...prev,
+        [id]: translateApiError(err, t, "femme.apiErrors.GENERIC"),
+      }));
+    } finally {
+      setVoidingSubmitting(null);
+    }
+  }
+
+  function deadlineLabel(deadlineDate: string): { text: string; overdue: boolean } {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const deadline = new Date(`${deadlineDate}T00:00:00`);
+    const days = Math.round((deadline.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+    if (days < 0) {
+      return { text: t("femme.sifenNumberVoiding.deadlineOverdue"), overdue: true };
+    }
+    return { text: t("femme.sifenNumberVoiding.deadlineDaysLeft", { count: days }), overdue: false };
+  }
+
+  function voidingStatusBadge(status: SifenNumberVoidingStatus) {
+    const badgeStyle: React.CSSProperties = {
+      fontSize: 10,
+      fontWeight: 500,
+      padding: "2px 8px",
+      borderRadius: "var(--radius-pill)",
+      whiteSpace: "nowrap",
+    };
+    if (status === "APPROVED" || status === "APPROVED_WITH_OBSERVATION") {
+      return (
+        <span
+          style={{
+            ...badgeStyle,
+            background: "var(--color-timbrado-valid-bg)",
+            color: "var(--color-timbrado-valid-fg)",
+          }}
+        >
+          {t(
+            status === "APPROVED"
+              ? "femme.sifenNumberVoiding.statusApproved"
+              : "femme.sifenNumberVoiding.statusApprovedWithObservation",
+          )}
+        </span>
+      );
+    }
+    if (status === "REJECTED") {
+      return (
+        <span
+          style={{ ...badgeStyle, background: "var(--color-danger-lt)", color: "var(--color-danger)" }}
+        >
+          {t("femme.sifenNumberVoiding.statusRejected")}
+        </span>
+      );
+    }
+    return (
+      <span style={{ ...badgeStyle, background: "var(--color-stone)", color: "var(--color-ink-2)" }}>
+        {t("femme.sifenNumberVoiding.statusPending")}
+      </span>
+    );
+  }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setFile(e.target.files?.[0] ?? null);
@@ -348,6 +454,132 @@ export default function SifenCertificatesPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section data-testid="sifen-number-voiding-section" style={sectionCardStyle}>
+        <Text style={{ fontWeight: 500, marginBottom: 4 }}>
+          {t("femme.sifenNumberVoiding.title")}
+        </Text>
+        <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
+          {t("femme.sifenNumberVoiding.lead")}
+        </Text>
+        {voidingLoadError ? (
+          <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
+            {voidingLoadError}
+          </Alert>
+        ) : voidingRows == null ? (
+          <Text variant="small" style={{ color: "var(--color-ink-3)" }}>
+            {t("femme.sifenNumberVoiding.loading")}
+          </Text>
+        ) : voidingRows.length === 0 ? (
+          <Text variant="muted">{t("femme.sifenNumberVoiding.empty")}</Text>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {voidingRows.map((row) => {
+              const deadline = deadlineLabel(row.deadlineDate);
+              const submittable =
+                row.status === "PENDING" || row.status === "REJECTED";
+              return (
+                <div
+                  key={row.id}
+                  data-testid="sifen-number-voiding-row"
+                  style={{
+                    border: "var(--border-default)",
+                    borderRadius: "var(--radius-md)",
+                    padding: 12,
+                    background: "var(--color-white)",
+                    fontSize: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+                    <div>
+                      <div style={{ color: "var(--color-ink-3)", fontSize: 10 }}>
+                        {t("femme.sifenNumberVoiding.colRange")}
+                      </div>
+                      <div>
+                        {row.documentType} {row.rangeFrom}
+                        {row.rangeTo !== row.rangeFrom ? `–${row.rangeTo}` : ""}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "var(--color-ink-3)", fontSize: 10 }}>
+                        {t("femme.sifenNumberVoiding.colDeadline")}
+                      </div>
+                      <div style={deadline.overdue ? { color: "var(--color-danger)" } : undefined}>
+                        {deadline.text}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {voidingStatusBadge(row.status)}
+                      {row.invoiceId != null ? (
+                        <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
+                          {t("femme.sifenNumberVoiding.automaticBadge")}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {row.message ? (
+                    <Text
+                      variant="small"
+                      style={{ color: "var(--color-ink-3)", marginTop: 8 }}
+                    >
+                      {t("femme.sifenNumberVoiding.resultMessage", { message: row.message })}
+                    </Text>
+                  ) : null}
+
+                  {submittable ? (
+                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <label htmlFor={`voiding-reason-${row.id}`} style={labelStyle}>
+                        {t("femme.sifenNumberVoiding.reasonLabel")}
+                      </label>
+                      <textarea
+                        id={`voiding-reason-${row.id}`}
+                        value={voidingReasons[row.id] ?? row.reason ?? ""}
+                        placeholder={t("femme.sifenNumberVoiding.reasonPlaceholder")}
+                        onChange={(e) =>
+                          setVoidingReasons((prev) => ({ ...prev, [row.id]: e.target.value }))
+                        }
+                        aria-invalid={!!voidingSubmitErrors[row.id]}
+                        aria-describedby={
+                          voidingSubmitErrors[row.id] ? `voiding-reason-${row.id}-err` : undefined
+                        }
+                        style={{
+                          padding: "8px 11px",
+                          border: voidingSubmitErrors[row.id]
+                            ? "1px solid var(--color-danger)"
+                            : "1px solid var(--color-stone-md)",
+                          borderRadius: "var(--radius-md)",
+                          fontSize: 12,
+                          width: "100%",
+                          boxSizing: "border-box",
+                          minHeight: 60,
+                        }}
+                      />
+                      <FieldValidationError id={`voiding-reason-${row.id}-err`}>
+                        {voidingSubmitErrors[row.id] || null}
+                      </FieldValidationError>
+                      <div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="min-h-11"
+                          disabled={voidingSubmitting === row.id}
+                          onClick={() => void submitVoiding(row.id)}
+                        >
+                          {voidingSubmitting === row.id
+                            ? t("femme.sifenNumberVoiding.submitting")
+                            : t("femme.sifenNumberVoiding.submit")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

@@ -235,6 +235,30 @@
       "statusExpired": "Expirado",
       "statusNotYetValid": "No vigente aún"
     },
+    "sifenNumberVoiding": {
+      "title": "Numeración inutilizada",
+      "lead": "Números reportados a SIFEN como nunca emitidos (\"inutilización\") — se registran automáticamente cuando SIFEN rechaza una factura, ya que ese número no puede reutilizarse bajo el mismo número de control. Reportá cada uno a SIFEN antes de la fecha límite indicada.",
+      "loading": "Cargando…",
+      "loadError": "No se pudo cargar la numeración inutilizada.",
+      "empty": "No hay numeración inutilizada.",
+      "colRange": "Rango",
+      "colStatus": "Estado",
+      "colDeadline": "Fecha límite",
+      "statusPending": "Pendiente de envío",
+      "statusApproved": "Aprobada",
+      "statusApprovedWithObservation": "Aprobada con observación",
+      "statusRejected": "Rechazada",
+      "automaticBadge": "Automática",
+      "deadlineDaysLeft_one": "Queda {{count}} día",
+      "deadlineDaysLeft_other": "Quedan {{count}} días",
+      "deadlineOverdue": "Fecha límite vencida",
+      "reasonLabel": "Motivo",
+      "reasonPlaceholder": "Explicá por qué se inutiliza este rango de numeración (mínimo 5 caracteres).",
+      "reasonTooShort": "Ingresá un motivo de al menos 5 caracteres.",
+      "submit": "Enviar a SIFEN",
+      "submitting": "Enviando…",
+      "resultMessage": "Respuesta de SIFEN: {{message}}"
+    },
     "taxes": {
       "pageTitle": "Impuestos",
       "pageSubtitle": "Configurá los tipos de impuestos aplicados a los servicios.",
@@ -276,7 +300,17 @@
       "resetToGlobal": "Volver al global",
       "globalSwitchAria": "Predeterminado global para {{key}}",
       "tenantSwitchAria": "Esta organización para {{key}}",
-      "lastChange": "Último cambio: {{date}} por {{email}} — {{previous}} → {{next}}"
+      "lastChange": "Último cambio: {{date}} por {{email}} — {{previous}} → {{next}}",
+      "sifenHomologation": {
+        "title": "Homologación SIFEN",
+        "statusPending": "Pendiente",
+        "statusApproved": "Aprobada",
+        "notMarked": "Todavía no registrada",
+        "markedBy": "Marcada como {{status}} por {{email}} el {{date}}",
+        "markApproved": "Marcar como aprobada",
+        "markPending": "Marcar como pendiente",
+        "pendingWarning": "Esta organización todavía no está marcada como que completó la homologación SIFEN (pruebas piloto de la SET). Revisá esto antes de confiar en la facturación electrónica en producción."
+      }
     },
     "businessSettings": {
       "title": "Configuración del negocio",
@@ -823,6 +857,10 @@
       "SIFEN_ISSUER_CONTACT_INFO_MISSING": "Configurá el teléfono y el correo de contacto del negocio en Configuración → Datos del negocio antes de emitir facturas SIFEN.",
       "SIFEN_ISSUER_LOCATION_NOT_CONFIGURED": "Configurá el departamento y la ciudad del negocio en Configuración → Datos del negocio antes de emitir facturas SIFEN.",
       "SIFEN_CERT_RUC_MISMATCH": "El RUC del certificado no coincide con el RUC configurado del negocio. Conexión rechazada.",
+      "SIFEN_RATE_LIMIT_EXCEEDED": "Demasiadas solicitudes a SIFEN para este negocio en este momento. Esto se reintenta automáticamente en breve.",
+      "SIFEN_NUMBER_VOIDING_NO_RESPONSE": "SIFEN no respondió a la solicitud de inutilización. Intentá de nuevo en unos minutos.",
+      "SIFEN_NUMBER_VOIDING_ALREADY_APPROVED": "Esta solicitud de inutilización ya fue aprobada por SIFEN.",
+      "SIFEN_NUMBER_VOIDING_NOT_FOUND": "No se encontró la solicitud de inutilización.",
       "SIFEN_CONNECTION_REJECTED": "No se pudo establecer una conexión segura con SIFEN. Intentá de nuevo más tarde.",
       "SIFEN_CLIENT_IDENTIFICATION_REQUIRED": "Las ventas de Gs. 7.000.000 o más exigen identificar al cliente con RUC o documento de identidad.",
       "SIFEN_INVOICE_NOT_PENDING_VERIFICATION": "Esta factura no está pendiente de verificación con SIFEN.",

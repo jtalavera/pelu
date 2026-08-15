@@ -43,6 +43,12 @@ function renderPage() {
   );
 }
 
+const defaultHomologation = {
+  status: "PENDING",
+  markedByEmail: null,
+  markedAt: null,
+};
+
 describe("FeatureFlagsPage (acceptance: system admin can review guided tour flag)", () => {
   beforeEach(() => {
     void i18n.changeLanguage("en");
@@ -50,15 +56,20 @@ describe("FeatureFlagsPage (acceptance: system admin can review guided tour flag
     vi.mocked(femmeClient.femmeJson).mockReset();
     vi.mocked(femmeClient.femmePutJson).mockReset();
     vi.mocked(femmeClient.femmeDeleteJson).mockReset();
-    vi.mocked(femmeClient.femmeJson).mockResolvedValue([
-      {
-        flagKey: "GUIDED_TOUR",
-        description: "Show guided tour tooltips on every screen",
-        globalEnabled: true,
-        hasOverride: false,
-        overrideEnabled: null,
-      },
-    ]);
+    vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.endsWith("/sifen-homologation")) {
+        return defaultHomologation as never;
+      }
+      return [
+        {
+          flagKey: "GUIDED_TOUR",
+          description: "Show guided tour tooltips on every screen",
+          globalEnabled: true,
+          hasOverride: false,
+          overrideEnabled: null,
+        },
+      ] as never;
+    });
     vi.mocked(femmeClient.femmePutJson).mockResolvedValue({});
     vi.mocked(femmeClient.femmeDeleteJson).mockResolvedValue(undefined);
   });
@@ -88,26 +99,93 @@ describe("FeatureFlagsPage (acceptance: system admin can review guided tour flag
   });
 
   it("shows the last-change history when present (SIFEN HU-22 AC-05)", async () => {
-    vi.mocked(femmeClient.femmeJson).mockResolvedValue([
-      {
-        flagKey: "SIFEN_ELECTRONIC_INVOICING",
-        description: "Route new invoices through SIFEN",
-        globalEnabled: false,
-        hasOverride: true,
-        overrideEnabled: true,
-        lastChange: {
-          changedAt: "2026-08-01T15:30:00Z",
-          changedByEmail: "root@pelu",
-          previousEnabled: false,
-          newEnabled: true,
+    vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.endsWith("/sifen-homologation")) {
+        return defaultHomologation as never;
+      }
+      return [
+        {
+          flagKey: "SIFEN_ELECTRONIC_INVOICING",
+          description: "Route new invoices through SIFEN",
+          globalEnabled: false,
+          hasOverride: true,
+          overrideEnabled: true,
+          lastChange: {
+            changedAt: "2026-08-01T15:30:00Z",
+            changedByEmail: "root@pelu",
+            previousEnabled: false,
+            newEnabled: true,
+          },
         },
-      },
-    ]);
+      ] as never;
+    });
 
     renderPage();
     const history = await screen.findByTestId("feature-flag-history-SIFEN_ELECTRONIC_INVOICING");
     expect(history.textContent).toContain("root@pelu");
     expect(history.textContent).toContain("Off");
     expect(history.textContent).toContain("On");
+  });
+
+  /** RT-19 (Hardening_SIFEN.md): warns a SYSTEM_ADMIN before relying on SIFEN in a tenant still PENDING. */
+  it("shows a pending homologación warning next to SIFEN_ELECTRONIC_INVOICING", async () => {
+    vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.endsWith("/sifen-homologation")) {
+        return defaultHomologation as never;
+      }
+      return [
+        {
+          flagKey: "SIFEN_ELECTRONIC_INVOICING",
+          description: "Route new invoices through SIFEN",
+          globalEnabled: false,
+          hasOverride: false,
+          overrideEnabled: null,
+          lastChange: null,
+        },
+      ] as never;
+    });
+
+    renderPage();
+    expect(await screen.findByText("Pending")).toBeTruthy();
+    expect(
+      screen.getByText(/not marked as having completed SIFEN homologación/),
+    ).toBeTruthy();
+  });
+
+  /** RT-19: a SYSTEM_ADMIN can record that a tenant passed homologación. */
+  it("marks homologación as approved and refreshes the badge", async () => {
+    const user = userEvent.setup();
+    vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.endsWith("/sifen-homologation")) {
+        return defaultHomologation as never;
+      }
+      return [
+        {
+          flagKey: "SIFEN_ELECTRONIC_INVOICING",
+          description: "Route new invoices through SIFEN",
+          globalEnabled: false,
+          hasOverride: false,
+          overrideEnabled: null,
+          lastChange: null,
+        },
+      ] as never;
+    });
+    vi.mocked(femmeClient.femmePutJson).mockResolvedValue({
+      status: "APPROVED",
+      markedByEmail: "root@pelu",
+      markedAt: "2026-08-12T10:00:00Z",
+    });
+
+    renderPage();
+    const markButton = await screen.findByText("Mark as approved");
+    await user.click(markButton);
+
+    await waitFor(() => {
+      expect(vi.mocked(femmeClient.femmePutJson)).toHaveBeenCalledWith(
+        "/api/admin/feature-flags/tenants/1/sifen-homologation",
+        { status: "APPROVED" },
+      );
+    });
+    expect(await screen.findByText("Approved")).toBeTruthy();
   });
 });

@@ -81,6 +81,10 @@ class SifenHomologationOtherDocumentTypesLiveTest {
     return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
   }
 
+  private static SifenRateLimiter testRateLimiter() {
+    return new SifenRateLimiter(1_000_000, 60);
+  }
+
   /** Same real-server pacing HU-12/HU-13 established. */
   private static final Duration PACING_DELAY = Duration.ofMillis(700);
 
@@ -117,7 +121,7 @@ class SifenHomologationOtherDocumentTypesLiveTest {
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private final SifenDocumentReceptionClient receptionClient =
       new SifenDocumentReceptionClient(
-          null, new SifenConnectionProperties(), timeProperties, testMetrics());
+          null, new SifenConnectionProperties(), timeProperties, testMetrics(), testRateLimiter());
 
   private long documentNumberCursor;
 

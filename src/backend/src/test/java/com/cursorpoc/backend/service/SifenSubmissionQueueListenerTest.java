@@ -32,13 +32,15 @@ class SifenSubmissionQueueListenerTest {
 
   @Mock private SifenInvoiceSubmissionPersistenceService persistence;
   @Mock private SifenInvoiceSubmissionService submissionService;
+  @Mock private SifenNumberVoidingService numberVoidingService;
 
   private SifenSubmissionQueueListener listener;
 
   @BeforeEach
   void setUp() {
     listener =
-        new SifenSubmissionQueueListener(persistence, submissionService, new FemmeTimeProperties());
+        new SifenSubmissionQueueListener(
+            persistence, submissionService, new FemmeTimeProperties(), numberVoidingService);
   }
 
   @Test
@@ -66,6 +68,23 @@ class SifenSubmissionQueueListenerTest {
     assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.COMPLETED);
     verify(persistence).clearRetrySchedule(TENANT_ID, INVOICE_ID);
     verify(persistence).releaseLease(TENANT_ID, INVOICE_ID);
+    verify(numberVoidingService, never()).recordPendingForRejectedInvoice(anyLong(), anyLong());
+  }
+
+  /** RT-25 (Hardening_SIFEN.md): a rejected transmit records a pending inutilización. */
+  @Test
+  void processMessage_recordsPendingNumberVoiding_whenTransmitResolvesRejected() {
+    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
+        .thenReturn(Optional.of(1));
+    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
+        .thenReturn(
+            new SifenSubmissionResult(
+                SifenSubmissionStatus.REJECTED, "123", "0261", "Rechazado", LocalDateTime.now()));
+
+    var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 1, CORRELATION_ID);
+
+    assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.COMPLETED);
+    verify(numberVoidingService).recordPendingForRejectedInvoice(TENANT_ID, INVOICE_ID);
   }
 
   @Test
@@ -113,6 +132,40 @@ class SifenSubmissionQueueListenerTest {
     assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.COMPLETED);
     verify(persistence).releaseLease(TENANT_ID, INVOICE_ID);
     verify(persistence).clearRetrySchedule(TENANT_ID, INVOICE_ID);
+  }
+
+  /**
+   * RT-22 (Hardening_SIFEN.md): a 429 from {@code SifenRateLimiter} is a fact about this tenant's
+   * traffic, not this invoice — it must be retried, not dead-lettered, unlike the other two {@link
+   * ResponseStatusException}s this listener classifies.
+   */
+  @Test
+  void processMessage_schedulesRetry_whenRateLimited() {
+    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
+        .thenReturn(Optional.of(1));
+    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
+        .thenThrow(
+            new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "SIFEN_RATE_LIMIT_EXCEEDED"));
+
+    var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 1, CORRELATION_ID);
+
+    assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.RETRY_SCHEDULED);
+    verify(persistence).scheduleRetry(eq(TENANT_ID), eq(INVOICE_ID), any());
+    verify(persistence).releaseLease(TENANT_ID, INVOICE_ID);
+    verify(persistence, never()).clearRetrySchedule(TENANT_ID, INVOICE_ID);
+  }
+
+  @Test
+  void processMessage_deadLetters_whenRateLimitedAndAttemptsExhausted() {
+    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
+        .thenReturn(Optional.of(SifenSubmissionQueueListener.MAX_ATTEMPTS));
+    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
+        .thenThrow(
+            new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "SIFEN_RATE_LIMIT_EXCEEDED"));
+
+    var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 6, CORRELATION_ID);
+
+    assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.DEAD_LETTERED);
   }
 
   @Test

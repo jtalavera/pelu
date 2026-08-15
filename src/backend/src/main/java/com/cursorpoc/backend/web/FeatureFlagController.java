@@ -5,11 +5,14 @@ import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.security.TenantPathAccess;
 import com.cursorpoc.backend.service.FeatureFlagService;
+import com.cursorpoc.backend.service.SifenHomologationStatusService;
 import com.cursorpoc.backend.web.dto.FeatureFlagResponse;
 import com.cursorpoc.backend.web.dto.FeatureFlagsResolvedResponse;
 import com.cursorpoc.backend.web.dto.FeatureGlobalUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantFeatureFlagOverrideRequest;
 import com.cursorpoc.backend.web.dto.TenantFeatureFlagRowResponse;
+import com.cursorpoc.backend.web.dto.TenantSifenHomologationResponse;
+import com.cursorpoc.backend.web.dto.TenantSifenHomologationUpdateRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.slf4j.Logger;
@@ -32,11 +35,15 @@ public class FeatureFlagController {
 
   private final FeatureFlagService featureFlagService;
   private final FemmeSystemAdminProperties systemAdminProperties;
+  private final SifenHomologationStatusService sifenHomologationStatusService;
 
   public FeatureFlagController(
-      FeatureFlagService featureFlagService, FemmeSystemAdminProperties systemAdminProperties) {
+      FeatureFlagService featureFlagService,
+      FemmeSystemAdminProperties systemAdminProperties,
+      SifenHomologationStatusService sifenHomologationStatusService) {
     this.featureFlagService = featureFlagService;
     this.systemAdminProperties = systemAdminProperties;
+    this.sifenHomologationStatusService = sifenHomologationStatusService;
   }
 
   @GetMapping("/api/feature-flags")
@@ -168,6 +175,54 @@ public class FeatureFlagController {
           "DELETE /api/admin/feature-flags/tenants/{}/{} tenantId={} status={}",
           tenantId,
           flagKey,
+          principal.getTenantId(),
+          ex.getStatusCode());
+      throw ex;
+    }
+  }
+
+  @GetMapping("/api/admin/feature-flags/tenants/{tenantId}/sifen-homologation")
+  public TenantSifenHomologationResponse getSifenHomologationStatus(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("tenantId") long tenantId) {
+    requireSystemAdmin(principal);
+    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
+    log.info(
+        "GET /api/admin/feature-flags/tenants/{}/sifen-homologation method=GET tenantId={}",
+        tenantId,
+        principal.getTenantId());
+    TenantSifenHomologationResponse out = sifenHomologationStatusService.getStatus(tenantId);
+    log.info(
+        "GET /api/admin/feature-flags/tenants/{}/sifen-homologation tenantId={} status=200",
+        tenantId,
+        principal.getTenantId());
+    return out;
+  }
+
+  @PutMapping("/api/admin/feature-flags/tenants/{tenantId}/sifen-homologation")
+  public TenantSifenHomologationResponse setSifenHomologationStatus(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("tenantId") long tenantId,
+      @Valid @RequestBody TenantSifenHomologationUpdateRequest request) {
+    requireSystemAdmin(principal);
+    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
+    log.info(
+        "PUT /api/admin/feature-flags/tenants/{}/sifen-homologation method=PUT tenantId={}",
+        tenantId,
+        principal.getTenantId());
+    try {
+      TenantSifenHomologationResponse out =
+          sifenHomologationStatusService.setStatus(
+              tenantId, request.status(), principal.getUserId(), principal.getUsername());
+      log.info(
+          "PUT /api/admin/feature-flags/tenants/{}/sifen-homologation tenantId={} status=200",
+          tenantId,
+          principal.getTenantId());
+      return out;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PUT /api/admin/feature-flags/tenants/{}/sifen-homologation tenantId={} status={}",
+          tenantId,
           principal.getTenantId(),
           ex.getStatusCode());
       throw ex;

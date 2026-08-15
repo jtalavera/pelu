@@ -19,6 +19,7 @@ import com.cursorpoc.backend.service.SifenInvoiceDetail;
 import com.cursorpoc.backend.service.SifenInvoiceDetailService;
 import com.cursorpoc.backend.service.SifenInvoiceHeader;
 import com.cursorpoc.backend.service.SifenInvoiceHeaderService;
+import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenQrCodeService;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
 import java.io.IOException;
@@ -92,6 +93,7 @@ public class SifenInvoiceTestSupportController {
   private final SifenInvoiceHeaderService headerService;
   private final SifenInvoiceDetailService detailService;
   private final SifenQrCodeService qrCodeService;
+  private final SifenNumberVoidingService numberVoidingService;
   private final FemmeTimeProperties timeProperties;
 
   public SifenInvoiceTestSupportController(
@@ -105,6 +107,7 @@ public class SifenInvoiceTestSupportController {
       SifenInvoiceHeaderService headerService,
       SifenInvoiceDetailService detailService,
       SifenQrCodeService qrCodeService,
+      SifenNumberVoidingService numberVoidingService,
       FemmeTimeProperties timeProperties) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
@@ -116,6 +119,7 @@ public class SifenInvoiceTestSupportController {
     this.headerService = headerService;
     this.detailService = detailService;
     this.qrCodeService = qrCodeService;
+    this.numberVoidingService = numberVoidingService;
     this.timeProperties = timeProperties;
   }
 
@@ -320,6 +324,30 @@ public class SifenInvoiceTestSupportController {
       invoice.setSifenClientIdentificationResultCode("4520");
       invoice.setSifenClientIdentificationMessage("Datos del receptor inconsistentes");
     }
+  }
+
+  /**
+   * RT-25 (Hardening_SIFEN.md): fabricates a rejected transmit outcome and calls the real trigger
+   * ({@code SifenNumberVoidingService.recordPendingForRejectedInvoice}) directly — this system has
+   * never reached a real SIFEN rejection through the async queue in {@code e2e} (application-e2e's
+   * SIFEN endpoint is unreachable, so a real attempt always lands in {@code PENDING_VERIFICATION},
+   * never {@code REJECTED}), so Playwright can't drive this through {@code
+   * SifenSubmissionQueueListener} itself. That wiring (listener calls the trigger only for {@code
+   * REJECTED}) is covered at the unit level in {@code SifenSubmissionQueueListenerTest} instead;
+   * this endpoint exercises the trigger's own real logic (idempotency, deadline computation,
+   * persistence) end to end.
+   */
+  @PostMapping("/invoices/{id}/simulate-sifen-rejection")
+  @Transactional
+  public void simulateSifenRejection(@PathVariable long id) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/simulate-sifen-rejection", id);
+    prepareWithQrAndStatus(id, SifenSubmissionStatus.REJECTED);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    numberVoidingService.recordPendingForRejectedInvoice(invoice.getTenant().getId(), id);
   }
 
   private void prepareWithQrAndStatus(long id, SifenSubmissionStatus status) {

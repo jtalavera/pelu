@@ -109,6 +109,10 @@ class SifenHomologationInvoiceSubmissionLiveTest {
     return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
   }
 
+  private static SifenRateLimiter testRateLimiter() {
+    return new SifenRateLimiter(1_000_000, 60);
+  }
+
   /** Same real-server pacing HU-12 established (see its Javadoc's "Real-server finding"). */
   private static final Duration PACING_DELAY = Duration.ofMillis(700);
 
@@ -152,7 +156,7 @@ class SifenHomologationInvoiceSubmissionLiveTest {
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private final SifenDocumentReceptionClient receptionClient =
       new SifenDocumentReceptionClient(
-          null, new SifenConnectionProperties(), timeProperties, testMetrics());
+          null, new SifenConnectionProperties(), timeProperties, testMetrics(), testRateLimiter());
 
   /**
    * One invoice-building recipe. {@code null}/{@code false} fields mean "use the correct default" —

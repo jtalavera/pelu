@@ -72,16 +72,19 @@ public class SifenDocumentReceptionClient {
   private final SifenConnectionProperties connectionProperties;
   private final FemmeTimeProperties timeProperties;
   private final SifenCallMetrics metrics;
+  private final SifenRateLimiter rateLimiter;
 
   public SifenDocumentReceptionClient(
       SifenConnectionService connectionService,
       SifenConnectionProperties connectionProperties,
       FemmeTimeProperties timeProperties,
-      SifenCallMetrics metrics) {
+      SifenCallMetrics metrics,
+      SifenRateLimiter rateLimiter) {
     this.connectionService = connectionService;
     this.connectionProperties = connectionProperties;
     this.timeProperties = timeProperties;
     this.metrics = metrics;
+    this.rateLimiter = rateLimiter;
   }
 
   /**
@@ -92,11 +95,12 @@ public class SifenDocumentReceptionClient {
    * from resolving the tenant's certificate (no valid certificate, RUC mismatch) is a configuration
    * error, not a communication failure, so it propagates instead of being swallowed here.
    *
-   * <p>RT-21 (Hardening_SIFEN.md): the only entry point instrumented with {@link SifenCallMetrics}
-   * — homologación calls go through {@link #sendWithClient} directly and aren't real tenant
-   * traffic.
+   * <p>RT-21/RT-22 (Hardening_SIFEN.md): the only entry point instrumented with {@link
+   * SifenCallMetrics}/{@link SifenRateLimiter} — homologación calls go through {@link
+   * #sendWithClient} directly and aren't real tenant traffic.
    */
   public Optional<SifenSubmissionResult> send(long tenantId, String signedDocumentXml) {
+    rateLimiter.requireCapacity(tenantId);
     return metrics.record("recepcion", tenantId, () -> send(tenantId, signedDocumentXml, null));
   }
 

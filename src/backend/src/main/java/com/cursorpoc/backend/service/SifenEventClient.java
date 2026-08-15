@@ -83,16 +83,19 @@ public class SifenEventClient {
   private final SifenConnectionProperties connectionProperties;
   private final FemmeTimeProperties timeProperties;
   private final SifenCallMetrics metrics;
+  private final SifenRateLimiter rateLimiter;
 
   public SifenEventClient(
       SifenConnectionService connectionService,
       SifenConnectionProperties connectionProperties,
       FemmeTimeProperties timeProperties,
-      SifenCallMetrics metrics) {
+      SifenCallMetrics metrics,
+      SifenRateLimiter rateLimiter) {
     this.connectionService = connectionService;
     this.connectionProperties = connectionProperties;
     this.timeProperties = timeProperties;
     this.metrics = metrics;
+    this.rateLimiter = rateLimiter;
   }
 
   /**
@@ -108,6 +111,7 @@ public class SifenEventClient {
    */
   public Optional<SifenSubmissionResult> send(
       long tenantId, String signedEventXml, String eventLabel) {
+    rateLimiter.requireCapacity(tenantId);
     return metrics.record(
         "evento", tenantId, () -> send(tenantId, signedEventXml, eventLabel, null));
   }
