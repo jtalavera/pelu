@@ -233,13 +233,14 @@ resource "azurerm_key_vault" "main" { # nosemgrep: terraform.azure.security.keyv
   purge_protection_enabled   = var.key_vault_purge_protection_enabled
 
   # Container Apps here run outside a VNet (same reason azurerm_mssql_firewall_rule.allow_azure_services
-  # allows 0.0.0.0/0) — access control is RBAC + Managed Identity, not network isolation. The network
-  # ACL below still denies non-Azure traffic by default; "AzureServices" covers the backend Container
-  # App and any operator running `az keyvault secret set` from Azure Cloud Shell.
+  # allows 0.0.0.0/0) — access control is RBAC + Managed Identity, not network isolation.
+  # default_action must be "Allow": Container Apps is NOT on Key Vault's trusted-services
+  # bypass list, so a "Deny" default blocks the backend's own data-plane calls (and any
+  # operator running `az keyvault secret set` from outside Azure) regardless of RBAC grants.
   public_network_access_enabled = true
 
   network_acls {
-    default_action = "Deny"
+    default_action = "Allow"
     bypass         = "AzureServices"
   }
 
