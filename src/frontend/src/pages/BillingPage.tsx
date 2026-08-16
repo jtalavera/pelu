@@ -598,12 +598,15 @@ function NewInvoiceTab({
   onInitialClientConsumed,
   initialPrefillServiceRecord,
   onInitialPrefillConsumed,
+  resetKey,
 }: {
   onIssued: () => void;
   initialClient?: InitialClientForBilling | null;
   onInitialClientConsumed?: () => void;
   initialPrefillServiceRecord?: PrefillServiceRecord | null;
   onInitialPrefillConsumed?: () => void;
+  /** Bumped by the parent each time "Nuevo comprobante" is clicked, to clear messages left over from a previous invoice. */
+  resetKey?: number;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -704,6 +707,16 @@ function NewInvoiceTab({
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [rucValidForInvoicing, setRucValidForInvoicing] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    setSuccessInvoiceNumber(null);
+    setLastInvoiceId(null);
+    setSubmitError(null);
+    setPdfError(null);
+    setGlobalErrors([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
 
   useEffect(() => {
     void (async () => {
@@ -2000,7 +2013,12 @@ function CashSessionTab({
 
             {!showCloseForm && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button type="button" style={primaryBtn} onClick={onNewInvoice}>
+                <button
+                  type="button"
+                  data-tour="billing-new-invoice"
+                  style={primaryBtn}
+                  onClick={onNewInvoice}
+                >
                   {t("femme.billing.session.newInvoiceButton")}
                 </button>
                 <button type="button" style={destructiveSoft} onClick={() => setShowCloseForm(true)}>
@@ -2347,6 +2365,7 @@ export default function BillingPage() {
   );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [invoiceFormResetKey, setInvoiceFormResetKey] = useState(0);
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
   >(navState?.selectedClient ?? null);
@@ -2437,51 +2456,31 @@ export default function BillingPage() {
       )}
 
       <div data-tour="billing-session" style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.billing.title")}>
-        {(["session", "invoice", "history"] as const).map((tabKey) => {
-          const disabled = tabKey === "invoice" && !currentSession;
-          if (disabled) {
-            return (
-              <button
-                key={tabKey}
-                data-tour={tabKey === "invoice" ? "billing-new-invoice" : undefined}
-                type="button"
-                role="tab"
-                aria-selected={false}
-                disabled
-                style={{
-                  ...tabBase,
-                  opacity: 0.45,
-                  cursor: "not-allowed",
-                }}
-              >
-                {t(`femme.billing.tabs.${tabKey}`)}
-              </button>
-            );
-          }
-          return (
-            <button
-              key={tabKey}
-              data-tour={tabKey === "invoice" ? "billing-new-invoice" : undefined}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tabKey}
-              style={activeTab === tabKey ? tabActive : tabBase}
-              onClick={() => {
-                setActiveTab(tabKey);
-                if (tabKey === "history") setHistoryRefresh((k) => k + 1);
-              }}
-            >
-              {t(`femme.billing.tabs.${tabKey}`)}
-            </button>
-          );
-        })}
+        {(["session", "history"] as const).map((tabKey) => (
+          <button
+            key={tabKey}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tabKey}
+            style={activeTab === tabKey ? tabActive : tabBase}
+            onClick={() => {
+              setActiveTab(tabKey);
+              if (tabKey === "history") setHistoryRefresh((k) => k + 1);
+            }}
+          >
+            {t(`femme.billing.tabs.${tabKey}`)}
+          </button>
+        ))}
       </div>
 
       <div hidden={activeTab !== "session"}>
         <CashSessionTab
           currentSession={currentSession}
           onSessionChanged={() => void loadCurrentSession()}
-          onNewInvoice={() => setActiveTab("invoice")}
+          onNewInvoice={() => {
+            setInvoiceFormResetKey((k) => k + 1);
+            setActiveTab("invoice");
+          }}
           refreshTrigger={invoiceListRefresh}
         />
       </div>
@@ -2496,6 +2495,7 @@ export default function BillingPage() {
             onInitialClientConsumed={() => setPendingInitialClient(null)}
             initialPrefillServiceRecord={pendingPrefillServiceRecord}
             onInitialPrefillConsumed={() => setPendingPrefillServiceRecord(null)}
+            resetKey={invoiceFormResetKey}
           />
         ) : (
           <Text variant="muted">{t("femme.billing.noOpenSession")}</Text>

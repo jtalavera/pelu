@@ -69,7 +69,8 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
 

@@ -195,9 +195,10 @@ test.describe("HU-28 · Fixes varios", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.goto("/app/billing");
-    // Switch to "invoice" (Nueva factura) tab
-    await page.getByRole("tab", { name: /Nueva factura|New Invoice/ }).click();
-    await expect(page.getByRole("tab", { name: /Nueva factura|New Invoice/ })).toBeVisible({ timeout: 5_000 });
+    // Click "New Invoice" inside the Cash Register tab
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
+    await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible({ timeout: 5_000 });
     // Wait for the form
     const form = page.locator("[data-testid='new-invoice-form'], form").first();
     // Fill the first line
@@ -225,8 +226,9 @@ test.describe("HU-28 · Fixes varios", () => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
     await page.goto("/app/billing");
-    // Switch to invoice tab
-    await page.getByRole("tab", { name: /Nueva factura|New Invoice/ }).click();
+    // Click "New Invoice" inside the Cash Register tab
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     // The submit button is disabled until client+item+payment are filled (tested in HU-14.13).
     // Trigger form submit programmatically to verify the validation-focus behavior.
     const submitBtn = page.getByRole("button", { name: /Emitir comprobante|Issue invoice/ });

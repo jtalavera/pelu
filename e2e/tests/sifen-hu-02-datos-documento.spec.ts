@@ -120,7 +120,8 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);

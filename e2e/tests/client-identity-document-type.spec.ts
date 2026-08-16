@@ -32,7 +32,8 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
 
@@ -61,7 +62,8 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
 

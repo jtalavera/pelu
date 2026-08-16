@@ -192,7 +192,8 @@ test("Issue #37 · warning RUC faltante en Nuevo comprobante (sin RUC)", async (
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The warning text must be visible on the new-invoice tab
   await expect(
@@ -210,7 +211,8 @@ test("Issue #37 · sin warning RUC cuando el salon tiene RUC configurado", async
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   await expect(
     page.getByText(/agregá un ruc de negocio válido|add a valid business ruc/i),
@@ -232,7 +234,8 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Select the client
   await page.getByLabel("Search or select client").fill(originalName.slice(0, 8));
@@ -277,7 +280,8 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   await page.getByLabel("Search or select client").fill(clientName43.slice(0, 8));
   await page.getByRole("button", { name: clientName43, exact: false }).click();
@@ -567,7 +571,8 @@ test("Issue #51 · dropdown de clientes en formulario de factura flota sobre el 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Trigger the client search dropdown
   const clientInput = page.getByLabel("Search or select client");
@@ -697,7 +702,8 @@ test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (port
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Capture position of a stable button below the service field before opening dropdown
   const submitBtn = page.getByRole("button", { name: "Issue invoice" });
@@ -828,7 +834,8 @@ test("Issue #63 · al ingresar un servicio al comprobante, el monto Efectivo se 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The CASH amount field starts empty
   const amountField = page.locator("#pay-amount-0");
@@ -854,7 +861,8 @@ test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Fill in a service so the CASH amount auto-populates
   await pickServiceLine(page, seed.serviceFullName, 0);
@@ -884,7 +892,8 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   const issueBtn = page.getByRole("button", { name: "Issue invoice" });
   await expect(issueBtn).toBeDisabled({ timeout: 10_000 });

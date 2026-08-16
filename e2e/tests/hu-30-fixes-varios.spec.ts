@@ -34,7 +34,8 @@ test.describe("HU-30 · Fixes varios", () => {
     const client = await seedClient(request, token, `E2E HU30 Reset ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     // Fill the form
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));

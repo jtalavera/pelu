@@ -43,7 +43,8 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
     await expect(page.getByRole("button", { name: client.fullName })).toHaveCount(0);
   });
