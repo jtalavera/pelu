@@ -116,16 +116,17 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(screen.getByText(/admin@demo\.com/i)).toBeTruthy();
     });
 
-    it("renders invoice tab triggers (HU-14, HU-15)", async () => {
+    it("renders the New Invoice button inside the Cash Register tab (HU-14, HU-15, issue #153)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
-      // The invoice tab trigger should exist (may appear multiple times in responsive layout)
-      const invoiceTabs = screen.getAllByRole("tab", { name: /new invoice/i });
-      expect(invoiceTabs.length).toBeGreaterThan(0);
-      // At least one tab should not be disabled when session is open
-      const anyEnabled = invoiceTabs.some(
-        (t) => t.getAttribute("disabled") === null,
+      // Issue #153 AC1: the invoice trigger lives only inside the Cash Register tab as a
+      // button now — there is no separate "New Invoice" tab in the tab bar.
+      expect(screen.queryAllByRole("tab", { name: /new invoice/i }).length).toBe(0);
+      const invoiceButtons = screen.getAllByRole("button", { name: /new invoice/i });
+      expect(invoiceButtons.length).toBeGreaterThan(0);
+      const anyEnabled = invoiceButtons.some(
+        (b) => b.getAttribute("disabled") === null,
       );
       expect(anyEnabled).toBe(true);
     });

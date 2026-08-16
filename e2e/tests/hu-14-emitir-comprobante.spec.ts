@@ -27,7 +27,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
   test("HU-14 · 1 formulario de emisión de factura", async ({ page }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
   });
 
@@ -49,7 +50,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 6));
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
@@ -78,7 +80,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("Occ E2E");
@@ -103,7 +106,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Discount type").selectOption("PERCENT");
@@ -135,7 +139,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("No stamp");
@@ -199,7 +204,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
       await openBtn.click();
       await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 30_000 });
     }
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("Walk-in");
@@ -323,7 +329,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     });
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(fullName.slice(0, 10));
     const option = page.getByRole("button", { name: fullName, exact: false });
     await expect(option).toBeVisible();
@@ -353,7 +360,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     const priceField = page.locator("#line-price-0");
     await setControlledInputValue(priceField, "1234567");
     await expect(priceField).toHaveValue("1.234.567");
@@ -379,7 +387,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     const client = await seedClient(request, token, `E2E Submit ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     const issueBtn = page.getByRole("button", { name: "Issue invoice" });
     // No client / no item / no payment yet → disabled
@@ -484,7 +493,8 @@ test.describe("HU-14 · Emitir comprobante", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.locator("#billing-line-svc-0").fill(seed.serviceFullName.slice(0, 10));
     const option = page.getByRole("button", { name: seed.serviceFullName, exact: false });
     await expect(option).toBeVisible();

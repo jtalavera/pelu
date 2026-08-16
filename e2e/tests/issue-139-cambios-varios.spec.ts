@@ -142,7 +142,8 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill(`E2E139 AC6 ${Date.now()}`);
@@ -169,7 +170,8 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
   }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await expect(page.getByLabel("Client name / business name")).toBeVisible();
@@ -187,7 +189,8 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
     await page.getByRole("button", { name: client.fullName }).click();
     await expect(page.locator("#client-display-name")).toHaveValue(client.fullName);

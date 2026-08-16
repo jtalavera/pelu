@@ -89,7 +89,8 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
       }
     });
 
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("E2E HU33 KuDE siempre");

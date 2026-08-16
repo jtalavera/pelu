@@ -47,7 +47,8 @@ test.describe("HU-29 · Fixes varios", () => {
     await setBusinessRuc(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     await setControlledInputValue(page.locator("#line-price-0"), "10000");
     // No discount yet → field hidden
@@ -68,7 +69,8 @@ test.describe("HU-29 · Fixes varios", () => {
     await setBusinessRuc(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     await setControlledInputValue(page.locator("#line-price-0"), "10000");
     await page.locator("#line-disc-toggle-0").check();
@@ -89,7 +91,8 @@ test.describe("HU-29 · Fixes varios", () => {
     const client = await seedClient(request, token, `E2E HU29 ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();

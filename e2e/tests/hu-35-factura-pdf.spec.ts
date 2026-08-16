@@ -96,7 +96,8 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     // Issue invoice via UI to get the success alert with "Download PDF" button.
     // A client (here an occasional one) is required for the Issue button to enable.
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("E2E HU35 sin RUC");
@@ -188,7 +189,8 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await ensureCashSessionOpen(page);
 
     // Issue invoice via UI. A client (occasional) is required to enable the Issue button.
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("E2E HU35 con RUC");
