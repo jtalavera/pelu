@@ -333,21 +333,15 @@ public class InvoiceService {
 
     // 6b. SIFEN HU-02 AC-05: Gs. 7.000.000+ requires client identification (RUC or identity
     // document), sin excepción — checked here so it blocks issuance up front, before payments.
+    // The linked client's profile RUC/document is never used as a fallback here — must match
+    // SifenInvoiceHeaderService#buildReceiverData exactly, or a large invoice could pass this
+    // check using the client's profile data yet still be submitted to SIFEN with a blank
+    // receiver, since the header service no longer falls back either (this is what
+    // isReceiverUnidentified ultimately reflects — see its Javadoc cross-reference).
     if (total.compareTo(CLIENT_IDENTIFICATION_THRESHOLD) >= 0) {
-      Client linkedClient = invoice.getClient();
-      String ruc =
-          (invoice.getClientRucOverride() != null && !invoice.getClientRucOverride().isBlank())
-              ? invoice.getClientRucOverride()
-              : (linkedClient != null ? linkedClient.getRuc() : null);
-      String identityDocument =
-          (invoice.getClientIdentityDocumentOverride() != null
-                  && !invoice.getClientIdentityDocumentOverride().isBlank())
-              ? invoice.getClientIdentityDocumentOverride()
-              : (linkedClient != null ? linkedClient.getIdentityDocumentNumber() : null);
-      ClientIdentityDocumentType explicitType =
-          invoice.getClientIdentityDocumentTypeOverride() != null
-              ? invoice.getClientIdentityDocumentTypeOverride()
-              : (linkedClient != null ? linkedClient.getIdentityDocumentType() : null);
+      String ruc = invoice.getClientRucOverride();
+      String identityDocument = invoice.getClientIdentityDocumentOverride();
+      ClientIdentityDocumentType explicitType = invoice.getClientIdentityDocumentTypeOverride();
       ClientIdentityDocumentType resolvedType =
           ClientIdentityDocumentType.resolve(explicitType, ruc, identityDocument);
       if (resolvedType == ClientIdentityDocumentType.INNOMINADO) {
