@@ -732,13 +732,33 @@ function NewInvoiceTab({
     })();
   }, []);
 
+  /**
+   * Loads the display name + document type/number from a selected client's profile.
+   * A client profile itself stored as "Sin identificar" (INNOMINADO) would otherwise make the
+   * "Comprobante sin nominar" checkbox appear stuck checked when re-loaded here, so that case
+   * falls back to RUC with a blank number — same default as no client selected.
+   */
+  function loadClientIdentity(client: {
+    fullName: string;
+    ruc?: string | null;
+    identityDocumentNumber?: string | null;
+    identityDocumentType?: string | null;
+  }) {
+    setClientDisplayName(client.fullName);
+    const resolved = resolveIdentityDocumentTypeAndNumber(client);
+    if (resolved.type === "INNOMINADO") {
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
+    } else {
+      setClientIdentityDocumentType(resolved.type);
+      setClientIdentityDocumentNumber(resolved.number);
+    }
+  }
+
   function handleClientSelectionChange(sel: ClientSelection) {
     setClientSelection(sel);
     if (sel?.type === "client") {
-      setClientDisplayName(sel.client.fullName);
-      const resolved = resolveIdentityDocumentTypeAndNumber(sel.client);
-      setClientIdentityDocumentType(resolved.type);
-      setClientIdentityDocumentNumber(resolved.number);
+      loadClientIdentity(sel.client);
     } else if (sel?.type === "occasional") {
       setClientDisplayName("");
       setClientIdentityDocumentType("RUC");
@@ -1268,9 +1288,19 @@ function NewInvoiceTab({
               <Checkbox
                 id="client-unnamed-invoice"
                 checked={clientIdentityDocumentType === "INNOMINADO"}
-                onChange={(e) =>
-                  setClientIdentityDocumentType(e.target.checked ? "INNOMINADO" : "RUC")
-                }
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setClientIdentityDocumentType("INNOMINADO");
+                    setClientDisplayName("");
+                    setClientIdentityDocumentNumber("");
+                  } else if (clientSelection?.type === "client") {
+                    loadClientIdentity(clientSelection.client);
+                  } else {
+                    setClientIdentityDocumentType("RUC");
+                    setClientDisplayName("");
+                    setClientIdentityDocumentNumber("");
+                  }
+                }}
               />
               {t("femme.billing.invoice.unnamedInvoice")}
             </label>

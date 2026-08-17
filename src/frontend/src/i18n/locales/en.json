@@ -800,7 +800,6 @@
       "viewProfile": "View profile",
       "profileTitle": "Client profile",
       "profileLoadError": "Could not load client profile.",
-      "closeForm": "Close form",
       "editSuccess": "Client updated successfully.",
       "backToList": "Back to clients",
       "basicInfo": "Basic information",

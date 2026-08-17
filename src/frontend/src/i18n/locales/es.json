@@ -800,7 +800,6 @@
       "viewProfile": "Ver perfil",
       "profileTitle": "Perfil de cliente",
       "profileLoadError": "No se pudo cargar el perfil del cliente.",
-      "closeForm": "Cerrar formulario",
       "editSuccess": "Cliente actualizado correctamente.",
       "backToList": "Volver a clientes",
       "basicInfo": "Información básica",
