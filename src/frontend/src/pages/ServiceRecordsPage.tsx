@@ -385,6 +385,7 @@ export default function ServiceRecordsPage() {
           allowClientCreateNew
           initialClientOverride={pendingClient}
           onInitialClientOverrideConsumed={() => setPendingClient(null)}
+          active={activeTab === "new"}
         />
       </div>
 

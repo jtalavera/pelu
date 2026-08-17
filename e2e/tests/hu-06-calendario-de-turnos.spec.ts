@@ -69,7 +69,8 @@ test.describe("HU-06 · Calendario de turnos", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
-    await pickSearchableOption(page, "Filter by professional", "E2E Prof B", /E2E Prof B/);
+    // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
+    await pickSearchableOption(page, "Filter by professional", "E2E Prof B", /E2E Prof B/i);
     await expect(page.getByRole("button", { name: client.fullName, exact: false })).toHaveCount(0);
     await pickSearchableOption(page, "Filter by professional", "All", /All professionals/);
     await ensureCalendarShowsClientCard(page, client.fullName);

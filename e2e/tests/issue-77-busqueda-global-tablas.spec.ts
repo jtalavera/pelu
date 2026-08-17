@@ -37,7 +37,8 @@ async function seedClientBatch(
   }
   const targetName = `${tag} Z Target`;
   await seedClient(request, token, targetName);
-  return { firstId, targetName };
+  // Names are stored in UPPERCASE (issue #155 AC3) — return what the UI actually displays.
+  return { firstId, targetName: targetName.toUpperCase() };
 }
 
 async function gotoClients(page: Page): Promise<void> {
@@ -275,11 +276,13 @@ test.describe("Issue #77 · Services and billing history searches are global", (
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.waitForTimeout(600);
-    await expect(page.getByText(clientName, { exact: true })).toHaveCount(0);
+    // The history row displays the linked client's stored (UPPERCASE, issue #155 AC3) name,
+    // not the raw clientDisplayName text sent above — see issue-139 AC8.
+    await expect(page.getByText(clientName.toUpperCase(), { exact: true })).toHaveCount(0);
 
     await page.locator("#invoice-history-text-filter").fill(clientName);
     await page.waitForTimeout(600);
-    await expect(page.getByText(clientName, { exact: true }).first()).toBeVisible({
+    await expect(page.getByText(clientName.toUpperCase(), { exact: true }).first()).toBeVisible({
       timeout: 10_000,
     });
   });

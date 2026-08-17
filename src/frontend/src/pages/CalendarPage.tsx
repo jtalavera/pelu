@@ -35,7 +35,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -155,6 +155,7 @@ export default function CalendarPage() {
   useTour("calendar", calendarSteps, tourRole, guidedTourEnabled);
 
   const location = useLocation();
+  const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const selectedDate = (location.state as { selectedDate?: string } | null)?.selectedDate;
     if (selectedDate) {
@@ -163,6 +164,9 @@ export default function CalendarPage() {
     }
     return startOfWeek(new Date());
   });
+  const [pendingOpenApptId, setPendingOpenApptId] = useState<number | null>(
+    () => (location.state as { openAppointmentId?: number } | null)?.openAppointmentId ?? null,
+  );
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -283,10 +287,23 @@ export default function CalendarPage() {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Load clients when form opens
+  // Deep-link support: open a specific appointment's detail modal when navigated here
+  // (e.g. from the Panel principal's today's-turnos list) once it's loaded for the week.
+  useEffect(() => {
+    if (pendingOpenApptId == null) return;
+    const appt = appointments.find((a) => a.id === pendingOpenApptId);
+    if (appt) {
+      setDetailAppt(appt);
+      setDetailError(null);
+      setPendingOpenApptId(null);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [appointments, pendingOpenApptId, navigate, location.pathname]);
+
+  // Load clients when form opens (active only — inactive clients must not be assignable to new turnos)
   useEffect(() => {
     if (formOpen && clients.length === 0) {
-      femmeJson<Client[]>("/api/clients?q=")
+      femmeJson<Client[]>("/api/clients?q=&active=true")
         .then((c) => setClients(c))
         .catch(() => {});
     }

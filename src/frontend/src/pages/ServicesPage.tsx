@@ -111,6 +111,7 @@ export default function ServicesPage() {
 
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
   const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState(false);
 
   // ── Server-side pagination for services tab ──────────────────────────────
   type SvcPage = { content: SalonService[]; page: number; size: number; totalElements: number; totalPages: number };
@@ -227,6 +228,7 @@ export default function ServicesPage() {
     setCategoryAccentKey("stone");
     setCategoryNameError(null);
     setCategorySaveError(null);
+    setEditSuccess(false);
     setCategoryModalOpen(true);
   }
 
@@ -240,6 +242,7 @@ export default function ServicesPage() {
     setCategorySaving(true);
     try {
       const payload = { name: categoryName.trim(), accentKey: categoryAccentKey };
+      const wasEdit = categoryEditing !== null;
       if (categoryEditing) {
         await femmePutJson<ServiceCategory>(
           `/api/service-categories/${categoryEditing.id}`,
@@ -251,6 +254,7 @@ export default function ServicesPage() {
       setCategoryModalOpen(false);
       await load();
       setSvcReloadTick((n) => n + 1);
+      if (wasEdit) setEditSuccess(true);
     } catch (e) {
       setCategorySaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -287,6 +291,7 @@ export default function ServicesPage() {
     setServiceDuration("");
     setServiceFieldError(null);
     setServiceSaveError(null);
+    setEditSuccess(false);
     setServiceModalOpen(true);
   }
 
@@ -316,6 +321,7 @@ export default function ServicesPage() {
         durationMinutes: duration,
         taxId: serviceTaxId ? Number(serviceTaxId) : null,
       };
+      const wasEdit = serviceEditing !== null;
       if (serviceEditing) {
         await femmePutJson<SalonService>(`/api/services/${serviceEditing.id}`, payload);
       } else {
@@ -324,6 +330,7 @@ export default function ServicesPage() {
       setServiceModalOpen(false);
       await load();
       setSvcReloadTick((n) => n + 1);
+      if (wasEdit) setEditSuccess(true);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -431,6 +438,7 @@ export default function ServicesPage() {
     );
     setCategoryNameError(null);
     setCategorySaveError(null);
+    setEditSuccess(false);
     setCategoryModalOpen(true);
   }
 
@@ -447,6 +455,7 @@ export default function ServicesPage() {
     setServiceDuration(String(s.durationMinutes));
     setServiceFieldError(null);
     setServiceSaveError(null);
+    setEditSuccess(false);
     setServiceModalOpen(true);
   }
 
@@ -571,6 +580,9 @@ export default function ServicesPage() {
         <Alert variant="destructive" title={t("femme.services.errorTitle")}>
           {error}
         </Alert>
+      )}
+      {editSuccess && (
+        <Alert variant="success">{t("femme.services.editSuccess")}</Alert>
       )}
 
       {/* ── Custom tabs ── */}

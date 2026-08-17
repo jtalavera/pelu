@@ -21,13 +21,14 @@ async function seedProfessional(
   token: string,
   fullName: string,
 ): Promise<{ id: number; fullName: string }> {
-  const prof = await apiPostJson<{ id: number }>(request, token, "/api/professionals", {
+  // Names are stored in UPPERCASE (issue #155 AC3) — return what's actually displayed,
+  // not the mixed-case string sent above.
+  return apiPostJson<{ id: number; fullName: string }>(request, token, "/api/professionals", {
     fullName,
     phone: null,
     email: null,
     photoDataUrl: null,
   });
-  return { id: prof.id, fullName };
 }
 
 /**

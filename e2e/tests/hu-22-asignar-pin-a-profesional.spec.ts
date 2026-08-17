@@ -112,7 +112,8 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await dlg.getByRole("button", { name: "Save schedule" }).waitFor({ state: "visible" });
     await clickSaveScheduleAndCloseModal(page, dlg);
 
-    await expect(page.getByText(name1, { exact: true }).first()).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
+    await expect(page.getByText(name1.toUpperCase(), { exact: true }).first()).toBeVisible();
 
     const name2 = `E2E DupPin2 ${Date.now()}`;
     await page.getByRole("button", { name: "+ New professional" }).click();
@@ -148,7 +149,8 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await dlg.getByRole("button", { name: "Save schedule" }).waitFor({ state: "visible" });
     await clickSaveScheduleAndCloseModal(page, dlg);
 
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
+    await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
 
     const row = page.locator("tr").filter({ hasText: name }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });

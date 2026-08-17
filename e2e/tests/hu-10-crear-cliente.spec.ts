@@ -13,7 +13,8 @@ test.describe("HU-10 · Crear cliente", () => {
     await dlg.getByRole("button", { name: "Save" }).click();
     // Search by name so the new client is on page 1 regardless of total count (server-side pagination).
     await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name);
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
+    await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
   });
 
   test("HU-10 · 2 RUC inválido muestra mensaje de validación", async ({ page }) => {
@@ -59,6 +60,7 @@ test.describe("HU-10 · Crear cliente", () => {
     await loginAsDemo(page);
     await page.goto("/app/clients");
     await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name.slice(0, 6));
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
+    await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
   });
 });

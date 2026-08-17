@@ -85,7 +85,8 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     expect(validateRes.ok()).toBeTruthy();
     const info = await validateRes.json() as { professionalId: number; professionalName: string; email: string };
     expect(info.professionalId).toBe(profId);
-    expect(info.professionalName).toBe(name);
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case sent here.
+    expect(info.professionalName).toBe(name.toUpperCase());
     expect(info.email).toBe(email);
   });
 

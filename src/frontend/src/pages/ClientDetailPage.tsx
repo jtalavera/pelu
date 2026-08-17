@@ -423,7 +423,7 @@ export default function ClientDetailPage() {
         >
           ← {t("femme.clients.backToList")}
         </Button>
-        <div data-tour="client-detail-status">
+        <div className="flex items-center gap-2" data-tour="client-detail-status">
           {client.active ? (
             <Button
               type="button"
@@ -445,6 +445,17 @@ export default function ClientDetailPage() {
               {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivate")}
             </Button>
           )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/app/clients")}
+            aria-label={t("femme.clients.closeForm")}
+            data-testid="client-detail-close"
+            className="shrink-0 text-slate-500 dark:text-slate-400"
+          >
+            ×
+          </Button>
         </div>
       </div>
 

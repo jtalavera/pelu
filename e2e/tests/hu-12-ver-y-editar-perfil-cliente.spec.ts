@@ -31,7 +31,8 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
     await loginAsDemo(page);
     await page.goto("/app/clients");
     await page.getByPlaceholder("Search by name, phone, or RUC…").first().fill(name);
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case sent here.
+    await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
     await expect(page.getByText(phone, { exact: true })).toBeVisible();
     await expect(page.getByText("No RUC", { exact: true }).first()).toBeVisible();
   });
@@ -47,7 +48,8 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${c.id}`);
-    await expect(page.getByRole("heading", { name: /E2E Tabs/ })).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
+    await expect(page.getByRole("heading", { name: /E2E Tabs/i })).toBeVisible();
     await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Upcoming", { exact: true })).toBeVisible();
     await expect(page.getByText("Past", { exact: true })).toBeVisible();

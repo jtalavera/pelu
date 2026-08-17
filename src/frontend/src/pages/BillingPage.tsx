@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Heading,
   Input,
   Label,
@@ -1259,48 +1260,65 @@ function NewInvoiceTab({
             label={t("femme.billing.invoice.clientSearchLabel")}
             placeholder={t("femme.billing.invoice.clientPlaceholder")}
           />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="client-display-name">
-                {t("femme.billing.invoice.clientDisplayName")}
-              </Label>
-              <Input
-                id="client-display-name"
-                value={clientDisplayName}
-                onChange={(e) => setClientDisplayName(e.target.value)}
-                placeholder={t("femme.billing.invoice.clientDisplayNamePlaceholder")}
-                className="mt-1 w-full"
+          <div className="flex flex-col gap-4 border-t border-[rgb(var(--color-border))] pt-4">
+            <label
+              htmlFor="client-unnamed-invoice"
+              className="flex cursor-pointer items-center gap-2 text-sm font-medium"
+            >
+              <Checkbox
+                id="client-unnamed-invoice"
+                checked={clientIdentityDocumentType === "INNOMINADO"}
+                onChange={(e) =>
+                  setClientIdentityDocumentType(e.target.checked ? "INNOMINADO" : "RUC")
+                }
               />
-            </div>
-            <div>
-              <Label htmlFor="client-identity-document-type">
-                {t("femme.clients.identityDocumentType")}
-              </Label>
-              <Select
-                id="client-identity-document-type"
-                value={clientIdentityDocumentType}
-                onChange={(e) => setClientIdentityDocumentType(e.target.value)}
-                className="mt-1 w-full"
-              >
-                {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {t(opt.labelKey)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="client-identity-document-number">
-                {t("femme.clients.identityDocumentNumber")}
-              </Label>
-              <Input
-                id="client-identity-document-number"
-                value={clientIdentityDocumentNumber}
-                onChange={(e) => setClientIdentityDocumentNumber(e.target.value)}
-                placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
-                disabled={clientIdentityDocumentType === "INNOMINADO"}
-                className="mt-1 w-full"
-              />
+              {t("femme.billing.invoice.unnamedInvoice")}
+            </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="client-display-name">
+                  {t("femme.billing.invoice.clientDisplayName")}
+                </Label>
+                <Input
+                  id="client-display-name"
+                  value={clientDisplayName}
+                  onChange={(e) => setClientDisplayName(e.target.value)}
+                  placeholder={t("femme.billing.invoice.clientDisplayNamePlaceholder")}
+                  disabled={clientIdentityDocumentType === "INNOMINADO"}
+                  className="mt-1 w-full"
+                />
+              </div>
+              <div>
+                <Label htmlFor="client-identity-document-type">
+                  {t("femme.clients.identityDocumentType")}
+                </Label>
+                <Select
+                  id="client-identity-document-type"
+                  value={clientIdentityDocumentType}
+                  onChange={(e) => setClientIdentityDocumentType(e.target.value)}
+                  disabled={clientIdentityDocumentType === "INNOMINADO"}
+                  className="mt-1 w-full"
+                >
+                  {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {t(opt.labelKey)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="client-identity-document-number">
+                  {t("femme.clients.identityDocumentNumber")}
+                </Label>
+                <Input
+                  id="client-identity-document-number"
+                  value={clientIdentityDocumentNumber}
+                  onChange={(e) => setClientIdentityDocumentNumber(e.target.value)}
+                  placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                  disabled={clientIdentityDocumentType === "INNOMINADO"}
+                  className="mt-1 w-full"
+                />
+              </div>
             </div>
           </div>
         </Card>

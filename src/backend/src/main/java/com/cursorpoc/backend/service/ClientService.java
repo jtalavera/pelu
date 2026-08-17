@@ -10,6 +10,7 @@ import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -63,7 +64,7 @@ public class ClientService {
 
   @Transactional
   public ClientResponse create(long tenantId, ClientRequest request) {
-    String fullName = request.fullName().trim();
+    String fullName = request.fullName().trim().toUpperCase(Locale.ROOT);
     String phone = blankToNull(request.phone());
     String email = blankToNull(request.email());
     ClientIdentityDocumentType type = parseDocumentType(request.identityDocumentType());
@@ -129,7 +130,7 @@ public class ClientService {
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
 
-    String fullName = request.fullName().trim();
+    String fullName = request.fullName().trim().toUpperCase(Locale.ROOT);
     String phone = blankToNull(request.phone());
     String email = blankToNull(request.email());
     ClientIdentityDocumentType type = parseDocumentType(request.identityDocumentType());

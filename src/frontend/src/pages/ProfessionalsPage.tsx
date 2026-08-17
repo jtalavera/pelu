@@ -182,6 +182,8 @@ export default function ProfessionalsPage() {
   const [deactivateTarget, setDeactivateTarget] = useState<Professional | null>(null);
   const [activateTarget, setActivateTarget] = useState<Professional | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [editSuccess, setEditSuccess] = useState(false);
+  const [editingExistingId, setEditingExistingId] = useState<number | null>(null);
 
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -261,6 +263,8 @@ export default function ProfessionalsPage() {
     setTab("details");
     resetDetailForm(null);
     resetScheduleForm(null);
+    setEditingExistingId(null);
+    setEditSuccess(false);
     setModalOpen(true);
   }
 
@@ -269,6 +273,8 @@ export default function ProfessionalsPage() {
     setTab("details");
     resetDetailForm(p);
     resetScheduleForm(p);
+    setEditingExistingId(p.id);
+    setEditSuccess(false);
     setModalOpen(true);
   }
 
@@ -277,6 +283,8 @@ export default function ProfessionalsPage() {
     resetDetailForm(p);
     resetScheduleForm(p);
     setTab("schedule");
+    setEditingExistingId(p.id);
+    setEditSuccess(false);
     setModalOpen(true);
   }
 
@@ -426,6 +434,7 @@ export default function ProfessionalsPage() {
       );
       setSavedProfessional(saved);
       setProfReloadTick((n) => n + 1);
+      if (editingExistingId !== null) setEditSuccess(true);
       closeModal();
     } catch (e) {
       setScheduleSaveError(translateApiError(e, t, "femme.professionals.saveError"));
@@ -598,6 +607,9 @@ export default function ProfessionalsPage() {
         <Alert variant="destructive" title={t("femme.professionals.errorTitle")}>
           {pageError}
         </Alert>
+      )}
+      {editSuccess && (
+        <Alert variant="success">{t("femme.professionals.editSuccess")}</Alert>
       )}
 
       <div data-tour="professionals-search" style={{ marginBottom: 12 }}>
