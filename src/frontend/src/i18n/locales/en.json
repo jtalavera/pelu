@@ -181,6 +181,7 @@
       "todayAppointments": "Today's appointments",
       "viewAgenda": "View agenda →",
       "noAppts": "No appointments today",
+      "openAppointmentDetail": "View {{client}}'s appointment detail in the Calendar",
       "occupancyTitle": "Today's occupancy",
       "occupancyUnit": "appts"
     },
@@ -473,6 +474,7 @@
         "clientId": "Client (optional)",
         "clientPlaceholder": "Search or select a client…",
         "occasionalClient": "Occasional client (no record)",
+        "unnamedInvoice": "Unnamed invoice (no client identified)",
         "clientDisplayName": "Client name / business name",
         "clientDisplayNamePlaceholder": "CONSUMIDOR FINAL",
         "clientDisplayNameRequiredWithRuc": "Enter a client name — required when a RUC is provided.",
@@ -798,6 +800,7 @@
       "viewProfile": "View profile",
       "profileTitle": "Client profile",
       "profileLoadError": "Could not load client profile.",
+      "closeForm": "Close form",
       "editSuccess": "Client updated successfully.",
       "backToList": "Back to clients",
       "basicInfo": "Basic information",
@@ -957,6 +960,7 @@
       "saveError": "Could not save. Check your data and try again.",
       "saving": "Saving…",
       "errorTitle": "Error",
+      "editSuccess": "Changes saved successfully.",
       "tabs": {
         "services": "Services",
         "categories": "Categories"
@@ -1061,6 +1065,7 @@
       "saveError": "Could not save. Check your data and try again.",
       "saving": "Saving…",
       "errorTitle": "Error",
+      "editSuccess": "Changes saved successfully.",
       "addNew": "+ New professional",
       "colProfessional": "Professional",
       "colPhone": "Phone",

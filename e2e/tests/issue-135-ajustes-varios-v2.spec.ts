@@ -274,7 +274,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
       timeout: 15_000,
     });
 
-    await pickSearchableOption(page, "Professional", "E2E135 Prof B", /E2E135 Prof B/);
+    await pickSearchableOption(page, "Professional", "E2E135 Prof B", /E2E135 Prof B/i);
     await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 8.000", { timeout: 15_000 });
     await setControlledInputValue(page.locator("#propinas-withdrawal-amount"), "2000");
     await page.getByRole("button", { name: "Withdraw", exact: true }).click();
@@ -290,7 +290,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
       seed.professionalFullName.slice(0, 10),
       new RegExp(seed.professionalFullName),
     );
-    await pickMultiSelectOption(page, "Professional", "E2E135 Prof B", /E2E135 Prof B/);
+    await pickMultiSelectOption(page, "Professional", "E2E135 Prof B", /E2E135 Prof B/i);
     await page.getByRole("button", { name: "Search", exact: true }).click();
 
     const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");

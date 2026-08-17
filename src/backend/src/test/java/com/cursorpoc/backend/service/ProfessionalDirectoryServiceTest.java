@@ -78,7 +78,7 @@ class ProfessionalDirectoryServiceTest {
             "  Ana Gomez  ", "  555  ", "  ana@example.com ", null, null, null);
 
     var res = service.create(1L, req);
-    assertThat(res.fullName()).isEqualTo("Ana Gomez");
+    assertThat(res.fullName()).isEqualTo("ANA GOMEZ");
     assertThat(res.active()).isTrue();
     assertThat(res.phone()).isEqualTo("555");
   }
@@ -113,7 +113,7 @@ class ProfessionalDirectoryServiceTest {
         new ProfessionalUpsertRequest(
             "Ana Gomez", null, null, "data:image/jpeg;base64,abc", null, null);
     var res = service.create(1L, req);
-    assertThat(res.fullName()).isEqualTo("Ana Gomez");
+    assertThat(res.fullName()).isEqualTo("ANA GOMEZ");
     assertThat(res.photoDataUrl()).startsWith("data:image/jpeg;base64,");
   }
 

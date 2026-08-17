@@ -22,13 +22,14 @@ async function seedProfessional(
   token: string,
   fullName: string,
 ): Promise<{ id: number; fullName: string }> {
-  const prof = await apiPostJson<{ id: number }>(request, token, "/api/professionals", {
+  // Names are stored in UPPERCASE (issue #155 AC3) — return what's actually displayed,
+  // not the mixed-case string sent above.
+  return apiPostJson<{ id: number; fullName: string }>(request, token, "/api/professionals", {
     fullName,
     phone: null,
     email: null,
     photoDataUrl: null,
   });
-  return { id: prof.id, fullName };
 }
 
 async function createServiceRecordApi(
@@ -201,7 +202,8 @@ test.describe("Issue #53 · Ficha de servicio", () => {
 
     // Round trip back into the ficha's "New record" tab with the new client selected.
     await expect(page).toHaveURL(/\/app\/service-records/);
-    await expect(page.getByLabel("Search or select client")).toHaveValue(newClientName);
+    // Names are stored in UPPERCASE (issue #155 AC3) once saved, regardless of the case typed above.
+    await expect(page.getByLabel("Search or select client")).toHaveValue(newClientName.toUpperCase());
 
     await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
@@ -347,7 +349,8 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(olderClient.fullName)).toBeVisible();
 
-    const cards = page.locator("button", { hasText: /E2E (Newer|Older)/ });
+    // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
+    const cards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
     const firstCardText = await cards.first().innerText();
     expect(firstCardText).toContain(newerClient.fullName);
 
@@ -361,7 +364,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await revealAllTodayRecords(page);
     await expect(page.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(newerClient.fullName)).toBeVisible();
-    const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/ });
+    const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
     const firstCardAfterVoid = await reorderedCards.first().innerText();
     expect(firstCardAfterVoid).toContain(olderClient.fullName);
   });

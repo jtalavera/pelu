@@ -181,6 +181,7 @@
       "todayAppointments": "Turnos de hoy",
       "viewAgenda": "Ver agenda →",
       "noAppts": "Sin turnos hoy",
+      "openAppointmentDetail": "Ver detalle del turno de {{client}} en el Calendario",
       "occupancyTitle": "Ocupación hoy",
       "occupancyUnit": "turnos"
     },
@@ -473,6 +474,7 @@
         "clientId": "Cliente (opcional)",
         "clientPlaceholder": "Buscar o seleccionar cliente…",
         "occasionalClient": "Cliente ocasional (sin registro)",
+        "unnamedInvoice": "Comprobante sin nominar",
         "clientDisplayName": "Nombre o Razón social",
         "clientDisplayNamePlaceholder": "CONSUMIDOR FINAL",
         "clientDisplayNameRequiredWithRuc": "Ingresá el nombre del cliente: es obligatorio cuando se carga un RUC.",
@@ -798,6 +800,7 @@
       "viewProfile": "Ver perfil",
       "profileTitle": "Perfil de cliente",
       "profileLoadError": "No se pudo cargar el perfil del cliente.",
+      "closeForm": "Cerrar formulario",
       "editSuccess": "Cliente actualizado correctamente.",
       "backToList": "Volver a clientes",
       "basicInfo": "Información básica",
@@ -959,6 +962,7 @@
       "errorTitle": "Error",
       "cancel": "Cancelar",
       "save": "Guardar",
+      "editSuccess": "Los cambios se guardaron correctamente.",
       "tabs": {
         "services": "Servicios",
         "categories": "Categorías"
@@ -1061,6 +1065,7 @@
       "saveError": "No se pudo guardar. Revisá los datos e intentá de nuevo.",
       "saving": "Guardando…",
       "errorTitle": "Error",
+      "editSuccess": "Los cambios se guardaron correctamente.",
       "addNew": "+ Nueva profesional",
       "colProfessional": "Profesional",
       "colPhone": "Teléfono",

@@ -58,7 +58,8 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     // The list is server-side paginated (HU-32); search for the new professional so it
     // is not missed on a later page as professionals accumulate.
     await page.locator("#professionals-inline-search").fill(name);
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
+    await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
   });
 
   test("HU-05 · 4 listado muestra estado activo", async ({ page }) => {

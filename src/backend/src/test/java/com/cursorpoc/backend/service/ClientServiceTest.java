@@ -70,7 +70,7 @@ class ClientServiceTest {
 
     var response = clientService.create(1L, new ClientRequest("Ana García", null, null, null));
 
-    assertThat(response.fullName()).isEqualTo("Ana García");
+    assertThat(response.fullName()).isEqualTo("ANA GARCÍA");
     assertThat(response.active()).isTrue();
     assertThat(response.visitCount()).isZero();
     assertThat(response.phone()).isNull();
@@ -89,7 +89,7 @@ class ClientServiceTest {
 
     var response = clientService.create(1L, new ClientRequest("  Ana  ", null, null, null));
 
-    assertThat(response.fullName()).isEqualTo("Ana");
+    assertThat(response.fullName()).isEqualTo("ANA");
   }
 
   @Test
@@ -405,7 +405,7 @@ class ClientServiceTest {
 
     var response =
         clientService.update(1L, 5L, new ClientRequest("New Name", "0981999999", null, null));
-    assertThat(response.fullName()).isEqualTo("New Name");
+    assertThat(response.fullName()).isEqualTo("NEW NAME");
     assertThat(response.phone()).isEqualTo("0981999999");
   }
 

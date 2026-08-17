@@ -72,6 +72,7 @@ export function ServiceRecordEditor({
   onSaved,
   onVoided,
   onClose,
+  active = true,
 }: {
   initial: ServiceRecordDetail | null;
   allowClientCreateNew: boolean;
@@ -82,6 +83,10 @@ export function ServiceRecordEditor({
   onVoided?: (record: ServiceRecordDetail) => void;
   /** Present only in modal/detail contexts — renders "Cerrar" next to "Anular ficha". */
   onClose?: () => void;
+  /** Whether this editor is the currently visible tab/view. Defaults to true for modal/detail
+   * usages, which always mount on demand; tab-based hosts (e.g. Nueva ficha / Historial) pass
+   * false while hidden so a stale success banner doesn't resurface when the tab is revisited. */
+  active?: boolean;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -157,6 +162,10 @@ export function ServiceRecordEditor({
       .then((list) => setProfessionals((Array.isArray(list) ? list : []).filter((p) => p.active)))
       .catch(() => setProfessionals([]));
   }, []);
+
+  useEffect(() => {
+    if (!active) setSaveSuccessKind(null);
+  }, [active]);
 
   useEffect(() => {
     if (initialClientOverride) {

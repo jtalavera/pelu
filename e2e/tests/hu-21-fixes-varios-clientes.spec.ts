@@ -133,7 +133,8 @@ test.describe("HU-21 · Fixes varios clientes", () => {
     await page.goto("/app/clients");
     await page.getByRole("button", { name: "All" }).click();
     await page.locator("#clients-inline-search").fill(name);
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case sent here.
+    await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Inactive", { exact: true }).first()).toBeVisible();
   });
 });

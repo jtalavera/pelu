@@ -578,15 +578,35 @@ export default function DashboardPage() {
             visibleTodayAppts.map((appt, idx) => {
               const ac = avatarColor(appt.professionalName);
               const isLast = idx === visibleTodayAppts.length - 1;
+              const goToApptDetail = () =>
+                navigate("/app/calendar", {
+                  state: {
+                    selectedDate: toLocalDateStr(new Date(appt.startAt)),
+                    openAppointmentId: appt.id,
+                  },
+                });
               return (
                 <div
                   key={appt.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t("femme.dashboard.openAppointmentDetail", {
+                    client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
+                  })}
+                  onClick={goToApptDetail}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      goToApptDetail();
+                    }
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
                     padding: "8px 0",
                     borderBottom: isLast ? "none" : "0.5px solid var(--color-stone)",
+                    cursor: "pointer",
                   }}
                 >
                   <span

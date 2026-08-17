@@ -215,18 +215,24 @@ export async function seedCategoryServiceProfessional(
     priceMinor: 50000,
     durationMinutes: 60,
   });
-  const professionalFullName = `E2E Prof ${suffix}`;
-  const prof = await apiPostJson<{ id: number }>(request, token, "/api/professionals", {
-    fullName: professionalFullName,
-    phone: null,
-    email: null,
-    photoDataUrl: null,
-  });
+  const prof = await apiPostJson<{ id: number; fullName: string }>(
+    request,
+    token,
+    "/api/professionals",
+    {
+      fullName: `E2E Prof ${suffix}`,
+      phone: null,
+      email: null,
+      photoDataUrl: null,
+    },
+  );
   return {
     categoryId: cat.id,
     serviceId: svc.id,
     professionalId: prof.id,
-    professionalFullName,
+    // Names are stored in UPPERCASE (issue #155 AC3) — return what's actually displayed,
+    // not the mixed-case string sent above.
+    professionalFullName: prof.fullName,
     serviceFullName,
   };
 }
