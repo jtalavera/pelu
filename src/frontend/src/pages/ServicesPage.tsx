@@ -251,10 +251,15 @@ export default function ServicesPage() {
       } else {
         await femmePostJson<ServiceCategory>("/api/service-categories", payload);
       }
-      setCategoryModalOpen(false);
+      if (wasEdit) {
+        // Keep the modal open so the success message shows in the edit form itself,
+        // not on the main table page behind it.
+        setEditSuccess(true);
+      } else {
+        setCategoryModalOpen(false);
+      }
       await load();
       setSvcReloadTick((n) => n + 1);
-      if (wasEdit) setEditSuccess(true);
     } catch (e) {
       setCategorySaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -327,10 +332,15 @@ export default function ServicesPage() {
       } else {
         await femmePostJson<SalonService>("/api/services", payload);
       }
-      setServiceModalOpen(false);
+      if (wasEdit) {
+        // Keep the modal open so the success message shows in the edit form itself,
+        // not on the main table page behind it.
+        setEditSuccess(true);
+      } else {
+        setServiceModalOpen(false);
+      }
       await load();
       setSvcReloadTick((n) => n + 1);
-      if (wasEdit) setEditSuccess(true);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
     } finally {
@@ -580,9 +590,6 @@ export default function ServicesPage() {
         <Alert variant="destructive" title={t("femme.services.errorTitle")}>
           {error}
         </Alert>
-      )}
-      {editSuccess && (
-        <Alert variant="success">{t("femme.services.editSuccess")}</Alert>
       )}
 
       {/* ── Custom tabs ── */}
@@ -1143,6 +1150,9 @@ export default function ServicesPage() {
         }
       >
         <div className="flex flex-col gap-4">
+          {editSuccess ? (
+            <Alert variant="success">{t("femme.services.editSuccess")}</Alert>
+          ) : null}
           {categorySaveError ? (
             <Alert variant="destructive" title={t("femme.services.errorTitle")}>
               {categorySaveError}
@@ -1222,6 +1232,9 @@ export default function ServicesPage() {
         }
       >
         <div className="flex flex-col gap-4">
+          {editSuccess ? (
+            <Alert variant="success">{t("femme.services.editSuccess")}</Alert>
+          ) : null}
           {serviceSaveError ? (
             <Alert variant="destructive" title={t("femme.services.errorTitle")}>
               {serviceSaveError}

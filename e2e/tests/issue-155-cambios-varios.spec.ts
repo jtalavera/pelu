@@ -30,9 +30,10 @@ test.describe("Issue #155 · Cambios varios", () => {
     await card.click();
     const dlg = page.getByRole("dialog", { name: "Edit service" });
     await dlg.getByRole("button", { name: "Save" }).click();
-    await expect(dlg).toBeHidden({ timeout: 10_000 });
+    // Issue #157: the success message shows inside the edit form itself, which stays open.
+    await expect(dlg).toBeVisible();
     await expect(
-      page.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
+      dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
     ).toBeVisible({ timeout: 10_000 });
   });
 
@@ -58,27 +59,15 @@ test.describe("Issue #155 · Cambios varios", () => {
     const dlg = professionalFormDialog(page);
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     await dlg.getByRole("button", { name: "Save schedule" }).click();
-    await expect(dlg).toBeHidden({ timeout: 10_000 });
+    // Issue #157: the success message shows inside the edit form itself, which stays open.
+    await expect(dlg).toBeVisible();
     await expect(
-      page.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
+      dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("AC2 · el formulario de edición de cliente tiene botón de cerrar (x)", async ({
-    page,
-    request,
-  }) => {
-    const token = await loginAsDemoApi(request);
-    const client = await seedClient(request, token, `E2E155 Client ${Date.now()}`);
-
-    await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}`);
-    const closeBtn = page.getByTestId("client-detail-close");
-    await expect(closeBtn).toBeVisible({ timeout: 15_000 });
-    await expect(closeBtn).toHaveAccessibleName("Close form");
-    await closeBtn.click();
-    await expect(page).toHaveURL(/\/app\/clients$/);
-  });
+  // AC2 (the client-detail "×" close button) was reverted by issue #157 — see
+  // issue-157-ajustes-varios.spec.ts for the regression test confirming its removal.
 
   test("AC3 · el nombre del cliente se almacena en mayúsculas", async ({ request }) => {
     const token = await loginAsDemoApi(request);

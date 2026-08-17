@@ -434,8 +434,13 @@ export default function ProfessionalsPage() {
       );
       setSavedProfessional(saved);
       setProfReloadTick((n) => n + 1);
-      if (editingExistingId !== null) setEditSuccess(true);
-      closeModal();
+      if (editingExistingId !== null) {
+        // Keep the modal open so the success message shows in the edit form itself,
+        // not on the main table page behind it.
+        setEditSuccess(true);
+      } else {
+        closeModal();
+      }
     } catch (e) {
       setScheduleSaveError(translateApiError(e, t, "femme.professionals.saveError"));
     } finally {
@@ -608,10 +613,6 @@ export default function ProfessionalsPage() {
           {pageError}
         </Alert>
       )}
-      {editSuccess && (
-        <Alert variant="success">{t("femme.professionals.editSuccess")}</Alert>
-      )}
-
       <div data-tour="professionals-search" style={{ marginBottom: 12 }}>
         <SearchInput
           id="professionals-inline-search"
@@ -1110,6 +1111,9 @@ export default function ProfessionalsPage() {
           {/* ── Schedule tab ─────────────────────────────────────── */}
           <TabsContent value="schedule">
             <div className="flex flex-col gap-4">
+              {editSuccess ? (
+                <Alert variant="success">{t("femme.professionals.editSuccess")}</Alert>
+              ) : null}
               {scheduleSaveError ? (
                 <Alert variant="destructive" title={t("femme.professionals.errorTitle")}>
                   {scheduleSaveError}
