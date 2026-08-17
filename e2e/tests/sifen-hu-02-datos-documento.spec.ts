@@ -9,6 +9,7 @@ import {
   ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
+  seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
@@ -86,6 +87,45 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
     expect(status, text).toBe(201);
   });
 
+  /**
+   * Bugfix: the linked client's own profile RUC must never be used as a silent fallback — the
+   * comprobante must declare its own RUC explicitly. Before this fix, a linked client with a saved
+   * RUC satisfied AC-05 even with a blank clientRucOverride, and SIFEN silently received that
+   * client's profile RUC (see SifenInvoiceHeaderService#buildReceiverData).
+   */
+  test("HU-02 · AC-05 cliente vinculado con RUC en su perfil pero sin RUC en el comprobante es rechazada (API)", async ({
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(
+      request,
+      token,
+      `E2E SIFEN AC05 ${Date.now()}`,
+      undefined,
+      `800${Date.now()}-6`,
+    );
+
+    const { status, text } = await apiPostJsonStatus(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: null,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 7_000_000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 7_000_000 }],
+    });
+
+    expect(status, text).toBe(400);
+    expect(text).toContain("SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
+  });
+
   test("HU-02 · AC-05 justo debajo del umbral no exige identificar al cliente (API)", async ({
     request,
   }) => {
@@ -139,6 +179,42 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
     await page.locator("#client-identity-document-type").selectOption("CEDULA_PARAGUAYA");
     await page.locator("#client-identity-document-number").fill("4123456");
     await clickIssueInvoiceAndExpectSuccess(page);
+  });
+
+  test("HU-02 · AC-05 (bugfix) cliente vinculado con RUC guardado pero campo de RUC vaciado en el comprobante sigue exigiendo identificación (UI)", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(
+      request,
+      token,
+      `E2E SIFEN AC05 UI ${Date.now()}`,
+      undefined,
+      `800${Date.now()}-6`,
+    );
+
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
+    await page.getByRole("button", { name: client.fullName }).click();
+    // Selecting the client auto-fills Nombre/RUC from their profile — clear them manually,
+    // same as leaving the form blank for a client without those fields prefilled.
+    await page.locator("#client-display-name").fill("");
+    await page.locator("#client-identity-document-number").fill("");
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("7000000");
+    await page.locator("#pay-amount-0").fill("7000000");
+
+    await page.getByRole("button", { name: "Issue invoice" }).click();
+    await expect(
+      page.getByText(
+        "Sales of Gs. 7,000,000 or more require identifying the client with a RUC or an identity document.",
+      ),
+    ).toBeVisible();
   });
 
   test("HU-02 · AC-07 crear cliente con dirección y localidad persiste departamento/ciudad (UI)", async ({
