@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
@@ -104,6 +105,7 @@ public class ClientService {
     client.setVisitCount(0);
     client.setIdentityDocumentNumber(identityDocumentNumber);
     client.setIdentityDocumentType(type);
+    client.setTaxpayerType(parseTaxpayerType(request.taxpayerType()));
     client.setAddress(blankToNull(request.address()));
     client.setDepartmentCode(blankToNull(request.departmentCode()));
     client.setDepartmentName(blankToNull(request.departmentName()));
@@ -166,6 +168,7 @@ public class ClientService {
     client.setRuc(ruc);
     client.setIdentityDocumentNumber(identityDocumentNumber);
     client.setIdentityDocumentType(type);
+    client.setTaxpayerType(parseTaxpayerType(request.taxpayerType()));
     client.setAddress(blankToNull(request.address()));
     client.setDepartmentCode(blankToNull(request.departmentCode()));
     client.setDepartmentName(blankToNull(request.departmentName()));
@@ -210,6 +213,15 @@ public class ClientService {
       return ClientIdentityDocumentType.valueOf(raw);
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
+    }
+  }
+
+  private static ClientTaxpayerType parseTaxpayerType(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return ClientTaxpayerType.valueOf(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TAXPAYER_TYPE");
     }
   }
 
@@ -271,6 +283,7 @@ public class ClientService {
         c.getDepartmentName(),
         c.getCityCode(),
         c.getCityName(),
-        c.getIdentityDocumentType() == null ? null : c.getIdentityDocumentType().name());
+        c.getIdentityDocumentType() == null ? null : c.getIdentityDocumentType().name(),
+        c.getTaxpayerType() == null ? null : c.getTaxpayerType().name());
   }
 }

@@ -11,6 +11,7 @@ import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
@@ -145,6 +146,50 @@ class SifenInvoiceHeaderServiceTest {
 
     assertThat(header.receiver().ruc()).isEqualTo("80000005-6");
     assertThat(header.receiver().name()).isEqualTo("Cliente Demo");
+  }
+
+  /**
+   * D205/iTiContRec: a client with a RUC but no explicit taxpayer type on file defaults to Persona
+   * Física — preserves the old hardcoded behavior for clients created before this field existed.
+   */
+  @Test
+  void buildHeader_clientWithRucAndNoTaxpayerType_defaultsToPersonaFisica() {
+    Client client = new Client();
+    client.setRuc("80000005-6");
+    invoice.setClient(client);
+
+    SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
+
+    assertThat(header.receiver().taxpayerType()).isEqualTo(ClientTaxpayerType.PERSONA_FISICA);
+  }
+
+  /**
+   * D205/iTiContRec: a client explicitly marked as Persona Jurídica on their profile is honored.
+   */
+  @Test
+  void buildHeader_clientWithRucAndPersonaJuridica_usesClientsTaxpayerType() {
+    Client client = new Client();
+    client.setRuc("80000005-6");
+    client.setTaxpayerType(ClientTaxpayerType.PERSONA_JURIDICA);
+    invoice.setClient(client);
+
+    SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
+
+    assertThat(header.receiver().taxpayerType()).isEqualTo(ClientTaxpayerType.PERSONA_JURIDICA);
+  }
+
+  /** D205/iTiContRec: the invoice's own override wins over the linked client's profile value. */
+  @Test
+  void buildHeader_invoiceTaxpayerTypeOverride_winsOverClientsProfile() {
+    Client client = new Client();
+    client.setRuc("80000005-6");
+    client.setTaxpayerType(ClientTaxpayerType.PERSONA_FISICA);
+    invoice.setClient(client);
+    invoice.setClientTaxpayerTypeOverride(ClientTaxpayerType.PERSONA_JURIDICA);
+
+    SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
+
+    assertThat(header.receiver().taxpayerType()).isEqualTo(ClientTaxpayerType.PERSONA_JURIDICA);
   }
 
   /** AC-05 (walk-in path): an occasional client identified by cédula, not RUC, is also accepted. */

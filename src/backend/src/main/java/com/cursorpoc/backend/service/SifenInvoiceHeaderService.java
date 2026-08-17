@@ -7,6 +7,7 @@ import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
@@ -191,6 +192,16 @@ public class SifenInvoiceHeaderService {
             : (client != null ? client.getIdentityDocumentType() : null);
     ClientIdentityDocumentType type =
         ClientIdentityDocumentType.resolve(explicitType, ruc, identityDocument);
+    // D205/iTiContRec: only meaningful once `type` resolves to RUC, but always computed —
+    // harmless when unused. Falls back to the linked client's own profile, then to
+    // PERSONA_FISICA — unlike ruc/identityDocument/type above, this isn't "identifying" data the
+    // user must confirm on this invoice, it's a classification of a RUC already declared here.
+    ClientTaxpayerType taxpayerType =
+        invoice.getClientTaxpayerTypeOverride() != null
+            ? invoice.getClientTaxpayerTypeOverride()
+            : (client != null && client.getTaxpayerType() != null
+                ? client.getTaxpayerType()
+                : ClientTaxpayerType.PERSONA_FISICA);
     String address = client != null ? client.getAddress() : null;
     boolean hasAddress = address != null && !address.isBlank();
     boolean hasDepartmentAndCity =
@@ -209,7 +220,8 @@ public class SifenInvoiceHeaderService {
         hasDepartmentAndCity ? client.getDepartmentName() : null,
         hasDepartmentAndCity ? client.getCityCode() : null,
         hasDepartmentAndCity ? client.getCityName() : null,
-        type);
+        type,
+        taxpayerType);
   }
 
   private static void requireIssuerDataComplete(BusinessProfile profile) {

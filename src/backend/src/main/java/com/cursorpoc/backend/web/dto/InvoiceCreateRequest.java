@@ -24,7 +24,9 @@ public record InvoiceCreateRequest(
      */
     BigDecimal tipsAmount,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
-    String clientIdentityDocumentTypeOverride) {
+    String clientIdentityDocumentTypeOverride,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
+    String clientTaxpayerTypeOverride) {
 
   public InvoiceCreateRequest(
       Long clientId,
@@ -47,6 +49,7 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
         null);
   }
 
@@ -72,6 +75,34 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
+        null);
+  }
+
+  public InvoiceCreateRequest(
+      Long clientId,
+      String clientDisplayName,
+      String clientRucOverride,
+      String clientIdentityDocumentOverride,
+      String discountType,
+      BigDecimal discountValue,
+      List<InvoiceLineRequest> lines,
+      List<InvoicePaymentAllocationRequest> payments,
+      Long serviceRecordId,
+      BigDecimal tipsAmount,
+      String clientIdentityDocumentTypeOverride) {
+    this(
+        clientId,
+        clientDisplayName,
+        clientRucOverride,
+        clientIdentityDocumentOverride,
+        discountType,
+        discountValue,
+        lines,
+        payments,
+        serviceRecordId,
+        tipsAmount,
+        clientIdentityDocumentTypeOverride,
         null);
   }
 }

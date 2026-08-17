@@ -11,6 +11,7 @@ type Client = {
   ruc: string | null;
   identityDocumentNumber?: string | null;
   identityDocumentType?: string | null;
+  taxpayerType?: string | null;
   active?: boolean;
 };
 

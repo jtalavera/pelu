@@ -144,6 +144,7 @@ export default function ClientsPage() {
   const [email, setEmail]           = useState("");
   const [identityDocumentType, setIdentityDocumentType] = useState("RUC");
   const [identityDocumentNumber, setIdentityDocumentNumber] = useState("");
+  const [taxpayerType, setTaxpayerType] = useState("PERSONA_FISICA");
   const [address, setAddress]       = useState("");
   const [locality, setLocality]     = useState<Locality | null>(null);
   const localitySearch = useLocalitySearch();
@@ -210,6 +211,7 @@ export default function ClientsPage() {
       setEmail("");
       setIdentityDocumentType("RUC");
       setIdentityDocumentNumber("");
+      setTaxpayerType("PERSONA_FISICA");
       setAddress("");
       setLocality(null);
       setFieldError(null);
@@ -232,6 +234,7 @@ export default function ClientsPage() {
     setEmail("");
     setIdentityDocumentType("RUC");
     setIdentityDocumentNumber("");
+    setTaxpayerType("PERSONA_FISICA");
     setAddress("");
     setLocality(null);
     setFieldError(null);
@@ -269,6 +272,7 @@ export default function ClientsPage() {
         ruc: isRucType ? documentNumberTrim || null : null,
         identityDocumentNumber: !isRucType && !isInnominado ? documentNumberTrim || null : null,
         identityDocumentType: documentNumberTrim ? identityDocumentType : null,
+        taxpayerType: isRucType ? taxpayerType : null,
         address: address.trim() || null,
         departmentCode: locality?.departmentCode ?? null,
         departmentName: locality?.departmentName ?? null,
@@ -836,6 +840,24 @@ export default function ClientsPage() {
               ))}
             </Select>
           </div>
+
+          {identityDocumentType === "RUC" && (
+            <div>
+              <Label htmlFor="client-taxpayer-type">{t("femme.clients.taxpayerType")}</Label>
+              <Select
+                id="client-taxpayer-type"
+                value={taxpayerType}
+                onChange={(e) => setTaxpayerType(e.target.value)}
+              >
+                <option value="PERSONA_FISICA">
+                  {t("femme.clients.taxpayerTypePersonaFisica")}
+                </option>
+                <option value="PERSONA_JURIDICA">
+                  {t("femme.clients.taxpayerTypePersonaJuridica")}
+                </option>
+              </Select>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="client-identity-document-number">

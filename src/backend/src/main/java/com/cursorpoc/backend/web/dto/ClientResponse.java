@@ -15,4 +15,6 @@ public record ClientResponse(
     String cityCode,
     String cityName,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
-    String identityDocumentType) {}
+    String identityDocumentType,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
+    String taxpayerType) {}

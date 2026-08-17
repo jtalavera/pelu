@@ -545,6 +545,7 @@ type InitialClientForBilling = {
   ruc: string | null;
   identityDocumentNumber?: string | null;
   identityDocumentType?: string | null;
+  taxpayerType?: string | null;
 };
 
 /**
@@ -625,6 +626,7 @@ function NewInvoiceTab({
           ruc: effectiveInitialClient.ruc,
           identityDocumentNumber: effectiveInitialClient.identityDocumentNumber,
           identityDocumentType: effectiveInitialClient.identityDocumentType,
+          taxpayerType: effectiveInitialClient.taxpayerType,
         },
       }
     : null;
@@ -640,6 +642,9 @@ function NewInvoiceTab({
   );
   const [clientIdentityDocumentNumber, setClientIdentityDocumentNumber] = useState(
     initialDocTypeAndNumber.number,
+  );
+  const [clientTaxpayerType, setClientTaxpayerType] = useState(
+    effectiveInitialClient?.taxpayerType ?? "PERSONA_FISICA",
   );
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
@@ -743,6 +748,7 @@ function NewInvoiceTab({
     ruc?: string | null;
     identityDocumentNumber?: string | null;
     identityDocumentType?: string | null;
+    taxpayerType?: string | null;
   }) {
     setClientDisplayName(client.fullName);
     const resolved = resolveIdentityDocumentTypeAndNumber(client);
@@ -753,6 +759,7 @@ function NewInvoiceTab({
       setClientIdentityDocumentType(resolved.type);
       setClientIdentityDocumentNumber(resolved.number);
     }
+    setClientTaxpayerType(client.taxpayerType ?? "PERSONA_FISICA");
   }
 
   function handleClientSelectionChange(sel: ClientSelection) {
@@ -763,6 +770,7 @@ function NewInvoiceTab({
       setClientDisplayName("");
       setClientIdentityDocumentType("RUC");
       setClientIdentityDocumentNumber("");
+      setClientTaxpayerType("PERSONA_FISICA");
     }
   }
 
@@ -1121,6 +1129,7 @@ function NewInvoiceTab({
       clientRucOverride: isRucType ? numberTrim || null : null,
       clientIdentityDocumentOverride: !isRucType && !isInnominado ? numberTrim || null : null,
       clientIdentityDocumentTypeOverride: numberTrim ? clientIdentityDocumentType : null,
+      clientTaxpayerTypeOverride: isRucType && numberTrim ? clientTaxpayerType : null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
         discountType !== "NONE" && discountValue
@@ -1349,6 +1358,24 @@ function NewInvoiceTab({
                   className="mt-1 w-full"
                 />
               </div>
+              {clientIdentityDocumentType === "RUC" && (
+                <div>
+                  <Label htmlFor="client-taxpayer-type">{t("femme.clients.taxpayerType")}</Label>
+                  <Select
+                    id="client-taxpayer-type"
+                    value={clientTaxpayerType}
+                    onChange={(e) => setClientTaxpayerType(e.target.value)}
+                    className="mt-1 w-full"
+                  >
+                    <option value="PERSONA_FISICA">
+                      {t("femme.clients.taxpayerTypePersonaFisica")}
+                    </option>
+                    <option value="PERSONA_JURIDICA">
+                      {t("femme.clients.taxpayerTypePersonaJuridica")}
+                    </option>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
         </Card>
