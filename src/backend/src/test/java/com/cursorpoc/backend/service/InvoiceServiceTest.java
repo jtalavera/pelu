@@ -847,7 +847,7 @@ class InvoiceServiceTest {
 
   /** AC-05: a saved client with an on-file RUC also satisfies the threshold. */
   @Test
-  void issueInvoice_atThreshold_withSavedClientRuc_succeeds() {
+  void issueInvoice_atThreshold_withExplicitClientRucOverride_succeeds() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
         .thenReturn(Optional.of(openSession));
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
@@ -867,11 +867,44 @@ class InvoiceServiceTest {
     var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
     var request =
         new InvoiceCreateRequest(
-            7L, null, null, null, null, null, List.of(line), List.of(payment), null, null);
+            7L, null, "80000005-6", null, null, null, List.of(line), List.of(payment), null, null);
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
     assertThat(result.clientId()).isEqualTo(7L);
+  }
+
+  /**
+   * The linked client's profile RUC is never used as a fallback for identification: an invoice at
+   * or above the threshold must be blocked unless the RUC/document is explicitly sent on this
+   * invoice, even when a client with a saved RUC is linked — matches
+   * SifenInvoiceHeaderService#buildReceiverData, which no longer falls back either.
+   */
+  @Test
+  void issueInvoice_atThreshold_withClientLinkedButNoRucOverride_throwsBadRequest() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    Client client = new Client();
+    client.setId(7L);
+    client.setTenant(tenant);
+    client.setFullName("Ana García");
+    client.setRuc("80000005-6");
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var request =
+        new InvoiceCreateRequest(
+            7L, null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
   }
 
   /** AC-05: an explicit Innominado type override blocks issuance even if a RUC is also sent. */

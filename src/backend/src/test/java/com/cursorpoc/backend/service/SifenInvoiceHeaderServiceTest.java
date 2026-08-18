@@ -136,10 +136,11 @@ class SifenInvoiceHeaderServiceTest {
 
   /** AC-06: si el cliente tiene RUC, se incluyen su RUC y nombre. */
   @Test
-  void buildHeader_clientWithRuc_includesRucAndName() {
+  void buildHeader_clientWithRucOverride_includesRucAndName() {
     Client client = new Client();
     client.setRuc("80000005-6");
     invoice.setClient(client);
+    invoice.setClientRucOverride("80000005-6");
     invoice.setClientDisplayName("Cliente Demo");
 
     SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
@@ -190,6 +191,23 @@ class SifenInvoiceHeaderServiceTest {
     SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
 
     assertThat(header.receiver().taxpayerType()).isEqualTo(ClientTaxpayerType.PERSONA_JURIDICA);
+   * The linked client's profile RUC/document is never used as a fallback: leaving the invoice's own
+   * override fields blank must send a blank receiver to SIFEN, even if the client has RUC data on
+   * file, so the user can't be silently identified without confirming it on this invoice.
+   */
+  @Test
+  void buildHeader_clientWithRucOnProfileButNoOverride_omitsRuc() {
+    Client client = new Client();
+    client.setRuc("80000005-6");
+    client.setIdentityDocumentNumber("4123456");
+    invoice.setClient(client);
+    invoice.setClientDisplayName("Cliente Demo");
+
+    SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
+
+    assertThat(header.receiver().ruc()).isNull();
+    assertThat(header.receiver().identityDocumentNumber()).isNull();
+    assertThat(header.receiver().name()).isEqualTo("Cliente Demo");
   }
 
   /** AC-05 (walk-in path): an occasional client identified by cédula, not RUC, is also accepted. */

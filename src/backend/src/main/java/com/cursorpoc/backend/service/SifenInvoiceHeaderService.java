@@ -178,18 +178,13 @@ public class SifenInvoiceHeaderService {
    */
   private SifenReceiverData buildReceiverData(Invoice invoice) {
     Client client = invoice.getClient();
-    String ruc =
-        invoice.getClientRucOverride() != null
-            ? invoice.getClientRucOverride()
-            : (client != null ? client.getRuc() : null);
-    String identityDocument =
-        invoice.getClientIdentityDocumentOverride() != null
-            ? invoice.getClientIdentityDocumentOverride()
-            : (client != null ? client.getIdentityDocumentNumber() : null);
-    ClientIdentityDocumentType explicitType =
-        invoice.getClientIdentityDocumentTypeOverride() != null
-            ? invoice.getClientIdentityDocumentTypeOverride()
-            : (client != null ? client.getIdentityDocumentType() : null);
+    // The client's profile RUC/document are never used as a fallback here — same rule as the
+    // display name (issue #96) and the printed PDF: a blank override means SIFEN receives a
+    // blank receiver, even if the linked client has RUC/document data on file. Silently reusing
+    // the client's profile would send data to SIFEN the user never confirmed on this invoice.
+    String ruc = invoice.getClientRucOverride();
+    String identityDocument = invoice.getClientIdentityDocumentOverride();
+    ClientIdentityDocumentType explicitType = invoice.getClientIdentityDocumentTypeOverride();
     ClientIdentityDocumentType type =
         ClientIdentityDocumentType.resolve(explicitType, ruc, identityDocument);
     // D205/iTiContRec: only meaningful once `type` resolves to RUC, but always computed —
