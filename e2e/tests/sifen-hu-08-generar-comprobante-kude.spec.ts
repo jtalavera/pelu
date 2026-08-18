@@ -67,7 +67,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     let row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     // RT-28 (Hardening_SIFEN.md): before the invoice was ever submitted to SIFEN at all (no CDC/QR
     // yet), there's still nothing deliverable — no KuDE section/button.
@@ -89,7 +89,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     const section = page.getByTestId("sifen-status-section");
     await expect(section).toBeVisible();
@@ -152,7 +152,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     const section = page.getByTestId("sifen-status-section");
     await expect(section).toBeVisible();
@@ -211,7 +211,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
     await expect(page.getByTestId("sifen-kude-pending-validation-note")).toHaveCount(0);
@@ -253,7 +253,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 

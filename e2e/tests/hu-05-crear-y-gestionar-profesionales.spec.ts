@@ -55,6 +55,9 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     await dlg
       .getByRole("button", { name: "Save schedule" })
       .evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
+    // Issue #163 AC2: a new-professional save shows a success message in the page header,
+    // same style as saving a Ficha de servicio.
+    await expect(page.getByText("Professional saved successfully.", { exact: true })).toBeVisible();
     // The list is server-side paginated (HU-32); search for the new professional so it
     // is not missed on a later page as professionals accumulate.
     await page.locator("#professionals-inline-search").fill(name);
@@ -90,10 +93,17 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     await page.getByRole("menuitem", { name: "Deactivate" }).click();
     await page.getByRole("dialog", { name: "Deactivate professional" }).getByRole("button", { name: "Deactivate" }).click();
     await expect(row.getByText("Inactive", { exact: true })).toBeVisible();
+    // Issue #163 AC3: deactivating from the table shows a success message in the page header.
+    await expect(
+      page.getByText("Professional deactivated successfully.", { exact: true }),
+    ).toBeVisible();
 
     await row.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
     await page.getByRole("menuitem", { name: "Activate" }).click();
     await page.getByRole("dialog", { name: "Activate professional" }).getByRole("button", { name: "Activate" }).click();
     await expect(row.getByText("Active", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Professional activated successfully.", { exact: true }),
+    ).toBeVisible();
   });
 });

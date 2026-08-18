@@ -409,13 +409,12 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
               style={{ tableLayout: "fixed" }}
             >
               <colgroup>
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "24%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "12%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "27%" }} />
                 <col style={{ width: "14%" }} />
-                <col style={{ width: "13%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "17%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -426,7 +425,6 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     { key: "colTotal", align: "right" },
                     { key: "colStatus", align: "center" },
                     { key: "colSifenStatus", align: "center" },
-                    { key: "", align: "right" },
                   ].map(({ key, align }, i) => (
                     <th
                       key={i}
@@ -451,9 +449,21 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                 {invoices.map((inv) => (
                   <tr
                     key={inv.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t("femme.billing.history.openDetail", {
+                      invoiceNumber: inv.invoiceNumberFormatted,
+                    })}
+                    onClick={() => setSelectedInvoiceId(inv.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedInvoiceId(inv.id);
+                      }
+                    }}
                     style={{
                       borderTop: "var(--border-default)",
-                      cursor: "default",
+                      cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
                       (e.currentTarget as HTMLTableRowElement).style.background =
@@ -482,18 +492,6 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>
                       <SifenStatusBadge status={inv.sifenSubmissionStatus} />
-                    </td>
-                    <td
-                      style={{ padding: "10px 12px", textAlign: "right" }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedInvoiceId(inv.id)}
-                      >
-                        {t("femme.billing.history.viewDetail")}
-                      </Button>
                     </td>
                   </tr>
                 ))}

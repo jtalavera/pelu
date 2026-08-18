@@ -84,7 +84,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(errorBox).toBeInViewport();
   });
 
-  test("AC3 · las funciones de SIFEN (revalidar, correo, cancelar, identificar) están en solapas; estado/KuDE quedan informativos", async ({
+  test("AC3 · las funciones de SIFEN (revalidar, correo, cancelar, identificar) están en solapas; estado/KuDE quedan informativos [issue #163: ahora son acordeones independientes]", async ({
     page,
     request,
   }) => {
@@ -119,7 +119,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     // Estado/KuDE stay informational — visible up top without touching any solapa.
     const section = page.getByTestId("sifen-status-section");
@@ -127,24 +127,30 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(section.getByText("Approved", { exact: true })).toBeVisible();
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 
-    // All four solapas exist for this invoice (approved, verification URL, client-identification
-    // eligible), and the first one (Revalidate) is the default.
+    // All four solapas (now independent accordion items) exist for this invoice (approved,
+    // verification URL, client-identification eligible), all collapsed by default — only
+    // "Estado en SIFEN" is expanded on open (issue #163).
     await expect(page.getByTestId("sifen-tab-revalidate")).toBeVisible();
     await expect(page.getByTestId("sifen-tab-email")).toBeVisible();
     await expect(page.getByTestId("sifen-tab-cancel")).toBeVisible();
     await expect(page.getByTestId("sifen-tab-identify")).toBeVisible();
 
-    await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-revalidate-button")).not.toBeVisible();
     await expect(page.getByTestId("sifen-identify-client-button")).not.toBeVisible();
 
-    // Switching solapas swaps which function is interactive without losing the others.
+    // Issue #163: opening one accordion section no longer closes the others — expanding
+    // Revalidate, then Identify, then Cancel keeps every previously-opened section's content visible.
+    await page.getByTestId("sifen-tab-revalidate").click();
+    await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
+
     await page.getByTestId("sifen-tab-identify").click();
     await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
-    await expect(page.getByTestId("sifen-revalidate-button")).not.toBeVisible();
+    await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
 
     await page.getByTestId("sifen-tab-cancel").click();
     await expect(page.getByTestId("sifen-cancel-button")).toBeVisible();
-    await expect(page.getByTestId("sifen-identify-client-button")).not.toBeVisible();
+    await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
   });
 
   test("AC4 · la solapa de Horario del profesional es compacta (cada día ocupa una fila reducida)", async ({

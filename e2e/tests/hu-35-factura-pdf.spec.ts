@@ -148,7 +148,7 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     // Find the row for this invoice and click "View"
     const invRow = page.getByRole("row").filter({ hasText: inv.invoiceNumberFormatted });
     await expect(invRow).toBeVisible({ timeout: 15_000 });
-    await invRow.getByRole("button", { name: "View" }).click();
+    await invRow.click();
 
     // The detail modal opens
     await expect(
@@ -247,7 +247,7 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     // Find the row for this invoice and click "View"
     const invRow = page.getByRole("row").filter({ hasText: inv.invoiceNumberFormatted });
     await expect(invRow).toBeVisible({ timeout: 15_000 });
-    await invRow.getByRole("button", { name: "View" }).click();
+    await invRow.click();
 
     // The detail modal opens
     await expect(

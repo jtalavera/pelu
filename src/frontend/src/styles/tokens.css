@@ -294,33 +294,6 @@ html.light {
   );
 }
 
-.card-inactive {
-  background: var(--color-stone) !important;
-  border-color: transparent !important;
-}
-
-.card-inactive .card-icon {
-  opacity: 0.3;
-}
-
-.card-inactive .card-name {
-  color: var(--color-ink-3);
-  text-decoration: line-through;
-  text-decoration-color: var(--color-ink-3);
-  text-decoration-thickness: 1px;
-  font-weight: 400;
-}
-
-.card-inactive .card-meta {
-  color: var(--color-ink-3);
-  opacity: 0.6;
-}
-
-.card-inactive .card-price {
-  color: var(--color-ink-3);
-  opacity: 0.5;
-}
-
 /* Botones de fila/card (Servicios / Categorías) */
 .act-btn {
   padding: 4px 10px;

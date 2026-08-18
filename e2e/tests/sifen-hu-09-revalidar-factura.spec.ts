@@ -66,7 +66,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await page.locator("#invoice-history-text-filter").fill(clientFullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: clientFullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
   }
 
   test("HU-09 · AC-01/AC-06 sin verificación SIFEN previa no existe botón de revalidar (y no hay carga de imagen)", async ({

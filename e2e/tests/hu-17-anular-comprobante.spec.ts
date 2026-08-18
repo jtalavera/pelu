@@ -45,7 +45,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await clickIssueInvoiceAndExpectSuccess(page);
 
     await page.getByRole("tab", { name: "History" }).click();
-    await page.getByRole("button", { name: "View" }).first().click();
+    await page.locator("tbody").getByRole("row").first().click();
     await page.getByRole("button", { name: "Void invoice" }).click();
     await expect(page.locator("#void-reason")).toBeVisible();
     await page.getByRole("button", { name: "Confirm void" }).click();
@@ -99,7 +99,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await expect(clientRow).toBeVisible({ timeout: 15_000 });
     // Total in history table must use dot separator, no decimals
     await expect(clientRow).toContainText("3.000");
-    await clientRow.getByRole("button", { name: "View" }).click();
+    await clientRow.click();
     await page.getByRole("button", { name: "Void invoice" }).click();
     await page.locator("#void-reason").fill("Wrong amount");
     const [voidRes2] = await Promise.all([

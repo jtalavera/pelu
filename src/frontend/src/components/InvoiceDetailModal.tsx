@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Accordion,
+  AccordionItem,
   Alert,
   Badge,
   Button,
@@ -11,10 +13,6 @@ import {
   RadioGroup,
   Select,
   Spinner,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   Text,
   Textarea,
   Label,
@@ -228,10 +226,6 @@ export function InvoiceDetailModal({
   const [identifyCountryCode, setIdentifyCountryCode] = useState("");
   const [identifyFieldErrors, setIdentifyFieldErrors] = useState<Record<string, string>>({});
   const [identifying, setIdentifying] = useState(false);
-  /** Issue #161: SIFEN's per-function actions (revalidate/email/cancel/identify) live in solapas
-   * — undefined means "no explicit selection yet," so it falls back to the first tab that's
-   * actually applicable to this invoice instead of a hardcoded value that might not be shown. */
-  const [sifenActiveTab, setSifenActiveTab] = useState<string | undefined>(undefined);
   const [identifyError, setIdentifyError] = useState<string | null>(null);
 
   // SIFEN HU-10 AC-02: ticks the deadline countdown without a full page refresh.
@@ -593,94 +587,31 @@ export function InvoiceDetailModal({
               </div>
             </div>
 
-            {/* SIFEN status — HU-07. Issue #161: status/received-data/KuDE download stay as
-                informational context up top; the per-function actions (revalidate, email, cancel,
-                identify) move into solapas below so they're easy to find instead of stacked. */}
-            {invoice.sifenSubmissionStatus && (
-              <div
-                className="border-t border-[rgb(var(--color-border))] pt-4 flex flex-col gap-4"
-                data-testid="sifen-status-section"
-              >
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Text className="font-medium">{t("femme.billing.history.detail.sifen.title")}</Text>
-                    <SifenStatusBadge status={invoice.sifenSubmissionStatus} />
-                  </div>
-                  {invoice.sifenControlNumber && (
-                    <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                      {t("femme.billing.history.detail.sifen.controlNumber")}: {invoice.sifenControlNumber}
-                    </Text>
-                  )}
-                  {invoice.sifenSubmissionProtocolNumber && (
-                    <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                      {t("femme.billing.history.detail.sifen.protocolNumber")}: {invoice.sifenSubmissionProtocolNumber}
-                    </Text>
-                  )}
-                  {invoice.sifenSubmissionMessage && (
-                    <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                      {t("femme.billing.history.detail.sifen.resultMessage")}: {invoice.sifenSubmissionMessage}
-                    </Text>
-                  )}
-                  {(invoice.sifenSubmissionStatus === "APPROVED" ||
-                    invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION") &&
-                    invoice.sifenQueryDocumentContent && (
-                      <div>
-                        <Text variant="small" className="font-medium mb-1">
-                          {t("femme.billing.history.detail.sifen.documentContent")}
-                        </Text>
-                        <pre className="max-h-40 overflow-auto rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))] p-2 text-xs whitespace-pre-wrap break-all">
-                          {invoice.sifenQueryDocumentContent}
-                        </pre>
-                      </div>
-                    )}
-                  {sifenCheckError && (
-                    <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-                      {sifenCheckError}
-                    </Alert>
-                  )}
-                  {sifenCheckMessage && !sifenCheckError && (
-                    <Alert variant="success" title={sifenCheckMessage}>
-                      {sifenCheckMessage}
-                    </Alert>
-                  )}
-                  {/* RT-20 (Hardening_SIFEN.md): while QUEUED, the invoice hasn't been transmitted
-                      yet at all — querying SIFEN for a CDC it never received would be pointless, so
-                      this shows an informational line instead of the "check status" button below
-                      (which only ever makes sense once something was actually sent). */}
-                  {invoice.sifenSubmissionStatus === "QUEUED" && (
-                    <Text
-                      variant="small"
-                      className="text-[rgb(var(--color-muted-foreground))]"
-                      data-testid="sifen-submission-in-progress-note"
-                    >
-                      {t("femme.billing.history.detail.sifen.submissionInProgressNote")}
-                    </Text>
-                  )}
-                  {invoice.sifenSubmissionStatus === "PENDING_VERIFICATION" && (
-                    <div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={checkingSifenStatus}
-                        data-testid="sifen-check-status-button"
-                        onClick={() => void handleCheckSifenStatus()}
-                      >
-                        {checkingSifenStatus
-                          ? t("femme.billing.history.detail.sifen.checkingStatus")
-                          : t("femme.billing.history.detail.sifen.checkStatusButton")}
-                      </Button>
-                    </div>
-                  )}
-                  {/* RT-28 (Hardening_SIFEN.md): the KuDE is deliverable while pending SIFEN's
-                      validation too — the Manual Técnico's general "validación posterior" model
-                      lets the receiver walk out with it, conditioned on later approval. RT-20
-                      (Hardening_SIFEN.md): QUEUED already has a CDC/QR by the time it's ever shown
-                      (prepareAndSign persists both before marking QUEUED), so it's deliverable too. */}
-                  {(invoice.sifenSubmissionStatus === "APPROVED" ||
-                    invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION" ||
-                    invoice.sifenSubmissionStatus === "QUEUED" ||
-                    invoice.sifenSubmissionStatus === "PENDING_VERIFICATION") && (
-                    <div className="flex flex-col gap-2 pt-2 border-t border-[rgb(var(--color-border))]">
+            {/* SIFEN status — HU-07. Issue #163: the Kude download sits above the collapsible
+                sections; each SIFEN function (status, revalidate, email, cancel, identify) is its
+                own independent accordion item instead of exclusive tabs. */}
+            {invoice.sifenSubmissionStatus && (() => {
+              const kudeEligible =
+                invoice.sifenSubmissionStatus === "APPROVED" ||
+                invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION" ||
+                invoice.sifenSubmissionStatus === "QUEUED" ||
+                invoice.sifenSubmissionStatus === "PENDING_VERIFICATION";
+              const cancelEligible =
+                invoice.sifenSubmissionStatus === "APPROVED" ||
+                invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION";
+              const cancelHistoryVisible =
+                invoice.sifenSubmissionStatus === "CANCELLED" &&
+                !!invoice.sifenCancellationRequestedAt;
+              const identifyHistoryVisible = !!invoice.sifenClientIdentificationRequestedAt;
+
+              return (
+                <div
+                  className="border-t border-[rgb(var(--color-border))] pt-4 flex flex-col gap-4"
+                  data-testid="sifen-status-section"
+                >
+                  {/* Issue #163: Kude download promoted above the accordion sections. */}
+                  {kudeEligible && (
+                    <div className="flex flex-col gap-2">
                       {(invoice.sifenSubmissionStatus === "QUEUED" ||
                         invoice.sifenSubmissionStatus === "PENDING_VERIFICATION") && (
                         <Text
@@ -711,615 +642,646 @@ export function InvoiceDetailModal({
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* Issue #161: revalidate/email/cancel/identify grouped into solapas — only the
-                    ones applicable to this invoice's current state are shown. */}
-                {(() => {
-                  const kudeEligible =
-                    invoice.sifenSubmissionStatus === "APPROVED" ||
-                    invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION" ||
-                    invoice.sifenSubmissionStatus === "QUEUED" ||
-                    invoice.sifenSubmissionStatus === "PENDING_VERIFICATION";
-                  const cancelEligible =
-                    invoice.sifenSubmissionStatus === "APPROVED" ||
-                    invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION";
-                  const cancelHistoryVisible =
-                    invoice.sifenSubmissionStatus === "CANCELLED" &&
-                    !!invoice.sifenCancellationRequestedAt;
-                  const identifyHistoryVisible = !!invoice.sifenClientIdentificationRequestedAt;
-
-                  const tabs: { value: string; label: string }[] = [];
-                  if (invoice.sifenVerificationUrl) {
-                    tabs.push({
-                      value: "revalidate",
-                      label: t("femme.billing.history.detail.sifen.revalidateButton"),
-                    });
-                  }
-                  if (kudeEligible) {
-                    tabs.push({
-                      value: "email",
-                      label: t("femme.billing.history.detail.sifen.kudeEmailLabel"),
-                    });
-                  }
-                  if (cancelEligible || cancelHistoryVisible) {
-                    tabs.push({
-                      value: "cancel",
-                      label: t("femme.billing.history.detail.sifen.cancelButton"),
-                    });
-                  }
-                  if (invoice.sifenClientIdentificationEligible || identifyHistoryVisible) {
-                    tabs.push({
-                      value: "identify",
-                      label: t("femme.billing.history.detail.sifen.identifyClientHistoryTitle"),
-                    });
-                  }
-                  if (tabs.length === 0) return null;
-
-                  const activeTab = tabs.some((tab) => tab.value === sifenActiveTab)
-                    ? sifenActiveTab!
-                    : tabs[0].value;
-
-                  return (
-                    <Tabs value={activeTab} onValueChange={setSifenActiveTab}>
-                      <TabsList>
-                        {tabs.map((tab) => (
-                          <TabsTrigger
-                            key={tab.value}
-                            value={tab.value}
-                            data-testid={`sifen-tab-${tab.value}`}
+                  <Accordion>
+                    <AccordionItem
+                      title={
+                        <span className="flex items-center gap-3 flex-wrap">
+                          <span>{t("femme.billing.history.detail.sifen.title")}</span>
+                          <SifenStatusBadge status={invoice.sifenSubmissionStatus} />
+                        </span>
+                      }
+                      defaultOpen
+                      data-testid="sifen-tab-status"
+                    >
+                      <div className="flex flex-col gap-2">
+                        {invoice.sifenControlNumber && (
+                          <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                            {t("femme.billing.history.detail.sifen.controlNumber")}: {invoice.sifenControlNumber}
+                          </Text>
+                        )}
+                        {invoice.sifenSubmissionProtocolNumber && (
+                          <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                            {t("femme.billing.history.detail.sifen.protocolNumber")}: {invoice.sifenSubmissionProtocolNumber}
+                          </Text>
+                        )}
+                        {invoice.sifenSubmissionMessage && (
+                          <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                            {t("femme.billing.history.detail.sifen.resultMessage")}: {invoice.sifenSubmissionMessage}
+                          </Text>
+                        )}
+                        {(invoice.sifenSubmissionStatus === "APPROVED" ||
+                          invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION") &&
+                          invoice.sifenQueryDocumentContent && (
+                            <div>
+                              <Text variant="small" className="font-medium mb-1">
+                                {t("femme.billing.history.detail.sifen.documentContent")}
+                              </Text>
+                              <pre className="max-h-40 overflow-auto rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))] p-2 text-xs whitespace-pre-wrap break-all">
+                                {invoice.sifenQueryDocumentContent}
+                              </pre>
+                            </div>
+                          )}
+                        {sifenCheckError && (
+                          <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                            {sifenCheckError}
+                          </Alert>
+                        )}
+                        {sifenCheckMessage && !sifenCheckError && (
+                          <Alert variant="success" title={sifenCheckMessage}>
+                            {sifenCheckMessage}
+                          </Alert>
+                        )}
+                        {/* RT-20 (Hardening_SIFEN.md): while QUEUED, the invoice hasn't been transmitted
+                            yet at all — querying SIFEN for a CDC it never received would be pointless, so
+                            this shows an informational line instead of the "check status" button below
+                            (which only ever makes sense once something was actually sent). */}
+                        {invoice.sifenSubmissionStatus === "QUEUED" && (
+                          <Text
+                            variant="small"
+                            className="text-[rgb(var(--color-muted-foreground))]"
+                            data-testid="sifen-submission-in-progress-note"
                           >
-                            {tab.label}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
-
-                      {invoice.sifenVerificationUrl && (
-                        <TabsContent value="revalidate">
-                          {/* SIFEN HU-09 AC-01/AC-05: available regardless of status (active or,
-                              once Fase 3 ships, cancelled) as long as the invoice actually has a
-                              persisted verification URL — i.e. it was really signed/submitted. */}
+                            {t("femme.billing.history.detail.sifen.submissionInProgressNote")}
+                          </Text>
+                        )}
+                        {invoice.sifenSubmissionStatus === "PENDING_VERIFICATION" && (
                           <div>
                             <Button
                               variant="outline"
                               size="sm"
-                              data-testid="sifen-revalidate-button"
-                              title={t("femme.billing.history.detail.sifen.revalidateHint")}
-                              onClick={() =>
-                                window.open(invoice.sifenVerificationUrl!, "_blank", "noopener,noreferrer")
-                              }
+                              disabled={checkingSifenStatus}
+                              data-testid="sifen-check-status-button"
+                              onClick={() => void handleCheckSifenStatus()}
                             >
-                              {t("femme.billing.history.detail.sifen.revalidateButton")}
+                              {checkingSifenStatus
+                                ? t("femme.billing.history.detail.sifen.checkingStatus")
+                                : t("femme.billing.history.detail.sifen.checkStatusButton")}
                             </Button>
                           </div>
-                        </TabsContent>
-                      )}
+                        )}
+                      </div>
+                    </AccordionItem>
 
-                      {kudeEligible && (
-                        <TabsContent value="email">
-                          <div className="flex flex-col gap-2">
-                            <form
-                              className="flex flex-wrap items-end gap-2"
-                              onSubmit={(e) => void handleSendKudeEmail(e)}
-                              noValidate
+                    {invoice.sifenVerificationUrl && (
+                      <AccordionItem
+                        title={t("femme.billing.history.detail.sifen.revalidateButton")}
+                        data-testid="sifen-tab-revalidate"
+                      >
+                        {/* SIFEN HU-09 AC-01/AC-05: available regardless of status (active or,
+                            once Fase 3 ships, cancelled) as long as the invoice actually has a
+                            persisted verification URL — i.e. it was really signed/submitted. */}
+                        <div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="sifen-revalidate-button"
+                            title={t("femme.billing.history.detail.sifen.revalidateHint")}
+                            onClick={() =>
+                              window.open(invoice.sifenVerificationUrl!, "_blank", "noopener,noreferrer")
+                            }
+                          >
+                            {t("femme.billing.history.detail.sifen.revalidateButton")}
+                          </Button>
+                        </div>
+                      </AccordionItem>
+                    )}
+
+                    {kudeEligible && (
+                      <AccordionItem
+                        title={t("femme.billing.history.detail.sifen.kudeEmailLabel")}
+                        data-testid="sifen-tab-email"
+                      >
+                        <div className="flex flex-col gap-2">
+                          <form
+                            className="flex flex-wrap items-end gap-2"
+                            onSubmit={(e) => void handleSendKudeEmail(e)}
+                            noValidate
+                          >
+                            <div className="flex-1 min-w-[200px]">
+                              <Label htmlFor="kude-email">
+                                {t("femme.billing.history.detail.sifen.kudeEmailFieldLabel")}
+                              </Label>
+                              <Input
+                                id="kude-email"
+                                type="email"
+                                value={kudeEmail}
+                                onChange={(e) => {
+                                  setKudeEmail(e.target.value);
+                                  setKudeEmailSuccess(false);
+                                }}
+                                placeholder={t("femme.billing.history.detail.sifen.kudeEmailPlaceholder")}
+                                className="mt-1 w-full"
+                              />
+                            </div>
+                            <Button
+                              type="submit"
+                              variant="secondary"
+                              size="sm"
+                              disabled={kudeEmailSending}
+                              data-testid="sifen-kude-send-email-button"
                             >
-                              <div className="flex-1 min-w-[200px]">
-                                <Label htmlFor="kude-email">
-                                  {t("femme.billing.history.detail.sifen.kudeEmailFieldLabel")}
-                                </Label>
-                                <Input
-                                  id="kude-email"
-                                  type="email"
-                                  value={kudeEmail}
-                                  onChange={(e) => {
-                                    setKudeEmail(e.target.value);
-                                    setKudeEmailSuccess(false);
-                                  }}
-                                  placeholder={t("femme.billing.history.detail.sifen.kudeEmailPlaceholder")}
-                                  className="mt-1 w-full"
-                                />
-                              </div>
-                              <Button
-                                type="submit"
-                                variant="secondary"
-                                size="sm"
-                                disabled={kudeEmailSending}
-                                data-testid="sifen-kude-send-email-button"
-                              >
-                                {kudeEmailSending
-                                  ? t("femme.billing.history.detail.sifen.kudeEmailSending")
-                                  : t("femme.billing.history.detail.sifen.kudeEmailButton")}
-                              </Button>
-                            </form>
-                            {kudeEmailError && (
-                              <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-                                {kudeEmailError}
-                              </Alert>
-                            )}
-                            {kudeEmailSuccess && !kudeEmailError && (
-                              <Alert
-                                variant="success"
-                                title={t("femme.billing.history.detail.sifen.kudeEmailSuccess")}
-                                data-testid="sifen-kude-email-success"
-                              >
-                                {t("femme.billing.history.detail.sifen.kudeEmailSuccess")}
-                              </Alert>
-                            )}
-                          </div>
-                        </TabsContent>
-                      )}
+                              {kudeEmailSending
+                                ? t("femme.billing.history.detail.sifen.kudeEmailSending")
+                                : t("femme.billing.history.detail.sifen.kudeEmailButton")}
+                            </Button>
+                          </form>
+                          {kudeEmailError && (
+                            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                              {kudeEmailError}
+                            </Alert>
+                          )}
+                          {kudeEmailSuccess && !kudeEmailError && (
+                            <Alert
+                              variant="success"
+                              title={t("femme.billing.history.detail.sifen.kudeEmailSuccess")}
+                              data-testid="sifen-kude-email-success"
+                            >
+                              {t("femme.billing.history.detail.sifen.kudeEmailSuccess")}
+                            </Alert>
+                          )}
+                        </div>
+                      </AccordionItem>
+                    )}
 
-                      {(cancelEligible || cancelHistoryVisible) && (
-                        <TabsContent value="cancel">
-                          <div className="flex flex-col gap-2">
-                            {/* SIFEN HU-10: cancel an approved invoice within the 48h window (AC-01/AC-02) */}
-                            {cancelEligible && (
-                              <>
-                                {cancelError && (
-                                  <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-                                    {cancelError}
-                                  </Alert>
-                                )}
-                                {/* AC-04: a resultCode here, while status is still Approved(-ish), can only mean
-                                    the last cancellation attempt was rejected — an approved one would have moved
-                                    the invoice to CANCELLED, taking it out of this whole gated block. */}
-                                {invoice.sifenCancellationResultCode && (
-                                  <Alert
-                                    variant="destructive"
-                                    title={t("femme.billing.history.detail.sifen.cancellationRejectedMessage")}
-                                    data-testid="sifen-cancellation-rejected"
-                                  >
-                                    {invoice.sifenCancellationMessage}
-                                  </Alert>
-                                )}
-                                {invoice.sifenCancellationDeadlineAt &&
-                                  (() => {
-                                    const deadlineMs = new Date(invoice.sifenCancellationDeadlineAt!).getTime();
-                                    const remainingMs = deadlineMs - nowMs;
-                                    const expired = remainingMs <= 0;
-                                    const { hours, minutes } = remainingHoursMinutes(remainingMs);
-                                    // Issue #145: SIFEN rejects a cancellation attempted too soon after approval
-                                    // ("Plazo de solicitud de cancelación... extemporáneo") — block the attempt
-                                    // client-side with a clear message instead of surfacing that raw rejection.
-                                    const availableAtMs = invoice.sifenCancellationAvailableAt
-                                      ? new Date(invoice.sifenCancellationAvailableAt).getTime()
-                                      : null;
-                                    const tooSoon = availableAtMs != null && nowMs < availableAtMs;
-                                    return (
-                                      <>
+                    {(cancelEligible || cancelHistoryVisible) && (
+                      <AccordionItem
+                        title={t("femme.billing.history.detail.sifen.cancelButton")}
+                        data-testid="sifen-tab-cancel"
+                      >
+                        <div className="flex flex-col gap-2">
+                          {/* SIFEN HU-10: cancel an approved invoice within the 48h window (AC-01/AC-02) */}
+                          {cancelEligible && (
+                            <>
+                              {cancelError && (
+                                <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                                  {cancelError}
+                                </Alert>
+                              )}
+                              {/* AC-04: a resultCode here, while status is still Approved(-ish), can only mean
+                                  the last cancellation attempt was rejected — an approved one would have moved
+                                  the invoice to CANCELLED, taking it out of this whole gated block. */}
+                              {invoice.sifenCancellationResultCode && (
+                                <Alert
+                                  variant="destructive"
+                                  title={t("femme.billing.history.detail.sifen.cancellationRejectedMessage")}
+                                  data-testid="sifen-cancellation-rejected"
+                                >
+                                  {invoice.sifenCancellationMessage}
+                                </Alert>
+                              )}
+                              {invoice.sifenCancellationDeadlineAt &&
+                                (() => {
+                                  const deadlineMs = new Date(invoice.sifenCancellationDeadlineAt!).getTime();
+                                  const remainingMs = deadlineMs - nowMs;
+                                  const expired = remainingMs <= 0;
+                                  const { hours, minutes } = remainingHoursMinutes(remainingMs);
+                                  // Issue #145: SIFEN rejects a cancellation attempted too soon after approval
+                                  // ("Plazo de solicitud de cancelación... extemporáneo") — block the attempt
+                                  // client-side with a clear message instead of surfacing that raw rejection.
+                                  const availableAtMs = invoice.sifenCancellationAvailableAt
+                                    ? new Date(invoice.sifenCancellationAvailableAt).getTime()
+                                    : null;
+                                  const tooSoon = availableAtMs != null && nowMs < availableAtMs;
+                                  return (
+                                    <>
+                                      <Text
+                                        variant="small"
+                                        className="text-[rgb(var(--color-muted-foreground))]"
+                                        data-testid={
+                                          expired
+                                            ? "sifen-cancel-deadline-expired"
+                                            : "sifen-cancel-deadline-remaining"
+                                        }
+                                      >
+                                        {expired
+                                          ? t("femme.billing.history.detail.sifen.cancelDeadlineExpired")
+                                          : t("femme.billing.history.detail.sifen.cancelDeadlineRemaining", {
+                                              hours,
+                                              minutes,
+                                            })}
+                                      </Text>
+                                      {tooSoon && (
                                         <Text
                                           variant="small"
                                           className="text-[rgb(var(--color-muted-foreground))]"
-                                          data-testid={
-                                            expired
-                                              ? "sifen-cancel-deadline-expired"
-                                              : "sifen-cancel-deadline-remaining"
-                                          }
+                                          data-testid="sifen-cancel-too-soon"
                                         >
-                                          {expired
-                                            ? t("femme.billing.history.detail.sifen.cancelDeadlineExpired")
-                                            : t("femme.billing.history.detail.sifen.cancelDeadlineRemaining", {
-                                                hours,
-                                                minutes,
-                                              })}
+                                          {t("femme.billing.history.detail.sifen.cancelTooSoon", {
+                                            time: formatParaguayTime(availableAtMs!, dateLocale),
+                                          })}
                                         </Text>
-                                        {tooSoon && (
-                                          <Text
-                                            variant="small"
-                                            className="text-[rgb(var(--color-muted-foreground))]"
-                                            data-testid="sifen-cancel-too-soon"
+                                      )}
+                                      {!showCancelForm && (
+                                        <div>
+                                          <Button
+                                            variant="danger"
+                                            size="sm"
+                                            disabled={expired || tooSoon}
+                                            data-testid="sifen-cancel-button"
+                                            onClick={() => setShowCancelForm(true)}
                                           >
-                                            {t("femme.billing.history.detail.sifen.cancelTooSoon", {
-                                              time: formatParaguayTime(availableAtMs!, dateLocale),
-                                            })}
-                                          </Text>
-                                        )}
-                                        {!showCancelForm && (
-                                          <div>
-                                            <Button
-                                              variant="danger"
-                                              size="sm"
-                                              disabled={expired || tooSoon}
-                                              data-testid="sifen-cancel-button"
-                                              onClick={() => setShowCancelForm(true)}
-                                            >
-                                              {t("femme.billing.history.detail.sifen.cancelButton")}
-                                            </Button>
-                                          </div>
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-                                {showCancelForm && (
-                                  <form
-                                    className="flex flex-col gap-2"
-                                    onSubmit={(e) => void handleCancelInvoice(e)}
-                                    noValidate
+                                            {t("femme.billing.history.detail.sifen.cancelButton")}
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              {showCancelForm && (
+                                <form
+                                  className="flex flex-col gap-2"
+                                  onSubmit={(e) => void handleCancelInvoice(e)}
+                                  noValidate
+                                >
+                                  <Text
+                                    variant="small"
+                                    className="text-[rgb(var(--color-muted-foreground))]"
+                                    data-testid="sifen-cancel-also-voids-hint"
                                   >
-                                    <Text
-                                      variant="small"
-                                      className="text-[rgb(var(--color-muted-foreground))]"
-                                      data-testid="sifen-cancel-also-voids-hint"
-                                    >
-                                      {t("femme.billing.history.detail.sifen.cancelAlsoVoidsHint")}
-                                    </Text>
-                                    <div>
-                                      <Label htmlFor="cancel-reason">
-                                        {t("femme.billing.history.detail.sifen.cancelReasonLabel")}
-                                      </Label>
-                                      <Textarea
-                                        id="cancel-reason"
-                                        value={cancelReason}
-                                        onChange={(e) => {
-                                          setCancelReason(e.target.value);
-                                          setCancelReasonError(null);
-                                        }}
-                                        placeholder={t(
-                                          "femme.billing.history.detail.sifen.cancelReasonPlaceholder",
-                                        )}
-                                        rows={2}
-                                        aria-invalid={!!cancelReasonError}
-                                        aria-describedby={
-                                          cancelReasonError ? "cancel-reason-err" : undefined
-                                        }
-                                        className="mt-1 w-full"
-                                      />
-                                      <FieldValidationError id="cancel-reason-err">
-                                        {cancelReasonError}
-                                      </FieldValidationError>
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <Button
-                                        type="submit"
-                                        variant="danger"
-                                        size="sm"
-                                        disabled={cancelling}
-                                        data-testid="sifen-cancel-confirm-button"
-                                      >
-                                        {cancelling
-                                          ? t("femme.billing.history.detail.sifen.cancelling")
-                                          : t("femme.billing.history.detail.sifen.cancelConfirm")}
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => setShowCancelForm(false)}
-                                      >
-                                        {t("femme.billing.history.detail.sifen.cancelDismiss")}
-                                      </Button>
-                                    </div>
-                                  </form>
-                                )}
-                              </>
-                            )}
-                            {/* SIFEN HU-10 AC-05: historical record, once the invoice is actually cancelled */}
-                            {cancelHistoryVisible && (
-                              <div
-                                className={cancelEligible ? "pt-2 border-t border-[rgb(var(--color-border))]" : undefined}
-                                data-testid="sifen-cancellation-history"
-                              >
-                                <Text className="font-medium">
-                                  {t("femme.billing.history.detail.sifen.cancellationHistoryTitle")}
-                                </Text>
-                                <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                  {t("femme.billing.history.detail.sifen.cancellationRequestedAt")}:{" "}
-                                  {formatParaguayDateTime(invoice.sifenCancellationRequestedAt!, dateLocale)}
-                                </Text>
-                                {invoice.sifenCancellationRequestedByEmail && (
-                                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                    {t("femme.billing.history.detail.sifen.cancellationRequestedBy")}:{" "}
-                                    {invoice.sifenCancellationRequestedByEmail}
+                                    {t("femme.billing.history.detail.sifen.cancelAlsoVoidsHint")}
                                   </Text>
-                                )}
-                                {invoice.sifenCancellationReason && (
-                                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                    {t("femme.billing.history.detail.sifen.cancellationReason")}:{" "}
-                                    {invoice.sifenCancellationReason}
-                                  </Text>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </TabsContent>
-                      )}
-
-                      {(invoice.sifenClientIdentificationEligible || identifyHistoryVisible) && (
-                        <TabsContent value="identify">
-                          <div className="flex flex-col gap-2">
-                            {/* SIFEN HU-11 AC-01: identify the client on an invoice issued without one */}
-                            {invoice.sifenClientIdentificationEligible && (
-                              <>
-                                {identifyError && (
-                                  <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-                                    {identifyError}
-                                  </Alert>
-                                )}
-                                {!showIdentifyForm && (
                                   <div>
+                                    <Label htmlFor="cancel-reason">
+                                      {t("femme.billing.history.detail.sifen.cancelReasonLabel")}
+                                    </Label>
+                                    <Textarea
+                                      id="cancel-reason"
+                                      value={cancelReason}
+                                      onChange={(e) => {
+                                        setCancelReason(e.target.value);
+                                        setCancelReasonError(null);
+                                      }}
+                                      placeholder={t(
+                                        "femme.billing.history.detail.sifen.cancelReasonPlaceholder",
+                                      )}
+                                      rows={2}
+                                      aria-invalid={!!cancelReasonError}
+                                      aria-describedby={
+                                        cancelReasonError ? "cancel-reason-err" : undefined
+                                      }
+                                      className="mt-1 w-full"
+                                    />
+                                    <FieldValidationError id="cancel-reason-err">
+                                      {cancelReasonError}
+                                    </FieldValidationError>
+                                  </div>
+                                  <div className="flex gap-2">
                                     <Button
-                                      variant="outline"
+                                      type="submit"
+                                      variant="danger"
                                       size="sm"
-                                      data-testid="sifen-identify-client-button"
-                                      onClick={() => setShowIdentifyForm(true)}
+                                      disabled={cancelling}
+                                      data-testid="sifen-cancel-confirm-button"
                                     >
-                                      {t("femme.billing.history.detail.sifen.identifyClientButton")}
+                                      {cancelling
+                                        ? t("femme.billing.history.detail.sifen.cancelling")
+                                        : t("femme.billing.history.detail.sifen.cancelConfirm")}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => setShowCancelForm(false)}
+                                    >
+                                      {t("femme.billing.history.detail.sifen.cancelDismiss")}
                                     </Button>
                                   </div>
-                                )}
-                                {showIdentifyForm && (
-                                  <form
-                                    className="flex flex-col gap-3"
-                                    onSubmit={(e) => void handleIdentifyClient(e)}
-                                    noValidate
-                                  >
-                                    <Heading as="h3" className="text-base">
-                                      {t("femme.billing.history.detail.sifen.identifyClientTitle")}
-                                    </Heading>
-                                    <div>
-                                      <Label id="identify-client-type-label">
-                                        {t("femme.billing.history.detail.sifen.identifyClientTypeLabel")}
-                                      </Label>
-                                      <RadioGroup
-                                        aria-labelledby="identify-client-type-label"
-                                        value={identifyClientType}
-                                        onChange={(value) => {
-                                          setIdentifyClientType(value as "COMPANY" | "PERSON" | "FOREIGN");
-                                          setIdentifyFieldErrors({});
-                                        }}
-                                        className="flex-row gap-4 mt-1"
-                                        name="identify-client-type"
-                                      >
-                                        <label className="flex items-center gap-2 text-sm">
-                                          <Radio value="PERSON" />
-                                          {t("femme.billing.history.detail.sifen.identifyClientTypePerson")}
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm">
-                                          <Radio value="COMPANY" />
-                                          {t("femme.billing.history.detail.sifen.identifyClientTypeCompany")}
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm">
-                                          <Radio value="FOREIGN" />
-                                          {t("femme.billing.history.detail.sifen.identifyClientTypeForeign")}
-                                        </label>
-                                      </RadioGroup>
-                                    </div>
+                                </form>
+                              )}
+                            </>
+                          )}
+                          {/* SIFEN HU-10 AC-05: historical record, once the invoice is actually cancelled */}
+                          {cancelHistoryVisible && (
+                            <div
+                              className={cancelEligible ? "pt-2 border-t border-[rgb(var(--color-border))]" : undefined}
+                              data-testid="sifen-cancellation-history"
+                            >
+                              <Text className="font-medium">
+                                {t("femme.billing.history.detail.sifen.cancellationHistoryTitle")}
+                              </Text>
+                              <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                {t("femme.billing.history.detail.sifen.cancellationRequestedAt")}:{" "}
+                                {formatParaguayDateTime(invoice.sifenCancellationRequestedAt!, dateLocale)}
+                              </Text>
+                              {invoice.sifenCancellationRequestedByEmail && (
+                                <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                  {t("femme.billing.history.detail.sifen.cancellationRequestedBy")}:{" "}
+                                  {invoice.sifenCancellationRequestedByEmail}
+                                </Text>
+                              )}
+                              {invoice.sifenCancellationReason && (
+                                <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                  {t("femme.billing.history.detail.sifen.cancellationReason")}:{" "}
+                                  {invoice.sifenCancellationReason}
+                                </Text>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </AccordionItem>
+                    )}
 
+                    {(invoice.sifenClientIdentificationEligible || identifyHistoryVisible) && (
+                      <AccordionItem
+                        title={t("femme.billing.history.detail.sifen.identifyClientButton")}
+                        data-testid="sifen-tab-identify"
+                      >
+                        <div className="flex flex-col gap-2">
+                          {/* SIFEN HU-11 AC-01: identify the client on an invoice issued without one */}
+                          {invoice.sifenClientIdentificationEligible && (
+                            <>
+                              {identifyError && (
+                                <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                                  {identifyError}
+                                </Alert>
+                              )}
+                              {!showIdentifyForm && (
+                                <div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    data-testid="sifen-identify-client-button"
+                                    onClick={() => setShowIdentifyForm(true)}
+                                  >
+                                    {t("femme.billing.history.detail.sifen.identifyClientButton")}
+                                  </Button>
+                                </div>
+                              )}
+                              {showIdentifyForm && (
+                                <form
+                                  className="flex flex-col gap-3"
+                                  onSubmit={(e) => void handleIdentifyClient(e)}
+                                  noValidate
+                                >
+                                  <Heading as="h3" className="text-base">
+                                    {t("femme.billing.history.detail.sifen.identifyClientTitle")}
+                                  </Heading>
+                                  <div>
+                                    <Label id="identify-client-type-label">
+                                      {t("femme.billing.history.detail.sifen.identifyClientTypeLabel")}
+                                    </Label>
+                                    <RadioGroup
+                                      aria-labelledby="identify-client-type-label"
+                                      value={identifyClientType}
+                                      onChange={(value) => {
+                                        setIdentifyClientType(value as "COMPANY" | "PERSON" | "FOREIGN");
+                                        setIdentifyFieldErrors({});
+                                      }}
+                                      className="flex-row gap-4 mt-1"
+                                      name="identify-client-type"
+                                    >
+                                      <label className="flex items-center gap-2 text-sm">
+                                        <Radio value="PERSON" />
+                                        {t("femme.billing.history.detail.sifen.identifyClientTypePerson")}
+                                      </label>
+                                      <label className="flex items-center gap-2 text-sm">
+                                        <Radio value="COMPANY" />
+                                        {t("femme.billing.history.detail.sifen.identifyClientTypeCompany")}
+                                      </label>
+                                      <label className="flex items-center gap-2 text-sm">
+                                        <Radio value="FOREIGN" />
+                                        {t("femme.billing.history.detail.sifen.identifyClientTypeForeign")}
+                                      </label>
+                                    </RadioGroup>
+                                  </div>
+
+                                  <div>
+                                    <Label htmlFor="identify-client-name">
+                                      {t("femme.billing.history.detail.sifen.identifyClientNameLabel")}
+                                    </Label>
+                                    <Input
+                                      id="identify-client-name"
+                                      value={identifyName}
+                                      onChange={(e) => {
+                                        setIdentifyName(e.target.value);
+                                        setIdentifyFieldErrors((prev) => ({ ...prev, name: "" }));
+                                      }}
+                                      placeholder={t(
+                                        "femme.billing.history.detail.sifen.identifyClientNamePlaceholder",
+                                      )}
+                                      aria-invalid={!!identifyFieldErrors.name}
+                                      aria-describedby={
+                                        identifyFieldErrors.name ? "identify-client-name-err" : undefined
+                                      }
+                                      className="mt-1 w-full"
+                                    />
+                                    <FieldValidationError id="identify-client-name-err">
+                                      {identifyFieldErrors.name}
+                                    </FieldValidationError>
+                                  </div>
+
+                                  {identifyClientType === "COMPANY" ? (
                                     <div>
-                                      <Label htmlFor="identify-client-name">
-                                        {t("femme.billing.history.detail.sifen.identifyClientNameLabel")}
+                                      <Label htmlFor="identify-client-ruc">
+                                        {t("femme.billing.history.detail.sifen.identifyClientRucLabel")}
                                       </Label>
                                       <Input
-                                        id="identify-client-name"
-                                        value={identifyName}
+                                        id="identify-client-ruc"
+                                        value={identifyRuc}
                                         onChange={(e) => {
-                                          setIdentifyName(e.target.value);
-                                          setIdentifyFieldErrors((prev) => ({ ...prev, name: "" }));
+                                          setIdentifyRuc(e.target.value);
+                                          setIdentifyFieldErrors((prev) => ({ ...prev, ruc: "" }));
                                         }}
                                         placeholder={t(
-                                          "femme.billing.history.detail.sifen.identifyClientNamePlaceholder",
+                                          "femme.billing.history.detail.sifen.identifyClientRucPlaceholder",
                                         )}
-                                        aria-invalid={!!identifyFieldErrors.name}
+                                        aria-invalid={!!identifyFieldErrors.ruc}
                                         aria-describedby={
-                                          identifyFieldErrors.name ? "identify-client-name-err" : undefined
+                                          identifyFieldErrors.ruc ? "identify-client-ruc-err" : undefined
                                         }
                                         className="mt-1 w-full"
                                       />
-                                      <FieldValidationError id="identify-client-name-err">
-                                        {identifyFieldErrors.name}
+                                      <FieldValidationError id="identify-client-ruc-err">
+                                        {identifyFieldErrors.ruc}
                                       </FieldValidationError>
                                     </div>
+                                  ) : (
+                                    <div>
+                                      <Label htmlFor="identify-client-document">
+                                        {t("femme.billing.history.detail.sifen.identifyClientDocumentLabel")}
+                                      </Label>
+                                      <Input
+                                        id="identify-client-document"
+                                        value={identifyDocument}
+                                        onChange={(e) => {
+                                          setIdentifyDocument(e.target.value);
+                                          setIdentifyFieldErrors((prev) => ({ ...prev, document: "" }));
+                                        }}
+                                        placeholder={t(
+                                          "femme.billing.history.detail.sifen.identifyClientDocumentPlaceholder",
+                                        )}
+                                        aria-invalid={!!identifyFieldErrors.document}
+                                        aria-describedby={
+                                          identifyFieldErrors.document
+                                            ? "identify-client-document-err"
+                                            : undefined
+                                        }
+                                        className="mt-1 w-full"
+                                      />
+                                      <FieldValidationError id="identify-client-document-err">
+                                        {identifyFieldErrors.document}
+                                      </FieldValidationError>
+                                    </div>
+                                  )}
 
-                                    {identifyClientType === "COMPANY" ? (
+                                  {identifyClientType === "FOREIGN" && (
+                                    <>
                                       <div>
-                                        <Label htmlFor="identify-client-ruc">
-                                          {t("femme.billing.history.detail.sifen.identifyClientRucLabel")}
+                                        <Label htmlFor="identify-client-country">
+                                          {t("femme.billing.history.detail.sifen.identifyClientCountryLabel")}
                                         </Label>
-                                        <Input
-                                          id="identify-client-ruc"
-                                          value={identifyRuc}
+                                        <Select
+                                          id="identify-client-country"
+                                          value={identifyCountryCode}
                                           onChange={(e) => {
-                                            setIdentifyRuc(e.target.value);
-                                            setIdentifyFieldErrors((prev) => ({ ...prev, ruc: "" }));
+                                            setIdentifyCountryCode(e.target.value);
+                                            setIdentifyFieldErrors((prev) => ({ ...prev, country: "" }));
                                           }}
-                                          placeholder={t(
-                                            "femme.billing.history.detail.sifen.identifyClientRucPlaceholder",
-                                          )}
-                                          aria-invalid={!!identifyFieldErrors.ruc}
+                                          invalid={!!identifyFieldErrors.country}
                                           aria-describedby={
-                                            identifyFieldErrors.ruc ? "identify-client-ruc-err" : undefined
+                                            identifyFieldErrors.country
+                                              ? "identify-client-country-err"
+                                              : undefined
                                           }
                                           className="mt-1 w-full"
-                                        />
-                                        <FieldValidationError id="identify-client-ruc-err">
-                                          {identifyFieldErrors.ruc}
+                                        >
+                                          <option value="">
+                                            {t(
+                                              "femme.billing.history.detail.sifen.identifyClientCountryPlaceholder",
+                                            )}
+                                          </option>
+                                          {FOREIGN_COUNTRY_CODES.map((code) => (
+                                            <option key={code} value={code}>
+                                              {t(`femme.billing.history.detail.sifen.countries.${code}`)}
+                                            </option>
+                                          ))}
+                                        </Select>
+                                        <FieldValidationError id="identify-client-country-err">
+                                          {identifyFieldErrors.country}
                                         </FieldValidationError>
                                       </div>
-                                    ) : (
                                       <div>
-                                        <Label htmlFor="identify-client-document">
-                                          {t("femme.billing.history.detail.sifen.identifyClientDocumentLabel")}
+                                        <Label htmlFor="identify-client-address">
+                                          {t("femme.billing.history.detail.sifen.identifyClientAddressLabel")}
                                         </Label>
                                         <Input
-                                          id="identify-client-document"
-                                          value={identifyDocument}
+                                          id="identify-client-address"
+                                          value={identifyAddress}
                                           onChange={(e) => {
-                                            setIdentifyDocument(e.target.value);
-                                            setIdentifyFieldErrors((prev) => ({ ...prev, document: "" }));
+                                            setIdentifyAddress(e.target.value);
+                                            setIdentifyFieldErrors((prev) => ({ ...prev, address: "" }));
                                           }}
                                           placeholder={t(
-                                            "femme.billing.history.detail.sifen.identifyClientDocumentPlaceholder",
+                                            "femme.billing.history.detail.sifen.identifyClientAddressPlaceholder",
                                           )}
-                                          aria-invalid={!!identifyFieldErrors.document}
+                                          aria-invalid={!!identifyFieldErrors.address}
                                           aria-describedby={
-                                            identifyFieldErrors.document
-                                              ? "identify-client-document-err"
+                                            identifyFieldErrors.address
+                                              ? "identify-client-address-err"
                                               : undefined
                                           }
                                           className="mt-1 w-full"
                                         />
-                                        <FieldValidationError id="identify-client-document-err">
-                                          {identifyFieldErrors.document}
+                                        <FieldValidationError id="identify-client-address-err">
+                                          {identifyFieldErrors.address}
                                         </FieldValidationError>
                                       </div>
-                                    )}
+                                    </>
+                                  )}
 
-                                    {identifyClientType === "FOREIGN" && (
-                                      <>
-                                        <div>
-                                          <Label htmlFor="identify-client-country">
-                                            {t("femme.billing.history.detail.sifen.identifyClientCountryLabel")}
-                                          </Label>
-                                          <Select
-                                            id="identify-client-country"
-                                            value={identifyCountryCode}
-                                            onChange={(e) => {
-                                              setIdentifyCountryCode(e.target.value);
-                                              setIdentifyFieldErrors((prev) => ({ ...prev, country: "" }));
-                                            }}
-                                            invalid={!!identifyFieldErrors.country}
-                                            aria-describedby={
-                                              identifyFieldErrors.country
-                                                ? "identify-client-country-err"
-                                                : undefined
-                                            }
-                                            className="mt-1 w-full"
-                                          >
-                                            <option value="">
-                                              {t(
-                                                "femme.billing.history.detail.sifen.identifyClientCountryPlaceholder",
-                                              )}
-                                            </option>
-                                            {FOREIGN_COUNTRY_CODES.map((code) => (
-                                              <option key={code} value={code}>
-                                                {t(`femme.billing.history.detail.sifen.countries.${code}`)}
-                                              </option>
-                                            ))}
-                                          </Select>
-                                          <FieldValidationError id="identify-client-country-err">
-                                            {identifyFieldErrors.country}
-                                          </FieldValidationError>
-                                        </div>
-                                        <div>
-                                          <Label htmlFor="identify-client-address">
-                                            {t("femme.billing.history.detail.sifen.identifyClientAddressLabel")}
-                                          </Label>
-                                          <Input
-                                            id="identify-client-address"
-                                            value={identifyAddress}
-                                            onChange={(e) => {
-                                              setIdentifyAddress(e.target.value);
-                                              setIdentifyFieldErrors((prev) => ({ ...prev, address: "" }));
-                                            }}
-                                            placeholder={t(
-                                              "femme.billing.history.detail.sifen.identifyClientAddressPlaceholder",
-                                            )}
-                                            aria-invalid={!!identifyFieldErrors.address}
-                                            aria-describedby={
-                                              identifyFieldErrors.address
-                                                ? "identify-client-address-err"
-                                                : undefined
-                                            }
-                                            className="mt-1 w-full"
-                                          />
-                                          <FieldValidationError id="identify-client-address-err">
-                                            {identifyFieldErrors.address}
-                                          </FieldValidationError>
-                                        </div>
-                                      </>
-                                    )}
-
-                                    <div className="flex gap-2">
-                                      <Button
-                                        type="submit"
-                                        variant="secondary"
-                                        size="sm"
-                                        disabled={identifying}
-                                        data-testid="sifen-identify-client-confirm-button"
-                                      >
-                                        {identifying
-                                          ? t("femme.billing.history.detail.sifen.identifyClientSubmitting")
-                                          : t("femme.billing.history.detail.sifen.identifyClientSubmit")}
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => setShowIdentifyForm(false)}
-                                      >
-                                        {t("femme.billing.history.detail.sifen.identifyClientDismiss")}
-                                      </Button>
-                                    </div>
-                                  </form>
-                                )}
-                              </>
-                            )}
-                            {/* SIFEN HU-11 AC-05/AC-06: last client-identification attempt, either outcome */}
-                            {identifyHistoryVisible && (
-                              <div
-                                className={
-                                  invoice.sifenClientIdentificationEligible
-                                    ? "pt-2 border-t border-[rgb(var(--color-border))]"
-                                    : undefined
-                                }
-                                data-testid="sifen-client-identification-history"
-                              >
-                                <Text className="font-medium">
-                                  {t("femme.billing.history.detail.sifen.identifyClientHistoryTitle")}
-                                </Text>
-                                {!invoice.sifenClientIdentified && invoice.sifenClientIdentificationMessage && (
-                                  <Alert
-                                    variant="destructive"
-                                    title={t("femme.billing.history.detail.sifen.identifyClientRejectedMessage")}
-                                    data-testid="sifen-client-identification-rejected"
-                                  >
-                                    {invoice.sifenClientIdentificationMessage}
-                                  </Alert>
-                                )}
+                                  <div className="flex gap-2">
+                                    <Button
+                                      type="submit"
+                                      variant="secondary"
+                                      size="sm"
+                                      disabled={identifying}
+                                      data-testid="sifen-identify-client-confirm-button"
+                                    >
+                                      {identifying
+                                        ? t("femme.billing.history.detail.sifen.identifyClientSubmitting")
+                                        : t("femme.billing.history.detail.sifen.identifyClientSubmit")}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => setShowIdentifyForm(false)}
+                                    >
+                                      {t("femme.billing.history.detail.sifen.identifyClientDismiss")}
+                                    </Button>
+                                  </div>
+                                </form>
+                              )}
+                            </>
+                          )}
+                          {/* SIFEN HU-11 AC-05/AC-06: last client-identification attempt, either outcome */}
+                          {identifyHistoryVisible && (
+                            <div
+                              className={
+                                invoice.sifenClientIdentificationEligible
+                                  ? "pt-2 border-t border-[rgb(var(--color-border))]"
+                                  : undefined
+                              }
+                              data-testid="sifen-client-identification-history"
+                            >
+                              <Text className="font-medium">
+                                {t("femme.billing.history.detail.sifen.identifyClientHistoryTitle")}
+                              </Text>
+                              {!invoice.sifenClientIdentified && invoice.sifenClientIdentificationMessage && (
+                                <Alert
+                                  variant="destructive"
+                                  title={t("femme.billing.history.detail.sifen.identifyClientRejectedMessage")}
+                                  data-testid="sifen-client-identification-rejected"
+                                >
+                                  {invoice.sifenClientIdentificationMessage}
+                                </Alert>
+                              )}
+                              <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                {t("femme.billing.history.detail.sifen.identifyClientHistoryRequestedAt")}:{" "}
+                                {formatParaguayDateTime(invoice.sifenClientIdentificationRequestedAt!, dateLocale)}
+                              </Text>
+                              {invoice.sifenClientIdentificationRequestedByEmail && (
                                 <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                  {t("femme.billing.history.detail.sifen.identifyClientHistoryRequestedAt")}:{" "}
-                                  {formatParaguayDateTime(invoice.sifenClientIdentificationRequestedAt!, dateLocale)}
+                                  {t("femme.billing.history.detail.sifen.identifyClientHistoryRequestedBy")}:{" "}
+                                  {invoice.sifenClientIdentificationRequestedByEmail}
                                 </Text>
-                                {invoice.sifenClientIdentificationRequestedByEmail && (
-                                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                    {t("femme.billing.history.detail.sifen.identifyClientHistoryRequestedBy")}:{" "}
-                                    {invoice.sifenClientIdentificationRequestedByEmail}
-                                  </Text>
-                                )}
-                                {invoice.sifenClientIdentificationName && (
-                                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                    {t("femme.billing.history.detail.sifen.identifyClientHistoryName")}:{" "}
-                                    {invoice.sifenClientIdentificationName}
-                                  </Text>
-                                )}
-                                {invoice.sifenClientIdentificationRuc && (
-                                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                    {t("femme.billing.history.detail.sifen.identifyClientHistoryRuc")}:{" "}
-                                    {invoice.sifenClientIdentificationRuc}
-                                  </Text>
-                                )}
-                                {invoice.sifenClientIdentificationIdentityDocument && (
-                                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                    {t("femme.billing.history.detail.sifen.identifyClientHistoryDocument")}:{" "}
-                                    {invoice.sifenClientIdentificationIdentityDocument}
-                                  </Text>
-                                )}
-                                {invoice.sifenClientIdentificationAddress && (
-                                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-                                    {t("femme.billing.history.detail.sifen.identifyClientHistoryAddress")}:{" "}
-                                    {invoice.sifenClientIdentificationAddress}
-                                  </Text>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </TabsContent>
-                      )}
-                    </Tabs>
-                  );
-                })()}
-              </div>
-            )}
+                              )}
+                              {invoice.sifenClientIdentificationName && (
+                                <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                  {t("femme.billing.history.detail.sifen.identifyClientHistoryName")}:{" "}
+                                  {invoice.sifenClientIdentificationName}
+                                </Text>
+                              )}
+                              {invoice.sifenClientIdentificationRuc && (
+                                <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                  {t("femme.billing.history.detail.sifen.identifyClientHistoryRuc")}:{" "}
+                                  {invoice.sifenClientIdentificationRuc}
+                                </Text>
+                              )}
+                              {invoice.sifenClientIdentificationIdentityDocument && (
+                                <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                  {t("femme.billing.history.detail.sifen.identifyClientHistoryDocument")}:{" "}
+                                  {invoice.sifenClientIdentificationIdentityDocument}
+                                </Text>
+                              )}
+                              {invoice.sifenClientIdentificationAddress && (
+                                <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                                  {t("femme.billing.history.detail.sifen.identifyClientHistoryAddress")}:{" "}
+                                  {invoice.sifenClientIdentificationAddress}
+                                </Text>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </AccordionItem>
+                    )}
+
+                    {/* Space reserved for future SIFEN functionality (issue #163 AC11-f) */}
+                  </Accordion>
+                </div>
+              );
+            })()}
 
             {/* Actions */}
             <div className="flex flex-wrap gap-3 pt-2">

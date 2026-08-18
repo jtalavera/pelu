@@ -73,11 +73,13 @@ describe("ServicesPage", () => {
     cleanup();
   });
 
-  it("applies inactive card styling to inactive services", async () => {
+  it("shows an inactive status badge for inactive services instead of strikethrough", async () => {
     mockLoad([sampleCategory], [inactiveService]);
     const { container } = renderPage();
     expect(await screen.findByText("Basic cut")).toBeTruthy();
-    expect(container.querySelector(".card-inactive")).toBeTruthy();
+    const row = screen.getByTestId(`svc-row-${inactiveService.id}`);
+    expect(row.textContent).toMatch(/inactive/i);
+    expect(container.querySelector(".card-inactive")).toBeNull();
   });
 
   it("calls activate endpoint when Reactivate is clicked in the kebab menu", async () => {

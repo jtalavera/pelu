@@ -34,12 +34,62 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await svcDialog.getByLabel("Duration (minutes)").fill("45");
     await svcDialog.getByRole("button", { name: "Save" }).click();
     await expect(svcDialog).not.toBeVisible();
+    // Issue #163 AC1: saving a new service shows a success message in the table header,
+    // same style as saving a Ficha de servicio.
+    await expect(page.getByText("Service saved successfully.", { exact: true })).toBeVisible();
     // Search by name so the new service is on page 1 regardless of total count (server-side pagination)
     await page.getByPlaceholder(/search by name/i).fill(svcName);
     await page.waitForTimeout(600);
     await expect(page.getByText(svcName, { exact: true }).first()).toBeVisible();
     const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
     await expect(svcRow.getByText("Gs. 50.000", { exact: true })).toBeVisible();
+    // Issue #163 AC7: the services table has its own Status column, same as Professionals.
+    await expect(svcRow.getByText("Active", { exact: true })).toBeVisible();
+  });
+
+  test("Issue #163 · AC8/AC9 desactivar y reactivar servicio: sin tachado, badge de estado, mensaje de éxito", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/services");
+    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    const cat = `DeactCat ${Date.now()}`;
+    await page.getByRole("button", { name: "+ New category" }).click();
+    await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(cat);
+    await page.getByRole("dialog", { name: "New category" }).getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Services", exact: true }).click();
+    const svcName = `E2E Deact Svc ${Date.now()}`;
+    await page.getByRole("button", { name: "+ New service" }).click();
+    const svcDialog = page.getByRole("dialog", { name: "New service" });
+    await svcDialog.getByLabel("Name").fill(svcName);
+    await svcDialog.getByLabel("Category").selectOption({ label: cat });
+    await svcDialog.getByLabel("Price").fill("15000");
+    await svcDialog.getByLabel("Duration (minutes)").fill("20");
+    await svcDialog.getByRole("button", { name: "Save" }).click();
+    await expect(svcDialog).not.toBeVisible();
+
+    await page.getByPlaceholder(/search by name/i).fill(svcName);
+    await page.waitForTimeout(600);
+    const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
+    await expect(svcRow).toBeVisible();
+
+    await svcRow.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
+    await page.getByRole("menuitem", { name: "Deactivate" }).click();
+    await page.getByRole("dialog", { name: "Deactivate service" }).getByRole("button", { name: "Deactivate" }).click();
+    await expect(svcRow.getByText("Inactive", { exact: true })).toBeVisible();
+    // AC8: status changes via badge, the service name is never struck through.
+    await expect(svcRow).not.toHaveClass(/card-inactive/);
+    const nameDecoration = await svcRow
+      .getByText(svcName, { exact: true })
+      .evaluate((el) => getComputedStyle(el).textDecorationLine);
+    expect(nameDecoration).toBe("none");
+    // AC9: deactivating from the table shows a success message in the table header.
+    await expect(page.getByText("Service deactivated successfully.", { exact: true })).toBeVisible();
+
+    await svcRow.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
+    await page.getByRole("menuitem", { name: "Activate" }).click();
+    await expect(svcRow.getByText("Active", { exact: true })).toBeVisible();
+    await expect(page.getByText("Service activated successfully.", { exact: true })).toBeVisible();
   });
 
   test("HU-04 · 3+6 edición de servicio vía pop-up al hacer click en la fila", async ({ page }) => {

@@ -13,7 +13,7 @@ export function Accordion({ className, children, ...props }: AccordionProps) {
   );
 }
 
-export type AccordionItemProps = HTMLAttributes<HTMLDetailsElement> & {
+export type AccordionItemProps = Omit<HTMLAttributes<HTMLDetailsElement>, "title"> & {
   title: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -29,7 +29,7 @@ export function AccordionItem({
   return (
     <details
       className={cn("group bg-white dark:bg-slate-900", className)}
-      {...(defaultOpen ? { defaultOpen: true } : {})}
+      {...(defaultOpen ? { open: true } : {})}
       {...props}
     >
       <summary
