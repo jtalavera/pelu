@@ -620,6 +620,7 @@
             "kudeDownloading": "Downloading…",
             "kudePendingValidationNote": "This voucher is subject to SIFEN's pending validation. It is already valid to deliver to the client — its final validity is conditioned on SIFEN's approval.",
             "kudeEmailLabel": "Send by email",
+            "kudeEmailFieldLabel": "Email address",
             "kudeEmailPlaceholder": "client@example.com (leave blank to use the client's email)",
             "kudeEmailButton": "Send",
             "kudeEmailSending": "Sending…",

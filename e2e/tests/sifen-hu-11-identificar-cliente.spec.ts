@@ -129,6 +129,8 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    // Issue #161: client identification now lives under its own solapa in the invoice detail modal.
+    await page.getByTestId("sifen-tab-identify").click();
     await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
   });
 
@@ -172,6 +174,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, invoice.invoiceNumberFormatted);
 
     await expect(page.getByTestId("sifen-identify-client-button")).toHaveCount(0);
+    await page.getByTestId("sifen-tab-identify").click();
     await expect(page.getByTestId("sifen-client-identification-history")).toBeVisible();
   });
 
@@ -187,6 +190,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, invoice.invoiceNumberFormatted);
 
+    await page.getByTestId("sifen-tab-identify").click();
     const history = page.getByTestId("sifen-client-identification-history");
     await expect(history).toBeVisible();
     await expect(history).toContainText("isabelzymanscki@gmail.com");
@@ -206,6 +210,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    await page.getByTestId("sifen-tab-identify").click();
     await expect(page.getByTestId("sifen-client-identification-rejected")).toBeVisible();
     await expect(page.getByTestId("sifen-client-identification-rejected")).toContainText(
       "Datos del receptor inconsistentes",
@@ -225,6 +230,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    await page.getByTestId("sifen-tab-identify").click();
     await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-name").fill("Comercial ABC S.A.");
     await page.getByLabel("Company").click();
@@ -247,6 +253,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    await page.getByTestId("sifen-tab-identify").click();
     await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-name").fill("John Smith");
     await page.getByLabel("Client from abroad").click();
@@ -265,6 +272,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    await page.getByTestId("sifen-tab-identify").click();
     await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
@@ -285,6 +293,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    await page.getByTestId("sifen-tab-identify").click();
     await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-name").fill("María Fernanda Duarte");
     await page.locator("#identify-client-document").fill("4123456");
@@ -302,6 +311,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.getByRole("button", { name: "View" }).click();
+    await page.getByTestId("sifen-tab-identify").click();
     await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
   });
 });

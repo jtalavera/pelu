@@ -428,29 +428,6 @@ export default function ClientDetailPage() {
         >
           ← {t("femme.clients.backToList")}
         </Button>
-        <div data-tour="client-detail-status">
-          {client.active ? (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setDeactivateTarget(client)}
-              disabled={deactivating}
-              className="min-h-11 sm:self-auto"
-            >
-              {t("femme.clients.deactivate")}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => void activateClient()}
-              disabled={reactivating}
-              className="min-h-11 sm:self-auto"
-            >
-              {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivate")}
-            </Button>
-          )}
-        </div>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -669,6 +646,31 @@ export default function ClientDetailPage() {
                 >
                   {t("femme.clients.cancel")}
                 </Button>
+                <div data-tour="client-detail-status">
+                  {client.active ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setDeactivateTarget(client)}
+                      disabled={deactivating}
+                      className="min-h-11 w-full sm:w-auto"
+                      data-testid="client-edit-deactivate"
+                    >
+                      {t("femme.clients.deactivate")}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => void activateClient()}
+                      disabled={reactivating}
+                      className="min-h-11 w-full sm:w-auto"
+                      data-testid="client-edit-reactivate"
+                    >
+                      {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivate")}
+                    </Button>
+                  )}
+                </div>
                 <Button
                   type="button"
                   onClick={() => void saveClient()}
