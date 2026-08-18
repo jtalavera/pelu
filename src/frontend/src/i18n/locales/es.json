@@ -620,6 +620,7 @@
             "kudeDownloading": "Descargando…",
             "kudePendingValidationNote": "Este comprobante está sujeto a validación pendiente de SIFEN. Ya es válido para entregar al cliente — su validez definitiva está condicionada a la aprobación de SIFEN.",
             "kudeEmailLabel": "Enviar por correo electrónico",
+            "kudeEmailFieldLabel": "Correo electrónico",
             "kudeEmailPlaceholder": "cliente@ejemplo.com (dejar vacío para usar el correo del cliente)",
             "kudeEmailButton": "Enviar",
             "kudeEmailSending": "Enviando…",

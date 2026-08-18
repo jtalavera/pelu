@@ -257,7 +257,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 
-    await page.getByLabel("Send by email").fill("cliente-e2e@example.com");
+    // Issue #161: KuDE-by-email now lives under its own solapa in the invoice detail modal.
+    await page.getByTestId("sifen-tab-email").click();
+    await page.getByLabel("Email address").fill("cliente-e2e@example.com");
     const sendButton = page.getByTestId("sifen-kude-send-email-button");
 
     const [emailResponse] = await Promise.all([

@@ -1198,6 +1198,12 @@ function NewInvoiceTab({
       onIssued();
     } catch (err) {
       setSubmitError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+      // Use setTimeout to allow React to commit the state update before we scroll
+      setTimeout(() => {
+        document
+          .getElementById("invoice-submit-error")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
     } finally {
       setSubmitting(false);
     }
@@ -1229,7 +1235,11 @@ function NewInvoiceTab({
         </Alert>
       ))}
       {submitError && (
-        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+        <Alert
+          id="invoice-submit-error"
+          variant="destructive"
+          title={t("femme.billing.errorTitle")}
+        >
           {submitError}
         </Alert>
       )}

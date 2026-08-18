@@ -1122,7 +1122,7 @@ export default function ProfessionalsPage() {
 
               <Text variant="muted">{t("femme.professionals.form.scheduleLead")}</Text>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
                 {DAYS.map((d) => {
                   const row = schedules.find((s) => s.dayOfWeek === d.value) ?? {
                     dayOfWeek: d.value,
@@ -1135,78 +1135,67 @@ export default function ProfessionalsPage() {
                   return (
                     <div
                       key={d.value}
+                      className="flex flex-wrap items-center gap-3"
+                      data-testid={`prof-day-${d.key}-row`}
                       style={{
-                        padding: 12,
+                        padding: "6px 12px",
                         border: "var(--border-default)",
                         borderRadius: "var(--radius-md)",
                         background: "var(--color-white)",
                       }}
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <label
-                          htmlFor={checkboxId}
-                          className="flex w-28 shrink-0 cursor-pointer items-center gap-2"
-                        >
-                          <input
-                            id={checkboxId}
-                            type="checkbox"
-                            checked={row.active}
-                            onChange={(e) => toggleScheduleDay(d.value, e.target.checked)}
-                            aria-label={`${dayLabel} — ${t("femme.professionals.form.scheduleDayActive")}`}
-                            data-testid={`prof-day-${d.key}-active`}
-                            style={{ width: 16, height: 16, cursor: "pointer" }}
+                      <label
+                        htmlFor={checkboxId}
+                        className="flex w-24 shrink-0 cursor-pointer items-center gap-2"
+                      >
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          checked={row.active}
+                          onChange={(e) => toggleScheduleDay(d.value, e.target.checked)}
+                          aria-label={`${dayLabel} — ${t("femme.professionals.form.scheduleDayActive")}`}
+                          data-testid={`prof-day-${d.key}-active`}
+                          style={{ width: 16, height: 16, cursor: "pointer" }}
+                        />
+                        <span className="text-sm font-medium">{dayLabel}</span>
+                      </label>
+                      {row.active ? (
+                        <div className="flex flex-1 min-w-[180px] items-center gap-2">
+                          <TimeCombobox
+                            id={`prof-${d.value}-start`}
+                            value={row.startTime}
+                            onChange={(next) => setScheduleTime(d.value, { startTime: next })}
+                            placeholder={t("femme.professionals.form.timePlaceholderStart")}
+                            invalid={!!scheduleErrors?.schedules}
+                            aria-invalid={!!scheduleErrors?.schedules}
+                            aria-label={`${dayLabel} — ${t("femme.professionals.form.start")}`}
+                            data-testid={`prof-day-${d.key}-start`}
+                            className="w-24 sm:w-28"
                           />
-                          <span className="font-medium">{dayLabel}</span>
-                        </label>
-                        {row.active ? (
-                          <div className="grid flex-1 grid-cols-2 gap-3">
-                            <div>
-                              <Label
-                                htmlFor={`prof-${d.value}-start`}
-                                className="text-xs"
-                              >
-                                {t("femme.professionals.form.start")}
-                              </Label>
-                              <TimeCombobox
-                                id={`prof-${d.value}-start`}
-                                value={row.startTime}
-                                onChange={(next) =>
-                                  setScheduleTime(d.value, { startTime: next })
-                                }
-                                placeholder={t("femme.professionals.form.timePlaceholderStart")}
-                                invalid={!!scheduleErrors?.schedules}
-                                aria-invalid={!!scheduleErrors?.schedules}
-                                aria-label={`${dayLabel} — ${t("femme.professionals.form.start")}`}
-                                data-testid={`prof-day-${d.key}-start`}
-                              />
-                            </div>
-                            <div>
-                              <Label
-                                htmlFor={`prof-${d.value}-end`}
-                                className="text-xs"
-                              >
-                                {t("femme.professionals.form.end")}
-                              </Label>
-                              <TimeCombobox
-                                id={`prof-${d.value}-end`}
-                                value={row.endTime}
-                                onChange={(next) =>
-                                  setScheduleTime(d.value, { endTime: next })
-                                }
-                                placeholder={t("femme.professionals.form.timePlaceholderEnd")}
-                                invalid={!!scheduleErrors?.schedules}
-                                aria-invalid={!!scheduleErrors?.schedules}
-                                aria-label={`${dayLabel} — ${t("femme.professionals.form.end")}`}
-                                data-testid={`prof-day-${d.key}-end`}
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <Text variant="muted" className="flex-1 text-xs">
-                            {t("femme.professionals.dayOff")}
+                          <Text
+                            variant="muted"
+                            aria-hidden="true"
+                            className="shrink-0 text-sm"
+                          >
+                            –
                           </Text>
-                        )}
-                      </div>
+                          <TimeCombobox
+                            id={`prof-${d.value}-end`}
+                            value={row.endTime}
+                            onChange={(next) => setScheduleTime(d.value, { endTime: next })}
+                            placeholder={t("femme.professionals.form.timePlaceholderEnd")}
+                            invalid={!!scheduleErrors?.schedules}
+                            aria-invalid={!!scheduleErrors?.schedules}
+                            aria-label={`${dayLabel} — ${t("femme.professionals.form.end")}`}
+                            data-testid={`prof-day-${d.key}-end`}
+                            className="w-24 sm:w-28"
+                          />
+                        </div>
+                      ) : (
+                        <Text variant="muted" className="flex-1 text-xs">
+                          {t("femme.professionals.dayOff")}
+                        </Text>
+                      )}
                     </div>
                   );
                 })}
