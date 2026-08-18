@@ -76,7 +76,7 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     const section = page.getByTestId("sifen-status-section");
     await expect(section).toBeVisible();
@@ -135,7 +135,7 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     await expect(page.getByRole("heading", { name: /Invoice #/ })).toBeVisible();
     await expect(page.getByTestId("sifen-status-section")).toHaveCount(0);

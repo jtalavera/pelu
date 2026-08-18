@@ -181,6 +181,9 @@ export default function ClientDetailPage() {
   const [deactivating, setDeactivating] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
   const [reactivating, setReactivating] = useState(false);
+  const [statusSuccessKind, setStatusSuccessKind] = useState<"deactivated" | "reactivated" | null>(
+    null,
+  );
 
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -306,6 +309,7 @@ export default function ClientDetailPage() {
     setFieldError(null);
     setSaveError(null);
     setSaveSuccess(false);
+    setStatusSuccessKind(null);
     const nextErr: NonNullable<typeof fieldError> = {};
 
     if (!fullName.trim()) {
@@ -365,10 +369,13 @@ export default function ClientDetailPage() {
   async function confirmDeactivate() {
     if (!deactivateTarget || !id) return;
     setDeactivating(true);
+    setSaveSuccess(false);
+    setStatusSuccessKind(null);
     try {
       await femmePostJson<Client>(`/api/clients/${id}/deactivate`, {});
       setDeactivateTarget(null);
       await load();
+      setStatusSuccessKind("deactivated");
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
       setDeactivateTarget(null);
@@ -380,9 +387,12 @@ export default function ClientDetailPage() {
   async function activateClient() {
     if (!client || !id) return;
     setReactivating(true);
+    setSaveSuccess(false);
+    setStatusSuccessKind(null);
     try {
       await femmePostJson<Client>(`/api/clients/${id}/activate`, {});
       await load();
+      setStatusSuccessKind("reactivated");
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
     } finally {
@@ -452,6 +462,17 @@ export default function ClientDetailPage() {
           <Card data-tour="client-detail-edit" className="p-6">
             {saveSuccess ? (
               <Alert variant="success" title={t("femme.clients.editSuccess")} className="mb-4" />
+            ) : null}
+            {statusSuccessKind ? (
+              <Alert
+                variant="success"
+                title={t(
+                  statusSuccessKind === "deactivated"
+                    ? "femme.clients.deactivateSuccess"
+                    : "femme.clients.reactivateSuccess",
+                )}
+                className="mb-4"
+              />
             ) : null}
             {saveError ? (
               <Alert variant="destructive" title={t("femme.clients.errorTitle")} className="mb-4">

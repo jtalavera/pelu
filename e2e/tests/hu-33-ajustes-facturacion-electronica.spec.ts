@@ -163,7 +163,7 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
     const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     const section = page.getByTestId("sifen-status-section");
     await expect(section).toBeVisible();

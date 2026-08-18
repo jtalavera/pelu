@@ -110,8 +110,11 @@ export default function ServicesPage() {
   const [activatingCategoryId, setActivatingCategoryId] = useState<number | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
-  const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState(false);
+  const [serviceStatusSuccess, setServiceStatusSuccess] = useState<"activated" | "deactivated" | null>(
+    null,
+  );
 
   // ── Server-side pagination for services tab ──────────────────────────────
   type SvcPage = { content: SalonService[]; page: number; size: number; totalElements: number; totalPages: number };
@@ -297,12 +300,19 @@ export default function ServicesPage() {
     setServiceFieldError(null);
     setServiceSaveError(null);
     setEditSuccess(false);
+    dismissServicePageSuccess();
     setServiceModalOpen(true);
+  }
+
+  function dismissServicePageSuccess() {
+    setCreateSuccess(false);
+    setServiceStatusSuccess(null);
   }
 
   async function saveService() {
     setServiceFieldError(null);
     setServiceSaveError(null);
+    dismissServicePageSuccess();
     const nameTrim = serviceName.trim();
     const categoryId = serviceCategoryId.trim();
     const price = moneyDigitsOnly(servicePrice) ? parseMaskedMoney(servicePrice) : null;
@@ -338,6 +348,8 @@ export default function ServicesPage() {
         setEditSuccess(true);
       } else {
         setServiceModalOpen(false);
+        setCreateSuccess(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
       await load();
       setSvcReloadTick((n) => n + 1);
@@ -354,10 +366,13 @@ export default function ServicesPage() {
 
   async function activateSalonServiceFromList(s: SalonService) {
     setError(null);
+    setCreateSuccess(false);
     try {
       await femmePostJson(`/api/services/${s.id}/activate`, {});
       await load();
       setSvcReloadTick((n) => n + 1);
+      setServiceStatusSuccess("activated");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
     }
@@ -386,6 +401,7 @@ export default function ServicesPage() {
     const target = deactivateTarget;
     if (!target) return;
     setDeactivateTarget(null);
+    setCreateSuccess(false);
     try {
       if (target.kind === "category") {
         await femmePostJson<ServiceCategory>(
@@ -397,6 +413,10 @@ export default function ServicesPage() {
       }
       await load();
       setSvcReloadTick((n) => n + 1);
+      if (target.kind === "service") {
+        setServiceStatusSuccess("deactivated");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
     }
@@ -466,10 +486,11 @@ export default function ServicesPage() {
     setServiceFieldError(null);
     setServiceSaveError(null);
     setEditSuccess(false);
+    dismissServicePageSuccess();
     setServiceModalOpen(true);
   }
 
-  const onRowKeyOpenService = (s: SalonService) => (e: KeyboardEvent<HTMLDivElement>) => {
+  const onRowKeyOpenService = (s: SalonService) => (e: KeyboardEvent<HTMLTableRowElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       openEditService(s);
@@ -554,6 +575,18 @@ export default function ServicesPage() {
     fontWeight: 500,
   };
 
+  const thStyle: React.CSSProperties = {
+    padding: "9px 12px",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--color-ink-3)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    textAlign: "left",
+    background: "var(--color-stone)",
+    whiteSpace: "nowrap",
+  };
+
   return (
     <div>
       {/* ── Page header ── */}
@@ -584,6 +617,16 @@ export default function ServicesPage() {
           </button>
         )}
       </div>
+
+      {/* ── Success ── */}
+      {createSuccess && <Alert variant="success">{t("femme.services.createSuccess")}</Alert>}
+      {serviceStatusSuccess && (
+        <Alert variant="success">
+          {serviceStatusSuccess === "activated"
+            ? t("femme.services.activateSuccess")
+            : t("femme.services.deactivateSuccess")}
+        </Alert>
+      )}
 
       {/* ── Error ── */}
       {error && (
@@ -673,226 +716,217 @@ export default function ServicesPage() {
             </div>
           </div>
 
-          {/* Service cards */}
+          {/* Services table */}
           {svcPageLoading && !svcPageData && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "20px 0" }}>
               <Spinner size="sm" />
               <Text>{t("femme.services.loading")}</Text>
             </div>
           )}
-          {!svcPageLoading && svcTotalElements === 0 && services.length === 0 && (
-            <div
-              style={{
-                padding: "20px 0",
-                textAlign: "center",
-                fontSize: 12,
-                color: "var(--color-ink-3)",
-              }}
-            >
-              {t("femme.services.services.emptyBody")}
-            </div>
-          )}
-          {!svcPageLoading && svcTotalElements === 0 && services.length > 0 && (
-            <div
-              style={{
-                padding: "20px 0",
-                textAlign: "center",
-                fontSize: 12,
-                color: "var(--color-ink-3)",
-              }}
-            >
-              {t("femme.listFilter.noMatches")}
-            </div>
-          )}
-          {svcContent.map((s, index) => {
-            const ic = categoryAccentStyle(s.categoryAccentKey);
-            const hk = `svc-${s.id}`;
-            const isHov = hoveredCardKey === hk;
-            const anterior = svcContent[index - 1];
-            const hayCambioDeEstado =
-              index > 0 &&
-              anterior.active === true &&
-              s.active === false;
-            return (
-              <Fragment key={s.id}>
-                {hayCambioDeEstado ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      margin: "16px 0 10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "0.5px",
-                        background: "var(--color-stone-md)",
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 500,
-                        letterSpacing: "0.07em",
-                        textTransform: "uppercase",
-                        color: "var(--color-ink-3)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t("femme.services.services.separatorInactive")}
-                    </span>
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "0.5px",
-                        background: "var(--color-stone-md)",
-                      }}
-                    />
-                  </div>
-                ) : null}
-                {(
-                  <div
-                    className={`svc-card ${!s.active ? "card-inactive" : ""}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={t("femme.services.services.openEdit", { name: s.name })}
-                    data-testid={`svc-row-${s.id}`}
-                    onMouseEnter={() => setHoveredCardKey(hk)}
-                    onMouseLeave={() => setHoveredCardKey(null)}
-                    onClick={() => openEditService(s)}
-                    onKeyDown={onRowKeyOpenService(s)}
-                    style={
-                      s.active
-                        ? {
-                            background: "var(--color-white)",
-                            border: isHov
-                              ? "0.5px solid var(--color-rose-md)"
-                              : "var(--border-default)",
-                            borderRadius: "var(--radius-lg)",
-                            padding: "14px 16px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            marginBottom: 8,
-                            cursor: "pointer",
-                            transition: "border-color 0.15s",
-                          }
-                        : {
-                            borderRadius: "var(--radius-lg)",
-                            padding: "14px 16px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            marginBottom: 8,
-                            cursor: "pointer",
-                          }
-                    }
-                  >
-                    <div
-                      className="cat-ic card-icon"
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "var(--radius-md)",
-                        background: s.active ? ic.bg : "var(--color-stone-md)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <div
+          {!svcPageLoading && (
+            <div className="min-w-0 overflow-x-auto">
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "separate",
+                  borderSpacing: "0 8px",
+                }}
+              >
+                <thead>
+                  <tr>
+                    <th style={thStyle}>{t("femme.services.colService")}</th>
+                    <th style={thStyle}>{t("femme.services.colCategory")}</th>
+                    <th style={thStyle}>{t("femme.services.colDuration")}</th>
+                    <th style={thStyle}>{t("femme.services.colPrice")}</th>
+                    <th style={thStyle}>{t("femme.services.colStatus")}</th>
+                    <th style={thStyle} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {svcTotalElements === 0 && services.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
                         style={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: 3,
-                          background: s.active ? ic.color : "var(--color-stone-md)",
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        className="card-name"
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: "var(--color-ink)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
+                          padding: "20px 12px",
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: "var(--color-ink-3)",
                         }}
                       >
-                        {s.name}
-                      </div>
-                      <div
-                        className="card-meta"
-                        style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 1 }}
+                        {t("femme.services.services.emptyBody")}
+                      </td>
+                    </tr>
+                  ) : svcTotalElements === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{
+                          padding: "20px 12px",
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: "var(--color-ink-3)",
+                        }}
                       >
-                        {s.categoryName} · {s.durationMinutes} min
-                      </div>
-                    </div>
-
-                    <div
-                      className="card-price"
-                      style={{
-                        marginLeft: "auto",
-                        marginRight: 16,
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        whiteSpace: "nowrap",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {formatGuaraniesGs(s.priceMinor)}
-                    </div>
-
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      role="presentation"
-                    >
-                      <KebabMenu
-                        id={`services-row-${s.id}`}
-                        triggerAriaLabel={t("femme.rowActions.trigger")}
-                        items={
-                          s.active
-                            ? [
-                                {
-                                  id: "edit-details",
-                                  label: t("femme.rowActions.services.editDetails"),
-                                  onSelect: () => openEditService(s),
-                                },
-                                {
-                                  id: "deactivate",
-                                  label: t("femme.rowActions.services.deactivate"),
-                                  destructive: true,
-                                  onSelect: () => requestDeactivateService(s),
-                                },
-                              ]
-                            : [
-                                {
-                                  id: "edit-details",
-                                  label: t("femme.rowActions.services.editDetails"),
-                                  onSelect: () => openEditService(s),
-                                },
-                                {
-                                  id: "activate",
-                                  label: t("femme.rowActions.services.activate"),
-                                  onSelect: () => void activateSalonServiceFromList(s),
-                                },
-                              ]
-                        }
-                      />
-                    </div>
-                  </div>
-                )}
-              </Fragment>
-            );
-          })}
+                        {t("femme.listFilter.noMatches")}
+                      </td>
+                    </tr>
+                  ) : (
+                    svcContent.map((s, index) => {
+                      const ic = categoryAccentStyle(s.categoryAccentKey);
+                      const anterior = svcContent[index - 1];
+                      const hayCambioDeEstado =
+                        index > 0 &&
+                        anterior.active === true &&
+                        s.active === false;
+                      return (
+                        <Fragment key={s.id}>
+                          {hayCambioDeEstado ? (
+                            <tr>
+                              <td
+                                colSpan={6}
+                                style={{
+                                  padding: "6px 14px",
+                                  fontSize: 10,
+                                  fontWeight: 500,
+                                  letterSpacing: "0.06em",
+                                  textTransform: "uppercase",
+                                  color: "var(--color-ink-3)",
+                                  background: "var(--color-stone)",
+                                  borderBottom: "0.5px solid var(--color-stone-md)",
+                                }}
+                              >
+                                {t("femme.services.services.separatorInactive")}
+                              </td>
+                            </tr>
+                          ) : null}
+                          <tr
+                            className={!s.active ? "row-inactive row-inactive-bg" : ""}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={t("femme.services.services.openEdit", { name: s.name })}
+                            data-testid={`svc-row-${s.id}`}
+                            onClick={() => openEditService(s)}
+                            onKeyDown={onRowKeyOpenService(s)}
+                            style={
+                              s.active
+                                ? {
+                                    background: "var(--color-white)",
+                                    border: "var(--border-default)",
+                                    borderRadius: "var(--radius-lg)",
+                                    cursor: "pointer",
+                                  }
+                                : { cursor: "pointer" }
+                            }
+                          >
+                            <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div
+                                  className="cat-ic cell-icon"
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: "var(--radius-md)",
+                                    background: s.active ? ic.bg : "var(--color-stone-md)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: 14,
+                                      height: 14,
+                                      borderRadius: 3,
+                                      background: s.active ? ic.color : "var(--color-stone-md)",
+                                    }}
+                                  />
+                                </div>
+                                <div
+                                  className="cell-name"
+                                  style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}
+                                >
+                                  {s.name}
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: "var(--color-ink)", verticalAlign: "middle" }}>
+                              {s.categoryName}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                fontSize: 12,
+                                color: "var(--color-ink)",
+                                verticalAlign: "middle",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {s.durationMinutes} min
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: "var(--color-ink)",
+                                verticalAlign: "middle",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {formatGuaraniesGs(s.priceMinor)}
+                            </td>
+                            <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
+                              <StatusBadge status={s.active ? "ACTIVE" : "INACTIVE"} />
+                            </td>
+                            <td
+                              style={{ padding: "10px 12px", verticalAlign: "middle", textAlign: "right" }}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <KebabMenu
+                                id={`services-row-${s.id}`}
+                                triggerAriaLabel={t("femme.rowActions.trigger")}
+                                items={
+                                  s.active
+                                    ? [
+                                        {
+                                          id: "edit-details",
+                                          label: t("femme.rowActions.services.editDetails"),
+                                          onSelect: () => openEditService(s),
+                                        },
+                                        {
+                                          id: "deactivate",
+                                          label: t("femme.rowActions.services.deactivate"),
+                                          destructive: true,
+                                          onSelect: () => requestDeactivateService(s),
+                                        },
+                                      ]
+                                    : [
+                                        {
+                                          id: "edit-details",
+                                          label: t("femme.rowActions.services.editDetails"),
+                                          onSelect: () => openEditService(s),
+                                        },
+                                        {
+                                          id: "activate",
+                                          label: t("femme.rowActions.services.activate"),
+                                          onSelect: () => void activateSalonServiceFromList(s),
+                                        },
+                                      ]
+                                }
+                              />
+                            </td>
+                          </tr>
+                        </Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
         {/* ── Pagination footer ── */}
         <div

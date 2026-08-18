@@ -136,6 +136,9 @@ export default function ClientsPage() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
+  const [rowStatusSuccess, setRowStatusSuccess] = useState<"activated" | "deactivated" | null>(
+    null,
+  );
 
   // Modal state
   const [modalOpen, setModalOpen]   = useState(false);
@@ -217,6 +220,7 @@ export default function ClientsPage() {
       setFieldError(null);
       setSaveError(null);
       setSaveSuccess(false);
+      setRowStatusSuccess(null);
       setModalOpen(true);
       if (st.returnTo) {
         setReturnAfterCreate({ path: st.returnTo, tab: st.returnTab });
@@ -240,6 +244,7 @@ export default function ClientsPage() {
     setFieldError(null);
     setSaveError(null);
     setSaveSuccess(false);
+    setRowStatusSuccess(null);
     setModalOpen(true);
   }
 
@@ -247,6 +252,7 @@ export default function ClientsPage() {
     setFieldError(null);
     setSaveError(null);
     setSaveSuccess(false);
+    setRowStatusSuccess(null);
     const nextErr: NonNullable<typeof fieldError> = {};
     if (!fullName.trim()) nextErr.fullName = t("femme.clients.fullNameRequired");
     const isRucType = identityDocumentType === "RUC";
@@ -311,10 +317,13 @@ export default function ClientsPage() {
   // ── Deactivate / activate ───────────────────────────────────────────────────
   async function confirmDeactivateFromList() {
     if (!deactivateTarget) return;
+    setSaveSuccess(false);
+    setRowStatusSuccess(null);
     try {
       await femmePostJson<Client>(`/api/clients/${deactivateTarget.id}/deactivate`, {});
       setDeactivateTarget(null);
       reload();
+      setRowStatusSuccess("deactivated");
     } catch (e) {
       setError(translateApiError(e, t, "femme.clients.saveError"));
       setDeactivateTarget(null);
@@ -322,9 +331,12 @@ export default function ClientsPage() {
   }
 
   async function activateClientRow(client: Client) {
+    setSaveSuccess(false);
+    setRowStatusSuccess(null);
     try {
       await femmePostJson<Client>(`/api/clients/${client.id}/activate`, {});
       reload();
+      setRowStatusSuccess("activated");
     } catch (e) {
       setError(translateApiError(e, t, "femme.clients.saveError"));
     }
@@ -453,18 +465,27 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {/* ── Success ── */}
-      {saveSuccess && (
-        <Alert variant="success" title={t("femme.clients.createSuccessTitle")}>
-          {t("femme.clients.createSuccessBody")}
-        </Alert>
-      )}
-
-      {/* ── Error ── */}
-      {error && (
-        <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
-          {error}
-        </Alert>
+      {/* ── Success / Error ── */}
+      {(saveSuccess || rowStatusSuccess || error) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {saveSuccess && (
+            <Alert variant="success" title={t("femme.clients.createSuccessTitle")}>
+              {t("femme.clients.createSuccessBody")}
+            </Alert>
+          )}
+          {rowStatusSuccess && (
+            <Alert variant="success">
+              {rowStatusSuccess === "activated"
+                ? t("femme.clients.rowActivateSuccess")
+                : t("femme.clients.rowDeactivateSuccess")}
+            </Alert>
+          )}
+          {error && (
+            <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
+              {error}
+            </Alert>
+          )}
+        </div>
       )}
 
       {/* ── Toolbar ── */}

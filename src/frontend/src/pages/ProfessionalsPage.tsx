@@ -184,6 +184,10 @@ export default function ProfessionalsPage() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [editSuccess, setEditSuccess] = useState(false);
   const [editingExistingId, setEditingExistingId] = useState<number | null>(null);
+  const [createSuccess, setCreateSuccess] = useState(false);
+  const [statusChangeSuccess, setStatusChangeSuccess] = useState<"activated" | "deactivated" | null>(
+    null,
+  );
 
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -258,6 +262,11 @@ export default function ProfessionalsPage() {
     setScheduleSaveError(null);
   }
 
+  function dismissProfessionalsPageSuccess() {
+    setCreateSuccess(false);
+    setStatusChangeSuccess(null);
+  }
+
   function openNew() {
     setSavedProfessional(null);
     setTab("details");
@@ -265,6 +274,7 @@ export default function ProfessionalsPage() {
     resetScheduleForm(null);
     setEditingExistingId(null);
     setEditSuccess(false);
+    dismissProfessionalsPageSuccess();
     setModalOpen(true);
   }
 
@@ -275,6 +285,7 @@ export default function ProfessionalsPage() {
     resetScheduleForm(p);
     setEditingExistingId(p.id);
     setEditSuccess(false);
+    dismissProfessionalsPageSuccess();
     setModalOpen(true);
   }
 
@@ -285,6 +296,7 @@ export default function ProfessionalsPage() {
     setTab("schedule");
     setEditingExistingId(p.id);
     setEditSuccess(false);
+    dismissProfessionalsPageSuccess();
     setModalOpen(true);
   }
 
@@ -440,6 +452,8 @@ export default function ProfessionalsPage() {
         setEditSuccess(true);
       } else {
         closeModal();
+        setCreateSuccess(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch (e) {
       setScheduleSaveError(translateApiError(e, t, "femme.professionals.saveError"));
@@ -507,9 +521,12 @@ export default function ProfessionalsPage() {
     const p = deactivateTarget;
     if (!p) return;
     setDeactivateTarget(null);
+    setCreateSuccess(false);
     try {
       await femmePostJson<Professional>(`/api/professionals/${p.id}/deactivate`, {});
       setProfReloadTick((n) => n + 1);
+      setStatusChangeSuccess("deactivated");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setPageError(translateApiError(e, t, "femme.professionals.saveError"));
     }
@@ -523,9 +540,12 @@ export default function ProfessionalsPage() {
     const p = activateTarget;
     if (!p) return;
     setActivateTarget(null);
+    setCreateSuccess(false);
     try {
       await femmePostJson<Professional>(`/api/professionals/${p.id}/activate`, {});
       setProfReloadTick((n) => n + 1);
+      setStatusChangeSuccess("activated");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setPageError(translateApiError(e, t, "femme.professionals.saveError"));
     }
@@ -606,6 +626,16 @@ export default function ProfessionalsPage() {
           {t("femme.professionals.addNew")}
         </button>
       </div>
+
+      {/* ── Success ── */}
+      {createSuccess && <Alert variant="success">{t("femme.professionals.createSuccess")}</Alert>}
+      {statusChangeSuccess && (
+        <Alert variant="success">
+          {statusChangeSuccess === "activated"
+            ? t("femme.professionals.activateSuccess")
+            : t("femme.professionals.deactivateSuccess")}
+        </Alert>
+      )}
 
       {/* ── Error ── */}
       {pageError && (

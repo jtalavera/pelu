@@ -111,4 +111,60 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
   });
+
+  // Issue #163 · AC10 — rows open the detail solely by clicking the record, like Professionals rows.
+  test("Issue #163 · AC10 clic en la fila abre el detalle del comprobante (sin botón 'View')", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU16-163 ${Date.now()}`);
+    const invoice = await apiPostJson<{ id: number; invoiceNumberFormatted: string }>(
+      request,
+      token,
+      "/api/invoices",
+      {
+        clientId: client.id,
+        clientDisplayName: client.fullName,
+        clientRucOverride: null,
+        clientIdentityDocumentOverride: null,
+        lines: [
+          {
+            serviceId: seed.serviceId,
+            description: seed.serviceFullName,
+            quantity: 1,
+            unitPrice: 5000,
+          },
+        ],
+        payments: [{ method: "CASH", amount: 5000 }],
+      },
+    );
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    await expect(histRow).toBeVisible({ timeout: 30_000 });
+
+    // No standalone "View" button exists anymore — only the row itself is interactive.
+    await expect(histRow.getByRole("button", { name: "View" })).toHaveCount(0);
+    await expect(histRow).toHaveAttribute("role", "button");
+
+    // Clicking anywhere on the row opens the detail modal.
+    await histRow.click();
+    await expect(
+      page.getByRole("dialog").filter({ hasText: invoice.invoiceNumberFormatted }),
+    ).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press("Escape");
+
+    // Keyboard access: focus the row and press Enter to open it too.
+    await histRow.focus();
+    await histRow.press("Enter");
+    await expect(
+      page.getByRole("dialog").filter({ hasText: invoice.invoiceNumberFormatted }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
 });
