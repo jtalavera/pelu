@@ -191,6 +191,9 @@ class SifenInvoiceHeaderServiceTest {
     SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID);
 
     assertThat(header.receiver().taxpayerType()).isEqualTo(ClientTaxpayerType.PERSONA_JURIDICA);
+  }
+
+  /**
    * The linked client's profile RUC/document is never used as a fallback: leaving the invoice's own
    * override fields blank must send a blank receiver to SIFEN, even if the client has RUC data on
    * file, so the user can't be silently identified without confirming it on this invoice.
