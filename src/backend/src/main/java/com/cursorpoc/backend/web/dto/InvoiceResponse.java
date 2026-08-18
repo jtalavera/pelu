@@ -15,6 +15,8 @@ public record InvoiceResponse(
     String clientIdentityDocumentOverride,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
     String clientIdentityDocumentTypeOverride,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
+    String clientTaxpayerTypeOverride,
     String businessRuc,
     String status,
     BigDecimal subtotal,

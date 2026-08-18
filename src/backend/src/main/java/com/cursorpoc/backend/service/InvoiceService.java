@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
@@ -185,6 +186,15 @@ public class InvoiceService {
             ClientIdentityDocumentType.valueOf(request.clientIdentityDocumentTypeOverride()));
       } catch (IllegalArgumentException e) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
+      }
+    }
+    if (request.clientTaxpayerTypeOverride() != null
+        && !request.clientTaxpayerTypeOverride().isBlank()) {
+      try {
+        invoice.setClientTaxpayerTypeOverride(
+            ClientTaxpayerType.valueOf(request.clientTaxpayerTypeOverride()));
+      } catch (IllegalArgumentException e) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TAXPAYER_TYPE");
       }
     }
 
@@ -584,6 +594,7 @@ public class InvoiceService {
         i.getClientIdentityDocumentTypeOverride() != null
             ? i.getClientIdentityDocumentTypeOverride().name()
             : null,
+        i.getClientTaxpayerTypeOverride() != null ? i.getClientTaxpayerTypeOverride().name() : null,
         i.getBusinessRuc(),
         i.getStatus().name(),
         i.getSubtotal(),

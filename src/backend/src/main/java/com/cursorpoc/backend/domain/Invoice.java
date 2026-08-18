@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.domain;
 
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
@@ -65,6 +66,16 @@ public class Invoice {
   @Enumerated(EnumType.STRING)
   @Column(name = "client_identity_document_type_override", length = 20)
   private ClientIdentityDocumentType clientIdentityDocumentTypeOverride;
+
+  /**
+   * SIFEN D205/iTiContRec — solo aplica si esta factura declara RUC (propio o del cliente
+   * vinculado). Nullable: sin valor, se usa el del cliente vinculado y si tampoco existe, {@link
+   * ClientTaxpayerType#PERSONA_FISICA} por defecto — ver {@code
+   * SifenInvoiceHeaderService#buildReceiverData}.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "client_taxpayer_type_override", length = 20)
+  private ClientTaxpayerType clientTaxpayerTypeOverride;
 
   /** Número de control (CDC), generado una sola vez y reutilizado — SIFEN HU-01 AC-06. */
   @Column(name = "sifen_control_number", length = 44)
@@ -357,6 +368,14 @@ public class Invoice {
   public void setClientIdentityDocumentTypeOverride(
       ClientIdentityDocumentType clientIdentityDocumentTypeOverride) {
     this.clientIdentityDocumentTypeOverride = clientIdentityDocumentTypeOverride;
+  }
+
+  public ClientTaxpayerType getClientTaxpayerTypeOverride() {
+    return clientTaxpayerTypeOverride;
+  }
+
+  public void setClientTaxpayerTypeOverride(ClientTaxpayerType clientTaxpayerTypeOverride) {
+    this.clientTaxpayerTypeOverride = clientTaxpayerTypeOverride;
   }
 
   public String getSifenControlNumber() {

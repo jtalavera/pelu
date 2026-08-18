@@ -19,10 +19,12 @@ public record ClientRequest(
     /** SIFEN HU-02 AC-07 — D224/dDesCiuRec. */
     String cityName,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
-    String identityDocumentType) {
+    String identityDocumentType,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
+    String taxpayerType) {
 
   public ClientRequest(String fullName, String phone, String email, String ruc) {
-    this(fullName, phone, email, ruc, null, null, null, null, null, null, null);
+    this(fullName, phone, email, ruc, null, null, null, null, null, null, null, null);
   }
 
   public ClientRequest(
@@ -47,6 +49,34 @@ public record ClientRequest(
         departmentName,
         cityCode,
         cityName,
+        null,
+        null);
+  }
+
+  public ClientRequest(
+      String fullName,
+      String phone,
+      String email,
+      String ruc,
+      String identityDocumentNumber,
+      String address,
+      String departmentCode,
+      String departmentName,
+      String cityCode,
+      String cityName,
+      String identityDocumentType) {
+    this(
+        fullName,
+        phone,
+        email,
+        ruc,
+        identityDocumentNumber,
+        address,
+        departmentCode,
+        departmentName,
+        cityCode,
+        cityName,
+        identityDocumentType,
         null);
   }
 }

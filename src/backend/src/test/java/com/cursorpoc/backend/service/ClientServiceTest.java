@@ -145,6 +145,62 @@ class ClientServiceTest {
     assertThat(response.ruc()).isNull();
   }
 
+  /** SIFEN D205/iTiContRec: a client explicitly marked Persona Jurídica persists that value. */
+  @Test
+  void create_withRucAndPersonaJuridica_persistsTaxpayerType() {
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Empresa Demo",
+                null,
+                null,
+                "80000005-6",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "RUC",
+                "PERSONA_JURIDICA"));
+
+    assertThat(response.taxpayerType()).isEqualTo("PERSONA_JURIDICA");
+  }
+
+  @Test
+  void create_withInvalidTaxpayerType_throwsBadRequest() {
+    assertThatThrownBy(
+            () ->
+                clientService.create(
+                    1L,
+                    new ClientRequest(
+                        "Ana",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "NOT_A_REAL_TYPE")))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
   @Test
   void create_withExplicitRucType_stillValidatesFormat() {
     assertThatThrownBy(

@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.domain;
 
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -55,6 +56,14 @@ public class Client {
   @Enumerated(EnumType.STRING)
   @Column(name = "identity_document_type", length = 20)
   private ClientIdentityDocumentType identityDocumentType;
+
+  /**
+   * SIFEN D205/iTiContRec — solo aplica cuando el cliente se identifica por RUC. Nullable: sin
+   * valor, el XML SIFEN usa {@link ClientTaxpayerType#PERSONA_FISICA} por defecto.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "taxpayer_type", length = 20)
+  private ClientTaxpayerType taxpayerType;
 
   @Column(length = 500)
   private String address;
@@ -153,6 +162,14 @@ public class Client {
 
   public void setIdentityDocumentType(ClientIdentityDocumentType identityDocumentType) {
     this.identityDocumentType = identityDocumentType;
+  }
+
+  public ClientTaxpayerType getTaxpayerType() {
+    return taxpayerType;
+  }
+
+  public void setTaxpayerType(ClientTaxpayerType taxpayerType) {
+    this.taxpayerType = taxpayerType;
   }
 
   public String getAddress() {

@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import java.math.BigDecimal;
@@ -220,6 +221,73 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='iTipIDRec']")).isEqualTo("1");
     assertThat(xpath(doc, "//*[local-name()='dNumIDRec']")).isEqualTo("4123456");
     assertThat(xpath(doc, "//*[local-name()='dNomRec']")).isEqualTo("Cliente Demo");
+  }
+
+  /**
+   * D205/iTiContRec: defaults to Física ("1") when the receiver has a RUC but no explicit taxpayer
+   * type — {@link SifenReceiverData}'s 9-arg legacy constructor (used by most fixtures in this
+   * file) leaves it {@code null} on purpose, so this default must hold for every existing caller.
+   */
+  @Test
+  void buildDocument_receiverWithRucAndNoTaxpayerType_defaultsToPersonaFisica() throws Exception {
+    SifenReceiverData receiverWithRuc =
+        new SifenReceiverData(
+            "80000005-6", null, "Empresa Demo S.A.", null, null, null, null, null, null);
+    SifenInvoiceHeader headerWithRuc =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            header.issuer(),
+            receiverWithRuc,
+            header.testEnvironmentNotice());
+
+    Document doc = service.buildDocument(headerWithRuc, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iNatRec']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='iTiContRec']")).isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='dRucRec']")).isEqualTo("80000005");
+    assertThat(xpath(doc, "//*[local-name()='dDVRec']")).isEqualTo("6");
+  }
+
+  /**
+   * D205/iTiContRec: an explicit Persona Jurídica taxpayer type sends "2", not the old hardcoded
+   * "1".
+   */
+  @Test
+  void buildDocument_receiverWithRucAndExplicitPersonaJuridica_usesCode2() throws Exception {
+    SifenReceiverData receiverWithRuc =
+        new SifenReceiverData(
+            "80000005-6",
+            null,
+            "Empresa Demo S.A.",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            ClientTaxpayerType.PERSONA_JURIDICA);
+    SifenInvoiceHeader headerWithRuc =
+        new SifenInvoiceHeader(
+            header.controlNumber(),
+            header.issueDateTime(),
+            header.stampNumber(),
+            header.establishment(),
+            header.expeditionPoint(),
+            header.stampValidFrom(),
+            header.stampValidUntil(),
+            header.issuer(),
+            receiverWithRuc,
+            header.testEnvironmentNotice());
+
+    Document doc = service.buildDocument(headerWithRuc, detail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iTiContRec']")).isEqualTo("2");
   }
 
   @Test

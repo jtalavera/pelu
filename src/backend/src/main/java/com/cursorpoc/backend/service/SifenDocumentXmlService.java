@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
 import java.io.StringWriter;
@@ -265,7 +266,13 @@ public class SifenDocumentXmlService {
 
     if (hasRuc) {
       ParaguayRucValidator.RucParts rucParts = ParaguayRucValidator.split(receiver.ruc());
-      el(doc, gDatRec, "iTiContRec", "1");
+      // D205/iTiContRec: defaults to Física when unset (e.g. via SifenReceiverData's 9-arg
+      // legacy constructor, used by most existing tests) — see ClientTaxpayerType's javadoc.
+      ClientTaxpayerType taxpayerType =
+          receiver.taxpayerType() != null
+              ? receiver.taxpayerType()
+              : ClientTaxpayerType.PERSONA_FISICA;
+      el(doc, gDatRec, "iTiContRec", String.valueOf(taxpayerType.sifenCode()));
       el(doc, gDatRec, "dRucRec", rucParts.base());
       el(doc, gDatRec, "dDVRec", String.valueOf(rucParts.checkDigit()));
     } else if (type != ClientIdentityDocumentType.INNOMINADO

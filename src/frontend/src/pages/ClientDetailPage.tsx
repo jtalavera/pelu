@@ -60,6 +60,7 @@ type Client = {
   cityName?: string | null;
   identityDocumentNumber?: string | null;
   identityDocumentType?: string | null;
+  taxpayerType?: string | null;
 };
 
 const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
@@ -163,6 +164,7 @@ export default function ClientDetailPage() {
   const [email, setEmail] = useState("");
   const [identityDocumentType, setIdentityDocumentType] = useState("RUC");
   const [identityDocumentNumber, setIdentityDocumentNumber] = useState("");
+  const [taxpayerType, setTaxpayerType] = useState("PERSONA_FISICA");
   const [address, setAddress] = useState("");
   const [locality, setLocality] = useState<Locality | null>(null);
   const localitySearch = useLocalitySearch();
@@ -208,6 +210,7 @@ export default function ClientDetailPage() {
       const resolved = resolveIdentityDocumentTypeAndNumber(data);
       setIdentityDocumentType(resolved.type);
       setIdentityDocumentNumber(resolved.number);
+      setTaxpayerType(data.taxpayerType ?? "PERSONA_FISICA");
       setAddress(data.address ?? "");
       setLocality(localityFromClient(data));
     } catch {
@@ -334,6 +337,7 @@ export default function ClientDetailPage() {
         ruc: isRucType ? documentNumberTrim || null : null,
         identityDocumentNumber: !isRucType && !isInnominado ? documentNumberTrim || null : null,
         identityDocumentType: documentNumberTrim ? identityDocumentType : null,
+        taxpayerType: isRucType ? taxpayerType : null,
         address: address.trim() || null,
         departmentCode: locality?.departmentCode ?? null,
         departmentName: locality?.departmentName ?? null,
@@ -347,6 +351,7 @@ export default function ClientDetailPage() {
       const resolved = resolveIdentityDocumentTypeAndNumber(updated);
       setIdentityDocumentType(resolved.type);
       setIdentityDocumentNumber(resolved.number);
+      setTaxpayerType(updated.taxpayerType ?? "PERSONA_FISICA");
       setAddress(updated.address ?? "");
       setLocality(localityFromClient(updated));
       setSaveSuccess(true);
@@ -568,6 +573,27 @@ export default function ClientDetailPage() {
                   ))}
                 </Select>
               </div>
+
+              {identityDocumentType === "RUC" && (
+                <div>
+                  <Label htmlFor="detail-taxpayer-type">{t("femme.clients.taxpayerType")}</Label>
+                  <Select
+                    id="detail-taxpayer-type"
+                    value={taxpayerType}
+                    onChange={(e) => {
+                      setTaxpayerType(e.target.value);
+                      setSaveSuccess(false);
+                    }}
+                  >
+                    <option value="PERSONA_FISICA">
+                      {t("femme.clients.taxpayerTypePersonaFisica")}
+                    </option>
+                    <option value="PERSONA_JURIDICA">
+                      {t("femme.clients.taxpayerTypePersonaJuridica")}
+                    </option>
+                  </Select>
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="detail-identity-document-number">
