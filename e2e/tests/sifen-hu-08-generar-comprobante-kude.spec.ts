@@ -272,4 +272,92 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(emailResponse.status()).toBe(204);
     await expect(page.getByTestId("sifen-kude-email-success")).toBeVisible({ timeout: 15_000 });
   });
+
+  test("Issue #167 · AC1 el campo de correo se precarga con el email del cliente si está cargado", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const clientEmail = `e2e167-${Date.now()}@example.com`;
+    const client = await apiPostJson<{ id: number; fullName: string }>(request, token, "/api/clients", {
+      fullName: `E2E167 ConEmail ${Date.now()}`,
+      phone: null,
+      email: clientEmail,
+      ruc: null,
+    });
+
+    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 45000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 45000 }],
+    });
+    const prep = await request.post(
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    await page.getByTestId("sifen-tab-email").click();
+    await expect(page.getByLabel("Email address")).toHaveValue(clientEmail);
+  });
+
+  test("Issue #167 · AC1 el campo de correo queda vacío si el cliente no tiene email cargado", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E167 SinEmail ${Date.now()}`);
+
+    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 45000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 45000 }],
+    });
+    const prep = await request.post(
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    await page.getByTestId("sifen-tab-email").click();
+    await expect(page.getByLabel("Email address")).toHaveValue("");
+  });
 });

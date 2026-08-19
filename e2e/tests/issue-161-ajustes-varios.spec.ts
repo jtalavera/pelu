@@ -136,7 +136,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(page.getByTestId("sifen-tab-identify")).toBeVisible();
 
     await expect(page.getByTestId("sifen-revalidate-button")).not.toBeVisible();
-    await expect(page.getByTestId("sifen-identify-client-button")).not.toBeVisible();
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).not.toBeVisible();
 
     // Issue #163: opening one accordion section no longer closes the others — expanding
     // Revalidate, then Identify, then Cancel keeps every previously-opened section's content visible.
@@ -144,12 +144,12 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
 
     await page.getByTestId("sifen-tab-identify").click();
-    await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
     await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
 
     await page.getByTestId("sifen-tab-cancel").click();
     await expect(page.getByTestId("sifen-cancel-button")).toBeVisible();
-    await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
     await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
   });
 

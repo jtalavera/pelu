@@ -52,6 +52,8 @@ export type InvoiceDetail = {
   fiscalStampNumber: string;
   clientId: number | null;
   clientDisplayName: string;
+  /** Issue #167: the linked client's own email on file, if any — used to prefill the KuDE-by-email field. */
+  clientEmail?: string | null;
   clientRucOverride: string | null;
   status: string;
   subtotal: string;
@@ -215,7 +217,6 @@ export function InvoiceDetailModal({
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [showIdentifyForm, setShowIdentifyForm] = useState(false);
   const [identifyClientType, setIdentifyClientType] = useState<"COMPANY" | "PERSON" | "FOREIGN">(
     "PERSON",
   );
@@ -240,7 +241,12 @@ export function InvoiceDetailModal({
     setLoadError(null);
     femmeJson<InvoiceDetail>(`/api/invoices/${invoiceId}`)
       .then((data) => {
-        if (!cancelled) setInvoice(data);
+        if (cancelled) return;
+        setInvoice(data);
+        // Issue #167: prefill the KuDE-by-email field with the client's own email, if any is on
+        // file — the backend already falls back to it when the field is left blank, this just
+        // makes that visible instead of leaving the field looking empty.
+        if (data.clientEmail) setKudeEmail(data.clientEmail);
       })
       .catch(() => {
         if (!cancelled) setLoadError(t("femme.billing.history.detail.loadError"));
@@ -394,7 +400,6 @@ export function InvoiceDetailModal({
         },
       );
       setInvoice(updated);
-      setShowIdentifyForm(false);
       setIdentifyRuc("");
       setIdentifyDocument("");
       setIdentifyName("");
@@ -731,18 +736,27 @@ export function InvoiceDetailModal({
                         {/* SIFEN HU-09 AC-01/AC-05: available regardless of status (active or,
                             once Fase 3 ships, cancelled) as long as the invoice actually has a
                             persisted verification URL — i.e. it was really signed/submitted. */}
-                        <div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            data-testid="sifen-revalidate-button"
-                            title={t("femme.billing.history.detail.sifen.revalidateHint")}
-                            onClick={() =>
-                              window.open(invoice.sifenVerificationUrl!, "_blank", "noopener,noreferrer")
-                            }
-                          >
-                            {t("femme.billing.history.detail.sifen.revalidateButton")}
-                          </Button>
+                        <div className="flex flex-col gap-2">
+                          {/* Issue #167: visible explanation, not just a hover-only tooltip — most
+                              users would never discover the old title-attribute-only hint. */}
+                          <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                            {t("femme.billing.history.detail.sifen.revalidateExplanation")}
+                            <br />
+                            {t("femme.billing.history.detail.sifen.revalidateHint")}
+                          </Text>
+                          <div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-testid="sifen-revalidate-button"
+                              title={t("femme.billing.history.detail.sifen.revalidateHint")}
+                              onClick={() =>
+                                window.open(invoice.sifenVerificationUrl!, "_blank", "noopener,noreferrer")
+                              }
+                            >
+                              {t("femme.billing.history.detail.sifen.revalidateButton")}
+                            </Button>
+                          </div>
                         </div>
                       </AccordionItem>
                     )}
@@ -996,19 +1010,7 @@ export function InvoiceDetailModal({
                                   {identifyError}
                                 </Alert>
                               )}
-                              {!showIdentifyForm && (
-                                <div>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    data-testid="sifen-identify-client-button"
-                                    onClick={() => setShowIdentifyForm(true)}
-                                  >
-                                    {t("femme.billing.history.detail.sifen.identifyClientButton")}
-                                  </Button>
-                                </div>
-                              )}
-                              {showIdentifyForm && (
+                              {(
                                 <form
                                   className="flex flex-col gap-3"
                                   onSubmit={(e) => void handleIdentifyClient(e)}
@@ -1201,14 +1203,6 @@ export function InvoiceDetailModal({
                                       {identifying
                                         ? t("femme.billing.history.detail.sifen.identifyClientSubmitting")
                                         : t("femme.billing.history.detail.sifen.identifyClientSubmit")}
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() => setShowIdentifyForm(false)}
-                                    >
-                                      {t("femme.billing.history.detail.sifen.identifyClientDismiss")}
                                     </Button>
                                   </div>
                                 </form>
