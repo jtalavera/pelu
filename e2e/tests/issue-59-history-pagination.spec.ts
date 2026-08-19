@@ -109,9 +109,10 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    // Wait for invoice row to appear
+    // Wait for invoice row to appear. History rows are <tr role="button"> (issue #163
+    // AC10), so their a11y role is "button", not "row" — match by tag instead.
     const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 30_000 });
 
     // PageSizeSelect should be present. Billing keeps all tabs mounted (hidden via
     // the `hidden` attribute), so scope to the visible (History) tab's control.
@@ -138,7 +139,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.getByRole("tab", { name: "History" }).click();
 
     const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 30_000 });
 
     // Range text should be present (e.g. "1–1 of 1" or "1–10 of N"). Scope to the
     // visible tab since billing keeps all tabs mounted (hidden via `hidden`).
@@ -163,10 +164,10 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.getByRole("tab", { name: "History" }).click();
 
     const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 30_000 });
 
     // Should show exactly 10 rows on first page
-    await expect(tbody.getByRole("row")).toHaveCount(10);
+    await expect(tbody.locator('tr[role="button"]')).toHaveCount(10);
 
     // Next button should be enabled
     const nextBtn = page.getByRole("button", { name: /next/i });
@@ -174,7 +175,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     // Click next to get page 2
     await nextBtn.click();
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 15_000 });
 
     // Prev button should now be enabled
     const prevBtn = page.getByRole("button", { name: /previous/i });

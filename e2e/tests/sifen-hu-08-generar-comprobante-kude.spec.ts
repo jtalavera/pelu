@@ -65,7 +65,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    let row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    let row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -87,7 +87,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.reload();
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -150,7 +150,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -209,7 +209,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -251,7 +251,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 

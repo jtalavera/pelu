@@ -117,7 +117,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -151,6 +151,76 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(page.getByTestId("sifen-cancel-button")).toBeVisible();
     await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
     await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
+  });
+
+  test("Issue #165 · AC4 las secciones abiertas del acordeón SIFEN usan el mismo beige que el hover del menú lateral", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E165 Accordion ${Date.now()}-${Math.random()}`);
+    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 55000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 55000 }],
+    });
+    const prep = await request.post(
+      `${apiBaseUrl()}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    // Reference: the same beige used by the left-nav item hover (AppShell.tsx uses
+    // var(--color-stone) for that hover, e.g. on the "Calendar" link).
+    const navHoverColor = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.style.background = "var(--color-stone)";
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    });
+
+    // The testid sits on the <details> element; the beige background lives on its
+    // clickable <summary> header bar.
+    const statusHeader = page.getByTestId("sifen-tab-status").locator("summary");
+    const revalidateHeader = page.getByTestId("sifen-tab-revalidate").locator("summary");
+
+    // "Estado en SIFEN" is open by default — its header must already be beige.
+    await expect(statusHeader).toBeVisible();
+    await expect
+      .poll(() => statusHeader.evaluate((el) => getComputedStyle(el).backgroundColor))
+      .toBe(navHoverColor);
+
+    // "Revalidar en SIFEN" starts closed — its header must NOT be beige yet.
+    const closedColor = await revalidateHeader.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(closedColor).not.toBe(navHoverColor);
+
+    // Opening it must turn its header beige too — the body content style is unaffected.
+    await revalidateHeader.click();
+    await expect
+      .poll(() => revalidateHeader.evaluate((el) => getComputedStyle(el).backgroundColor))
+      .toBe(navHoverColor);
   });
 
   test("AC4 · la solapa de Horario del profesional es compacta (cada día ocupa una fila reducida)", async ({

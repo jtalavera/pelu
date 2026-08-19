@@ -83,7 +83,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: clientFullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }
@@ -308,7 +308,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await page.reload();
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
     await page.getByTestId("sifen-tab-identify").click();

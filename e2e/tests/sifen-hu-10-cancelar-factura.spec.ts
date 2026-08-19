@@ -54,7 +54,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: clientFullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }

@@ -50,7 +50,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     // Clicking the History tab (no page reload) refreshes the list on its own — see HU-16 · 4.
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const histRow = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
     // Total in history table must use dot separator, no decimals
     await expect(histRow).toContainText("5.000");
@@ -108,7 +108,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.getByRole("tab", { name: "Cash Register" }).click();
     await page.getByRole("tab", { name: "History" }).click();
 
-    const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const histRow = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
   });
 
@@ -146,7 +146,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const histRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const histRow = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
 
     // No standalone "View" button exists anymore — only the row itself is interactive.
