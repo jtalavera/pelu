@@ -64,7 +64,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: clientFullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }
@@ -101,6 +101,8 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    // Issue #163: the revalidate button lives inside its own accordion section — expand it first.
+    await page.getByTestId("sifen-tab-revalidate").click();
     const button = page.getByTestId("sifen-revalidate-button");
     await expect(button).toBeVisible();
 
@@ -138,6 +140,8 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await expect(section).toBeVisible();
     await expect(section.getByText("Not found / Rejected", { exact: true })).toBeVisible();
 
+    // Issue #163: the revalidate button lives inside its own accordion section — expand it first.
+    await page.getByTestId("sifen-tab-revalidate").click();
     const button = page.getByTestId("sifen-revalidate-button");
     await expect(button).toBeVisible();
 

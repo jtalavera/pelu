@@ -47,7 +47,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await expect(svcRow.getByText("Active", { exact: true })).toBeVisible();
   });
 
-  test("Issue #163 · AC8/AC9 desactivar y reactivar servicio: sin tachado, badge de estado, mensaje de éxito", async ({
+  test("Issue #163/#165 · AC8/AC9 desactivar y reactivar servicio: sin tachado ni fondo apagado, badge de estado, mensaje de éxito", async ({
     page,
   }) => {
     await loginAsDemo(page);
@@ -72,6 +72,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await page.waitForTimeout(600);
     const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
     await expect(svcRow).toBeVisible();
+    const activeBackground = await svcRow.evaluate((el) => getComputedStyle(el).backgroundColor);
 
     await svcRow.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
     await page.getByRole("menuitem", { name: "Deactivate" }).click();
@@ -83,6 +84,11 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
       .getByText(svcName, { exact: true })
       .evaluate((el) => getComputedStyle(el).textDecorationLine);
     expect(nameDecoration).toBe("none");
+    // Issue #165 AC2: the row must NOT get a dimmed/grayed-out background either — only
+    // the Status badge should signal inactive, same as the Clients table.
+    await expect(svcRow).not.toHaveClass(/row-inactive/);
+    const inactiveBackground = await svcRow.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(inactiveBackground).toBe(activeBackground);
     // AC9: deactivating from the table shows a success message in the table header.
     await expect(page.getByText("Service deactivated successfully.", { exact: true })).toBeVisible();
 
@@ -180,5 +186,70 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
       );
     });
     expect(catBeforeStatus).toBe(true);
+  });
+
+  test("Issue #165 · AC1 el mensaje de éxito usa el tamaño de letra del buscador y no toca la tabla", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/services");
+    const svcName = `E2E FontSize Svc ${Date.now()}`;
+    await page.getByRole("button", { name: "+ New service" }).click();
+    const svcDialog = page.getByRole("dialog", { name: "New service" });
+    await svcDialog.getByLabel("Name").fill(svcName);
+    await svcDialog.getByLabel("Price").fill("5000");
+    await svcDialog.getByLabel("Duration (minutes)").fill("15");
+    await svcDialog.getByRole("button", { name: "Save" }).click();
+    await expect(svcDialog).not.toBeVisible();
+
+    const alert = page.getByText("Service saved successfully.", { exact: true });
+    await expect(alert).toBeVisible();
+    const search = page.getByPlaceholder(/search by name/i);
+    await expect(search).toBeVisible();
+
+    const [alertFontSize, searchFontSize] = await Promise.all([
+      alert.evaluate((el) => getComputedStyle(el).fontSize),
+      search.evaluate((el) => getComputedStyle(el).fontSize),
+    ]);
+    expect(alertFontSize).toBe(searchFontSize);
+
+    // The message box must leave a gap before the table header — not touch it directly.
+    const gap = await page.evaluate(() => {
+      const alertEl = document.querySelector('[role="alert"]');
+      const table = document.querySelector("table");
+      if (!alertEl || !table) return null;
+      return table.getBoundingClientRect().top - alertEl.getBoundingClientRect().bottom;
+    });
+    expect(gap).not.toBeNull();
+    expect(gap as number).toBeGreaterThan(8);
+  });
+
+  test("Issue #165 · AC3 desactivar un servicio no reemplaza la página con el spinner de carga completa", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/services");
+    const svcName = `E2E NoFlash Svc ${Date.now()}`;
+    await page.getByRole("button", { name: "+ New service" }).click();
+    const svcDialog = page.getByRole("dialog", { name: "New service" });
+    await svcDialog.getByLabel("Name").fill(svcName);
+    await svcDialog.getByLabel("Price").fill("5000");
+    await svcDialog.getByLabel("Duration (minutes)").fill("15");
+    await svcDialog.getByRole("button", { name: "Save" }).click();
+    await expect(svcDialog).not.toBeVisible();
+
+    await page.getByPlaceholder(/search by name/i).fill(svcName);
+    await page.waitForTimeout(600);
+    const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
+    await expect(svcRow).toBeVisible();
+
+    await svcRow.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
+    await page.getByRole("menuitem", { name: "Deactivate" }).click();
+    await page.getByRole("dialog", { name: "Deactivate service" }).getByRole("button", { name: "Deactivate" }).click();
+    await expect(svcRow.getByText("Inactive", { exact: true })).toBeVisible();
+    // The full-page loading spinner text must never reappear after this in-place update —
+    // the search box (unmounted while the spinner is shown) must stay mounted throughout.
+    await expect(page.getByPlaceholder(/search by name/i)).toBeVisible();
+    await expect(page.getByText("Loading…", { exact: true })).toHaveCount(0);
   });
 });

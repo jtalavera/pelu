@@ -144,7 +144,8 @@ export default function ServicesPage() {
   }, [taxes, serviceEditing]);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Only the initial mount shows the full-page spinner (loading starts true); subsequent
+    // calls (e.g. after a category action) refresh categories/taxes quietly in the background.
     setError(null);
     try {
       const [cats, svcs, txs] = await Promise.all([
@@ -351,7 +352,7 @@ export default function ServicesPage() {
         setCreateSuccess(true);
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
-      await load();
+      // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
@@ -369,7 +370,7 @@ export default function ServicesPage() {
     setCreateSuccess(false);
     try {
       await femmePostJson(`/api/services/${s.id}/activate`, {});
-      await load();
+      // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
       setServiceStatusSuccess("activated");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -388,7 +389,7 @@ export default function ServicesPage() {
         {},
       );
       setServiceEditing(updated);
-      await load();
+      // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
@@ -408,10 +409,11 @@ export default function ServicesPage() {
           `/api/service-categories/${target.item.id}/deactivate`,
           {},
         );
+        // Categories affect the service form's category list — refresh it.
+        await load();
       } else {
         await femmePostJson<SalonService>(`/api/services/${target.item.id}/deactivate`, {});
       }
-      await load();
       setSvcReloadTick((n) => n + 1);
       if (target.kind === "service") {
         setServiceStatusSuccess("deactivated");
@@ -523,6 +525,10 @@ export default function ServicesPage() {
   }
 
   // ── Shared style constants ────────────────────────────────────────────────
+  // Matches the search input's text size (SearchInput.tsx) so the page-header message
+  // boxes read as a smaller, secondary element instead of competing with the table.
+  const pageAlertStyle: React.CSSProperties = { fontSize: 12, padding: "8px 12px" };
+
   const primaryBtn: React.CSSProperties = {
     background: "var(--color-rose)",
     color: "var(--color-on-primary)",
@@ -618,21 +624,27 @@ export default function ServicesPage() {
         )}
       </div>
 
-      {/* ── Success ── */}
-      {createSuccess && <Alert variant="success">{t("femme.services.createSuccess")}</Alert>}
-      {serviceStatusSuccess && (
-        <Alert variant="success">
-          {serviceStatusSuccess === "activated"
-            ? t("femme.services.activateSuccess")
-            : t("femme.services.deactivateSuccess")}
-        </Alert>
-      )}
-
-      {/* ── Error ── */}
-      {error && (
-        <Alert variant="destructive" title={t("femme.services.errorTitle")}>
-          {error}
-        </Alert>
+      {/* ── Success / Error ── */}
+      {(createSuccess || serviceStatusSuccess || error) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {createSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {t("femme.services.createSuccess")}
+            </Alert>
+          )}
+          {serviceStatusSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {serviceStatusSuccess === "activated"
+                ? t("femme.services.activateSuccess")
+                : t("femme.services.deactivateSuccess")}
+            </Alert>
+          )}
+          {error && (
+            <Alert variant="destructive" title={t("femme.services.errorTitle")} style={pageAlertStyle}>
+              {error}
+            </Alert>
+          )}
+        </div>
       )}
 
       {/* ── Custom tabs ── */}
@@ -801,23 +813,18 @@ export default function ServicesPage() {
                             </tr>
                           ) : null}
                           <tr
-                            className={!s.active ? "row-inactive row-inactive-bg" : ""}
                             role="button"
                             tabIndex={0}
                             aria-label={t("femme.services.services.openEdit", { name: s.name })}
                             data-testid={`svc-row-${s.id}`}
                             onClick={() => openEditService(s)}
                             onKeyDown={onRowKeyOpenService(s)}
-                            style={
-                              s.active
-                                ? {
-                                    background: "var(--color-white)",
-                                    border: "var(--border-default)",
-                                    borderRadius: "var(--radius-lg)",
-                                    cursor: "pointer",
-                                  }
-                                : { cursor: "pointer" }
-                            }
+                            style={{
+                              background: "var(--color-white)",
+                              border: "var(--border-default)",
+                              borderRadius: "var(--radius-lg)",
+                              cursor: "pointer",
+                            }}
                           >
                             <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -827,7 +834,7 @@ export default function ServicesPage() {
                                     width: 32,
                                     height: 32,
                                     borderRadius: "var(--radius-md)",
-                                    background: s.active ? ic.bg : "var(--color-stone-md)",
+                                    background: ic.bg,
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
@@ -839,7 +846,7 @@ export default function ServicesPage() {
                                       width: 14,
                                       height: 14,
                                       borderRadius: 3,
-                                      background: s.active ? ic.color : "var(--color-stone-md)",
+                                      background: ic.color,
                                     }}
                                   />
                                 </div>

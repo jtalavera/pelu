@@ -161,7 +161,7 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 

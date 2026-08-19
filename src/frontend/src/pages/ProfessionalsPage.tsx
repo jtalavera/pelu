@@ -568,6 +568,10 @@ export default function ProfessionalsPage() {
     );
   }
 
+  // Matches the search input's text size (SearchInput.tsx) so the page-header message
+  // boxes read as a smaller, secondary element instead of competing with the table.
+  const pageAlertStyle: React.CSSProperties = { fontSize: 12, padding: "8px 12px" };
+
   const primaryBtn: React.CSSProperties = {
     background: "var(--color-rose)",
     color: "var(--color-on-primary)",
@@ -627,21 +631,27 @@ export default function ProfessionalsPage() {
         </button>
       </div>
 
-      {/* ── Success ── */}
-      {createSuccess && <Alert variant="success">{t("femme.professionals.createSuccess")}</Alert>}
-      {statusChangeSuccess && (
-        <Alert variant="success">
-          {statusChangeSuccess === "activated"
-            ? t("femme.professionals.activateSuccess")
-            : t("femme.professionals.deactivateSuccess")}
-        </Alert>
-      )}
-
-      {/* ── Error ── */}
-      {pageError && (
-        <Alert variant="destructive" title={t("femme.professionals.errorTitle")}>
-          {pageError}
-        </Alert>
+      {/* ── Success / Error ── */}
+      {(createSuccess || statusChangeSuccess || pageError) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {createSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {t("femme.professionals.createSuccess")}
+            </Alert>
+          )}
+          {statusChangeSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {statusChangeSuccess === "activated"
+                ? t("femme.professionals.activateSuccess")
+                : t("femme.professionals.deactivateSuccess")}
+            </Alert>
+          )}
+          {pageError && (
+            <Alert variant="destructive" title={t("femme.professionals.errorTitle")} style={pageAlertStyle}>
+              {pageError}
+            </Alert>
+          )}
+        </div>
       )}
       <div data-tour="professionals-search" style={{ marginBottom: 12 }}>
         <SearchInput

@@ -45,7 +45,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await clickIssueInvoiceAndExpectSuccess(page);
 
     await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("tbody").getByRole("row").first().click();
+    await page.locator("tbody tr[role=\"button\"]").first().click();
     await page.getByRole("button", { name: "Void invoice" }).click();
     await expect(page.locator("#void-reason")).toBeVisible();
     await page.getByRole("button", { name: "Confirm void" }).click();
@@ -95,7 +95,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.getByRole("tab", { name: "History" }).click();
     // Filter by unique client name to isolate this invoice from previous test runs
     await page.locator("#invoice-history-text-filter").fill(clientName);
-    const clientRow = page.locator("tbody").getByRole("row").first();
+    const clientRow = page.locator("tbody tr[role=\"button\"]").first();
     await expect(clientRow).toBeVisible({ timeout: 15_000 });
     // Total in history table must use dot separator, no decimals
     await expect(clientRow).toContainText("3.000");
@@ -115,7 +115,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     expect(voidRes2.ok(), await voidRes2.text()).toBeTruthy();
     // After void the detail closes; verify the row now shows Voided status
     await expect(
-      page.locator("tbody").getByRole("row").filter({ hasText: "Voided" }).first(),
+      page.locator("tbody tr[role=\"button\"]").filter({ hasText: "Voided" }).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 });

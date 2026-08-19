@@ -106,4 +106,43 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
       page.getByText("Professional activated successfully.", { exact: true }),
     ).toBeVisible();
   });
+
+  test("Issue #165 · AC1 el mensaje de éxito usa el tamaño de letra del buscador y no toca la tabla", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/professionals");
+    const name = `E2E FontSize Prof ${Date.now()}`;
+    await page.getByRole("button", { name: "+ New professional" }).click();
+    const dlg = professionalFormDialog(page);
+    await dlg.getByLabel("Full name").fill(name);
+    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.getByTestId("prof-day-mon-active").check();
+    await fillTimeComboboxField(dlg.locator("#prof-1-start"), "09:00");
+    await fillTimeComboboxField(dlg.locator("#prof-1-end"), "17:00");
+    await dlg
+      .getByRole("button", { name: "Save schedule" })
+      .evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
+
+    const alert = page.getByText("Professional saved successfully.", { exact: true });
+    await expect(alert).toBeVisible();
+    const search = page.locator("#professionals-inline-search");
+    await expect(search).toBeVisible();
+
+    const [alertFontSize, searchFontSize] = await Promise.all([
+      alert.evaluate((el) => getComputedStyle(el).fontSize),
+      search.evaluate((el) => getComputedStyle(el).fontSize),
+    ]);
+    expect(alertFontSize).toBe(searchFontSize);
+
+    // The message box must leave a gap before the table header — not touch it directly.
+    const gap = await page.evaluate(() => {
+      const alertEl = document.querySelector('[role="alert"]');
+      const table = document.querySelector("table");
+      if (!alertEl || !table) return null;
+      return table.getBoundingClientRect().top - alertEl.getBoundingClientRect().bottom;
+    });
+    expect(gap).not.toBeNull();
+    expect(gap as number).toBeGreaterThan(8);
+  });
 });
