@@ -252,4 +252,38 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await expect(page.getByPlaceholder(/search by name/i)).toBeVisible();
     await expect(page.getByText("Loading…", { exact: true })).toHaveCount(0);
   });
+
+  test("Bugfix · cambiar filas por página no reemplaza toda la tabla (sin parpadeo), igual que Profesionales", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/services");
+    const table = page.locator("table").first();
+    await expect(table).toBeVisible();
+    const firstRow = page.locator('[data-testid^="svc-row-"]').first();
+    await expect(firstRow).toBeVisible();
+
+    // Delay the refetch triggered by the page-size change so the loading window is long
+    // enough to deterministically observe whether the table unmounts during it. The page's
+    // own fetch is debounced 350ms after the change before the request even fires.
+    await page.route("**/api/services/page?**", async (route) => {
+      await new Promise((r) => setTimeout(r, 800));
+      await route.continue();
+    });
+
+    await page.getByRole("combobox", { name: /rows per page/i }).selectOption("25");
+
+    // 600ms: past the 350ms debounce (request now in flight), well before the 800ms route
+    // delay resolves. The table (and its rows) must stay mounted here — no blank-out/remount
+    // flash — mirroring Profesionales' stale-while-revalidate behavior. `isVisible()` checks
+    // the DOM once, synchronously — unlike `expect(...).toBeVisible()`, it does not retry/wait,
+    // so it cannot mask a transient unmount that resolves before a retrying assertion would
+    // have re-checked.
+    await page.waitForTimeout(600);
+    expect(await table.isVisible()).toBe(true);
+    expect(await firstRow.isVisible()).toBe(true);
+
+    await page.unroute("**/api/services/page?**");
+    await expect(table).toBeVisible();
+  });
 });
