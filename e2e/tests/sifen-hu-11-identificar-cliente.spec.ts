@@ -130,8 +130,12 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     // Issue #161: client identification now lives under its own solapa in the invoice detail modal.
+    // Issue #167 AC3: the form now renders directly in the accordion body — no separate trigger
+    // button anymore; opening the section is enough to see the whole form and its fields.
     await page.getByTestId("sifen-tab-identify").click();
-    await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-identify-client-button")).toHaveCount(0);
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
+    await expect(page.locator("#identify-client-name")).toBeVisible();
   });
 
   test("HU-11 · AC-01 una factura no aprobada no ofrece identificar", async ({ page, request }) => {
@@ -142,7 +146,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await expect(page.getByTestId("sifen-identify-client-button")).toHaveCount(0);
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
   });
 
   test("HU-11 · AC-01 una factura aprobada que ya tiene datos del cliente no ofrece identificar", async ({
@@ -156,7 +160,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await expect(page.getByTestId("sifen-identify-client-button")).toHaveCount(0);
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
   });
 
   test("HU-11 · AC-01 una factura ya identificada no vuelve a ofrecer la opción", async ({
@@ -173,7 +177,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, invoice.invoiceNumberFormatted);
 
-    await expect(page.getByTestId("sifen-identify-client-button")).toHaveCount(0);
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
     await page.getByTestId("sifen-tab-identify").click();
     await expect(page.getByTestId("sifen-client-identification-history")).toBeVisible();
   });
@@ -216,7 +220,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
       "Datos del receptor inconsistentes",
     );
     // AC-01: rejection doesn't lock out further attempts.
-    await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
   });
 
   test("HU-11 · AC-02/AC-03 empresa sin RUC válido muestra un error de validación", async ({
@@ -231,7 +235,6 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await page.getByTestId("sifen-tab-identify").click();
-    await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-name").fill("Comercial ABC S.A.");
     await page.getByLabel("Company").click();
     await page.locator("#identify-client-ruc").fill("not-a-ruc");
@@ -254,7 +257,6 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await page.getByTestId("sifen-tab-identify").click();
-    await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-name").fill("John Smith");
     await page.getByLabel("Client from abroad").click();
     await page.locator("#identify-client-document").fill("AB123456");
@@ -273,7 +275,6 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await page.getByTestId("sifen-tab-identify").click();
-    await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
 
@@ -294,7 +295,6 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await page.getByTestId("sifen-tab-identify").click();
-    await page.getByTestId("sifen-identify-client-button").click();
     await page.locator("#identify-client-name").fill("María Fernanda Duarte");
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
@@ -312,6 +312,6 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
     await page.getByTestId("sifen-tab-identify").click();
-    await expect(page.getByTestId("sifen-identify-client-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
   });
 });

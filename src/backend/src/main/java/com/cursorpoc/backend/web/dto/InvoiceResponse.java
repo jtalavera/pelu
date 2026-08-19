@@ -11,6 +11,11 @@ public record InvoiceResponse(
     String fiscalStampNumber,
     Long clientId,
     String clientDisplayName,
+    // Issue #167: the linked client's own email on file, if any — lets the frontend prefill the
+    // KuDE-by-email field without a separate client lookup. Null whenever there's no linked client
+    // or that client has no email; the backend already falls back to it server-side regardless (see
+    // SifenKudeEmailService#resolveRecipientEmail), this is purely so the field isn't left blank.
+    String clientEmail,
     String clientRucOverride,
     String clientIdentityDocumentOverride,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */

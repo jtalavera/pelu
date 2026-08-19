@@ -149,4 +149,44 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     expect(popup.url()).toContain("https://ekuatia.set.gov.py/consultas-test/qr?");
     await popup.close();
   });
+
+  test("Issue #167 · AC2 el detalle de Revalidar en SIFEN muestra el texto explicativo antes del botón", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const { invoice, client } = await createInvoice(request, token);
+
+    const prep = await request.post(
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await openInvoiceDetail(page, client.fullName);
+
+    await page.getByTestId("sifen-tab-revalidate").click();
+    const section = page.getByTestId("sifen-tab-revalidate");
+    await expect(
+      section.getByText(
+        "Check this invoice directly on SET's official site, for an independent confirmation of its validity.",
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await expect(
+      section.getByText("Opens in a new tab — the result is shown on that page, not in this system.", {
+        exact: false,
+      }),
+    ).toBeVisible();
+
+    // The explanation must appear before the button in reading order.
+    const explanationBox = section.getByText("Check this invoice directly", { exact: false });
+    const button = page.getByTestId("sifen-revalidate-button");
+    const [explanationY, buttonY] = await Promise.all([
+      explanationBox.evaluate((el) => el.getBoundingClientRect().top),
+      button.evaluate((el) => el.getBoundingClientRect().top),
+    ]);
+    expect(explanationY).toBeLessThan(buttonY);
+  });
 });

@@ -589,6 +589,7 @@ public class InvoiceService {
         i.getFiscalStamp().getStampNumber(),
         i.getClient() != null ? i.getClient().getId() : null,
         i.getClientDisplayName(),
+        i.getClient() != null ? i.getClient().getEmail() : null,
         i.getClientRucOverride(),
         i.getClientIdentityDocumentOverride(),
         i.getClientIdentityDocumentTypeOverride() != null
