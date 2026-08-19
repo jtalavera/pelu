@@ -125,6 +125,7 @@ export default function ServicesPage() {
   const [svcReloadTick, setSvcReloadTick] = useState(0);
   const svcDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState("");
+  const [hoveredServiceId, setHoveredServiceId] = useState<number | null>(null);
   // ─────────────────────────────────────────────────────────────────────────
 
   const activeCategories = useMemo(() => categories.filter((c) => c.active), [categories]);
@@ -729,21 +730,31 @@ export default function ServicesPage() {
           </div>
 
           {/* Services table */}
-          {svcPageLoading && !svcPageData && (
+          {svcPageLoading && !svcPageData ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "20px 0" }}>
               <Spinner size="sm" />
               <Text>{t("femme.services.loading")}</Text>
             </div>
-          )}
-          {!svcPageLoading && (
-            <div className="min-w-0 overflow-x-auto">
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "separate",
-                  borderSpacing: "0 8px",
-                }}
-              >
+          ) : (
+            <div
+              data-tour="services-list"
+              style={{
+                background: "var(--color-white)",
+                borderRadius: "var(--radius-xl)",
+                border: "var(--border-default)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ overflowX: "auto" }}>
+              <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
+                <colgroup>
+                  <col style={{ width: "34%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "6%" }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th style={thStyle}>{t("femme.services.colService")}</th>
@@ -791,6 +802,16 @@ export default function ServicesPage() {
                         index > 0 &&
                         anterior.active === true &&
                         s.active === false;
+                      const isHov = hoveredServiceId === s.id;
+                      const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
+                      const tdStyle: React.CSSProperties = {
+                        padding: "10px 12px",
+                        fontSize: 12,
+                        color: "var(--color-ink)",
+                        verticalAlign: "middle",
+                        borderBottom: "0.5px solid var(--color-stone)",
+                        background: tdBg,
+                      };
                       return (
                         <Fragment key={s.id}>
                           {hayCambioDeEstado ? (
@@ -819,14 +840,11 @@ export default function ServicesPage() {
                             data-testid={`svc-row-${s.id}`}
                             onClick={() => openEditService(s)}
                             onKeyDown={onRowKeyOpenService(s)}
-                            style={{
-                              background: "var(--color-white)",
-                              border: "var(--border-default)",
-                              borderRadius: "var(--radius-lg)",
-                              cursor: "pointer",
-                            }}
+                            onMouseEnter={() => setHoveredServiceId(s.id)}
+                            onMouseLeave={() => setHoveredServiceId(null)}
+                            style={{ cursor: "pointer" }}
                           >
-                            <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
+                            <td style={tdStyle}>
                               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                 <div
                                   className="cat-ic cell-icon"
@@ -858,37 +876,27 @@ export default function ServicesPage() {
                                 </div>
                               </div>
                             </td>
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "var(--color-ink)", verticalAlign: "middle" }}>
+                            <td style={tdStyle}>
                               {s.categoryName}
                             </td>
-                            <td
-                              style={{
-                                padding: "10px 12px",
-                                fontSize: 12,
-                                color: "var(--color-ink)",
-                                verticalAlign: "middle",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
+                            <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
                               {s.durationMinutes} min
                             </td>
                             <td
                               style={{
-                                padding: "10px 12px",
+                                ...tdStyle,
                                 fontSize: 13,
                                 fontWeight: 500,
-                                color: "var(--color-ink)",
-                                verticalAlign: "middle",
                                 whiteSpace: "nowrap",
                               }}
                             >
                               {formatGuaraniesGs(s.priceMinor)}
                             </td>
-                            <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
+                            <td style={tdStyle}>
                               <StatusBadge status={s.active ? "ACTIVE" : "INACTIVE"} />
                             </td>
                             <td
-                              style={{ padding: "10px 12px", verticalAlign: "middle", textAlign: "right" }}
+                              style={{ ...tdStyle, textAlign: "right" }}
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => e.stopPropagation()}
                             >
@@ -932,6 +940,7 @@ export default function ServicesPage() {
                   )}
                 </tbody>
               </table>
+            </div>
             </div>
           )}
         </div>
