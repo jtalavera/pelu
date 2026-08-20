@@ -37,9 +37,13 @@ public class JwtService {
     this.key = Keys.hmacShaKeyFor(bytes);
   }
 
+  /**
+   * @param tenantId {@code null} only for {@link UserRole#PLATFORM_ADMIN} (HU-34) — the resulting
+   *     token carries no {@code tid} claim at all, not a null/zero one.
+   */
   public String createAccessToken(
       long userId,
-      long tenantId,
+      Long tenantId,
       String email,
       UserRole role,
       Long professionalId,
@@ -48,11 +52,13 @@ public class JwtService {
     var builder =
         Jwts.builder()
             .subject(String.valueOf(userId))
-            .claim(CLAIM_TENANT_ID, tenantId)
             .claim("email", email)
             .claim(CLAIM_ROLE, role.name())
             .issuedAt(Date.from(issuedAt))
             .expiration(Date.from(exp));
+    if (tenantId != null) {
+      builder.claim(CLAIM_TENANT_ID, tenantId);
+    }
     if (professionalId != null) {
       builder.claim(CLAIM_PROFESSIONAL_ID, professionalId);
     }
@@ -63,11 +69,12 @@ public class JwtService {
     try {
       Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
       long userId = Long.parseLong(claims.getSubject());
+      // HU-34: `tid` is now optional — absent for a PLATFORM_ADMIN token. Whether a *missing*
+      // tenant is acceptable for the route being called is enforced downstream by
+      // JwtAuthenticationFilter (platform/auth routes only), not here; JwtService only concerns
+      // itself with whether the token itself is well-formed and signed correctly.
       Number tid = claims.get(CLAIM_TENANT_ID, Number.class);
-      if (tid == null) {
-        return Optional.empty();
-      }
-      long tenantId = tid.longValue();
+      Long tenantId = tid != null ? tid.longValue() : null;
       String email = claims.get("email", String.class);
       if (email == null) {
         return Optional.empty();

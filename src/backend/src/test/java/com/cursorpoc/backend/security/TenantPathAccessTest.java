@@ -28,4 +28,17 @@ class TenantPathAccessTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasFieldOrPropertyWithValue("statusCode", HttpStatus.FORBIDDEN);
   }
+
+  /**
+   * HU-34 AC-5: unlike SYSTEM_ADMIN above, PLATFORM_ADMIN gets no bypass here — a tenant-less
+   * principal reaching this tenant-scoped check at all is already a bug elsewhere (the JWT filter
+   * should have rejected it before any controller ran), so this fails loudly instead of silently
+   * granting cross-tenant access.
+   */
+  @Test
+  void platformAdmin_getsNoBypass_andFailsLoudlyInsteadOfGrantingAccess() {
+    var p = new FemmeUserPrincipal(1L, null, "platform-admin@pelu", UserRole.PLATFORM_ADMIN, null);
+    assertThatThrownBy(() -> TenantPathAccess.requirePathTenantMatchesJwt(p, 2L))
+        .isInstanceOf(IllegalStateException.class);
+  }
 }

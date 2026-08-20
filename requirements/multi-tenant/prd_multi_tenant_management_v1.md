@@ -66,7 +66,7 @@ negocio de un tenant).
 
 | HU | Título | Estado |
 |---|---|---|
-| HU-34 | Rol Platform Admin tenant-independiente | Pendiente |
+| HU-34 | Rol Platform Admin tenant-independiente | Done |
 | HU-35 | Login unificado, enrutamiento por rol | Pendiente |
 | HU-36 | Migrar SYSTEM_ADMIN a Platform Admin | Pendiente |
 | HU-37 | Crear tenant | Pendiente |

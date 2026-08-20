@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.bootstrap;
 
+import com.cursorpoc.backend.config.FemmePlatformAdminProperties;
 import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
@@ -72,6 +73,7 @@ public class FemmeDataInitializer {
   private final InvoiceRepository invoiceRepository;
   private final AppointmentRepository appointmentRepository;
   private final FemmeSystemAdminProperties systemAdminProperties;
+  private final FemmePlatformAdminProperties platformAdminProperties;
   private final PasswordEncoder passwordEncoder;
 
   public FemmeDataInitializer(
@@ -89,6 +91,7 @@ public class FemmeDataInitializer {
       InvoiceRepository invoiceRepository,
       AppointmentRepository appointmentRepository,
       FemmeSystemAdminProperties systemAdminProperties,
+      FemmePlatformAdminProperties platformAdminProperties,
       PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
@@ -104,6 +107,7 @@ public class FemmeDataInitializer {
     this.invoiceRepository = invoiceRepository;
     this.appointmentRepository = appointmentRepository;
     this.systemAdminProperties = systemAdminProperties;
+    this.platformAdminProperties = platformAdminProperties;
     this.passwordEncoder = passwordEncoder;
   }
 
@@ -176,6 +180,21 @@ public class FemmeDataInitializer {
                     log.warn(
                         "Skipped system admin seed: no tenant with id={}",
                         systemAdminProperties.getTenantId()));
+      }
+
+      // HU-34: seed a genuinely tenant-independent PLATFORM_ADMIN (tenant == null) for
+      // dev/e2e testing. A real production bootstrap flow is HU-57's scope, not this one — this
+      // mirrors the existing SYSTEM_ADMIN seed above, gated the same way (femme.data-init.enabled).
+      var platformAdminEmail = platformAdminProperties.getEmail().trim().toLowerCase();
+      if (appUserRepository.findByEmail(platformAdminEmail).isEmpty()) {
+        AppUser platformAdmin = new AppUser();
+        platformAdmin.setTenant(null);
+        platformAdmin.setEmail(platformAdminEmail);
+        platformAdmin.setPasswordHash(
+            passwordEncoder.encode(platformAdminProperties.getPassword()));
+        platformAdmin.setRole(UserRole.PLATFORM_ADMIN);
+        appUserRepository.save(platformAdmin);
+        log.info("Seeded platform admin user {} (no tenant)", platformAdminEmail);
       }
     };
   }

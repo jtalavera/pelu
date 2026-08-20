@@ -16,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
   FemmeJwtProperties.class,
   FemmeTimeProperties.class,
   FemmeSystemAdminProperties.class,
+  FemmePlatformAdminProperties.class,
   SifenConnectionProperties.class,
   SifenQrProperties.class
 })

@@ -24,8 +24,11 @@ public class AppUser {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "tenant_id", nullable = false)
+  // HU-34: nullable — PLATFORM_ADMIN is genuinely tenant-independent (tenant == null). Every
+  // other role still requires a tenant; that invariant is enforced where such users are created
+  // (AuthService, FemmeDataInitializer), not at the JPA/DB level, to keep this entity simple.
+  @ManyToOne(fetch = FetchType.LAZY, optional = true)
+  @JoinColumn(name = "tenant_id", nullable = true)
   private Tenant tenant;
 
   @Column(nullable = false, length = 320)

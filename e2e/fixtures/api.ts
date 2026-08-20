@@ -41,6 +41,28 @@ export async function loginSystemAdminApi(request: APIRequestContext): Promise<s
   return json.accessToken;
 }
 
+// HU-34: seeded by FemmeDataInitializer (femme.data-init.enabled=true, same gating as
+// SYS_ADMIN_EMAIL above) — see FemmePlatformAdminProperties for the default credentials.
+const PLATFORM_ADMIN_EMAIL = "platform-admin@pelu";
+const PLATFORM_ADMIN_PASSWORD = ".The.Platform@admin.2026";
+
+export async function loginPlatformAdminApi(request: APIRequestContext): Promise<string> {
+  const res = await request.post(`${API_BASE}/api/auth/login`, {
+    data: { email: PLATFORM_ADMIN_EMAIL, password: PLATFORM_ADMIN_PASSWORD },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  const json = (await res.json()) as { accessToken: string };
+  return json.accessToken;
+}
+
+/** Decodes a JWT's payload segment (no signature verification) — for asserting on claims in tests. */
+export function decodeJwtPayload(token: string): Record<string, unknown> {
+  const payload = token.split(".")[1] ?? "";
+  const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+  const json = Buffer.from(normalized, "base64").toString("utf-8");
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
 /** Sets a tenant's override for a feature flag (e.g. SIFEN_ELECTRONIC_INVOICING) via the
  * system-admin endpoint — same write path as the toggle at /app/settings/feature-flags. */
 export async function setTenantFeatureFlag(

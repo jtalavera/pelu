@@ -120,6 +120,32 @@ public class AuthService {
       return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
     }
 
+    // HU-34: PLATFORM_ADMIN is tenant-independent — try a tenant-less lookup by email before
+    // falling back to the tenant-scoped path below. findByEmail() is only reached here for emails
+    // that actually belong to a PLATFORM_ADMIN row (tenant-bound emails still resolve exclusively
+    // through resolveTenant()+findByEmailAndTenant_Id(), unchanged from before this story).
+    Optional<AppUser> platformCandidate =
+        appUserRepository.findByEmail(email).filter(u -> u.getRole() == UserRole.PLATFORM_ADMIN);
+    if (platformCandidate.isPresent()) {
+      AppUser platformUser = platformCandidate.get();
+      if (!passwordEncoder.matches(request.password(), platformUser.getPasswordHash())) {
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+      }
+      if (!platformUser.isEnabled()) {
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+      }
+      Instant now = Instant.now();
+      String token =
+          jwtService.createAccessToken(
+              platformUser.getId(),
+              null,
+              platformUser.getEmail(),
+              platformUser.getRole(),
+              null,
+              now);
+      return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
+    }
+
     Tenant tenant = resolveTenant(origin);
     AppUser user =
         appUserRepository
@@ -154,7 +180,9 @@ public class AuthService {
     String token =
         jwtService.createAccessToken(
             principal.getUserId(),
-            principal.getTenantId(),
+            // HU-34: PLATFORM_ADMIN has no tenant — getTenantId() would throw; refresh must
+            // preserve whatever tenant state (present or absent) the original token had.
+            principal.getTenantIdOrNull(),
             principal.getUsername(),
             principal.getRole(),
             principal.getProfessionalId(),

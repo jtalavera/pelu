@@ -12,9 +12,10 @@ export type MeProfile = {
 
 export type Me = {
   userId: number;
-  tenantId: number;
+  /** null only for PLATFORM_ADMIN (HU-34) — genuinely tenant-independent. */
+  tenantId: number | null;
   email: string;
-  role: "SYSTEM_ADMIN" | "ADMIN" | "PROFESSIONAL";
+  role: "PLATFORM_ADMIN" | "SYSTEM_ADMIN" | "ADMIN" | "PROFESSIONAL";
   professionalId: number | null;
   /**
    * When `SYSTEM_ADMIN`, the real salon tenant to use for feature flags and data preview.
