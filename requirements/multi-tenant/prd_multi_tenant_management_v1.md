@@ -60,4 +60,38 @@ negocio de un tenant).
 
 ---
 
+## Estado de implementación
+
+> Mantenido por el loop de implementación (`/loop` + skill `implement-user-story`), trabajando directamente sobre la rama `feat/multi_tenant`, en el orden en que aparecen las épicas arriba. Se actualiza HU por HU a medida que se completan (implementación + tests automatizados + CI en verde + commit/push).
+
+| HU | Título | Estado |
+|---|---|---|
+| HU-34 | Rol Platform Admin tenant-independiente | Pendiente |
+| HU-35 | Login unificado, enrutamiento por rol | Pendiente |
+| HU-36 | Migrar SYSTEM_ADMIN a Platform Admin | Pendiente |
+| HU-37 | Crear tenant | Pendiente |
+| HU-38 | Editar tenant | Pendiente |
+| HU-39 | Listado y búsqueda de tenants | Pendiente |
+| HU-40 | Suspender/reactivar tenant | Pendiente |
+| HU-41 | Crear usuario admin de tenant | Pendiente |
+| HU-42 | Asignar múltiples admins a un tenant | Pendiente |
+| HU-43 | Desactivar/reactivar usuario de tenant | Pendiente |
+| HU-44 | Reenviar invitación admin de tenant | Pendiente |
+| HU-45 | Crear y administrar tiers | Pendiente |
+| HU-46 | Asociar feature flags a un tier | Pendiente |
+| HU-47 | Resolución de flags en tres niveles | Pendiente |
+| HU-48 | Asignar tier a tenant | Pendiente |
+| HU-49 | Configuración global y per-tenant de feature flags | Done (funcionalidad preexistente, documentada retroactivamente) |
+| HU-50 | Formato estándar de planillas Excel | Pendiente |
+| HU-51 | Importar servicios desde Excel | Pendiente |
+| HU-52 | Importar clientes desde Excel | Pendiente |
+| HU-53 | Importar profesionales desde Excel | Pendiente |
+| HU-54 | Reporte de resultados de importación | Pendiente |
+| HU-55 | Descargar planillas de ejemplo | Pendiente |
+| HU-56 | Remover seed hardcodeado tenant 1 | Pendiente |
+| HU-57 | Bootstrap inicial de Platform Admin | Pendiente |
+| HU-58 | Ajustar e2e sin seed hardcodeado | Pendiente |
+
+---
+
 *Femme SaaS · Gestión multi-tenant · Platform Admin · v1*
