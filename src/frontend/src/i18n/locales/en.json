@@ -145,6 +145,19 @@
     "footer": {
       "designSystem": "Design system"
     },
+    "platform": {
+      "brandSuffix": "Platform",
+      "loading": "Loading…",
+      "navLabel": "Platform navigation",
+      "nav": {
+        "dashboard": "Dashboard"
+      },
+      "dashboard": {
+        "title": "Platform Admin",
+        "welcome": "Welcome, {{email}}.",
+        "comingSoon": "Tenant, user, tier, and feature-flag management is coming soon."
+      }
+    },
     "dashboard": {
       "title": "Dashboard",
       "loading": "Loading…",

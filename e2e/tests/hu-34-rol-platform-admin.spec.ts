@@ -89,7 +89,9 @@ test.describe("HU-34 · Rol Platform Admin tenant-independiente", () => {
   // AC-5 in particular: Platform Admin cannot reach tenant business data through these routes,
   // not even as a "bypass" — the request never reaches any controller (and therefore never any
   // per-tenant authorization logic) in the first place.
-  for (const path of ["/api/clients", "/api/professionals", "/api/services", "/api/me"]) {
+  // NOTE: /api/me is deliberately NOT in this list — HU-35 wires platform-admin support into it
+  // (generic "who am I" identity, not tenant business data); see hu-35-mt-login-unificado.spec.ts.
+  for (const path of ["/api/clients", "/api/professionals", "/api/services"]) {
     test(`AC4+AC5: Platform Admin token is rejected (403) on tenant-scoped route ${path}`, async ({
       request,
     }) => {

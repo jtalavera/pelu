@@ -14,11 +14,11 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * HU-34 AC-3/AC-4: a PLATFORM_ADMIN token (no {@code tid}) authenticates on {@code
- * /api/platform/**} and {@code /api/auth/**}, but is left unauthenticated everywhere else — same
- * outcome (SecurityContext left empty, so SecurityConfig's {@code anyRequest().authenticated()}
- * rejects the request) tenant-scoped routes already gave any tid-less token before this story, for
- * any role.
+ * HU-34 AC-3/AC-4, extended by HU-35: a PLATFORM_ADMIN token (no {@code tid}) authenticates on
+ * {@code /api/platform/**}, {@code /api/auth/**}, and (since HU-35) {@code /api/me}, but is left
+ * unauthenticated everywhere else — same outcome (SecurityContext left empty, so SecurityConfig's
+ * {@code anyRequest().authenticated()} rejects the request) tenant-scoped routes already gave any
+ * tid-less token before this story, for any role.
  */
 class JwtAuthenticationFilterTest {
 
@@ -63,13 +63,15 @@ class JwtAuthenticationFilterTest {
   }
 
   @Test
-  void platformAdminToken_doesNotAuthenticate_onMeRoute() throws Exception {
-    // /api/me is generic "who am I", not under /api/platform/** — HU-34 deliberately leaves it
-    // out of scope (HU-35 wires platform-admin support into it); a tenant-less token must not
-    // silently authenticate there either.
+  void platformAdminToken_authenticates_onMeRoute() throws Exception {
+    // HU-35: /api/me is generic "who am I", not tenant business data — the frontend's
+    // /platform/** route guard needs it to resolve the current user's role, so a tenant-less
+    // PLATFORM_ADMIN token must authenticate here (unlike genuinely tenant-scoped routes).
     runFilter(platformAdminToken(), "/api/me");
 
-    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    assertThat(auth).isNotNull();
+    assertThat(((FemmeUserPrincipal) auth.getPrincipal()).isPlatformAdmin()).isTrue();
   }
 
   @Test

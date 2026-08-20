@@ -1,5 +1,10 @@
 import { expect, type APIRequestContext } from "@playwright/test";
-import { DEMO_EMAIL, DEMO_PASSWORD } from "./auth";
+import {
+  DEMO_EMAIL,
+  DEMO_PASSWORD,
+  PLATFORM_ADMIN_EMAIL,
+  PLATFORM_ADMIN_PASSWORD,
+} from "./auth";
 
 /**
  * Backend origin for Playwright `request` calls.
@@ -43,9 +48,8 @@ export async function loginSystemAdminApi(request: APIRequestContext): Promise<s
 
 // HU-34: seeded by FemmeDataInitializer (femme.data-init.enabled=true, same gating as
 // SYS_ADMIN_EMAIL above) — see FemmePlatformAdminProperties for the default credentials.
-const PLATFORM_ADMIN_EMAIL = "platform-admin@pelu";
-const PLATFORM_ADMIN_PASSWORD = ".The.Platform@admin.2026";
-
+// Credentials now live in ./auth (PLATFORM_ADMIN_EMAIL/PASSWORD), shared with HU-35's
+// browser-level login helper (loginAsPlatformAdmin).
 export async function loginPlatformAdminApi(request: APIRequestContext): Promise<string> {
   const res = await request.post(`${API_BASE}/api/auth/login`, {
     data: { email: PLATFORM_ADMIN_EMAIL, password: PLATFORM_ADMIN_PASSWORD },

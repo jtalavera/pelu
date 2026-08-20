@@ -14,14 +14,19 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   /**
-   * HU-34 AC-3/AC-4: the only path prefixes allowed to authenticate a tenant-less (PLATFORM_ADMIN)
-   * token. {@code /api/platform/**} is the new explicit platform area (AC-5: Platform Admin never
-   * reaches tenant business data via a bypass on tenant-scoped routes, only through these new
-   * routes); {@code /api/auth/**} is session plumbing (login/refresh), not tenant-scoped business
-   * data, so a Platform Admin must still be able to refresh their own session. Every other route —
-   * unchanged from before HU-34 — keeps rejecting a token without {@code tid}, for every role.
+   * HU-34 AC-3/AC-4, extended by HU-35: the only path prefixes allowed to authenticate a
+   * tenant-less (PLATFORM_ADMIN) token. {@code /api/platform/**} is the explicit platform area
+   * (AC-5: Platform Admin never reaches tenant business data via a bypass on tenant-scoped routes,
+   * only through these new routes); {@code /api/auth/**} is session plumbing (login/refresh), not
+   * tenant-scoped business data, so a Platform Admin must still be able to refresh their own
+   * session. {@code /api/me} (HU-35) is generic "who am I" identity, not tenant business data
+   * either — the frontend's route guard for {@code /platform/**} needs it to resolve the current
+   * user's role. Every other route — unchanged from before HU-34 — keeps rejecting a token without
+   * {@code tid}, for every role.
    */
-  private static final String[] TENANT_OPTIONAL_PATH_PREFIXES = {"/api/platform/", "/api/auth/"};
+  private static final String[] TENANT_OPTIONAL_PATH_PREFIXES = {
+    "/api/platform/", "/api/auth/", "/api/me"
+  };
 
   private final JwtService jwtService;
 

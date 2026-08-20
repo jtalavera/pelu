@@ -50,13 +50,15 @@ public class MeController {
 
   @GetMapping("/me")
   public MeResponse me(@AuthenticationPrincipal FemmeUserPrincipal principal) {
-    log.info("GET /api/me tenantId={}", principal == null ? "null" : principal.getTenantId());
+    log.info("GET /api/me tenantId={}", principal == null ? "null" : principal.getTenantIdOrNull());
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     Long preview =
         principal.getRole() == UserRole.SYSTEM_ADMIN ? systemAdminProperties.getTenantId() : null;
 
+    // HU-35: PLATFORM_ADMIN has no tenant and no linked Professional — getProfessionalId() is
+    // always null for that role, so this branch is naturally skipped without a tenant lookup.
     MeProfileResponse profile = null;
     if (principal.getProfessionalId() != null) {
       profile =
@@ -76,13 +78,13 @@ public class MeController {
     MeResponse resp =
         new MeResponse(
             principal.getUserId(),
-            principal.getTenantId(),
+            principal.getTenantIdOrNull(),
             principal.getUsername(),
             principal.getRole().name(),
             principal.getProfessionalId(),
             preview,
             profile);
-    log.info("GET /api/me tenantId={} status=200", principal.getTenantId());
+    log.info("GET /api/me tenantId={} status=200", principal.getTenantIdOrNull());
     return resp;
   }
 
@@ -91,16 +93,18 @@ public class MeController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @RequestBody MeProfileUpdateRequest request) {
     log.info(
-        "PUT /api/me/profile tenantId={}", principal == null ? "null" : principal.getTenantId());
+        "PUT /api/me/profile tenantId={}",
+        principal == null ? "null" : principal.getTenantIdOrNull());
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
 
     if (principal.getProfessionalId() == null) {
-      // Admin without linked Professional: only allow email update on AppUser
+      // Admin without linked Professional (incl. HU-35's tenant-less PLATFORM_ADMIN): only allow
+      // email update on AppUser
       log.error(
           "PUT /api/me/profile tenantId={} status=403 - admin has no linked professional",
-          principal.getTenantId());
+          principal.getTenantIdOrNull());
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PROFILE_NOT_EDITABLE_FOR_ADMIN");
     }
 
@@ -145,7 +149,7 @@ public class MeController {
       @RequestBody ChangePasswordRequest request) {
     log.info(
         "POST /api/me/change-password tenantId={}",
-        principal == null ? "null" : principal.getTenantId());
+        principal == null ? "null" : principal.getTenantIdOrNull());
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
@@ -161,7 +165,7 @@ public class MeController {
     user.setPasswordHash(passwordEncoder.encode(newPassword));
     appUserRepository.save(user);
 
-    log.info("POST /api/me/change-password tenantId={} status=200", principal.getTenantId());
+    log.info("POST /api/me/change-password tenantId={} status=200", principal.getTenantIdOrNull());
     return ResponseEntity.noContent().build();
   }
 }

@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./layout/AppShell";
+import { PlatformShell } from "./layout/PlatformShell";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
+import { PlatformAdminRoute } from "./auth/PlatformAdminRoute";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -20,6 +22,7 @@ import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
 import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 import SifenCertificatesPage from "./pages/SifenCertificatesPage";
+import PlatformDashboardPage from "./pages/PlatformDashboardPage";
 
 export function AppRoutes() {
   return (
@@ -52,6 +55,15 @@ export function AppRoutes() {
           <Route path="feature-flags" element={<FeatureFlagsPage />} />
           <Route path="sifen" element={<SifenCertificatesPage />} />
         </Route>
+      </Route>
+      <Route
+        element={
+          <PlatformAdminRoute>
+            <PlatformShell />
+          </PlatformAdminRoute>
+        }
+      >
+        <Route path="/platform" element={<PlatformDashboardPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>

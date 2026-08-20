@@ -49,14 +49,19 @@ export default function LoginPage() {
       } catch {
         // keep ADMIN default
       }
+      // HU-35 AC-2/AC-3: routing is decided purely by the role returned by the backend (via the
+      // JWT), with no manual "access type" selector. A Platform Admin always lands on the
+      // platform area, regardless of any tenant-app return path (they can't reach those anyway).
       const destination =
-        from !== "/app"
-          ? from
-          : role === "PROFESSIONAL"
-            ? "/app/calendar"
-            : role === "SYSTEM_ADMIN"
-              ? "/app/settings/feature-flags"
-              : "/app";
+        role === "PLATFORM_ADMIN"
+          ? "/platform"
+          : from !== "/app"
+            ? from
+            : role === "PROFESSIONAL"
+              ? "/app/calendar"
+              : role === "SYSTEM_ADMIN"
+                ? "/app/settings/feature-flags"
+                : "/app";
       navigate(destination, { replace: true });
     } catch {
       setError(t("femme.login.errorNetwork"));

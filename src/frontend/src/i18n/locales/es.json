@@ -145,6 +145,19 @@
     "footer": {
       "designSystem": "Sistema de diseño"
     },
+    "platform": {
+      "brandSuffix": "Plataforma",
+      "loading": "Cargando…",
+      "navLabel": "Navegación de plataforma",
+      "nav": {
+        "dashboard": "Panel"
+      },
+      "dashboard": {
+        "title": "Platform Admin",
+        "welcome": "Bienvenido, {{email}}.",
+        "comingSoon": "La gestión de tenants, usuarios, tiers y feature flags estará disponible próximamente."
+      }
+    },
     "dashboard": {
       "title": "Panel",
       "loading": "Cargando…",
