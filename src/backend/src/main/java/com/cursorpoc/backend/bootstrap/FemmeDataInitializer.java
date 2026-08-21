@@ -12,6 +12,7 @@ import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
 import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.Tier;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
@@ -26,6 +27,7 @@ import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TierRepository;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -71,6 +73,7 @@ public class FemmeDataInitializer {
   private final ClientRepository clientRepository;
   private final InvoiceRepository invoiceRepository;
   private final AppointmentRepository appointmentRepository;
+  private final TierRepository tierRepository;
   private final FemmePlatformAdminProperties platformAdminProperties;
   private final PasswordEncoder passwordEncoder;
 
@@ -88,6 +91,7 @@ public class FemmeDataInitializer {
       ClientRepository clientRepository,
       InvoiceRepository invoiceRepository,
       AppointmentRepository appointmentRepository,
+      TierRepository tierRepository,
       FemmePlatformAdminProperties platformAdminProperties,
       PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
@@ -103,6 +107,7 @@ public class FemmeDataInitializer {
     this.clientRepository = clientRepository;
     this.invoiceRepository = invoiceRepository;
     this.appointmentRepository = appointmentRepository;
+    this.tierRepository = tierRepository;
     this.platformAdminProperties = platformAdminProperties;
     this.passwordEncoder = passwordEncoder;
   }
@@ -138,6 +143,18 @@ public class FemmeDataInitializer {
                 + " traditional generator");
         featureFlagRepository.save(sifenElectronicInvoicing);
         log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=false)");
+      }
+
+      // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's
+      // full tier CRUD hasn't landed yet). V41's Flyway INSERT only reaches dev/prod the same way
+      // V28's flag INSERT does above — Flyway is disabled for the `e2e` profile — so this runner
+      // seeds the same default tier there too.
+      if (tierRepository.count() == 0) {
+        Tier defaultTier = new Tier();
+        defaultTier.setName("Estándar");
+        defaultTier.setDescription("Tier por defecto.");
+        tierRepository.save(defaultTier);
+        log.info("Seeded default tier 'Estándar'");
       }
 
       if (appUserRepository.count() == 0) {

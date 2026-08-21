@@ -21,6 +21,7 @@ import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TierRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,7 @@ class FemmeDataInitializerTest {
   @Mock private ClientRepository clientRepository;
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private AppointmentRepository appointmentRepository;
+  @Mock private TierRepository tierRepository;
   @Mock private FemmePlatformAdminProperties platformAdminProperties;
   @Mock private PasswordEncoder passwordEncoder;
 
@@ -73,6 +75,7 @@ class FemmeDataInitializerTest {
             clientRepository,
             invoiceRepository,
             appointmentRepository,
+            tierRepository,
             platformAdminProperties,
             passwordEncoder);
     tenant = new Tenant();

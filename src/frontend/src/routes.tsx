@@ -23,6 +23,7 @@ import ActivatePage from "./pages/ActivatePage";
 import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 import SifenCertificatesPage from "./pages/SifenCertificatesPage";
 import PlatformDashboardPage from "./pages/PlatformDashboardPage";
+import PlatformTenantsPage from "./pages/PlatformTenantsPage";
 
 export function AppRoutes() {
   return (
@@ -63,6 +64,7 @@ export function AppRoutes() {
         }
       >
         <Route path="/platform" element={<PlatformDashboardPage />} />
+        <Route path="/platform/tenants" element={<PlatformTenantsPage />} />
         <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />

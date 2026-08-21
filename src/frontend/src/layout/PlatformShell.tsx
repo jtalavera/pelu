@@ -154,6 +154,17 @@ export function PlatformShell() {
           {t("femme.platform.nav.dashboard")}
         </NavLink>
         <NavLink
+          to="/platform/tenants"
+          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
+          style={({ isActive }) => ({
+            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
+            fontWeight: isActive ? 500 : 400,
+            background: isActive ? "var(--color-rose-lt)" : "transparent",
+          })}
+        >
+          {t("femme.platform.nav.tenants")}
+        </NavLink>
+        <NavLink
           to="/platform/feature-flags"
           className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
           style={({ isActive }) => ({

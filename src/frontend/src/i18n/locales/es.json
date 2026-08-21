@@ -151,12 +151,43 @@
       "navLabel": "Navegación de plataforma",
       "nav": {
         "dashboard": "Panel",
+        "tenants": "Tenants",
         "featureFlags": "Funcionalidades"
       },
       "dashboard": {
         "title": "Platform Admin",
         "welcome": "Bienvenido, {{email}}.",
         "comingSoon": "La gestión de tenants, usuarios, tiers y feature flags estará disponible próximamente."
+      },
+      "tenants": {
+        "title": "Tenants",
+        "lead": "Creá y visualizá los tenants que operan en la plataforma.",
+        "loading": "Cargando…",
+        "loadError": "No se pudieron cargar los tenants.",
+        "tiersLoadError": "No se pudieron cargar los tiers.",
+        "errorTitle": "Error",
+        "addNew": "Nuevo tenant",
+        "addTitle": "Nuevo tenant",
+        "createSuccess": "Tenant creado con éxito.",
+        "saveError": "No se pudo crear el tenant.",
+        "saving": "Guardando…",
+        "save": "Crear tenant",
+        "cancel": "Cancelar",
+        "emptyBody": "Todavía no hay tenants.",
+        "colName": "Nombre",
+        "colDomain": "Dominio",
+        "colTier": "Tier",
+        "colStatus": "Estado",
+        "form": {
+          "name": "Nombre",
+          "namePlaceholder": "p. ej. Salón Bella Vista",
+          "nameRequired": "Ingresá un nombre para el tenant.",
+          "domain": "Dominio (opcional)",
+          "domainPlaceholder": "p. ej. bellavista.pelu.app",
+          "tier": "Tier inicial",
+          "tierPlaceholder": "Seleccioná un tier…",
+          "tierRequired": "Seleccioná un tier inicial."
+        }
       }
     },
     "dashboard": {
@@ -210,7 +241,8 @@
       "INACTIVE": "Inactivo",
       "OPEN": "Abierto",
       "CLOSED": "Cerrado",
-      "VOIDED": "Anulado"
+      "VOIDED": "Anulado",
+      "SUSPENDED": "Suspendido"
     },
     "settings": {
       "sectionTitle": "Configuración",
@@ -856,6 +888,10 @@
       "UNAUTHORIZED": "Debés iniciar sesión para realizar esta acción.",
       "FORBIDDEN": "No tenés permiso para realizar esta acción.",
       "TENANT_NOT_FOUND": "Organización no encontrada.",
+      "TENANT_NAME_REQUIRED": "Ingresá un nombre para el tenant.",
+      "TENANT_DOMAIN_DUPLICATE": "Ese dominio ya está en uso por otro tenant.",
+      "TENANT_TIER_REQUIRED": "Seleccioná un tier inicial.",
+      "TIER_NOT_FOUND": "Ese tier no existe.",
       "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
       "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Profesional no encontrada.",
