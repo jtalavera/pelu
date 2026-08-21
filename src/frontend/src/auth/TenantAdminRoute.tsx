@@ -24,7 +24,7 @@ export function TenantAdminRoute({ children }: Props) {
     return <Navigate to="/" replace />;
   }
 
-  if (me.role !== "SYSTEM_ADMIN" && me.tenantId !== tenantId) {
+  if (me.tenantId !== tenantId) {
     return <Navigate to="/app" replace />;
   }
 

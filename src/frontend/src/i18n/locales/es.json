@@ -150,7 +150,8 @@
       "loading": "Cargando…",
       "navLabel": "Navegación de plataforma",
       "nav": {
-        "dashboard": "Panel"
+        "dashboard": "Panel",
+        "featureFlags": "Funcionalidades"
       },
       "dashboard": {
         "title": "Platform Admin",
@@ -304,8 +305,14 @@
       "title": "Funcionalidades (feature flags)",
       "subtitle": "Activá o desactivá funciones para todos por defecto, o sobreescribilas solo para esta organización. Los cambios se aplican cuando los usuarios cargan la app.",
       "loading": "Cargando funcionalidades…",
-      "forbidden": "Necesitás permisos de administrador para gestionar las funcionalidades.",
+      "forbidden": "Necesitás acceso de Platform Admin para gestionar las funcionalidades.",
       "errorTitle": "No se pudo actualizar",
+      "tenantIdLabel": "ID de tenant",
+      "tenantIdPlaceholder": "ej.: 1",
+      "tenantIdHelp": "Ingresá el ID numérico del tenant cuyas funcionalidades querés gestionar.",
+      "tenantIdSubmit": "Cargar",
+      "tenantIdChange": "Cambiar de tenant",
+      "managingTenant": "Gestionando tenant #{{tenantId}}.",
       "globalDefault": "Predeterminado global",
       "thisTenant": "Esta organización",
       "stateOn": "Sí",

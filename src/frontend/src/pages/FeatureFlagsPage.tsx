@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Badge, Button, Heading, Spinner, Switch, Text } from "@design-system";
+import { Alert, Badge, Button, Heading, Input, Label, Spinner, Switch, Text } from "@design-system";
 import { femmeDeleteJson, femmeJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { getDateLocale } from "../i18n/dateLocale";
-import { useFeatureFlagsState } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 
 type TenantFlagChange = {
@@ -33,31 +32,39 @@ type SifenHomologation = {
 
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
+/**
+ * HU-36: lives under `/platform/feature-flags` (mounted inside `PlatformShell`, gated to
+ * `PLATFORM_ADMIN` by `PlatformAdminRoute`), not `/app/settings/feature-flags` — Platform Admin is
+ * tenant-independent, so it manages an explicitly chosen tenant's flags via the "Tenant ID" form
+ * below rather than an implicit preview tenant. Deliberately does not call `useFeatureFlagsState()`
+ * (unlike before HU-36): that hook requires `FeatureFlagProvider`, mounted only inside `AppShell`
+ * for a tenant-scoped session — `PlatformShell` skips it on purpose (see its own comment) since a
+ * Platform Admin has no "current tenant" app session whose flags cache would need refreshing.
+ */
 export default function FeatureFlagsPage() {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
   const { me } = useMe();
-  const { refetch: refetchFlags } = useFeatureFlagsState();
   const [rows, setRows] = useState<TenantRow[] | null>(null);
   const [homologation, setHomologation] = useState<SifenHomologation | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [tenantIdInput, setTenantIdInput] = useState("");
+  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
 
-  const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
-  const effectiveTenantId =
-    me?.role === "SYSTEM_ADMIN" ? (me.previewTenantId ?? me.tenantId) : (me?.tenantId ?? null);
+  const isPlatformAdmin = me?.role === "PLATFORM_ADMIN";
 
   const load = useCallback(async () => {
-    if (!isSystemAdmin || effectiveTenantId == null) return;
+    if (!isPlatformAdmin || selectedTenantId == null) return;
     setLoadError(null);
     try {
       const [data, homologationData] = await Promise.all([
-        femmeJson<TenantRow[]>(`/api/admin/feature-flags/tenants/${effectiveTenantId}`, {
+        femmeJson<TenantRow[]>(`/api/admin/feature-flags/tenants/${selectedTenantId}`, {
           json: false,
         }),
         femmeJson<SifenHomologation>(
-          `/api/admin/feature-flags/tenants/${effectiveTenantId}/sifen-homologation`,
+          `/api/admin/feature-flags/tenants/${selectedTenantId}/sifen-homologation`,
           { json: false },
         ),
       ]);
@@ -67,19 +74,37 @@ export default function FeatureFlagsPage() {
       setRows(null);
       setLoadError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     }
-  }, [isSystemAdmin, t, effectiveTenantId]);
+  }, [isPlatformAdmin, t, selectedTenantId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  function handleTenantIdSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const parsed = Number(tenantIdInput);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    setRows(null);
+    setHomologation(null);
+    setLoadError(null);
+    setSelectedTenantId(parsed);
+  }
+
+  function handleChangeTenant() {
+    setSelectedTenantId(null);
+    setRows(null);
+    setHomologation(null);
+    setLoadError(null);
+    setTenantIdInput("");
+  }
+
   async function setHomologationStatus(status: SifenHomologationStatus) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey("sifen-homologation");
     try {
       const updated = await femmePutJson<SifenHomologation>(
-        `/api/admin/feature-flags/tenants/${effectiveTenantId}/sifen-homologation`,
+        `/api/admin/feature-flags/tenants/${selectedTenantId}/sifen-homologation`,
         { status },
       );
       setHomologation(updated);
@@ -91,7 +116,7 @@ export default function FeatureFlagsPage() {
   }
 
   async function setGlobalEnabled(flagKey: string, enabled: boolean, description: string | null) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
@@ -100,7 +125,6 @@ export default function FeatureFlagsPage() {
         description: description ?? undefined,
       });
       await load();
-      await refetchFlags();
     } catch (e) {
       setActionError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -109,16 +133,15 @@ export default function FeatureFlagsPage() {
   }
 
   async function setTenantOverride(flagKey: string, enabled: boolean) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
       await femmePutJson(
-        `/api/admin/feature-flags/tenants/${effectiveTenantId}/${encodeURIComponent(flagKey)}`,
+        `/api/admin/feature-flags/tenants/${selectedTenantId}/${encodeURIComponent(flagKey)}`,
         { enabled },
       );
       await load();
-      await refetchFlags();
     } catch (e) {
       setActionError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -127,15 +150,14 @@ export default function FeatureFlagsPage() {
   }
 
   async function removeOverride(flagKey: string) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
       await femmeDeleteJson(
-        `/api/admin/feature-flags/tenants/${effectiveTenantId}/${encodeURIComponent(flagKey)}`,
+        `/api/admin/feature-flags/tenants/${selectedTenantId}/${encodeURIComponent(flagKey)}`,
       );
       await load();
-      await refetchFlags();
     } catch (e) {
       setActionError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -143,7 +165,7 @@ export default function FeatureFlagsPage() {
     }
   }
 
-  if (!isSystemAdmin) {
+  if (!isPlatformAdmin) {
     return (
       <div>
         <Heading as="h2" className="text-[var(--color-ink)]">
@@ -156,12 +178,52 @@ export default function FeatureFlagsPage() {
     );
   }
 
+  if (selectedTenantId == null) {
+    return (
+      <div className="min-w-0">
+        <div className="mb-6">
+          <Heading as="h2" className="text-[var(--color-ink)]">
+            {t("femme.featureFlags.title")}
+          </Heading>
+          <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
+            {t("femme.featureFlags.subtitle")}
+          </Text>
+        </div>
+        <form onSubmit={handleTenantIdSubmit} className="flex max-w-xs flex-col gap-2">
+          <Label htmlFor="tenant-id-input" className="text-[var(--color-ink-2)]">
+            {t("femme.featureFlags.tenantIdLabel")}
+          </Label>
+          <Input
+            id="tenant-id-input"
+            name="tenantId"
+            type="number"
+            min={1}
+            inputMode="numeric"
+            placeholder={t("femme.featureFlags.tenantIdPlaceholder")}
+            value={tenantIdInput}
+            onChange={(e) => setTenantIdInput(e.target.value)}
+            required
+          />
+          <Text variant="small" className="text-[var(--color-ink-3)]">
+            {t("femme.featureFlags.tenantIdHelp")}
+          </Text>
+          <Button type="submit" variant="primary" className="min-h-11 self-start">
+            {t("femme.featureFlags.tenantIdSubmit")}
+          </Button>
+        </form>
+      </div>
+    );
+  }
+
   if (loadError) {
     return (
       <div>
         <Alert variant="destructive" title={t("femme.featureFlags.errorTitle")}>
           {loadError}
         </Alert>
+        <Button type="button" size="sm" variant="outline" className="mt-4" onClick={handleChangeTenant}>
+          {t("femme.featureFlags.tenantIdChange")}
+        </Button>
       </div>
     );
   }
@@ -177,13 +239,21 @@ export default function FeatureFlagsPage() {
 
   return (
     <div className="min-w-0">
-      <div className="mb-6">
-        <Heading as="h2" className="text-[var(--color-ink)]">
-          {t("femme.featureFlags.title")}
-        </Heading>
-        <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
-          {t("femme.featureFlags.subtitle")}
-        </Text>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Heading as="h2" className="text-[var(--color-ink)]">
+            {t("femme.featureFlags.title")}
+          </Heading>
+          <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
+            {t("femme.featureFlags.subtitle")}
+          </Text>
+          <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
+            {t("femme.featureFlags.managingTenant", { tenantId: selectedTenantId })}
+          </Text>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={handleChangeTenant}>
+          {t("femme.featureFlags.tenantIdChange")}
+        </Button>
       </div>
 
       {actionError ? (

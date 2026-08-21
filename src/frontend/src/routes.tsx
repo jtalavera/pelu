@@ -52,7 +52,6 @@ export function AppRoutes() {
           <Route path="business" element={<BusinessSettingsPage />} />
           <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
           <Route path="taxes" element={<TaxSettingsPage />} />
-          <Route path="feature-flags" element={<FeatureFlagsPage />} />
           <Route path="sifen" element={<SifenCertificatesPage />} />
         </Route>
       </Route>
@@ -64,6 +63,7 @@ export function AppRoutes() {
         }
       >
         <Route path="/platform" element={<PlatformDashboardPage />} />
+        <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>

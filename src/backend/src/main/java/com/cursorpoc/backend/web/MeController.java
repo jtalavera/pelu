@@ -1,9 +1,7 @@
 package com.cursorpoc.backend.web;
 
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.Professional;
-import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
@@ -32,17 +30,14 @@ public class MeController {
 
   private static final Logger log = LoggerFactory.getLogger(MeController.class);
 
-  private final FemmeSystemAdminProperties systemAdminProperties;
   private final ProfessionalRepository professionalRepository;
   private final AppUserRepository appUserRepository;
   private final PasswordEncoder passwordEncoder;
 
   public MeController(
-      FemmeSystemAdminProperties systemAdminProperties,
       ProfessionalRepository professionalRepository,
       AppUserRepository appUserRepository,
       PasswordEncoder passwordEncoder) {
-    this.systemAdminProperties = systemAdminProperties;
     this.professionalRepository = professionalRepository;
     this.appUserRepository = appUserRepository;
     this.passwordEncoder = passwordEncoder;
@@ -54,9 +49,6 @@ public class MeController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    Long preview =
-        principal.getRole() == UserRole.SYSTEM_ADMIN ? systemAdminProperties.getTenantId() : null;
-
     // HU-35: PLATFORM_ADMIN has no tenant and no linked Professional — getProfessionalId() is
     // always null for that role, so this branch is naturally skipped without a tenant lookup.
     MeProfileResponse profile = null;
@@ -82,7 +74,6 @@ public class MeController {
             principal.getUsername(),
             principal.getRole().name(),
             principal.getProfessionalId(),
-            preview,
             profile);
     log.info("GET /api/me tenantId={} status=200", principal.getTenantIdOrNull());
     return resp;

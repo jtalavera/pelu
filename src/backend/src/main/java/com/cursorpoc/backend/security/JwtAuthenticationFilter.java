@@ -14,18 +14,24 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   /**
-   * HU-34 AC-3/AC-4, extended by HU-35: the only path prefixes allowed to authenticate a
+   * HU-34 AC-3/AC-4, extended by HU-35 and HU-36: the only path prefixes allowed to authenticate a
    * tenant-less (PLATFORM_ADMIN) token. {@code /api/platform/**} is the explicit platform area
    * (AC-5: Platform Admin never reaches tenant business data via a bypass on tenant-scoped routes,
    * only through these new routes); {@code /api/auth/**} is session plumbing (login/refresh), not
    * tenant-scoped business data, so a Platform Admin must still be able to refresh their own
    * session. {@code /api/me} (HU-35) is generic "who am I" identity, not tenant business data
    * either — the frontend's route guard for {@code /platform/**} needs it to resolve the current
-   * user's role. Every other route — unchanged from before HU-34 — keeps rejecting a token without
-   * {@code tid}, for every role.
+   * user's role. {@code /api/admin/feature-flags} (HU-36) is the explicit platform route for global
+   * and per-tenant feature-flag/SIFEN-homologación administration — it migrated here from the
+   * retired {@code SYSTEM_ADMIN} role, which used to reach the very same paths via a tenant-bound
+   * token plus a {@code TenantPathAccess} bypass (also retired); {@link
+   * com.cursorpoc.backend.web.FeatureFlagController} gates every one of these endpoints to {@code
+   * PLATFORM_ADMIN} and treats each {@code {tenantId}} path segment as an explicit, deliberate
+   * target rather than matching it against the caller's own (nonexistent) tenant. Every other route
+   * — unchanged from before HU-34 — keeps rejecting a token without {@code tid}, for every role.
    */
   private static final String[] TENANT_OPTIONAL_PATH_PREFIXES = {
-    "/api/platform/", "/api/auth/", "/api/me"
+    "/api/platform/", "/api/auth/", "/api/me", "/api/admin/feature-flags"
   };
 
   private final JwtService jwtService;

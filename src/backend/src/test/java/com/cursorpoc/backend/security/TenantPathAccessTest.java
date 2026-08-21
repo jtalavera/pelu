@@ -16,12 +16,6 @@ class TenantPathAccessTest {
   }
 
   @Test
-  void systemAdmin_skipsPathCheck() {
-    var p = new FemmeUserPrincipal(1L, 99L, "root@pelu", UserRole.SYSTEM_ADMIN, null);
-    TenantPathAccess.requirePathTenantMatchesJwt(p, 2L);
-  }
-
-  @Test
   void forbidden_whenDifferentTenants() {
     var p = new FemmeUserPrincipal(1L, 1L, "a@b.com", UserRole.ADMIN, null);
     assertThatThrownBy(() -> TenantPathAccess.requirePathTenantMatchesJwt(p, 2L))
@@ -30,10 +24,10 @@ class TenantPathAccessTest {
   }
 
   /**
-   * HU-34 AC-5: unlike SYSTEM_ADMIN above, PLATFORM_ADMIN gets no bypass here — a tenant-less
-   * principal reaching this tenant-scoped check at all is already a bug elsewhere (the JWT filter
-   * should have rejected it before any controller ran), so this fails loudly instead of silently
-   * granting cross-tenant access.
+   * HU-34 AC-5 (and HU-36, which retired the legacy SYSTEM_ADMIN bypass this check used to have):
+   * PLATFORM_ADMIN gets no bypass here — a tenant-less principal reaching this tenant-scoped check
+   * at all is already a bug elsewhere (the JWT filter should have rejected it before any controller
+   * ran), so this fails loudly instead of silently granting cross-tenant access.
    */
   @Test
   void platformAdmin_getsNoBypass_andFailsLoudlyInsteadOfGrantingAccess() {

@@ -1,7 +1,6 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.PasswordResetToken;
 import com.cursorpoc.backend.domain.Professional;
@@ -64,7 +63,6 @@ public class AuthService {
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final FemmeJwtProperties jwtProperties;
-  private final FemmeSystemAdminProperties systemAdminProperties;
   private final EmailService emailService;
 
   public AuthService(
@@ -76,7 +74,6 @@ public class AuthService {
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
       FemmeJwtProperties jwtProperties,
-      FemmeSystemAdminProperties systemAdminProperties,
       EmailService emailService) {
     this.appUserRepository = appUserRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
@@ -86,39 +83,11 @@ public class AuthService {
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
     this.jwtProperties = jwtProperties;
-    this.systemAdminProperties = systemAdminProperties;
     this.emailService = emailService;
   }
 
   public TokenResponse login(LoginRequest request, String origin) {
     String email = request.email().trim().toLowerCase();
-    if (email.equalsIgnoreCase(systemAdminProperties.getEmail())) {
-      AppUser systemUser =
-          appUserRepository
-              .findByEmail(email)
-              .orElseThrow(
-                  () ->
-                      new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
-      if (systemUser.getRole() != UserRole.SYSTEM_ADMIN) {
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
-      }
-      if (!passwordEncoder.matches(request.password(), systemUser.getPasswordHash())) {
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
-      }
-      if (!systemUser.isEnabled()) {
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
-      }
-      Instant now = Instant.now();
-      String token =
-          jwtService.createAccessToken(
-              systemUser.getId(),
-              systemUser.getTenant().getId(),
-              systemUser.getEmail(),
-              systemUser.getRole(),
-              null,
-              now);
-      return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
-    }
 
     // HU-34: PLATFORM_ADMIN is tenant-independent — try a tenant-less lookup by email before
     // falling back to the tenant-scoped path below. findByEmail() is only reached here for emails

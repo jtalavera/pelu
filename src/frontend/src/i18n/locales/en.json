@@ -150,7 +150,8 @@
       "loading": "Loading…",
       "navLabel": "Platform navigation",
       "nav": {
-        "dashboard": "Dashboard"
+        "dashboard": "Dashboard",
+        "featureFlags": "Feature flags"
       },
       "dashboard": {
         "title": "Platform Admin",
@@ -304,8 +305,14 @@
       "title": "Feature flags",
       "subtitle": "Turn features on or off for everyone by default, or override them for this organization only. Changes apply when users load the app.",
       "loading": "Loading feature flags…",
-      "forbidden": "You need administrator access to manage feature flags.",
+      "forbidden": "You need Platform Admin access to manage feature flags.",
       "errorTitle": "Could not update",
+      "tenantIdLabel": "Tenant ID",
+      "tenantIdPlaceholder": "e.g. 1",
+      "tenantIdHelp": "Enter the numeric ID of the tenant whose feature flags you want to manage.",
+      "tenantIdSubmit": "Load",
+      "tenantIdChange": "Change tenant",
+      "managingTenant": "Managing tenant #{{tenantId}}.",
       "globalDefault": "Global default",
       "thisTenant": "This organization",
       "stateOn": "On",

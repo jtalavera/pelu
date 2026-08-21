@@ -1,7 +1,6 @@
 package com.cursorpoc.backend.bootstrap;
 
 import com.cursorpoc.backend.config.FemmePlatformAdminProperties;
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Client;
@@ -72,7 +71,6 @@ public class FemmeDataInitializer {
   private final ClientRepository clientRepository;
   private final InvoiceRepository invoiceRepository;
   private final AppointmentRepository appointmentRepository;
-  private final FemmeSystemAdminProperties systemAdminProperties;
   private final FemmePlatformAdminProperties platformAdminProperties;
   private final PasswordEncoder passwordEncoder;
 
@@ -90,7 +88,6 @@ public class FemmeDataInitializer {
       ClientRepository clientRepository,
       InvoiceRepository invoiceRepository,
       AppointmentRepository appointmentRepository,
-      FemmeSystemAdminProperties systemAdminProperties,
       FemmePlatformAdminProperties platformAdminProperties,
       PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
@@ -106,7 +103,6 @@ public class FemmeDataInitializer {
     this.clientRepository = clientRepository;
     this.invoiceRepository = invoiceRepository;
     this.appointmentRepository = appointmentRepository;
-    this.systemAdminProperties = systemAdminProperties;
     this.platformAdminProperties = platformAdminProperties;
     this.passwordEncoder = passwordEncoder;
   }
@@ -162,29 +158,10 @@ public class FemmeDataInitializer {
 
       tenantRepository.findFirstByOrderByIdAsc().ifPresent(tenant -> seedClientsFromCsv(tenant));
 
-      var systemEmail = systemAdminProperties.getEmail().trim().toLowerCase();
-      if (appUserRepository.findByEmail(systemEmail).isEmpty()) {
-        tenantRepository
-            .findById(systemAdminProperties.getTenantId())
-            .ifPresentOrElse(
-                t -> {
-                  AppUser root = new AppUser();
-                  root.setTenant(t);
-                  root.setEmail(systemEmail);
-                  root.setPasswordHash(passwordEncoder.encode(systemAdminProperties.getPassword()));
-                  root.setRole(UserRole.SYSTEM_ADMIN);
-                  appUserRepository.save(root);
-                  log.info("Seeded system admin user {} on tenant id={}", systemEmail, t.getId());
-                },
-                () ->
-                    log.warn(
-                        "Skipped system admin seed: no tenant with id={}",
-                        systemAdminProperties.getTenantId()));
-      }
-
       // HU-34: seed a genuinely tenant-independent PLATFORM_ADMIN (tenant == null) for
-      // dev/e2e testing. A real production bootstrap flow is HU-57's scope, not this one — this
-      // mirrors the existing SYSTEM_ADMIN seed above, gated the same way (femme.data-init.enabled).
+      // dev/e2e testing. A real production bootstrap flow is HU-57's scope, not this one. HU-36
+      // retired the legacy tenant-bound SYSTEM_ADMIN seed this used to sit next to (migrated to
+      // PLATFORM_ADMIN by V40 for any environment that already had that row).
       var platformAdminEmail = platformAdminProperties.getEmail().trim().toLowerCase();
       if (appUserRepository.findByEmail(platformAdminEmail).isEmpty()) {
         AppUser platformAdmin = new AppUser();

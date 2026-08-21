@@ -14,11 +14,12 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * HU-34 AC-3/AC-4, extended by HU-35: a PLATFORM_ADMIN token (no {@code tid}) authenticates on
- * {@code /api/platform/**}, {@code /api/auth/**}, and (since HU-35) {@code /api/me}, but is left
- * unauthenticated everywhere else — same outcome (SecurityContext left empty, so SecurityConfig's
- * {@code anyRequest().authenticated()} rejects the request) tenant-scoped routes already gave any
- * tid-less token before this story, for any role.
+ * HU-34 AC-3/AC-4, extended by HU-35 and HU-36: a PLATFORM_ADMIN token (no {@code tid})
+ * authenticates on {@code /api/platform/**}, {@code /api/auth/**}, (since HU-35) {@code /api/me},
+ * and (since HU-36) {@code /api/admin/feature-flags}, but is left unauthenticated everywhere else —
+ * same outcome (SecurityContext left empty, so SecurityConfig's {@code
+ * anyRequest().authenticated()} rejects the request) tenant-scoped routes already gave any tid-less
+ * token before this story, for any role.
  */
 class JwtAuthenticationFilterTest {
 
@@ -68,6 +69,18 @@ class JwtAuthenticationFilterTest {
     // /platform/** route guard needs it to resolve the current user's role, so a tenant-less
     // PLATFORM_ADMIN token must authenticate here (unlike genuinely tenant-scoped routes).
     runFilter(platformAdminToken(), "/api/me");
+
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    assertThat(auth).isNotNull();
+    assertThat(((FemmeUserPrincipal) auth.getPrincipal()).isPlatformAdmin()).isTrue();
+  }
+
+  @Test
+  void platformAdminToken_authenticates_onAdminFeatureFlagsRoute() throws Exception {
+    // HU-36: the retired SYSTEM_ADMIN role used to reach these paths via a tenant-bound token plus
+    // a TenantPathAccess bypass; PLATFORM_ADMIN reaches the very same paths as an explicit platform
+    // route instead (see FeatureFlagController's requirePlatformAdmin gating).
+    runFilter(platformAdminToken(), "/api/admin/feature-flags/tenants/1/sifen-homologation");
 
     var auth = SecurityContextHolder.getContext().getAuthentication();
     assertThat(auth).isNotNull();

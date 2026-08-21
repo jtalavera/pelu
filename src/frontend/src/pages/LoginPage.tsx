@@ -59,9 +59,7 @@ export default function LoginPage() {
             ? from
             : role === "PROFESSIONAL"
               ? "/app/calendar"
-              : role === "SYSTEM_ADMIN"
-                ? "/app/settings/feature-flags"
-                : "/app";
+              : "/app";
       navigate(destination, { replace: true });
     } catch {
       setError(t("femme.login.errorNetwork"));

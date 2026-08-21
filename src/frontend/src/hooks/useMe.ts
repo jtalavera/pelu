@@ -15,13 +15,8 @@ export type Me = {
   /** null only for PLATFORM_ADMIN (HU-34) — genuinely tenant-independent. */
   tenantId: number | null;
   email: string;
-  role: "PLATFORM_ADMIN" | "SYSTEM_ADMIN" | "ADMIN" | "PROFESSIONAL";
+  role: "PLATFORM_ADMIN" | "ADMIN" | "PROFESSIONAL";
   professionalId: number | null;
-  /**
-   * When `SYSTEM_ADMIN`, the real salon tenant to use for feature flags and data preview.
-   * For other roles, usually matches `tenantId` or is null.
-   */
-  previewTenantId: number | null;
   /** Profile data from linked Professional; null for admin without linked Professional. */
   profile: MeProfile | null;
 };
@@ -41,12 +36,9 @@ export function useMe(): { me: Me | null; loading: boolean } {
           if (!cancelled) setMe(null);
           return;
         }
-        const data = (await res.json()) as Me & { previewTenantId?: number | null };
+        const data = (await res.json()) as Me;
         if (!cancelled) {
-          setMe({
-            ...data,
-            previewTenantId: data.previewTenantId ?? null,
-          });
+          setMe(data);
         }
       } catch {
         if (!cancelled) setMe(null);

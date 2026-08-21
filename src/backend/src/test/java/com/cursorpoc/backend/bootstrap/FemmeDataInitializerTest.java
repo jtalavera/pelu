@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmePlatformAdminProperties;
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.AppUserRepository;
@@ -51,7 +50,6 @@ class FemmeDataInitializerTest {
   @Mock private ClientRepository clientRepository;
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private AppointmentRepository appointmentRepository;
-  @Mock private FemmeSystemAdminProperties systemAdminProperties;
   @Mock private FemmePlatformAdminProperties platformAdminProperties;
   @Mock private PasswordEncoder passwordEncoder;
 
@@ -75,7 +73,6 @@ class FemmeDataInitializerTest {
             clientRepository,
             invoiceRepository,
             appointmentRepository,
-            systemAdminProperties,
             platformAdminProperties,
             passwordEncoder);
     tenant = new Tenant();

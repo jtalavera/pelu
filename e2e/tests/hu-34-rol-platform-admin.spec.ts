@@ -6,7 +6,6 @@ import {
   decodeJwtPayload,
   loginAsDemoApi,
   loginPlatformAdminApi,
-  loginSystemAdminApi,
 } from "../fixtures/api";
 
 // HU-34 · Definir rol Platform Admin tenant-independiente
@@ -16,8 +15,8 @@ import {
 // pure identity/auth plumbing (role, JWT shape, endpoint gating) with no UI surface of its own —
 // login *routing* by role is a separate story (HU-35), out of scope here per the HU's own "Notas
 // para estimación y pruebas". The seeded platform-admin@pelu user (FemmeDataInitializer, gated by
-// femme.data-init.enabled=true, same as root@pelu SYS_ADMIN) exists specifically to make this
-// story's login/JWT/gating behavior exercisable end-to-end against the real backend.
+// femme.data-init.enabled=true) exists specifically to make this story's login/JWT/gating behavior
+// exercisable end-to-end against the real backend.
 
 // Mirrors application-e2e.properties' app.femme.jwt.secret exactly — used only to forge a
 // deliberately-invalid (tid-less, non-platform-admin) token for AC-4's "any other role" case,
@@ -53,16 +52,11 @@ test.describe("HU-34 · Rol Platform Admin tenant-independiente", () => {
     expect(claims).not.toHaveProperty("tid");
   });
 
-  // AC-1: PLATFORM_ADMIN is a distinct role from the legacy SYSTEM_ADMIN — same login endpoint,
-  // different role claim, and (unlike Platform Admin) SYSTEM_ADMIN's token still carries a tid
-  // (HU-36, not this story, migrates SYSTEM_ADMIN to the new tenant-independent model).
-  test("AC1: SYSTEM_ADMIN remains a distinct, tenant-bound role after HU-34", async ({ request }) => {
-    const token = await loginSystemAdminApi(request);
-    const claims = decodeJwtPayload(token);
-
-    expect(claims.role).toBe("SYSTEM_ADMIN");
-    expect(claims).toHaveProperty("tid");
-  });
+  // AC-1 (superseded by HU-36): this used to assert PLATFORM_ADMIN was distinct from the legacy
+  // SYSTEM_ADMIN role, which still existed and was still tenant-bound at that point. HU-36 migrated
+  // every SYSTEM_ADMIN row to PLATFORM_ADMIN and retired the role from the enum entirely — see
+  // e2e/tests/hu-36-migrar-system-admin-a-platform-admin.spec.ts for that story's own coverage
+  // (login continuity, no SYSTEM_ADMIN role survives, explicit-platform-route access only).
 
   // AC-3: the backend accepts a tid-less Platform Admin token as valid specifically on the new
   // explicit platform route (/api/platform/me).
@@ -108,8 +102,8 @@ test.describe("HU-34 · Rol Platform Admin tenant-independiente", () => {
   // AC-4: the same rejection applies to *any* role's token, not just PLATFORM_ADMIN's — a
   // tid-less token is never valid on a tenant-scoped route regardless of who it claims to be.
   // No real login flow can produce such a token for a non-platform-admin role (AuthService always
-  // attaches a tenant for ADMIN/PROFESSIONAL/SYSTEM_ADMIN), so this forges one directly with the
-  // e2e environment's known JWT secret to exercise JwtAuthenticationFilter's gate in isolation.
+  // attaches a tenant for ADMIN/PROFESSIONAL), so this forges one directly with the e2e
+  // environment's known JWT secret to exercise JwtAuthenticationFilter's gate in isolation.
   test("AC4: a forged tid-less token for a non-platform role is also rejected on a tenant-scoped route", async ({
     request,
   }) => {

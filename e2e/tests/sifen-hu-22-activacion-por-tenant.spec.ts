@@ -8,10 +8,11 @@ import {
   ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
   loginAsDemoApi,
+  loginPlatformAdminApi,
   seedCategoryServiceProfessional,
   seedClient,
 } from "../fixtures/api";
-import { loginAs, loginAsDemo } from "../fixtures/auth";
+import { PLATFORM_ADMIN_EMAIL, loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
 //
@@ -44,8 +45,6 @@ import { loginAs, loginAsDemo } from "../fixtures/auth";
 // mechanism to create a second real tenant in tests (documented already in HU-18's own deviation,
 // see PROGRESS.md) — verified instead at the unit level in FeatureFlagServiceTest.
 
-const SYS_ADMIN_EMAIL = "root@pelu";
-const SYS_ADMIN_PASSWORD = ".The.Super@admin.1982";
 const DEMO_TENANT_ID = 1;
 const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 const FIXTURE_CERT_RUC = "12345678-9";
@@ -61,17 +60,12 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await setTenantFlag(request, false);
   });
 
-  async function loginSystemAdminApi(request: APIRequestContext): Promise<string> {
-    const res = await request.post(`${apiBaseUrl()}/api/auth/login`, {
-      data: { email: SYS_ADMIN_EMAIL, password: SYS_ADMIN_PASSWORD },
-    });
-    expect(res.ok(), await res.text()).toBeTruthy();
-    const json = (await res.json()) as { accessToken: string };
-    return json.accessToken;
-  }
-
+  // HU-36: the SYSTEM_ADMIN role was migrated to PLATFORM_ADMIN — feature-flag administration
+  // (including this per-tenant SIFEN toggle) now goes through loginPlatformAdminApi, and
+  // /api/admin/feature-flags/** is an explicit platform route (JwtAuthenticationFilter allowlist)
+  // rather than a tenant-bound token bypassing TenantPathAccess.
   async function setTenantFlag(request: APIRequestContext, enabled: boolean) {
-    const token = await loginSystemAdminApi(request);
+    const token = await loginPlatformAdminApi(request);
     const res = await request.put(
       `${apiBaseUrl()}/api/admin/feature-flags/tenants/${DEMO_TENANT_ID}/${FLAG_KEY}`,
       { headers: authHeaders(token), data: { enabled } },
@@ -161,9 +155,14 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     return apiGetJson<IssuedInvoice>(request, token, `/api/invoices/${invoiceId}`);
   }
 
-  test("HU-22 · AC-01 existe el toggle por tenant para un system admin", async ({ page }) => {
-    await loginAs(page, SYS_ADMIN_EMAIL, SYS_ADMIN_PASSWORD);
-    await page.goto("/app/settings/feature-flags");
+  // HU-36: the toggle lives at /platform/feature-flags (Platform Admin's own area) now, not
+  // /app/settings/feature-flags — Platform Admin picks the target tenant explicitly (no implicit
+  // preview tenant), so this also exercises that "Tenant ID" form.
+  test("HU-22/HU-36 · existe el toggle por tenant para un Platform Admin", async ({ page }) => {
+    await loginAsPlatformAdmin(page);
+    await page.goto("/platform/feature-flags");
+    await page.getByLabel("Tenant ID").fill(String(DEMO_TENANT_ID));
+    await page.getByRole("button", { name: "Load" }).click();
     await expect(page.getByText(FLAG_KEY)).toBeVisible();
     await expect(page.locator(`#ff-tenant-${FLAG_KEY}`)).toBeVisible();
   });
@@ -237,9 +236,14 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     expect(refetchedTraditionalInvoice.sifenSubmissionStatus).toBeNull();
   });
 
-  test("HU-22 · AC-05 el sistema deja un registro histórico del cambio de flag", async ({ page }) => {
-    await loginAs(page, SYS_ADMIN_EMAIL, SYS_ADMIN_PASSWORD);
-    await page.goto("/app/settings/feature-flags");
+  test("HU-22/HU-36 · el sistema deja un registro histórico del cambio de flag", async ({
+    page,
+  }) => {
+    await loginAsPlatformAdmin(page);
+    await page.goto("/platform/feature-flags");
+    await page.getByLabel("Tenant ID").fill(String(DEMO_TENANT_ID));
+    await page.getByRole("button", { name: "Load" }).click();
+    await expect(page.getByText(FLAG_KEY)).toBeVisible();
 
     // The Switch's real <input> is visually sr-only (styling handled by sibling spans), so
     // Playwright's actionability check sees it as covered — same pattern any design-system Switch
@@ -249,7 +253,7 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
 
     const history = page.getByTestId(`feature-flag-history-${FLAG_KEY}`);
     await expect(history).toBeVisible();
-    await expect(history).toContainText(SYS_ADMIN_EMAIL);
+    await expect(history).toContainText(PLATFORM_ADMIN_EMAIL);
   });
 
   test("HU-22 · AC-08 el resto del sistema sigue funcionando con el flag activado", async ({
@@ -312,10 +316,10 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await expect(page.getByText("SIFEN tax data")).toHaveCount(0);
   });
 
-  test("HU-22 · Adenda un system admin (no ADMIN del tenant) no puede gestionar Datos del negocio", async ({
+  test("HU-22/HU-36 · un Platform Admin (no ADMIN del tenant) no puede gestionar Datos del negocio", async ({
     page,
   }) => {
-    await loginAs(page, SYS_ADMIN_EMAIL, SYS_ADMIN_PASSWORD);
+    await loginAsPlatformAdmin(page);
     await page.goto("/app/settings/taxes");
     await expect(page.getByRole("link", { name: "Business", exact: true })).toHaveCount(0);
 
@@ -325,10 +329,15 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     ).toBeVisible();
   });
 
-  test("HU-22 · Adenda PUT /api/business-profile devuelve 403 para un system admin, GET sigue abierto", async ({
+  // HU-36: this used to log in as the tenant-bound SYSTEM_ADMIN (tid=1), which authenticated on
+  // any tenant-scoped route and only got a role-based 403 on PUT (GET was open to any authenticated
+  // tenant-scoped role). PLATFORM_ADMIN is genuinely tenant-independent — its token carries no tid
+  // at all, so it never authenticates on /api/business-profile in the first place (that path isn't
+  // in JwtAuthenticationFilter's tenant-optional allowlist); both GET and PUT now 403.
+  test("HU-22/HU-36 · /api/business-profile rejects a tenant-less Platform Admin token (GET and PUT)", async ({
     request,
   }) => {
-    const token = await loginSystemAdminApi(request);
+    const token = await loginPlatformAdminApi(request);
     const putRes = await request.put(`${apiBaseUrl()}/api/business-profile`, {
       headers: authHeaders(token),
       data: { businessName: "Should be rejected" },
@@ -338,6 +347,6 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     const getRes = await request.get(`${apiBaseUrl()}/api/business-profile`, {
       headers: authHeaders(token),
     });
-    expect(getRes.ok(), await getRes.text()).toBeTruthy();
+    expect(getRes.status()).toBe(403);
   });
 });

@@ -34,22 +34,13 @@ export function authHeaders(token: string): Record<string, string> {
   };
 }
 
-const SYS_ADMIN_EMAIL = "root@pelu";
-const SYS_ADMIN_PASSWORD = ".The.Super@admin.1982";
-
-export async function loginSystemAdminApi(request: APIRequestContext): Promise<string> {
-  const res = await request.post(`${API_BASE}/api/auth/login`, {
-    data: { email: SYS_ADMIN_EMAIL, password: SYS_ADMIN_PASSWORD },
-  });
-  expect(res.ok(), await res.text()).toBeTruthy();
-  const json = (await res.json()) as { accessToken: string };
-  return json.accessToken;
-}
-
-// HU-34: seeded by FemmeDataInitializer (femme.data-init.enabled=true, same gating as
-// SYS_ADMIN_EMAIL above) — see FemmePlatformAdminProperties for the default credentials.
-// Credentials now live in ./auth (PLATFORM_ADMIN_EMAIL/PASSWORD), shared with HU-35's
-// browser-level login helper (loginAsPlatformAdmin).
+// HU-34: seeded by FemmeDataInitializer (femme.data-init.enabled=true) — see
+// FemmePlatformAdminProperties for the default credentials. Credentials live in ./auth
+// (PLATFORM_ADMIN_EMAIL/PASSWORD), shared with HU-35's browser-level login helper
+// (loginAsPlatformAdmin). HU-36 retired the legacy tenant-bound SYSTEM_ADMIN role (and the
+// loginSystemAdminApi helper that used to log in as it) — PLATFORM_ADMIN is now the only
+// platform-operator identity, including for feature-flag administration (see
+// setTenantFeatureFlag below).
 export async function loginPlatformAdminApi(request: APIRequestContext): Promise<string> {
   const res = await request.post(`${API_BASE}/api/auth/login`, {
     data: { email: PLATFORM_ADMIN_EMAIL, password: PLATFORM_ADMIN_PASSWORD },
@@ -68,14 +59,14 @@ export function decodeJwtPayload(token: string): Record<string, unknown> {
 }
 
 /** Sets a tenant's override for a feature flag (e.g. SIFEN_ELECTRONIC_INVOICING) via the
- * system-admin endpoint — same write path as the toggle at /app/settings/feature-flags. */
+ * Platform Admin endpoint — same write path as the toggle at /platform/feature-flags. */
 export async function setTenantFeatureFlag(
   request: APIRequestContext,
   tenantId: number,
   flagKey: string,
   enabled: boolean,
 ): Promise<void> {
-  const token = await loginSystemAdminApi(request);
+  const token = await loginPlatformAdminApi(request);
   const res = await request.put(`${API_BASE}/api/admin/feature-flags/tenants/${tenantId}/${flagKey}`, {
     headers: authHeaders(token),
     data: { enabled },
