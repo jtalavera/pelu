@@ -7,6 +7,7 @@ import com.cursorpoc.backend.excelimport.ImportResult;
 import com.cursorpoc.backend.excelimport.ImportRowOutcome;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ClientImportService;
+import com.cursorpoc.backend.service.ProfessionalImportService;
 import com.cursorpoc.backend.service.ServiceImportService;
 import com.cursorpoc.backend.web.dto.ImportFileRequest;
 import com.cursorpoc.backend.web.dto.ImportResultResponse;
@@ -25,12 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-51/HU-52 (Épica E — Importación de datos vía Excel): the actual upload → parse data rows →
- * validate row-by-row → persist flow for the "servicios" and "clientes" entities, extending HU-50's
- * headers-only foundation. Platform-Admin-only, tenant-scoped (the target tenant is chosen
- * explicitly by the caller — AC-1 — unlike the tenant-independent {@code
- * PlatformImportTemplateController} routes). Profesionales import (HU-53) is not wired yet; that
- * entity is rejected with a clear, temporary error code rather than silently doing nothing.
+ * HU-51/HU-52/HU-53 (Épica E — Importación de datos vía Excel): the actual upload → parse data rows
+ * → validate row-by-row → persist flow for the "servicios", "clientes" and "profesionales"
+ * entities, extending HU-50's headers-only foundation. Platform-Admin-only, tenant-scoped (the
+ * target tenant is chosen explicitly by the caller — AC-1 — unlike the tenant-independent {@code
+ * PlatformImportTemplateController} routes).
  */
 @RestController
 @RequestMapping("/api/platform/tenants/{tenantId}/import")
@@ -41,14 +41,17 @@ public class PlatformTenantImportController {
   private final ExcelHeaderValidationService headerValidationService;
   private final ServiceImportService serviceImportService;
   private final ClientImportService clientImportService;
+  private final ProfessionalImportService professionalImportService;
 
   public PlatformTenantImportController(
       ExcelHeaderValidationService headerValidationService,
       ServiceImportService serviceImportService,
-      ClientImportService clientImportService) {
+      ClientImportService clientImportService,
+      ProfessionalImportService professionalImportService) {
     this.headerValidationService = headerValidationService;
     this.serviceImportService = serviceImportService;
     this.clientImportService = clientImportService;
+    this.professionalImportService = professionalImportService;
   }
 
   /**
@@ -83,16 +86,6 @@ public class PlatformTenantImportController {
           entity);
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "IMPORT_ENTITY_NOT_FOUND");
     }
-    if (entityType != ImportEntityType.SERVICES && entityType != ImportEntityType.CLIENTS) {
-      log.error(
-          "{} adminUserId={} tenantId={} status=400 - entity={} not yet supported",
-          routeLabel,
-          principal.getUserId(),
-          tenantId,
-          entity);
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "IMPORT_ENTITY_NOT_SUPPORTED");
-    }
-
     if (!headerValidationService.hasValidExtension(request.fileName())) {
       log.error(
           "{} adminUserId={} tenantId={} entity={} status=200 result=INVALID_FILE_EXTENSION",
@@ -119,9 +112,12 @@ public class PlatformTenantImportController {
 
     try {
       ImportResult result =
-          entityType == ImportEntityType.CLIENTS
-              ? clientImportService.importClients(tenantId, fileBytes)
-              : serviceImportService.importServices(tenantId, fileBytes);
+          switch (entityType) {
+            case CLIENTS -> clientImportService.importClients(tenantId, fileBytes);
+            case PROFESSIONALS ->
+                professionalImportService.importProfessionals(tenantId, fileBytes);
+            case SERVICES -> serviceImportService.importServices(tenantId, fileBytes);
+          };
       ImportResultResponse response = toResponse(result);
       if (!response.fileAccepted()) {
         log.error(

@@ -24,8 +24,8 @@ import { listTenantsPaged, type PlatformTenant } from "../api/platformTenants";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 
-/** HU-51/HU-52: "services" and "clients" have an actual upload -> import flow wired (HU-53 pending). */
-const IMPORTABLE_ENTITIES = new Set(["services", "clients"]);
+/** HU-51/HU-52/HU-53: "services", "clients" and "professionals" all have an actual upload -> import flow wired. */
+const IMPORTABLE_ENTITIES = new Set(["services", "clients", "professionals"]);
 
 const ENTITY_ORDER = ["services", "clients", "professionals"] as const;
 
@@ -73,8 +73,8 @@ const tdStyle: React.CSSProperties = {
  * HU-50 (Épica E — Importación de datos vía Excel): AC-1/AC-2/AC-3/AC-4 documented per-entity
  * column templates + AC-7 (visible to the Platform Admin at import time, not only in the HU-50
  * spec file), plus an AC-5/AC-6 headers-only file check. HU-51 wired the actual import for
- * servicios, HU-52 for clientes; profesionales (HU-53) is still headers-only. Downloading a
- * ready-made example spreadsheet with sample rows is HU-55's separate scope, not built here.
+ * servicios, HU-52 for clientes, HU-53 for profesionales. Downloading a ready-made example
+ * spreadsheet with sample rows is HU-55's separate scope, not built here.
  */
 export default function PlatformImportPage() {
   const { t } = useTranslation();
