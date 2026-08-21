@@ -4,7 +4,7 @@
 | ---------- | --------------------------------------------------|
 | **ID**     | HU-52                                             |
 | **Módulo** | Plataforma · Importación de datos vía Excel       |
-| **Estado** | `Backlog`                                         |
+| **Estado** | `Done`                                            |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 

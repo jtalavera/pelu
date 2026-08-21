@@ -84,7 +84,7 @@ negocio de un tenant).
 | HU-49 | Configuración global y per-tenant de feature flags | Done (funcionalidad preexistente, documentada retroactivamente) |
 | HU-50 | Formato estándar de planillas Excel | Done |
 | HU-51 | Importar servicios desde Excel | Done |
-| HU-52 | Importar clientes desde Excel | Pendiente |
+| HU-52 | Importar clientes desde Excel | Done |
 | HU-53 | Importar profesionales desde Excel | Pendiente |
 | HU-54 | Reporte de resultados de importación | Pendiente |
 | HU-55 | Descargar planillas de ejemplo | Pendiente |

@@ -24,8 +24,8 @@ import { listTenantsPaged, type PlatformTenant } from "../api/platformTenants";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 
-/** HU-51: only "services" has an actual upload -> import flow wired so far (HU-52/53 pending). */
-const IMPORTABLE_ENTITIES = new Set(["services"]);
+/** HU-51/HU-52: "services" and "clients" have an actual upload -> import flow wired (HU-53 pending). */
+const IMPORTABLE_ENTITIES = new Set(["services", "clients"]);
 
 const ENTITY_ORDER = ["services", "clients", "professionals"] as const;
 
@@ -72,9 +72,9 @@ const tdStyle: React.CSSProperties = {
 /**
  * HU-50 (Épica E — Importación de datos vía Excel): AC-1/AC-2/AC-3/AC-4 documented per-entity
  * column templates + AC-7 (visible to the Platform Admin at import time, not only in the HU-50
- * spec file), plus an AC-5/AC-6 headers-only file check. Deliberately does NOT import any data —
- * that is HU-51 (servicios), HU-52 (clientes), HU-53 (profesionales). Downloading a ready-made
- * example spreadsheet with sample rows is HU-55's separate scope, not built here.
+ * spec file), plus an AC-5/AC-6 headers-only file check. HU-51 wired the actual import for
+ * servicios, HU-52 for clientes; profesionales (HU-53) is still headers-only. Downloading a
+ * ready-made example spreadsheet with sample rows is HU-55's separate scope, not built here.
  */
 export default function PlatformImportPage() {
   const { t } = useTranslation();
@@ -401,10 +401,14 @@ export default function PlatformImportPage() {
                 data-testid={`import-run-section-${tpl.entity}`}
               >
                 <Text style={{ fontWeight: 500, marginBottom: 4 }}>
-                  {t("femme.platform.import.runSectionTitle")}
+                  {t("femme.platform.import.runSectionTitle", {
+                    entity: t(`femme.platform.import.entityTabs.${tpl.entity}`).toLowerCase(),
+                  })}
                 </Text>
                 <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
-                  {t("femme.platform.import.runSectionLead")}
+                  {t("femme.platform.import.runSectionLead", {
+                    entity: t(`femme.platform.import.entityTabs.${tpl.entity}`).toLowerCase(),
+                  })}
                 </Text>
 
                 {tenantsLoadError ? (
