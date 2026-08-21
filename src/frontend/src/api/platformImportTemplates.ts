@@ -83,3 +83,29 @@ export function importEntityData(
     { fileName, fileBase64 },
   );
 }
+
+/**
+ * HU-54 AC-4: the persisted report of the last import attempt (accepted or rejected) for one
+ * tenant/entity pair, so it can be revisited after leaving and returning — `available=false` when
+ * no import has ever run yet for that pair. Same shape as `ImportResult` plus who/when/which file.
+ */
+export type ImportReport = {
+  available: boolean;
+  fileName: string | null;
+  importedAt: string | null;
+  importedByEmail: string | null;
+  fileAccepted: boolean;
+  errorCode: string | null;
+  missingRequiredColumns: string[];
+  totalRows: number;
+  importedCount: number;
+  failedCount: number;
+  rows: ImportRowResult[];
+};
+
+/** HU-54 AC-4: fetches the persisted last-import report for one tenant/entity pair. */
+export function getImportReport(tenantId: number, entity: string): Promise<ImportReport> {
+  return femmeJson<ImportReport>(
+    `/api/platform/tenants/${tenantId}/import/${encodeURIComponent(entity)}/report`,
+  );
+}

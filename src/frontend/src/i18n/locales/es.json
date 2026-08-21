@@ -348,7 +348,19 @@
         "runButton": "Importar",
         "running": "Importando…",
         "runSummary": "{{imported}} de {{total}} filas importadas. {{failed}} fallaron.",
-        "runRowError": "Fila {{row}}: {{reason}}"
+        "runRowError": "Fila {{row}}: {{reason}}",
+        "reportSectionTitle": "Reporte de la última importación",
+        "reportSectionLead": "El reporte de la importación más reciente para este tenant, disponible para volver a consultarlo más tarde.",
+        "reportSelectTenant": "Seleccioná un tenant destino arriba para ver su último reporte de importación.",
+        "reportLoading": "Cargando reporte…",
+        "reportEmpty": "Todavía no se ejecutó ninguna importación para este tenant.",
+        "reportMeta": "Archivo \"{{fileName}}\" — {{date}} — por {{email}}",
+        "colRow": "Fila",
+        "colStatus": "Estado",
+        "colName": "Nombre",
+        "colReason": "Motivo",
+        "statusImported": "Importada",
+        "statusFailed": "Fallida"
       }
     },
     "dashboard": {

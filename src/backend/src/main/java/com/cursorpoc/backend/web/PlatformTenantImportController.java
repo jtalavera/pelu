@@ -9,7 +9,9 @@ import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ClientImportService;
 import com.cursorpoc.backend.service.ProfessionalImportService;
 import com.cursorpoc.backend.service.ServiceImportService;
+import com.cursorpoc.backend.service.TenantImportRunService;
 import com.cursorpoc.backend.web.dto.ImportFileRequest;
+import com.cursorpoc.backend.web.dto.ImportReportResponse;
 import com.cursorpoc.backend.web.dto.ImportResultResponse;
 import com.cursorpoc.backend.web.dto.ImportRowResultResponse;
 import java.util.Base64;
@@ -18,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,7 +33,8 @@ import org.springframework.web.server.ResponseStatusException;
  * → validate row-by-row → persist flow for the "servicios", "clientes" and "profesionales"
  * entities, extending HU-50's headers-only foundation. Platform-Admin-only, tenant-scoped (the
  * target tenant is chosen explicitly by the caller — AC-1 — unlike the tenant-independent {@code
- * PlatformImportTemplateController} routes).
+ * PlatformImportTemplateController} routes). HU-54 adds: every attempt (accepted or rejected) is
+ * persisted via {@link TenantImportRunService}, and {@code GET .../report} reads back the last one.
  */
 @RestController
 @RequestMapping("/api/platform/tenants/{tenantId}/import")
@@ -42,16 +46,19 @@ public class PlatformTenantImportController {
   private final ServiceImportService serviceImportService;
   private final ClientImportService clientImportService;
   private final ProfessionalImportService professionalImportService;
+  private final TenantImportRunService importRunService;
 
   public PlatformTenantImportController(
       ExcelHeaderValidationService headerValidationService,
       ServiceImportService serviceImportService,
       ClientImportService clientImportService,
-      ProfessionalImportService professionalImportService) {
+      ProfessionalImportService professionalImportService,
+      TenantImportRunService importRunService) {
     this.headerValidationService = headerValidationService;
     this.serviceImportService = serviceImportService;
     this.clientImportService = clientImportService;
     this.professionalImportService = professionalImportService;
+    this.importRunService = importRunService;
   }
 
   /**
@@ -93,7 +100,9 @@ public class PlatformTenantImportController {
           principal.getUserId(),
           tenantId,
           entity);
-      return toRejectedResponse(ImportResult.fileError("INVALID_FILE_EXTENSION"));
+      ImportResult rejected = ImportResult.fileError("INVALID_FILE_EXTENSION");
+      recordRun(tenantId, entityType, request.fileName(), rejected, principal);
+      return toRejectedResponse(rejected);
     }
 
     byte[] fileBytes;
@@ -107,7 +116,9 @@ public class PlatformTenantImportController {
           principal.getUserId(),
           tenantId,
           entity);
-      return toRejectedResponse(ImportResult.fileError("CORRUPT_FILE"));
+      ImportResult rejected = ImportResult.fileError("CORRUPT_FILE");
+      recordRun(tenantId, entityType, request.fileName(), rejected, principal);
+      return toRejectedResponse(rejected);
     }
 
     try {
@@ -118,6 +129,7 @@ public class PlatformTenantImportController {
                 professionalImportService.importProfessionals(tenantId, fileBytes);
             case SERVICES -> serviceImportService.importServices(tenantId, fileBytes);
           };
+      recordRun(tenantId, entityType, request.fileName(), result, principal);
       ImportResultResponse response = toResponse(result);
       if (!response.fileAccepted()) {
         log.error(
@@ -151,6 +163,55 @@ public class PlatformTenantImportController {
           ex.getReason());
       throw ex;
     }
+  }
+
+  /**
+   * HU-54 AC-1..AC-4: read back the persisted report of the last import attempt (accepted or
+   * rejected) for this tenant/entity pair, so the Platform Admin can revisit it after leaving and
+   * returning — {@code available=false} when no import has ever run yet for the pair.
+   */
+  @GetMapping("/{entity}/report")
+  public ImportReportResponse getImportReport(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("tenantId") Long tenantId,
+      @PathVariable("entity") String entity) {
+    String routeLabel = "GET /api/platform/tenants/{tenantId}/import/{entity}/report";
+    requirePlatformAdmin(principal, routeLabel);
+    ImportEntityType entityType = ImportEntityType.fromPathSegment(entity);
+    log.info(
+        "{} adminUserId={} tenantId={} entity={}",
+        routeLabel,
+        principal.getUserId(),
+        tenantId,
+        entity);
+    if (entityType == null) {
+      log.error(
+          "{} adminUserId={} tenantId={} status=404 - unknown entity={}",
+          routeLabel,
+          principal.getUserId(),
+          tenantId,
+          entity);
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "IMPORT_ENTITY_NOT_FOUND");
+    }
+    ImportReportResponse response = importRunService.getReport(tenantId, entityType);
+    log.info(
+        "{} adminUserId={} tenantId={} entity={} status=200 available={}",
+        routeLabel,
+        principal.getUserId(),
+        tenantId,
+        entity,
+        response.available());
+    return response;
+  }
+
+  private void recordRun(
+      Long tenantId,
+      ImportEntityType entityType,
+      String fileName,
+      ImportResult result,
+      FemmeUserPrincipal principal) {
+    importRunService.recordRun(
+        tenantId, entityType, fileName, result, principal.getUserId(), principal.getUsername());
   }
 
   private static ImportResultResponse toRejectedResponse(ImportResult result) {

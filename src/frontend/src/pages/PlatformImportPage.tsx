@@ -4,6 +4,8 @@ import {
   Alert,
   Button,
   Label,
+  PageSizeSelect,
+  Pagination,
   Select,
   Spinner,
   Tabs,
@@ -13,11 +15,13 @@ import {
   Text,
 } from "@design-system";
 import {
+  getImportReport,
   importEntityData,
   listImportTemplates,
   validateImportHeaders,
   type HeaderValidationResult,
   type ImportColumnTemplate,
+  type ImportReport,
   type ImportResult,
 } from "../api/platformImportTemplates";
 import { listTenantsPaged, type PlatformTenant } from "../api/platformTenants";
@@ -103,6 +107,14 @@ export default function PlatformImportPage() {
   const [runError, setRunError] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<ImportResult | null>(null);
 
+  // HU-54 AC-4: persisted report of the last import attempt for the selected tenant/entity pair,
+  // reloaded whenever either changes and again right after a new run completes.
+  const [report, setReport] = useState<ImportReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportPage, setReportPage] = useState(0);
+  const [reportPageSize, setReportPageSize] = useState(10);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -134,6 +146,36 @@ export default function PlatformImportPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // HU-54 AC-4: reload the persisted last-import report whenever the destination tenant or the
+  // active entity tab changes (including the very first render), so it's there without requiring a
+  // fresh import — e.g. after leaving and coming back to this page.
+  const loadReport = useCallback(
+    async (tenantId: string, entity: string) => {
+      if (!tenantId || !IMPORTABLE_ENTITIES.has(entity)) {
+        setReport(null);
+        setReportError(null);
+        return;
+      }
+      setReportLoading(true);
+      setReportError(null);
+      try {
+        const data = await getImportReport(Number(tenantId), entity);
+        setReport(data);
+      } catch (err) {
+        setReport(null);
+        setReportError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+      } finally {
+        setReportLoading(false);
+      }
+    },
+    [t],
+  );
+
+  useEffect(() => {
+    setReportPage(0);
+    void loadReport(selectedTenantId, activeEntity);
+  }, [selectedTenantId, activeEntity, loadReport]);
 
   function onTabChange(entity: string) {
     setActiveEntity(entity);
@@ -191,6 +233,10 @@ export default function PlatformImportPage() {
         fileBase64,
       );
       setRunResult(result);
+      // HU-54 AC-4: the run just persisted a new report server-side — refresh it so the section
+      // below reflects this attempt without requiring a tab switch or page reload.
+      setReportPage(0);
+      void loadReport(selectedTenantId, activeEntity);
     } catch (err) {
       setRunError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -395,6 +441,7 @@ export default function PlatformImportPage() {
             </section>
 
             {IMPORTABLE_ENTITIES.has(tpl.entity) ? (
+              <>
               <section
                 className="mt-4 rounded-[var(--radius-xl)] p-4"
                 style={{ background: "var(--color-white)", border: "var(--border-default)" }}
@@ -549,6 +596,178 @@ export default function PlatformImportPage() {
                   </div>
                 </form>
               </section>
+
+              <section
+                className="mt-4 rounded-[var(--radius-xl)] p-4"
+                style={{ background: "var(--color-white)", border: "var(--border-default)" }}
+                data-testid={`import-last-report-${tpl.entity}`}
+              >
+                <Text style={{ fontWeight: 500, marginBottom: 4 }}>
+                  {t("femme.platform.import.reportSectionTitle")}
+                </Text>
+                <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
+                  {t("femme.platform.import.reportSectionLead")}
+                </Text>
+
+                {!selectedTenantId ? (
+                  <Text
+                    variant="small"
+                    style={{ color: "var(--color-ink-3)" }}
+                    data-testid={`import-last-report-select-tenant-${tpl.entity}`}
+                  >
+                    {t("femme.platform.import.reportSelectTenant")}
+                  </Text>
+                ) : reportLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Spinner size="sm" />
+                    <Text variant="small">{t("femme.platform.import.reportLoading")}</Text>
+                  </div>
+                ) : reportError ? (
+                  <Alert
+                    variant="destructive"
+                    style={{ fontSize: 12, padding: "8px 12px" }}
+                  >
+                    {reportError}
+                  </Alert>
+                ) : !report || !report.available ? (
+                  <Text
+                    variant="small"
+                    style={{ color: "var(--color-ink-3)" }}
+                    data-testid={`import-last-report-empty-${tpl.entity}`}
+                  >
+                    {t("femme.platform.import.reportEmpty")}
+                  </Text>
+                ) : (
+                  <div data-testid={`import-last-report-content-${tpl.entity}`}>
+                    <Text
+                      variant="small"
+                      style={{ color: "var(--color-ink-3)", marginBottom: 8 }}
+                      data-testid={`import-last-report-meta-${tpl.entity}`}
+                    >
+                      {t("femme.platform.import.reportMeta", {
+                        fileName: report.fileName,
+                        date: report.importedAt ? new Date(report.importedAt).toLocaleString() : "",
+                        email: report.importedByEmail,
+                      })}
+                    </Text>
+
+                    {report.fileAccepted ? (
+                      <>
+                        <Alert
+                          variant={report.failedCount > 0 ? "warning" : "success"}
+                          data-testid={`import-last-report-summary-${tpl.entity}`}
+                          style={{ fontSize: 12, padding: "8px 12px", marginBottom: 12 }}
+                        >
+                          {t("femme.platform.import.runSummary", {
+                            imported: report.importedCount,
+                            total: report.totalRows,
+                            failed: report.failedCount,
+                          })}
+                        </Alert>
+
+                        {report.rows.length > 0 ? (
+                          <>
+                            <div
+                              className="overflow-x-auto rounded-[var(--radius-xl)]"
+                              style={{ border: "var(--border-default)" }}
+                            >
+                              <table
+                                style={{ width: "100%", borderCollapse: "collapse" }}
+                                data-testid={`import-last-report-table-${tpl.entity}`}
+                              >
+                                <thead>
+                                  <tr>
+                                    <th style={thStyle}>{t("femme.platform.import.colRow")}</th>
+                                    <th style={thStyle}>{t("femme.platform.import.colStatus")}</th>
+                                    <th style={thStyle}>{t("femme.platform.import.colName")}</th>
+                                    <th style={thStyle}>{t("femme.platform.import.colReason")}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {report.rows
+                                    .slice(
+                                      reportPage * reportPageSize,
+                                      reportPage * reportPageSize + reportPageSize,
+                                    )
+                                    .map((row) => (
+                                      <tr
+                                        key={row.rowNumber}
+                                        data-testid={`import-last-report-row-${tpl.entity}-${row.rowNumber}`}
+                                      >
+                                        <td style={tdStyle}>{row.rowNumber}</td>
+                                        <td style={tdStyle}>
+                                          {row.imported
+                                            ? t("femme.platform.import.statusImported")
+                                            : t("femme.platform.import.statusFailed")}
+                                        </td>
+                                        <td style={tdStyle}>{row.name ?? "—"}</td>
+                                        <td style={tdStyle}>
+                                          {row.imported
+                                            ? "—"
+                                            : row.errorCode
+                                              ? t(`femme.apiErrors.${row.errorCode}`, {
+                                                  defaultValue: t("femme.apiErrors.GENERIC"),
+                                                })
+                                              : t("femme.apiErrors.GENERIC")}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                              <PageSizeSelect
+                                value={reportPageSize}
+                                onChange={(s) => {
+                                  setReportPageSize(s);
+                                  setReportPage(0);
+                                }}
+                                label={t("femme.pagination.rowsPerPage")}
+                              />
+                              <Text variant="small" className="text-[var(--color-ink-3)]">
+                                {t("femme.pagination.showingRange", {
+                                  from:
+                                    report.rows.length === 0 ? 0 : reportPage * reportPageSize + 1,
+                                  to: Math.min(
+                                    (reportPage + 1) * reportPageSize,
+                                    report.rows.length,
+                                  ),
+                                  total: report.rows.length,
+                                })}
+                              </Text>
+                              <Pagination
+                                page={reportPage + 1}
+                                pageCount={Math.max(
+                                  1,
+                                  Math.ceil(report.rows.length / reportPageSize),
+                                )}
+                                onPageChange={(p) => setReportPage(p - 1)}
+                                previousLabel={t("femme.pagination.previous")}
+                                nextLabel={t("femme.pagination.next")}
+                              />
+                            </div>
+                          </>
+                        ) : null}
+                      </>
+                    ) : (
+                      <Alert
+                        variant="destructive"
+                        data-testid={`import-last-report-rejected-${tpl.entity}`}
+                        style={{ fontSize: 12, padding: "8px 12px" }}
+                      >
+                        {report.errorCode
+                          ? t(`femme.apiErrors.${report.errorCode}`, {
+                              defaultValue: t("femme.apiErrors.GENERIC"),
+                            })
+                          : t("femme.platform.import.checkMissingColumns", {
+                              columns: report.missingRequiredColumns.join(", "),
+                            })}
+                      </Alert>
+                    )}
+                  </div>
+                )}
+              </section>
+              </>
             ) : null}
           </TabsContent>
         ))}

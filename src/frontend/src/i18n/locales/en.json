@@ -348,7 +348,19 @@
         "runButton": "Import",
         "running": "Importing…",
         "runSummary": "{{imported}} of {{total}} rows imported. {{failed}} failed.",
-        "runRowError": "Row {{row}}: {{reason}}"
+        "runRowError": "Row {{row}}: {{reason}}",
+        "reportSectionTitle": "Last import report",
+        "reportSectionLead": "The report of the most recent import for this tenant, kept available so you can come back to it later.",
+        "reportSelectTenant": "Select a destination tenant above to see its last import report.",
+        "reportLoading": "Loading report…",
+        "reportEmpty": "No import has been run yet for this tenant.",
+        "reportMeta": "File \"{{fileName}}\" — {{date}} — by {{email}}",
+        "colRow": "Row",
+        "colStatus": "Status",
+        "colName": "Name",
+        "colReason": "Reason",
+        "statusImported": "Imported",
+        "statusFailed": "Failed"
       }
     },
     "dashboard": {
