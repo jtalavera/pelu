@@ -4,7 +4,7 @@
 | ---------- | ---------------------------------------------|
 | **ID**     | HU-48                                        |
 | **Módulo** | Plataforma · Tiers y Feature Flags           |
-| **Estado** | `Backlog`                                    |
+| **Estado** | `Done`                                       |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
