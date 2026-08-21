@@ -152,6 +152,7 @@
       "nav": {
         "dashboard": "Panel",
         "tenants": "Tenants",
+        "tiers": "Tiers",
         "featureFlags": "Funcionalidades"
       },
       "dashboard": {
@@ -244,6 +245,45 @@
           "resendInvitationSuccess": "Se reenvió la invitación de activación a {{email}}.",
           "resendPasswordResetSuccess": "Se envió un correo de restablecimiento de contraseña a {{email}}.",
           "resendError": "No se pudo reenviar la invitación."
+        }
+      },
+      "tiers": {
+        "title": "Tiers",
+        "lead": "Creá y administrá tiers reutilizables para asignar a los tenants.",
+        "loading": "Cargando…",
+        "loadError": "No se pudieron cargar los tiers.",
+        "errorTitle": "Error",
+        "addNew": "Nuevo tier",
+        "addTitle": "Nuevo tier",
+        "createSuccess": "Tier creado con éxito.",
+        "saveError": "No se pudo crear el tier.",
+        "saving": "Guardando…",
+        "save": "Crear tier",
+        "cancel": "Cancelar",
+        "emptyBody": "Todavía no hay tiers.",
+        "colName": "Nombre",
+        "colDescription": "Descripción",
+        "colTenantCount": "Tenants",
+        "colActions": "Acciones",
+        "tenantCount_one": "{{count}} tenant",
+        "tenantCount_other": "{{count}} tenants",
+        "editTitle": "Editar tier",
+        "editSuccess": "Tier actualizado con éxito.",
+        "editSaveError": "No se pudo actualizar el tier.",
+        "saveChanges": "Guardar cambios",
+        "openEdit": "Editar tier {{name}}",
+        "deleteAction": "Eliminar",
+        "deleting": "Eliminando…",
+        "deleteSuccess": "Tier eliminado con éxito.",
+        "deleteError": "No se pudo eliminar el tier.",
+        "deleteDialogTitle": "¿Eliminar tier?",
+        "deleteDialogDescription": "\"{{name}}\" se eliminará de forma permanente. Esta acción no se puede deshacer.",
+        "form": {
+          "name": "Nombre",
+          "namePlaceholder": "p. ej. Estándar",
+          "nameRequired": "Ingresá un nombre para el tier.",
+          "description": "Descripción (opcional)",
+          "descriptionPlaceholder": "p. ej. Paquete de funcionalidades por defecto."
         }
       }
     },
@@ -955,6 +995,10 @@
       "APP_USER_STATUS_REQUIRED": "El estado del usuario es obligatorio.",
       "TENANT_USER_DISABLED_CANNOT_RESEND": "Este usuario está desactivado. Reactivalo antes de reenviar una invitación o un reseteo de contraseña.",
       "TIER_NOT_FOUND": "Ese tier no existe.",
+      "TIER_NAME_REQUIRED": "Ingresá un nombre para el tier.",
+      "TIER_NAME_DUPLICATE": "Ese nombre ya está en uso por otro tier.",
+      "TIER_IN_USE_one": "Este tier no se puede eliminar: {{count}} tenant lo tiene asignado actualmente.",
+      "TIER_IN_USE_other": "Este tier no se puede eliminar: {{count}} tenants lo tienen asignado actualmente.",
       "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
       "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Profesional no encontrada.",

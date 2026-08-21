@@ -152,6 +152,7 @@
       "nav": {
         "dashboard": "Dashboard",
         "tenants": "Tenants",
+        "tiers": "Tiers",
         "featureFlags": "Feature flags"
       },
       "dashboard": {
@@ -244,6 +245,45 @@
           "resendInvitationSuccess": "Activation invite resent to {{email}}.",
           "resendPasswordResetSuccess": "Password reset email sent to {{email}}.",
           "resendError": "Could not resend the invitation."
+        }
+      },
+      "tiers": {
+        "title": "Tiers",
+        "lead": "Create and manage reusable tiers to assign to tenants.",
+        "loading": "Loading…",
+        "loadError": "Could not load tiers.",
+        "errorTitle": "Error",
+        "addNew": "New tier",
+        "addTitle": "New tier",
+        "createSuccess": "Tier created successfully.",
+        "saveError": "Could not create the tier.",
+        "saving": "Saving…",
+        "save": "Create tier",
+        "cancel": "Cancel",
+        "emptyBody": "No tiers yet.",
+        "colName": "Name",
+        "colDescription": "Description",
+        "colTenantCount": "Tenants",
+        "colActions": "Actions",
+        "tenantCount_one": "{{count}} tenant",
+        "tenantCount_other": "{{count}} tenants",
+        "editTitle": "Edit tier",
+        "editSuccess": "Tier updated successfully.",
+        "editSaveError": "Could not update the tier.",
+        "saveChanges": "Save changes",
+        "openEdit": "Edit tier {{name}}",
+        "deleteAction": "Delete",
+        "deleting": "Deleting…",
+        "deleteSuccess": "Tier deleted successfully.",
+        "deleteError": "Could not delete the tier.",
+        "deleteDialogTitle": "Delete tier?",
+        "deleteDialogDescription": "\"{{name}}\" will be permanently deleted. This cannot be undone.",
+        "form": {
+          "name": "Name",
+          "namePlaceholder": "e.g. Standard",
+          "nameRequired": "Enter a name for the tier.",
+          "description": "Description (optional)",
+          "descriptionPlaceholder": "e.g. Default feature package."
         }
       }
     },
@@ -955,6 +995,10 @@
       "APP_USER_STATUS_REQUIRED": "The user status is required.",
       "TENANT_USER_DISABLED_CANNOT_RESEND": "This user is disabled. Reactivate them before resending an invitation or password reset.",
       "TIER_NOT_FOUND": "That tier does not exist.",
+      "TIER_NAME_REQUIRED": "Enter a name for the tier.",
+      "TIER_NAME_DUPLICATE": "That name is already used by another tier.",
+      "TIER_IN_USE_one": "This tier can't be deleted: {{count}} tenant is currently assigned to it.",
+      "TIER_IN_USE_other": "This tier can't be deleted: {{count}} tenants are currently assigned to it.",
       "FLAG_NOT_FOUND": "That feature flag does not exist.",
       "INVALID_FLAG_KEY": "Invalid feature flag name. Use uppercase letters, digits, and underscores (e.g. GUIDED_TOUR).",
       "PROFESSIONAL_NOT_FOUND": "Professional not found.",

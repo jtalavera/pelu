@@ -17,6 +17,10 @@ public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
   Optional<Tenant> findFirstByOrderByIdAsc();
 
+  // HU-45 AC-3/AC-4: how many tenants currently have this tier assigned — drives both the
+  // listing's per-tier count and the delete-in-use protection.
+  long countByTierId(Long tierId);
+
   // HU-39 AC-2: search matches name or domain (case-insensitive, partial). A blank/null q leaves
   // every tenant in scope — same "empty filter" convention as
   // ClientRepository#findByTenantFilteredPaged.

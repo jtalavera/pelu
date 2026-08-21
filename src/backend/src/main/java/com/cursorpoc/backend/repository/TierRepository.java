@@ -10,4 +10,10 @@ public interface TierRepository extends JpaRepository<Tier, Long> {
   Optional<Tier> findByNameIgnoreCase(String name);
 
   List<Tier> findAllByOrderByNameAsc();
+
+  // HU-45 AC-5: name uniqueness check on create.
+  boolean existsByNameIgnoreCase(String name);
+
+  // HU-45 AC-5: name uniqueness check on edit, excluding the tier being edited.
+  boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
 }

@@ -77,7 +77,7 @@ negocio de un tenant).
 | HU-42 | Asignar múltiples admins a un tenant | Done |
 | HU-43 | Desactivar/reactivar usuario de tenant | Done |
 | HU-44 | Reenviar invitación admin de tenant | Done |
-| HU-45 | Crear y administrar tiers | Pendiente |
+| HU-45 | Crear y administrar tiers | Done |
 | HU-46 | Asociar feature flags a un tier | Pendiente |
 | HU-47 | Resolución de flags en tres niveles | Pendiente |
 | HU-48 | Asignar tier a tenant | Pendiente |
