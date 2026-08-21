@@ -42,3 +42,44 @@ export function validateImportHeaders(
     { fileName, fileBase64 },
   );
 }
+
+/**
+ * HU-51 AC-3/AC-4/AC-5: outcome of one data row of an actual import run. `errorCode` (translated
+ * via `femme.apiErrors.*`) is set only when `imported` is false.
+ */
+export type ImportRowResult = {
+  rowNumber: number;
+  imported: boolean;
+  errorCode: string | null;
+  name: string | null;
+};
+
+/**
+ * HU-51: outcome of an actual upload -> parse -> persist import run. `fileAccepted=false` means
+ * the whole file was rejected before any row was processed (HU-50 AC-5/AC-6) — `errorCode` and/or
+ * `missingRequiredColumns` explain why, same shape as `HeaderValidationResult`. When
+ * `fileAccepted=true`, `rows` has one entry per processed data row; the full formal per-row report
+ * screen is HU-54's separate scope — this is only the immediate result of one import.
+ */
+export type ImportResult = {
+  fileAccepted: boolean;
+  errorCode: string | null;
+  missingRequiredColumns: string[];
+  totalRows: number;
+  importedCount: number;
+  failedCount: number;
+  rows: ImportRowResult[];
+};
+
+/** HU-51 AC-1: Platform Admin uploads a file to actually import data into the target tenant. */
+export function importEntityData(
+  tenantId: number,
+  entity: string,
+  fileName: string,
+  fileBase64: string,
+): Promise<ImportResult> {
+  return femmePostJson<ImportResult>(
+    `/api/platform/tenants/${tenantId}/import/${encodeURIComponent(entity)}`,
+    { fileName, fileBase64 },
+  );
+}

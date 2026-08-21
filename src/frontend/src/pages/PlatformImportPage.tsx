@@ -1,14 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Spinner, Tabs, TabsContent, TabsList, TabsTrigger, Text } from "@design-system";
 import {
+  Alert,
+  Button,
+  Label,
+  Select,
+  Spinner,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Text,
+} from "@design-system";
+import {
+  importEntityData,
   listImportTemplates,
   validateImportHeaders,
   type HeaderValidationResult,
   type ImportColumnTemplate,
+  type ImportResult,
 } from "../api/platformImportTemplates";
+import { listTenantsPaged, type PlatformTenant } from "../api/platformTenants";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+
+/** HU-51: only "services" has an actual upload -> import flow wired so far (HU-52/53 pending). */
+const IMPORTABLE_ENTITIES = new Set(["services"]);
 
 const ENTITY_ORDER = ["services", "clients", "professionals"] as const;
 
@@ -74,6 +91,33 @@ export default function PlatformImportPage() {
   const [checkError, setCheckError] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<HeaderValidationResult | null>(null);
 
+  // HU-51 AC-1: tenant selection + actual import (services only so far).
+  const runFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [tenants, setTenants] = useState<PlatformTenant[]>([]);
+  const [tenantsLoadError, setTenantsLoadError] = useState<string | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
+  const [tenantFieldError, setTenantFieldError] = useState<string | null>(null);
+  const [runFile, setRunFile] = useState<File | null>(null);
+  const [runFileFieldError, setRunFileFieldError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<ImportResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const page = await listTenantsPaged({ page: 0, size: 200 });
+        if (!cancelled) setTenants(page.content);
+      } catch (err) {
+        if (!cancelled) setTenantsLoadError(translateApiError(err, t, "femme.platform.import.tenantsLoadError"));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -98,6 +142,11 @@ export default function PlatformImportPage() {
     setCheckError(null);
     setCheckResult(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    setRunFile(null);
+    setRunFileFieldError(null);
+    setRunError(null);
+    setRunResult(null);
+    if (runFileInputRef.current) runFileInputRef.current.value = "";
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -105,6 +154,48 @@ export default function PlatformImportPage() {
     setFileFieldError(null);
     setCheckError(null);
     setCheckResult(null);
+  }
+
+  function onRunFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setRunFile(e.target.files?.[0] ?? null);
+    setRunFileFieldError(null);
+    setRunError(null);
+    setRunResult(null);
+  }
+
+  async function onRunSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setRunError(null);
+    setRunResult(null);
+    let hasFieldError = false;
+    if (!selectedTenantId) {
+      setTenantFieldError(t("femme.platform.import.tenantRequired"));
+      hasFieldError = true;
+    } else {
+      setTenantFieldError(null);
+    }
+    if (!runFile) {
+      setRunFileFieldError(t("femme.platform.import.runFileRequired"));
+      hasFieldError = true;
+    } else {
+      setRunFileFieldError(null);
+    }
+    if (hasFieldError) return;
+    setRunning(true);
+    try {
+      const fileBase64 = await readFileAsBase64(runFile as File);
+      const result = await importEntityData(
+        Number(selectedTenantId),
+        activeEntity,
+        (runFile as File).name,
+        fileBase64,
+      );
+      setRunResult(result);
+    } catch (err) {
+      setRunError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setRunning(false);
+    }
   }
 
   async function onCheckSubmit(e: React.FormEvent) {
@@ -302,6 +393,159 @@ export default function PlatformImportPage() {
                 </div>
               </form>
             </section>
+
+            {IMPORTABLE_ENTITIES.has(tpl.entity) ? (
+              <section
+                className="mt-4 rounded-[var(--radius-xl)] p-4"
+                style={{ background: "var(--color-white)", border: "var(--border-default)" }}
+                data-testid={`import-run-section-${tpl.entity}`}
+              >
+                <Text style={{ fontWeight: 500, marginBottom: 4 }}>
+                  {t("femme.platform.import.runSectionTitle")}
+                </Text>
+                <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
+                  {t("femme.platform.import.runSectionLead")}
+                </Text>
+
+                {tenantsLoadError ? (
+                  <Alert
+                    variant="destructive"
+                    style={{ fontSize: 12, padding: "8px 12px", marginBottom: 12 }}
+                  >
+                    {tenantsLoadError}
+                  </Alert>
+                ) : null}
+
+                {runResult ? (
+                  runResult.fileAccepted ? (
+                    <div style={{ marginBottom: 12 }} data-testid={`import-run-result-${tpl.entity}`}>
+                      <Alert
+                        variant={runResult.failedCount > 0 ? "warning" : "success"}
+                        data-testid={`import-run-summary-${tpl.entity}`}
+                        style={{ fontSize: 12, padding: "8px 12px", marginBottom: 8 }}
+                      >
+                        {t("femme.platform.import.runSummary", {
+                          imported: runResult.importedCount,
+                          total: runResult.totalRows,
+                          failed: runResult.failedCount,
+                        })}
+                      </Alert>
+                      {runResult.failedCount > 0 ? (
+                        <ul
+                          style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}
+                          data-testid={`import-run-failed-rows-${tpl.entity}`}
+                        >
+                          {runResult.rows
+                            .filter((row) => !row.imported)
+                            .map((row) => (
+                              <li key={row.rowNumber} data-testid={`import-run-failed-row-${row.rowNumber}`}>
+                                {t("femme.platform.import.runRowError", {
+                                  row: row.rowNumber,
+                                  reason: row.errorCode
+                                    ? t(`femme.apiErrors.${row.errorCode}`, {
+                                        defaultValue: t("femme.apiErrors.GENERIC"),
+                                      })
+                                    : t("femme.apiErrors.GENERIC"),
+                                })}
+                              </li>
+                            ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <Alert
+                      variant="destructive"
+                      data-testid={`import-run-rejected-${tpl.entity}`}
+                      style={{ fontSize: 12, padding: "8px 12px", marginBottom: 12 }}
+                    >
+                      {runResult.errorCode
+                        ? t(`femme.apiErrors.${runResult.errorCode}`, {
+                            defaultValue: t("femme.apiErrors.GENERIC"),
+                          })
+                        : t("femme.platform.import.checkMissingColumns", {
+                            columns: runResult.missingRequiredColumns.join(", "),
+                          })}
+                    </Alert>
+                  )
+                ) : null}
+                {runError ? (
+                  <Alert
+                    variant="destructive"
+                    style={{ fontSize: 12, padding: "8px 12px", marginBottom: 12 }}
+                  >
+                    {runError}
+                  </Alert>
+                ) : null}
+
+                <form
+                  onSubmit={onRunSubmit}
+                  noValidate
+                  style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                >
+                  <div>
+                    <Label htmlFor={`import-run-tenant-${tpl.entity}`}>
+                      {t("femme.platform.import.tenantLabel")}
+                    </Label>
+                    <Select
+                      id={`import-run-tenant-${tpl.entity}`}
+                      value={selectedTenantId}
+                      onChange={(e) => {
+                        setSelectedTenantId(e.target.value);
+                        setTenantFieldError(null);
+                      }}
+                      invalid={!!tenantFieldError}
+                      aria-describedby={
+                        tenantFieldError ? `import-run-tenant-${tpl.entity}-err` : undefined
+                      }
+                    >
+                      <option value="">{t("femme.platform.import.tenantPlaceholder")}</option>
+                      {tenants.map((tenant) => (
+                        <option key={tenant.id} value={tenant.id}>
+                          {tenant.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <FieldValidationError id={`import-run-tenant-${tpl.entity}-err`}>
+                      {tenantFieldError}
+                    </FieldValidationError>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor={`import-run-file-${tpl.entity}`}
+                      style={{
+                        display: "block",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: "var(--color-ink-2)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {t("femme.platform.import.fileLabel")}
+                    </label>
+                    <input
+                      id={`import-run-file-${tpl.entity}`}
+                      ref={runFileInputRef}
+                      type="file"
+                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      onChange={onRunFileChange}
+                      aria-invalid={!!runFileFieldError}
+                      aria-describedby={
+                        runFileFieldError ? `import-run-file-${tpl.entity}-err` : undefined
+                      }
+                      style={{ fontSize: 12 }}
+                    />
+                    <FieldValidationError id={`import-run-file-${tpl.entity}-err`}>
+                      {runFileFieldError}
+                    </FieldValidationError>
+                  </div>
+                  <div>
+                    <Button type="submit" className="min-h-11" disabled={running}>
+                      {running ? t("femme.platform.import.running") : t("femme.platform.import.runButton")}
+                    </Button>
+                  </div>
+                </form>
+              </section>
+            ) : null}
           </TabsContent>
         ))}
       </Tabs>

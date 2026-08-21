@@ -83,7 +83,7 @@ negocio de un tenant).
 | HU-48 | Asignar tier a tenant | Done (implementada en HU-37/HU-38: selector de tier, obligatoriedad, efecto inmediato en HU-47 y auditoría vía `TenantTierChange`; HU-48 formalizó y sumó cobertura Playwright dedicada, `e2e/tests/hu-48-asignar-tier-a-tenant.spec.ts`) |
 | HU-49 | Configuración global y per-tenant de feature flags | Done (funcionalidad preexistente, documentada retroactivamente) |
 | HU-50 | Formato estándar de planillas Excel | Done |
-| HU-51 | Importar servicios desde Excel | Pendiente |
+| HU-51 | Importar servicios desde Excel | Done |
 | HU-52 | Importar clientes desde Excel | Pendiente |
 | HU-53 | Importar profesionales desde Excel | Pendiente |
 | HU-54 | Reporte de resultados de importación | Pendiente |
