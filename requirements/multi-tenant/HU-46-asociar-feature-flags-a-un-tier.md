@@ -36,3 +36,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 
 - **Dependencias:** HU-45 (tiers), HU-49 (deben existir flags para asociar).
 - **Pruebas sugeridas:** activar/desactivar una flag en un tier y verificar el efecto en un tenant de ese tier sin override; verificar que un tenant con override puntual no cambia.
+
+## Nota de implementación (2026-08-21)
+
+Implementado el modelo, la persistencia, la UI (matriz en el detalle/edición de tier) y la
+auditoría (tabla `tier_feature_flag_changes`) para AC-1, AC-2, AC-3 y AC-5. **AC-4 ("Efecto
+inmediato para tenants sin override") queda pendiente**: requiere que la resolución de flags de un
+tenant (`FeatureFlagService#resolveAll`/`isEnabled`) consulte el default del tier como nivel
+intermedio, que es exactamente el alcance de HU-47 ("Resolución de flags en tres niveles"). Por
+decisión explícita de scope de esta iteración, HU-46 se limita a definir/persistir la asociación
+tier↔flag sin consumirla todavía en la resolución — HU-47 debe completar AC-4 de esta historia como
+parte de su propio trabajo.

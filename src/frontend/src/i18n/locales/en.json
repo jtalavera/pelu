@@ -284,6 +284,18 @@
           "nameRequired": "Enter a name for the tier.",
           "description": "Description (optional)",
           "descriptionPlaceholder": "e.g. Default feature package."
+        },
+        "flags": {
+          "title": "Feature flags",
+          "lead": "Choose which feature flags this tier includes by default.",
+          "loading": "Loading feature flags…",
+          "loadError": "Could not load this tier's feature flags.",
+          "saveError": "Could not update this tier's feature flags.",
+          "empty": "No feature flags exist yet.",
+          "included": "Included",
+          "notIncluded": "Not included",
+          "toggleAria": "Include {{key}} in this tier by default",
+          "lastChange": "Last change: {{date}} by {{email}} — {{previous}} → {{next}}"
         }
       }
     },

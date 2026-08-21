@@ -78,7 +78,7 @@ negocio de un tenant).
 | HU-43 | Desactivar/reactivar usuario de tenant | Done |
 | HU-44 | Reenviar invitación admin de tenant | Done |
 | HU-45 | Crear y administrar tiers | Done |
-| HU-46 | Asociar feature flags a un tier | Pendiente |
+| HU-46 | Asociar feature flags a un tier | Done (AC-4 "efecto inmediato" requiere la resolución en 3 niveles de HU-47, todavía no implementada — ver nota en la historia) |
 | HU-47 | Resolución de flags en tres niveles | Pendiente |
 | HU-48 | Asignar tier a tenant | Pendiente |
 | HU-49 | Configuración global y per-tenant de feature flags | Done (funcionalidad preexistente, documentada retroactivamente) |

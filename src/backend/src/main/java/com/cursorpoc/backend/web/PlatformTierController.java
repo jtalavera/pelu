@@ -4,8 +4,11 @@ import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.TierAdminService;
 import com.cursorpoc.backend.web.dto.TierCreateRequest;
+import com.cursorpoc.backend.web.dto.TierFeatureFlagIncludeRequest;
+import com.cursorpoc.backend.web.dto.TierFeatureFlagRowResponse;
 import com.cursorpoc.backend.web.dto.TierResponse;
 import com.cursorpoc.backend.web.dto.TierUpdateRequest;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +28,11 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * HU-45 (Épica D — Tiers y Feature Flags): Platform Admin creates, edits, lists, and deletes tiers
  * — reusable packages of feature flags that can later be assigned to tenants (HU-48) and
- * pre-populate their flags (HU-46/HU-47, not implemented by this story). Distinct from {@code GET
- * /api/platform/tenants/tiers} (kept as-is): that endpoint is the minimal option list the tenant
- * create/edit form needs (HU-37); this one is full tier administration. Tenant-independent (no
- * {@code tid} on the caller's token, see HU-34), so logging identifies the acting Platform Admin
- * user instead of a tenant id.
+ * pre-populate their flags (HU-46, added below; HU-47 wires it into flag resolution, not
+ * implemented by either story). Distinct from {@code GET /api/platform/tenants/tiers} (kept as-is):
+ * that endpoint is the minimal option list the tenant create/edit form needs (HU-37); this one is
+ * full tier administration. Tenant-independent (no {@code tid} on the caller's token, see HU-34),
+ * so logging identifies the acting Platform Admin user instead of a tenant id.
  */
 @RestController
 @RequestMapping("/api/platform/tiers")
@@ -126,6 +129,77 @@ public class PlatformTierController {
       log.error(
           "DELETE /api/platform/tiers/{} adminUserId={} tierId={} status={} error={}",
           id,
+          principal.getUserId(),
+          id,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /** HU-46 AC-1: every global flag plus whether this tier includes it in its default package. */
+  @GetMapping("/{id}/feature-flags")
+  public List<TierFeatureFlagRowResponse> listFeatureFlags(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") Long id) {
+    requirePlatformAdmin(principal, "GET /api/platform/tiers/{id}/feature-flags");
+    log.info(
+        "GET /api/platform/tiers/{}/feature-flags adminUserId={} tierId={}",
+        id,
+        principal.getUserId(),
+        id);
+    try {
+      List<TierFeatureFlagRowResponse> response = tierAdminService.listTierFeatureFlags(id);
+      log.info(
+          "GET /api/platform/tiers/{}/feature-flags adminUserId={} tierId={} status=200 count={}",
+          id,
+          principal.getUserId(),
+          id,
+          response.size());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/platform/tiers/{}/feature-flags adminUserId={} tierId={} status={} error={}",
+          id,
+          principal.getUserId(),
+          id,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /**
+   * HU-46 AC-1/AC-2: marks a flag as included (or not) in this tier's default package; AC-5:
+   * records who made the change and when.
+   */
+  @PutMapping("/{id}/feature-flags/{flagKey}")
+  public ResponseEntity<Void> setFeatureFlagIncluded(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") Long id,
+      @PathVariable("flagKey") String flagKey,
+      @Valid @RequestBody TierFeatureFlagIncludeRequest request) {
+    requirePlatformAdmin(principal, "PUT /api/platform/tiers/{id}/feature-flags/{flagKey}");
+    log.info(
+        "PUT /api/platform/tiers/{}/feature-flags/{} adminUserId={} tierId={}",
+        id,
+        flagKey,
+        principal.getUserId(),
+        id);
+    try {
+      tierAdminService.setTierFeatureFlagIncluded(
+          id, flagKey, request.included(), principal.getUserId(), principal.getUsername());
+      log.info(
+          "PUT /api/platform/tiers/{}/feature-flags/{} adminUserId={} tierId={} status=204",
+          id,
+          flagKey,
+          principal.getUserId(),
+          id);
+      return ResponseEntity.noContent().build();
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PUT /api/platform/tiers/{}/feature-flags/{} adminUserId={} tierId={} status={} error={}",
+          id,
+          flagKey,
           principal.getUserId(),
           id,
           ex.getStatusCode().value(),

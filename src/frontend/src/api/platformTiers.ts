@@ -1,9 +1,4 @@
-import {
-  femmeDeleteJson,
-  femmeJson,
-  femmePostJson,
-  femmePutJson,
-} from "./femmeClient";
+import { femmeDeleteJson, femmeJson, femmePostJson, femmePutJson } from "./femmeClient";
 
 /**
  * HU-45 (Épica D — Tiers y Feature Flags): full tier CRUD for the Platform Admin. `tenantCount`
@@ -46,4 +41,39 @@ export function updatePlatformTier(
 /** HU-45 AC-3: rejected (409 `TIER_IN_USE`) when at least one tenant uses this tier. */
 export function deletePlatformTier(id: number): Promise<void> {
   return femmeDeleteJson<void>(`/api/platform/tiers/${id}`);
+}
+
+/**
+ * HU-46 (Épica D — Tiers y Feature Flags): a tier's feature-flag matrix — every global flag plus
+ * whether this tier includes it in its default package, and the last time that changed (AC-5).
+ */
+export type TierFeatureFlagChange = {
+  changedAt: string;
+  changedByEmail: string;
+  previousIncluded: boolean;
+  newIncluded: boolean;
+};
+
+export type TierFeatureFlagRow = {
+  flagKey: string;
+  description: string | null;
+  globalEnabled: boolean;
+  included: boolean;
+  lastChange: TierFeatureFlagChange | null;
+};
+
+export function listTierFeatureFlags(tierId: number): Promise<TierFeatureFlagRow[]> {
+  return femmeJson<TierFeatureFlagRow[]>(`/api/platform/tiers/${tierId}/feature-flags`);
+}
+
+/** HU-46 AC-1/AC-2: marks (or unmarks) a flag as included in this tier's default package. */
+export function setTierFeatureFlagIncluded(
+  tierId: number,
+  flagKey: string,
+  included: boolean,
+): Promise<void> {
+  return femmePutJson<void>(
+    `/api/platform/tiers/${tierId}/feature-flags/${encodeURIComponent(flagKey)}`,
+    { included },
+  );
 }

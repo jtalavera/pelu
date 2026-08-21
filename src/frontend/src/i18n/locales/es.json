@@ -284,6 +284,18 @@
           "nameRequired": "Ingresá un nombre para el tier.",
           "description": "Descripción (opcional)",
           "descriptionPlaceholder": "p. ej. Paquete de funcionalidades por defecto."
+        },
+        "flags": {
+          "title": "Feature flags",
+          "lead": "Elegí qué feature flags incluye este tier por defecto.",
+          "loading": "Cargando feature flags…",
+          "loadError": "No se pudieron cargar las feature flags de este tier.",
+          "saveError": "No se pudieron actualizar las feature flags de este tier.",
+          "empty": "Todavía no hay feature flags.",
+          "included": "Incluida",
+          "notIncluded": "No incluida",
+          "toggleAria": "Incluir {{key}} en este tier por defecto",
+          "lastChange": "Último cambio: {{date}} por {{email}} — {{previous}} → {{next}}"
         }
       }
     },

@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, Label, Modal, Spinner, Text } from "@design-system";
+import { Alert, Button, Input, Label, Modal, Spinner, Switch, Text } from "@design-system";
 import {
   createPlatformTier,
   deletePlatformTier,
   listPlatformTiers,
+  listTierFeatureFlags,
+  setTierFeatureFlagIncluded,
   updatePlatformTier,
   type PlatformTier,
+  type TierFeatureFlagRow,
 } from "../api/platformTiers";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
+import { getDateLocale } from "../i18n/dateLocale";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 
@@ -25,7 +29,8 @@ type FormErrors = {
  * listing), not a per-tenant growing list.
  */
 export default function PlatformTiersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = getDateLocale(i18n);
 
   const [tiers, setTiers] = useState<PlatformTier[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -54,6 +59,13 @@ export default function PlatformTiersPage() {
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
+
+  // HU-46 AC-1: from the tier detail (this edit modal), the flag matrix the tier includes by
+  // default. Loaded whenever the edit modal opens for a tier.
+  const [editFlags, setEditFlags] = useState<TierFeatureFlagRow[] | null>(null);
+  const [editFlagsLoading, setEditFlagsLoading] = useState(false);
+  const [editFlagsError, setEditFlagsError] = useState<string | null>(null);
+  const [flagBusyKey, setFlagBusyKey] = useState<string | null>(null);
 
   const loadTiers = useCallback(async () => {
     setLoading(true);
@@ -129,6 +141,37 @@ export default function PlatformTiersPage() {
     setEditSuccess(false);
     setDeleteSuccess(false);
     setEditModalOpen(true);
+    void loadEditFlags(tier.id);
+  }
+
+  // HU-46 AC-1/AC-2: the tier's feature-flag matrix, loaded fresh every time the detail/edit modal
+  // opens so it always reflects whatever was last persisted (also used to re-sync after a toggle).
+  async function loadEditFlags(tierId: number) {
+    setEditFlags(null);
+    setEditFlagsError(null);
+    setEditFlagsLoading(true);
+    try {
+      const data = await listTierFeatureFlags(tierId);
+      setEditFlags(data);
+    } catch (e) {
+      setEditFlagsError(translateApiError(e, t, "femme.platform.tiers.flags.loadError"));
+    } finally {
+      setEditFlagsLoading(false);
+    }
+  }
+
+  async function toggleTierFlag(flagKey: string, included: boolean) {
+    if (!editingTier) return;
+    setEditFlagsError(null);
+    setFlagBusyKey(flagKey);
+    try {
+      await setTierFeatureFlagIncluded(editingTier.id, flagKey, included);
+      await loadEditFlags(editingTier.id);
+    } catch (e) {
+      setEditFlagsError(translateApiError(e, t, "femme.platform.tiers.flags.saveError"));
+    } finally {
+      setFlagBusyKey(null);
+    }
   }
 
   const onRowKeyOpenEdit = (tier: PlatformTier) => (e: KeyboardEvent<HTMLTableRowElement>) => {
@@ -141,6 +184,8 @@ export default function PlatformTiersPage() {
   function closeEditModal() {
     setEditModalOpen(false);
     setEditingTier(null);
+    setEditFlags(null);
+    setEditFlagsError(null);
   }
 
   async function submitEdit() {
@@ -480,6 +525,94 @@ export default function PlatformTiersPage() {
               {t("femme.platform.tiers.tenantCount", { count: editingTier.tenantCount })}
             </Text>
           ) : null}
+
+          {/* HU-46 AC-1: from this tier's detail (the edit modal), the Platform Admin sees every
+              existing feature flag and marks which ones this tier includes by default. */}
+          <div className="border-t border-[var(--color-stone-md)] pt-4 dark:border-slate-700">
+            <Text className="mb-1 font-medium text-[var(--color-ink)]">
+              {t("femme.platform.tiers.flags.title")}
+            </Text>
+            <Text variant="small" className="mb-3 text-[var(--color-ink-3)]">
+              {t("femme.platform.tiers.flags.lead")}
+            </Text>
+
+            {editFlagsError ? (
+              <Alert
+                variant="destructive"
+                className="mb-3"
+                title={t("femme.platform.tiers.errorTitle")}
+              >
+                {editFlagsError}
+              </Alert>
+            ) : null}
+
+            {editFlagsLoading && editFlags === null ? (
+              <div className="flex items-center gap-2 text-[var(--color-ink-3)]">
+                <Spinner size="sm" />
+                <Text variant="small">{t("femme.platform.tiers.flags.loading")}</Text>
+              </div>
+            ) : (
+              <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto" data-testid="tier-flags-list">
+                {(editFlags ?? []).map((row) => {
+                  const busy = flagBusyKey === row.flagKey;
+                  return (
+                    <li
+                      key={row.flagKey}
+                      data-testid={`tier-flag-row-${row.flagKey}`}
+                      className="flex items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] p-3 dark:border-slate-700"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono text-xs font-medium text-[var(--color-ink)]">
+                          {row.flagKey}
+                        </div>
+                        {row.description ? (
+                          <div className="mt-0.5 text-xs text-[var(--color-ink-3)]">
+                            {row.description}
+                          </div>
+                        ) : null}
+                        {row.lastChange ? (
+                          <div
+                            data-testid={`tier-flag-history-${row.flagKey}`}
+                            className="mt-1 text-[11px] text-[var(--color-ink-3)]"
+                          >
+                            {t("femme.platform.tiers.flags.lastChange", {
+                              date: new Intl.DateTimeFormat(locale, {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              }).format(new Date(row.lastChange.changedAt)),
+                              email: row.lastChange.changedByEmail,
+                              previous: row.lastChange.previousIncluded
+                                ? t("femme.platform.tiers.flags.included")
+                                : t("femme.platform.tiers.flags.notIncluded"),
+                              next: row.lastChange.newIncluded
+                                ? t("femme.platform.tiers.flags.included")
+                                : t("femme.platform.tiers.flags.notIncluded"),
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Switch
+                          checked={row.included}
+                          disabled={busy}
+                          onChange={() => void toggleTierFlag(row.flagKey, !row.included)}
+                          id={`tier-flag-${row.flagKey}`}
+                          aria-label={t("femme.platform.tiers.flags.toggleAria", {
+                            key: row.flagKey,
+                          })}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+                {editFlags !== null && editFlags.length === 0 ? (
+                  <li className="text-xs text-[var(--color-ink-3)]">
+                    {t("femme.platform.tiers.flags.empty")}
+                  </li>
+                ) : null}
+              </ul>
+            )}
+          </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" onClick={closeEditModal} className="min-h-11">
