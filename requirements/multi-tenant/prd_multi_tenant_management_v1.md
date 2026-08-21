@@ -70,7 +70,7 @@ negocio de un tenant).
 | HU-35 | Login unificado, enrutamiento por rol | Done |
 | HU-36 | Migrar SYSTEM_ADMIN a Platform Admin | Done |
 | HU-37 | Crear tenant | Done |
-| HU-38 | Editar tenant | Pendiente |
+| HU-38 | Editar tenant | Done |
 | HU-39 | Listado y búsqueda de tenants | Pendiente |
 | HU-40 | Suspender/reactivar tenant | Pendiente |
 | HU-41 | Crear usuario admin de tenant | Pendiente |

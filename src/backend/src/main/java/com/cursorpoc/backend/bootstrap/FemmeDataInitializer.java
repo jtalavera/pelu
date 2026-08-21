@@ -148,13 +148,20 @@ public class FemmeDataInitializer {
       // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's
       // full tier CRUD hasn't landed yet). V41's Flyway INSERT only reaches dev/prod the same way
       // V28's flag INSERT does above — Flyway is disabled for the `e2e` profile — so this runner
-      // seeds the same default tier there too.
+      // seeds the same default tier there too. HU-38 (editar tenant) needs a *second* tier to
+      // exercise an actual tier change (V43's Flyway INSERT, mirrored here for the same reason).
       if (tierRepository.count() == 0) {
         Tier defaultTier = new Tier();
         defaultTier.setName("Estándar");
         defaultTier.setDescription("Tier por defecto.");
         tierRepository.save(defaultTier);
         log.info("Seeded default tier 'Estándar'");
+
+        Tier premiumTier = new Tier();
+        premiumTier.setName("Premium");
+        premiumTier.setDescription("Tier con funcionalidades ampliadas.");
+        tierRepository.save(premiumTier);
+        log.info("Seeded tier 'Premium'");
       }
 
       if (appUserRepository.count() == 0) {

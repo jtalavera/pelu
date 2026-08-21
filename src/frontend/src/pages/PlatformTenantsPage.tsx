@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -16,12 +16,14 @@ import {
   createTenant,
   listTenantsPaged,
   listTiers,
+  updateTenant,
   type PlatformTenant,
   type TierOption,
 } from "../api/platformTenants";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
+import { useDateLocale } from "../i18n/dateLocale";
 
 type FormErrors = {
   name?: string;
@@ -36,6 +38,7 @@ type FormErrors = {
  */
 export default function PlatformTenantsPage() {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
 
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -62,6 +65,18 @@ export default function PlatformTenantsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
+
+  // HU-38: edit an existing tenant. Reuses the same PlatformTenant row data already held in
+  // tenantPageData — no separate GET-by-id endpoint needed to prefill the form.
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingTenant, setEditingTenant] = useState<PlatformTenant | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDomain, setEditDomain] = useState("");
+  const [editTierId, setEditTierId] = useState<string>("");
+  const [editFormErrors, setEditFormErrors] = useState<FormErrors>(null);
+  const [editSaveError, setEditSaveError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSuccess, setEditSuccess] = useState(false);
 
   const loadTenants = useCallback(
     async (page: number, size: number) => {
@@ -103,6 +118,7 @@ export default function PlatformTenantsPage() {
     setFormErrors(null);
     setSaveError(null);
     setCreateSuccess(false);
+    setEditSuccess(false);
     setModalOpen(true);
   }
 
@@ -151,6 +167,82 @@ export default function PlatformTenantsPage() {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  // HU-38 AC-1: opens the edit form prefilled with this tenant's current name/domain/tier.
+  function openEdit(tenant: PlatformTenant) {
+    setEditingTenant(tenant);
+    setEditName(tenant.name);
+    setEditDomain(tenant.domain ?? "");
+    setEditTierId(tenant.tierId != null ? String(tenant.tierId) : "");
+    setEditFormErrors(null);
+    setEditSaveError(null);
+    setCreateSuccess(false);
+    setEditSuccess(false);
+    setEditModalOpen(true);
+  }
+
+  const onRowKeyOpenEdit =
+    (tenant: PlatformTenant) => (e: KeyboardEvent<HTMLTableRowElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openEdit(tenant);
+      }
+    };
+
+  function closeEditModal() {
+    setEditModalOpen(false);
+    setEditingTenant(null);
+  }
+
+  // HU-38 AC-1/AC-2/AC-3/AC-5: same field-level validations as create; on success the listing is
+  // reloaded so the edited row (and, if the tier changed, its refreshed audit line) is visible
+  // immediately and survives a page reload (persisted server-side).
+  async function submitEdit() {
+    if (!editingTenant) {
+      return;
+    }
+    setEditSaveError(null);
+    const nameTrim = editName.trim();
+    const domainTrim = editDomain.trim();
+    const errs: NonNullable<FormErrors> = {};
+    if (!nameTrim) {
+      errs.name = t("femme.platform.tenants.form.nameRequired");
+    }
+    if (!editTierId) {
+      errs.tier = t("femme.platform.tenants.form.tierRequired");
+    }
+    if (errs.name || errs.tier) {
+      setEditFormErrors(errs);
+      return;
+    }
+    setEditFormErrors(null);
+    setEditSaving(true);
+    try {
+      await updateTenant(editingTenant.id, {
+        name: nameTrim,
+        domain: domainTrim || null,
+        tierId: editTierId ? Number(editTierId) : null,
+      });
+      setEditModalOpen(false);
+      setEditingTenant(null);
+      setEditSuccess(true);
+      setReloadTick((n) => n + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      const rawCode = parseApiErrorMessage(e);
+      if (rawCode === "TENANT_DOMAIN_DUPLICATE") {
+        setEditFormErrors({ domain: t("femme.apiErrors.TENANT_DOMAIN_DUPLICATE") });
+      } else if (rawCode === "TENANT_NAME_REQUIRED") {
+        setEditFormErrors({ name: t("femme.apiErrors.TENANT_NAME_REQUIRED") });
+      } else if (rawCode === "TENANT_TIER_REQUIRED" || rawCode === "TIER_NOT_FOUND") {
+        setEditFormErrors({ tier: t(`femme.apiErrors.${rawCode}`) });
+      } else {
+        setEditSaveError(translateApiError(e, t, "femme.platform.tenants.editSaveError"));
+      }
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -204,11 +296,16 @@ export default function PlatformTenantsPage() {
         </Button>
       </div>
 
-      {(createSuccess || pageError) && (
+      {(createSuccess || editSuccess || pageError) && (
         <div className="mb-4 flex flex-col gap-2">
           {createSuccess && (
             <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
               {t("femme.platform.tenants.createSuccess")}
+            </Alert>
+          )}
+          {editSuccess && (
+            <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
+              {t("femme.platform.tenants.editSuccess")}
             </Alert>
           )}
           {pageError && (
@@ -255,7 +352,16 @@ export default function PlatformTenantsPage() {
                 </tr>
               ) : (
                 content.map((tenant) => (
-                  <tr key={tenant.id} data-testid={`platform-tenant-row-${tenant.id}`}>
+                  <tr
+                    key={tenant.id}
+                    data-testid={`platform-tenant-row-${tenant.id}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t("femme.platform.tenants.openEdit", { name: tenant.name })}
+                    onClick={() => openEdit(tenant)}
+                    onKeyDown={onRowKeyOpenEdit(tenant)}
+                    style={{ cursor: "pointer" }}
+                  >
                     <td style={{ ...tdStyle, fontWeight: 500 }}>{tenant.name}</td>
                     <td style={{ ...tdStyle, color: tenant.domain ? "var(--color-ink)" : "var(--color-ink-3)" }}>
                       {tenant.domain ?? "—"}
@@ -368,6 +474,110 @@ export default function PlatformTenantsPage() {
             </Button>
             <Button type="button" onClick={submitCreate} disabled={saving} className="min-h-11">
               {saving ? t("femme.platform.tenants.saving") : t("femme.platform.tenants.save")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={editModalOpen}
+        onClose={closeEditModal}
+        title={t("femme.platform.tenants.editTitle")}
+      >
+        <div className="flex flex-col gap-4">
+          {editSaveError ? (
+            <Alert variant="destructive" title={t("femme.platform.tenants.errorTitle")}>
+              {editSaveError}
+            </Alert>
+          ) : null}
+          {tiersLoadError ? <Alert variant="destructive">{tiersLoadError}</Alert> : null}
+
+          <div>
+            <Label htmlFor="tenant-edit-name">{t("femme.platform.tenants.form.name")}</Label>
+            <Input
+              id="tenant-edit-name"
+              value={editName}
+              onChange={(e) => {
+                setEditName(e.target.value);
+                setEditFormErrors((prev) => (prev ? { ...prev, name: undefined } : prev));
+              }}
+              placeholder={t("femme.platform.tenants.form.namePlaceholder")}
+              aria-invalid={editFormErrors?.name ? "true" : "false"}
+              aria-describedby={editFormErrors?.name ? "tenant-edit-name-err" : undefined}
+            />
+            <FieldValidationError id="tenant-edit-name-err">
+              {editFormErrors?.name}
+            </FieldValidationError>
+          </div>
+
+          <div>
+            <Label htmlFor="tenant-edit-domain">{t("femme.platform.tenants.form.domain")}</Label>
+            <Input
+              id="tenant-edit-domain"
+              value={editDomain}
+              onChange={(e) => {
+                setEditDomain(e.target.value);
+                setEditFormErrors((prev) => (prev ? { ...prev, domain: undefined } : prev));
+              }}
+              placeholder={t("femme.platform.tenants.form.domainPlaceholder")}
+              aria-invalid={editFormErrors?.domain ? "true" : "false"}
+              aria-describedby={editFormErrors?.domain ? "tenant-edit-domain-err" : undefined}
+            />
+            <FieldValidationError id="tenant-edit-domain-err">
+              {editFormErrors?.domain}
+            </FieldValidationError>
+          </div>
+
+          <div>
+            <Label htmlFor="tenant-edit-tier">{t("femme.platform.tenants.form.tierEdit")}</Label>
+            <Select
+              id="tenant-edit-tier"
+              value={editTierId}
+              onChange={(e) => {
+                setEditTierId(e.target.value);
+                setEditFormErrors((prev) => (prev ? { ...prev, tier: undefined } : prev));
+              }}
+              invalid={!!editFormErrors?.tier}
+              aria-invalid={editFormErrors?.tier ? "true" : "false"}
+              aria-describedby={editFormErrors?.tier ? "tenant-edit-tier-err" : undefined}
+            >
+              <option value="">{t("femme.platform.tenants.form.tierPlaceholder")}</option>
+              {tiers.map((tier) => (
+                <option key={tier.id} value={tier.id}>
+                  {tier.name}
+                </option>
+              ))}
+            </Select>
+            <FieldValidationError id="tenant-edit-tier-err">
+              {editFormErrors?.tier}
+            </FieldValidationError>
+          </div>
+
+          {editingTenant?.lastTierChange ? (
+            <p
+              data-testid="tenant-edit-last-tier-change"
+              className="text-xs text-[var(--color-ink-3)]"
+            >
+              {t("femme.platform.tenants.lastTierChange", {
+                date: new Intl.DateTimeFormat(dateLocale, {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                }).format(new Date(editingTenant.lastTierChange.changedAt)),
+                email: editingTenant.lastTierChange.changedByEmail,
+                previous: editingTenant.lastTierChange.previousTierName ?? "—",
+                next: editingTenant.lastTierChange.newTierName ?? "—",
+              })}
+            </p>
+          ) : null}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" onClick={closeEditModal} className="min-h-11">
+              {t("femme.platform.tenants.cancel")}
+            </Button>
+            <Button type="button" onClick={submitEdit} disabled={editSaving} className="min-h-11">
+              {editSaving
+                ? t("femme.platform.tenants.saving")
+                : t("femme.platform.tenants.saveChanges")}
             </Button>
           </div>
         </div>

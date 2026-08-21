@@ -1,5 +1,12 @@
-import { femmeJson, femmePostJson } from "./femmeClient";
+import { femmeJson, femmePostJson, femmePutJson } from "./femmeClient";
 import type { PageResponse } from "./pagination";
+
+export type TenantTierChange = {
+  changedAt: string;
+  changedByEmail: string;
+  previousTierName: string | null;
+  newTierName: string | null;
+};
 
 export type PlatformTenant = {
   id: number;
@@ -8,6 +15,7 @@ export type PlatformTenant = {
   tierId: number | null;
   tierName: string | null;
   status: "ACTIVE" | "SUSPENDED";
+  lastTierChange: TenantTierChange | null;
 };
 
 export type TierOption = {
@@ -41,4 +49,17 @@ export type CreateTenantPayload = {
 
 export function createTenant(payload: CreateTenantPayload): Promise<PlatformTenant> {
   return femmePostJson<PlatformTenant>("/api/platform/tenants", payload);
+}
+
+export type UpdateTenantPayload = {
+  name: string;
+  domain: string | null;
+  tierId: number | null;
+};
+
+export function updateTenant(
+  id: number,
+  payload: UpdateTenantPayload,
+): Promise<PlatformTenant> {
+  return femmePutJson<PlatformTenant>(`/api/platform/tenants/${id}`, payload);
 }

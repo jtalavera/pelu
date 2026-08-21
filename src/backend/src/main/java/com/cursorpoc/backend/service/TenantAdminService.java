@@ -1,15 +1,22 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.TenantTierChange;
 import com.cursorpoc.backend.domain.Tier;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TenantTierChangeRepository;
 import com.cursorpoc.backend.repository.TierRepository;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
+import com.cursorpoc.backend.web.dto.TenantTierChangeResponse;
+import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import com.cursorpoc.backend.web.dto.TierOptionResponse;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -19,19 +26,27 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37 (Épica B — Gestión de Tenants): Platform Admin creates and lists tenants. HU-39 will extend
- * {@link #listPaged} with search/filtering; this only needs the plain paged listing so a
- * freshly-created tenant is provably visible (AC-6).
+ * HU-37/HU-38 (Épica B — Gestión de Tenants): Platform Admin creates, lists, and edits tenants.
+ * HU-39 will extend {@link #listPaged} with search/filtering; this only needs the plain paged
+ * listing so a freshly-created/edited tenant is provably visible.
  */
 @Service
 public class TenantAdminService {
 
   private final TenantRepository tenantRepository;
   private final TierRepository tierRepository;
+  private final TenantTierChangeRepository tenantTierChangeRepository;
+  private final FemmeTimeProperties timeProperties;
 
-  public TenantAdminService(TenantRepository tenantRepository, TierRepository tierRepository) {
+  public TenantAdminService(
+      TenantRepository tenantRepository,
+      TierRepository tierRepository,
+      TenantTierChangeRepository tenantTierChangeRepository,
+      FemmeTimeProperties timeProperties) {
     this.tenantRepository = tenantRepository;
     this.tierRepository = tierRepository;
+    this.tenantTierChangeRepository = tenantTierChangeRepository;
+    this.timeProperties = timeProperties;
   }
 
   @Transactional(readOnly = true)
@@ -88,14 +103,106 @@ public class TenantAdminService {
     return toResponse(tenant);
   }
 
+  /**
+   * HU-38: AC-1 (edit name/domain/tier), AC-2 (same validations as create, domain uniqueness
+   * excluding self), AC-3/AC-4 (tier change takes effect immediately — flag resolution reads {@code
+   * Tenant#tier} live, nothing here caches it — without touching any existing per-tenant flag
+   * override), AC-5 (persisted via the same {@code tenantRepository.save}, so a page reload
+   * reflects it), AC-6 (tier changes are audited via {@link TenantTierChange}).
+   */
+  @Transactional
+  public TenantResponse update(
+      Long id, TenantUpdateRequest request, long changedByUserId, String changedByEmail) {
+    Tenant tenant =
+        tenantRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+
+    String name = request.name() == null ? "" : request.name().trim();
+    if (name.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TENANT_NAME_REQUIRED");
+    }
+
+    String domain = request.domain() == null ? null : request.domain().trim();
+    if (domain != null && domain.isBlank()) {
+      domain = null;
+    }
+    if (domain != null && tenantRepository.findByDomainAndIdNot(domain, id).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "TENANT_DOMAIN_DUPLICATE");
+    }
+
+    if (request.tierId() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TENANT_TIER_REQUIRED");
+    }
+    Tier newTier =
+        tierRepository
+            .findById(request.tierId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TIER_NOT_FOUND"));
+
+    Tier previousTier = tenant.getTier();
+    boolean tierChanged =
+        !Objects.equals(previousTier != null ? previousTier.getId() : null, newTier.getId());
+
+    tenant.setName(name);
+    tenant.setDomain(domain);
+    tenant.setTier(newTier);
+    tenantRepository.save(tenant);
+
+    if (tierChanged) {
+      recordTierChange(tenant.getId(), previousTier, newTier, changedByUserId, changedByEmail);
+    }
+
+    return toResponse(tenant);
+  }
+
+  /**
+   * SIFEN HU-22-style "single last result" upsert (see {@code FeatureFlagService.recordChange}):
+   * one row per tenant, overwritten on each tier change rather than appended.
+   */
+  private void recordTierChange(
+      Long tenantId, Tier previousTier, Tier newTier, long changedByUserId, String changedByEmail) {
+    TenantTierChange change =
+        tenantTierChangeRepository
+            .findByTenantId(tenantId)
+            .orElseGet(
+                () -> {
+                  TenantTierChange c = new TenantTierChange();
+                  c.setTenantId(tenantId);
+                  return c;
+                });
+    change.setPreviousTierId(previousTier != null ? previousTier.getId() : null);
+    change.setPreviousTierName(previousTier != null ? previousTier.getName() : null);
+    change.setNewTierId(newTier.getId());
+    change.setNewTierName(newTier.getName());
+    change.setChangedAt(LocalDateTime.now(timeProperties.zoneId()));
+    change.setChangedByUserId(changedByUserId);
+    change.setChangedByEmail(changedByEmail);
+    tenantTierChangeRepository.save(change);
+  }
+
   private TenantResponse toResponse(Tenant tenant) {
     Tier tier = tenant.getTier();
+    TenantTierChangeResponse lastTierChange =
+        tenantTierChangeRepository
+            .findByTenantId(tenant.getId())
+            .map(this::toTierChangeResponse)
+            .orElse(null);
     return new TenantResponse(
         tenant.getId(),
         tenant.getName(),
         tenant.getDomain(),
         tier != null ? tier.getId() : null,
         tier != null ? tier.getName() : null,
-        tenant.getStatus().name());
+        tenant.getStatus().name(),
+        lastTierChange);
+  }
+
+  private TenantTierChangeResponse toTierChangeResponse(TenantTierChange change) {
+    return new TenantTierChangeResponse(
+        change.getChangedAt().atZone(timeProperties.zoneId()).toInstant(),
+        change.getChangedByEmail(),
+        change.getPreviousTierName(),
+        change.getNewTierName());
   }
 }

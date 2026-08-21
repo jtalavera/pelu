@@ -178,6 +178,12 @@
         "colDomain": "Domain",
         "colTier": "Tier",
         "colStatus": "Status",
+        "editTitle": "Edit tenant",
+        "editSuccess": "Tenant updated successfully.",
+        "editSaveError": "Could not update the tenant.",
+        "saveChanges": "Save changes",
+        "openEdit": "Edit tenant {{name}}",
+        "lastTierChange": "Last tier change: {{date}} by {{email}} — {{previous}} → {{next}}",
         "form": {
           "name": "Name",
           "namePlaceholder": "e.g. Salon Bella Vista",
@@ -185,6 +191,7 @@
           "domain": "Domain (optional)",
           "domainPlaceholder": "e.g. bellavista.pelu.app",
           "tier": "Initial tier",
+          "tierEdit": "Tier",
           "tierPlaceholder": "Select a tier…",
           "tierRequired": "Select an initial tier."
         }
