@@ -73,7 +73,7 @@ negocio de un tenant).
 | HU-38 | Editar tenant | Done |
 | HU-39 | Listado y búsqueda de tenants | Done |
 | HU-40 | Suspender/reactivar tenant | Done |
-| HU-41 | Crear usuario admin de tenant | Pendiente |
+| HU-41 | Crear usuario admin de tenant | Done |
 | HU-42 | Asignar múltiples admins a un tenant | Pendiente |
 | HU-43 | Desactivar/reactivar usuario de tenant | Pendiente |
 | HU-44 | Reenviar invitación admin de tenant | Pendiente |

@@ -210,6 +210,17 @@
           "tierEdit": "Tier",
           "tierPlaceholder": "Seleccioná un tier…",
           "tierRequired": "Seleccioná un tier inicial."
+        },
+        "admins": {
+          "sectionTitle": "Administradores del tenant",
+          "sectionLead": "Invitá a un usuario para que administre este tenant. Va a definir su propia contraseña al activar la invitación.",
+          "emailLabel": "Email",
+          "emailPlaceholder": "p. ej. admin@ejemplo.com",
+          "inviteButton": "Invitar administrador",
+          "inviting": "Enviando invitación…",
+          "inviteSuccess": "Invitación enviada a {{email}}.",
+          "inviteError": "No se pudo enviar la invitación.",
+          "emailRequired": "Ingresá el email del nuevo administrador."
         }
       }
     },
@@ -914,7 +925,9 @@
       "TENANT_NAME_REQUIRED": "Ingresá un nombre para el tenant.",
       "TENANT_DOMAIN_DUPLICATE": "Ese dominio ya está en uso por otro tenant.",
       "TENANT_TIER_REQUIRED": "Seleccioná un tier inicial.",
-      "TENANT_STATUS_INVALID": "Estado de tenant inválido.",
+      "TENANT_ADMIN_EMAIL_REQUIRED": "Ingresá el email del nuevo administrador.",
+    "TENANT_ADMIN_EMAIL_DUPLICATE": "Ya existe un usuario con ese email para este tenant.",
+    "TENANT_STATUS_INVALID": "Estado de tenant inválido.",
       "TIER_NOT_FOUND": "Ese tier no existe.",
       "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
       "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",

@@ -210,6 +210,17 @@
           "tierEdit": "Tier",
           "tierPlaceholder": "Select a tier…",
           "tierRequired": "Select an initial tier."
+        },
+        "admins": {
+          "sectionTitle": "Tenant administrators",
+          "sectionLead": "Invite a user to manage this tenant as an administrator. They'll set their own password when they activate the invitation.",
+          "emailLabel": "Email",
+          "emailPlaceholder": "e.g. admin@example.com",
+          "inviteButton": "Invite administrator",
+          "inviting": "Sending invitation…",
+          "inviteSuccess": "Invitation sent to {{email}}.",
+          "inviteError": "Could not send the invitation.",
+          "emailRequired": "Enter the new administrator's email."
         }
       }
     },
@@ -914,7 +925,9 @@
       "TENANT_NAME_REQUIRED": "Enter a name for the tenant.",
       "TENANT_DOMAIN_DUPLICATE": "That domain is already used by another tenant.",
       "TENANT_TIER_REQUIRED": "Select an initial tier.",
-      "TENANT_STATUS_INVALID": "Invalid tenant status.",
+      "TENANT_ADMIN_EMAIL_REQUIRED": "Enter the new administrator's email.",
+    "TENANT_ADMIN_EMAIL_DUPLICATE": "A user with that email already exists for this tenant.",
+    "TENANT_STATUS_INVALID": "Invalid tenant status.",
       "TIER_NOT_FOUND": "That tier does not exist.",
       "FLAG_NOT_FOUND": "That feature flag does not exist.",
       "INVALID_FLAG_KEY": "Invalid feature flag name. Use uppercase letters, digits, and underscores (e.g. GUIDED_TOUR).",

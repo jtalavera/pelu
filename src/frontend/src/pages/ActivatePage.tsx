@@ -6,8 +6,10 @@ import { apiBaseUrl } from "../api/baseUrl";
 import { FieldValidationError } from "../components/FieldValidationError";
 
 type TokenInfo = {
-  professionalId: number;
-  professionalName: string;
+  // HU-41: null when this token belongs to a Platform-Admin-invited tenant ADMIN user rather than
+  // a Professional — the page falls back to its generic (nameless) subtitle in that case.
+  professionalId: number | null;
+  professionalName: string | null;
   email: string;
 };
 
@@ -161,7 +163,7 @@ export default function ActivatePage() {
                 {t("femme.activate.title")}
               </Heading>
               <Text variant="muted" className="mb-2 text-[var(--color-ink-3)]">
-                {tokenInfo
+                {tokenInfo?.professionalName
                   ? t("femme.activate.subTitleNamed", { name: tokenInfo.professionalName })
                   : t("femme.activate.subtitle")}
               </Text>

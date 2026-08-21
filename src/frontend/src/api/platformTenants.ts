@@ -81,3 +81,21 @@ export function updateTenant(
 export function updateTenantStatus(id: number, status: TenantStatus): Promise<PlatformTenant> {
   return femmePatchJson<PlatformTenant>(`/api/platform/tenants/${id}/status`, { status });
 }
+
+/** HU-41 AC-1/AC-6: response confirming the tenant ADMIN invite was created and emailed. */
+export type CreateTenantAdminResult = {
+  userId: number;
+  email: string;
+  invitationSent: boolean;
+  rawToken: string;
+};
+
+/** HU-41 AC-1/AC-4: Platform Admin creates a tenant ADMIN user and invites them to activate. */
+export function createTenantAdmin(
+  tenantId: number,
+  email: string,
+): Promise<CreateTenantAdminResult> {
+  return femmePostJson<CreateTenantAdminResult>(`/api/platform/tenants/${tenantId}/admins`, {
+    email,
+  });
+}

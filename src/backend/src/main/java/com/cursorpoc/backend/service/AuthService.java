@@ -2,12 +2,14 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
 import com.cursorpoc.backend.domain.AppUser;
+import com.cursorpoc.backend.domain.AppUserActivationToken;
 import com.cursorpoc.backend.domain.PasswordResetToken;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ProfessionalActivationToken;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
+import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
@@ -59,6 +61,7 @@ public class AuthService {
   private final AppUserRepository appUserRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final ProfessionalActivationTokenRepository activationTokenRepository;
+  private final AppUserActivationTokenRepository appUserActivationTokenRepository;
   private final ProfessionalRepository professionalRepository;
   private final TenantRepository tenantRepository;
   private final PasswordEncoder passwordEncoder;
@@ -70,6 +73,7 @@ public class AuthService {
       AppUserRepository appUserRepository,
       PasswordResetTokenRepository passwordResetTokenRepository,
       ProfessionalActivationTokenRepository activationTokenRepository,
+      AppUserActivationTokenRepository appUserActivationTokenRepository,
       ProfessionalRepository professionalRepository,
       TenantRepository tenantRepository,
       PasswordEncoder passwordEncoder,
@@ -79,6 +83,7 @@ public class AuthService {
     this.appUserRepository = appUserRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.activationTokenRepository = activationTokenRepository;
+    this.appUserActivationTokenRepository = appUserActivationTokenRepository;
     this.professionalRepository = professionalRepository;
     this.tenantRepository = tenantRepository;
     this.passwordEncoder = passwordEncoder;
@@ -263,34 +268,76 @@ public class AuthService {
     professionalRepository.save(professional);
   }
 
+  /**
+   * HU-41: {@code ActivatePage} is shared by both flows (AC-4), so this transparently checks the
+   * professional-scoped token table first, then the app-user-scoped one (Platform-Admin-invited
+   * tenant {@code ADMIN} users) — the frontend never needs to know which kind of token it has.
+   */
   @Transactional(readOnly = true)
   public ActivationTokenInfoResponse validateActivationToken(String rawToken) {
     String hash = sha256Hex(rawToken);
-    ProfessionalActivationToken token =
-        activationTokenRepository
+    Optional<ProfessionalActivationToken> professionalToken =
+        activationTokenRepository.findByTokenHashAndUsedFalse(hash);
+    if (professionalToken.isPresent()) {
+      ProfessionalActivationToken token = professionalToken.get();
+      if (token.getExpiresAt().isBefore(Instant.now())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
+      }
+      Professional prof = token.getProfessional();
+      return new ActivationTokenInfoResponse(prof.getId(), prof.getFullName(), prof.getEmail());
+    }
+
+    AppUserActivationToken userToken =
+        appUserActivationTokenRepository
             .findByTokenHashAndUsedFalse(hash)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
-    if (token.getExpiresAt().isBefore(Instant.now())) {
+    if (userToken.getExpiresAt().isBefore(Instant.now())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
-    Professional prof = token.getProfessional();
-    return new ActivationTokenInfoResponse(prof.getId(), prof.getFullName(), prof.getEmail());
+    return new ActivationTokenInfoResponse(null, null, userToken.getAppUser().getEmail());
   }
 
+  /**
+   * HU-41: activates the account behind an activation token — a {@code Professional} (existing
+   * flow) or a Platform-Admin-invited tenant {@code ADMIN} {@link AppUser} (AC-2/AC-4/AC-5), tried
+   * in that order, same as {@link #validateActivationToken}.
+   */
   @Transactional
-  public void activateProfessionalAccount(ActivateProfessionalRequest request) {
+  public void activateAccount(ActivateProfessionalRequest request) {
     validatePasswordStrength(request.password());
     if (!request.password().equals(request.confirmPassword())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORDS_DO_NOT_MATCH");
     }
 
     String hash = sha256Hex(request.token());
-    ProfessionalActivationToken activationToken =
-        activationTokenRepository
+    Optional<ProfessionalActivationToken> professionalToken =
+        activationTokenRepository.findByTokenHashAndUsedFalse(hash);
+    if (professionalToken.isPresent()) {
+      activateProfessionalAccount(professionalToken.get(), request.password());
+      return;
+    }
+
+    AppUserActivationToken userToken =
+        appUserActivationTokenRepository
             .findByTokenHashAndUsedFalse(hash)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
+    if (userToken.getExpiresAt().isBefore(Instant.now())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
+    }
+
+    AppUser user = userToken.getAppUser();
+    user.setPasswordHash(passwordEncoder.encode(request.password()));
+    user.setEnabled(true);
+    appUserRepository.save(user);
+
+    userToken.setUsed(true);
+    appUserActivationTokenRepository.save(userToken);
+  }
+
+  private void activateProfessionalAccount(
+      ProfessionalActivationToken activationToken, String rawPassword) {
     if (activationToken.getExpiresAt().isBefore(Instant.now())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
@@ -311,7 +358,7 @@ public class AuthService {
       user.setRole(UserRole.PROFESSIONAL);
       user.setEnabled(true);
     }
-    user.setPasswordHash(passwordEncoder.encode(request.password()));
+    user.setPasswordHash(passwordEncoder.encode(rawPassword));
     appUserRepository.save(user);
 
     professional.setUser(user);

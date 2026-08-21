@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.bootstrap.FemmeDataInitializer;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppUserTourStateRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
@@ -45,6 +46,7 @@ public class SeedResetService {
   private final ProfessionalRepository professionalRepository;
   private final ProfessionalScheduleRepository professionalScheduleRepository;
   private final ProfessionalActivationTokenRepository professionalActivationTokenRepository;
+  private final AppUserActivationTokenRepository appUserActivationTokenRepository;
   private final ClientRepository clientRepository;
   private final AppointmentRepository appointmentRepository;
   private final InvoiceRepository invoiceRepository;
@@ -66,6 +68,7 @@ public class SeedResetService {
       ProfessionalRepository professionalRepository,
       ProfessionalScheduleRepository professionalScheduleRepository,
       ProfessionalActivationTokenRepository professionalActivationTokenRepository,
+      AppUserActivationTokenRepository appUserActivationTokenRepository,
       ClientRepository clientRepository,
       AppointmentRepository appointmentRepository,
       InvoiceRepository invoiceRepository,
@@ -85,6 +88,7 @@ public class SeedResetService {
     this.professionalRepository = professionalRepository;
     this.professionalScheduleRepository = professionalScheduleRepository;
     this.professionalActivationTokenRepository = professionalActivationTokenRepository;
+    this.appUserActivationTokenRepository = appUserActivationTokenRepository;
     this.clientRepository = clientRepository;
     this.appointmentRepository = appointmentRepository;
     this.invoiceRepository = invoiceRepository;
@@ -179,6 +183,12 @@ public class SeedResetService {
     // Must run before deleting app_users: app_user_tour_state has a FK to app_users.
     long deletedTourState = appUserTourStateRepository.deleteByUser_Tenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_user_tour_state", deletedTourState);
+
+    // HU-41: must also run before deleting app_users — app_user_activation_tokens has a FK to
+    // app_users too (Platform-Admin-invited tenant ADMIN users).
+    long deletedAppUserActivationTokens =
+        appUserActivationTokenRepository.deleteByAppUser_Tenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} app_user_activation_tokens", deletedAppUserActivationTokens);
 
     long deletedUsers = appUserRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_users", deletedUsers);

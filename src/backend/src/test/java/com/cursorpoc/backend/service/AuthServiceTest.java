@@ -13,6 +13,7 @@ import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
+import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
@@ -41,6 +42,7 @@ class AuthServiceTest {
   @Mock private AppUserRepository appUserRepository;
   @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
   @Mock private ProfessionalActivationTokenRepository activationTokenRepository;
+  @Mock private AppUserActivationTokenRepository appUserActivationTokenRepository;
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private TenantRepository tenantRepository;
   @Mock private PasswordEncoder passwordEncoder;
@@ -60,6 +62,7 @@ class AuthServiceTest {
             appUserRepository,
             passwordResetTokenRepository,
             activationTokenRepository,
+            appUserActivationTokenRepository,
             professionalRepository,
             tenantRepository,
             passwordEncoder,

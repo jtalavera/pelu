@@ -68,7 +68,7 @@ public class AuthController {
 
   @PostMapping("/activate")
   public ResponseEntity<Void> activate(@Valid @RequestBody ActivateProfessionalRequest request) {
-    authService.activateProfessionalAccount(request);
+    authService.activateAccount(request);
     return ResponseEntity.noContent().build();
   }
 }

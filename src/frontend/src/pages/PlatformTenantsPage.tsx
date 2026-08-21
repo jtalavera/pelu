@@ -14,6 +14,7 @@ import {
 } from "@design-system";
 import {
   createTenant,
+  createTenantAdmin,
   listTenantsPaged,
   listTiers,
   updateTenant,
@@ -95,6 +96,13 @@ export default function PlatformTenantsPage() {
   const [statusActionError, setStatusActionError] = useState<string | null>(null);
   const [suspendSuccess, setSuspendSuccess] = useState(false);
   const [reactivateSuccess, setReactivateSuccess] = useState(false);
+
+  // HU-41: invite a tenant ADMIN user from within the tenant's detail (the edit dialog).
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminFormError, setAdminFormError] = useState<string | null>(null);
+  const [adminSaveError, setAdminSaveError] = useState<string | null>(null);
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminInviteSuccessEmail, setAdminInviteSuccessEmail] = useState<string | null>(null);
 
   const loadTenants = useCallback(
     async (page: number, size: number, q: string) => {
@@ -217,6 +225,10 @@ export default function PlatformTenantsPage() {
     setSuspendSuccess(false);
     setReactivateSuccess(false);
     setStatusActionError(null);
+    setAdminEmail("");
+    setAdminFormError(null);
+    setAdminSaveError(null);
+    setAdminInviteSuccessEmail(null);
     setEditModalOpen(true);
   }
 
@@ -321,6 +333,39 @@ export default function PlatformTenantsPage() {
       );
     } finally {
       setStatusActionSaving(false);
+    }
+  }
+
+  // HU-41 AC-1/AC-2/AC-3/AC-4/AC-6: invite a tenant ADMIN user for the tenant currently open in
+  // the edit dialog. The Platform Admin never sees or sets a password (AC-2) — only the email.
+  async function submitCreateAdmin() {
+    if (!editingTenant) {
+      return;
+    }
+    setAdminSaveError(null);
+    const emailTrim = adminEmail.trim();
+    if (!emailTrim) {
+      setAdminFormError(t("femme.platform.tenants.admins.emailRequired"));
+      return;
+    }
+    setAdminFormError(null);
+    setAdminInviteSuccessEmail(null);
+    setAdminSaving(true);
+    try {
+      const result = await createTenantAdmin(editingTenant.id, emailTrim);
+      setAdminEmail("");
+      setAdminInviteSuccessEmail(result.email);
+    } catch (e) {
+      const rawCode = parseApiErrorMessage(e);
+      if (rawCode === "TENANT_ADMIN_EMAIL_DUPLICATE") {
+        setAdminFormError(t("femme.apiErrors.TENANT_ADMIN_EMAIL_DUPLICATE"));
+      } else if (rawCode === "TENANT_ADMIN_EMAIL_REQUIRED" || rawCode === "INVALID_REQUEST") {
+        setAdminFormError(t("femme.platform.tenants.admins.emailRequired"));
+      } else {
+        setAdminSaveError(translateApiError(e, t, "femme.platform.tenants.admins.inviteError"));
+      }
+    } finally {
+      setAdminSaving(false);
     }
   }
 
@@ -728,6 +773,74 @@ export default function PlatformTenantsPage() {
                 next: t(`femme.status.${editingTenant.lastStatusChange.newStatus}`),
               })}
             </p>
+          ) : null}
+
+          {/* HU-41 AC-1/AC-2/AC-3/AC-4/AC-6: invite a tenant ADMIN user for this tenant, from its
+              detail (this edit dialog). No password is ever requested or shown here (AC-2) — the
+              invited user sets one at activation. */}
+          {editingTenant ? (
+            <div
+              className="flex flex-col gap-3 rounded-[var(--radius-lg)]"
+              style={{ background: "var(--color-stone)", padding: "10px 12px" }}
+            >
+              <div>
+                <Text variant="small" className="font-medium text-[var(--color-ink)]">
+                  {t("femme.platform.tenants.admins.sectionTitle")}
+                </Text>
+                <Text variant="small" className="text-[var(--color-ink-3)]">
+                  {t("femme.platform.tenants.admins.sectionLead")}
+                </Text>
+              </div>
+              {adminInviteSuccessEmail ? (
+                <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
+                  {t("femme.platform.tenants.admins.inviteSuccess", {
+                    email: adminInviteSuccessEmail,
+                  })}
+                </Alert>
+              ) : null}
+              {adminSaveError ? (
+                <Alert
+                  variant="destructive"
+                  title={t("femme.platform.tenants.errorTitle")}
+                  style={{ fontSize: 12, padding: "8px 12px" }}
+                >
+                  {adminSaveError}
+                </Alert>
+              ) : null}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <Label htmlFor="tenant-admin-email">
+                    {t("femme.platform.tenants.admins.emailLabel")}
+                  </Label>
+                  <Input
+                    id="tenant-admin-email"
+                    type="email"
+                    value={adminEmail}
+                    onChange={(e) => {
+                      setAdminEmail(e.target.value);
+                      setAdminFormError(null);
+                    }}
+                    placeholder={t("femme.platform.tenants.admins.emailPlaceholder")}
+                    aria-invalid={adminFormError ? "true" : "false"}
+                    aria-describedby={adminFormError ? "tenant-admin-email-err" : undefined}
+                  />
+                  <FieldValidationError id="tenant-admin-email-err">
+                    {adminFormError}
+                  </FieldValidationError>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="min-h-11"
+                  onClick={() => void submitCreateAdmin()}
+                  disabled={adminSaving}
+                >
+                  {adminSaving
+                    ? t("femme.platform.tenants.admins.inviting")
+                    : t("femme.platform.tenants.admins.inviteButton")}
+                </Button>
+              </div>
+            </div>
           ) : null}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

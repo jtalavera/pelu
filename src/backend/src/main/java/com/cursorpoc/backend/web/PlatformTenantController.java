@@ -2,14 +2,19 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.PlatformUserAdminService;
 import com.cursorpoc.backend.service.TenantAdminService;
+import com.cursorpoc.backend.web.dto.CreateTenantAdminRequest;
+import com.cursorpoc.backend.web.dto.CreateTenantAdminResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
 import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import com.cursorpoc.backend.web.dto.TierOptionResponse;
+import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -26,9 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants): Platform Admin creates, lists, edits, and
- * suspends/reactivates tenants. These routes are tenant-independent (no {@code tid} on the caller's
- * token, see HU-34), so logging identifies the *acting* Platform Admin user instead of a tenant id.
+ * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants) and HU-41 (Épica C — Gestión de usuarios y
+ * admins de tenant): Platform Admin creates, lists, edits, and suspends/reactivates tenants, and
+ * invites their first/next tenant {@code ADMIN} users. These routes are tenant-independent (no
+ * {@code tid} on the caller's token, see HU-34), so logging identifies the *acting* Platform Admin
+ * user instead of a tenant id.
  */
 @RestController
 @RequestMapping("/api/platform/tenants")
@@ -37,9 +44,12 @@ public class PlatformTenantController {
   private static final Logger log = LoggerFactory.getLogger(PlatformTenantController.class);
 
   private final TenantAdminService tenantAdminService;
+  private final PlatformUserAdminService platformUserAdminService;
 
-  public PlatformTenantController(TenantAdminService tenantAdminService) {
+  public PlatformTenantController(
+      TenantAdminService tenantAdminService, PlatformUserAdminService platformUserAdminService) {
     this.tenantAdminService = tenantAdminService;
+    this.platformUserAdminService = platformUserAdminService;
   }
 
   @GetMapping
@@ -154,6 +164,41 @@ public class PlatformTenantController {
     } catch (ResponseStatusException ex) {
       log.error(
           "PATCH /api/platform/tenants/{}/status adminUserId={} tenantId={} status={} error={}",
+          id,
+          principal.getUserId(),
+          id,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /** HU-41 AC-1/AC-4/AC-6: Platform Admin creates and invites a tenant {@code ADMIN} user. */
+  @PostMapping("/{id}/admins")
+  public CreateTenantAdminResponse createAdmin(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") Long id,
+      @Valid @RequestBody CreateTenantAdminRequest request,
+      Locale locale) {
+    requirePlatformAdmin(principal, "POST /api/platform/tenants/{id}/admins");
+    log.info(
+        "POST /api/platform/tenants/{}/admins adminUserId={} tenantId={}",
+        id,
+        principal.getUserId(),
+        id);
+    try {
+      CreateTenantAdminResponse response =
+          platformUserAdminService.createTenantAdmin(id, request, locale);
+      log.info(
+          "POST /api/platform/tenants/{}/admins adminUserId={} tenantId={} status=200 newUserId={}",
+          id,
+          principal.getUserId(),
+          id,
+          response.userId());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/platform/tenants/{}/admins adminUserId={} tenantId={} status={} error={}",
           id,
           principal.getUserId(),
           id,
