@@ -7,14 +7,17 @@ import static org.mockito.Mockito.lenient;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.TenantStatusChange;
 import com.cursorpoc.backend.domain.TenantTierChange;
 import com.cursorpoc.backend.domain.Tier;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TenantStatusChangeRepository;
 import com.cursorpoc.backend.repository.TenantTierChangeRepository;
 import com.cursorpoc.backend.repository.TierRepository;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
+import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,6 +45,7 @@ class TenantAdminServiceTest {
   @Mock private TenantRepository tenantRepository;
   @Mock private TierRepository tierRepository;
   @Mock private TenantTierChangeRepository tenantTierChangeRepository;
+  @Mock private TenantStatusChangeRepository tenantStatusChangeRepository;
 
   private TenantAdminService service;
 
@@ -56,6 +60,7 @@ class TenantAdminServiceTest {
             tenantRepository,
             tierRepository,
             tenantTierChangeRepository,
+            tenantStatusChangeRepository,
             new FemmeTimeProperties());
 
     tier = new Tier();
@@ -82,6 +87,12 @@ class TenantAdminServiceTest {
         .thenReturn(Optional.empty());
     lenient()
         .when(tenantTierChangeRepository.save(any(TenantTierChange.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+    lenient()
+        .when(tenantStatusChangeRepository.findByTenantId(Mockito.anyLong()))
+        .thenReturn(Optional.empty());
+    lenient()
+        .when(tenantStatusChangeRepository.save(any(TenantStatusChange.class)))
         .thenAnswer(inv -> inv.getArgument(0));
   }
 
@@ -286,5 +297,84 @@ class TenantAdminServiceTest {
             () -> service.update(12L, new TenantUpdateRequest("Salon", null, 99L), 1L, "a@b.com"))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("TIER_NOT_FOUND");
+  }
+
+  // HU-40 AC-1/AC-6: suspends an ACTIVE tenant and audits the change.
+  @Test
+  void suspendsActiveTenantAndAudits() {
+    Tenant existing = existingTenant(20L, "Salon", null, tier);
+    lenient().when(tenantRepository.findById(20L)).thenReturn(Optional.of(existing));
+
+    TenantResponse response =
+        service.updateStatus(
+            20L, new TenantStatusUpdateRequest("SUSPENDED"), 42L, "admin@pelu.app");
+
+    assertThat(response.status()).isEqualTo("SUSPENDED");
+    assertThat(existing.getStatus()).isEqualTo(TenantStatus.SUSPENDED);
+
+    ArgumentCaptor<TenantStatusChange> captor = ArgumentCaptor.forClass(TenantStatusChange.class);
+    Mockito.verify(tenantStatusChangeRepository).save(captor.capture());
+    TenantStatusChange saved = captor.getValue();
+    assertThat(saved.getTenantId()).isEqualTo(20L);
+    assertThat(saved.getPreviousStatus()).isEqualTo("ACTIVE");
+    assertThat(saved.getNewStatus()).isEqualTo("SUSPENDED");
+    assertThat(saved.getChangedByUserId()).isEqualTo(42L);
+    assertThat(saved.getChangedByEmail()).isEqualTo("admin@pelu.app");
+  }
+
+  // HU-40 AC-4: reactivates a SUSPENDED tenant, restoring ACTIVE, and audits the change too.
+  @Test
+  void reactivatesSuspendedTenantAndAudits() {
+    Tenant existing = existingTenant(21L, "Salon", null, tier);
+    existing.setStatus(TenantStatus.SUSPENDED);
+    lenient().when(tenantRepository.findById(21L)).thenReturn(Optional.of(existing));
+
+    TenantResponse response =
+        service.updateStatus(21L, new TenantStatusUpdateRequest("ACTIVE"), 42L, "admin@pelu.app");
+
+    assertThat(response.status()).isEqualTo("ACTIVE");
+    assertThat(existing.getStatus()).isEqualTo(TenantStatus.ACTIVE);
+
+    ArgumentCaptor<TenantStatusChange> captor = ArgumentCaptor.forClass(TenantStatusChange.class);
+    Mockito.verify(tenantStatusChangeRepository).save(captor.capture());
+    assertThat(captor.getValue().getPreviousStatus()).isEqualTo("SUSPENDED");
+    assertThat(captor.getValue().getNewStatus()).isEqualTo("ACTIVE");
+  }
+
+  // HU-40: setting the same status again is a no-op — no spurious audit row.
+  @Test
+  void doesNotAuditWhenStatusIsUnchanged() {
+    Tenant existing = existingTenant(22L, "Salon", null, tier);
+    lenient().when(tenantRepository.findById(22L)).thenReturn(Optional.of(existing));
+
+    service.updateStatus(22L, new TenantStatusUpdateRequest("ACTIVE"), 42L, "admin@pelu.app");
+
+    Mockito.verify(tenantStatusChangeRepository, Mockito.never())
+        .save(any(TenantStatusChange.class));
+  }
+
+  @Test
+  void rejectsInvalidStatusValue() {
+    Tenant existing = existingTenant(23L, "Salon", null, tier);
+    lenient().when(tenantRepository.findById(23L)).thenReturn(Optional.of(existing));
+
+    assertThatThrownBy(
+            () ->
+                service.updateStatus(
+                    23L, new TenantStatusUpdateRequest("BOGUS"), 42L, "admin@pelu.app"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("TENANT_STATUS_INVALID");
+  }
+
+  @Test
+  void rejectsStatusUpdateOfUnknownTenant() {
+    lenient().when(tenantRepository.findById(404L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () ->
+                service.updateStatus(
+                    404L, new TenantStatusUpdateRequest("SUSPENDED"), 1L, "a@b.com"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("TENANT_NOT_FOUND");
   }
 }

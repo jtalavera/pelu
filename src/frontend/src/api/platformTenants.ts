@@ -1,4 +1,4 @@
-import { femmeJson, femmePostJson, femmePutJson } from "./femmeClient";
+import { femmeJson, femmePatchJson, femmePostJson, femmePutJson } from "./femmeClient";
 import type { PageResponse } from "./pagination";
 
 export type TenantTierChange = {
@@ -8,14 +8,24 @@ export type TenantTierChange = {
   newTierName: string | null;
 };
 
+export type TenantStatus = "ACTIVE" | "SUSPENDED";
+
+export type TenantStatusChange = {
+  changedAt: string;
+  changedByEmail: string;
+  previousStatus: TenantStatus;
+  newStatus: TenantStatus;
+};
+
 export type PlatformTenant = {
   id: number;
   name: string;
   domain: string | null;
   tierId: number | null;
   tierName: string | null;
-  status: "ACTIVE" | "SUSPENDED";
+  status: TenantStatus;
   lastTierChange: TenantTierChange | null;
+  lastStatusChange: TenantStatusChange | null;
 };
 
 export type TierOption = {
@@ -65,4 +75,9 @@ export function updateTenant(
   payload: UpdateTenantPayload,
 ): Promise<PlatformTenant> {
   return femmePutJson<PlatformTenant>(`/api/platform/tenants/${id}`, payload);
+}
+
+/** HU-40 AC-1/AC-4: suspend or reactivate a tenant. */
+export function updateTenantStatus(id: number, status: TenantStatus): Promise<PlatformTenant> {
+  return femmePatchJson<PlatformTenant>(`/api/platform/tenants/${id}/status`, { status });
 }

@@ -17,10 +17,13 @@ import {
   listTenantsPaged,
   listTiers,
   updateTenant,
+  updateTenantStatus,
   type PlatformTenant,
+  type TenantStatus,
   type TierOption,
 } from "../api/platformTenants";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
@@ -86,6 +89,13 @@ export default function PlatformTenantsPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editSuccess, setEditSuccess] = useState(false);
 
+  // HU-40: suspend/reactivate a tenant from within the edit dialog ("detalle del tenant").
+  const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
+  const [statusActionSaving, setStatusActionSaving] = useState(false);
+  const [statusActionError, setStatusActionError] = useState<string | null>(null);
+  const [suspendSuccess, setSuspendSuccess] = useState(false);
+  const [reactivateSuccess, setReactivateSuccess] = useState(false);
+
   const loadTenants = useCallback(
     async (page: number, size: number, q: string) => {
       setTenantPageLoading(true);
@@ -141,6 +151,8 @@ export default function PlatformTenantsPage() {
     setSaveError(null);
     setCreateSuccess(false);
     setEditSuccess(false);
+    setSuspendSuccess(false);
+    setReactivateSuccess(false);
     setModalOpen(true);
   }
 
@@ -202,6 +214,9 @@ export default function PlatformTenantsPage() {
     setEditSaveError(null);
     setCreateSuccess(false);
     setEditSuccess(false);
+    setSuspendSuccess(false);
+    setReactivateSuccess(false);
+    setStatusActionError(null);
     setEditModalOpen(true);
   }
 
@@ -265,6 +280,47 @@ export default function PlatformTenantsPage() {
       }
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  // HU-40 AC-1/AC-4: opens the confirmation dialog for the opposite action of the tenant's current
+  // status (Suspend when Active, Reactivate when Suspended).
+  function openStatusConfirm() {
+    setStatusActionError(null);
+    setStatusConfirmOpen(true);
+  }
+
+  function closeStatusConfirm() {
+    setStatusConfirmOpen(false);
+  }
+
+  // HU-40 AC-1/AC-4: flips the tenant's status; on success, refreshes the listing (so the new
+  // status is visible there too, AC-6) and shows a distinct success message for each direction.
+  async function confirmStatusChange() {
+    if (!editingTenant) {
+      return;
+    }
+    const nextStatus: TenantStatus =
+      editingTenant.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    setStatusActionError(null);
+    setStatusActionSaving(true);
+    try {
+      await updateTenantStatus(editingTenant.id, nextStatus);
+      setStatusConfirmOpen(false);
+      setEditModalOpen(false);
+      setEditingTenant(null);
+      setCreateSuccess(false);
+      setEditSuccess(false);
+      setSuspendSuccess(nextStatus === "SUSPENDED");
+      setReactivateSuccess(nextStatus === "ACTIVE");
+      setReloadTick((n) => n + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      setStatusActionError(
+        translateApiError(e, t, "femme.platform.tenants.statusActionError"),
+      );
+    } finally {
+      setStatusActionSaving(false);
     }
   }
 
@@ -341,7 +397,7 @@ export default function PlatformTenantsPage() {
         ) : null}
       </form>
 
-      {(createSuccess || editSuccess || pageError) && (
+      {(createSuccess || editSuccess || suspendSuccess || reactivateSuccess || pageError) && (
         <div className="mb-4 flex flex-col gap-2">
           {createSuccess && (
             <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
@@ -351,6 +407,16 @@ export default function PlatformTenantsPage() {
           {editSuccess && (
             <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
               {t("femme.platform.tenants.editSuccess")}
+            </Alert>
+          )}
+          {suspendSuccess && (
+            <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
+              {t("femme.platform.tenants.suspendSuccess")}
+            </Alert>
+          )}
+          {reactivateSuccess && (
+            <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
+              {t("femme.platform.tenants.reactivateSuccess")}
             </Alert>
           )}
           {pageError && (
@@ -617,6 +683,53 @@ export default function PlatformTenantsPage() {
             </p>
           ) : null}
 
+          {/* HU-40 AC-1/AC-4/AC-6: current status + suspend/reactivate action, visible from the
+              tenant's "detail" (this edit dialog — there's no separate detail page yet). */}
+          {editingTenant ? (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)]"
+              style={{ background: "var(--color-stone)", padding: "10px 12px" }}
+            >
+              <div className="flex items-center gap-2">
+                <Text variant="small" className="text-[var(--color-ink-3)]">
+                  {t("femme.platform.tenants.detailStatusLabel")}
+                </Text>
+                <StatusBadge status={editingTenant.status} />
+              </div>
+              <Button
+                type="button"
+                variant={editingTenant.status === "ACTIVE" ? "danger" : "primary"}
+                className="min-h-11"
+                onClick={openStatusConfirm}
+              >
+                {editingTenant.status === "ACTIVE"
+                  ? t("femme.platform.tenants.suspendAction")
+                  : t("femme.platform.tenants.reactivateAction")}
+              </Button>
+            </div>
+          ) : null}
+          {statusActionError ? (
+            <Alert variant="destructive" title={t("femme.platform.tenants.errorTitle")}>
+              {statusActionError}
+            </Alert>
+          ) : null}
+          {editingTenant?.lastStatusChange ? (
+            <p
+              data-testid="tenant-edit-last-status-change"
+              className="text-xs text-[var(--color-ink-3)]"
+            >
+              {t("femme.platform.tenants.lastStatusChange", {
+                date: new Intl.DateTimeFormat(dateLocale, {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                }).format(new Date(editingTenant.lastStatusChange.changedAt)),
+                email: editingTenant.lastStatusChange.changedByEmail,
+                previous: t(`femme.status.${editingTenant.lastStatusChange.previousStatus}`),
+                next: t(`femme.status.${editingTenant.lastStatusChange.newStatus}`),
+              })}
+            </p>
+          ) : null}
+
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" onClick={closeEditModal} className="min-h-11">
               {t("femme.platform.tenants.cancel")}
@@ -629,6 +742,37 @@ export default function PlatformTenantsPage() {
           </div>
         </div>
       </Modal>
+
+      {editingTenant ? (
+        <ConfirmDialog
+          open={statusConfirmOpen}
+          title={
+            editingTenant.status === "ACTIVE"
+              ? t("femme.platform.tenants.suspendDialogTitle")
+              : t("femme.platform.tenants.reactivateDialogTitle")
+          }
+          description={
+            editingTenant.status === "ACTIVE"
+              ? t("femme.platform.tenants.suspendDialogDescription", {
+                  name: editingTenant.name,
+                })
+              : t("femme.platform.tenants.reactivateDialogDescription", {
+                  name: editingTenant.name,
+                })
+          }
+          cancelLabel={t("femme.platform.tenants.cancel")}
+          confirmLabel={
+            statusActionSaving
+              ? t("femme.platform.tenants.saving")
+              : editingTenant.status === "ACTIVE"
+                ? t("femme.platform.tenants.suspendAction")
+                : t("femme.platform.tenants.reactivateAction")
+          }
+          confirmVariant={editingTenant.status === "ACTIVE" ? "danger" : "primary"}
+          onCancel={closeStatusConfirm}
+          onConfirm={() => void confirmStatusChange()}
+        />
+      ) : null}
     </div>
   );
 }

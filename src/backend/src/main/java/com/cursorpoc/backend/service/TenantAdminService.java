@@ -2,15 +2,19 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.TenantStatusChange;
 import com.cursorpoc.backend.domain.TenantTierChange;
 import com.cursorpoc.backend.domain.Tier;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TenantStatusChangeRepository;
 import com.cursorpoc.backend.repository.TenantTierChangeRepository;
 import com.cursorpoc.backend.repository.TierRepository;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
+import com.cursorpoc.backend.web.dto.TenantStatusChangeResponse;
+import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantTierChangeResponse;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import com.cursorpoc.backend.web.dto.TierOptionResponse;
@@ -26,8 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37/HU-38/HU-39 (Épica B — Gestión de Tenants): Platform Admin creates, lists, searches, and
- * edits tenants.
+ * HU-37/HU-38/HU-39/HU-40 (Épica B — Gestión de Tenants): Platform Admin creates, lists, searches,
+ * edits, and suspends/reactivates tenants.
  */
 @Service
 public class TenantAdminService {
@@ -35,16 +39,19 @@ public class TenantAdminService {
   private final TenantRepository tenantRepository;
   private final TierRepository tierRepository;
   private final TenantTierChangeRepository tenantTierChangeRepository;
+  private final TenantStatusChangeRepository tenantStatusChangeRepository;
   private final FemmeTimeProperties timeProperties;
 
   public TenantAdminService(
       TenantRepository tenantRepository,
       TierRepository tierRepository,
       TenantTierChangeRepository tenantTierChangeRepository,
+      TenantStatusChangeRepository tenantStatusChangeRepository,
       FemmeTimeProperties timeProperties) {
     this.tenantRepository = tenantRepository;
     this.tierRepository = tierRepository;
     this.tenantTierChangeRepository = tenantTierChangeRepository;
+    this.tenantStatusChangeRepository = tenantStatusChangeRepository;
     this.timeProperties = timeProperties;
   }
 
@@ -161,6 +168,41 @@ public class TenantAdminService {
   }
 
   /**
+   * HU-40 AC-1/AC-4: Platform Admin flips a tenant's status between {@code ACTIVE} and {@code
+   * SUSPENDED}. Suspending only flips this flag — no business data (clients, services,
+   * professionals, comprobantes) is touched (AC-5), and login enforcement lives in {@code
+   * AuthService#login} / {@code JwtAuthenticationFilter}, not here. A no-op (status unchanged)
+   * skips the audit write, same convention as {@link #update} skipping a tier-change row when the
+   * tier didn't actually change.
+   */
+  @Transactional
+  public TenantResponse updateStatus(
+      Long id, TenantStatusUpdateRequest request, long changedByUserId, String changedByEmail) {
+    Tenant tenant =
+        tenantRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+
+    TenantStatus newStatus;
+    try {
+      newStatus = TenantStatus.valueOf(request.status() == null ? "" : request.status().trim());
+    } catch (IllegalArgumentException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TENANT_STATUS_INVALID");
+    }
+
+    TenantStatus previousStatus = tenant.getStatus();
+    if (previousStatus != newStatus) {
+      tenant.setStatus(newStatus);
+      tenantRepository.save(tenant);
+      recordStatusChange(
+          tenant.getId(), previousStatus, newStatus, changedByUserId, changedByEmail);
+    }
+
+    return toResponse(tenant);
+  }
+
+  /**
    * SIFEN HU-22-style "single last result" upsert (see {@code FeatureFlagService.recordChange}):
    * one row per tenant, overwritten on each tier change rather than appended.
    */
@@ -185,12 +227,44 @@ public class TenantAdminService {
     tenantTierChangeRepository.save(change);
   }
 
+  /**
+   * HU-40 AC-1/AC-4: same "single last result" upsert as {@link #recordTierChange}, but for status
+   * transitions.
+   */
+  private void recordStatusChange(
+      Long tenantId,
+      TenantStatus previousStatus,
+      TenantStatus newStatus,
+      long changedByUserId,
+      String changedByEmail) {
+    TenantStatusChange change =
+        tenantStatusChangeRepository
+            .findByTenantId(tenantId)
+            .orElseGet(
+                () -> {
+                  TenantStatusChange c = new TenantStatusChange();
+                  c.setTenantId(tenantId);
+                  return c;
+                });
+    change.setPreviousStatus(previousStatus.name());
+    change.setNewStatus(newStatus.name());
+    change.setChangedAt(LocalDateTime.now(timeProperties.zoneId()));
+    change.setChangedByUserId(changedByUserId);
+    change.setChangedByEmail(changedByEmail);
+    tenantStatusChangeRepository.save(change);
+  }
+
   private TenantResponse toResponse(Tenant tenant) {
     Tier tier = tenant.getTier();
     TenantTierChangeResponse lastTierChange =
         tenantTierChangeRepository
             .findByTenantId(tenant.getId())
             .map(this::toTierChangeResponse)
+            .orElse(null);
+    TenantStatusChangeResponse lastStatusChange =
+        tenantStatusChangeRepository
+            .findByTenantId(tenant.getId())
+            .map(this::toStatusChangeResponse)
             .orElse(null);
     return new TenantResponse(
         tenant.getId(),
@@ -199,7 +273,8 @@ public class TenantAdminService {
         tier != null ? tier.getId() : null,
         tier != null ? tier.getName() : null,
         tenant.getStatus().name(),
-        lastTierChange);
+        lastTierChange,
+        lastStatusChange);
   }
 
   private TenantTierChangeResponse toTierChangeResponse(TenantTierChange change) {
@@ -208,5 +283,13 @@ public class TenantAdminService {
         change.getChangedByEmail(),
         change.getPreviousTierName(),
         change.getNewTierName());
+  }
+
+  private TenantStatusChangeResponse toStatusChangeResponse(TenantStatusChange change) {
+    return new TenantStatusChangeResponse(
+        change.getChangedAt().atZone(timeProperties.zoneId()).toInstant(),
+        change.getChangedByEmail(),
+        change.getPreviousStatus(),
+        change.getNewStatus());
   }
 }

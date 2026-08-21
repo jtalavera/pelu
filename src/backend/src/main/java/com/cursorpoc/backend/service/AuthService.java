@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.PasswordResetToken;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ProfessionalActivationToken;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
@@ -116,6 +117,16 @@ public class AuthService {
     }
 
     Tenant tenant = resolveTenant(origin);
+    // HU-40 AC-2: a suspended tenant blocks login for every one of its users (admin or
+    // professional). Checked before even looking up the user/password so the response is
+    // byte-for-byte identical to "bad credentials" (same status, same error code) — an
+    // enumeration attempt can't tell a suspended tenant apart from a wrong email/password.
+    if (tenant.getStatus() == TenantStatus.SUSPENDED) {
+      log.warn(
+          "login rejected: tenant suspended tenantId={} (generic INVALID_CREDENTIALS returned)",
+          tenant.getId());
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+    }
     AppUser user =
         appUserRepository
             .findByEmailAndTenant_Id(email, tenant.getId())

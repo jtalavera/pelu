@@ -6,6 +6,7 @@ import com.cursorpoc.backend.service.TenantAdminService;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
+import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import com.cursorpoc.backend.web.dto.TierOptionResponse;
 import java.util.List;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -24,9 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37/HU-38 (Épica B — Gestión de Tenants): Platform Admin creates, lists, and edits tenants.
- * These routes are tenant-independent (no {@code tid} on the caller's token, see HU-34), so logging
- * identifies the *acting* Platform Admin user instead of a tenant id.
+ * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants): Platform Admin creates, lists, edits, and
+ * suspends/reactivates tenants. These routes are tenant-independent (no {@code tid} on the caller's
+ * token, see HU-34), so logging identifies the *acting* Platform Admin user instead of a tenant id.
  */
 @RestController
 @RequestMapping("/api/platform/tenants")
@@ -116,6 +118,42 @@ public class PlatformTenantController {
     } catch (ResponseStatusException ex) {
       log.error(
           "PUT /api/platform/tenants/{} adminUserId={} tenantId={} status={} error={}",
+          id,
+          principal.getUserId(),
+          id,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /** HU-40 AC-1/AC-4: Platform Admin suspends or reactivates a tenant. */
+  @PatchMapping("/{id}/status")
+  public TenantResponse updateStatus(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") Long id,
+      @RequestBody TenantStatusUpdateRequest request) {
+    requirePlatformAdmin(principal, "PATCH /api/platform/tenants/{id}/status");
+    log.info(
+        "PATCH /api/platform/tenants/{}/status adminUserId={} tenantId={} newStatus={}",
+        id,
+        principal.getUserId(),
+        id,
+        request.status());
+    try {
+      TenantResponse response =
+          tenantAdminService.updateStatus(
+              id, request, principal.getUserId(), principal.getUsername());
+      log.info(
+          "PATCH /api/platform/tenants/{}/status adminUserId={} tenantId={} status=200 newStatus={}",
+          id,
+          principal.getUserId(),
+          id,
+          response.status());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PATCH /api/platform/tenants/{}/status adminUserId={} tenantId={} status={} error={}",
           id,
           principal.getUserId(),
           id,

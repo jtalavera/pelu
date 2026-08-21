@@ -1,10 +1,14 @@
 package com.cursorpoc.backend.security;
 
+import com.cursorpoc.backend.domain.enums.TenantStatus;
+import com.cursorpoc.backend.repository.TenantRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,10 +38,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     "/api/platform/", "/api/auth/", "/api/me", "/api/admin/feature-flags"
   };
 
-  private final JwtService jwtService;
+  private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
-  public JwtAuthenticationFilter(JwtService jwtService) {
+  private final JwtService jwtService;
+  private final TenantRepository tenantRepository;
+
+  public JwtAuthenticationFilter(JwtService jwtService, TenantRepository tenantRepository) {
     this.jwtService = jwtService;
+    this.tenantRepository = tenantRepository;
   }
 
   @Override
@@ -60,6 +68,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                   // gave any invalid or missing token), for every role, not just PLATFORM_ADMIN.
                   return;
                 }
+                // HU-40 AC-3: a tenant-bound token stops working on the very next request once its
+                // tenant is SUSPENDED — the JWT itself is stateless/still valid, so this
+                // per-request
+                // DB check is what actually invalidates an already-issued token rather than waiting
+                // for it to expire naturally. Left unauthenticated here, exactly like the tid-less
+                // case above, so every route (not just tenant-scoped ones) rejects it the same way.
+                if (principal.hasTenant() && isTenantSuspended(principal.getTenantId())) {
+                  log.warn(
+                      "request rejected: tenant suspended tenantId={} path={}",
+                      principal.getTenantId(),
+                      request.getRequestURI());
+                  return;
+                }
                 UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(
                         principal, null, principal.getAuthorities());
@@ -68,6 +89,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
               });
     }
     filterChain.doFilter(request, response);
+  }
+
+  private boolean isTenantSuspended(long tenantId) {
+    return tenantRepository
+        .findById(tenantId)
+        .map(t -> t.getStatus() == TenantStatus.SUSPENDED)
+        .orElse(false);
   }
 
   private static boolean isTenantOptionalPath(String requestUri) {
