@@ -40,10 +40,14 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 ## Nota de implementación (2026-08-21)
 
 Implementado el modelo, la persistencia, la UI (matriz en el detalle/edición de tier) y la
-auditoría (tabla `tier_feature_flag_changes`) para AC-1, AC-2, AC-3 y AC-5. **AC-4 ("Efecto
-inmediato para tenants sin override") queda pendiente**: requiere que la resolución de flags de un
-tenant (`FeatureFlagService#resolveAll`/`isEnabled`) consulte el default del tier como nivel
-intermedio, que es exactamente el alcance de HU-47 ("Resolución de flags en tres niveles"). Por
-decisión explícita de scope de esta iteración, HU-46 se limita a definir/persistir la asociación
-tier↔flag sin consumirla todavía en la resolución — HU-47 debe completar AC-4 de esta historia como
-parte de su propio trabajo.
+auditoría (tabla `tier_feature_flag_changes`) para AC-1, AC-2, AC-3 y AC-5.
+
+**Actualización (2026-08-21, HU-47):** AC-4 ("Efecto inmediato para tenants sin override") quedó
+cerrado por HU-47 ("Resolución de flags en tres niveles"), que extendió
+`FeatureFlagService#resolveAll`/`isEnabled`/`listTenantView` para consultar el default del tier
+como nivel intermedio (global → tier → override puntual). Verificado con un test e2e dedicado
+(`e2e/tests/hu-47-resolucion-de-flags-en-tres-niveles.spec.ts`, caso "AC1: a tenant with a tier and
+no override resolves to the tier's default the instant the tier includes the flag") que activa la
+inclusión de una flag en un tier y confirma que un tenant de ese tier sin override propio resuelve
+el nuevo valor de inmediato, sin ningún write a nivel de tenant. Las 5 AC de esta historia están
+Done.

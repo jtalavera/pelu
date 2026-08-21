@@ -70,8 +70,12 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           flagKey: "GUIDED_TOUR",
           description: "Show guided tour tooltips on every screen",
           globalEnabled: true,
+          hasTier: false,
+          tierEnabled: null,
           hasOverride: false,
           overrideEnabled: null,
+          effectiveEnabled: true,
+          effectiveSource: "GLOBAL",
         },
       ] as never;
     });
@@ -102,6 +106,66 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
       "/api/admin/feature-flags/tenants/1",
       { json: false },
     );
+  });
+
+  // HU-47 AC-4: the tenant admin view shows explicitly which of the 3 levels (global/tier/override)
+  // produced the currently-effective value.
+  it("shows the tier default and the tier as the effective source when the tenant's tier defines the flag", async () => {
+    const user = userEvent.setup();
+    vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.endsWith("/sifen-homologation")) {
+        return defaultHomologation as never;
+      }
+      return [
+        {
+          flagKey: "GUIDED_TOUR",
+          description: "Show guided tour tooltips on every screen",
+          globalEnabled: true,
+          hasTier: true,
+          tierEnabled: false,
+          hasOverride: false,
+          overrideEnabled: null,
+          effectiveEnabled: false,
+          effectiveSource: "TIER",
+        },
+      ] as never;
+    });
+
+    renderPage();
+    await submitTenantId(user);
+
+    expect(await screen.findByText("Tier default")).toBeTruthy();
+    expect(screen.getByText("Using tier default")).toBeTruthy();
+    const source = screen.getByTestId("feature-flag-source-GUIDED_TOUR");
+    expect(source.textContent).toContain("From tier default");
+  });
+
+  it("shows the organization override as the effective source even when the tier also defines the flag", async () => {
+    const user = userEvent.setup();
+    vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.endsWith("/sifen-homologation")) {
+        return defaultHomologation as never;
+      }
+      return [
+        {
+          flagKey: "GUIDED_TOUR",
+          description: "Show guided tour tooltips on every screen",
+          globalEnabled: true,
+          hasTier: true,
+          tierEnabled: false,
+          hasOverride: true,
+          overrideEnabled: true,
+          effectiveEnabled: true,
+          effectiveSource: "OVERRIDE",
+        },
+      ] as never;
+    });
+
+    renderPage();
+    await submitTenantId(user);
+
+    const source = screen.getByTestId("feature-flag-source-GUIDED_TOUR");
+    expect(source.textContent).toContain("From organization override");
   });
 
   it("toggling global default calls admin PUT and reloads the tenant view", async () => {
@@ -151,8 +215,12 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           flagKey: "SIFEN_ELECTRONIC_INVOICING",
           description: "Route new invoices through SIFEN",
           globalEnabled: false,
+          hasTier: false,
+          tierEnabled: null,
           hasOverride: true,
           overrideEnabled: true,
+          effectiveEnabled: true,
+          effectiveSource: "OVERRIDE",
           lastChange: {
             changedAt: "2026-08-01T15:30:00Z",
             changedByEmail: "platform-admin@pelu",
@@ -183,8 +251,12 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           flagKey: "SIFEN_ELECTRONIC_INVOICING",
           description: "Route new invoices through SIFEN",
           globalEnabled: false,
+          hasTier: false,
+          tierEnabled: null,
           hasOverride: false,
           overrideEnabled: null,
+          effectiveEnabled: false,
+          effectiveSource: "GLOBAL",
           lastChange: null,
         },
       ] as never;
@@ -210,8 +282,12 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           flagKey: "SIFEN_ELECTRONIC_INVOICING",
           description: "Route new invoices through SIFEN",
           globalEnabled: false,
+          hasTier: false,
+          tierEnabled: null,
           hasOverride: false,
           overrideEnabled: null,
+          effectiveEnabled: false,
+          effectiveSource: "GLOBAL",
           lastChange: null,
         },
       ] as never;

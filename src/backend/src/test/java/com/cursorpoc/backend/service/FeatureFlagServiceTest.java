@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -10,14 +11,20 @@ import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.FeatureFlag;
+import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TenantFeatureFlag;
 import com.cursorpoc.backend.domain.TenantFeatureFlagChange;
+import com.cursorpoc.backend.domain.Tier;
+import com.cursorpoc.backend.domain.TierFeatureFlag;
+import com.cursorpoc.backend.domain.enums.FeatureFlagSource;
 import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagChangeRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TierFeatureFlagRepository;
 import com.cursorpoc.backend.web.dto.FeatureGlobalUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantFeatureFlagOverrideRequest;
+import com.cursorpoc.backend.web.dto.TenantFeatureFlagRowResponse;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +44,7 @@ class FeatureFlagServiceTest {
   @Mock private TenantFeatureFlagRepository tenantFeatureFlagRepository;
   @Mock private TenantFeatureFlagChangeRepository tenantFeatureFlagChangeRepository;
   @Mock private TenantRepository tenantRepository;
+  @Mock private TierFeatureFlagRepository tierFeatureFlagRepository;
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private FeatureFlagService featureFlagService;
@@ -188,6 +196,185 @@ class FeatureFlagServiceTest {
     when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(2L, "GUIDED_TOUR"))
         .thenReturn(Optional.empty());
     assertThat(featureFlagService.isEnabled("GUIDED_TOUR", 2L)).isTrue();
+  }
+
+  // HU-47 · resolución de flags en 3 niveles: global -> tier del tenant -> override del tenant.
+
+  private static Tenant tenantWithTier(long tierId) {
+    Tier tier = new Tier();
+    tier.setId(tierId);
+    Tenant tenant = new Tenant();
+    tenant.setTier(tier);
+    return tenant;
+  }
+
+  /**
+   * AC-1: no override, but the tenant's tier defines the flag -> the tier's value wins over global.
+   */
+  @Test
+  void isEnabled_usesTierDefaultWhenNoOverride() {
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenantWithTier(10L)));
+    TierFeatureFlag tierFlag = new TierFeatureFlag();
+    tierFlag.setEnabled(false);
+    when(tierFeatureFlagRepository.findByTierIdAndFlagKey(10L, "GUIDED_TOUR"))
+        .thenReturn(Optional.of(tierFlag));
+
+    // Global default is true (see setUp), but the tier explicitly says false.
+    assertThat(featureFlagService.isEnabled("GUIDED_TOUR", 1L)).isFalse();
+    verify(featureFlagRepository, never()).findByFlagKey(any());
+  }
+
+  /**
+   * AC-1: an explicit tenant override still wins even when the tenant's tier also defines the flag.
+   */
+  @Test
+  void isEnabled_overrideWinsOverTierDefault() {
+    TenantFeatureFlag override = new TenantFeatureFlag();
+    override.setEnabled(true);
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.of(override));
+
+    assertThat(featureFlagService.isEnabled("GUIDED_TOUR", 1L)).isTrue();
+    verify(tierFeatureFlagRepository, never()).findByTierIdAndFlagKey(anyLong(), any());
+  }
+
+  /**
+   * AC-2: a tenant with no tier assigned resolves exactly as before — global default, no tier
+   * lookup.
+   */
+  @Test
+  void isEnabled_tenantWithoutTier_fallsBackToGlobal() {
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
+    when(featureFlagRepository.findByFlagKey("GUIDED_TOUR")).thenReturn(Optional.of(globalGuided));
+
+    assertThat(featureFlagService.isEnabled("GUIDED_TOUR", 1L)).isTrue();
+    verify(tierFeatureFlagRepository, never()).findByTierIdAndFlagKey(anyLong(), any());
+  }
+
+  /**
+   * AC-1: the tier is assigned but doesn't define this particular flag -> falls through to global.
+   */
+  @Test
+  void isEnabled_tierWithoutOpinionOnFlag_fallsBackToGlobal() {
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenantWithTier(10L)));
+    when(tierFeatureFlagRepository.findByTierIdAndFlagKey(10L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    when(featureFlagRepository.findByFlagKey("GUIDED_TOUR")).thenReturn(Optional.of(globalGuided));
+
+    assertThat(featureFlagService.isEnabled("GUIDED_TOUR", 1L)).isTrue();
+  }
+
+  @Test
+  void resolveAll_tierDefaultAppliesWhenNoOverride() {
+    FeatureFlag other = new FeatureFlag();
+    other.setFlagKey("OTHER");
+    other.setEnabled(false);
+    when(featureFlagRepository.findAllByOrderByFlagKeyAsc())
+        .thenReturn(List.of(other, globalGuided));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenantWithTier(10L)));
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "OTHER"))
+        .thenReturn(Optional.empty());
+    when(tierFeatureFlagRepository.findByTierIdAndFlagKey(10L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    TierFeatureFlag otherTierFlag = new TierFeatureFlag();
+    otherTierFlag.setEnabled(true);
+    when(tierFeatureFlagRepository.findByTierIdAndFlagKey(10L, "OTHER"))
+        .thenReturn(Optional.of(otherTierFlag));
+
+    var map = featureFlagService.resolveAll(1L);
+    // GUIDED_TOUR: tier has no opinion -> global (true). OTHER: tier explicitly includes it -> true
+    // (overriding its global default of false).
+    assertThat(map).containsEntry("GUIDED_TOUR", true).containsEntry("OTHER", true);
+  }
+
+  /** AC-5: tenants without a tier keep resolving exactly like before this story. */
+  @Test
+  void resolveAll_tenantWithoutTier_behavesLikeBeforeHu47() {
+    when(featureFlagRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(globalGuided));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+
+    var map = featureFlagService.resolveAll(1L);
+    assertThat(map).containsEntry("GUIDED_TOUR", true);
+    verify(tierFeatureFlagRepository, never()).findByTierIdAndFlagKey(anyLong(), any());
+  }
+
+  /** AC-4: the tenant admin view surfaces which of the 3 levels produced the effective value. */
+  @Test
+  void listTenantView_reportsTierAsEffectiveSourceWhenNoOverride() {
+    when(tenantRepository.existsById(1L)).thenReturn(true);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenantWithTier(10L)));
+    when(featureFlagRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(globalGuided));
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    TierFeatureFlag tierFlag = new TierFeatureFlag();
+    tierFlag.setEnabled(false);
+    when(tierFeatureFlagRepository.findByTierIdAndFlagKey(10L, "GUIDED_TOUR"))
+        .thenReturn(Optional.of(tierFlag));
+    when(tenantFeatureFlagChangeRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+
+    List<TenantFeatureFlagRowResponse> rows = featureFlagService.listTenantView(1L);
+    assertThat(rows).hasSize(1);
+    TenantFeatureFlagRowResponse row = rows.get(0);
+    assertThat(row.hasTier()).isTrue();
+    assertThat(row.tierEnabled()).isFalse();
+    assertThat(row.hasOverride()).isFalse();
+    assertThat(row.effectiveEnabled()).isFalse();
+    assertThat(row.effectiveSource()).isEqualTo(FeatureFlagSource.TIER);
+  }
+
+  @Test
+  void listTenantView_reportsOverrideAsEffectiveSourceEvenWithTier() {
+    when(tenantRepository.existsById(1L)).thenReturn(true);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenantWithTier(10L)));
+    when(featureFlagRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(globalGuided));
+    TenantFeatureFlag override = new TenantFeatureFlag();
+    override.setEnabled(true);
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.of(override));
+    TierFeatureFlag tierFlag = new TierFeatureFlag();
+    tierFlag.setEnabled(false);
+    when(tierFeatureFlagRepository.findByTierIdAndFlagKey(10L, "GUIDED_TOUR"))
+        .thenReturn(Optional.of(tierFlag));
+    when(tenantFeatureFlagChangeRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+
+    List<TenantFeatureFlagRowResponse> rows = featureFlagService.listTenantView(1L);
+    TenantFeatureFlagRowResponse row = rows.get(0);
+    assertThat(row.effectiveSource()).isEqualTo(FeatureFlagSource.OVERRIDE);
+    assertThat(row.effectiveEnabled()).isTrue();
+    // The tier value is still surfaced for visibility even though it's not the effective one.
+    assertThat(row.hasTier()).isTrue();
+    assertThat(row.tierEnabled()).isFalse();
+  }
+
+  /** AC-4/AC-2: a tenant with no tier reports GLOBAL as the source when it also has no override. */
+  @Test
+  void listTenantView_reportsGlobalAsEffectiveSourceForTenantWithoutTier() {
+    when(tenantRepository.existsById(1L)).thenReturn(true);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
+    when(featureFlagRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(globalGuided));
+    when(tenantFeatureFlagRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+    when(tenantFeatureFlagChangeRepository.findByTenantIdAndFlagKey(1L, "GUIDED_TOUR"))
+        .thenReturn(Optional.empty());
+
+    List<TenantFeatureFlagRowResponse> rows = featureFlagService.listTenantView(1L);
+    TenantFeatureFlagRowResponse row = rows.get(0);
+    assertThat(row.hasTier()).isFalse();
+    assertThat(row.tierEnabled()).isNull();
+    assertThat(row.effectiveSource()).isEqualTo(FeatureFlagSource.GLOBAL);
+    assertThat(row.effectiveEnabled()).isTrue();
   }
 
   @Test

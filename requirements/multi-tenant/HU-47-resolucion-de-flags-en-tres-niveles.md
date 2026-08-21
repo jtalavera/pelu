@@ -4,7 +4,7 @@
 | ---------- | ---------------------------------------------|
 | **ID**     | HU-47                                        |
 | **Módulo** | Plataforma · Tiers y Feature Flags           |
-| **Estado** | `Backlog`                                    |
+| **Estado** | `Done`                                       |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -36,3 +36,27 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 
 - **Dependencias:** HU-45, HU-46 (tiers y su asociación con flags), HU-48 (asignación de tier a tenant), HU-49 (flags existentes).
 - **Pruebas sugeridas:** resolución con solo default global; con tier sin override; con tier y override puntual; con tenant sin tier; cambio de tier reflejado sin perder el override existente.
+
+## Nota de implementación (2026-08-21)
+
+`FeatureFlagService#isEnabled`/`resolveAll`/`listTenantView` ahora resuelven en 3 niveles:
+override puntual (`TenantFeatureFlag`) > default del tier del tenant (`TierFeatureFlag`, solo si el
+tenant tiene un tier asignado y ese tier define la flag) > default global (`FeatureFlag`). `GET
+/api/feature-flags` no cambió de contrato (AC-3): sigue devolviendo `{ flags: { KEY: boolean } }`,
+solo cambió el cálculo interno de `resolveAll`.
+
+Se agregó `FeatureFlagSource` (`GLOBAL`/`TIER`/`OVERRIDE`) y se extendió
+`TenantFeatureFlagRowResponse` con `hasTier`/`tierEnabled`/`effectiveEnabled`/`effectiveSource`
+(AC-4): la pantalla de administración de flags de un tenant (`/platform/feature-flags`) ahora
+muestra un tercer nivel "Tier default" y una insignia explícita de origen ("From global
+default"/"From tier default"/"From organization override") junto al valor efectivo.
+
+Con esta historia se cierra también la nota pendiente de HU-46 (AC-4 "efecto inmediato para
+tenants sin override"): incluir una flag en el paquete de un tier cambia inmediatamente el valor
+resuelto de cualquier tenant de ese tier sin override propio, sin ningún write a nivel de tenant —
+cubierto por `e2e/tests/hu-47-resolucion-de-flags-en-tres-niveles.spec.ts`.
+
+Cobertura de pruebas: unit tests en `FeatureFlagServiceTest` (los 3 niveles, precedencia,
+tenant sin tier, tier sin opinión sobre una flag, fuente efectiva en `listTenantView`) y Playwright
+en `e2e/tests/hu-47-resolucion-de-flags-en-tres-niveles.spec.ts` (AC-1 a AC-4 vía API y UI; AC-5
+cubierto junto con AC-2 contra el tenant DEMO sin tier).

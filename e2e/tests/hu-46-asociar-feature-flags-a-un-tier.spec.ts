@@ -9,11 +9,11 @@ import { loginAsPlatformAdmin, PLATFORM_ADMIN_EMAIL } from "../fixtures/auth";
 // always exists regardless of environment/seed order (there's no UI/API to create new global
 // flags — only HU-49's existing global-flag catalog can be associated to a tier).
 //
-// AC-4 ("Efecto inmediato para tenants sin override") is NOT covered here: it requires the 3-level
-// flag resolution (default global -> tier default -> tenant override) to actually consult the
-// tier<->flag association when resolving GET /api/feature-flags for a tenant. That resolution
-// logic is explicitly out of scope for this story (HU-47) — this story only defines/persists the
-// tier<->flag association itself. Flagged for follow-up once HU-47 lands.
+// AC-4 ("Efecto inmediato para tenants sin override") is covered by HU-47's own spec
+// (e2e/tests/hu-47-resolucion-de-flags-en-tres-niveles.spec.ts, "AC1: a tenant with a tier and no
+// override resolves to the tier's default the instant the tier includes the flag"), not here: that
+// story is the one that taught the 3-level flag resolution (global -> tier -> tenant override) to
+// actually consult the tier<->flag association this story defines/persists.
 
 test.describe("HU-46 · Asociar feature flags a un Tier", () => {
   // AC-1: from a tier's detail, the Platform Admin sees every existing feature flag and can mark
