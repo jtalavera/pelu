@@ -238,7 +238,12 @@
           "reactivateDialogDescription": "{{email}} va a poder iniciar sesión nuevamente.",
           "statusActionError": "No se pudo actualizar el estado del usuario. Intentá nuevamente.",
           "deactivateSuccess": "{{email}} fue desactivado.",
-          "reactivateSuccess": "{{email}} fue reactivado."
+          "reactivateSuccess": "{{email}} fue reactivado.",
+          "resendAction": "Reenviar",
+          "resending": "Reenviando…",
+          "resendInvitationSuccess": "Se reenvió la invitación de activación a {{email}}.",
+          "resendPasswordResetSuccess": "Se envió un correo de restablecimiento de contraseña a {{email}}.",
+          "resendError": "No se pudo reenviar la invitación."
         }
       }
     },
@@ -948,6 +953,7 @@
     "TENANT_STATUS_INVALID": "Estado de tenant inválido.",
       "TENANT_USER_NOT_FOUND": "No se encontró ese usuario para este tenant.",
       "APP_USER_STATUS_REQUIRED": "El estado del usuario es obligatorio.",
+      "TENANT_USER_DISABLED_CANNOT_RESEND": "Este usuario está desactivado. Reactivalo antes de reenviar una invitación o un reseteo de contraseña.",
       "TIER_NOT_FOUND": "Ese tier no existe.",
       "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
       "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",

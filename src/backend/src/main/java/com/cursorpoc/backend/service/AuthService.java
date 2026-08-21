@@ -176,24 +176,49 @@ public class AuthService {
   }
 
   @Transactional
-  public void forgotPassword(ForgotPasswordRequest request, String origin) {
+  public void forgotPassword(ForgotPasswordRequest request, String origin, Locale locale) {
     Tenant tenant = resolveTenant(origin);
     Optional<AppUser> userOpt =
         appUserRepository.findByEmailAndTenant_Id(
             request.email().trim().toLowerCase(), tenant.getId());
     if (userOpt.isEmpty()) {
+      // Deliberately silent — same "no enumeration" behavior whether or not the email exists.
       return;
     }
-    AppUser user = userOpt.get();
+    issuePasswordResetToken(userOpt.get(), locale);
+  }
+
+  /**
+   * HU-44 AC-2/AC-3/AC-4: Platform-Admin-triggered equivalent of {@link #forgotPassword} for a
+   * tenant user who already activated their account but lost access. The caller already knows the
+   * exact {@link AppUser} (no Origin/domain resolution — the Platform Admin isn't on the tenant's
+   * own frontend), and the raw token is returned so Playwright e2e coverage can exercise the full
+   * reset flow without reading the (dev-logged in e2e) email.
+   */
+  @Transactional
+  public String triggerPasswordResetForUser(AppUser user, Locale locale) {
+    return issuePasswordResetToken(user, locale);
+  }
+
+  /**
+   * HU-44 AC-3: invalidates any previously issued, still-unused reset link for this user before
+   * issuing and emailing a new one — shared by the self-service and Platform-Admin-triggered entry
+   * points above.
+   */
+  private String issuePasswordResetToken(AppUser user, Locale locale) {
+    passwordResetTokenRepository.invalidateAllForUser(user.getId());
+
     String raw = UUID.randomUUID().toString();
-    String hash = sha256Hex(raw);
     PasswordResetToken entity = new PasswordResetToken();
     entity.setUser(user);
-    entity.setTokenHash(hash);
+    entity.setTokenHash(sha256Hex(raw));
     entity.setExpiresAt(Instant.now().plus(48, ChronoUnit.HOURS));
     entity.setUsed(false);
     passwordResetTokenRepository.save(entity);
-    log.info("password reset link (dev): http://localhost:5173/reset-password?token={}", raw);
+
+    String resetUrl = frontendUrl + "/reset-password?token=" + raw;
+    emailService.sendPasswordResetLink(user.getEmail(), resetUrl, locale);
+    return raw;
   }
 
   @Transactional

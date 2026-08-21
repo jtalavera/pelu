@@ -14,6 +14,7 @@ import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.AppUserStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminResponse;
+import com.cursorpoc.backend.web.dto.ResendInvitationResponse;
 import com.cursorpoc.backend.web.dto.TenantUserResponse;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -37,7 +38,9 @@ import org.springframework.web.server.ResponseStatusException;
  * (AC-4) — {@link AuthService#validateActivationToken} and {@link AuthService#activateAccount}
  * transparently handle both professional- and app-user-scoped tokens, so the frontend needs no
  * branching between the two invite flows. HU-43 adds the ability to deactivate/reactivate a single
- * tenant user without affecting the rest of the tenant's admins.
+ * tenant user without affecting the rest of the tenant's admins. HU-44 adds resending that
+ * activation invite, or triggering a password reset for a user who already activated but lost
+ * access.
  */
 @Service
 public class PlatformUserAdminService {
@@ -55,6 +58,7 @@ public class PlatformUserAdminService {
   private final PasswordEncoder passwordEncoder;
   private final EmailService emailService;
   private final FemmeTimeProperties timeProperties;
+  private final AuthService authService;
 
   public PlatformUserAdminService(
       TenantRepository tenantRepository,
@@ -64,7 +68,8 @@ public class PlatformUserAdminService {
       AppUserStatusChangeRepository appUserStatusChangeRepository,
       PasswordEncoder passwordEncoder,
       EmailService emailService,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      AuthService authService) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.activationTokenRepository = activationTokenRepository;
@@ -73,6 +78,7 @@ public class PlatformUserAdminService {
     this.passwordEncoder = passwordEncoder;
     this.emailService = emailService;
     this.timeProperties = timeProperties;
+    this.authService = authService;
   }
 
   /**
@@ -210,6 +216,66 @@ public class PlatformUserAdminService {
     change.setChangedByUserId(changedByUserId);
     change.setChangedByEmail(changedByEmail);
     appUserStatusChangeRepository.save(change);
+  }
+
+  /**
+   * HU-44 AC-1/AC-2/AC-3/AC-4/AC-5: resends the activation invite for a user who never activated
+   * their account, or triggers the "forgot password" flow for one who already did but lost access —
+   * mutually exclusive, decided by {@link #hasActivated}. Either branch invalidates any previously
+   * issued unused link for this user first (AC-3), so an old link stops working the moment a new
+   * one is sent. A user the Platform Admin deliberately disabled (HU-43) is rejected — reactivate
+   * them first, rather than emailing a reset link for an account that still can't log in.
+   */
+  @Transactional
+  public ResendInvitationResponse resendInvitation(Long tenantId, Long userId, Locale locale) {
+    if (!tenantRepository.existsById(tenantId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND");
+    }
+    AppUser user =
+        appUserRepository
+            .findById(userId)
+            .filter(u -> tenantId.equals(u.getTenantId()))
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_USER_NOT_FOUND"));
+
+    boolean activated = hasActivated(user);
+    if (activated && !user.isEnabled()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "TENANT_USER_DISABLED_CANNOT_RESEND");
+    }
+
+    if (activated) {
+      // AC-2/AC-3/AC-4: already activated but lost access — trigger the same "forgot password"
+      // flow the self-service ForgotPasswordPage uses, tenant-scoped since the Platform Admin isn't
+      // on the tenant's own frontend to have its Origin header resolve one.
+      String rawToken = authService.triggerPasswordResetForUser(user, locale);
+      log.info(
+          "tenant user invitation resend tenantId={} userId={} mode=PASSWORD_RESET",
+          tenantId,
+          userId);
+      return new ResendInvitationResponse(user.getId(), user.getEmail(), true, rawToken);
+    }
+
+    // AC-1/AC-3/AC-4: never activated — invalidate any previous unused activation link and issue
+    // (and email) a fresh one, same shape as the original invite in createTenantAdmin.
+    activationTokenRepository.invalidateAllForAppUser(user.getId());
+
+    String raw = UUID.randomUUID().toString();
+    AppUserActivationToken token = new AppUserActivationToken();
+    token.setAppUser(user);
+    token.setTokenHash(AuthService.sha256Hex(raw));
+    token.setExpiresAt(Instant.now().plus(48, ChronoUnit.HOURS));
+    token.setUsed(false);
+    activationTokenRepository.save(token);
+
+    String activationUrl = frontendUrl + "/activate?token=" + raw;
+    emailService.sendActivationLink(user.getEmail(), activationUrl, locale);
+
+    log.info(
+        "tenant user invitation resend tenantId={} userId={} mode=ACTIVATION_INVITE",
+        tenantId,
+        userId);
+    return new ResendInvitationResponse(user.getId(), user.getEmail(), false, raw);
   }
 
   private TenantUserResponse toTenantUserResponse(AppUser u) {

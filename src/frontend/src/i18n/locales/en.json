@@ -238,7 +238,12 @@
           "reactivateDialogDescription": "{{email}} will be able to log in again.",
           "statusActionError": "Couldn't update the user's status. Please try again.",
           "deactivateSuccess": "{{email}} was deactivated.",
-          "reactivateSuccess": "{{email}} was reactivated."
+          "reactivateSuccess": "{{email}} was reactivated.",
+          "resendAction": "Resend",
+          "resending": "Resending…",
+          "resendInvitationSuccess": "Activation invite resent to {{email}}.",
+          "resendPasswordResetSuccess": "Password reset email sent to {{email}}.",
+          "resendError": "Could not resend the invitation."
         }
       }
     },
@@ -948,6 +953,7 @@
     "TENANT_STATUS_INVALID": "Invalid tenant status.",
       "TENANT_USER_NOT_FOUND": "That user was not found for this tenant.",
       "APP_USER_STATUS_REQUIRED": "The user status is required.",
+      "TENANT_USER_DISABLED_CANNOT_RESEND": "This user is disabled. Reactivate them before resending an invitation or password reset.",
       "TIER_NOT_FOUND": "That tier does not exist.",
       "FLAG_NOT_FOUND": "That feature flag does not exist.",
       "INVALID_FLAG_KEY": "Invalid feature flag name. Use uppercase letters, digits, and underscores (e.g. GUIDED_TOUR).",

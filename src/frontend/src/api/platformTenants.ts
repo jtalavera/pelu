@@ -136,3 +136,29 @@ export function updateTenantUserStatus(
     { enabled },
   );
 }
+
+/**
+ * HU-44 AC-1/AC-2/AC-3/AC-4: confirms a resend action — `passwordReset` tells the caller whether
+ * this was a fresh activation invite (user never activated) or a password-reset trigger (user
+ * already activated but lost access), so the UI can show the matching confirmation message.
+ */
+export type ResendInvitationResult = {
+  userId: number;
+  email: string;
+  passwordReset: boolean;
+  rawToken: string;
+};
+
+/**
+ * HU-44 AC-1/AC-2/AC-3: resends the activation invite, or triggers a password reset, for a single
+ * tenant user — invalidating any previously issued unused link either way.
+ */
+export function resendTenantUserInvitation(
+  tenantId: number,
+  userId: number,
+): Promise<ResendInvitationResult> {
+  return femmePostJson<ResendInvitationResult>(
+    `/api/platform/tenants/${tenantId}/admins/${userId}/resend-invitation`,
+    {},
+  );
+}

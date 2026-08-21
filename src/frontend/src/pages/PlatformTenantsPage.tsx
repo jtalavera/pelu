@@ -18,6 +18,7 @@ import {
   listTenantAdmins,
   listTenantsPaged,
   listTiers,
+  resendTenantUserInvitation,
   updateTenant,
   updateTenantStatus,
   updateTenantUserStatus,
@@ -119,6 +120,13 @@ export default function PlatformTenantsPage() {
   const [userStatusSaving, setUserStatusSaving] = useState(false);
   const [userStatusError, setUserStatusError] = useState<string | null>(null);
   const [userStatusSuccessMessage, setUserStatusSuccessMessage] = useState<string | null>(null);
+
+  // HU-44 AC-1/AC-2/AC-3/AC-4: resend the activation invite (never-activated user) or trigger a
+  // password reset (already-activated user) for a single user of the tenant currently open in the
+  // edit dialog, from a per-row action in the user list above.
+  const [resendTargetUserId, setResendTargetUserId] = useState<number | null>(null);
+  const [resendSuccessMessage, setResendSuccessMessage] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   const loadTenants = useCallback(
     async (page: number, size: number, q: string) => {
@@ -270,6 +278,9 @@ export default function PlatformTenantsPage() {
     setUserStatusTarget(null);
     setUserStatusError(null);
     setUserStatusSuccessMessage(null);
+    setResendTargetUserId(null);
+    setResendError(null);
+    setResendSuccessMessage(null);
     setEditModalOpen(true);
     void loadTenantUsers(tenant.id);
   }
@@ -383,6 +394,8 @@ export default function PlatformTenantsPage() {
   function openUserStatusConfirm(user: TenantUser) {
     setUserStatusError(null);
     setUserStatusSuccessMessage(null);
+    setResendError(null);
+    setResendSuccessMessage(null);
     setUserStatusTarget(user);
   }
 
@@ -420,6 +433,36 @@ export default function PlatformTenantsPage() {
       );
     } finally {
       setUserStatusSaving(false);
+    }
+  }
+
+  // HU-44 AC-1/AC-2/AC-3/AC-4: resends the activation invite for a never-activated user, or
+  // triggers a password reset for one who already activated but lost access — the backend decides
+  // which based on the user's current activation state, invalidating any previous unused link
+  // either way. The Platform Admin never sees or sets a password (AC-5).
+  async function handleResendInvitation(user: TenantUser) {
+    if (!editingTenant) {
+      return;
+    }
+    setResendError(null);
+    setResendSuccessMessage(null);
+    setUserStatusError(null);
+    setUserStatusSuccessMessage(null);
+    setResendTargetUserId(user.userId);
+    try {
+      const result = await resendTenantUserInvitation(editingTenant.id, user.userId);
+      setResendSuccessMessage(
+        t(
+          result.passwordReset
+            ? "femme.platform.tenants.admins.resendPasswordResetSuccess"
+            : "femme.platform.tenants.admins.resendInvitationSuccess",
+          { email: result.email },
+        ),
+      );
+    } catch (e) {
+      setResendError(translateApiError(e, t, "femme.platform.tenants.admins.resendError"));
+    } finally {
+      setResendTargetUserId(null);
     }
   }
 
@@ -953,6 +996,24 @@ export default function PlatformTenantsPage() {
                               ? t("femme.platform.tenants.admins.statusDisabled")
                               : t("femme.platform.tenants.admins.statusPendingActivation")}
                         </span>
+                        {/* HU-44 AC-1/AC-2: resend the activation invite (pending users) or
+                            trigger a password reset (already-activated, still-enabled users).
+                            Hidden for users the Platform Admin deliberately disabled (HU-43) —
+                            reactivate them first. */}
+                        {!u.activated || u.enabled ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="min-h-11"
+                            style={{ padding: "4px 12px", fontSize: 12 }}
+                            onClick={() => void handleResendInvitation(u)}
+                            disabled={resendTargetUserId === u.userId}
+                          >
+                            {resendTargetUserId === u.userId
+                              ? t("femme.platform.tenants.admins.resending")
+                              : t("femme.platform.tenants.admins.resendAction")}
+                          </Button>
+                        ) : null}
                         {/* HU-43 AC-1/AC-3: deactivate or reactivate this one user, without
                             affecting the rest of the tenant's users. */}
                         <Button
@@ -992,6 +1053,24 @@ export default function PlatformTenantsPage() {
                   style={{ fontSize: 12, padding: "8px 12px" }}
                 >
                   {userStatusError}
+                </Alert>
+              ) : null}
+              {resendSuccessMessage ? (
+                <Alert
+                  data-testid="tenant-user-resend-success"
+                  variant="success"
+                  style={{ fontSize: 12, padding: "8px 12px" }}
+                >
+                  {resendSuccessMessage}
+                </Alert>
+              ) : null}
+              {resendError ? (
+                <Alert
+                  variant="destructive"
+                  title={t("femme.platform.tenants.errorTitle")}
+                  style={{ fontSize: 12, padding: "8px 12px" }}
+                >
+                  {resendError}
                 </Alert>
               ) : null}
               {adminInviteSuccessEmail ? (

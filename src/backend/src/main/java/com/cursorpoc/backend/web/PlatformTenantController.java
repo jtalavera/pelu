@@ -8,6 +8,7 @@ import com.cursorpoc.backend.web.dto.AppUserStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import com.cursorpoc.backend.web.dto.ResendInvitationResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
 import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
@@ -33,12 +34,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants) and HU-41/HU-42/HU-43 (Épica C — Gestión de
- * usuarios y admins de tenant): Platform Admin creates, lists, edits, and suspends/reactivates
+ * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants) and HU-41/HU-42/HU-43/HU-44 (Épica C — Gestión
+ * de usuarios y admins de tenant): Platform Admin creates, lists, edits, and suspends/reactivates
  * tenants, invites tenant {@code ADMIN} users — any number of them, HU-42 AC-1 — lists everyone
- * assigned to a tenant, and deactivates/reactivates a single tenant user without affecting the rest
- * (HU-43). These routes are tenant-independent (no {@code tid} on the caller's token, see HU-34),
- * so logging identifies the *acting* Platform Admin user instead of a tenant id.
+ * assigned to a tenant, deactivates/reactivates a single tenant user without affecting the rest
+ * (HU-43), and resends an activation invite or triggers a password reset for one (HU-44). These
+ * routes are tenant-independent (no {@code tid} on the caller's token, see HU-34), so logging
+ * identifies the *acting* Platform Admin user instead of a tenant id.
  */
 @RestController
 @RequestMapping("/api/platform/tenants")
@@ -277,6 +279,52 @@ public class PlatformTenantController {
     } catch (ResponseStatusException ex) {
       log.error(
           "PATCH /api/platform/tenants/{}/admins/{}/status adminUserId={} tenantId={} userId={} status={} error={}",
+          id,
+          userId,
+          principal.getUserId(),
+          id,
+          userId,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /**
+   * HU-44 AC-1/AC-2/AC-3/AC-4: resends the activation invite for a user who never activated, or
+   * triggers a password reset for one who already did but lost access — the response tells the
+   * frontend which happened so it can show the right confirmation (AC-4).
+   */
+  @PostMapping("/{id}/admins/{userId}/resend-invitation")
+  public ResendInvitationResponse resendInvitation(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") Long id,
+      @PathVariable("userId") Long userId,
+      Locale locale) {
+    requirePlatformAdmin(
+        principal, "POST /api/platform/tenants/{id}/admins/{userId}/resend-invitation");
+    log.info(
+        "POST /api/platform/tenants/{}/admins/{}/resend-invitation adminUserId={} tenantId={} userId={}",
+        id,
+        userId,
+        principal.getUserId(),
+        id,
+        userId);
+    try {
+      ResendInvitationResponse response =
+          platformUserAdminService.resendInvitation(id, userId, locale);
+      log.info(
+          "POST /api/platform/tenants/{}/admins/{}/resend-invitation adminUserId={} tenantId={} userId={} status=200 passwordReset={}",
+          id,
+          userId,
+          principal.getUserId(),
+          id,
+          userId,
+          response.passwordReset());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/platform/tenants/{}/admins/{}/resend-invitation adminUserId={} tenantId={} userId={} status={} error={}",
           id,
           userId,
           principal.getUserId(),

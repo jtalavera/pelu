@@ -9,6 +9,7 @@ import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.ResetPasswordRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
 import jakarta.validation.Valid;
+import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -50,8 +51,9 @@ public class AuthController {
   public ResponseEntity<Void> forgotPassword(
       @Valid @RequestBody ForgotPasswordRequest request,
       @org.springframework.web.bind.annotation.RequestHeader(value = "Origin", required = false)
-          String origin) {
-    authService.forgotPassword(request, origin);
+          String origin,
+      Locale locale) {
+    authService.forgotPassword(request, origin, locale);
     return ResponseEntity.noContent().build();
   }
 

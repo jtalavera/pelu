@@ -85,6 +85,48 @@ public class EmailService {
   }
 
   /**
+   * HU-44 AC-2/AC-4: sends the password-reset link — same shape and dev/e2e logging fallback as
+   * {@link #sendActivationLink} — used both by the self-service "forgot password" flow and by a
+   * Platform-Admin-triggered reset for a tenant user who already activated their account.
+   */
+  public void sendPasswordResetLink(String toEmail, String resetUrl, Locale locale) {
+    String subject = messageSource.getMessage("email.passwordReset.subject", null, locale);
+    String body =
+        messageSource.getMessage("email.passwordReset.body", new Object[] {resetUrl}, locale);
+
+    if (!isEffectivelyEnabled()) {
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
+          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          toEmail,
+          subject,
+          body);
+      return;
+    }
+
+    try {
+      EmailClient client =
+          new EmailClientBuilder().connectionString(connectionString).buildClient();
+      EmailMessage message =
+          new EmailMessage()
+              .setSenderAddress(senderAddress)
+              .setToRecipients(new EmailAddress(toEmail))
+              .setSubject(subject)
+              .setBodyPlainText(body);
+      client.beginSend(message).getFinalResult();
+      log.info(
+          "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
+          senderAddress,
+          toEmail,
+          subject,
+          locale.getLanguage());
+    } catch (Exception ex) {
+      log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
+  }
+
+  /**
    * SIFEN HU-08 AC-17: sends an email with a single PDF attachment (the KuDE) — same
    * enabled/disabled branching as {@link #sendActivationLink}, logging the would-be send instead of
    * calling Azure Communication Email when {@code app.femme.email.enabled=false} (dev/e2e).
