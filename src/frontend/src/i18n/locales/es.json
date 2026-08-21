@@ -306,6 +306,9 @@
         "loadError": "No se pudieron cargar las plantillas de importación.",
         "errorTitle": "Error",
         "fileFormatNote": "Solo se aceptan archivos .xlsx. La primera fila debe contener exactamente estos encabezados (no distingue mayúsculas ni espacios extra al inicio/fin). Si falta una columna obligatoria, se rechaza el archivo completo antes de procesar ninguna fila.",
+        "downloadExampleLead": "Descargá un archivo de ejemplo listo para completar con los encabezados exactos y 1–2 filas de muestra para {{entity}}. Borrá las filas de ejemplo y reutilizá el archivo para tu importación real.",
+        "downloadExampleButton": "Descargar ejemplo",
+        "downloadingExample": "Descargando…",
         "entityTabs": {
           "services": "Servicios",
           "clients": "Clientes",

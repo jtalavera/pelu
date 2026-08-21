@@ -24,6 +24,7 @@ import {
   type ImportReport,
   type ImportResult,
 } from "../api/platformImportTemplates";
+import { downloadImportExampleFile } from "../api/downloadImportExampleFile";
 import { listTenantsPaged, type PlatformTenant } from "../api/platformTenants";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
@@ -77,8 +78,9 @@ const tdStyle: React.CSSProperties = {
  * HU-50 (Épica E — Importación de datos vía Excel): AC-1/AC-2/AC-3/AC-4 documented per-entity
  * column templates + AC-7 (visible to the Platform Admin at import time, not only in the HU-50
  * spec file), plus an AC-5/AC-6 headers-only file check. HU-51 wired the actual import for
- * servicios, HU-52 for clientes, HU-53 for profesionales. Downloading a ready-made example
- * spreadsheet with sample rows is HU-55's separate scope, not built here.
+ * servicios, HU-52 for clientes, HU-53 for profesionales. HU-55 adds a "Download example" button
+ * per entity tab, fetching a ready-to-fill `.xlsx` (exact headers + 1-2 fictional sample rows)
+ * from the backend.
  */
 export default function PlatformImportPage() {
   const { t } = useTranslation();
@@ -89,6 +91,11 @@ export default function PlatformImportPage() {
   const [loading, setLoading] = useState(true);
 
   const [activeEntity, setActiveEntity] = useState<string>("services");
+
+  // HU-55 AC-1/AC-4: download a ready-to-fill example .xlsx for the active entity.
+  const [downloadingExample, setDownloadingExample] = useState(false);
+  const [downloadExampleError, setDownloadExampleError] = useState<string | null>(null);
+
   const [file, setFile] = useState<File | null>(null);
   const [fileFieldError, setFileFieldError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -179,6 +186,7 @@ export default function PlatformImportPage() {
 
   function onTabChange(entity: string) {
     setActiveEntity(entity);
+    setDownloadExampleError(null);
     setFile(null);
     setFileFieldError(null);
     setCheckError(null);
@@ -241,6 +249,20 @@ export default function PlatformImportPage() {
       setRunError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setRunning(false);
+    }
+  }
+
+  // HU-55 AC-1: downloads a ready-to-fill example .xlsx (exact headers + fictional sample rows)
+  // for the given entity, generated server-side from the same template HU-50's checker validates.
+  async function onDownloadExample(entity: string) {
+    setDownloadExampleError(null);
+    setDownloadingExample(true);
+    try {
+      await downloadImportExampleFile(entity);
+    } catch (err) {
+      setDownloadExampleError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setDownloadingExample(false);
     }
   }
 
@@ -315,6 +337,35 @@ export default function PlatformImportPage() {
 
         {orderedTemplates.map((tpl) => (
           <TabsContent key={tpl.entity} value={tpl.entity}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <Text variant="small" style={{ color: "var(--color-ink-3)" }}>
+                {t("femme.platform.import.downloadExampleLead", {
+                  entity: t(`femme.platform.import.entityTabs.${tpl.entity}`).toLowerCase(),
+                })}
+              </Text>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                disabled={downloadingExample}
+                onClick={() => onDownloadExample(tpl.entity)}
+                data-testid={`import-download-example-${tpl.entity}`}
+              >
+                {downloadingExample
+                  ? t("femme.platform.import.downloadingExample")
+                  : t("femme.platform.import.downloadExampleButton")}
+              </Button>
+            </div>
+            {downloadExampleError ? (
+              <Alert
+                variant="destructive"
+                data-testid={`import-download-example-error-${tpl.entity}`}
+                style={{ fontSize: 12, padding: "8px 12px", marginBottom: 12 }}
+              >
+                {downloadExampleError}
+              </Alert>
+            ) : null}
+
             <div
               className="overflow-hidden rounded-[var(--radius-xl)]"
               style={{ background: "var(--color-white)", border: "var(--border-default)" }}

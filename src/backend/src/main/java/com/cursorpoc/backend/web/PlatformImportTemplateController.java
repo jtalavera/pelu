@@ -6,6 +6,7 @@ import com.cursorpoc.backend.excelimport.HeaderValidationResult;
 import com.cursorpoc.backend.excelimport.ImportColumnDefinition;
 import com.cursorpoc.backend.excelimport.ImportColumnTemplateRegistry;
 import com.cursorpoc.backend.excelimport.ImportEntityType;
+import com.cursorpoc.backend.excelimport.ImportExampleFileGenerator;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.web.dto.ImportColumnResponse;
 import com.cursorpoc.backend.web.dto.ImportColumnTemplateResponse;
@@ -15,7 +16,9 @@ import java.util.Base64;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,8 +32,11 @@ import org.springframework.web.server.ResponseStatusException;
  * HU-50 (Épica E — Importación de datos vía Excel): standard column template per importable entity
  * (AC-1..AC-4, documented for the Platform Admin at import time — AC-7) plus a headers-only file
  * check (AC-5/AC-6). Deliberately does NOT parse data rows or create any record — that is
- * HU-51/HU-52/HU-53, one per entity. Platform-Admin-only, tenant-independent (no {@code tid} on the
- * caller's token, see HU-34), same gating pattern as {@code PlatformTierController}.
+ * HU-51/HU-52/HU-53, one per entity. HU-55 adds a downloadable example {@code .xlsx} per entity
+ * (header row + sample data rows), generated from the same {@link ImportColumnTemplateRegistry} so
+ * it can never diverge from what is validated on upload. Platform-Admin-only, tenant-independent
+ * (no {@code tid} on the caller's token, see HU-34), same gating pattern as {@code
+ * PlatformTierController}.
  */
 @RestController
 @RequestMapping("/api/platform/import-templates")
@@ -40,12 +46,15 @@ public class PlatformImportTemplateController {
 
   private final ImportColumnTemplateRegistry templateRegistry;
   private final ExcelHeaderValidationService headerValidationService;
+  private final ImportExampleFileGenerator exampleFileGenerator;
 
   public PlatformImportTemplateController(
       ImportColumnTemplateRegistry templateRegistry,
-      ExcelHeaderValidationService headerValidationService) {
+      ExcelHeaderValidationService headerValidationService,
+      ImportExampleFileGenerator exampleFileGenerator) {
     this.templateRegistry = templateRegistry;
     this.headerValidationService = headerValidationService;
+    this.exampleFileGenerator = exampleFileGenerator;
   }
 
   /** AC-1/AC-2/AC-3/AC-4/AC-7: the three standard templates, one per importable entity. */
@@ -67,6 +76,43 @@ public class PlatformImportTemplateController {
         principal.getUserId(),
         response.size());
     return response;
+  }
+
+  /**
+   * HU-55 AC-1/AC-2/AC-3/AC-4: a ready-to-fill example {@code .xlsx} for the given entity — the
+   * exact header row {@link ImportColumnTemplateRegistry} defines (never diverging from what {@code
+   * validate-headers} and the actual import accept) plus 1-2 fictional sample data rows.
+   */
+  @GetMapping("/{entity}/example-file")
+  public ResponseEntity<byte[]> downloadExampleFile(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("entity") String entity) {
+    String routeLabel = "GET /api/platform/import-templates/{entity}/example-file";
+    requirePlatformAdmin(principal, routeLabel);
+    ImportEntityType entityType = ImportEntityType.fromPathSegment(entity);
+    if (entityType == null) {
+      log.error(
+          "{} adminUserId={} status=404 - unknown entity={}",
+          routeLabel,
+          principal.getUserId(),
+          entity);
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "IMPORT_ENTITY_NOT_FOUND");
+    }
+    log.info("{} adminUserId={} entity={}", routeLabel, principal.getUserId(), entity);
+    byte[] fileBytes = exampleFileGenerator.generate(entityType);
+    String fileName = exampleFileGenerator.fileNameFor(entityType);
+    log.info(
+        "{} adminUserId={} entity={} status=200 bytes={}",
+        routeLabel,
+        principal.getUserId(),
+        entity,
+        fileBytes.length);
+    return ResponseEntity.ok()
+        .header(
+            HttpHeaders.CONTENT_TYPE,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+        .body(fileBytes);
   }
 
   /**

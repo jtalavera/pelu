@@ -87,7 +87,7 @@ negocio de un tenant).
 | HU-52 | Importar clientes desde Excel | Done |
 | HU-53 | Importar profesionales desde Excel | Done |
 | HU-54 | Reporte de resultados de importación | Done |
-| HU-55 | Descargar planillas de ejemplo | Pendiente |
+| HU-55 | Descargar planillas de ejemplo | Done |
 | HU-56 | Remover seed hardcodeado tenant 1 | Pendiente |
 | HU-57 | Bootstrap inicial de Platform Admin | Pendiente |
 | HU-58 | Ajustar e2e sin seed hardcodeado | Pendiente |

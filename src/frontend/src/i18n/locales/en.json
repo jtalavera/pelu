@@ -306,6 +306,9 @@
         "loadError": "Could not load the import templates.",
         "errorTitle": "Error",
         "fileFormatNote": "Only .xlsx files are accepted. Row 1 must contain exactly these column headers (not case-sensitive, extra leading/trailing spaces are ignored). If a required column is missing, the whole file is rejected before any row is processed.",
+        "downloadExampleLead": "Download a ready-to-fill example file with the exact headers and 1–2 sample rows for {{entity}}. Delete the sample rows and reuse the file for your real import.",
+        "downloadExampleButton": "Download example",
+        "downloadingExample": "Downloading…",
         "entityTabs": {
           "services": "Services",
           "clients": "Clients",

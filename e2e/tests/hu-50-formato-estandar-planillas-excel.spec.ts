@@ -7,9 +7,10 @@ import { loginAsPlatformAdmin } from "../fixtures/auth";
 // requirements/multi-tenant/HU-50-formato-estandar-de-planillas-excel.md
 //
 // Scope note: HU-50 is the documented column-template contract + a headers-only file check
-// (AC-5/AC-6). It deliberately does NOT parse data rows or create any record (HU-51/52/53), and
-// does NOT offer a downloadable example spreadsheet with sample data rows (HU-55's separate
-// scope) — only the standard-columns documentation and a way to verify a candidate file's headers.
+// (AC-5/AC-6). It deliberately does NOT parse data rows or create any record (HU-51/52/53) — only
+// the standard-columns documentation and a way to verify a candidate file's headers. The
+// downloadable example spreadsheet with sample data rows is HU-55's separate scope, covered by
+// hu-55-descargar-planillas-de-ejemplo.spec.ts.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VALID_HEADERS_XLSX = path.join(__dirname, "../fixtures/import/servicios-headers-validos.xlsx");
