@@ -460,14 +460,36 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
 
 // ─── Issue #39 ────────────────────────────────────────────────────────────────
 
-test("Issue #39 · profesionales semilla tienen horario Lun-Sáb 09:00-19:00 tras reset", async ({
+test("Issue #39 · profesional creado manualmente admite horario Lun-Sáb 09:00-19:00", async ({
   request,
 }) => {
-  // Reset seed to get a fresh state
+  // HU-56 removed the fixed professional roster (`FemmeSalonCatalogBootstrapData.PROFESSIONALS`)
+  // that this test used to rely on `/api/admin/seed/reset` seeding automatically — a seed reset
+  // no longer creates any professional for the tenant (see DemoTenantCatalogSeedService). This
+  // now exercises the same Mon-Sat 09:00-19:00 schedule shape via manual professional creation,
+  // the only way to get a professional after HU-56.
   const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
   expect(resetRes.ok()).toBeTruthy();
 
   const token = await loginAsDemoApi(request);
+
+  const createRes = await request.post(`${API_BASE}/api/professionals`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    data: { fullName: `Issue 39 Professional ${Date.now()}` },
+  });
+  expect(createRes.ok(), await createRes.text()).toBeTruthy();
+  const created = (await createRes.json()) as { id: number };
+
+  const schedules = [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+    dayOfWeek,
+    startTime: "09:00:00",
+    endTime: "19:00:00",
+  }));
+  const scheduleRes = await request.put(`${API_BASE}/api/professionals/${created.id}/schedules`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    data: schedules,
+  });
+  expect(scheduleRes.ok(), await scheduleRes.text()).toBeTruthy();
 
   // Fetch all professionals. The list endpoint already returns each professional's
   // schedules (there is no GET /api/professionals/{id} endpoint — only the list and /page).
@@ -484,16 +506,16 @@ test("Issue #39 · profesionales semilla tienen horario Lun-Sáb 09:00-19:00 tra
 
   // Each active professional must have 6 schedule rows (Mon=1 to Sat=6, 09:00-19:00)
   for (const prof of activeProfessionals) {
-    const schedules = prof.schedules ?? [];
+    const profSchedules = prof.schedules ?? [];
     expect(
-      schedules.length,
+      profSchedules.length,
       `${prof.fullName} should have 6 schedule rows`,
     ).toBe(6);
 
-    const days = schedules.map((s) => s.dayOfWeek).sort();
+    const days = profSchedules.map((s) => s.dayOfWeek).sort();
     expect(days).toEqual([1, 2, 3, 4, 5, 6]); // Mon-Sat
 
-    for (const s of schedules) {
+    for (const s of profSchedules) {
       expect(s.startTime, `${prof.fullName} day ${s.dayOfWeek} startTime`).toBe("09:00:00");
       expect(s.endTime, `${prof.fullName} day ${s.dayOfWeek} endTime`).toBe("19:00:00");
     }

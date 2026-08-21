@@ -88,7 +88,7 @@ negocio de un tenant).
 | HU-53 | Importar profesionales desde Excel | Done |
 | HU-54 | Reporte de resultados de importación | Done |
 | HU-55 | Descargar planillas de ejemplo | Done |
-| HU-56 | Remover seed hardcodeado tenant 1 | Pendiente |
+| HU-56 | Remover seed hardcodeado tenant 1 | Done (AC1/AC2/AC5: la reconciliación de catálogo/clientes CSV y el roster fijo de profesionales ya no corren en el arranque — `FemmeDataInitializer` solo siembra flags/tiers/admin de plataforma/tenant demo; esa lógica se movió a `DemoTenantCatalogSeedService`, que **solo** invoca `SeedResetService` (endpoint `/api/admin/seed/reset`, dev/e2e-only, gateado por `femme.data-init.enabled`). AC3: los CSVs se conservan porque siguen teniendo uso — son el fixture del reset e2e (frontera de alcance explícita con HU-58, que reemplazará este mecanismo). AC4: sin cambios en flags/tiers/IVA. AC6: única migración tenant-1-específica identificada es `V31__enable_sifen_electronic_invoicing_tenant1.sql` (ya autodocumentada in-line); no se agregan nuevas. El roster fijo de profesionales se eliminó sin reemplazo — 2 specs Playwright que dependían de él (`hu-27-seed-data-reset.spec.ts` AC3, `high-priority-fixes.spec.ts` Issue #39) se actualizaron para reflejar el nuevo comportamiento.) |
 | HU-57 | Bootstrap inicial de Platform Admin | Pendiente |
 | HU-58 | Ajustar e2e sin seed hardcodeado | Pendiente |
 

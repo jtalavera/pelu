@@ -56,6 +56,7 @@ public class SeedResetService {
   private final AppUserTourStateRepository appUserTourStateRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
   private final FemmeDataInitializer femmeDataInitializer;
+  private final DemoTenantCatalogSeedService demoTenantCatalogSeedService;
 
   public SeedResetService(
       TenantRepository tenantRepository,
@@ -77,7 +78,8 @@ public class SeedResetService {
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
-      FemmeDataInitializer femmeDataInitializer) {
+      FemmeDataInitializer femmeDataInitializer,
+      DemoTenantCatalogSeedService demoTenantCatalogSeedService) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.businessProfileRepository = businessProfileRepository;
@@ -98,6 +100,7 @@ public class SeedResetService {
     this.appUserTourStateRepository = appUserTourStateRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
     this.femmeDataInitializer = femmeDataInitializer;
+    this.demoTenantCatalogSeedService = demoTenantCatalogSeedService;
   }
 
   @Transactional
@@ -194,8 +197,8 @@ public class SeedResetService {
     log.info("Deleted {} app_users", deletedUsers);
 
     femmeDataInitializer.seedDemoTenantData(tenant);
-    femmeDataInitializer.seedCatalogFromCsv(tenant);
-    femmeDataInitializer.seedClientsFromCsv(tenant);
+    demoTenantCatalogSeedService.seedCatalogFromCsv(tenant);
+    demoTenantCatalogSeedService.seedClientsFromCsv(tenant);
 
     log.info("POST /api/admin/seed/reset tenantId={} — reset complete", DEMO_TENANT_ID);
   }

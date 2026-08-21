@@ -66,6 +66,7 @@ class SeedResetServiceTest {
   @Mock private AppUserTourStateRepository appUserTourStateRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
   @Mock private FemmeDataInitializer femmeDataInitializer;
+  @Mock private DemoTenantCatalogSeedService demoTenantCatalogSeedService;
 
   private SeedResetService service;
 
@@ -92,7 +93,8 @@ class SeedResetServiceTest {
             passwordResetTokenRepository,
             appUserTourStateRepository,
             tipWithdrawalRepository,
-            femmeDataInitializer);
+            femmeDataInitializer,
+            demoTenantCatalogSeedService);
 
     Tenant tenant = new Tenant();
     tenant.setId(DEMO_TENANT_ID);
@@ -114,7 +116,7 @@ class SeedResetServiceTest {
     service.resetDemoTenant();
 
     verify(femmeDataInitializer, times(1)).seedDemoTenantData(any(Tenant.class));
-    verify(femmeDataInitializer).seedCatalogFromCsv(any(Tenant.class));
-    verify(femmeDataInitializer).seedClientsFromCsv(any(Tenant.class));
+    verify(demoTenantCatalogSeedService).seedCatalogFromCsv(any(Tenant.class));
+    verify(demoTenantCatalogSeedService).seedClientsFromCsv(any(Tenant.class));
   }
 }

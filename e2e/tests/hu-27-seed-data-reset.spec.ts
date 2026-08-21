@@ -52,12 +52,14 @@ test.describe("HU-27 · Seed data reset", () => {
     const services = (await servicesRes.json()) as unknown[];
     expect(services.length).toBeGreaterThan(0);
 
+    // HU-56 removed the fixed professional roster (`FemmeSalonCatalogBootstrapData.PROFESSIONALS`)
+    // that a seed reset used to auto-create — professionals are no longer part of this seed.
     const professionalsRes = await request.get(`${API_BASE}/api/professionals`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(professionalsRes.ok()).toBeTruthy();
     const professionals = (await professionalsRes.json()) as unknown[];
-    expect(professionals.length).toBeGreaterThan(0);
+    expect(professionals.length).toBe(0);
   });
 
   test("HU-27 · AC4 endpoint is idempotent — two consecutive calls both succeed", async ({
