@@ -65,6 +65,21 @@ chmod +x gradlew   # once, if needed
 
 The current API does **not** require a database or Docker. Optional: `src/backend/docker-compose.yml` starts SQL Server for future work that needs it; it is not used by the minimal stack today.
 
+### Platform Admin bootstrap
+
+Per the multi-tenant PRD's "Sin seed hardcodeado" rule (`requirements/multi-tenant/prd_multi_tenant_management_v1.md`), the system creates **no** tenant, user, service, client or professional automatically at boot — with one exception: the very first Platform Admin (HU-57, `requirements/multi-tenant/HU-57-bootstrap-inicial-de-platform-admin.md`).
+
+On every boot, if the database has zero `PLATFORM_ADMIN` users, the backend creates exactly one from these environment variables (relaxed Spring Boot binding — no `application.properties` placeholder needed, and there is no hardcoded fallback in code):
+
+| Variable                            | Purpose                                  |
+| ------------------------------------ | ----------------------------------------- |
+| `APP_FEMME_PLATFORM_ADMIN_EMAIL`     | Email of the initial Platform Admin       |
+| `APP_FEMME_PLATFORM_ADMIN_PASSWORD`  | Password of the initial Platform Admin    |
+
+If either is unset when the bootstrap would otherwise run, it logs an error and skips creating the user instead of falling back to an insecure default — set both and restart. Once at least one `PLATFORM_ADMIN` exists (from this bootstrap or created later through the platform UI/API), the bootstrap never runs again: it neither creates a duplicate nor modifies the existing admin. From that first Platform Admin onward, every tenant, admin and catalog record is created exclusively through the platform UI/API (HU-37 onward) — there is no second seed path.
+
+See `com.cursorpoc.backend.bootstrap.PlatformAdminBootstrap`.
+
 ### Backend endpoints
 
 

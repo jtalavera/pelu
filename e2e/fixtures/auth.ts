@@ -5,8 +5,9 @@ export const DEMO_EMAIL = "isabelzymanscki@gmail.com";
 export const DEMO_PASSWORD = "Demo123!";
 
 /**
- * HU-34: seeded by `FemmeDataInitializer` (femme.data-init.enabled=true) — a tenant-independent
- * PLATFORM_ADMIN used by HU-35's login-routing tests.
+ * HU-34: a tenant-independent PLATFORM_ADMIN used by HU-35's login-routing tests. Bootstrapped by
+ * `PlatformAdminBootstrap` (HU-57) on every boot with zero PLATFORM_ADMIN users — see
+ * application-e2e.properties' app.femme.platform-admin.* for these exact credentials.
  */
 export const PLATFORM_ADMIN_EMAIL = "platform-admin@pelu";
 export const PLATFORM_ADMIN_PASSWORD = ".The.Platform@admin.2026";

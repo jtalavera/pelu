@@ -14,8 +14,9 @@ import {
 // This is API-only coverage (Playwright `request` fixture, no browser/UI) on purpose: HU-34 is
 // pure identity/auth plumbing (role, JWT shape, endpoint gating) with no UI surface of its own —
 // login *routing* by role is a separate story (HU-35), out of scope here per the HU's own "Notas
-// para estimación y pruebas". The seeded platform-admin@pelu user (FemmeDataInitializer, gated by
-// femme.data-init.enabled=true) exists specifically to make this story's login/JWT/gating behavior
+// para estimación y pruebas". The seeded platform-admin@pelu user (PlatformAdminBootstrap, HU-57 —
+// bootstrapped on every boot with zero PLATFORM_ADMIN users, independent of
+// femme.data-init.enabled) exists specifically to make this story's login/JWT/gating behavior
 // exercisable end-to-end against the real backend.
 
 // Mirrors application-e2e.properties' app.femme.jwt.secret exactly — used only to forge a

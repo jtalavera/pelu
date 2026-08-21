@@ -34,8 +34,9 @@ export function authHeaders(token: string): Record<string, string> {
   };
 }
 
-// HU-34: seeded by FemmeDataInitializer (femme.data-init.enabled=true) — see
-// FemmePlatformAdminProperties for the default credentials. Credentials live in ./auth
+// HU-34: this identity is bootstrapped by PlatformAdminBootstrap (HU-57) on every boot with zero
+// PLATFORM_ADMIN users, independent of femme.data-init.enabled — see
+// application-e2e.properties' app.femme.platform-admin.* for the credentials. Credentials live in ./auth
 // (PLATFORM_ADMIN_EMAIL/PASSWORD), shared with HU-35's browser-level login helper
 // (loginAsPlatformAdmin). HU-36 retired the legacy tenant-bound SYSTEM_ADMIN role (and the
 // loginSystemAdminApi helper that used to log in as it) — PLATFORM_ADMIN is now the only

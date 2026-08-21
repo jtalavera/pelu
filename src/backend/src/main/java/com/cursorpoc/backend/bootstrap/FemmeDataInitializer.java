@@ -1,6 +1,5 @@
 package com.cursorpoc.backend.bootstrap;
 
-import com.cursorpoc.backend.config.FemmePlatformAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.FeatureFlag;
@@ -35,7 +34,6 @@ public class FemmeDataInitializer {
   private final FiscalStampRepository fiscalStampRepository;
   private final FeatureFlagRepository featureFlagRepository;
   private final TierRepository tierRepository;
-  private final FemmePlatformAdminProperties platformAdminProperties;
   private final PasswordEncoder passwordEncoder;
 
   public FemmeDataInitializer(
@@ -45,7 +43,6 @@ public class FemmeDataInitializer {
       FiscalStampRepository fiscalStampRepository,
       FeatureFlagRepository featureFlagRepository,
       TierRepository tierRepository,
-      FemmePlatformAdminProperties platformAdminProperties,
       PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
@@ -53,7 +50,6 @@ public class FemmeDataInitializer {
     this.fiscalStampRepository = fiscalStampRepository;
     this.featureFlagRepository = featureFlagRepository;
     this.tierRepository = tierRepository;
-    this.platformAdminProperties = platformAdminProperties;
     this.passwordEncoder = passwordEncoder;
   }
 
@@ -65,8 +61,11 @@ public class FemmeDataInitializer {
   // DemoTenantCatalogSeedService, called only by the e2e/dev-only SeedResetService, never at
   // boot) so starting the system never creates/updates/deletes a tenant's clients or services —
   // see PRD "Sin seed hardcodeado". What remains below (feature flags, tiers, the demo tenant's
-  // admin user, the tenant-independent platform admin) is platform configuration, not a specific
-  // tenant's business data. Re-enable by setting femme.data-init.enabled=true (dev opt-in / e2e).
+  // admin user) is dev/e2e convenience seed data, not a specific tenant's real business data.
+  // HU-57 moved the tenant-independent platform admin OUT of this opt-in runner entirely — see
+  // platformAdminBootstrapRunner below, which is unconditional (not gated by this flag) because
+  // production needs it too. Re-enable this runner by setting femme.data-init.enabled=true (dev
+  // opt-in / e2e).
   @Bean
   @Profile("!test")
   @ConditionalOnProperty(name = "femme.data-init.enabled", havingValue = "true")
@@ -114,36 +113,34 @@ public class FemmeDataInitializer {
         log.info("Seeded tier 'Premium'");
       }
 
-      if (appUserRepository.count() == 0) {
-        Tenant tenant =
-            tenantRepository
-                .findFirstByOrderByIdAsc()
-                .orElseGet(
-                    () -> {
-                      Tenant t = new Tenant();
-                      t.setName("Demo salon");
-                      tenantRepository.save(t);
-                      return t;
-                    });
-        seedDemoTenantData(tenant);
-      }
-
-      // HU-34: seed a genuinely tenant-independent PLATFORM_ADMIN (tenant == null) for
-      // dev/e2e testing. A real production bootstrap flow is HU-57's scope, not this one. HU-36
-      // retired the legacy tenant-bound SYSTEM_ADMIN seed this used to sit next to (migrated to
-      // PLATFORM_ADMIN by V40 for any environment that already had that row).
-      var platformAdminEmail = platformAdminProperties.getEmail().trim().toLowerCase();
-      if (appUserRepository.findByEmail(platformAdminEmail).isEmpty()) {
-        AppUser platformAdmin = new AppUser();
-        platformAdmin.setTenant(null);
-        platformAdmin.setEmail(platformAdminEmail);
-        platformAdmin.setPasswordHash(
-            passwordEncoder.encode(platformAdminProperties.getPassword()));
-        platformAdmin.setRole(UserRole.PLATFORM_ADMIN);
-        appUserRepository.save(platformAdmin);
-        log.info("Seeded platform admin user {} (no tenant)", platformAdminEmail);
-      }
+      // HU-57: this used to be guarded by `appUserRepository.count() == 0`, which broke once the
+      // tenant-independent platform-admin bootstrap (PlatformAdminBootstrap) started running
+      // unconditionally on every boot — that bootstrap's own user would already push the count
+      // above zero before this runner got a turn, silently skipping the demo tenant/admin here.
+      // seedDemoTenantData is already fully idempotent internally (each insert checks its own
+      // existence), so call it directly with no outer user-count guard.
+      Tenant tenant =
+          tenantRepository
+              .findFirstByOrderByIdAsc()
+              .orElseGet(
+                  () -> {
+                    Tenant t = new Tenant();
+                    t.setName("Demo salon");
+                    tenantRepository.save(t);
+                    return t;
+                  });
+      seedDemoTenantData(tenant);
     };
+  }
+
+  // HU-57: the first-ever Platform Admin is now bootstrapped by PlatformAdminBootstrap, not here
+  // — that bean runs on every boot regardless of femme.data-init.enabled (production never sets
+  // that flag but still needs a way in), unlike this bean which stays opt-in dev/e2e-only. See
+  // PlatformAdminBootstrap's javadoc and the PRD's "Sin seed hardcodeado" definition.
+  @Bean
+  @Profile("!test")
+  CommandLineRunner platformAdminBootstrapRunner(PlatformAdminBootstrap platformAdminBootstrap) {
+    return args -> platformAdminBootstrap.bootstrapIfNeeded();
   }
 
   public void seedDemoTenantData(Tenant tenant) {

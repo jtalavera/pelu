@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.repository;
 
 import com.cursorpoc.backend.domain.AppUser;
+import com.cursorpoc.backend.domain.enums.UserRole;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -10,6 +11,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
   @EntityGraph(attributePaths = "tenant")
   Optional<AppUser> findByEmailAndTenant_Id(String email, Long tenantId);
+
+  // HU-57: lets the platform-admin bootstrap check "does at least one PLATFORM_ADMIN already
+  // exist" without loading any rows, for idempotency (AC-3).
+  boolean existsByRole(UserRole role);
 
   @EntityGraph(attributePaths = "tenant")
   Optional<AppUser> findByEmail(String email);

@@ -3,18 +3,25 @@ package com.cursorpoc.backend.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * HU-34: bootstrap credentials for a seed {@code PLATFORM_ADMIN} user, used only where {@code
- * femme.data-init.enabled=true} (dev opt-in / e2e — see {@code FemmeDataInitializer}). There is no
- * {@code tenantId} here — a Platform Admin is genuinely tenant-independent (unlike the legacy
- * tenant-bound system-admin operator that HU-36 retired). A real, UI-driven bootstrap flow for
- * production is HU-57's scope, not this one.
+ * HU-57: email/password for the very first {@code PLATFORM_ADMIN} user, created once by {@code
+ * PlatformAdminBootstrap} the first time the system boots with zero {@code PLATFORM_ADMIN} users in
+ * the database — see the PRD's "Sin seed hardcodeado" exception. There is no {@code tenantId} here
+ * — a Platform Admin is genuinely tenant-independent (unlike the legacy tenant-bound system-admin
+ * operator that HU-36 retired).
+ *
+ * <p>Deliberately no default values: per HU-57 AC-1 these must come only from the environment
+ * ({@code APP_FEMME_PLATFORM_ADMIN_EMAIL} / {@code APP_FEMME_PLATFORM_ADMIN_PASSWORD}, bound via
+ * Spring Boot's standard relaxed env-var binding — no property placeholder needed), never a
+ * hardcoded value in code. If either is left unset when the bootstrap actually needs to run, {@code
+ * PlatformAdminBootstrap} logs an error and skips creating the user rather than falling back to an
+ * insecure literal.
  */
 @ConfigurationProperties(prefix = "app.femme.platform-admin")
 public class FemmePlatformAdminProperties {
 
-  private String email = "platform-admin@pelu";
+  private String email;
 
-  private String password = ".The.Platform@admin.2026";
+  private String password;
 
   public String getEmail() {
     return email;
