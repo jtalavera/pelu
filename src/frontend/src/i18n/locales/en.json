@@ -153,7 +153,8 @@
         "dashboard": "Dashboard",
         "tenants": "Tenants",
         "tiers": "Tiers",
-        "featureFlags": "Feature flags"
+        "featureFlags": "Feature flags",
+        "import": "Data import"
       },
       "dashboard": {
         "title": "Platform Admin",
@@ -297,6 +298,46 @@
           "toggleAria": "Include {{key}} in this tier by default",
           "lastChange": "Last change: {{date}} by {{email}} — {{previous}} → {{next}}"
         }
+      },
+      "import": {
+        "title": "Data import",
+        "lead": "Standard Excel column templates for the entities a Platform Admin can import for a tenant during onboarding.",
+        "loading": "Loading…",
+        "loadError": "Could not load the import templates.",
+        "errorTitle": "Error",
+        "fileFormatNote": "Only .xlsx files are accepted. Row 1 must contain exactly these column headers (not case-sensitive, extra leading/trailing spaces are ignored). If a required column is missing, the whole file is rejected before any row is processed.",
+        "entityTabs": {
+          "services": "Services",
+          "clients": "Clients",
+          "professionals": "Professionals"
+        },
+        "colColumn": "Column",
+        "colRequirement": "Requirement",
+        "colDescription": "Description",
+        "required": "Required",
+        "optional": "Optional",
+        "columns": {
+          "categoria": "Service category name. Created automatically in the tenant if it doesn't exist yet.",
+          "nombre": "Service name.",
+          "precio": "Price in Guaraníes, as a whole number with no thousands separators (e.g. 150000).",
+          "duracion_minutos": "Duration in minutes, a positive whole number.",
+          "impuesto": "Tax name to associate with the service. Leave empty to create the service with no tax.",
+          "activo": "SI or NO. Defaults to SI when left empty.",
+          "nombre_completo": "Full name.",
+          "telefono": "Phone number.",
+          "email": "Email address.",
+          "ruc": "RUC (tax ID).",
+          "documento_identidad": "Identity document number (e.g. cédula), for clients without a RUC.",
+          "direccion": "Address."
+        },
+        "checkSectionTitle": "Check a file's headers",
+        "checkSectionLead": "Verify a candidate file's column headers against this template before using it, without importing any data.",
+        "fileLabel": "File (.xlsx)",
+        "checkButton": "Check headers",
+        "checking": "Checking…",
+        "checkFileRequired": "Choose an .xlsx file.",
+        "checkValid": "The headers are valid for the {{entity}} template.",
+        "checkMissingColumns": "Missing required columns: {{columns}}."
       }
     },
     "dashboard": {
@@ -1041,6 +1082,9 @@
       "SIFEN_CERT_INVALID_PASSWORD": "Incorrect password for the certificate file.",
       "SIFEN_CERT_INVALID_FILE": "The file is not a valid .p12 certificate or is corrupted.",
       "SIFEN_CERT_FILE_TOO_LARGE": "The certificate file is too large.",
+      "INVALID_FILE_EXTENSION": "Only .xlsx files are accepted.",
+      "CORRUPT_FILE": "The file could not be read. It may be corrupted or not a valid .xlsx file.",
+      "IMPORT_ENTITY_NOT_FOUND": "Unknown import entity.",
       "SIFEN_CERT_INVALID_KEY_SIZE": "The certificate's RSA key must be 2048 or 4096 bits (Manual Técnico V150, Tabla E). Request a compliant certificate from your certification authority.",
       "SIFEN_CERT_MISSING_CLIENT_AUTH": "The certificate is missing the \"TLS Web Client Authentication\" (clientAuth) extended key usage required by Manual Técnico V150, Tabla E. Request a certificate issued for client authentication.",
       "SIFEN_NO_VALID_CERTIFICATE": "This action requires a valid SIFEN certificate. Upload one in Settings → SIFEN.",

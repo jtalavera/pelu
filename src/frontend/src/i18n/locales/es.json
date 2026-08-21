@@ -153,7 +153,8 @@
         "dashboard": "Panel",
         "tenants": "Tenants",
         "tiers": "Tiers",
-        "featureFlags": "Funcionalidades"
+        "featureFlags": "Funcionalidades",
+        "import": "Importación de datos"
       },
       "dashboard": {
         "title": "Platform Admin",
@@ -297,6 +298,46 @@
           "toggleAria": "Incluir {{key}} en este tier por defecto",
           "lastChange": "Último cambio: {{date}} por {{email}} — {{previous}} → {{next}}"
         }
+      },
+      "import": {
+        "title": "Importación de datos",
+        "lead": "Formato estándar de columnas Excel para las entidades que un Platform Admin puede importar al dar de alta un tenant.",
+        "loading": "Cargando…",
+        "loadError": "No se pudieron cargar las plantillas de importación.",
+        "errorTitle": "Error",
+        "fileFormatNote": "Solo se aceptan archivos .xlsx. La primera fila debe contener exactamente estos encabezados (no distingue mayúsculas ni espacios extra al inicio/fin). Si falta una columna obligatoria, se rechaza el archivo completo antes de procesar ninguna fila.",
+        "entityTabs": {
+          "services": "Servicios",
+          "clients": "Clientes",
+          "professionals": "Profesionales"
+        },
+        "colColumn": "Columna",
+        "colRequirement": "Requerimiento",
+        "colDescription": "Descripción",
+        "required": "Obligatoria",
+        "optional": "Opcional",
+        "columns": {
+          "categoria": "Nombre de la categoría del servicio. Se crea automáticamente en el tenant si todavía no existe.",
+          "nombre": "Nombre del servicio.",
+          "precio": "Precio en guaraníes, como número entero y sin separadores de miles (p. ej. 150000).",
+          "duracion_minutos": "Duración en minutos, número entero positivo.",
+          "impuesto": "Nombre del impuesto a asociar al servicio. Dejar vacío para crear el servicio sin impuesto.",
+          "activo": "SI o NO. Por defecto SI si se deja vacío.",
+          "nombre_completo": "Nombre completo.",
+          "telefono": "Número de teléfono.",
+          "email": "Dirección de correo electrónico.",
+          "ruc": "RUC (identificación tributaria).",
+          "documento_identidad": "Número de documento de identidad (p. ej. cédula), para clientes sin RUC.",
+          "direccion": "Dirección."
+        },
+        "checkSectionTitle": "Verificar encabezados de un archivo",
+        "checkSectionLead": "Verificá los encabezados de columna de un archivo candidato contra esta plantilla antes de usarlo, sin importar ningún dato.",
+        "fileLabel": "Archivo (.xlsx)",
+        "checkButton": "Verificar encabezados",
+        "checking": "Verificando…",
+        "checkFileRequired": "Elegí un archivo .xlsx.",
+        "checkValid": "Los encabezados son válidos para la plantilla de {{entity}}.",
+        "checkMissingColumns": "Faltan columnas obligatorias: {{columns}}."
       }
     },
     "dashboard": {
@@ -1045,6 +1086,9 @@
       "SIFEN_CERT_FILE_TOO_LARGE": "El archivo del certificado es demasiado grande.",
       "SIFEN_CERT_INVALID_KEY_SIZE": "La clave RSA del certificado debe ser de 2048 o 4096 bits (Manual Técnico V150, Tabla E). Solicitá un certificado conforme a tu autoridad certificadora.",
       "SIFEN_CERT_MISSING_CLIENT_AUTH": "Al certificado le falta el uso extendido de clave \"TLS Web Client Authentication\" (clientAuth) requerido por el Manual Técnico V150, Tabla E. Solicitá un certificado emitido para autenticación de cliente.",
+      "INVALID_FILE_EXTENSION": "Solo se aceptan archivos .xlsx.",
+      "CORRUPT_FILE": "No se pudo leer el archivo. Puede estar corrupto o no ser un .xlsx válido.",
+      "IMPORT_ENTITY_NOT_FOUND": "Entidad de importación desconocida.",
       "SIFEN_NO_VALID_CERTIFICATE": "Esta acción requiere un certificado vigente de SIFEN. Cargá uno en Configuración → SIFEN.",
       "SIFEN_ISSUER_RUC_INVALID": "Configurá un RUC válido del negocio en Configuración → Datos del negocio antes de emitir facturas SIFEN.",
       "SIFEN_ISSUER_ADDRESS_MISSING": "Configurá la dirección del negocio en Configuración → Datos del negocio antes de emitir facturas SIFEN.",
