@@ -9,8 +9,10 @@ import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminResponse;
+import com.cursorpoc.backend.web.dto.TenantUserResponse;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -109,5 +111,22 @@ public class PlatformUserAdminService {
         "tenant admin created tenantId={} userId={} invitationSent=true", tenantId, user.getId());
 
     return new CreateTenantAdminResponse(user.getId(), user.getEmail(), true, raw);
+  }
+
+  /**
+   * HU-42 AC-3: lists every user (admins and professionals with login access) assigned to a tenant,
+   * so the Platform Admin can confirm that more than one {@code ADMIN} was assigned (AC-1) —
+   * repeating {@link #createTenantAdmin} has no artificial cap — and that each keeps independent
+   * credentials (AC-4, verified end-to-end via login, not by this read-only listing).
+   */
+  @Transactional(readOnly = true)
+  public List<TenantUserResponse> listTenantUsers(Long tenantId) {
+    if (!tenantRepository.existsById(tenantId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND");
+    }
+    return appUserRepository.findByTenant_IdOrderByRoleAscEmailAsc(tenantId).stream()
+        .map(
+            u -> new TenantUserResponse(u.getId(), u.getEmail(), u.getRole().name(), u.isEnabled()))
+        .toList();
   }
 }

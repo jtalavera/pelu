@@ -15,12 +15,14 @@ import {
 import {
   createTenant,
   createTenantAdmin,
+  listTenantAdmins,
   listTenantsPaged,
   listTiers,
   updateTenant,
   updateTenantStatus,
   type PlatformTenant,
   type TenantStatus,
+  type TenantUser,
   type TierOption,
 } from "../api/platformTenants";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
@@ -103,6 +105,12 @@ export default function PlatformTenantsPage() {
   const [adminSaveError, setAdminSaveError] = useState<string | null>(null);
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminInviteSuccessEmail, setAdminInviteSuccessEmail] = useState<string | null>(null);
+
+  // HU-42 AC-3: list of every user (admins and professionals with access) assigned to the tenant
+  // currently open in the edit dialog — proves AC-1 (no cap on admins) has actual, visible effect.
+  const [tenantUsers, setTenantUsers] = useState<TenantUser[] | null>(null);
+  const [tenantUsersLoading, setTenantUsersLoading] = useState(false);
+  const [tenantUsersError, setTenantUsersError] = useState<string | null>(null);
 
   const loadTenants = useCallback(
     async (page: number, size: number, q: string) => {
@@ -212,6 +220,26 @@ export default function PlatformTenantsPage() {
     }
   }
 
+  // HU-42 AC-3: (re)loads the list of every user assigned to a tenant — called when the edit
+  // dialog opens and again after a successful admin invite so the new admin appears immediately.
+  const loadTenantUsers = useCallback(
+    async (tenantId: number) => {
+      setTenantUsersLoading(true);
+      setTenantUsersError(null);
+      try {
+        const users = await listTenantAdmins(tenantId);
+        setTenantUsers(users);
+      } catch (err) {
+        setTenantUsersError(
+          translateApiError(err, t, "femme.platform.tenants.admins.listError"),
+        );
+      } finally {
+        setTenantUsersLoading(false);
+      }
+    },
+    [t],
+  );
+
   // HU-38 AC-1: opens the edit form prefilled with this tenant's current name/domain/tier.
   function openEdit(tenant: PlatformTenant) {
     setEditingTenant(tenant);
@@ -229,7 +257,10 @@ export default function PlatformTenantsPage() {
     setAdminFormError(null);
     setAdminSaveError(null);
     setAdminInviteSuccessEmail(null);
+    setTenantUsers(null);
+    setTenantUsersError(null);
     setEditModalOpen(true);
+    void loadTenantUsers(tenant.id);
   }
 
   const onRowKeyOpenEdit =
@@ -355,6 +386,9 @@ export default function PlatformTenantsPage() {
       const result = await createTenantAdmin(editingTenant.id, emailTrim);
       setAdminEmail("");
       setAdminInviteSuccessEmail(result.email);
+      // HU-42 AC-1/AC-3: refresh the listing so the newly invited admin appears immediately —
+      // proving the invite flow can be repeated with no artificial cap.
+      void loadTenantUsers(editingTenant.id);
     } catch (e) {
       const rawCode = parseApiErrorMessage(e);
       if (rawCode === "TENANT_ADMIN_EMAIL_DUPLICATE") {
@@ -791,6 +825,79 @@ export default function PlatformTenantsPage() {
                   {t("femme.platform.tenants.admins.sectionLead")}
                 </Text>
               </div>
+
+              {/* HU-42 AC-3: every user (admins and professionals with access) currently assigned
+                  to this tenant — proves AC-1 (no cap on admins) with a visible, growing list. */}
+              <div data-testid="tenant-users-list" className="flex flex-col gap-1.5">
+                {tenantUsersLoading ? (
+                  <Text variant="small" className="text-[var(--color-ink-3)]">
+                    {t("femme.platform.tenants.admins.listLoading")}
+                  </Text>
+                ) : tenantUsersError ? (
+                  <Alert
+                    variant="destructive"
+                    style={{ fontSize: 12, padding: "8px 12px" }}
+                  >
+                    {tenantUsersError}
+                  </Alert>
+                ) : tenantUsers && tenantUsers.length > 0 ? (
+                  tenantUsers.map((u) => (
+                    <div
+                      key={u.userId}
+                      data-testid={`tenant-user-row-${u.userId}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)]"
+                      style={{ background: "var(--color-white)", padding: "6px 10px" }}
+                    >
+                      <Text variant="small" className="min-w-0 truncate text-[var(--color-ink)]">
+                        {u.email}
+                      </Text>
+                      <div className="flex items-center gap-2">
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 500,
+                            padding: "2px 8px",
+                            borderRadius: "var(--radius-pill)",
+                            background:
+                              u.role === "ADMIN" ? "var(--color-mauve-lt)" : "var(--color-stone)",
+                            color:
+                              u.role === "ADMIN"
+                                ? "var(--color-mauve-dk)"
+                                : "var(--color-ink-2)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {u.role === "ADMIN"
+                            ? t("femme.platform.tenants.admins.roleAdmin")
+                            : t("femme.platform.tenants.admins.roleProfessional")}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 500,
+                            padding: "2px 8px",
+                            borderRadius: "var(--radius-pill)",
+                            background: u.enabled
+                              ? "var(--color-success-lt)"
+                              : "var(--color-warning-lt)",
+                            color: u.enabled ? "var(--color-success)" : "var(--color-warning)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {u.enabled
+                            ? t("femme.platform.tenants.admins.statusActive")
+                            : t("femme.platform.tenants.admins.statusPendingActivation")}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <Text variant="small" className="text-[var(--color-ink-3)]">
+                    {t("femme.platform.tenants.admins.listEmpty")}
+                  </Text>
+                )}
+              </div>
+
               {adminInviteSuccessEmail ? (
                 <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
                   {t("femme.platform.tenants.admins.inviteSuccess", {

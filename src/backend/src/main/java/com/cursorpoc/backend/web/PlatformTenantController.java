@@ -11,6 +11,7 @@ import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
 import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
+import com.cursorpoc.backend.web.dto.TenantUserResponse;
 import com.cursorpoc.backend.web.dto.TierOptionResponse;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -31,11 +32,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants) and HU-41 (Épica C — Gestión de usuarios y
- * admins de tenant): Platform Admin creates, lists, edits, and suspends/reactivates tenants, and
- * invites their first/next tenant {@code ADMIN} users. These routes are tenant-independent (no
- * {@code tid} on the caller's token, see HU-34), so logging identifies the *acting* Platform Admin
- * user instead of a tenant id.
+ * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants) and HU-41/HU-42 (Épica C — Gestión de usuarios y
+ * admins de tenant): Platform Admin creates, lists, edits, and suspends/reactivates tenants,
+ * invites tenant {@code ADMIN} users — any number of them, HU-42 AC-1 — and lists everyone assigned
+ * to a tenant. These routes are tenant-independent (no {@code tid} on the caller's token, see
+ * HU-34), so logging identifies the *acting* Platform Admin user instead of a tenant id.
  */
 @RestController
 @RequestMapping("/api/platform/tenants")
@@ -199,6 +200,40 @@ public class PlatformTenantController {
     } catch (ResponseStatusException ex) {
       log.error(
           "POST /api/platform/tenants/{}/admins adminUserId={} tenantId={} status={} error={}",
+          id,
+          principal.getUserId(),
+          id,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /**
+   * HU-42 AC-3: lists every user (admins and professionals with login access) assigned to this
+   * tenant, from its detail — surfacing that a tenant can have more than one {@code ADMIN} (AC-1).
+   */
+  @GetMapping("/{id}/admins")
+  public List<TenantUserResponse> listAdmins(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") Long id) {
+    requirePlatformAdmin(principal, "GET /api/platform/tenants/{id}/admins");
+    log.info(
+        "GET /api/platform/tenants/{}/admins adminUserId={} tenantId={}",
+        id,
+        principal.getUserId(),
+        id);
+    try {
+      List<TenantUserResponse> response = platformUserAdminService.listTenantUsers(id);
+      log.info(
+          "GET /api/platform/tenants/{}/admins adminUserId={} tenantId={} status=200 count={}",
+          id,
+          principal.getUserId(),
+          id,
+          response.size());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/platform/tenants/{}/admins adminUserId={} tenantId={} status={} error={}",
           id,
           principal.getUserId(),
           id,

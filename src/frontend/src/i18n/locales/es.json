@@ -220,7 +220,14 @@
           "inviting": "Enviando invitación…",
           "inviteSuccess": "Invitación enviada a {{email}}.",
           "inviteError": "No se pudo enviar la invitación.",
-          "emailRequired": "Ingresá el email del nuevo administrador."
+          "emailRequired": "Ingresá el email del nuevo administrador.",
+          "listLoading": "Cargando usuarios…",
+          "listError": "No se pudo cargar los usuarios del tenant.",
+          "listEmpty": "Todavía no hay usuarios asignados a este tenant.",
+          "roleAdmin": "Admin",
+          "roleProfessional": "Profesional",
+          "statusActive": "Activo",
+          "statusPendingActivation": "Activación pendiente"
         }
       }
     },

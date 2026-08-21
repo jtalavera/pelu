@@ -99,3 +99,20 @@ export function createTenantAdmin(
     email,
   });
 }
+
+/** HU-42 AC-3: one user (admin or professional with access) assigned to a tenant. */
+export type TenantUser = {
+  userId: number;
+  email: string;
+  role: "ADMIN" | "PROFESSIONAL";
+  enabled: boolean;
+};
+
+/**
+ * HU-42 AC-3: lists every user assigned to a tenant, so the Platform Admin can see all admins
+ * currently assigned to it (no artificial one-admin limit, AC-1) alongside professionals with
+ * login access.
+ */
+export function listTenantAdmins(tenantId: number): Promise<TenantUser[]> {
+  return femmeJson<TenantUser[]>(`/api/platform/tenants/${tenantId}/admins`);
+}

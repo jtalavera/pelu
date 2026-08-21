@@ -220,7 +220,14 @@
           "inviting": "Sending invitation…",
           "inviteSuccess": "Invitation sent to {{email}}.",
           "inviteError": "Could not send the invitation.",
-          "emailRequired": "Enter the new administrator's email."
+          "emailRequired": "Enter the new administrator's email.",
+          "listLoading": "Loading users…",
+          "listError": "Could not load the tenant's users.",
+          "listEmpty": "No users assigned to this tenant yet.",
+          "roleAdmin": "Admin",
+          "roleProfessional": "Professional",
+          "statusActive": "Active",
+          "statusPendingActivation": "Pending activation"
         }
       }
     },
