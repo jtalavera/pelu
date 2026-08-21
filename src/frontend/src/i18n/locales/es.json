@@ -227,7 +227,18 @@
           "roleAdmin": "Admin",
           "roleProfessional": "Profesional",
           "statusActive": "Activo",
-          "statusPendingActivation": "Activación pendiente"
+          "statusPendingActivation": "Activación pendiente",
+          "statusDisabled": "Desactivado",
+          "deactivateAction": "Desactivar",
+          "reactivateAction": "Reactivar",
+          "statusActionSaving": "Guardando…",
+          "deactivateDialogTitle": "Desactivar usuario",
+          "deactivateDialogDescription": "{{email}} no va a poder iniciar sesión, y cualquier sesión abierta se cerrará en su próxima petición. El resto de los usuarios del tenant no se ven afectados.",
+          "reactivateDialogTitle": "Reactivar usuario",
+          "reactivateDialogDescription": "{{email}} va a poder iniciar sesión nuevamente.",
+          "statusActionError": "No se pudo actualizar el estado del usuario. Intentá nuevamente.",
+          "deactivateSuccess": "{{email}} fue desactivado.",
+          "reactivateSuccess": "{{email}} fue reactivado."
         }
       }
     },
@@ -935,6 +946,8 @@
       "TENANT_ADMIN_EMAIL_REQUIRED": "Ingresá el email del nuevo administrador.",
     "TENANT_ADMIN_EMAIL_DUPLICATE": "Ya existe un usuario con ese email para este tenant.",
     "TENANT_STATUS_INVALID": "Estado de tenant inválido.",
+      "TENANT_USER_NOT_FOUND": "No se encontró ese usuario para este tenant.",
+      "APP_USER_STATUS_REQUIRED": "El estado del usuario es obligatorio.",
       "TIER_NOT_FOUND": "Ese tier no existe.",
       "FLAG_NOT_FOUND": "Esa funcionalidad (feature flag) no existe.",
       "INVALID_FLAG_KEY": "Nombre de funcionalidad inválido. Usá mayúsculas, números y guiones bajos (ej.: GUIDED_TOUR).",

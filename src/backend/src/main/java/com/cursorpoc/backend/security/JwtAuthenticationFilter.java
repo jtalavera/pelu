@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.security;
 
 import com.cursorpoc.backend.domain.enums.TenantStatus;
+import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -42,10 +43,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtService jwtService;
   private final TenantRepository tenantRepository;
+  private final AppUserRepository appUserRepository;
 
-  public JwtAuthenticationFilter(JwtService jwtService, TenantRepository tenantRepository) {
+  public JwtAuthenticationFilter(
+      JwtService jwtService,
+      TenantRepository tenantRepository,
+      AppUserRepository appUserRepository) {
     this.jwtService = jwtService;
     this.tenantRepository = tenantRepository;
+    this.appUserRepository = appUserRepository;
   }
 
   @Override
@@ -81,6 +87,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                       request.getRequestURI());
                   return;
                 }
+                // HU-43 AC-2/AC-4: mirrors the tenant-suspended check above, but per user — a
+                // token stops authenticating the moment its own AppUser is deactivated, even
+                // though the JWT itself is still validly signed/unexpired. This is what actually
+                // invalidates an already-open session "on the next request" rather than waiting
+                // for the token to expire naturally, and it doesn't affect any other user of the
+                // same tenant.
+                if (isUserDisabled(principal.getUserId())) {
+                  log.warn(
+                      "request rejected: user disabled userId={} path={}",
+                      principal.getUserId(),
+                      request.getRequestURI());
+                  return;
+                }
                 UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(
                         principal, null, principal.getAuthorities());
@@ -96,6 +115,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         .findById(tenantId)
         .map(t -> t.getStatus() == TenantStatus.SUSPENDED)
         .orElse(false);
+  }
+
+  private boolean isUserDisabled(long userId) {
+    return appUserRepository.findById(userId).map(u -> !u.isEnabled()).orElse(false);
   }
 
   private static boolean isTenantOptionalPath(String requestUri) {

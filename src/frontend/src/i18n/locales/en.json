@@ -227,7 +227,18 @@
           "roleAdmin": "Admin",
           "roleProfessional": "Professional",
           "statusActive": "Active",
-          "statusPendingActivation": "Pending activation"
+          "statusPendingActivation": "Pending activation",
+          "statusDisabled": "Disabled",
+          "deactivateAction": "Deactivate",
+          "reactivateAction": "Reactivate",
+          "statusActionSaving": "Saving…",
+          "deactivateDialogTitle": "Deactivate user",
+          "deactivateDialogDescription": "{{email}} won't be able to log in, and any open session will be closed on their next request. The rest of the tenant's users are not affected.",
+          "reactivateDialogTitle": "Reactivate user",
+          "reactivateDialogDescription": "{{email}} will be able to log in again.",
+          "statusActionError": "Couldn't update the user's status. Please try again.",
+          "deactivateSuccess": "{{email}} was deactivated.",
+          "reactivateSuccess": "{{email}} was reactivated."
         }
       }
     },
@@ -935,6 +946,8 @@
       "TENANT_ADMIN_EMAIL_REQUIRED": "Enter the new administrator's email.",
     "TENANT_ADMIN_EMAIL_DUPLICATE": "A user with that email already exists for this tenant.",
     "TENANT_STATUS_INVALID": "Invalid tenant status.",
+      "TENANT_USER_NOT_FOUND": "That user was not found for this tenant.",
+      "APP_USER_STATUS_REQUIRED": "The user status is required.",
       "TIER_NOT_FOUND": "That tier does not exist.",
       "FLAG_NOT_FOUND": "That feature flag does not exist.",
       "INVALID_FLAG_KEY": "Invalid feature flag name. Use uppercase letters, digits, and underscores (e.g. GUIDED_TOUR).",

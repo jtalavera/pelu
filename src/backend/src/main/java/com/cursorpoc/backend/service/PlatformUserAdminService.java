@@ -1,16 +1,22 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.AppUserActivationToken;
+import com.cursorpoc.backend.domain.AppUserStatusChange;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.AppUserStatusChangeRepository;
+import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.web.dto.AppUserStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminResponse;
 import com.cursorpoc.backend.web.dto.TenantUserResponse;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
@@ -25,12 +31,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-41 (Épica C — Gestión de usuarios y admins de tenant): Platform Admin creates a new
+ * HU-41/HU-43 (Épica C — Gestión de usuarios y admins de tenant): Platform Admin creates a new
  * tenant-scoped {@code ADMIN} user and invites them to activate their own account. Reuses the same
  * activation-link entity/page pattern as {@code ProfessionalActivationToken}/{@code ActivatePage}
  * (AC-4) — {@link AuthService#validateActivationToken} and {@link AuthService#activateAccount}
  * transparently handle both professional- and app-user-scoped tokens, so the frontend needs no
- * branching between the two invite flows.
+ * branching between the two invite flows. HU-43 adds the ability to deactivate/reactivate a single
+ * tenant user without affecting the rest of the tenant's admins.
  */
 @Service
 public class PlatformUserAdminService {
@@ -43,20 +50,29 @@ public class PlatformUserAdminService {
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
   private final AppUserActivationTokenRepository activationTokenRepository;
+  private final ProfessionalActivationTokenRepository professionalActivationTokenRepository;
+  private final AppUserStatusChangeRepository appUserStatusChangeRepository;
   private final PasswordEncoder passwordEncoder;
   private final EmailService emailService;
+  private final FemmeTimeProperties timeProperties;
 
   public PlatformUserAdminService(
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       AppUserActivationTokenRepository activationTokenRepository,
+      ProfessionalActivationTokenRepository professionalActivationTokenRepository,
+      AppUserStatusChangeRepository appUserStatusChangeRepository,
       PasswordEncoder passwordEncoder,
-      EmailService emailService) {
+      EmailService emailService,
+      FemmeTimeProperties timeProperties) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.activationTokenRepository = activationTokenRepository;
+    this.professionalActivationTokenRepository = professionalActivationTokenRepository;
+    this.appUserStatusChangeRepository = appUserStatusChangeRepository;
     this.passwordEncoder = passwordEncoder;
     this.emailService = emailService;
+    this.timeProperties = timeProperties;
   }
 
   /**
@@ -125,8 +141,89 @@ public class PlatformUserAdminService {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND");
     }
     return appUserRepository.findByTenant_IdOrderByRoleAscEmailAsc(tenantId).stream()
-        .map(
-            u -> new TenantUserResponse(u.getId(), u.getEmail(), u.getRole().name(), u.isEnabled()))
+        .map(this::toTenantUserResponse)
         .toList();
+  }
+
+  /**
+   * HU-43 AC-1/AC-3: flips a single tenant user's {@code enabled} flag. AC-2/AC-4 (login blocked,
+   * open session invalidated on the next request) are enforced generically wherever {@code
+   * AppUser#isEnabled} is already checked — {@link AuthService#login} and {@code
+   * JwtAuthenticationFilter} — so this method only needs to persist the new value. AC-5: no data is
+   * deleted or reassigned, only this one boolean flag changes. A no-op (value unchanged) skips the
+   * audit write, same convention as {@code TenantAdminService#updateStatus}.
+   */
+  @Transactional
+  public TenantUserResponse updateUserStatus(
+      Long tenantId,
+      Long userId,
+      AppUserStatusUpdateRequest request,
+      long changedByUserId,
+      String changedByEmail) {
+    if (!tenantRepository.existsById(tenantId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND");
+    }
+    if (request.enabled() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "APP_USER_STATUS_REQUIRED");
+    }
+    AppUser user =
+        appUserRepository
+            .findById(userId)
+            .filter(u -> tenantId.equals(u.getTenantId()))
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_USER_NOT_FOUND"));
+
+    boolean previousEnabled = user.isEnabled();
+    boolean newEnabled = request.enabled();
+    if (previousEnabled != newEnabled) {
+      user.setEnabled(newEnabled);
+      appUserRepository.save(user);
+      recordStatusChange(
+          user.getId(), previousEnabled, newEnabled, changedByUserId, changedByEmail);
+    }
+
+    return toTenantUserResponse(user);
+  }
+
+  /**
+   * HU-43 — PRD "Auditoría": same "single last result" upsert as {@code
+   * TenantAdminService#recordStatusChange}, one row per app user.
+   */
+  private void recordStatusChange(
+      Long appUserId,
+      boolean previousEnabled,
+      boolean newEnabled,
+      long changedByUserId,
+      String changedByEmail) {
+    AppUserStatusChange change =
+        appUserStatusChangeRepository
+            .findByAppUserId(appUserId)
+            .orElseGet(
+                () -> {
+                  AppUserStatusChange c = new AppUserStatusChange();
+                  c.setAppUserId(appUserId);
+                  return c;
+                });
+    change.setPreviousEnabled(previousEnabled);
+    change.setNewEnabled(newEnabled);
+    change.setChangedAt(LocalDateTime.now(timeProperties.zoneId()));
+    change.setChangedByUserId(changedByUserId);
+    change.setChangedByEmail(changedByEmail);
+    appUserStatusChangeRepository.save(change);
+  }
+
+  private TenantUserResponse toTenantUserResponse(AppUser u) {
+    return new TenantUserResponse(
+        u.getId(), u.getEmail(), u.getRole().name(), u.isEnabled(), hasActivated(u));
+  }
+
+  /**
+   * HU-43: whether this user ever completed an activation link — either the {@code ADMIN} invite
+   * flow ({@link #createTenantAdmin}) or the professional-access-grant flow ({@code
+   * AuthService#grantProfessionalAccess}), whichever applies to this user's role.
+   */
+  private boolean hasActivated(AppUser u) {
+    return activationTokenRepository.existsByAppUser_IdAndUsedTrue(u.getId())
+        || professionalActivationTokenRepository.existsByProfessional_User_IdAndUsedTrue(u.getId());
   }
 }

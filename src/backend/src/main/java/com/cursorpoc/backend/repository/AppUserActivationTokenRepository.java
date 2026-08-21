@@ -11,6 +11,13 @@ public interface AppUserActivationTokenRepository
 
   Optional<AppUserActivationToken> findByTokenHashAndUsedFalse(String tokenHash);
 
+  /**
+   * HU-43: distinguishes "never activated" (still {@code PENDING_ACTIVATION}) from "deactivated
+   * after having activated" ({@code DISABLED}) for the tenant users listing — both states share the
+   * same {@code AppUser#enabled == false}.
+   */
+  boolean existsByAppUser_IdAndUsedTrue(Long appUserId);
+
   /** HU-44: reinviting/resending must invalidate any previously issued link for this user. */
   @Modifying
   @Query(

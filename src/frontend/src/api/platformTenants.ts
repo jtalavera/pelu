@@ -100,12 +100,17 @@ export function createTenantAdmin(
   });
 }
 
-/** HU-42 AC-3: one user (admin or professional with access) assigned to a tenant. */
+/**
+ * HU-42 AC-3: one user (admin or professional with access) assigned to a tenant. HU-43: `activated`
+ * distinguishes, when `enabled` is false, a user who never completed their invite (still "pending
+ * activation") from one who did and was later deactivated (genuinely "disabled").
+ */
 export type TenantUser = {
   userId: number;
   email: string;
   role: "ADMIN" | "PROFESSIONAL";
   enabled: boolean;
+  activated: boolean;
 };
 
 /**
@@ -115,4 +120,19 @@ export type TenantUser = {
  */
 export function listTenantAdmins(tenantId: number): Promise<TenantUser[]> {
   return femmeJson<TenantUser[]>(`/api/platform/tenants/${tenantId}/admins`);
+}
+
+/**
+ * HU-43 AC-1/AC-3: deactivates or reactivates a single tenant user (admin or professional with
+ * access), without affecting the rest of the tenant's users.
+ */
+export function updateTenantUserStatus(
+  tenantId: number,
+  userId: number,
+  enabled: boolean,
+): Promise<TenantUser> {
+  return femmePatchJson<TenantUser>(
+    `/api/platform/tenants/${tenantId}/admins/${userId}/status`,
+    { enabled },
+  );
 }

@@ -7,9 +7,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
+import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
+import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -32,11 +34,17 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * <p>HU-40 AC-3: also covers the per-request tenant-status check — a tenant-scoped token stops
  * authenticating as soon as its tenant is {@code SUSPENDED}, and resumes authenticating as soon as
  * it's {@code ACTIVE} again, without a new token.
+ *
+ * <p>HU-43 AC-2/AC-4: also covers the per-request user-status check — a token stops authenticating
+ * as soon as its own {@code AppUser} is deactivated (session invalidated on the next request), and
+ * resumes authenticating as soon as it's reactivated, without a new token; deactivating one user
+ * doesn't affect any other token.
  */
 class JwtAuthenticationFilterTest {
 
   private JwtService jwtService;
   private TenantRepository tenantRepository;
+  private AppUserRepository appUserRepository;
   private JwtAuthenticationFilter filter;
 
   @BeforeEach
@@ -46,11 +54,16 @@ class JwtAuthenticationFilterTest {
     props.setAccessTokenTtlSeconds(28_800L);
     jwtService = new JwtService(props);
     tenantRepository = mock(TenantRepository.class);
+    appUserRepository = mock(AppUserRepository.class);
     // Default: every tenant looked up is ACTIVE, unless a test overrides it below (HU-40 AC-3).
     Tenant activeTenant = new Tenant();
     activeTenant.setStatus(TenantStatus.ACTIVE);
     lenient().when(tenantRepository.findById(anyLong())).thenReturn(Optional.of(activeTenant));
-    filter = new JwtAuthenticationFilter(jwtService, tenantRepository);
+    // Default: every user looked up is enabled, unless a test overrides it below (HU-43 AC-2/AC-4).
+    AppUser enabledUser = new AppUser();
+    enabledUser.setEnabled(true);
+    lenient().when(appUserRepository.findById(anyLong())).thenReturn(Optional.of(enabledUser));
+    filter = new JwtAuthenticationFilter(jwtService, tenantRepository, appUserRepository);
   }
 
   @AfterEach
@@ -152,6 +165,64 @@ class JwtAuthenticationFilterTest {
     var auth = SecurityContextHolder.getContext().getAuthentication();
     assertThat(auth).isNotNull();
     assertThat(((FemmeUserPrincipal) auth.getPrincipal()).getTenantId()).isEqualTo(7L);
+  }
+
+  // HU-43 AC-2/AC-4: a token stops authenticating the moment its own AppUser is deactivated, even
+  // though the JWT itself is still validly signed/unexpired — this is what invalidates an
+  // already-open session on the very next request.
+  @Test
+  void tenantToken_doesNotAuthenticate_whenUserDisabled() throws Exception {
+    AppUser disabled = new AppUser();
+    disabled.setEnabled(false);
+    when(appUserRepository.findById(2L)).thenReturn(Optional.of(disabled));
+
+    String token =
+        jwtService.createAccessToken(
+            2L, 7L, "admin@tenant.test", UserRole.ADMIN, null, Instant.now());
+
+    runFilter(token, "/api/clients");
+
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+  }
+
+  // HU-43 AC-3: reactivating the user (enabled back to true) immediately lets the very same
+  // still-valid token authenticate again — no new login/token needed.
+  @Test
+  void tenantToken_authenticatesAgain_afterUserReactivated() throws Exception {
+    AppUser enabled = new AppUser();
+    enabled.setEnabled(true);
+    when(appUserRepository.findById(2L)).thenReturn(Optional.of(enabled));
+
+    String token =
+        jwtService.createAccessToken(
+            2L, 7L, "admin@tenant.test", UserRole.ADMIN, null, Instant.now());
+
+    runFilter(token, "/api/clients");
+
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    assertThat(auth).isNotNull();
+    assertThat(((FemmeUserPrincipal) auth.getPrincipal()).getTenantId()).isEqualTo(7L);
+  }
+
+  // HU-43 AC-2: deactivating one user doesn't affect another user's token, even within the same
+  // tenant.
+  @Test
+  void tenantToken_stillAuthenticates_forDifferentEnabledUser_whenAnotherUserDisabled()
+      throws Exception {
+    AppUser disabledOther = new AppUser();
+    disabledOther.setEnabled(false);
+    when(appUserRepository.findById(99L)).thenReturn(Optional.of(disabledOther));
+    AppUser enabledSelf = new AppUser();
+    enabledSelf.setEnabled(true);
+    when(appUserRepository.findById(2L)).thenReturn(Optional.of(enabledSelf));
+
+    String token =
+        jwtService.createAccessToken(
+            2L, 7L, "admin@tenant.test", UserRole.ADMIN, null, Instant.now());
+
+    runFilter(token, "/api/clients");
+
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
   }
 
   private String platformAdminToken() {

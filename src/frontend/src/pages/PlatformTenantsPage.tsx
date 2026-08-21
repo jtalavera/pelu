@@ -20,6 +20,7 @@ import {
   listTiers,
   updateTenant,
   updateTenantStatus,
+  updateTenantUserStatus,
   type PlatformTenant,
   type TenantStatus,
   type TenantUser,
@@ -111,6 +112,13 @@ export default function PlatformTenantsPage() {
   const [tenantUsers, setTenantUsers] = useState<TenantUser[] | null>(null);
   const [tenantUsersLoading, setTenantUsersLoading] = useState(false);
   const [tenantUsersError, setTenantUsersError] = useState<string | null>(null);
+
+  // HU-43 AC-1/AC-3: deactivate/reactivate a single user of the tenant currently open in the edit
+  // dialog, from a per-row action in the user list above.
+  const [userStatusTarget, setUserStatusTarget] = useState<TenantUser | null>(null);
+  const [userStatusSaving, setUserStatusSaving] = useState(false);
+  const [userStatusError, setUserStatusError] = useState<string | null>(null);
+  const [userStatusSuccessMessage, setUserStatusSuccessMessage] = useState<string | null>(null);
 
   const loadTenants = useCallback(
     async (page: number, size: number, q: string) => {
@@ -259,6 +267,9 @@ export default function PlatformTenantsPage() {
     setAdminInviteSuccessEmail(null);
     setTenantUsers(null);
     setTenantUsersError(null);
+    setUserStatusTarget(null);
+    setUserStatusError(null);
+    setUserStatusSuccessMessage(null);
     setEditModalOpen(true);
     void loadTenantUsers(tenant.id);
   }
@@ -364,6 +375,51 @@ export default function PlatformTenantsPage() {
       );
     } finally {
       setStatusActionSaving(false);
+    }
+  }
+
+  // HU-43 AC-1/AC-3: opens the confirmation dialog for the opposite action of this user's current
+  // status (Deactivate when enabled, Reactivate when disabled).
+  function openUserStatusConfirm(user: TenantUser) {
+    setUserStatusError(null);
+    setUserStatusSuccessMessage(null);
+    setUserStatusTarget(user);
+  }
+
+  function closeUserStatusConfirm() {
+    setUserStatusTarget(null);
+  }
+
+  // HU-43 AC-1/AC-2/AC-3/AC-4/AC-5: flips one user's enabled flag; on success, refreshes the user
+  // list (so the new status is visible there immediately) and shows a distinct success message for
+  // each direction. Blocking login (AC-2) and invalidating an open session (AC-4) are enforced by
+  // the backend the moment the flag flips — nothing else here is required to make that true.
+  async function confirmUserStatusChange() {
+    if (!editingTenant || !userStatusTarget) {
+      return;
+    }
+    const target = userStatusTarget;
+    const nextEnabled = !target.enabled;
+    setUserStatusError(null);
+    setUserStatusSaving(true);
+    try {
+      await updateTenantUserStatus(editingTenant.id, target.userId, nextEnabled);
+      setUserStatusTarget(null);
+      setUserStatusSuccessMessage(
+        t(
+          nextEnabled
+            ? "femme.platform.tenants.admins.reactivateSuccess"
+            : "femme.platform.tenants.admins.deactivateSuccess",
+          { email: target.email },
+        ),
+      );
+      void loadTenantUsers(editingTenant.id);
+    } catch (e) {
+      setUserStatusError(
+        translateApiError(e, t, "femme.platform.tenants.admins.statusActionError"),
+      );
+    } finally {
+      setUserStatusSaving(false);
     }
   }
 
@@ -872,6 +928,7 @@ export default function PlatformTenantsPage() {
                             : t("femme.platform.tenants.admins.roleProfessional")}
                         </span>
                         <span
+                          data-testid={`tenant-user-status-${u.userId}`}
                           style={{
                             fontSize: 10,
                             fontWeight: 500,
@@ -879,15 +936,36 @@ export default function PlatformTenantsPage() {
                             borderRadius: "var(--radius-pill)",
                             background: u.enabled
                               ? "var(--color-success-lt)"
-                              : "var(--color-warning-lt)",
-                            color: u.enabled ? "var(--color-success)" : "var(--color-warning)",
+                              : u.activated
+                                ? "var(--color-danger-lt)"
+                                : "var(--color-warning-lt)",
+                            color: u.enabled
+                              ? "var(--color-success)"
+                              : u.activated
+                                ? "var(--color-danger)"
+                                : "var(--color-warning)",
                             whiteSpace: "nowrap",
                           }}
                         >
                           {u.enabled
                             ? t("femme.platform.tenants.admins.statusActive")
-                            : t("femme.platform.tenants.admins.statusPendingActivation")}
+                            : u.activated
+                              ? t("femme.platform.tenants.admins.statusDisabled")
+                              : t("femme.platform.tenants.admins.statusPendingActivation")}
                         </span>
+                        {/* HU-43 AC-1/AC-3: deactivate or reactivate this one user, without
+                            affecting the rest of the tenant's users. */}
+                        <Button
+                          type="button"
+                          variant={u.enabled ? "danger" : "secondary"}
+                          className="min-h-11"
+                          style={{ padding: "4px 12px", fontSize: 12 }}
+                          onClick={() => openUserStatusConfirm(u)}
+                        >
+                          {u.enabled
+                            ? t("femme.platform.tenants.admins.deactivateAction")
+                            : t("femme.platform.tenants.admins.reactivateAction")}
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -898,6 +976,24 @@ export default function PlatformTenantsPage() {
                 )}
               </div>
 
+              {userStatusSuccessMessage ? (
+                <Alert
+                  data-testid="tenant-user-status-success"
+                  variant="success"
+                  style={{ fontSize: 12, padding: "8px 12px" }}
+                >
+                  {userStatusSuccessMessage}
+                </Alert>
+              ) : null}
+              {userStatusError ? (
+                <Alert
+                  variant="destructive"
+                  title={t("femme.platform.tenants.errorTitle")}
+                  style={{ fontSize: 12, padding: "8px 12px" }}
+                >
+                  {userStatusError}
+                </Alert>
+              ) : null}
               {adminInviteSuccessEmail ? (
                 <Alert variant="success" style={{ fontSize: 12, padding: "8px 12px" }}>
                   {t("femme.platform.tenants.admins.inviteSuccess", {
@@ -991,6 +1087,38 @@ export default function PlatformTenantsPage() {
           confirmVariant={editingTenant.status === "ACTIVE" ? "danger" : "primary"}
           onCancel={closeStatusConfirm}
           onConfirm={() => void confirmStatusChange()}
+        />
+      ) : null}
+
+      {/* HU-43 AC-1/AC-3: confirm deactivating or reactivating a single tenant user. */}
+      {userStatusTarget ? (
+        <ConfirmDialog
+          open={!!userStatusTarget}
+          title={
+            userStatusTarget.enabled
+              ? t("femme.platform.tenants.admins.deactivateDialogTitle")
+              : t("femme.platform.tenants.admins.reactivateDialogTitle")
+          }
+          description={
+            userStatusTarget.enabled
+              ? t("femme.platform.tenants.admins.deactivateDialogDescription", {
+                  email: userStatusTarget.email,
+                })
+              : t("femme.platform.tenants.admins.reactivateDialogDescription", {
+                  email: userStatusTarget.email,
+                })
+          }
+          cancelLabel={t("femme.platform.tenants.cancel")}
+          confirmLabel={
+            userStatusSaving
+              ? t("femme.platform.tenants.admins.statusActionSaving")
+              : userStatusTarget.enabled
+                ? t("femme.platform.tenants.admins.deactivateAction")
+                : t("femme.platform.tenants.admins.reactivateAction")
+          }
+          confirmVariant={userStatusTarget.enabled ? "danger" : "primary"}
+          onCancel={closeUserStatusConfirm}
+          onConfirm={() => void confirmUserStatusChange()}
         />
       ) : null}
     </div>

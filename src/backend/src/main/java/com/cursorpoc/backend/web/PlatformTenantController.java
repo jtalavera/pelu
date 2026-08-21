@@ -4,6 +4,7 @@ import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.PlatformUserAdminService;
 import com.cursorpoc.backend.service.TenantAdminService;
+import com.cursorpoc.backend.web.dto.AppUserStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminRequest;
 import com.cursorpoc.backend.web.dto.CreateTenantAdminResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
@@ -32,11 +33,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants) and HU-41/HU-42 (Épica C — Gestión de usuarios y
- * admins de tenant): Platform Admin creates, lists, edits, and suspends/reactivates tenants,
- * invites tenant {@code ADMIN} users — any number of them, HU-42 AC-1 — and lists everyone assigned
- * to a tenant. These routes are tenant-independent (no {@code tid} on the caller's token, see
- * HU-34), so logging identifies the *acting* Platform Admin user instead of a tenant id.
+ * HU-37/HU-38/HU-40 (Épica B — Gestión de Tenants) and HU-41/HU-42/HU-43 (Épica C — Gestión de
+ * usuarios y admins de tenant): Platform Admin creates, lists, edits, and suspends/reactivates
+ * tenants, invites tenant {@code ADMIN} users — any number of them, HU-42 AC-1 — lists everyone
+ * assigned to a tenant, and deactivates/reactivates a single tenant user without affecting the rest
+ * (HU-43). These routes are tenant-independent (no {@code tid} on the caller's token, see HU-34),
+ * so logging identifies the *acting* Platform Admin user instead of a tenant id.
  */
 @RestController
 @RequestMapping("/api/platform/tenants")
@@ -237,6 +239,49 @@ public class PlatformTenantController {
           id,
           principal.getUserId(),
           id,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /** HU-43 AC-1/AC-3: Platform Admin deactivates or reactivates a single tenant user. */
+  @PatchMapping("/{id}/admins/{userId}/status")
+  public TenantUserResponse updateAdminStatus(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") Long id,
+      @PathVariable("userId") Long userId,
+      @RequestBody AppUserStatusUpdateRequest request) {
+    requirePlatformAdmin(principal, "PATCH /api/platform/tenants/{id}/admins/{userId}/status");
+    log.info(
+        "PATCH /api/platform/tenants/{}/admins/{}/status adminUserId={} tenantId={} userId={} newEnabled={}",
+        id,
+        userId,
+        principal.getUserId(),
+        id,
+        userId,
+        request.enabled());
+    try {
+      TenantUserResponse response =
+          platformUserAdminService.updateUserStatus(
+              id, userId, request, principal.getUserId(), principal.getUsername());
+      log.info(
+          "PATCH /api/platform/tenants/{}/admins/{}/status adminUserId={} tenantId={} userId={} status=200 enabled={}",
+          id,
+          userId,
+          principal.getUserId(),
+          id,
+          userId,
+          response.enabled());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PATCH /api/platform/tenants/{}/admins/{}/status adminUserId={} tenantId={} userId={} status={} error={}",
+          id,
+          userId,
+          principal.getUserId(),
+          id,
+          userId,
           ex.getStatusCode().value(),
           ex.getReason());
       throw ex;
