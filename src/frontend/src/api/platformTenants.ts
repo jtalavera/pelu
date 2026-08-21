@@ -26,6 +26,8 @@ export type TierOption = {
 export type ListTenantsPagedParams = {
   page?: number;
   size?: number;
+  /** HU-39 AC-2: filters by name or domain, server-side. */
+  q?: string;
 };
 
 export function listTenantsPaged(
@@ -34,6 +36,7 @@ export function listTenantsPaged(
   const qs = new URLSearchParams();
   if (params.page != null) qs.set("page", String(params.page));
   if (params.size != null) qs.set("size", String(params.size));
+  if (params.q != null && params.q.trim().length > 0) qs.set("q", params.q.trim());
   return femmeJson<PageResponse<PlatformTenant>>(`/api/platform/tenants?${qs.toString()}`);
 }
 

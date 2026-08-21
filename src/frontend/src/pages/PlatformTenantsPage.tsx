@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -32,9 +32,11 @@ type FormErrors = {
 } | null;
 
 /**
- * HU-37 (Épica B — Gestión de Tenants): Platform Admin creates tenants and sees them appear
- * immediately in this listing (AC-6). Search/filtering is HU-39's scope, not this one — this page
- * is deliberately just a plain paged list + a "new tenant" form.
+ * HU-37/HU-39 (Épica B — Gestión de Tenants): Platform Admin creates tenants and sees them appear
+ * immediately in this listing (AC-6), and can search the (paged, server-side) listing by name or
+ * domain (HU-39 AC-2). The search box follows the app's "form onSubmit + type=submit button"
+ * convention so Enter triggers search the same as clicking the button, with no duplicate
+ * `onKeyDown` handler.
  */
 export default function PlatformTenantsPage() {
   const { t } = useTranslation();
@@ -53,6 +55,12 @@ export default function PlatformTenantsPage() {
   const [tenantPage, setTenantPage] = useState(0);
   const [tenantPageSize, setTenantPageSize] = useState(10);
   const [reloadTick, setReloadTick] = useState(0);
+
+  // HU-39 AC-2: searchInput is the live text in the field; searchQuery is what's actually applied
+  // server-side, committed only on form submit (Enter or the Search button) — no live/onChange
+  // filtering, no duplicate onKeyDown handler.
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [tiers, setTiers] = useState<TierOption[]>([]);
   const [tiersLoadError, setTiersLoadError] = useState<string | null>(null);
@@ -79,11 +87,11 @@ export default function PlatformTenantsPage() {
   const [editSuccess, setEditSuccess] = useState(false);
 
   const loadTenants = useCallback(
-    async (page: number, size: number) => {
+    async (page: number, size: number, q: string) => {
       setTenantPageLoading(true);
       setPageError(null);
       try {
-        const data = await listTenantsPaged({ page, size });
+        const data = await listTenantsPaged({ page, size, q });
         setTenantPageData(data);
       } catch (err) {
         setPageError(translateApiError(err, t, "femme.platform.tenants.loadError"));
@@ -95,9 +103,23 @@ export default function PlatformTenantsPage() {
   );
 
   useEffect(() => {
-    void loadTenants(tenantPage, tenantPageSize);
+    void loadTenants(tenantPage, tenantPageSize, searchQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantPage, tenantPageSize, reloadTick, loadTenants]);
+  }, [tenantPage, tenantPageSize, searchQuery, reloadTick, loadTenants]);
+
+  // HU-39 AC-2: submitting the search form (Enter or the Search button) commits the query and
+  // resets to page 0, same as changing a filter pill elsewhere in the app.
+  function handleSearchSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setTenantPage(0);
+    setSearchQuery(searchInput.trim());
+  }
+
+  function handleSearchClear() {
+    setSearchInput("");
+    setTenantPage(0);
+    setSearchQuery("");
+  }
 
   useEffect(() => {
     (async () => {
@@ -296,6 +318,29 @@ export default function PlatformTenantsPage() {
         </Button>
       </div>
 
+      {/* HU-39 AC-2: form onSubmit + type="submit" button so Enter and the button trigger the
+          same search; no separate onKeyDown handler (see CLAUDE.md "Search fields"). */}
+      <form role="search" onSubmit={handleSearchSubmit} className="mb-4 flex flex-wrap items-end gap-2">
+        <div className="min-w-0 flex-1" style={{ maxWidth: 320 }}>
+          <Label htmlFor="platform-tenants-search">{t("femme.platform.tenants.searchLabel")}</Label>
+          <Input
+            id="platform-tenants-search"
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder={t("femme.platform.tenants.searchPlaceholder")}
+          />
+        </div>
+        <Button type="submit" variant="secondary" className="min-h-11">
+          {t("femme.platform.tenants.searchButton")}
+        </Button>
+        {searchQuery ? (
+          <Button type="button" variant="ghost" onClick={handleSearchClear} className="min-h-11">
+            {t("femme.platform.tenants.searchClear")}
+          </Button>
+        ) : null}
+      </form>
+
       {(createSuccess || editSuccess || pageError) && (
         <div className="mb-4 flex flex-col gap-2">
           {createSuccess && (
@@ -347,7 +392,9 @@ export default function PlatformTenantsPage() {
                     colSpan={4}
                     style={{ padding: "24px 12px", textAlign: "center", fontSize: 12, color: "var(--color-ink-3)" }}
                   >
-                    {t("femme.platform.tenants.emptyBody")}
+                    {searchQuery
+                      ? t("femme.platform.tenants.emptySearchBody", { query: searchQuery })
+                      : t("femme.platform.tenants.emptyBody")}
                   </td>
                 </tr>
               ) : (

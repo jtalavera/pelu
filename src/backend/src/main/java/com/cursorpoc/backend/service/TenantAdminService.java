@@ -26,9 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-37/HU-38 (Épica B — Gestión de Tenants): Platform Admin creates, lists, and edits tenants.
- * HU-39 will extend {@link #listPaged} with search/filtering; this only needs the plain paged
- * listing so a freshly-created/edited tenant is provably visible.
+ * HU-37/HU-38/HU-39 (Épica B — Gestión de Tenants): Platform Admin creates, lists, searches, and
+ * edits tenants.
  */
 @Service
 public class TenantAdminService {
@@ -49,12 +48,17 @@ public class TenantAdminService {
     this.timeProperties = timeProperties;
   }
 
+  /**
+   * HU-39 AC-2: {@code q} filters by name or domain (case-insensitive, partial match), applied
+   * server-side alongside the existing pagination (AC-3).
+   */
   @Transactional(readOnly = true)
-  public PageResponse<TenantResponse> listPaged(int page, int size) {
+  public PageResponse<TenantResponse> listPaged(int page, int size, String q) {
     PageRequest pageable =
         PageRequest.of(
             Math.max(0, page), Math.max(1, Math.min(size, 200)), Sort.by("id").descending());
-    Page<Tenant> result = tenantRepository.findAll(pageable);
+    String normalizedQ = q == null || q.isBlank() ? null : q.trim();
+    Page<Tenant> result = tenantRepository.findFiltered(normalizedQ, pageable);
     List<TenantResponse> content = result.getContent().stream().map(this::toResponse).toList();
     return new PageResponse<>(
         content,

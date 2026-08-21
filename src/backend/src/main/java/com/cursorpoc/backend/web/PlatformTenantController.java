@@ -44,14 +44,16 @@ public class PlatformTenantController {
   public PageResponse<TenantResponse> list(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @RequestParam(name = "page", defaultValue = "0") int page,
-      @RequestParam(name = "size", defaultValue = "10") int size) {
+      @RequestParam(name = "size", defaultValue = "10") int size,
+      @RequestParam(name = "q", required = false) String q) {
     requirePlatformAdmin(principal, "GET /api/platform/tenants");
     log.info(
-        "GET /api/platform/tenants adminUserId={} page={} size={}",
+        "GET /api/platform/tenants adminUserId={} page={} size={} q={}",
         principal.getUserId(),
         page,
-        size);
-    PageResponse<TenantResponse> response = tenantAdminService.listPaged(page, size);
+        size,
+        q);
+    PageResponse<TenantResponse> response = tenantAdminService.listPaged(page, size, q);
     log.info(
         "GET /api/platform/tenants adminUserId={} status=200 total={}",
         principal.getUserId(),
