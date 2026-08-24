@@ -111,12 +111,11 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
       ),
       downloadBtn.click(),
     ]);
-    // Not approved yet, so the KuDE endpoint correctly rejects it — proving AC-01 (the button now
-    // targets the KuDE endpoint at all, never the legacy one) without needing a real SIFEN approval.
-    expect(kudeResponse.status()).toBe(409);
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Approved or Approved with observation" }),
-    ).toBeVisible({ timeout: 10_000 });
+    // RT-28/RT-20 widened SifenKudePdfService#requireDeliverableInvoice to also deliver the KuDE
+    // for PENDING_VERIFICATION/QUEUED invoices (point-of-sale delivery ahead of SIFEN approval),
+    // so this succeeds — AC-01 here only proves the button targets the KuDE endpoint at all,
+    // never the legacy one.
+    expect(kudeResponse.status()).toBe(200);
 
     expect(legacyPdfRequestUrls).toHaveLength(0);
   });

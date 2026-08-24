@@ -209,17 +209,25 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
     // Wait for session card to show (session is already open)
     await expect(page.getByText(/cash register is open/i)).toBeVisible({ timeout: 30_000 });
 
-    // Wait for today's invoice table
-    const tbody = page.locator("table tbody").last();
+    // Wait for today's invoice table. The History tab's table stays mounted (just `hidden`)
+    // behind the active Session tab, so `.last()` picks the DOM-last (History) table instead of
+    // the visible one — scope to the visible table instead. (History rows also carry
+    // role="button" since issue-163, which would make `.getByRole("row")` match nothing there.)
+    const tbody = page.locator("table:visible tbody").first();
     await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
 
-    // PageSizeSelect should be present
-    const select = page.getByLabel("Rows per page:").last();
+    // PageSizeSelect should be present. Same DOM-order caveat as `tbody` above — the Session
+    // tab's own PageSizeSelect renders before the (hidden) History tab's, so it's `.first()`.
+    const select = page.getByLabel("Rows per page:").first();
     await expect(select).toBeVisible();
     await expect(select).toHaveValue("10");
 
-    // Showing range text (e.g. "1–1 of 1")
-    await expect(page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/)).toBeVisible();
+    // Showing range text (e.g. "1–1 of 1"). Same hidden-History-tab caveat as `tbody`/`select`
+    // above — filter to the visible paragraph so an accumulated History range that happens to
+    // match the same text doesn't trip strict mode.
+    await expect(
+      page.locator("p:visible", { hasText: /\d+–\d+ of \d+|\d+–\d+ de \d+/ }),
+    ).toBeVisible();
   });
 
   test("#59-T3-2 · Total del día reflects all ISSUED invoices (issuedTotal from backend)", async ({

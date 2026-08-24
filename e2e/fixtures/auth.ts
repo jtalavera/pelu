@@ -107,5 +107,13 @@ export async function loginAsPlatformAdmin(page: Page) {
   const loginResp = await loginPromise;
   expect(loginResp.ok(), `login failed (${loginResp.status()}): ${loginResp.statusText()}`).toBeTruthy();
   await expect(page).toHaveURL(/\/platform/, { timeout: 25_000 });
+  // PlatformAdminRoute gates rendering behind an async /api/me fetch (unlike ProtectedRoute's
+  // synchronous sessionStorage check for /app), so the URL can change before PlatformShell — and
+  // its useIdleLogout timer — actually mounts. Wait for real dashboard content, same as
+  // loginAsDemo does for /app, so callers relying on the idle timer's clock starting immediately
+  // (e.g. tests using page.clock) aren't racing this fetch.
+  await expect(page.getByRole("heading", { name: "Platform Admin", level: 1 })).toBeVisible({
+    timeout: 20_000,
+  });
 }
 

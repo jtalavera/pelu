@@ -2,7 +2,10 @@ package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Tenant;
@@ -37,7 +40,7 @@ class BusinessProfileServiceTest {
     profile.setTenant(tenant);
     profile.setTenantId(5L);
     profile.setBusinessName("Salon");
-    when(businessProfileRepository.findByTenantId(5L)).thenReturn(Optional.of(profile));
+    lenient().when(businessProfileRepository.findByTenantId(5L)).thenReturn(Optional.of(profile));
   }
 
   @Test
@@ -65,5 +68,20 @@ class BusinessProfileServiceTest {
   void isRucReadyForInvoicing_trueWhenValid() {
     profile.setRuc("80000005-6");
     assertThat(service.isRucReadyForInvoicing(5L)).isTrue();
+  }
+
+  /**
+   * A tenant with no profile row yet (a freshly-provisioned tenant, before its admin ever visits
+   * Settings) simply isn't RUC-ready — this must NOT lazily create a default profile as a side
+   * effect. DashboardService calls this method twice within one read-only transaction (once
+   * directly, once in its no-active-fiscal-stamp branch); a lazy-create here previously caused a
+   * {@code NonUniqueObjectException} on the second call, since the first call's unflushed insert
+   * isn't visible to a fresh lookup in the same persistence context — breaking the Dashboard for
+   * every newly-created tenant's very first login.
+   */
+  @Test
+  void isRucReadyForInvoicing_falseAndNoSideEffectWhenProfileDoesNotExist() {
+    assertThat(service.isRucReadyForInvoicing(99L)).isFalse();
+    verify(businessProfileRepository, never()).save(any());
   }
 }

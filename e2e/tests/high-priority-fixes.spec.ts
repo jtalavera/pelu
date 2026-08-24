@@ -346,8 +346,13 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
   await editDialog.getByRole("button", { name: /sky/i }).click();
   await editDialog.getByRole("button", { name: "Save" }).click();
 
-  // Dialog should close on success (no error alert)
-  await expect(editDialog).not.toBeVisible({ timeout: 10_000 });
+  // On edit, the dialog stays open and shows an inline success message instead of
+  // closing (issue-157) — no error alert appears.
+  await expect(editDialog.getByText("Changes saved successfully.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await editDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(editDialog).not.toBeVisible();
 
   // Category should still appear in the list
   await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
@@ -578,8 +583,9 @@ test("Issue #40 · guardar horario con cero días seleccionados no lanza error",
   const resp = await scheduleResp;
   expect(resp.ok(), await resp.text()).toBeTruthy();
 
-  // Dialog should close (no error left it open)
-  await expect(dlg).not.toBeVisible({ timeout: 10_000 });
+  // On edit, the dialog stays open and shows an inline success message instead of
+  // closing (issue-157) — no error alert appears.
+  await expect(dlg.getByText("Changes saved successfully.")).toBeVisible({ timeout: 10_000 });
 });
 
 // ─── Issue #51 ────────────────────────────────────────────────────────────────
@@ -727,6 +733,14 @@ test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (port
   await page.getByRole("tab", { name: "Cash Register" }).click();
   await page.getByRole("button", { name: "New Invoice" }).click();
 
+  // The Service combobox is only partially in the viewport at this scroll position — scroll it
+  // into view up front so the actionability check behind `.click()` below doesn't auto-scroll the
+  // page (and shift every other element, including the submit button) between the two bounding-box
+  // measurements this test compares.
+  const serviceInput = page.getByRole("combobox", { name: "Service" }).first();
+  await expect(serviceInput).toBeVisible({ timeout: 10_000 });
+  await serviceInput.scrollIntoViewIfNeeded();
+
   // Capture position of a stable button below the service field before opening dropdown
   const submitBtn = page.getByRole("button", { name: "Issue invoice" });
   await expect(submitBtn).toBeVisible({ timeout: 10_000 });
@@ -734,8 +748,6 @@ test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (port
   expect(boxBefore).not.toBeNull();
 
   // Open the service search dropdown (combobox aria-label="Service")
-  const serviceInput = page.getByRole("combobox", { name: "Service" }).first();
-  await expect(serviceInput).toBeVisible({ timeout: 10_000 });
   await serviceInput.click();
 
   // The listbox renders in a portal — query from page root
