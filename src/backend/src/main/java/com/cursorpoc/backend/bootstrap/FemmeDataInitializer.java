@@ -11,7 +11,6 @@ import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
-import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TierRepository;
 import java.time.LocalDate;
 import org.slf4j.Logger;
@@ -28,7 +27,6 @@ public class FemmeDataInitializer {
 
   private static final Logger log = LoggerFactory.getLogger(FemmeDataInitializer.class);
 
-  private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
   private final BusinessProfileRepository businessProfileRepository;
   private final FiscalStampRepository fiscalStampRepository;
@@ -37,14 +35,12 @@ public class FemmeDataInitializer {
   private final PasswordEncoder passwordEncoder;
 
   public FemmeDataInitializer(
-      TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       BusinessProfileRepository businessProfileRepository,
       FiscalStampRepository fiscalStampRepository,
       FeatureFlagRepository featureFlagRepository,
       TierRepository tierRepository,
       PasswordEncoder passwordEncoder) {
-    this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -57,15 +53,17 @@ public class FemmeDataInitializer {
   // list against static seed CSVs for the first tenant on every boot — that logic hard-deleted
   // clients that had gained real invoices/appointments since the CSV was last updated, tripping
   // fk_inv_client / fk_appt_client and crash-looping the container in prod (2026-07-14). HU-56
-  // removed that reconciliation from system boot entirely (moved to
-  // DemoTenantCatalogSeedService, called only by the e2e/dev-only SeedResetService, never at
-  // boot) so starting the system never creates/updates/deletes a tenant's clients or services —
-  // see PRD "Sin seed hardcodeado". What remains below (feature flags, tiers, the demo tenant's
-  // admin user) is dev/e2e convenience seed data, not a specific tenant's real business data.
-  // HU-57 moved the tenant-independent platform admin OUT of this opt-in runner entirely — see
-  // platformAdminBootstrapRunner below, which is unconditional (not gated by this flag) because
-  // production needs it too. Re-enable this runner by setting femme.data-init.enabled=true (dev
-  // opt-in / e2e).
+  // removed that reconciliation from system boot entirely. HU-58 went further and removed this
+  // runner's own creation of a demo tenant + admin user too — per the PRD's "Sin seed hardcodeado"
+  // (no tenant/user/service/client/professional is created automatically at boot, only the first
+  // Platform Admin — see PlatformAdminBootstrap below). The Playwright e2e suite now provisions its
+  // own tenant + tenant admin dynamically via the real Platform Admin API (see
+  // e2e/global-setup.ts), the same way a real onboarding would, instead of relying on a
+  // backend-seeded tenant id=1. What remains below (feature flags, tiers) is genuinely
+  // tenant-independent platform configuration, not a specific tenant's business data — Flyway's
+  // equivalent inserts (V28, V41, V43) don't reach the `e2e` profile (Flyway disabled there, JPA
+  // create-drop only builds the schema), so this runner is what makes them exist for Playwright.
+  // Re-enable this runner by setting femme.data-init.enabled=true (dev opt-in / e2e).
   @Bean
   @Profile("!test")
   @ConditionalOnProperty(name = "femme.data-init.enabled", havingValue = "true")
@@ -112,24 +110,6 @@ public class FemmeDataInitializer {
         tierRepository.save(premiumTier);
         log.info("Seeded tier 'Premium'");
       }
-
-      // HU-57: this used to be guarded by `appUserRepository.count() == 0`, which broke once the
-      // tenant-independent platform-admin bootstrap (PlatformAdminBootstrap) started running
-      // unconditionally on every boot — that bootstrap's own user would already push the count
-      // above zero before this runner got a turn, silently skipping the demo tenant/admin here.
-      // seedDemoTenantData is already fully idempotent internally (each insert checks its own
-      // existence), so call it directly with no outer user-count guard.
-      Tenant tenant =
-          tenantRepository
-              .findFirstByOrderByIdAsc()
-              .orElseGet(
-                  () -> {
-                    Tenant t = new Tenant();
-                    t.setName("Demo salon");
-                    tenantRepository.save(t);
-                    return t;
-                  });
-      seedDemoTenantData(tenant);
     };
   }
 

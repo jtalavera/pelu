@@ -34,7 +34,15 @@ test.describe("HU-27 · Seed data reset", () => {
     expect(json.accessToken).toBeTruthy();
   });
 
-  test("HU-27 · AC3 service catalog is restored after reset", async ({ request }) => {
+  // HU-58 removed the CSV-based catalog/client reconciliation that used to back this endpoint
+  // (`DemoTenantCatalogSeedService`) — it hardcoded a specific tenant's business data, which the
+  // PRD's "Sin seed hardcodeado" forbids. A reset now only restores login capability (the admin
+  // user) and leaves the catalog empty, the same way HU-56 already left professionals empty; a
+  // test that needs a catalog seeds it itself (e.g. seedCategoryServiceProfessional, or the real
+  // Excel-import flow).
+  test("HU-27 · AC3 catalog stays empty after reset (no hardcoded catalog reseeded)", async ({
+    request,
+  }) => {
     await request.post(`${API_BASE}/api/admin/seed/reset`);
 
     const token = await loginAsDemoApi(request);
@@ -43,14 +51,14 @@ test.describe("HU-27 · Seed data reset", () => {
     });
     expect(categoriesRes.ok()).toBeTruthy();
     const categories = (await categoriesRes.json()) as unknown[];
-    expect(categories.length).toBeGreaterThan(0);
+    expect(categories.length).toBe(0);
 
     const servicesRes = await request.get(`${API_BASE}/api/services`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(servicesRes.ok()).toBeTruthy();
     const services = (await servicesRes.json()) as unknown[];
-    expect(services.length).toBeGreaterThan(0);
+    expect(services.length).toBe(0);
 
     // HU-56 removed the fixed professional roster (`FemmeSalonCatalogBootstrapData.PROFESSIONALS`)
     // that a seed reset used to auto-create — professionals are no longer part of this seed.

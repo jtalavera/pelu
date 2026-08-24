@@ -66,7 +66,6 @@ class SeedResetServiceTest {
   @Mock private AppUserTourStateRepository appUserTourStateRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
   @Mock private FemmeDataInitializer femmeDataInitializer;
-  @Mock private DemoTenantCatalogSeedService demoTenantCatalogSeedService;
 
   private SeedResetService service;
 
@@ -93,8 +92,7 @@ class SeedResetServiceTest {
             passwordResetTokenRepository,
             appUserTourStateRepository,
             tipWithdrawalRepository,
-            femmeDataInitializer,
-            demoTenantCatalogSeedService);
+            femmeDataInitializer);
 
     Tenant tenant = new Tenant();
     tenant.setId(DEMO_TENANT_ID);
@@ -111,12 +109,12 @@ class SeedResetServiceTest {
     verify(fiscalStampRepository, never()).deleteByTenant_Id(any());
   }
 
+  // HU-58: reset no longer reconciles a hardcoded catalog/client CSV (DemoTenantCatalogSeedService
+  // was removed) — it only restores the tenant's admin login capability.
   @Test
-  void resetDemoTenant_reseedsCatalogAndClientsAfterDeletingUnlockedStamps() {
+  void resetDemoTenant_reseedsAdminLoginAfterDeletingUnlockedStamps() {
     service.resetDemoTenant();
 
     verify(femmeDataInitializer, times(1)).seedDemoTenantData(any(Tenant.class));
-    verify(demoTenantCatalogSeedService).seedCatalogFromCsv(any(Tenant.class));
-    verify(demoTenantCatalogSeedService).seedClientsFromCsv(any(Tenant.class));
   }
 }

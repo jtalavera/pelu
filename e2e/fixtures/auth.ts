@@ -1,6 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
-/** Seeded by `FemmeDataInitializer` for non-`test` profiles (including `e2e`). */
+/**
+ * HU-58: provisioned dynamically by `global-setup.ts` (once, before the whole suite runs) via the
+ * real Platform Admin API — creates a tenant, invites this email as its admin, and activates it —
+ * instead of a hardcoded backend boot seed. `FemmeDataInitializer` no longer creates any tenant or
+ * user.
+ */
 export const DEMO_EMAIL = "isabelzymanscki@gmail.com";
 export const DEMO_PASSWORD = "Demo123!";
 

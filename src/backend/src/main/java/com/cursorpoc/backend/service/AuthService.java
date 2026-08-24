@@ -412,6 +412,14 @@ public class AuthService {
     }
   }
 
+  // HU-58: falls back to the oldest existing tenant (by id) rather than a hardcoded tenant id=1 —
+  // no tenant is created at system boot any more (PRD "Sin seed hardcodeado"), so there is no
+  // longer a guaranteed tenant id=1. This preserves the existing dev/e2e convenience of resolving
+  // *some* tenant for a login request whose Origin doesn't match any tenant's custom domain
+  // (e.g. the local Vite dev server), while no longer special-casing a specific numeric id: the
+  // e2e suite provisions its own default tenant dynamically (see e2e/global-setup.ts) via the
+  // Platform Admin tenant-creation API, and that tenant becomes "the oldest" simply by being
+  // created first in a fresh database, not by being hardcoded here.
   private Tenant resolveTenant(String origin) {
     String host = extractHost(origin);
     if (host != null) {
@@ -421,7 +429,7 @@ public class AuthService {
       }
     }
     return tenantRepository
-        .findById(1L)
+        .findFirstByOrderByIdAsc()
         .orElseThrow(
             () ->
                 new ResponseStatusException(

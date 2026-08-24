@@ -73,6 +73,10 @@ const withBackend =
 
 export default defineConfig({
   testDir: "./tests",
+  // HU-58: provisions the "demo" tenant + admin (DEMO_EMAIL/DEMO_PASSWORD) dynamically via the
+  // real Platform Admin API before any test runs, instead of a hardcoded backend boot seed — see
+  // global-setup.ts.
+  globalSetup: "./global-setup.ts",
   outputDir: evidenceRoot
     ? path.join(evidenceRoot, "artifacts")
     : path.join(__dirname, "test-results"),

@@ -104,7 +104,7 @@ class AuthServiceTest {
   @Test
   void suspendedTenant_rejectsLogin_withSameErrorAsBadCredentials() {
     Tenant tenant = tenant(1L, TenantStatus.SUSPENDED);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(tenantRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(tenant));
 
     ResponseStatusException suspendedEx =
         catchLoginException(new LoginRequest("admin@tenant.test", "whatever-password"));
@@ -123,7 +123,7 @@ class AuthServiceTest {
   @Test
   void activeTenant_allowsLogin_withCorrectCredentials() {
     Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(tenantRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(tenant));
     AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
     when(appUserRepository.findByEmailAndTenant_Id("admin@tenant.test", 1L))
         .thenReturn(Optional.of(appUser));
@@ -138,7 +138,7 @@ class AuthServiceTest {
   @Test
   void reactivatedTenant_allowsLoginAgain() {
     Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(tenantRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(tenant));
     AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
     when(appUserRepository.findByEmailAndTenant_Id("admin@tenant.test", 1L))
         .thenReturn(Optional.of(appUser));

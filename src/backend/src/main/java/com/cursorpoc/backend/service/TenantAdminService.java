@@ -1,11 +1,13 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TenantStatusChange;
 import com.cursorpoc.backend.domain.TenantTierChange;
 import com.cursorpoc.backend.domain.Tier;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
+import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TenantStatusChangeRepository;
 import com.cursorpoc.backend.repository.TenantTierChangeRepository;
@@ -18,6 +20,7 @@ import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantTierChangeResponse;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import com.cursorpoc.backend.web.dto.TierOptionResponse;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -40,6 +43,7 @@ public class TenantAdminService {
   private final TierRepository tierRepository;
   private final TenantTierChangeRepository tenantTierChangeRepository;
   private final TenantStatusChangeRepository tenantStatusChangeRepository;
+  private final TaxRepository taxRepository;
   private final FemmeTimeProperties timeProperties;
 
   public TenantAdminService(
@@ -47,11 +51,13 @@ public class TenantAdminService {
       TierRepository tierRepository,
       TenantTierChangeRepository tenantTierChangeRepository,
       TenantStatusChangeRepository tenantStatusChangeRepository,
+      TaxRepository taxRepository,
       FemmeTimeProperties timeProperties) {
     this.tenantRepository = tenantRepository;
     this.tierRepository = tierRepository;
     this.tenantTierChangeRepository = tenantTierChangeRepository;
     this.tenantStatusChangeRepository = tenantStatusChangeRepository;
+    this.taxRepository = taxRepository;
     this.timeProperties = timeProperties;
   }
 
@@ -111,7 +117,39 @@ public class TenantAdminService {
     tenant.setTier(tier);
     tenant.setStatus(TenantStatus.ACTIVE);
     tenantRepository.save(tenant);
+    seedDefaultTaxes(tenant);
     return toResponse(tenant);
+  }
+
+  // HU-58: every tenant needs Paraguay's three standard IVA rates to categorize services/invoices
+  // at all (see TaxController) — these are fixed, legally-defined rates identical for every
+  // business in the country, not tenant-chosen "business data" (unlike clients/services/
+  // professionals, which HU-37 AC-5/AC-7 verifies stays empty for a new tenant). Before this, only
+  // the now-removed DemoTenantCatalogSeedService ever created them, and only for a single
+  // hardcoded demo tenant via the e2e/dev-only seed-reset endpoint — a tenant created through the
+  // real Platform Admin API had no way to get taxes at all. Seeding them here, for every tenant, at
+  // creation time is what actually removes that hardcoded-to-one-tenant dependency.
+  private void seedDefaultTaxes(Tenant tenant) {
+    Tax iva10 = new Tax();
+    iva10.setTenant(tenant);
+    iva10.setName("IVA 10%");
+    iva10.setRate(new BigDecimal("10.00"));
+    iva10.setActive(true);
+    taxRepository.save(iva10);
+
+    Tax iva5 = new Tax();
+    iva5.setTenant(tenant);
+    iva5.setName("IVA 5%");
+    iva5.setRate(new BigDecimal("5.00"));
+    iva5.setActive(true);
+    taxRepository.save(iva5);
+
+    Tax exento = new Tax();
+    exento.setTenant(tenant);
+    exento.setName("Exento");
+    exento.setRate(BigDecimal.ZERO);
+    exento.setActive(true);
+    taxRepository.save(exento);
   }
 
   /**

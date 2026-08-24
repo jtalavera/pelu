@@ -11,6 +11,7 @@ import com.cursorpoc.backend.domain.TenantStatusChange;
 import com.cursorpoc.backend.domain.TenantTierChange;
 import com.cursorpoc.backend.domain.Tier;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
+import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TenantStatusChangeRepository;
 import com.cursorpoc.backend.repository.TenantTierChangeRepository;
@@ -46,6 +47,7 @@ class TenantAdminServiceTest {
   @Mock private TierRepository tierRepository;
   @Mock private TenantTierChangeRepository tenantTierChangeRepository;
   @Mock private TenantStatusChangeRepository tenantStatusChangeRepository;
+  @Mock private TaxRepository taxRepository;
 
   private TenantAdminService service;
 
@@ -61,6 +63,7 @@ class TenantAdminServiceTest {
             tierRepository,
             tenantTierChangeRepository,
             tenantStatusChangeRepository,
+            taxRepository,
             new FemmeTimeProperties());
 
     tier = new Tier();
@@ -110,6 +113,25 @@ class TenantAdminServiceTest {
     assertThat(response.tierId()).isEqualTo(1L);
     assertThat(response.tierName()).isEqualTo("Estándar");
     assertThat(response.status()).isEqualTo(TenantStatus.ACTIVE.name());
+  }
+
+  // HU-58: taxes are fixed, legally-defined Paraguayan rates (not tenant-chosen business data like
+  // clients/services/professionals, which stay empty for a new tenant — see HU-37 AC-5/AC-7's own
+  // e2e coverage) — every tenant needs them to exist at all in order to categorize a service's IVA,
+  // so tenant creation seeds them directly instead of relying on the removed
+  // DemoTenantCatalogSeedService (which only ever did this for a single hardcoded demo tenant).
+  @Test
+  void createSeedsTheThreeStandardParaguayanTaxRates() {
+    service.create(new TenantCreateRequest("Salon Bella Vista", null, 1L));
+
+    ArgumentCaptor<com.cursorpoc.backend.domain.Tax> taxCaptor =
+        ArgumentCaptor.forClass(com.cursorpoc.backend.domain.Tax.class);
+    Mockito.verify(taxRepository, Mockito.times(3)).save(taxCaptor.capture());
+
+    assertThat(taxCaptor.getAllValues())
+        .extracting(com.cursorpoc.backend.domain.Tax::getName)
+        .containsExactlyInAnyOrder("IVA 10%", "IVA 5%", "Exento");
+    assertThat(taxCaptor.getAllValues()).allMatch(com.cursorpoc.backend.domain.Tax::isActive);
   }
 
   @Test

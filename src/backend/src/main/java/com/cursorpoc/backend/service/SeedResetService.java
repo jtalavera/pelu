@@ -30,6 +30,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Backs the e2e/dev-only {@code POST /api/admin/seed/reset} endpoint (gated behind {@code
+ * femme.data-init.enabled}, disabled in production). HU-58: this tenant is no longer created by a
+ * hardcoded backend boot seed — the Playwright suite provisions it dynamically via the real
+ * Platform Admin tenant-creation API in {@code e2e/global-setup.ts}, and it becomes id=1 simply by
+ * being the first tenant created in each run's fresh, empty database.
+ */
 @Service
 public class SeedResetService {
 
@@ -56,7 +63,6 @@ public class SeedResetService {
   private final AppUserTourStateRepository appUserTourStateRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
   private final FemmeDataInitializer femmeDataInitializer;
-  private final DemoTenantCatalogSeedService demoTenantCatalogSeedService;
 
   public SeedResetService(
       TenantRepository tenantRepository,
@@ -78,8 +84,7 @@ public class SeedResetService {
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
-      FemmeDataInitializer femmeDataInitializer,
-      DemoTenantCatalogSeedService demoTenantCatalogSeedService) {
+      FemmeDataInitializer femmeDataInitializer) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.businessProfileRepository = businessProfileRepository;
@@ -100,7 +105,6 @@ public class SeedResetService {
     this.appUserTourStateRepository = appUserTourStateRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
     this.femmeDataInitializer = femmeDataInitializer;
-    this.demoTenantCatalogSeedService = demoTenantCatalogSeedService;
   }
 
   @Transactional
@@ -196,9 +200,13 @@ public class SeedResetService {
     long deletedUsers = appUserRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_users", deletedUsers);
 
+    // HU-58: this used to also reconcile the catalog/clients against static seed CSVs (via the
+    // now-removed DemoTenantCatalogSeedService) — that hardcoded a specific tenant's business data,
+    // which the PRD's "Sin seed hardcodeado" forbids. Reset now only restores login capability
+    // (the admin user), leaving the catalog empty; the e2e suite that needs a tenant WITH a
+    // catalog seeds it itself via the real API/Excel-import flows (see e2e/global-setup.ts and
+    // e2e/fixtures/api.ts's seedCategoryServiceProfessional/seedClient helpers).
     femmeDataInitializer.seedDemoTenantData(tenant);
-    demoTenantCatalogSeedService.seedCatalogFromCsv(tenant);
-    demoTenantCatalogSeedService.seedClientsFromCsv(tenant);
 
     log.info("POST /api/admin/seed/reset tenantId={} — reset complete", DEMO_TENANT_ID);
   }
