@@ -159,3 +159,30 @@ cd src/backend && docker compose up -d
 Flyway runs on boot. If checksums mismatch (e.g. after editing an applied migration), run `bash scripts/flyway-repair.sh`.
 
 The default profile expects Azure Key Vault (`app.femme.keyvault.enabled=true` by default — RT-12/RT-18, `Hardening_SIFEN.md`) for the JWT secret and SIFEN certificate storage. Without a real vault to point at, `bootRun` locally with `FEMME_KEYVAULT_ENABLED=false APP_FEMME_JWT_SECRET=<32+ char string> ./gradlew bootRun --no-daemon` to fall back to local file storage for certificates and a literal JWT secret (via Spring Boot's standard relaxed env-var binding — no property placeholder needed), same opt-out `application-e2e.properties` uses.
+
+### Local backend against Azure dev services (DB stays local)
+
+Instead of disabling Key Vault, you can point the local backend at the real `flowbit-peluqueria-dev` Azure resources for Key Vault, Service Bus, ACS Email, and Application Insights, while the database stays on your local Docker SQL Server (`spring.datasource.*` in `application.properties` already defaults there independently of the Azure config).
+
+Prereqs: `az login` against the `flowbit-peluqueria-dev` subscription, and membership in the `femme-sql-admins` Entra group (grants "Key Vault Secrets Officer" on the dev vault and "Azure Service Bus Data Sender/Receiver" on the `sifen-submission` queue — see `infrastructure_v2/main.tf`, `deployer_kv_secrets_officer` / `deployer_sb_sender` / `deployer_sb_receiver`).
+
+Fetch the two connection strings yourself each session (never commit these):
+
+```bash
+az communication list-key --name femme-acs-b10via --resource-group femme-test-rg --query primaryConnectionString -o tsv
+az monitor app-insights component show --app femme-ai-b10via --resource-group femme-test-rg --query connectionString -o tsv
+```
+
+Then boot with:
+
+```bash
+FEMME_KEYVAULT_URI=https://femme-kv-b10via.vault.azure.net/ \
+FEMME_SERVICEBUS_NAMESPACE=femme-sb-b10via.servicebus.windows.net \
+ACS_CONNECTION_STRING=<value from az communication list-key> \
+ACS_SENDER_ADDRESS=DoNotReply@3fd72f16-072d-4971-9593-05a576dc06da.azurecomm.net \
+APPLICATIONINSIGHTS_CONNECTION_STRING=<value from az monitor app-insights component show> \
+APP_FEMME_PLATFORM_ADMIN_EMAIL=<email> APP_FEMME_PLATFORM_ADMIN_PASSWORD=<password> \
+./gradlew bootRun --no-daemon
+```
+
+Do not set `FEMME_KEYVAULT_ENABLED=false`, `APP_FEMME_JWT_SECRET`, or any `SPRING_DATASOURCE_*` override — leaving those unset is what keeps Key Vault real and the database local. Caveat: this hits real shared dev resources — ACS actually sends email, and the Service Bus queue is the same one the deployed dev backend consumes from.
