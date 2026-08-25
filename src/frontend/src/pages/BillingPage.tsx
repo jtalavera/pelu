@@ -81,6 +81,8 @@ type InvoiceLineForm = {
 type PaymentForm = {
   method: string;
   amount: string;
+  cardBrand: string;
+  cardBrandOtherDescription: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -144,6 +146,20 @@ const PAYMENT_METHODS = [
   "DEBIT_CARD",
   "CREDIT_CARD",
   "TRANSFER",
+  "OTHER",
+] as const;
+
+const CARD_PAYMENT_METHODS = new Set(["DEBIT_CARD", "CREDIT_CARD"]);
+
+// SIFEN Manual Técnico V150, E7.1.1/gPagTarCD — mandatory card brand when paying with
+// Tarjeta de crédito/débito (issue #170).
+const CARD_BRANDS = [
+  "VISA",
+  "MASTERCARD",
+  "AMEX",
+  "MAESTRO",
+  "PANAL",
+  "CABAL",
   "OTHER",
 ] as const;
 
@@ -700,7 +716,7 @@ function NewInvoiceTab({
         ],
   );
   const [payments, setPayments] = useState<PaymentForm[]>([
-    { method: "CASH", amount: "" },
+    { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -960,7 +976,10 @@ function NewInvoiceTab({
       const used = new Set(prev.map((p) => p.method));
       const next = PAYMENT_METHODS.find((m) => !used.has(m));
       if (!next) return prev;
-      return [...prev, { method: next, amount: "" }];
+      return [
+        ...prev,
+        { method: next, amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+      ];
     });
   }
 
@@ -976,7 +995,20 @@ function NewInvoiceTab({
   function updatePayment(idx: number, field: keyof PaymentForm, value: string) {
     const next = field === "amount" ? maskMoneyInput(value) : value;
     setPayments((prev) =>
-      prev.map((p, i) => (i === idx ? { ...p, [field]: next } : p)),
+      prev.map((p, i) => {
+        if (i !== idx) return p;
+        const updated = { ...p, [field]: next };
+        // Issue #170: clear the card fields when they no longer apply, so a stale brand/
+        // description never rides along after switching payment method or brand.
+        if (field === "method" && !CARD_PAYMENT_METHODS.has(next)) {
+          updated.cardBrand = "";
+          updated.cardBrandOtherDescription = "";
+        }
+        if (field === "cardBrand" && next !== "OTHER") {
+          updated.cardBrandOtherDescription = "";
+        }
+        return updated;
+      }),
     );
     if (paymentErrors[idx]) {
       setPaymentErrors((prev) => {
@@ -1045,6 +1077,17 @@ function NewInvoiceTab({
       const amount = parseMaskedMoney(p.amount);
       if (!Number.isFinite(amount) || amount <= 0) {
         newPaymentErrors[i] = t("femme.billing.invoice.paymentAmountInvalid");
+        return;
+      }
+      // Issue #170: SIFEN rejects card payments missing the mandatory card brand group.
+      if (CARD_PAYMENT_METHODS.has(p.method) && !p.cardBrand.trim()) {
+        newPaymentErrors[i] = t("femme.billing.invoice.cardBrandRequired");
+      } else if (
+        CARD_PAYMENT_METHODS.has(p.method) &&
+        p.cardBrand === "OTHER" &&
+        !p.cardBrandOtherDescription.trim()
+      ) {
+        newPaymentErrors[i] = t("femme.billing.invoice.cardBrandOtherDescriptionRequired");
       }
     });
 
@@ -1151,6 +1194,11 @@ function NewInvoiceTab({
       payments: payments.map((p) => ({
         method: p.method,
         amount: parseMaskedMoney(p.amount),
+        cardBrand: CARD_PAYMENT_METHODS.has(p.method) ? p.cardBrand : null,
+        cardBrandOtherDescription:
+          CARD_PAYMENT_METHODS.has(p.method) && p.cardBrand === "OTHER"
+            ? p.cardBrandOtherDescription
+            : null,
       })),
       serviceRecordId: serviceRecordId,
       tipsAmount: tipsAmount.trim() !== "" ? tipsAmountNum : null,
@@ -1187,7 +1235,9 @@ function NewInvoiceTab({
           discountValue: "",
         },
       ]);
-      setPayments([{ method: "CASH", amount: "" }]);
+      setPayments([
+        { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+      ]);
       setTipsAmount("");
       setServiceRecordId(null);
       setLineErrors({});
@@ -1622,7 +1672,14 @@ function NewInvoiceTab({
           </div>
 
           <div className="flex flex-col gap-3">
-            {payments.map((payment, idx) => (
+            {payments.map((payment, idx) => {
+              const paymentAmountNum = parseMaskedMoney(payment.amount);
+              const amountIsInvalid =
+                !Number.isFinite(paymentAmountNum) || paymentAmountNum <= 0;
+              const isCardPayment = CARD_PAYMENT_METHODS.has(payment.method);
+              const cardError =
+                !amountIsInvalid && paymentErrors[idx] ? paymentErrors[idx] : undefined;
+              return (
               <div key={idx} className="flex flex-wrap gap-2 items-start">
                 <div className="flex-1 min-w-[160px]">
                   <Label htmlFor={`pay-method-${idx}`}>
@@ -1656,15 +1713,60 @@ function NewInvoiceTab({
                     onChange={(e) => updatePayment(idx, "amount", e.target.value)}
                     placeholder={t("femme.billing.invoice.paymentAmountPlaceholder")}
                     className="mt-1 w-full"
-                    aria-invalid={!!paymentErrors[idx]}
+                    aria-invalid={amountIsInvalid && !!paymentErrors[idx]}
                     aria-describedby={
-                      paymentErrors[idx] ? `pay-amount-err-${idx}` : undefined
+                      amountIsInvalid && paymentErrors[idx] ? `pay-amount-err-${idx}` : undefined
                     }
                   />
                   <FieldValidationError id={`pay-amount-err-${idx}`}>
-                    {paymentErrors[idx]}
+                    {amountIsInvalid ? paymentErrors[idx] : undefined}
                   </FieldValidationError>
                 </div>
+                {isCardPayment && (
+                  <div className="flex-1 min-w-[160px]">
+                    <Label htmlFor={`pay-card-brand-${idx}`}>
+                      {t("femme.billing.invoice.cardBrandLabel")}
+                    </Label>
+                    <Select
+                      id={`pay-card-brand-${idx}`}
+                      value={payment.cardBrand}
+                      onChange={(e) => updatePayment(idx, "cardBrand", e.target.value)}
+                      className="mt-1 w-full"
+                      aria-invalid={!!cardError}
+                      aria-describedby={cardError ? `pay-card-brand-err-${idx}` : undefined}
+                    >
+                      <option value="" disabled>
+                        {t("femme.billing.invoice.cardBrandPlaceholder")}
+                      </option>
+                      {CARD_BRANDS.map((brand) => (
+                        <option key={brand} value={brand}>
+                          {t(`femme.billing.invoice.cardBrand${capitalize(brand)}`)}
+                        </option>
+                      ))}
+                    </Select>
+                    <FieldValidationError id={`pay-card-brand-err-${idx}`}>
+                      {cardError}
+                    </FieldValidationError>
+                  </div>
+                )}
+                {isCardPayment && payment.cardBrand === "OTHER" && (
+                  <div className="flex-1 min-w-[160px]">
+                    <Label htmlFor={`pay-card-brand-other-${idx}`}>
+                      {t("femme.billing.invoice.cardBrandOtherDescriptionLabel")}
+                    </Label>
+                    <Input
+                      id={`pay-card-brand-other-${idx}`}
+                      value={payment.cardBrandOtherDescription}
+                      onChange={(e) =>
+                        updatePayment(idx, "cardBrandOtherDescription", e.target.value)
+                      }
+                      placeholder={t(
+                        "femme.billing.invoice.cardBrandOtherDescriptionPlaceholder",
+                      )}
+                      className="mt-1 w-full"
+                    />
+                  </div>
+                )}
                 {payments.length > 1 && (
                   <div className="flex items-end pb-1">
                     <Button
@@ -1679,7 +1781,8 @@ function NewInvoiceTab({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <Button

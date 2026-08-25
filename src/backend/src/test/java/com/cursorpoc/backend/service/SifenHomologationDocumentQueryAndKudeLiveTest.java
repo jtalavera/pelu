@@ -634,7 +634,10 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
 
     SifenInvoiceDetail detail =
         new SifenInvoiceDetail(
-            List.of(lineA, lineB), totals, 1, List.of(new SifenPaymentDetail(1, NET_TOTAL)));
+            List.of(lineA, lineB),
+            totals,
+            1,
+            List.of(new SifenPaymentDetail(1, NET_TOTAL, null, null)));
 
     SifenDocumentTypeExtras extras = buildExtras(type, referencedCdc);
 

@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
@@ -378,6 +379,11 @@ public class SifenDocumentXmlService {
         el(doc, gPaConEIni, "cMoneTiPag", "PYG");
         // Same fix as dDesMoneOpe above — same catalog, same field-content cross-check.
         el(doc, gPaConEIni, "dDMoneTiPag", "Guarani");
+        // Issue #170 (SIFEN live rejection): E7.1.1/gPagTarCD is mandatory whenever iTiPago is 3
+        // (Tarjeta de crédito) or 4 (Tarjeta de débito) — was omitted entirely before this fix.
+        if (payment.typeCode() == 3 || payment.typeCode() == 4) {
+          buildCardPaymentGroup(doc, gPaConEIni, payment);
+        }
       }
     }
 
@@ -760,6 +766,24 @@ public class SifenDocumentXmlService {
         gTotSub,
         "dTBasGraIVA",
         isAutoInvoice ? "0" : totals.totalTaxableBase().toPlainString());
+  }
+
+  /**
+   * E7.1.1/gPagTarCD (Manual Técnico V150 p.82-83): mandatory sub-group when E606/iTiPago is 3
+   * (Tarjeta de crédito) or 4 (Tarjeta de débito). Only the mandatory fields are emitted —
+   * iDenTarj/dDesDenTarj (brand) and iForProPa (forma de procesamiento de pago), hardcoded to "1"
+   * (POS) since every salon in this domain charges cards through a physical POS terminal; the
+   * remaining fields in this group (processor RUC, authorization code, cardholder name, last-4
+   * digits) are all optional (0-1) and not captured today.
+   */
+  private void buildCardPaymentGroup(Document doc, Element gPaConEIni, SifenPaymentDetail payment) {
+    CardBrand brand = payment.cardBrand();
+    Element gPagTarCD = el(doc, gPaConEIni, "gPagTarCD", null);
+    el(doc, gPagTarCD, "iDenTarj", String.valueOf(brand.sifenCode()));
+    String description =
+        brand == CardBrand.OTHER ? payment.cardBrandOtherDescription() : brand.sifenDescription();
+    el(doc, gPagTarCD, "dDesDenTarj", description);
+    el(doc, gPagTarCD, "iForProPa", "1");
   }
 
   private static String paymentTypeDescription(int code) {

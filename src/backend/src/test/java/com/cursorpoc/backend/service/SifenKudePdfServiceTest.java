@@ -134,7 +134,7 @@ class SifenKudePdfServiceTest {
             List.of(line),
             totals,
             1,
-            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000))));
+            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000), null, null)));
 
     org.mockito.Mockito.lenient()
         .when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))

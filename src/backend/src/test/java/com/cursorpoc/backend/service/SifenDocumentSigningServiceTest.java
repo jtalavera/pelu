@@ -138,7 +138,7 @@ class SifenDocumentSigningServiceTest {
             List.of(line),
             totals,
             1,
-            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000))));
+            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000), null, null)));
   }
 
   /** AC-01/AC-05: a correctly signed document validates with no errors. */

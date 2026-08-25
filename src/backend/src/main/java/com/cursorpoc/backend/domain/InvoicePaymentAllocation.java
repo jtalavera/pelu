@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -33,6 +34,13 @@ public class InvoicePaymentAllocation {
   @Column(nullable = false, precision = 19, scale = 2)
   private BigDecimal amount;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "card_brand", length = 20)
+  private CardBrand cardBrand;
+
+  @Column(name = "card_brand_other_description", length = 60)
+  private String cardBrandOtherDescription;
+
   public Long getId() {
     return id;
   }
@@ -63,5 +71,21 @@ public class InvoicePaymentAllocation {
 
   public void setAmount(BigDecimal amount) {
     this.amount = amount;
+  }
+
+  public CardBrand getCardBrand() {
+    return cardBrand;
+  }
+
+  public void setCardBrand(CardBrand cardBrand) {
+    this.cardBrand = cardBrand;
+  }
+
+  public String getCardBrandOtherDescription() {
+    return cardBrandOtherDescription;
+  }
+
+  public void setCardBrandOtherDescription(String cardBrandOtherDescription) {
+    this.cardBrandOtherDescription = cardBrandOtherDescription;
   }
 }
