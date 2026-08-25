@@ -217,7 +217,8 @@ public class AuthService {
     passwordResetTokenRepository.save(entity);
 
     String resetUrl = frontendUrl + "/reset-password?token=" + raw;
-    emailService.sendPasswordResetLink(user.getEmail(), resetUrl, locale);
+    emailService.sendPasswordResetLink(
+        user.getEmail(), resetUrl, user.getTenant().getName(), locale);
     return raw;
   }
 
@@ -271,7 +272,8 @@ public class AuthService {
     professionalRepository.save(professional);
 
     String activationUrl = frontendUrl + "/activate?token=" + raw;
-    emailService.sendActivationLink(email, activationUrl, locale);
+    emailService.sendActivationLink(
+        email, activationUrl, professional.getTenant().getName(), locale);
 
     return new GrantAccessResponse(true, raw);
   }
@@ -309,7 +311,8 @@ public class AuthService {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
       }
       Professional prof = token.getProfessional();
-      return new ActivationTokenInfoResponse(prof.getId(), prof.getFullName(), prof.getEmail());
+      return new ActivationTokenInfoResponse(
+          prof.getId(), prof.getFullName(), prof.getEmail(), prof.getTenant().getName());
     }
 
     AppUserActivationToken userToken =
@@ -320,7 +323,11 @@ public class AuthService {
     if (userToken.getExpiresAt().isBefore(Instant.now())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
-    return new ActivationTokenInfoResponse(null, null, userToken.getAppUser().getEmail());
+    return new ActivationTokenInfoResponse(
+        null,
+        null,
+        userToken.getAppUser().getEmail(),
+        userToken.getAppUser().getTenant().getName());
   }
 
   /**

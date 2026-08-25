@@ -77,7 +77,7 @@
       "emailInvalid": "Ingresá un email válido (debe contener @ y texto antes del @, ej. nombre@dominio.com).",
       "phoneIncomplete": "Ingresá los 10 dígitos del teléfono (ej. (0981) 123-456)."
     },
-    "appName": "Femme",
+    "appName": "Gestión Peluquería",
     "login": {
       "title": "Iniciar sesión",
       "subtitle": "Ingresa tu correo y contraseña del sistema.",

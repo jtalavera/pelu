@@ -127,7 +127,7 @@ public class PlatformUserAdminService {
     activationTokenRepository.save(token);
 
     String activationUrl = frontendUrl + "/activate?token=" + raw;
-    emailService.sendActivationLink(email, activationUrl, locale);
+    emailService.sendActivationLink(email, activationUrl, tenant.getName(), locale);
 
     log.info(
         "tenant admin created tenantId={} userId={} invitationSent=true", tenantId, user.getId());
@@ -269,7 +269,8 @@ public class PlatformUserAdminService {
     activationTokenRepository.save(token);
 
     String activationUrl = frontendUrl + "/activate?token=" + raw;
-    emailService.sendActivationLink(user.getEmail(), activationUrl, locale);
+    emailService.sendActivationLink(
+        user.getEmail(), activationUrl, user.getTenant().getName(), locale);
 
     log.info(
         "tenant user invitation resend tenantId={} userId={} mode=ACTIVATION_INVITE",

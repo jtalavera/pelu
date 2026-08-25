@@ -14,6 +14,8 @@ export type Me = {
   userId: number;
   /** null only for PLATFORM_ADMIN (HU-34) — genuinely tenant-independent. */
   tenantId: number | null;
+  /** Same null-only-for-PLATFORM_ADMIN rule as tenantId. */
+  tenantName: string | null;
   email: string;
   role: "PLATFORM_ADMIN" | "ADMIN" | "PROFESSIONAL";
   professionalId: number | null;

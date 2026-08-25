@@ -77,7 +77,7 @@
       "emailInvalid": "Enter a valid email (must include @ and text before @, e.g. name@domain.com).",
       "phoneIncomplete": "Enter the 10 digits of the phone number (e.g. (0981) 123-456)."
     },
-    "appName": "Femme",
+    "appName": "Salon Management",
     "login": {
       "title": "Sign in",
       "subtitle": "Enter your system email and password.",

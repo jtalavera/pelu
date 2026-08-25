@@ -11,6 +11,7 @@ type TokenInfo = {
   professionalId: number | null;
   professionalName: string | null;
   email: string;
+  tenantName: string | null;
 };
 
 export default function ActivatePage() {
@@ -113,7 +114,7 @@ export default function ActivatePage() {
           className="text-lg font-medium text-[var(--color-rose)]"
           style={{ letterSpacing: "-0.01em" }}
         >
-          Femme
+          {tokenInfo?.tenantName ?? t("femme.appName")}
         </span>
 
         <div

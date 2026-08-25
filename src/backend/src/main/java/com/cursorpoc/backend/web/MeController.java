@@ -4,6 +4,7 @@ import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.AuthService;
 import com.cursorpoc.backend.web.dto.ChangePasswordRequest;
@@ -32,14 +33,17 @@ public class MeController {
 
   private final ProfessionalRepository professionalRepository;
   private final AppUserRepository appUserRepository;
+  private final TenantRepository tenantRepository;
   private final PasswordEncoder passwordEncoder;
 
   public MeController(
       ProfessionalRepository professionalRepository,
       AppUserRepository appUserRepository,
+      TenantRepository tenantRepository,
       PasswordEncoder passwordEncoder) {
     this.professionalRepository = professionalRepository;
     this.appUserRepository = appUserRepository;
+    this.tenantRepository = tenantRepository;
     this.passwordEncoder = passwordEncoder;
   }
 
@@ -67,10 +71,19 @@ public class MeController {
               .orElse(null);
     }
 
+    String tenantName =
+        principal.getTenantIdOrNull() == null
+            ? null
+            : tenantRepository
+                .findById(principal.getTenantIdOrNull())
+                .map(t -> t.getName())
+                .orElse(null);
+
     MeResponse resp =
         new MeResponse(
             principal.getUserId(),
             principal.getTenantIdOrNull(),
+            tenantName,
             principal.getUsername(),
             principal.getRole().name(),
             principal.getProfessionalId(),

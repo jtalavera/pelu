@@ -47,10 +47,13 @@ public class EmailService {
     return enabled && !connectionString.isBlank();
   }
 
-  public void sendActivationLink(String toEmail, String activationUrl, Locale locale) {
-    String subject = messageSource.getMessage("email.activation.subject", null, locale);
+  public void sendActivationLink(
+      String toEmail, String activationUrl, String tenantName, Locale locale) {
+    String subject =
+        messageSource.getMessage("email.activation.subject", new Object[] {tenantName}, locale);
     String body =
-        messageSource.getMessage("email.activation.body", new Object[] {activationUrl}, locale);
+        messageSource.getMessage(
+            "email.activation.body", new Object[] {activationUrl, tenantName}, locale);
 
     if (!isEffectivelyEnabled()) {
       log.info(
@@ -89,10 +92,13 @@ public class EmailService {
    * {@link #sendActivationLink} — used both by the self-service "forgot password" flow and by a
    * Platform-Admin-triggered reset for a tenant user who already activated their account.
    */
-  public void sendPasswordResetLink(String toEmail, String resetUrl, Locale locale) {
-    String subject = messageSource.getMessage("email.passwordReset.subject", null, locale);
+  public void sendPasswordResetLink(
+      String toEmail, String resetUrl, String tenantName, Locale locale) {
+    String subject =
+        messageSource.getMessage("email.passwordReset.subject", new Object[] {tenantName}, locale);
     String body =
-        messageSource.getMessage("email.passwordReset.body", new Object[] {resetUrl}, locale);
+        messageSource.getMessage(
+            "email.passwordReset.body", new Object[] {resetUrl, tenantName}, locale);
 
     if (!isEffectivelyEnabled()) {
       log.info(

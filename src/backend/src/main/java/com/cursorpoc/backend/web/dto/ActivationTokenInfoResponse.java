@@ -6,4 +6,4 @@ package com.cursorpoc.backend.web.dto;
  * ActivatePage} falls back to its generic subtitle in that case.
  */
 public record ActivationTokenInfoResponse(
-    Long professionalId, String professionalName, String email) {}
+    Long professionalId, String professionalName, String email, String tenantName) {}
