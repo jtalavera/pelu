@@ -9,6 +9,7 @@ import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.DiscountType;
@@ -372,10 +373,33 @@ public class InvoiceService {
       } catch (IllegalArgumentException e) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_PAYMENT_METHOD");
       }
+      // Issue #170: SIFEN's E7.1.1/gPagTarCD group is mandatory for card payments and requires
+      // the card brand — collect and validate it here so it's always present by the time the
+      // invoice reaches SifenInvoiceDetailService.
+      CardBrand cardBrand = null;
+      if (method == PaymentMethod.CREDIT_CARD || method == PaymentMethod.DEBIT_CARD) {
+        if (pr.cardBrand() == null || pr.cardBrand().isBlank()) {
+          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CARD_BRAND_REQUIRED");
+        }
+        try {
+          cardBrand = CardBrand.valueOf(pr.cardBrand().toUpperCase());
+        } catch (IllegalArgumentException e) {
+          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CARD_BRAND_REQUIRED");
+        }
+        if (cardBrand == CardBrand.OTHER
+            && (pr.cardBrandOtherDescription() == null
+                || pr.cardBrandOtherDescription().isBlank())) {
+          throw new ResponseStatusException(
+              HttpStatus.BAD_REQUEST, "CARD_BRAND_OTHER_DESCRIPTION_REQUIRED");
+        }
+      }
       InvoicePaymentAllocation allocation = new InvoicePaymentAllocation();
       allocation.setInvoice(invoice);
       allocation.setMethod(method);
       allocation.setAmount(pr.amount().setScale(2, RoundingMode.HALF_UP));
+      allocation.setCardBrand(cardBrand);
+      allocation.setCardBrandOtherDescription(
+          cardBrand == CardBrand.OTHER ? pr.cardBrandOtherDescription() : null);
       invoice.getPaymentAllocations().add(allocation);
       paymentsSum = paymentsSum.add(pr.amount());
     }
@@ -579,7 +603,13 @@ public class InvoiceService {
 
     List<InvoicePaymentAllocationResponse> payments =
         i.getPaymentAllocations().stream()
-            .map(p -> new InvoicePaymentAllocationResponse(p.getMethod().name(), p.getAmount()))
+            .map(
+                p ->
+                    new InvoicePaymentAllocationResponse(
+                        p.getMethod().name(),
+                        p.getAmount(),
+                        p.getCardBrand() != null ? p.getCardBrand().name() : null,
+                        p.getCardBrandOtherDescription()))
             .collect(Collectors.toList());
 
     return new InvoiceResponse(

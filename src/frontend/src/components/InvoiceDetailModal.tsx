@@ -43,6 +43,8 @@ export type InvoiceLine = {
 export type InvoicePayment = {
   method: string;
   amount: string;
+  cardBrand?: string | null;
+  cardBrandOtherDescription?: string | null;
 };
 
 export type InvoiceDetail = {
@@ -585,7 +587,15 @@ export function InvoiceDetailModal({
               <div className="flex flex-col gap-1">
                 {invoice.payments.map((p, i) => (
                   <div key={i} className="flex justify-between text-sm">
-                    <span>{t(`femme.billing.invoice.paymentMethod${capitalize(p.method)}`)}</span>
+                    <span>
+                      {t(`femme.billing.invoice.paymentMethod${capitalize(p.method)}`)}
+                      {p.cardBrand &&
+                        ` — ${
+                          p.cardBrand === "OTHER"
+                            ? p.cardBrandOtherDescription
+                            : t(`femme.billing.invoice.cardBrand${capitalize(p.cardBrand)}`)
+                        }`}
+                    </span>
                     <span>{formatAmountDecimal(p.amount)}</span>
                   </div>
                 ))}

@@ -111,7 +111,8 @@ class InvoiceServiceTest {
             });
 
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -163,7 +164,8 @@ class InvoiceServiceTest {
             });
 
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             7L, "  ", "  ", null, null, List.of(line), List.of(payment), null, null);
@@ -186,7 +188,8 @@ class InvoiceServiceTest {
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
     var line = new InvoiceLineRequest(null, "Color", 1, new BigDecimal("100000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("DEBIT_CARD", new BigDecimal("90000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("DEBIT_CARD", new BigDecimal("90000.00"), "VISA", null);
     var request =
         new InvoiceCreateRequest(
             null,
@@ -217,7 +220,8 @@ class InvoiceServiceTest {
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
     var line = new InvoiceLineRequest(null, "Mani", 1, new BigDecimal("200000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("180000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("180000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null,
@@ -246,8 +250,10 @@ class InvoiceServiceTest {
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
     var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("100000.00"), null, null);
-    var p1 = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"));
-    var p2 = new InvoicePaymentAllocationRequest("CREDIT_CARD", new BigDecimal("40000.00"));
+    var p1 = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
+    var p2 =
+        new InvoicePaymentAllocationRequest(
+            "CREDIT_CARD", new BigDecimal("40000.00"), "VISA", null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(p1, p2), null, null);
@@ -268,7 +274,8 @@ class InvoiceServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
     var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("100000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("99000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("99000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -283,6 +290,88 @@ class InvoiceServiceTest {
             });
   }
 
+  /**
+   * Issue #170: SIFEN rejects card payments missing the mandatory E7.1.1/gPagTarCD group — the card
+   * brand must be captured at issuance so it can always be emitted.
+   */
+  @Test
+  void issueInvoice_creditCardPaymentWithoutBrand_throwsBadRequest() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("100000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CREDIT_CARD", new BigDecimal("100000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex -> {
+              ResponseStatusException rse = (ResponseStatusException) ex;
+              assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+              assertThat(rse.getReason()).isEqualTo("CARD_BRAND_REQUIRED");
+            });
+  }
+
+  @Test
+  void issueInvoice_debitCardPaymentWithOtherBrandButNoDescription_throwsBadRequest() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("100000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest(
+            "DEBIT_CARD", new BigDecimal("100000.00"), "OTHER", "  ");
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex -> {
+              ResponseStatusException rse = (ResponseStatusException) ex;
+              assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+              assertThat(rse.getReason()).isEqualTo("CARD_BRAND_OTHER_DESCRIPTION_REQUIRED");
+            });
+  }
+
+  @Test
+  void issueInvoice_debitCardPaymentWithOtherBrandAndDescription_succeeds() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("100000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest(
+            "DEBIT_CARD", new BigDecimal("100000.00"), "OTHER", "Union Pay");
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.payments()).hasSize(1);
+    assertThat(result.payments().get(0).cardBrand()).isEqualTo("OTHER");
+    assertThat(result.payments().get(0).cardBrandOtherDescription()).isEqualTo("Union Pay");
+  }
+
   @Test
   void issueInvoice_withTipsAmount_paymentsMustCoverTotalOnly() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
@@ -294,7 +383,7 @@ class InvoiceServiceTest {
 
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
     var paymentIncludingTip =
-        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"));
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
     var requestTooHigh =
         new InvoiceCreateRequest(
             null,
@@ -319,7 +408,7 @@ class InvoiceServiceTest {
 
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
     var paymentCoveringTotalOnly =
-        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
     var requestOk =
         new InvoiceCreateRequest(
             null,
@@ -360,7 +449,8 @@ class InvoiceServiceTest {
     when(invoiceRepository.existsByServiceRecord_Id(200L)).thenReturn(false);
 
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(payment), 200L, null);
@@ -392,7 +482,8 @@ class InvoiceServiceTest {
     when(invoiceRepository.existsByServiceRecord_Id(201L)).thenReturn(true);
 
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(payment), 201L, null);
@@ -413,7 +504,8 @@ class InvoiceServiceTest {
         .thenReturn(Optional.empty());
 
     var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("50000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -435,7 +527,8 @@ class InvoiceServiceTest {
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L)).thenReturn(Optional.empty());
 
     var line = new InvoiceLineRequest(null, "Service", 1, new BigDecimal("50000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -665,7 +758,7 @@ class InvoiceServiceTest {
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
     var line = new InvoiceLineRequest(null, "S", 1, new BigDecimal("10.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("10.00"));
+    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("10.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -789,7 +882,8 @@ class InvoiceServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
     var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -811,7 +905,8 @@ class InvoiceServiceTest {
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
     var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("6999999.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("6999999.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("6999999.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -835,7 +930,8 @@ class InvoiceServiceTest {
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
     var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null, null, null, "4123456", null, null, List.of(line), List.of(payment), null, null);
@@ -864,7 +960,8 @@ class InvoiceServiceTest {
     when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
 
     var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             7L, null, "80000005-6", null, null, null, List.of(line), List.of(payment), null, null);
@@ -897,7 +994,8 @@ class InvoiceServiceTest {
     when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
 
     var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             7L, null, null, null, null, null, List.of(line), List.of(payment), null, null);
@@ -918,7 +1016,8 @@ class InvoiceServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
     var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null,
@@ -950,7 +1049,8 @@ class InvoiceServiceTest {
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
     var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
-    var payment = new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"));
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"), null, null);
     var request =
         new InvoiceCreateRequest(
             null,
