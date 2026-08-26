@@ -723,6 +723,12 @@ public class SifenKudePdfService {
   private static final class PageNumberEvent extends PdfPageEventHelper {
     private PdfTemplate totalPagesTemplate;
     private com.lowagie.text.pdf.BaseFont baseFont;
+    // Tracks the last page actually rendered via onEndPage. writer.getPageNumber() can no
+    // longer be trusted at onCloseDocument time: OpenPDF bumps its internal page counter while
+    // probing whether trailing content (e.g. the totals/optional-message blocks) fits on the
+    // current page, even when that probe never produces a real extra page — re-reading it here
+    // was inflating the total by one on single-page KuDEs (AC-12 regression).
+    private int lastPageNumber;
 
     @Override
     public void onOpenDocument(PdfWriter writer, Document document) {
@@ -740,8 +746,9 @@ public class SifenKudePdfService {
 
     @Override
     public void onEndPage(PdfWriter writer, Document document) {
+      lastPageNumber = writer.getPageNumber();
       com.lowagie.text.pdf.PdfContentByte cb = writer.getDirectContent();
-      String text = "Página " + writer.getPageNumber() + " / ";
+      String text = "Página " + lastPageNumber + " / ";
       float x = document.right() - 60;
       float y = document.bottom() - 20;
       cb.beginText();
@@ -757,7 +764,7 @@ public class SifenKudePdfService {
       totalPagesTemplate.beginText();
       totalPagesTemplate.setFontAndSize(baseFont, 8);
       totalPagesTemplate.setTextMatrix(0, 0);
-      totalPagesTemplate.showText(String.valueOf(writer.getPageNumber()));
+      totalPagesTemplate.showText(String.valueOf(lastPageNumber));
       totalPagesTemplate.endText();
     }
   }
