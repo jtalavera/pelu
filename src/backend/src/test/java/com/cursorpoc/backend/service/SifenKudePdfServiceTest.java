@@ -357,6 +357,17 @@ class SifenKudePdfServiceTest {
     assertThat(page1).contains("Página 1 / ");
   }
 
+  /** AC-12 regression: the displayed total must match the PDF's real page count. */
+  @Test
+  void buildKudePdf_pageNumberingTotalMatchesActualPageCount() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    PdfReader reader = new PdfReader(result.bytes());
+    int actualPages = reader.getNumberOfPages();
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).contains("Página 1 / " + actualPages);
+  }
+
   /** AC-11: an optional logo and free message are the only allowed extras. */
   @Test
   void buildKudePdf_showsOptionalFreeMessageWhenConfigured() throws Exception {
