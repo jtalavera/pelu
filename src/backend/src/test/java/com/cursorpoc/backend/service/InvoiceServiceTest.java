@@ -1070,6 +1070,121 @@ class InvoiceServiceTest {
     assertThat(result.clientIdentityDocumentTypeOverride()).isEqualTo("PASAPORTE");
   }
 
+  // ── Issue #174 AC-01: diplomatic-exoneration receiver → amounts net of the included 10% IVA ──
+
+  @Test
+  void issueInvoice_diplomaticReceiver_stripsIncludedIva() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    var line = new InvoiceLineRequest(null, "Corte", 1, new BigDecimal("110000.00"), null, null);
+    // 110.000 / 1,10 = 100.000 — that's what the payment must now cover.
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("100000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            null,
+            "MISION DIPLOMATICA",
+            null,
+            "DIP-001",
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            "TARJETA_DIPLOMATICA",
+            null,
+            null,
+            null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.subtotal()).isEqualByComparingTo(new BigDecimal("100000.00"));
+    assertThat(result.total()).isEqualByComparingTo(new BigDecimal("100000.00"));
+    assertThat(result.lines().get(0).unitPrice()).isEqualByComparingTo(new BigDecimal("100000.00"));
+    assertThat(result.lines().get(0).taxRate()).isEqualByComparingTo(BigDecimal.ZERO);
+    assertThat(result.lines().get(0).taxAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+  }
+
+  // ── Issue #174 AC-04: manual emission date must sit inside SIFEN's -720h/+120h window ──
+
+  @Test
+  void issueInvoice_backdatedEmissionDateWithinWindow_isHonoured() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    Instant backdated = Instant.now().minusSeconds(5L * 24 * 3600);
+    var line = new InvoiceLineRequest(null, "Corte", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            null,
+            null,
+            null,
+            backdated.toString());
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.issuedAt()).isEqualTo(backdated);
+  }
+
+  @Test
+  void issueInvoice_emissionDateTooFarBack_throwsBadRequest() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    Instant tooOld = Instant.now().minusSeconds(40L * 24 * 3600);
+    var line = new InvoiceLineRequest(null, "Corte", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            null,
+            null,
+            null,
+            tooOld.toString());
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, request))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVOICE_ISSUE_DATE_OUT_OF_RANGE");
+  }
+
   private Invoice buildIssuedInvoice() {
     Invoice invoice = new Invoice();
     invoice.setId(100L);

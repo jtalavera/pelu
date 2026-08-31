@@ -32,7 +32,12 @@ public record InvoiceCreateRequest(
      * e-invoicing is enabled unless the receiver is unidentified ("Sin identificar"). A new value
      * is also written back to the linked client's profile.
      */
-    String email) {
+    String email,
+    /**
+     * Issue #174 AC-04: optional ISO-8601 instant overriding the emission date. Only honoured when
+     * the form's "editar fecha" checkbox was ticked; must sit within SIFEN's -720h/+120h window.
+     */
+    String issuedAt) {
 
   public InvoiceCreateRequest(
       Long clientId,
@@ -55,6 +60,7 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
         null,
         null,
         null);
@@ -82,6 +88,7 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
         null,
         null,
         null);
@@ -111,6 +118,7 @@ public record InvoiceCreateRequest(
         serviceRecordId,
         tipsAmount,
         clientIdentityDocumentTypeOverride,
+        null,
         null,
         null);
   }

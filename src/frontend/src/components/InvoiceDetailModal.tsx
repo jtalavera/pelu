@@ -59,6 +59,8 @@ export type InvoiceDetail = {
   /** Issue #173: the email captured on the comprobante form for this document. */
   recipientEmail?: string | null;
   clientRucOverride: string | null;
+  /** Issue #174 AC-01: "TARJETA_DIPLOMATICA" here means the sale was issued IVA-exonerada. */
+  clientIdentityDocumentTypeOverride?: string | null;
   status: string;
   subtotal: string;
   discountType: string;
@@ -529,6 +531,15 @@ export function InvoiceDetailModal({
             {/* Lines */}
             <div>
               <Text className="font-medium mb-2">{t("femme.billing.history.detail.items")}</Text>
+              {invoice.clientIdentityDocumentTypeOverride === "TARJETA_DIPLOMATICA" && (
+                <Text
+                  variant="small"
+                  data-testid="invoice-detail-tax-exempt-note"
+                  className="mb-2 text-[rgb(var(--color-muted-foreground))]"
+                >
+                  {t("femme.billing.history.detail.taxExemptNote")}
+                </Text>
+              )}
               <div className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
                 <table className="min-w-full text-sm">
                   <thead className="bg-[rgb(var(--color-muted))]">
@@ -1028,9 +1039,9 @@ export function InvoiceDetailModal({
                                   onSubmit={(e) => void handleIdentifyClient(e)}
                                   noValidate
                                 >
-                                  <Heading as="h3" className="text-base">
-                                    {t("femme.billing.history.detail.sifen.identifyClientTitle")}
-                                  </Heading>
+                                  {/* Issue #174 AC-03: the accordion header already reads
+                                      "Identificar cliente" — a second identical heading here is
+                                      redundant. */}
                                   <div>
                                     <Label id="identify-client-type-label">
                                       {t("femme.billing.history.detail.sifen.identifyClientTypeLabel")}

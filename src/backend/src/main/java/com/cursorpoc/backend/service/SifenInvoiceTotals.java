@@ -8,6 +8,8 @@ import java.math.BigDecimal;
  * consistent with the line detail by construction (AC-04).
  *
  * @param exemptSubtotal F002/dSubExe — sum of netTotal for EXENTO lines.
+ * @param exoneratedSubtotal F003/dSubExo — sum of netTotal for EXONERADO lines (issue #174 AC-01,
+ *     "Tarjeta Diplomática de exoneración fiscal" receiver); zero otherwise.
  * @param taxedSubtotal5 F004/dSub5 — sum of netTotal for GRAVADO lines at 5%.
  * @param taxedSubtotal10 F005/dSub10 — sum of netTotal for GRAVADO lines at 10%.
  * @param grossTotal F008/dTotOpe — exemptSubtotal + taxedSubtotal5 + taxedSubtotal10.
@@ -34,6 +36,7 @@ import java.math.BigDecimal;
  */
 public record SifenInvoiceTotals(
     BigDecimal exemptSubtotal,
+    BigDecimal exoneratedSubtotal,
     BigDecimal taxedSubtotal5,
     BigDecimal taxedSubtotal10,
     BigDecimal grossTotal,
@@ -48,4 +51,46 @@ public record SifenInvoiceTotals(
     BigDecimal iva10,
     BigDecimal totalIva,
     BigDecimal globalDiscountPercent,
-    BigDecimal roundingAdjustment) {}
+    BigDecimal roundingAdjustment) {
+
+  /**
+   * Backward-compatible constructor for the pre-issue-#174 shape (no exonerado bucket) — keeps
+   * existing tests and homologation fixtures compiling; {@code exoneratedSubtotal} defaults to 0.
+   */
+  public SifenInvoiceTotals(
+      BigDecimal exemptSubtotal,
+      BigDecimal taxedSubtotal5,
+      BigDecimal taxedSubtotal10,
+      BigDecimal grossTotal,
+      BigDecimal perLineDiscountTotal,
+      BigDecimal globalDiscountTotal,
+      BigDecimal totalDiscount,
+      BigDecimal netTotal,
+      BigDecimal taxableBase5,
+      BigDecimal taxableBase10,
+      BigDecimal totalTaxableBase,
+      BigDecimal iva5,
+      BigDecimal iva10,
+      BigDecimal totalIva,
+      BigDecimal globalDiscountPercent,
+      BigDecimal roundingAdjustment) {
+    this(
+        exemptSubtotal,
+        BigDecimal.ZERO,
+        taxedSubtotal5,
+        taxedSubtotal10,
+        grossTotal,
+        perLineDiscountTotal,
+        globalDiscountTotal,
+        totalDiscount,
+        netTotal,
+        taxableBase5,
+        taxableBase10,
+        totalTaxableBase,
+        iva5,
+        iva10,
+        totalIva,
+        globalDiscountPercent,
+        roundingAdjustment);
+  }
+}

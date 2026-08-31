@@ -2,6 +2,7 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.FeatureFlagService;
+import com.cursorpoc.backend.service.InvoiceHistoryReportService;
 import com.cursorpoc.backend.service.InvoiceService;
 import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
@@ -11,16 +12,22 @@ import com.cursorpoc.backend.service.SifenSubmissionQueue;
 import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
+import com.cursorpoc.backend.web.dto.InvoiceListItemResponse;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +53,7 @@ public class InvoiceController {
   static final String SIFEN_ELECTRONIC_INVOICING_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
   private final InvoiceService invoiceService;
+  private final InvoiceHistoryReportService invoiceHistoryReportService;
   private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
   private final SifenInvoiceCancellationService sifenInvoiceCancellationService;
   private final SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService;
@@ -55,6 +63,7 @@ public class InvoiceController {
 
   public InvoiceController(
       InvoiceService invoiceService,
+      InvoiceHistoryReportService invoiceHistoryReportService,
       SifenInvoiceSubmissionService sifenInvoiceSubmissionService,
       SifenInvoiceCancellationService sifenInvoiceCancellationService,
       SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService,
@@ -62,6 +71,7 @@ public class InvoiceController {
       SifenCertificateService sifenCertificateService,
       SifenSubmissionQueue sifenSubmissionQueue) {
     this.invoiceService = invoiceService;
+    this.invoiceHistoryReportService = invoiceHistoryReportService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
     this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
     this.sifenInvoiceClientIdentificationService = sifenInvoiceClientIdentificationService;
@@ -137,6 +147,58 @@ public class InvoiceController {
         principal.getTenantId(),
         response.totalElements());
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Issue #174 AC-05: downloads the History tab's currently filtered list as an Excel (.xlsx) or
+   * PDF report — header data only. {@code format} is {@code xlsx} or {@code pdf} (default pdf).
+   */
+  @GetMapping("/report")
+  public ResponseEntity<byte[]> report(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(required = false) String from,
+      @RequestParam(required = false) String to,
+      @RequestParam(required = false) Long clientId,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "pdf") String format) {
+    requirePrincipal(principal);
+    long tenantId = principal.getTenantId();
+    log.info("GET /api/invoices/report tenantId={} format={}", tenantId, format);
+    Instant fromInstant = from != null ? Instant.parse(from) : null;
+    Instant toInstant = to != null ? Instant.parse(to) : null;
+    try {
+      List<InvoiceListItemResponse> rows =
+          invoiceService.listInvoicesForReport(
+              tenantId, fromInstant, toInstant, clientId, status, q);
+      boolean xlsx = "xlsx".equalsIgnoreCase(format) || "excel".equalsIgnoreCase(format);
+      byte[] body =
+          xlsx
+              ? invoiceHistoryReportService.renderXlsx(rows, fromInstant, toInstant)
+              : invoiceHistoryReportService.renderPdf(rows, fromInstant, toInstant);
+      String filename = reportFilename(fromInstant, toInstant, xlsx ? "xlsx" : "pdf");
+      MediaType contentType =
+          xlsx
+              ? MediaType.parseMediaType(
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+              : MediaType.APPLICATION_PDF;
+      log.info("GET /api/invoices/report tenantId={} status=200 rows={}", tenantId, rows.size());
+      return ResponseEntity.ok()
+          .contentType(contentType)
+          .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+          .body(body);
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/invoices/report tenantId={} status={}", tenantId, ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
+  private static String reportFilename(Instant from, Instant to, String ext) {
+    DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC);
+    String fromLabel = from != null ? fmt.format(from) : "inicio";
+    String toLabel = to != null ? fmt.format(to) : "hoy";
+    return "COMPROBANTES-" + fromLabel + "-" + toLabel + "." + ext;
   }
 
   @GetMapping("/{id}")
