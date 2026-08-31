@@ -43,13 +43,24 @@ const defaultHomologation = {
   markedAt: null,
 };
 
-/** Submits the "Tenant ID" form (HU-36: Platform Admin picks the tenant explicitly — there is no
- * implicit preview tenant anymore) so the page loads tenant #1's rows, mirroring what every test
- * below needs before it can assert on the loaded feature-flag list. */
-async function submitTenantId(user: ReturnType<typeof userEvent.setup>, tenantId = "1") {
-  const input = await screen.findByLabelText("Tenant ID");
-  await user.type(input, tenantId);
-  await user.click(screen.getByRole("button", { name: "Load" }));
+const defaultTenantSearchResult = {
+  content: [
+    { id: 1, name: "Tenant One", domain: null, tierId: null, tierName: null, status: "ACTIVE" },
+  ],
+  page: 0,
+  size: 8,
+  totalElements: 1,
+  totalPages: 1,
+};
+
+/** Searches for and selects "Tenant One" via the tenant search field (HU-36: Platform Admin picks
+ * the tenant explicitly — there is no implicit preview tenant anymore) so the page loads tenant
+ * #1's rows, mirroring what every test below needs before it can assert on the loaded
+ * feature-flag list. */
+async function submitTenantId(user: ReturnType<typeof userEvent.setup>) {
+  const input = await screen.findByLabelText("Organization");
+  await user.type(input, "Tenant");
+  await user.click(await screen.findByRole("button", { name: /Tenant One/i }));
 }
 
 describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour flag)", () => {
@@ -62,6 +73,9 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     vi.mocked(femmeClient.femmePutJson).mockReset();
     vi.mocked(femmeClient.femmeDeleteJson).mockReset();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.includes("/api/platform/tenants")) {
+        return defaultTenantSearchResult as never;
+      }
       if (path.endsWith("/sifen-homologation")) {
         return defaultHomologation as never;
       }
@@ -83,9 +97,9 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     vi.mocked(femmeClient.femmeDeleteJson).mockResolvedValue(undefined);
   });
 
-  it("shows a tenant ID form before loading anything", async () => {
+  it("shows a tenant search field before loading anything", async () => {
     renderPage();
-    expect(await screen.findByLabelText("Tenant ID")).toBeTruthy();
+    expect(await screen.findByLabelText("Organization")).toBeTruthy();
     expect(vi.mocked(femmeClient.femmeJson)).not.toHaveBeenCalledWith(
       expect.stringContaining("/api/admin/feature-flags"),
       expect.anything(),
@@ -101,7 +115,7 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     expect(screen.getByText("Global default")).toBeTruthy();
     expect(screen.getByText("This organization")).toBeTruthy();
     expect(screen.getByText("Using global default")).toBeTruthy();
-    expect(screen.getByText("Managing tenant #1.")).toBeTruthy();
+    expect(screen.getByText("Managing Tenant One.")).toBeTruthy();
     expect(vi.mocked(femmeClient.femmeJson)).toHaveBeenCalledWith(
       "/api/admin/feature-flags/tenants/1",
       { json: false },
@@ -113,6 +127,9 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
   it("shows the tier default and the tier as the effective source when the tenant's tier defines the flag", async () => {
     const user = userEvent.setup();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.includes("/api/platform/tenants")) {
+        return defaultTenantSearchResult as never;
+      }
       if (path.endsWith("/sifen-homologation")) {
         return defaultHomologation as never;
       }
@@ -143,6 +160,9 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
   it("shows the organization override as the effective source even when the tier also defines the flag", async () => {
     const user = userEvent.setup();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.includes("/api/platform/tenants")) {
+        return defaultTenantSearchResult as never;
+      }
       if (path.endsWith("/sifen-homologation")) {
         return defaultHomologation as never;
       }
@@ -192,21 +212,24 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     });
   });
 
-  it("changing tenant returns to the tenant ID form", async () => {
+  it("changing tenant returns to the tenant search field", async () => {
     const user = userEvent.setup();
     renderPage();
     await submitTenantId(user);
     await screen.findByText("GUIDED_TOUR");
 
-    await user.click(screen.getByRole("button", { name: "Change tenant" }));
+    await user.click(screen.getByRole("button", { name: "Change organization" }));
 
-    expect(await screen.findByLabelText("Tenant ID")).toBeTruthy();
+    expect(await screen.findByLabelText("Organization")).toBeTruthy();
     expect(screen.queryByText("GUIDED_TOUR")).toBeNull();
   });
 
   it("shows the last-change history when present (SIFEN HU-22 AC-05)", async () => {
     const user = userEvent.setup();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.includes("/api/platform/tenants")) {
+        return defaultTenantSearchResult as never;
+      }
       if (path.endsWith("/sifen-homologation")) {
         return defaultHomologation as never;
       }
@@ -243,6 +266,9 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
   it("shows a pending homologación warning next to SIFEN_ELECTRONIC_INVOICING", async () => {
     const user = userEvent.setup();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.includes("/api/platform/tenants")) {
+        return defaultTenantSearchResult as never;
+      }
       if (path.endsWith("/sifen-homologation")) {
         return defaultHomologation as never;
       }
@@ -274,6 +300,9 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
   it("marks homologación as approved and refreshes the badge", async () => {
     const user = userEvent.setup();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
+      if (path.includes("/api/platform/tenants")) {
+        return defaultTenantSearchResult as never;
+      }
       if (path.endsWith("/sifen-homologation")) {
         return defaultHomologation as never;
       }

@@ -11,9 +11,11 @@ import { PLATFORM_ADMIN_EMAIL, loginAsPlatformAdmin } from "../fixtures/auth";
 // HU-36: the legacy tenant-bound SYSTEM_ADMIN role was migrated to the tenant-independent
 // PLATFORM_ADMIN role, and the toggle/homologación admin UI moved from
 // /app/settings/feature-flags to /platform/feature-flags (Platform Admin now picks the target
-// tenant explicitly via a "Tenant ID" form instead of an implicit preview tenant).
+// tenant explicitly via a search field instead of an implicit preview tenant).
 
 const DEMO_TENANT_ID = 1;
+// e2e/global-setup.ts always names the first (id=1) provisioned tenant this.
+const DEMO_TENANT_NAME = "Demo salon";
 
 async function setHomologationStatus(request: APIRequestContext, status: "PENDING" | "APPROVED") {
   const token = await loginPlatformAdminApi(request);
@@ -27,8 +29,8 @@ async function setHomologationStatus(request: APIRequestContext, status: "PENDIN
 async function goToTenantFeatureFlags(page: import("@playwright/test").Page) {
   await loginAsPlatformAdmin(page);
   await page.goto("/platform/feature-flags");
-  await page.getByLabel("Tenant ID").fill(String(DEMO_TENANT_ID));
-  await page.getByRole("button", { name: "Load" }).click();
+  await page.getByLabel("Organization").fill(DEMO_TENANT_NAME);
+  await page.getByRole("button", { name: new RegExp(DEMO_TENANT_NAME) }).click();
 }
 
 test.describe("RT-19 · Estado de homologación SIFEN por tenant", () => {

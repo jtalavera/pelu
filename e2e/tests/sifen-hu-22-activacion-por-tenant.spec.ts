@@ -46,6 +46,8 @@ import { PLATFORM_ADMIN_EMAIL, loginAsDemo, loginAsPlatformAdmin } from "../fixt
 // see PROGRESS.md) — verified instead at the unit level in FeatureFlagServiceTest.
 
 const DEMO_TENANT_ID = 1;
+// e2e/global-setup.ts always names the first (id=1) provisioned tenant this.
+const DEMO_TENANT_NAME = "Demo salon";
 const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 const FIXTURE_CERT_RUC = "12345678-9";
 
@@ -157,12 +159,12 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
 
   // HU-36: the toggle lives at /platform/feature-flags (Platform Admin's own area) now, not
   // /app/settings/feature-flags — Platform Admin picks the target tenant explicitly (no implicit
-  // preview tenant), so this also exercises that "Tenant ID" form.
+  // preview tenant), so this also exercises that organization search field.
   test("HU-22/HU-36 · existe el toggle por tenant para un Platform Admin", async ({ page }) => {
     await loginAsPlatformAdmin(page);
     await page.goto("/platform/feature-flags");
-    await page.getByLabel("Tenant ID").fill(String(DEMO_TENANT_ID));
-    await page.getByRole("button", { name: "Load" }).click();
+    await page.getByLabel("Organization").fill(DEMO_TENANT_NAME);
+    await page.getByRole("button", { name: new RegExp(DEMO_TENANT_NAME) }).click();
     await expect(page.getByText(FLAG_KEY)).toBeVisible();
     await expect(page.locator(`#ff-tenant-${FLAG_KEY}`)).toBeVisible();
   });
@@ -241,8 +243,8 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
   }) => {
     await loginAsPlatformAdmin(page);
     await page.goto("/platform/feature-flags");
-    await page.getByLabel("Tenant ID").fill(String(DEMO_TENANT_ID));
-    await page.getByRole("button", { name: "Load" }).click();
+    await page.getByLabel("Organization").fill(DEMO_TENANT_NAME);
+    await page.getByRole("button", { name: new RegExp(DEMO_TENANT_NAME) }).click();
     await expect(page.getByText(FLAG_KEY)).toBeVisible();
 
     // The Switch's real <input> is visually sr-only (styling handled by sibling spans), so

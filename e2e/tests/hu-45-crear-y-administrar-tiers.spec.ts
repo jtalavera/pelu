@@ -70,6 +70,31 @@ test.describe("HU-45 · Crear y administrar Tiers", () => {
     await expect(updatedRow).toContainText("Updated description.");
   });
 
+  // The row's dedicated "Feature flags" action is a clearer, explicitly-labeled entry point to a
+  // tier's flag matrix than relying on clicking the row itself — same modal either way.
+  test("the row's dedicated Feature flags button opens the tier's edit modal, flags section included", async ({
+    page,
+  }) => {
+    await loginAsPlatformAdmin(page);
+    await page.goto("/platform/tiers");
+
+    const tierName = `E2E FlagsButton ${Date.now()}`;
+    await page.getByRole("button", { name: "New tier" }).click();
+    const createDlg = page.getByRole("dialog", { name: "New tier" });
+    await createDlg.getByLabel("Name").fill(tierName);
+    await createDlg.getByRole("button", { name: "Create tier" }).click();
+    await expect(createDlg).toBeHidden();
+
+    const row = page.locator("tr").filter({ hasText: tierName }).first();
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.getByRole("button", { name: "Feature flags" }).click();
+
+    const editDlg = page.getByRole("dialog", { name: "Edit tier" });
+    await expect(editDlg).toBeVisible();
+    await expect(editDlg.getByLabel("Name")).toHaveValue(tierName);
+    await expect(editDlg.getByText("Choose which feature flags this tier includes by default.")).toBeVisible();
+  });
+
   // AC-5: creating (or renaming) a tier with a name already used by another tier is rejected with
   // a clear, field-level error; the dialog stays open.
   test("AC5: a duplicate tier name is rejected on create and on rename", async ({ page }) => {

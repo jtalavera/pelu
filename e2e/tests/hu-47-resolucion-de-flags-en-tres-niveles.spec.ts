@@ -210,8 +210,8 @@ test.describe("HU-47 · Resolución de flags en 3 niveles", () => {
 
     await loginAsPlatformAdmin(page);
     await page.goto("/platform/feature-flags");
-    await page.locator("#tenant-id-input").fill(String(tenant.id));
-    await page.getByRole("button", { name: "Load" }).click();
+    await page.getByLabel("Organization").fill(tenant.name);
+    await page.getByRole("button", { name: new RegExp(tenant.name) }).click();
 
     await expect(page.getByText(SIFEN_FLAG)).toBeVisible();
     const sourceBlock = page.getByTestId(`feature-flag-source-${SIFEN_FLAG}`);
@@ -228,10 +228,74 @@ test.describe("HU-47 · Resolución de flags en 3 niveles", () => {
     expect(overrideRes.ok(), await overrideRes.text()).toBeTruthy();
 
     await page.reload();
-    await page.locator("#tenant-id-input").fill(String(tenant.id));
-    await page.getByRole("button", { name: "Load" }).click();
+    await page.getByLabel("Organization").fill(tenant.name);
+    await page.getByRole("button", { name: new RegExp(tenant.name) }).click();
     await expect(page.getByTestId(`feature-flag-source-badge-${SIFEN_FLAG}`)).toContainText(
       "From organization override",
     );
+  });
+
+  // The tenant picker replaced a raw numeric-ID form with a live, filtered search — this proves
+  // typing narrows results instead of showing every tenant in the system.
+  test("the organization search field only shows tenants matching what's typed", async ({
+    page,
+    request,
+  }) => {
+    const platformToken = await loginPlatformAdminApi(request);
+    const tier = await createTierViaApi(request, platformToken, `E2E HU47 Search Tier ${Date.now()}`);
+    const uniqueSuffix = Date.now();
+    const tenantA = await createTenantViaApi(
+      request,
+      platformToken,
+      `E2E HU47 SearchAlpha ${uniqueSuffix}`,
+      tier.id,
+    );
+    const tenantB = await createTenantViaApi(
+      request,
+      platformToken,
+      `E2E HU47 SearchBeta ${uniqueSuffix}`,
+      tier.id,
+    );
+
+    await loginAsPlatformAdmin(page);
+    await page.goto("/platform/feature-flags");
+    await page.getByLabel("Organization").fill(tenantA.name);
+
+    await expect(page.getByRole("button", { name: new RegExp(tenantA.name) })).toBeVisible();
+    await expect(page.getByRole("button", { name: new RegExp(tenantB.name) })).toHaveCount(0);
+  });
+
+  // The Tier Default column's "Edit in {tier} →" link is how a Platform Admin is meant to discover
+  // where tier-level flags actually get edited (a separate screen) — it should land exactly on that
+  // tier's edit modal, not just the tiers list.
+  test("the tier-default link jumps straight to that tier's edit modal in Platform → Tiers", async ({
+    page,
+    request,
+  }) => {
+    const platformToken = await loginPlatformAdminApi(request);
+    const tier = await createTierViaApi(
+      request,
+      platformToken,
+      `E2E HU47 DeepLink Tier ${Date.now()}`,
+    );
+    await setTierFlagIncluded(request, platformToken, tier.id, SIFEN_FLAG, true);
+    const tenant = await createTenantViaApi(
+      request,
+      platformToken,
+      `E2E HU47 DeepLink Tenant ${Date.now()}`,
+      tier.id,
+    );
+
+    await loginAsPlatformAdmin(page);
+    await page.goto("/platform/feature-flags");
+    await page.getByLabel("Organization").fill(tenant.name);
+    await page.getByRole("button", { name: new RegExp(tenant.name) }).click();
+    await expect(page.getByText(SIFEN_FLAG)).toBeVisible();
+
+    await page.getByRole("link", { name: new RegExp(`Edit in ${tier.name}`) }).click();
+
+    await expect(page).toHaveURL(/\/platform\/tiers/);
+    await expect(page.getByRole("dialog", { name: "Edit tier" })).toBeVisible();
+    await expect(page.locator("#tier-edit-name")).toHaveValue(tier.name);
   });
 });

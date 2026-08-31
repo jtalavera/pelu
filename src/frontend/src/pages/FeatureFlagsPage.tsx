@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Alert, Badge, Button, Heading, Input, Label, Spinner, Switch, Text } from "@design-system";
+import { Alert, Badge, Button, Heading, Spinner, Switch, Text } from "@design-system";
 import { femmeDeleteJson, femmeJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useMe } from "../hooks/useMe";
+import { TenantSearchField, type TenantSelection } from "../components/TenantSearchField";
 
 type TenantFlagChange = {
   changedAt: string;
@@ -56,8 +58,9 @@ export default function FeatureFlagsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [tenantIdInput, setTenantIdInput] = useState("");
-  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
+  const [tenantSelection, setTenantSelection] = useState<TenantSelection>(null);
+  const selectedTenant = tenantSelection?.tenant ?? null;
+  const selectedTenantId = selectedTenant?.id ?? null;
 
   const isPlatformAdmin = me?.role === "PLATFORM_ADMIN";
 
@@ -86,22 +89,18 @@ export default function FeatureFlagsPage() {
     void load();
   }, [load]);
 
-  function handleTenantIdSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const parsed = Number(tenantIdInput);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
+  function handleTenantSelect(selection: TenantSelection) {
     setRows(null);
     setHomologation(null);
     setLoadError(null);
-    setSelectedTenantId(parsed);
+    setTenantSelection(selection);
   }
 
   function handleChangeTenant() {
-    setSelectedTenantId(null);
+    setTenantSelection(null);
     setRows(null);
     setHomologation(null);
     setLoadError(null);
-    setTenantIdInput("");
   }
 
   async function setHomologationStatus(status: SifenHomologationStatus) {
@@ -195,28 +194,13 @@ export default function FeatureFlagsPage() {
             {t("femme.featureFlags.subtitle")}
           </Text>
         </div>
-        <form onSubmit={handleTenantIdSubmit} className="flex max-w-xs flex-col gap-2">
-          <Label htmlFor="tenant-id-input" className="text-[var(--color-ink-2)]">
-            {t("femme.featureFlags.tenantIdLabel")}
-          </Label>
-          <Input
-            id="tenant-id-input"
-            name="tenantId"
-            type="number"
-            min={1}
-            inputMode="numeric"
-            placeholder={t("femme.featureFlags.tenantIdPlaceholder")}
-            value={tenantIdInput}
-            onChange={(e) => setTenantIdInput(e.target.value)}
-            required
+        <div className="max-w-sm">
+          <TenantSearchField
+            id="tenant-search-field"
+            value={tenantSelection}
+            onChange={handleTenantSelect}
           />
-          <Text variant="small" className="text-[var(--color-ink-3)]">
-            {t("femme.featureFlags.tenantIdHelp")}
-          </Text>
-          <Button type="submit" variant="primary" className="min-h-11 self-start">
-            {t("femme.featureFlags.tenantIdSubmit")}
-          </Button>
-        </form>
+        </div>
       </div>
     );
   }
@@ -228,7 +212,7 @@ export default function FeatureFlagsPage() {
           {loadError}
         </Alert>
         <Button type="button" size="sm" variant="outline" className="mt-4" onClick={handleChangeTenant}>
-          {t("femme.featureFlags.tenantIdChange")}
+          {t("femme.featureFlags.changeTenant")}
         </Button>
       </div>
     );
@@ -254,11 +238,11 @@ export default function FeatureFlagsPage() {
             {t("femme.featureFlags.subtitle")}
           </Text>
           <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
-            {t("femme.featureFlags.managingTenant", { tenantId: selectedTenantId })}
+            {t("femme.featureFlags.managingTenant", { tenantName: selectedTenant?.name })}
           </Text>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={handleChangeTenant}>
-          {t("femme.featureFlags.tenantIdChange")}
+          {t("femme.featureFlags.changeTenant")}
         </Button>
       </div>
 
@@ -314,7 +298,7 @@ export default function FeatureFlagsPage() {
                   <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
                     {t("femme.featureFlags.tierDefault")}
                   </div>
-                  <div className="mt-1 flex items-center gap-2">
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     {row.hasTier ? (
                       <span className="text-sm text-[var(--color-ink-2)]">
                         {row.tierEnabled
@@ -326,6 +310,16 @@ export default function FeatureFlagsPage() {
                         {t("femme.featureFlags.tierNotDefined")}
                       </span>
                     )}
+                    {selectedTenant?.tierId != null ? (
+                      <Link
+                        to={`/platform/tiers?open=${selectedTenant.tierId}`}
+                        className="text-xs font-medium text-[var(--color-rose)] underline-offset-4 hover:underline"
+                      >
+                        {t("femme.featureFlags.tierDefaultEditLink", {
+                          tierName: selectedTenant.tierName,
+                        })}
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
                 <div>

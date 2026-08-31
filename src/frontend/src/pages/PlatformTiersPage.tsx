@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Input, Label, Modal, Spinner, Switch, Text } from "@design-system";
 import {
@@ -31,6 +32,7 @@ type FormErrors = {
 export default function PlatformTiersPage() {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [tiers, setTiers] = useState<PlatformTier[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -83,6 +85,24 @@ export default function PlatformTiersPage() {
   useEffect(() => {
     void loadTiers();
   }, [loadTiers]);
+
+  // Deep link from the Feature Flags page's "Edit in {tier} →" link (?open=<tierId>) — once tiers
+  // are loaded, jump straight to that tier's edit modal instead of leaving the user to find it in
+  // the list themselves. The param is cleared right after so re-opening later starts clean.
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId || tiers == null) return;
+    const target = tiers.find((tier) => String(tier.id) === openId);
+    if (target) {
+      openEdit(target);
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("open");
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiers, searchParams]);
 
   function openNew() {
     setName("");
@@ -357,10 +377,10 @@ export default function PlatformTiersPage() {
         <div className="overflow-x-auto">
           <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
             <colgroup>
-              <col style={{ width: "24%" }} />
-              <col style={{ width: "40%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "18%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "32%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "32%" }} />
             </colgroup>
             <thead>
               <tr>
@@ -408,18 +428,32 @@ export default function PlatformTiersPage() {
                       {t("femme.platform.tiers.tenantCount", { count: tier.tenantCount })}
                     </td>
                     <td style={tdStyle}>
-                      <Button
-                        type="button"
-                        variant="danger"
-                        className="min-h-11"
-                        style={{ padding: "4px 12px", fontSize: 12 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openDeleteConfirm(tier);
-                        }}
-                      >
-                        {t("femme.platform.tiers.deleteAction")}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-11"
+                          style={{ padding: "4px 12px", fontSize: 12 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(tier);
+                          }}
+                        >
+                          {t("femme.platform.tiers.featureFlagsAction")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          className="min-h-11"
+                          style={{ padding: "4px 12px", fontSize: 12 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteConfirm(tier);
+                          }}
+                        >
+                          {t("femme.platform.tiers.deleteAction")}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
