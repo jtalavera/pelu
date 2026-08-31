@@ -31,7 +31,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -96,11 +98,13 @@ public class AuthService {
     String email = request.email().trim().toLowerCase();
 
     // HU-34: PLATFORM_ADMIN is tenant-independent — try a tenant-less lookup by email before
-    // falling back to the tenant-scoped path below. findByEmail() is only reached here for emails
-    // that actually belong to a PLATFORM_ADMIN row (tenant-bound emails still resolve exclusively
-    // through resolveTenant()+findByEmailAndTenant_Id(), unchanged from before this story).
+    // falling back to the tenant-scoped path below. findAllByEmail() (not the single-result
+    // findByEmail()) because email is only unique per (tenant_id, email) — the same email can
+    // also exist as a tenant-scoped user elsewhere, which would make a single-result query throw.
     Optional<AppUser> platformCandidate =
-        appUserRepository.findByEmail(email).filter(u -> u.getRole() == UserRole.PLATFORM_ADMIN);
+        appUserRepository.findAllByEmail(email).stream()
+            .filter(u -> u.getRole() == UserRole.PLATFORM_ADMIN)
+            .findFirst();
     if (platformCandidate.isPresent()) {
       AppUser platformUser = platformCandidate.get();
       if (!passwordEncoder.matches(request.password(), platformUser.getPasswordHash())) {
@@ -121,28 +125,30 @@ public class AuthService {
       return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
     }
 
-    Tenant tenant = resolveTenant(origin);
-    // HU-40 AC-2: a suspended tenant blocks login for every one of its users (admin or
-    // professional). Checked before even looking up the user/password so the response is
-    // byte-for-byte identical to "bad credentials" (same status, same error code) — an
-    // enumeration attempt can't tell a suspended tenant apart from a wrong email/password.
-    if (tenant.getStatus() == TenantStatus.SUSPENDED) {
-      log.warn(
-          "login rejected: tenant suspended tenantId={} (generic INVALID_CREDENTIALS returned)",
-          tenant.getId());
+    // No tenant is resolved up front any more (see candidateUsersForLogin): when the Origin
+    // doesn't match a tenant's custom domain, we gather every AppUser this email could belong to
+    // across all tenants and let password verification — not a guessed tenant — decide which one
+    // is real. This also means a suspended tenant, a disabled user, and a wrong password all
+    // collapse into the exact same outcome below (HU-40 AC-2's anti-enumeration guarantee, now
+    // covering "email doesn't exist anywhere" too): none of them ever produce a valid match.
+    List<AppUser> candidates = candidateUsersForLogin(origin, email);
+    List<AppUser> validMatches =
+        candidates.stream()
+            .filter(u -> passwordEncoder.matches(request.password(), u.getPasswordHash()))
+            .filter(AppUser::isEnabled)
+            .filter(u -> u.getTenant().getStatus() == TenantStatus.ACTIVE)
+            .toList();
+
+    if (validMatches.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
     }
-    AppUser user =
-        appUserRepository
-            .findByEmailAndTenant_Id(email, tenant.getId())
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
-    if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+    if (validMatches.size() > 1) {
+      // Only reachable when the exact same password is independently valid for this email in two
+      // or more active tenants — i.e. the caller already proved they hold valid credentials for
+      // more than one account. Nothing is revealed to anyone who doesn't.
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "TENANT_AMBIGUOUS");
     }
-    if (!user.isEnabled()) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
-    }
+    AppUser user = validMatches.get(0);
     Long professionalId = null;
     if (user.getRole() == UserRole.PROFESSIONAL) {
       professionalId =
@@ -158,6 +164,32 @@ public class AuthService {
             professionalId,
             now);
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
+  }
+
+  /**
+   * Candidate {@link AppUser} rows this login attempt could resolve to: exactly the one tenant a
+   * custom domain matches (if any), or — when no domain matches — every tenant this email exists in
+   * at all. Password/enabled/active-tenant filtering in {@link #login} decides the rest.
+   */
+  private List<AppUser> candidateUsersForLogin(String origin, String email) {
+    Optional<Tenant> domainTenant = resolveTenantByDomain(origin);
+    if (domainTenant.isPresent()) {
+      return appUserRepository
+          .findByEmailAndTenant_Id(email, domainTenant.get().getId())
+          .map(List::of)
+          .orElseGet(List::of);
+    }
+    return appUserRepository.findAllByEmail(email).stream()
+        .filter(u -> u.getTenant() != null) // excludes PLATFORM_ADMIN rows defensively
+        .toList();
+  }
+
+  private Optional<Tenant> resolveTenantByDomain(String origin) {
+    String host = extractHost(origin);
+    if (host == null) {
+      return Optional.empty();
+    }
+    return tenantRepository.findByDomain(host);
   }
 
   public TokenResponse refresh(FemmeUserPrincipal principal) {
@@ -177,15 +209,36 @@ public class AuthService {
 
   @Transactional
   public void forgotPassword(ForgotPasswordRequest request, String origin, Locale locale) {
-    Tenant tenant = resolveTenant(origin);
+    String email = request.email().trim().toLowerCase();
+    Optional<Tenant> tenantOpt =
+        resolveTenantByDomain(origin).or(() -> resolveTenantByUniqueEmail(email));
+    if (tenantOpt.isEmpty()) {
+      // Deliberately silent — same "no enumeration" behavior whether the email doesn't exist at
+      // all or exists in more than one tenant (either way, there's no single account to reset).
+      return;
+    }
     Optional<AppUser> userOpt =
-        appUserRepository.findByEmailAndTenant_Id(
-            request.email().trim().toLowerCase(), tenant.getId());
+        appUserRepository.findByEmailAndTenant_Id(email, tenantOpt.get().getId());
     if (userOpt.isEmpty()) {
       // Deliberately silent — same "no enumeration" behavior whether or not the email exists.
       return;
     }
     issuePasswordResetToken(userOpt.get(), locale);
+  }
+
+  /**
+   * Used only by {@link #forgotPassword}, which has no password to check — so unlike {@link
+   * #login}'s credentials-first resolution, this just needs "does this email belong to exactly one
+   * tenant," silently giving up (same as a nonexistent email) when it doesn't.
+   */
+  private Optional<Tenant> resolveTenantByUniqueEmail(String email) {
+    List<Long> tenantIds =
+        appUserRepository.findAllByEmail(email).stream()
+            .map(AppUser::getTenantId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+    return tenantIds.size() == 1 ? tenantRepository.findById(tenantIds.get(0)) : Optional.empty();
   }
 
   /**
@@ -417,30 +470,6 @@ public class AuthService {
     if (!PASSWORD_SPECIAL.matcher(password).matches()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_WEAK");
     }
-  }
-
-  // HU-58: falls back to the oldest existing tenant (by id) rather than a hardcoded tenant id=1 —
-  // no tenant is created at system boot any more (PRD "Sin seed hardcodeado"), so there is no
-  // longer a guaranteed tenant id=1. This preserves the existing dev/e2e convenience of resolving
-  // *some* tenant for a login request whose Origin doesn't match any tenant's custom domain
-  // (e.g. the local Vite dev server), while no longer special-casing a specific numeric id: the
-  // e2e suite provisions its own default tenant dynamically (see e2e/global-setup.ts) via the
-  // Platform Admin tenant-creation API, and that tenant becomes "the oldest" simply by being
-  // created first in a fresh database, not by being hardcoded here.
-  private Tenant resolveTenant(String origin) {
-    String host = extractHost(origin);
-    if (host != null) {
-      Optional<Tenant> byDomain = tenantRepository.findByDomain(host);
-      if (byDomain.isPresent()) {
-        return byDomain.get();
-      }
-    }
-    return tenantRepository
-        .findFirstByOrderByIdAsc()
-        .orElseThrow(
-            () ->
-                new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR, "DEFAULT_TENANT_NOT_FOUND"));
   }
 
   private static String extractHost(String origin) {

@@ -1,11 +1,8 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
@@ -22,6 +19,7 @@ import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +32,10 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * HU-40 AC-2: a SUSPENDED tenant blocks login for every one of its users, with a response
  * byte-for-byte identical to "bad credentials" — same HTTP status, same error code — so an
- * enumeration attempt can't distinguish a suspended tenant from a wrong email/password.
+ * enumeration attempt can't distinguish a suspended tenant from a wrong email/password. Tenant
+ * resolution: when no Origin/domain match exists, login() gathers every AppUser for the email
+ * across tenants and lets password verification (not a guessed tenant) decide which one is real —
+ * see AuthService#candidateUsersForLogin.
  */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -70,13 +71,14 @@ class AuthServiceTest {
             jwtProperties,
             emailService);
 
-    // findByEmail (the tenant-independent PLATFORM_ADMIN fast-path) never matches a tenant-bound
-    // email in these tests, so login() always falls through to the tenant-scoped path below.
+    // findAllByEmail (the tenant-independent PLATFORM_ADMIN fast-path, plus the email-based
+    // fallback below) defaults to "nobody" unless a test stubs it — Mockito already returns an
+    // empty List for unstubbed List-returning methods, this just documents that explicitly.
     lenient()
-        .when(appUserRepository.findByEmail(org.mockito.ArgumentMatchers.anyString()))
-        .thenReturn(Optional.empty());
-    // resolveTenant(origin) falls back to tenant id=1 when the Origin header doesn't match any
-    // tenant's domain (no domain is set up in these tests, exactly like a bare local/test origin).
+        .when(appUserRepository.findAllByEmail(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(List.of());
+    // No domain is set up in these tests (a bare local/test Origin) — candidateUsersForLogin()
+    // always falls through to the email-based fallback below.
     lenient()
         .when(tenantRepository.findByDomain(org.mockito.ArgumentMatchers.anyString()))
         .thenReturn(Optional.empty());
@@ -104,7 +106,9 @@ class AuthServiceTest {
   @Test
   void suspendedTenant_rejectsLogin_withSameErrorAsBadCredentials() {
     Tenant tenant = tenant(1L, TenantStatus.SUSPENDED);
-    when(tenantRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(tenant));
+    AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
+    when(appUserRepository.findAllByEmail("admin@tenant.test")).thenReturn(List.of(appUser));
+    lenient().when(passwordEncoder.matches("whatever-password", "hashed")).thenReturn(true);
 
     ResponseStatusException suspendedEx =
         catchLoginException(new LoginRequest("admin@tenant.test", "whatever-password"));
@@ -114,19 +118,13 @@ class AuthServiceTest {
     assertThat(suspendedEx.getStatusCode()).isEqualTo(wrongPasswordEx.getStatusCode());
     assertThat(suspendedEx.getReason()).isEqualTo(wrongPasswordEx.getReason());
     assertThat(suspendedEx.getReason()).isEqualTo("INVALID_CREDENTIALS");
-
-    // The suspended-tenant path must short-circuit before ever touching the user lookup — proof
-    // that the check can't be used to enumerate which emails exist in a suspended tenant either.
-    verify(appUserRepository, never()).findByEmailAndTenant_Id(any(), any());
   }
 
   @Test
   void activeTenant_allowsLogin_withCorrectCredentials() {
     Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
-    when(tenantRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(tenant));
     AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
-    when(appUserRepository.findByEmailAndTenant_Id("admin@tenant.test", 1L))
-        .thenReturn(Optional.of(appUser));
+    when(appUserRepository.findAllByEmail("admin@tenant.test")).thenReturn(List.of(appUser));
     when(passwordEncoder.matches("correct-password", "hashed")).thenReturn(true);
 
     TokenResponse response =
@@ -138,10 +136,8 @@ class AuthServiceTest {
   @Test
   void reactivatedTenant_allowsLoginAgain() {
     Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
-    when(tenantRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(tenant));
     AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
-    when(appUserRepository.findByEmailAndTenant_Id("admin@tenant.test", 1L))
-        .thenReturn(Optional.of(appUser));
+    when(appUserRepository.findAllByEmail("admin@tenant.test")).thenReturn(List.of(appUser));
     when(passwordEncoder.matches("correct-password", "hashed")).thenReturn(true);
 
     // Simulate: suspend then reactivate — by the time login() runs, status is ACTIVE again.
@@ -152,6 +148,47 @@ class AuthServiceTest {
         service.login(new LoginRequest("admin@tenant.test", "correct-password"), null);
 
     assertThat(response.accessToken()).isNotBlank();
+  }
+
+  @Test
+  void emailNotLinkedToAnyTenant_rejectsLogin_withInvalidCredentials() {
+    ResponseStatusException ex =
+        catchLoginException(new LoginRequest("nobody@nowhere.test", "whatever-password"));
+
+    assertThat(ex.getStatusCode().value()).isEqualTo(401);
+    assertThat(ex.getReason()).isEqualTo("INVALID_CREDENTIALS");
+  }
+
+  @Test
+  void emailMatchesTwoTenants_onlyOneWithValidPassword_logsInToThatTenant() {
+    Tenant tenantA = tenant(1L, TenantStatus.ACTIVE);
+    Tenant tenantB = tenant(2L, TenantStatus.ACTIVE);
+    AppUser userA = user(tenantA, "shared@tenant.test", "hashA");
+    AppUser userB = user(tenantB, "shared@tenant.test", "hashB");
+    when(appUserRepository.findAllByEmail("shared@tenant.test")).thenReturn(List.of(userA, userB));
+    when(passwordEncoder.matches("correct-password", "hashA")).thenReturn(true);
+    when(passwordEncoder.matches("correct-password", "hashB")).thenReturn(false);
+
+    TokenResponse response =
+        service.login(new LoginRequest("shared@tenant.test", "correct-password"), null);
+
+    assertThat(response.accessToken()).isNotBlank();
+  }
+
+  @Test
+  void emailMatchesTwoTenantsWithValidPasswordInBoth_rejectsLogin_withTenantAmbiguous() {
+    Tenant tenantA = tenant(1L, TenantStatus.ACTIVE);
+    Tenant tenantB = tenant(2L, TenantStatus.ACTIVE);
+    AppUser userA = user(tenantA, "shared@tenant.test", "sameHash");
+    AppUser userB = user(tenantB, "shared@tenant.test", "sameHash");
+    when(appUserRepository.findAllByEmail("shared@tenant.test")).thenReturn(List.of(userA, userB));
+    when(passwordEncoder.matches("correct-password", "sameHash")).thenReturn(true);
+
+    ResponseStatusException ex =
+        catchLoginException(new LoginRequest("shared@tenant.test", "correct-password"));
+
+    assertThat(ex.getStatusCode().value()).isEqualTo(401);
+    assertThat(ex.getReason()).isEqualTo("TENANT_AMBIGUOUS");
   }
 
   private ResponseStatusException catchLoginException(LoginRequest request) {

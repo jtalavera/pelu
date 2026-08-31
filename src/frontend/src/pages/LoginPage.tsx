@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Alert, Button, Heading, Input, Label, Text } from "@design-system";
 import { apiBaseUrl } from "../api/baseUrl";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
+import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTour } from "../tour/useTour";
@@ -35,7 +36,8 @@ export default function LoginPage() {
         body: JSON.stringify({ email: email.trim(), password }),
       });
       if (!res.ok) {
-        setError(t("femme.login.errorInvalid"));
+        const text = await res.text();
+        setError(translateApiError(new Error(text), t, "femme.login.errorInvalid"));
         return;
       }
       const data = (await res.json()) as { accessToken: string };

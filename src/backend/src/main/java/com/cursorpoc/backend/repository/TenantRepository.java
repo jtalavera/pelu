@@ -15,8 +15,6 @@ public interface TenantRepository extends JpaRepository<Tenant, Long> {
   // HU-38 AC-2: domain uniqueness check on edit, excluding the tenant being edited.
   Optional<Tenant> findByDomainAndIdNot(String domain, Long id);
 
-  Optional<Tenant> findFirstByOrderByIdAsc();
-
   // HU-45 AC-3/AC-4: how many tenants currently have this tier assigned — drives both the
   // listing's per-tier count and the delete-in-use protection.
   long countByTierId(Long tierId);

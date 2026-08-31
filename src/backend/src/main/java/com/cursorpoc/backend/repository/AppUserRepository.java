@@ -19,6 +19,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
   @EntityGraph(attributePaths = "tenant")
   Optional<AppUser> findByEmail(String email);
 
+  // Login tenant resolution: email is only unique per (tenant_id, email), not globally — the
+  // same email can exist across multiple tenants (or as a tenant-less PLATFORM_ADMIN). Callers
+  // decide what to do with more than one row; unlike findByEmail() above, this never throws for
+  // a non-unique email.
+  @EntityGraph(attributePaths = "tenant")
+  List<AppUser> findAllByEmail(String email);
+
   Optional<AppUser> findFirstByTenant_IdOrderByIdAsc(Long tenantId);
 
   long countByTenant_Id(Long tenantId);
