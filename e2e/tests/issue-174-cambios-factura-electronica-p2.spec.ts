@@ -152,6 +152,8 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await page.getByLabel("Client name / business name").fill("MISION DIPLOMATICA");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("55000");
+    // Robust to a parallel sibling flipping SIFEN on (which makes the email mandatory).
+    await page.locator("#billing-client-email").fill("e2e174-ac1@example.com");
 
     // No note while it's a normal receiver.
     await expect(page.getByTestId("billing-tax-exempt-note")).toBeHidden();
@@ -185,6 +187,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("PAGO");
     await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#billing-client-email").fill("e2e174-ac2@example.com");
 
     await page.locator("#line-price-0").fill("40000");
     await expect(page.locator("#pay-amount-0")).toHaveValue("40.000");
@@ -226,6 +229,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await page.getByLabel("Client name / business name").fill("FECHA");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("30000");
+    await page.locator("#billing-client-email").fill("e2e174-ac4@example.com");
 
     // 40 days back is outside the window → blocked, no POST.
     const tooOld = new Date();
@@ -348,9 +352,11 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
-    await enableSifen(request, token);
     const seed = await seedCategoryServiceProfessional(request, token);
 
+    // SIFEN stays disabled at issue time (same pattern as sifen-hu-11): the invoice is then
+    // fabricated straight into an APPROVED SIFEN state, with no client data → eligible for the
+    // "Identify client" accordion.
     const clientName = `E2E 174 IDENT ${Date.now()}`;
     const inv = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
       clientId: null,
@@ -361,9 +367,10 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
       lines: [{ serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 30000 }],
       payments: [{ method: "CASH", amount: 30000 }],
     });
-    await request.post(
+    const prep = await request.post(
       `${apiBaseUrl()}/api/admin/sifen-test-support/invoices/${inv.id}/prepare-as-approved`,
     );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
