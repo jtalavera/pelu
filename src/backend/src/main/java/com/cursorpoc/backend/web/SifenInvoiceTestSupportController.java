@@ -19,6 +19,7 @@ import com.cursorpoc.backend.service.SifenInvoiceDetail;
 import com.cursorpoc.backend.service.SifenInvoiceDetailService;
 import com.cursorpoc.backend.service.SifenInvoiceHeader;
 import com.cursorpoc.backend.service.SifenInvoiceHeaderService;
+import com.cursorpoc.backend.service.SifenInvoiceNotificationService;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenQrCodeService;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
@@ -95,6 +96,7 @@ public class SifenInvoiceTestSupportController {
   private final SifenQrCodeService qrCodeService;
   private final SifenNumberVoidingService numberVoidingService;
   private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceNotificationService notificationService;
 
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
@@ -108,7 +110,8 @@ public class SifenInvoiceTestSupportController {
       SifenInvoiceDetailService detailService,
       SifenQrCodeService qrCodeService,
       SifenNumberVoidingService numberVoidingService,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceNotificationService notificationService) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
@@ -121,6 +124,7 @@ public class SifenInvoiceTestSupportController {
     this.qrCodeService = qrCodeService;
     this.numberVoidingService = numberVoidingService;
     this.timeProperties = timeProperties;
+    this.notificationService = notificationService;
   }
 
   /**
@@ -282,6 +286,31 @@ public class SifenInvoiceTestSupportController {
       invoice.setSifenCancellationMessage(
           "Plazo de solicitud de cancelación de una FE extemporáneo");
     }
+  }
+
+  /**
+   * Issue #173 item 2: e2e points SIFEN at an unreachable port, so the real submission listener
+   * never sees an Aprobado result and never fires the KuDE auto-email. This calls the real trigger
+   * ({@link SifenInvoiceNotificationService#emailKudeAfterApproval}) directly against a
+   * fabricated-approved invoice so Playwright can assert the observable outcome (the invoice's
+   * {@code sifenKudeEmailedAt} timestamp — the email itself is disabled/logged in e2e).
+   */
+  @PostMapping("/invoices/{id}/run-approval-notifications")
+  public void runApprovalNotifications(@PathVariable long id) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/run-approval-notifications", id);
+    notificationService.emailKudeAfterApproval(DEMO_TENANT_ID, id);
+  }
+
+  /**
+   * Issue #173 item 3: same rationale as {@link #runApprovalNotifications(long)} — calls the real
+   * trigger ({@link SifenInvoiceNotificationService#emailCancellationNotice}) directly so
+   * Playwright can assert the {@code sifenCancellationNotifiedAt} timestamp after a fabricated
+   * cancellation.
+   */
+  @PostMapping("/invoices/{id}/run-cancellation-notifications")
+  public void runCancellationNotifications(@PathVariable long id) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/run-cancellation-notifications", id);
+    notificationService.emailCancellationNotice(DEMO_TENANT_ID, id);
   }
 
   /**

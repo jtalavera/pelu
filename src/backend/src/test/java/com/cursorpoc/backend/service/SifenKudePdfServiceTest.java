@@ -259,8 +259,12 @@ class SifenKudePdfServiceTest {
     assertThat(page1).contains("Operación presencial");
   }
 
+  /**
+   * Issue #173 item 4: a "Sin nominar" comprobante still prints the receiver rows, with "Sin
+   * nombre" / "X" placeholders instead of omitting the block entirely.
+   */
   @Test
-  void buildKudePdf_omitsClientBlockForAnonymousReceiver() throws Exception {
+  void buildKudePdf_showsSinNombrePlaceholdersForAnonymousReceiver() throws Exception {
     SifenReceiverData anonymous =
         new SifenReceiverData(null, null, null, null, null, null, null, null, null);
     SifenInvoiceHeader anonymousHeader =
@@ -280,7 +284,36 @@ class SifenKudePdfServiceTest {
     var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
     String allText = extractPage(result.bytes(), 1);
 
-    assertThat(allText).doesNotContain("Operación presencial");
+    assertThat(allText).contains("Sin nombre");
+    assertThat(allText).contains("Operación presencial");
+  }
+
+  /**
+   * Issue #173 item 6: the always-empty "Cuotas" / "Tipo de Cambio" rows are gone; "Moneda"
+   * (spanning the whole grid now) and the still-relevant sale rows remain.
+   */
+  @Test
+  void buildKudePdf_saleBlock_dropsCuotasAndTipoDeCambio() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).doesNotContain("Cuotas");
+    assertThat(page1).doesNotContain("Tipo de Cambio");
+    assertThat(page1).contains("Moneda");
+    assertThat(page1).contains("Guaraníes");
+    assertThat(page1).contains("Fecha y hora de Emisión");
+    assertThat(page1).contains("Condición de Venta");
+  }
+
+  /** Issue #173 item 3: the cancellation-notice email can build a KuDE for a CANCELLED invoice. */
+  @Test
+  void buildCancelledKudePdf_allowsCancelledInvoice() throws Exception {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
+
+    var result = service.buildCancelledKudePdf(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.bytes()).isNotEmpty();
+    assertThat(new PdfReader(result.bytes()).getNumberOfPages()).isGreaterThanOrEqualTo(1);
   }
 
   /** AC-08: the CDC is grouped visually in eleven 4-character blocks. */

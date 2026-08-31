@@ -95,6 +95,14 @@ public class InvoiceController {
         featureFlagService.isEnabled(SIFEN_ELECTRONIC_INVOICING_FLAG_KEY, tenantId);
     if (sifenEnabled) {
       sifenCertificateService.requireActiveCertificate(tenantId);
+      // Issue #173: with SIFEN enabled the KuDE is auto-emailed after approval, so a recipient
+      // address is mandatory — except for a "Sin identificar" (unidentified) receiver, where no
+      // client data is sent to SIFEN at all.
+      if (receiverWillBeIdentified(request) && isBlank(request.email())) {
+        log.error(
+            "POST /api/invoices tenantId={} status=400 SIFEN_RECIPIENT_EMAIL_REQUIRED", tenantId);
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_RECIPIENT_EMAIL_REQUIRED");
+      }
     }
     InvoiceResponse response = invoiceService.issueInvoice(tenantId, request);
     if (sifenEnabled) {
@@ -227,5 +235,19 @@ public class InvoiceController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
+  }
+
+  /**
+   * Issue #173: mirrors {@code SifenInvoiceHeaderService.isReceiverUnidentified} on the request —
+   * the receiver ends up identified iff a RUC or an identity-document override was sent (a linked
+   * client's own profile data is never used as a fallback, per issue #96).
+   */
+  private static boolean receiverWillBeIdentified(InvoiceCreateRequest request) {
+    return !isBlank(request.clientRucOverride())
+        || !isBlank(request.clientIdentityDocumentOverride());
+  }
+
+  private static boolean isBlank(String value) {
+    return value == null || value.isBlank();
   }
 }

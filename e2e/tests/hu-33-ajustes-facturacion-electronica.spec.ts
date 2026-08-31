@@ -94,6 +94,8 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("E2E HU33 KuDE siempre");
+    // Issue #173: with SIFEN active the recipient email is mandatory unless "Sin identificar".
+    await page.locator("#billing-client-email").fill("hu33-kude@example.com");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
@@ -111,13 +113,10 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
       ),
       downloadBtn.click(),
     ]);
-    // Not approved yet, so the KuDE endpoint correctly rejects it — proving AC-01 (the button now
-    // targets the KuDE endpoint at all, never the legacy one) without needing a real SIFEN approval.
-    expect(kudeResponse.status()).toBe(409);
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Approved or Approved with observation" }),
-    ).toBeVisible({ timeout: 10_000 });
-
+    // AC-01: the button targets the KuDE endpoint, never the legacy one. RT-20/RT-28: a
+    // freshly-issued (QUEUED / pendiente de verificación) SIFEN invoice already has its CDC/QR, so
+    // the KuDE downloads right away (200), no approval needed.
+    expect(kudeResponse.status()).toBe(200);
     expect(legacyPdfRequestUrls).toHaveLength(0);
   });
 

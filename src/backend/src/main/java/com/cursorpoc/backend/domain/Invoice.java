@@ -248,6 +248,21 @@ public class Invoice {
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
 
+  /**
+   * Issue #173: the email address the KuDE / cancellation notice for this document is sent to,
+   * captured on the comprobante form. Takes priority over the linked client's own email on file.
+   */
+  @Column(name = "recipient_email", length = 320)
+  private String recipientEmail;
+
+  /** Issue #173: when this invoice's KuDE was auto-emailed after a successful SIFEN result. */
+  @Column(name = "sifen_kude_emailed_at")
+  private LocalDateTime sifenKudeEmailedAt;
+
+  /** Issue #173: when the client was emailed a notice for this document's SIFEN cancellation. */
+  @Column(name = "sifen_cancellation_notified_at")
+  private LocalDateTime sifenCancellationNotifiedAt;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private InvoiceStatus status;
@@ -544,6 +559,30 @@ public class Invoice {
 
   public void setSifenCancellationProtocolNumber(String sifenCancellationProtocolNumber) {
     this.sifenCancellationProtocolNumber = sifenCancellationProtocolNumber;
+  }
+
+  public String getRecipientEmail() {
+    return recipientEmail;
+  }
+
+  public void setRecipientEmail(String recipientEmail) {
+    this.recipientEmail = recipientEmail;
+  }
+
+  public LocalDateTime getSifenKudeEmailedAt() {
+    return sifenKudeEmailedAt;
+  }
+
+  public void setSifenKudeEmailedAt(LocalDateTime sifenKudeEmailedAt) {
+    this.sifenKudeEmailedAt = sifenKudeEmailedAt;
+  }
+
+  public LocalDateTime getSifenCancellationNotifiedAt() {
+    return sifenCancellationNotifiedAt;
+  }
+
+  public void setSifenCancellationNotifiedAt(LocalDateTime sifenCancellationNotifiedAt) {
+    this.sifenCancellationNotifiedAt = sifenCancellationNotifiedAt;
   }
 
   public boolean isSifenClientIdentified() {

@@ -67,6 +67,11 @@ public class SifenKudeEmailService {
             .findByIdAndTenant_Id(invoiceId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    // Issue #173: the email captured on the comprobante form for this document wins over the
+    // linked client's profile email.
+    if (invoice.getRecipientEmail() != null && !invoice.getRecipientEmail().isBlank()) {
+      return invoice.getRecipientEmail().trim();
+    }
     if (invoice.getClient() != null) {
       Hibernate.initialize(invoice.getClient());
       String clientEmail = invoice.getClient().getEmail();

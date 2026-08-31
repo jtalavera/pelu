@@ -26,7 +26,13 @@ public record InvoiceCreateRequest(
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
     String clientIdentityDocumentTypeOverride,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
-    String clientTaxpayerTypeOverride) {
+    String clientTaxpayerTypeOverride,
+    /**
+     * Issue #173: email address to send this comprobante's KuDE to. Required to emit when SIFEN
+     * e-invoicing is enabled unless the receiver is unidentified ("Sin identificar"). A new value
+     * is also written back to the linked client's profile.
+     */
+    String email) {
 
   public InvoiceCreateRequest(
       Long clientId,
@@ -49,6 +55,7 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
         null,
         null);
   }
@@ -75,6 +82,7 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
         null,
         null);
   }
@@ -103,6 +111,7 @@ public record InvoiceCreateRequest(
         serviceRecordId,
         tipsAmount,
         clientIdentityDocumentTypeOverride,
+        null,
         null);
   }
 }

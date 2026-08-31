@@ -33,6 +33,7 @@ class SifenSubmissionQueueListenerTest {
   @Mock private SifenInvoiceSubmissionPersistenceService persistence;
   @Mock private SifenInvoiceSubmissionService submissionService;
   @Mock private SifenNumberVoidingService numberVoidingService;
+  @Mock private SifenInvoiceNotificationService notificationService;
 
   private SifenSubmissionQueueListener listener;
 
@@ -40,7 +41,11 @@ class SifenSubmissionQueueListenerTest {
   void setUp() {
     listener =
         new SifenSubmissionQueueListener(
-            persistence, submissionService, new FemmeTimeProperties(), numberVoidingService);
+            persistence,
+            submissionService,
+            new FemmeTimeProperties(),
+            numberVoidingService,
+            notificationService);
   }
 
   @Test
@@ -69,6 +74,23 @@ class SifenSubmissionQueueListenerTest {
     verify(persistence).clearRetrySchedule(TENANT_ID, INVOICE_ID);
     verify(persistence).releaseLease(TENANT_ID, INVOICE_ID);
     verify(numberVoidingService, never()).recordPendingForRejectedInvoice(anyLong(), anyLong());
+    // Issue #173 item 2: SIFEN approved → the KuDE is auto-emailed.
+    verify(notificationService).emailKudeAfterApproval(TENANT_ID, INVOICE_ID);
+  }
+
+  /** Issue #173 item 2: a non-approved terminal result never triggers the KuDE auto-email. */
+  @Test
+  void processMessage_rejected_doesNotEmailKude() {
+    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
+        .thenReturn(Optional.of(1));
+    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
+        .thenReturn(
+            new SifenSubmissionResult(
+                SifenSubmissionStatus.REJECTED, "123", "1001", "Rechazado", LocalDateTime.now()));
+
+    listener.processMessage(TENANT_ID, INVOICE_ID, 1, CORRELATION_ID);
+
+    verify(notificationService, never()).emailKudeAfterApproval(anyLong(), anyLong());
   }
 
   /** RT-25 (Hardening_SIFEN.md): a rejected transmit records a pending inutilización. */

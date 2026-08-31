@@ -119,7 +119,21 @@ public class SifenKudePdfService {
    */
   @Transactional(readOnly = true)
   public KudePdfResult buildKudePdf(long tenantId, long invoiceId) {
-    Invoice invoice = requireDeliverableInvoice(tenantId, invoiceId);
+    return buildKudePdf(tenantId, invoiceId, false);
+  }
+
+  /**
+   * Issue #173: the cancellation-notice email (sent after SIFEN approves the cancellation, when the
+   * invoice is already {@code CANCELLED}) still attaches this document's KuDE — the receiver needs
+   * to see exactly which document was voided.
+   */
+  @Transactional(readOnly = true)
+  public KudePdfResult buildCancelledKudePdf(long tenantId, long invoiceId) {
+    return buildKudePdf(tenantId, invoiceId, true);
+  }
+
+  private KudePdfResult buildKudePdf(long tenantId, long invoiceId, boolean allowCancelled) {
+    Invoice invoice = requireDeliverableInvoice(tenantId, invoiceId, allowCancelled);
     SifenInvoiceHeader header = headerService.buildHeader(tenantId, invoiceId);
     SifenInvoiceDetail detail = detailService.buildDetail(tenantId, invoiceId);
     BusinessProfile profile = businessProfileRepository.findByTenantId(tenantId).orElse(null);
@@ -186,16 +200,23 @@ public class SifenKudePdfService {
    */
   @Transactional(readOnly = true)
   Invoice requireDeliverableInvoice(long tenantId, long invoiceId) {
+    return requireDeliverableInvoice(tenantId, invoiceId, false);
+  }
+
+  Invoice requireDeliverableInvoice(long tenantId, long invoiceId, boolean allowCancelled) {
     Invoice invoice =
         invoiceRepository
             .findByIdAndTenant_Id(invoiceId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
     SifenSubmissionStatus status = invoice.getSifenSubmissionStatus();
-    if (status != SifenSubmissionStatus.APPROVED
-        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION
-        && status != SifenSubmissionStatus.PENDING_VERIFICATION
-        && status != SifenSubmissionStatus.QUEUED) {
+    boolean deliverable =
+        status == SifenSubmissionStatus.APPROVED
+            || status == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION
+            || status == SifenSubmissionStatus.PENDING_VERIFICATION
+            || status == SifenSubmissionStatus.QUEUED
+            || (allowCancelled && status == SifenSubmissionStatus.CANCELLED);
+    if (!deliverable) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES");
     }
@@ -429,29 +450,46 @@ public class SifenKudePdfService {
         labelFont,
         bodyFont);
     addGridCell(table, "Condición de Venta", "Contado", 3, labelFont, bodyFont);
-    addGridCell(table, "Cuotas", "", 2, labelFont, bodyFont);
-    addGridCell(table, "Moneda", "Guaraníes (PYG)", 2, labelFont, bodyFont);
-    addGridCell(table, "Tipo de Cambio", "", 2, labelFont, bodyFont);
+    // Issue #173 item 6: the always-empty "Cuotas" / "Tipo de Cambio" rows are dropped (no
+    // credit-sale or FX support in this domain); "Moneda" spans the full 6-column grid so the
+    // row isn't left with 4 empty cells.
+    addGridCell(table, "Moneda", "Guaraníes (PYG)", 6, labelFont, bodyFont);
 
-    if (isReceiverIdentified(header)) {
-      SifenReceiverData receiver = header.receiver();
-      if (hasText(receiver.ruc())) {
-        addGridCell(table, "RUC del Cliente", receiver.ruc(), 6, labelFont, bodyFont);
-      } else if (hasText(receiver.identityDocumentNumber())) {
-        addGridCell(
-            table,
-            "Documento del Cliente",
-            receiver.identityDocumentNumber(),
-            6,
-            labelFont,
-            bodyFont);
-      }
-      if (hasText(receiver.name())) {
-        addGridCell(table, "Nombre o Razón Social", receiver.name(), 6, labelFont, bodyFont);
-      }
-      if (hasText(receiver.address())) {
-        addGridCell(table, "Dirección", receiver.address(), 6, labelFont, bodyFont);
-      }
+    // The receiver block always renders now (Issue #173 item 4). "RUC del Cliente" falls back to
+    // "X" and "Nombre o Razón Social" to "Sin nombre" for a "Sin nominar" comprobante — i.e. one
+    // with no RUC, no identity document and no real display name (the occasional-client placeholder
+    // "CONSUMIDOR FINAL" isn't a real name).
+    SifenReceiverData receiver = header.receiver();
+    boolean hasRuc = hasText(receiver.ruc());
+    boolean hasDoc = !hasRuc && hasText(receiver.identityDocumentNumber());
+    boolean hasRealName =
+        hasText(receiver.name())
+            && !OCCASIONAL_CLIENT_DISPLAY_NAME.equalsIgnoreCase(receiver.name().trim());
+
+    if (hasRuc) {
+      addGridCell(table, "RUC del Cliente", receiver.ruc(), 6, labelFont, bodyFont);
+    } else if (hasDoc) {
+      addGridCell(
+          table,
+          "Documento del Cliente",
+          receiver.identityDocumentNumber(),
+          6,
+          labelFont,
+          bodyFont);
+    } else {
+      addGridCell(table, "RUC del Cliente", "X", 6, labelFont, bodyFont);
+    }
+    addGridCell(
+        table,
+        "Nombre o Razón Social",
+        hasRealName ? receiver.name() : "Sin nombre",
+        6,
+        labelFont,
+        bodyFont);
+    if (hasText(receiver.address())) {
+      addGridCell(table, "Dirección", receiver.address(), 6, labelFont, bodyFont);
+    }
+    if (hasRuc || hasDoc || hasRealName) {
       String phone = client != null ? client.getPhone() : null;
       String email = client != null ? client.getEmail() : null;
       if (hasText(phone) || hasText(email)) {
@@ -459,16 +497,16 @@ public class SifenKudePdfService {
         addGridCell(
             table, "Correo Electrónico", hasText(email) ? email : "", 3, labelFont, bodyFont);
       }
-      addGridCell(table, "Tipo de Operación", "Operación presencial", 6, labelFont, bodyFont);
     }
+    addGridCell(table, "Tipo de Operación", "Operación presencial", 6, labelFont, bodyFont);
 
     document.add(table);
   }
 
-  private static boolean isReceiverIdentified(SifenInvoiceHeader header) {
-    SifenReceiverData r = header.receiver();
-    return hasText(r.ruc()) || hasText(r.identityDocumentNumber()) || hasText(r.name());
-  }
+  /**
+   * Mirrors {@code InvoiceService.OCCASIONAL_CLIENT_DISPLAY_NAME} — the placeholder isn't a name.
+   */
+  private static final String OCCASIONAL_CLIENT_DISPLAY_NAME = "CONSUMIDOR FINAL";
 
   /** One bordered "label: value" cell spanning {@code colspan} of the grid's 6 columns. */
   private static void addGridCell(
