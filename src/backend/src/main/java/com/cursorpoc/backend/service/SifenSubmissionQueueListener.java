@@ -58,16 +58,19 @@ public class SifenSubmissionQueueListener {
   private final SifenInvoiceSubmissionService submissionService;
   private final FemmeTimeProperties timeProperties;
   private final SifenNumberVoidingService numberVoidingService;
+  private final SifenInvoiceNotificationService notificationService;
 
   public SifenSubmissionQueueListener(
       SifenInvoiceSubmissionPersistenceService persistence,
       SifenInvoiceSubmissionService submissionService,
       FemmeTimeProperties timeProperties,
-      SifenNumberVoidingService numberVoidingService) {
+      SifenNumberVoidingService numberVoidingService,
+      SifenInvoiceNotificationService notificationService) {
     this.persistence = persistence;
     this.submissionService = submissionService;
     this.timeProperties = timeProperties;
     this.numberVoidingService = numberVoidingService;
+    this.notificationService = notificationService;
   }
 
   /**
@@ -116,6 +119,13 @@ public class SifenSubmissionQueueListener {
         // RT-25: the rejected invoice's number will never be reused under this CDC — record it as
         // a pending inutilización for an admin to review and submit, per Manual Técnico V150.
         numberVoidingService.recordPendingForRejectedInvoice(tenantId, invoiceId);
+      }
+      if (status == SifenSubmissionStatus.APPROVED
+          || status == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+        // Issue #173 item 2: SIFEN accepted the document — email its KuDE to the recipient. This
+        // is a best-effort side effect; it never throws, so an email problem can't re-queue or
+        // dead-letter an already-approved fiscal document.
+        notificationService.emailKudeAfterApproval(tenantId, invoiceId);
       }
       log.info(
           "SIFEN transmit resolved tenantId={} invoiceId={} attempt={} status={}",

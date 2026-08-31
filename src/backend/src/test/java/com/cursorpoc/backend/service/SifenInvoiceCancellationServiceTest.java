@@ -55,6 +55,7 @@ class SifenInvoiceCancellationServiceTest {
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenEventClient eventClient;
+  @Mock private SifenInvoiceNotificationService notificationService;
 
   private final SifenCancellationEventXmlService eventXmlService =
       new SifenCancellationEventXmlService();
@@ -70,7 +71,8 @@ class SifenInvoiceCancellationServiceTest {
             eventXmlService,
             signingService,
             eventClient,
-            new FemmeTimeProperties());
+            new FemmeTimeProperties(),
+            notificationService);
 
     invoice = new Invoice();
     invoice.setSifenControlNumber("01011371528001001999990122026072811234567800");
@@ -108,6 +110,8 @@ class SifenInvoiceCancellationServiceTest {
     // Issue #145: a successful SIFEN cancellation also voids the invoice record.
     assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.VOIDED);
     assertThat(invoice.getVoidReason()).isEqualTo(REASON);
+    // Issue #173 item 3: a successful cancellation emails the client a notice.
+    org.mockito.Mockito.verify(notificationService).emailCancellationNotice(TENANT_ID, INVOICE_ID);
   }
 
   @Test
@@ -150,6 +154,10 @@ class SifenInvoiceCancellationServiceTest {
         .isEqualTo("Plazo de solicitud de cancelación de una FE extemporáneo");
     // Issue #145: a rejected cancellation must not void the invoice.
     assertThat(invoice.getStatus()).isNull();
+    // Issue #173 item 3: a rejected cancellation sends no client notice.
+    org.mockito.Mockito.verify(notificationService, org.mockito.Mockito.never())
+        .emailCancellationNotice(
+            org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
   }
 
   @Test

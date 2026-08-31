@@ -25,6 +25,7 @@ import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
+import { isValidEmail } from "../lib/validateEmail";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
 import {
   ServiceSearchField,
@@ -660,6 +661,10 @@ function NewInvoiceTab({
   const [clientTaxpayerType, setClientTaxpayerType] = useState(
     effectiveInitialClient?.taxpayerType ?? "PERSONA_FISICA",
   );
+  // Issue #173: recipient email for this comprobante. Pre-filled from the selected client's
+  // profile, editable; a new value is written back to the client on issue.
+  const [clientEmail, setClientEmail] = useState(effectiveInitialClient?.email ?? "");
+  const [clientEmailError, setClientEmailError] = useState<string | null>(null);
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
   );
@@ -759,12 +764,15 @@ function NewInvoiceTab({
    */
   function loadClientIdentity(client: {
     fullName: string;
+    email?: string | null;
     ruc?: string | null;
     identityDocumentNumber?: string | null;
     identityDocumentType?: string | null;
     taxpayerType?: string | null;
   }) {
     setClientDisplayName(client.fullName);
+    setClientEmail(client.email ?? "");
+    setClientEmailError(null);
     const resolved = resolveIdentityDocumentTypeAndNumber(client);
     if (resolved.type === "INNOMINADO") {
       setClientIdentityDocumentType("RUC");
@@ -785,6 +793,8 @@ function NewInvoiceTab({
       setClientIdentityDocumentType("RUC");
       setClientIdentityDocumentNumber("");
       setClientTaxpayerType("PERSONA_FISICA");
+      setClientEmail("");
+      setClientEmailError(null);
     }
   }
 
@@ -1109,6 +1119,21 @@ function NewInvoiceTab({
       }
     }
 
+    // Issue #173: with SIFEN e-invoicing enabled the KuDE is auto-emailed after approval, so a
+    // recipient email is mandatory — except for a "Sin identificar" (INNOMINADO) comprobante.
+    let newClientEmailError: string | null = null;
+    {
+      const emailTrim = clientEmail.trim();
+      const emailRequired =
+        sifenEnabled && clientIdentityDocumentType !== "INNOMINADO";
+      if (emailRequired && !emailTrim) {
+        newClientEmailError = t("femme.billing.invoice.clientEmailRequired");
+      } else if (emailTrim && !isValidEmail(emailTrim)) {
+        newClientEmailError = t("femme.clients.emailInvalid");
+      }
+    }
+    setClientEmailError(newClientEmailError);
+
     setLineErrors(newLineErrors);
     setPaymentErrors(newPaymentErrors);
     setGlobalErrors(errors);
@@ -1117,6 +1142,7 @@ function NewInvoiceTab({
       Object.keys(newLineErrors).length === 0 &&
       Object.keys(newPaymentErrors).length === 0 &&
       newDiscountValueError === null &&
+      newClientEmailError === null &&
       errors.length === 0;
     return { ok, lineErrors: newLineErrors, paymentErrors: newPaymentErrors, globalErrors: errors };
   }
@@ -1137,6 +1163,16 @@ function NewInvoiceTab({
             return "client-identity-document-number";
           }
           if (isRucType && numberTrim && !clientDisplayName.trim()) return "client-display-name";
+        }
+        {
+          const emailTrim = clientEmail.trim();
+          const emailRequired = sifenEnabled && clientIdentityDocumentType !== "INNOMINADO";
+          if (
+            (emailRequired && !emailTrim) ||
+            (emailTrim && !isValidEmail(emailTrim))
+          ) {
+            return "billing-client-email";
+          }
         }
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
@@ -1171,6 +1207,7 @@ function NewInvoiceTab({
       clientIdentityDocumentOverride: !isRucType && !isInnominado ? numberTrim || null : null,
       clientIdentityDocumentTypeOverride: numberTrim ? clientIdentityDocumentType : null,
       clientTaxpayerTypeOverride: isRucType && numberTrim ? clientTaxpayerType : null,
+      email: clientEmail.trim() || null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
         discountType !== "NONE" && discountValue
@@ -1220,6 +1257,8 @@ function NewInvoiceTab({
       setClientDisplayName("");
       setClientIdentityDocumentType("RUC");
       setClientIdentityDocumentNumber("");
+      setClientEmail("");
+      setClientEmailError(null);
       setDiscountType("NONE");
       setDiscountValue("");
       setDiscountValueError(null);
@@ -1347,6 +1386,37 @@ function NewInvoiceTab({
             label={t("femme.billing.invoice.clientSearchLabel")}
             placeholder={t("femme.billing.invoice.clientPlaceholder")}
           />
+          <div>
+            <Label htmlFor="billing-client-email">
+              {t("femme.billing.invoice.clientEmailLabel")}
+            </Label>
+            <Input
+              id="billing-client-email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={clientEmail}
+              onChange={(e) => {
+                setClientEmail(e.target.value);
+                setClientEmailError(null);
+              }}
+              placeholder={t("femme.billing.invoice.clientEmailPlaceholder")}
+              aria-invalid={clientEmailError ? true : undefined}
+              aria-describedby={
+                clientEmailError ? "billing-client-email-err" : "billing-client-email-hint"
+              }
+              className="mt-1 w-full"
+            />
+            {clientEmailError ? (
+              <FieldValidationError id="billing-client-email-err">
+                {clientEmailError}
+              </FieldValidationError>
+            ) : (
+              <Text id="billing-client-email-hint" className="mt-1 text-xs text-[rgb(var(--color-muted-foreground))]">
+                {t("femme.billing.invoice.clientEmailHint")}
+              </Text>
+            )}
+          </div>
           <div className="flex flex-col gap-4 border-t border-[rgb(var(--color-border))] pt-4">
             <label
               htmlFor="client-unnamed-invoice"

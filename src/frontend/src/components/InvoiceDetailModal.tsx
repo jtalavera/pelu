@@ -56,6 +56,8 @@ export type InvoiceDetail = {
   clientDisplayName: string;
   /** Issue #167: the linked client's own email on file, if any — used to prefill the KuDE-by-email field. */
   clientEmail?: string | null;
+  /** Issue #173: the email captured on the comprobante form for this document. */
+  recipientEmail?: string | null;
   clientRucOverride: string | null;
   status: string;
   subtotal: string;
@@ -245,10 +247,10 @@ export function InvoiceDetailModal({
       .then((data) => {
         if (cancelled) return;
         setInvoice(data);
-        // Issue #167: prefill the KuDE-by-email field with the client's own email, if any is on
-        // file — the backend already falls back to it when the field is left blank, this just
-        // makes that visible instead of leaving the field looking empty.
-        if (data.clientEmail) setKudeEmail(data.clientEmail);
+        // Issue #167/#173: prefill the KuDE-by-email field with the email captured on the
+        // comprobante form for this document, falling back to the client's own email on file.
+        if (data.recipientEmail) setKudeEmail(data.recipientEmail);
+        else if (data.clientEmail) setKudeEmail(data.clientEmail);
       })
       .catch(() => {
         if (!cancelled) setLoadError(t("femme.billing.history.detail.loadError"));

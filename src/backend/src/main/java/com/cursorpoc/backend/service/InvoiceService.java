@@ -152,8 +152,9 @@ public class InvoiceService {
     invoice.setStatus(InvoiceStatus.ISSUED);
 
     // 4. Client
+    Client client = null;
     if (request.clientId() != null) {
-      Client client =
+      client =
           clientRepository
               .findByIdAndTenant_Id(request.clientId(), tenantId)
               .orElseThrow(
@@ -197,6 +198,21 @@ public class InvoiceService {
       } catch (IllegalArgumentException e) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TAXPAYER_TYPE");
       }
+    }
+
+    // Issue #173: recipient email for the KuDE / cancellation notice. Stored on the invoice
+    // (takes priority over the client's own email on file) and, when it's a new value for a
+    // linked client, written back to that client's profile.
+    String recipientEmail =
+        request.email() != null && !request.email().isBlank() ? request.email().trim() : null;
+    invoice.setRecipientEmail(recipientEmail);
+    if (client != null
+        && recipientEmail != null
+        && !recipientEmail.equalsIgnoreCase(client.getEmail())) {
+      if (clientRepository.findByTenantIdAndEmail(tenantId, recipientEmail).isPresent()) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
+      }
+      client.setEmail(recipientEmail);
     }
 
     // Snapshot the salon RUC at issue time so PDF reprints remain faithful
@@ -620,6 +636,7 @@ public class InvoiceService {
         i.getClient() != null ? i.getClient().getId() : null,
         i.getClientDisplayName(),
         i.getClient() != null ? i.getClient().getEmail() : null,
+        i.getRecipientEmail(),
         i.getClientRucOverride(),
         i.getClientIdentityDocumentOverride(),
         i.getClientIdentityDocumentTypeOverride() != null
@@ -664,7 +681,9 @@ public class InvoiceService {
         i.getSifenClientIdentificationAddress(),
         i.getSifenClientIdentificationCountryCode(),
         i.getSifenClientIdentificationResultCode(),
-        i.getSifenClientIdentificationMessage());
+        i.getSifenClientIdentificationMessage(),
+        toInstant(i.getSifenKudeEmailedAt()),
+        toInstant(i.getSifenCancellationNotifiedAt()));
   }
 
   /**
