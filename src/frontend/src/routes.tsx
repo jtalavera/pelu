@@ -20,6 +20,7 @@ import PropinasPage from "./pages/PropinasPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 import SifenCertificatesPage from "./pages/SifenCertificatesPage";
 import PlatformDashboardPage from "./pages/PlatformDashboardPage";
@@ -33,6 +34,7 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/activate" element={<ActivatePage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/design-system" element={<DesignSystemShowcasePage />} />
       <Route
         element={

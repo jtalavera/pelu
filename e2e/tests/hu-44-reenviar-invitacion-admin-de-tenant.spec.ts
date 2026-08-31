@@ -262,6 +262,47 @@ test.describe("HU-44 · Reenviar invitación / reseteo de contraseña para un ad
     expect(loginNew.ok(), await loginNew.text()).toBeTruthy();
   });
 
+  // AC-2/AC-4: the emailed reset link's actual page resets the password and logs in with it — not
+  // just the API contract (this page didn't exist until it was added: clicking the emailed link
+  // used to hit "No routes matched location '/reset-password?token=...'" and render a blank page).
+  test("AC2+AC4: the password-reset link's actual page resets the password and logs in with it", async ({
+    page,
+    request,
+  }) => {
+    const platformToken = await loginPlatformAdminApi(request);
+    const email = `reset-page-${Date.now()}@e2e-tenant.test`;
+    const admin = await createTenantAdminViaApi(request, platformToken, 1, email);
+    await activateViaApi(request, admin.rawToken, "OriginalPagePass1!");
+
+    const resendRes = await resendInvitationViaApi(request, platformToken, 1, admin.userId);
+    expect(resendRes.ok(), await resendRes.text()).toBeTruthy();
+    const { rawToken } = (await resendRes.json()) as { rawToken: string };
+
+    await page.goto(`/reset-password?token=${rawToken}`);
+    await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+    await page.getByLabel("New password", { exact: true }).fill("BrandNewPagePass1!");
+    await page.getByLabel("Confirm new password").fill("BrandNewPagePass1!");
+    await page.getByRole("button", { name: "Reset password" }).click();
+
+    await expect(
+      page.getByText("Password reset successfully. You can now sign in.", { exact: true }),
+    ).toBeVisible();
+
+    const loginRes = await loginViaApi(request, email, "BrandNewPagePass1!");
+    expect(loginRes.ok(), await loginRes.text()).toBeTruthy();
+  });
+
+  test("a reset-password link with no token shows an error instead of a blank page", async ({
+    page,
+  }) => {
+    await page.goto("/reset-password");
+    await expect(
+      page.getByText("This password reset link is invalid or has already been used.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
+
   // A user the Platform Admin deliberately disabled (HU-43) can't be resent an invite or a
   // password reset from here — the row hides the action, and the API rejects it directly too.
   test("a disabled user's resend action is hidden in the UI and rejected by the API", async ({
