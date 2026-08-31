@@ -743,7 +743,8 @@ public class SifenDocumentXmlService {
       Document doc, Element de, SifenInvoiceTotals totals, boolean isAutoInvoice) {
     Element gTotSub = el(doc, de, "gTotSub", null);
     el(doc, gTotSub, "dSubExe", isAutoInvoice ? "0" : totals.exemptSubtotal().toPlainString());
-    el(doc, gTotSub, "dSubExo", "0");
+    // F003/dSubExo: subtotal exonerado (issue #174 AC-01 — "Tarjeta Diplomática" receiver).
+    el(doc, gTotSub, "dSubExo", isAutoInvoice ? "0" : totals.exoneratedSubtotal().toPlainString());
     el(doc, gTotSub, "dSub5", isAutoInvoice ? "0" : totals.taxedSubtotal5().toPlainString());
     el(doc, gTotSub, "dSub10", isAutoInvoice ? "0" : totals.taxedSubtotal10().toPlainString());
     el(doc, gTotSub, "dTotOpe", totals.grossTotal().toPlainString());

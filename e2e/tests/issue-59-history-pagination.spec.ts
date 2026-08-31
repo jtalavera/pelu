@@ -59,22 +59,23 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await ensureActiveFiscalStampForInvoices(request, token);
   });
 
-  test("#59-T4-1 · Historial shows 6-month default date range", async ({ page }) => {
+  // Issue #174 AC-06: the default is now one month back (not six) and the fields are shown as
+  // DD/MM/YYYY (not the native ISO date picker).
+  test("#59-T4-1 · Historial shows a one-month default date range in DD/MM/YYYY", async ({ page }) => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    // from date should be ~6 months ago, to date = today
     const today = new Date();
-    const fromExpected = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+    const fromExpected = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
     const pad = (n: number) => String(n).padStart(2, "0");
-    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const fmtDisplay = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 
     const fromInput = page.locator("#filter-from");
     const toInput = page.locator("#filter-to");
-    await expect(fromInput).toHaveValue(fmt(fromExpected));
-    await expect(toInput).toHaveValue(fmt(today));
+    await expect(fromInput).toHaveValue(fmtDisplay(fromExpected));
+    await expect(toInput).toHaveValue(fmtDisplay(today));
   });
 
   test("#59-T4-2 · Historial rejects from-date older than 6 months", async ({ page }) => {
@@ -86,7 +87,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     const tooOld = new Date();
     tooOld.setMonth(tooOld.getMonth() - 7);
     const pad = (n: number) => String(n).padStart(2, "0");
-    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const fmt = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 
     await page.locator("#filter-from").fill(fmt(tooOld));
     // Trigger search

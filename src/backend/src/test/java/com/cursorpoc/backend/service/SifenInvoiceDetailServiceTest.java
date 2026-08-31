@@ -209,6 +209,30 @@ class SifenInvoiceDetailServiceTest {
     assertThat(line.taxAmount()).isEqualByComparingTo("0");
   }
 
+  /**
+   * Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes every line
+   * EXONERADO (iAfecIVA=2) with zero IVA, and its net total lands in the exonerated subtotal bucket
+   * (F003/dSubExo).
+   */
+  @Test
+  void buildDetail_diplomaticReceiver_marksLinesExoneradoAndFillsExoneratedSubtotal() {
+    invoice.setClientIdentityDocumentTypeOverride(
+        com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType.TARJETA_DIPLOMATICA);
+    invoice.setClientIdentityDocumentOverride("DIP-001");
+    // Already netted at issue time (see InvoiceService), so the line carries a 0 tax rate.
+    addLine("Corte", 1, new BigDecimal("100000.00"), BigDecimal.ZERO);
+    finalizeTotals(BigDecimal.ZERO);
+
+    SifenInvoiceDetail detail = service.buildDetail(TENANT_ID, INVOICE_ID);
+    SifenInvoiceLine line = detail.lines().get(0);
+
+    assertThat(line.taxAffectation()).isEqualTo(SifenTaxAffectation.EXONERADO);
+    assertThat(line.taxAmount()).isEqualByComparingTo("0");
+    assertThat(detail.totals().exoneratedSubtotal()).isEqualByComparingTo("100000.00");
+    assertThat(detail.totals().exemptSubtotal()).isEqualByComparingTo("0");
+    assertThat(detail.totals().grossTotal()).isEqualByComparingTo("100000.00");
+  }
+
   /** AC-03: SIFEN only accepts 5% or 10% for a gravado line — any other rate is rejected. */
   @Test
   void buildDetail_unsupportedTaxRate_throws() {

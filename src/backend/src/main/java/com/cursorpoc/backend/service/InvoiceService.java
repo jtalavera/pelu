@@ -36,11 +36,13 @@ import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -67,6 +69,23 @@ public class InvoiceService {
 
   /** Maximum inclusive calendar months that date filters may span (6 months = ~180 days). */
   public static final int MAX_INVOICE_LIST_MONTHS = 6;
+
+  /**
+   * Issue #174 AC-04: SIFEN technical limits for the emission date of a DE — it may be backdated up
+   * to 720 hours (30 days) and future-dated up to 120 hours (5 days) relative to the transmission
+   * instant. Enforced here so a manually edited emission date can never produce a DE SIFEN would
+   * reject outright.
+   */
+  static final Duration MAX_ISSUE_BACKDATE = Duration.ofHours(720);
+
+  static final Duration MAX_ISSUE_FUTUREDATE = Duration.ofHours(120);
+
+  /**
+   * Issue #174 AC-01: services are priced IVA-incluido (10%). When the receiver presents a "Tarjeta
+   * Diplomática de exoneración fiscal", every item and the totals must be shown/emitted net of that
+   * IVA — the unit price is divided by this factor and the line becomes exonerada.
+   */
+  private static final BigDecimal TAX_EXEMPT_DIVISOR = new BigDecimal("1.10");
 
   private final InvoiceRepository invoiceRepository;
   private final CashSessionRepository cashSessionRepository;
@@ -148,7 +167,9 @@ public class InvoiceService {
     invoice.setCashSession(cashSession);
     invoice.setFiscalStamp(stamp);
     invoice.setInvoiceNumber(nextNumber);
-    invoice.setIssuedAt(Instant.now());
+    // Issue #174 AC-04: the emission date is "now" unless the form explicitly sent an edited one,
+    // which must then fall inside SIFEN's -720h/+120h window.
+    invoice.setIssuedAt(resolveIssuedAt(request.issuedAt()));
     invoice.setStatus(InvoiceStatus.ISSUED);
 
     // 4. Client
@@ -199,6 +220,16 @@ public class InvoiceService {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TAXPAYER_TYPE");
       }
     }
+
+    // Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes the whole
+    // sale IVA-exonerada — resolved from the same overrides SIFEN's receiver block reads, so it
+    // never falls back to a linked client's profile document (issue #96).
+    boolean taxExemptReceiver =
+        ClientIdentityDocumentType.resolve(
+                invoice.getClientIdentityDocumentTypeOverride(),
+                invoice.getClientRucOverride(),
+                invoice.getClientIdentityDocumentOverride())
+            == ClientIdentityDocumentType.TARJETA_DIPLOMATICA;
 
     // Issue #173: recipient email for the KuDE / cancellation notice. Stored on the invoice
     // (takes priority over the client's own email on file) and, when it's a new value for a
@@ -256,10 +287,18 @@ public class InvoiceService {
       line.setInvoice(invoice);
       line.setDescription(lr.description());
       line.setQuantity(lr.quantity());
-      line.setUnitPrice(lr.unitPrice().setScale(2, RoundingMode.HALF_UP));
+
+      // Issue #174 AC-01: strip the included 10% IVA for a diplomatic-exoneration receiver, so
+      // subtotal/total/payments all reconcile on the net amount the client actually pays.
+      BigDecimal effectiveUnitPrice =
+          taxExemptReceiver
+              ? lr.unitPrice().divide(TAX_EXEMPT_DIVISOR, 0, RoundingMode.HALF_UP)
+              : lr.unitPrice();
+      effectiveUnitPrice = effectiveUnitPrice.setScale(2, RoundingMode.HALF_UP);
+      line.setUnitPrice(effectiveUnitPrice);
 
       BigDecimal grossLineTotal =
-          lr.unitPrice()
+          effectiveUnitPrice
               .multiply(BigDecimal.valueOf(lr.quantity()))
               .setScale(2, RoundingMode.HALF_UP);
 
@@ -309,6 +348,10 @@ public class InvoiceService {
         if (salonService.getTax() != null) {
           taxRate = salonService.getTax().getRate();
         }
+      }
+      // Issue #174 AC-01: an exonerated line carries no IVA at all.
+      if (taxExemptReceiver) {
+        taxRate = BigDecimal.ZERO;
       }
       line.setTaxRate(taxRate.setScale(4, RoundingMode.HALF_UP));
       BigDecimal taxAmount = BigDecimal.ZERO;
@@ -479,6 +522,35 @@ public class InvoiceService {
         invoicePage.getTotalElements(),
         invoicePage.getTotalPages(),
         issuedTotal != null ? issuedTotal : BigDecimal.ZERO);
+  }
+
+  /**
+   * Issue #174 AC-05: the same filtered invoice list the History tab shows, unpaged (capped), for
+   * the Excel/PDF report — header data only, newest first. Reuses the exact filter resolution and
+   * query the paged endpoint uses so the report always matches what's on screen.
+   */
+  @Transactional(readOnly = true)
+  public List<InvoiceListItemResponse> listInvoicesForReport(
+      long tenantId, Instant fromDate, Instant toDate, Long clientId, String statusStr, String q) {
+    Instant[] fromTo = resolveInvoiceListRange(fromDate, toDate, clientId);
+    InvoiceStatus status = null;
+    if (statusStr != null && !statusStr.isBlank()) {
+      try {
+        status = InvoiceStatus.valueOf(statusStr.toUpperCase());
+      } catch (IllegalArgumentException e) {
+        // ignore bad status filter
+      }
+    }
+    String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
+    Integer qInvoiceNumber = parseInvoiceNumberQuery(qTrimmed);
+    Pageable pageable = PageRequest.of(0, 5000);
+    return invoiceRepository
+        .findByTenantWithFiltersPaged(
+            tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, qInvoiceNumber, pageable)
+        .getContent()
+        .stream()
+        .map(InvoiceService::toListItemDto)
+        .collect(Collectors.toList());
   }
 
   /**
@@ -749,6 +821,29 @@ public class InvoiceService {
 
   private static String formatInvoiceNumber(int number) {
     return String.format("%07d", number);
+  }
+
+  /**
+   * Issue #174 AC-04: resolves the invoice's emission date. Absent/blank → "now". Otherwise the ISO
+   * instant sent by the form, rejected unless it sits within SIFEN's -720h/+120h window relative to
+   * the current instant (the same limit the frontend enforces before submitting).
+   */
+  static Instant resolveIssuedAt(String issuedAtIso) {
+    if (issuedAtIso == null || issuedAtIso.isBlank()) {
+      return Instant.now();
+    }
+    Instant parsed;
+    try {
+      parsed = Instant.parse(issuedAtIso.trim());
+    } catch (DateTimeParseException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_ISSUE_DATE_INVALID");
+    }
+    Instant now = Instant.now();
+    if (parsed.isBefore(now.minus(MAX_ISSUE_BACKDATE))
+        || parsed.isAfter(now.plus(MAX_ISSUE_FUTUREDATE))) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_ISSUE_DATE_OUT_OF_RANGE");
+    }
+    return parsed;
   }
 
   /**
