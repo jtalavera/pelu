@@ -460,6 +460,206 @@ class SifenKudePdfServiceTest {
     assertThat(SifenKudePdfService.QR_WIDTH_POINTS).isGreaterThanOrEqualTo(25f * (72f / 25.4f));
   }
 
+  /**
+   * Issue #179: for a fully IVA-exonerada operation (e.g. a "Tarjeta Diplomática de exoneración
+   * fiscal" receiver — every line rate 0, iAfecIVA=2), Subtotal / Total de la operación / Total en
+   * Guaraníes must be printed under the items table's "Exentas" column, not "10%".
+   */
+  @Test
+  void buildKudePdf_exoneradoTotals_landUnderExentasColumnNotTenPercent() throws Exception {
+    when(detailService.buildDetail(TENANT_ID, INVOICE_ID)).thenReturn(exoneradoDetail());
+
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    var positions = textPositions(result.bytes(), 1);
+
+    float fivePctX = xOf(positions, "5%");
+    for (String row : List.of("Subtotal", "Total de la operación", "Total en Guaraníes")) {
+      assertThat(valueXInSameRow(positions, row))
+          .as("'%s' amount must sit left of the 5%%/10%% columns (i.e. under Exentas)", row)
+          .isLessThan(fivePctX);
+    }
+  }
+
+  /** Contrast / regression: a plain 10% invoice keeps its totals under the "10%" column. */
+  @Test
+  void buildKudePdf_gravado10Totals_landUnderTenPercentColumn() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    var positions = textPositions(result.bytes(), 1);
+
+    float fivePctX = xOf(positions, "5%");
+    assertThat(valueXInSameRow(positions, "Subtotal")).isGreaterThan(fivePctX);
+  }
+
+  /**
+   * Issue #179: the logo box is bigger, taken from the address column — but the timbrado column
+   * (RUC / Timbrado / vigencia / doc type + number) keeps its exact 5/19 share so it doesn't move.
+   */
+  @Test
+  void headerLayout_enlargesLogo_shrinksAddress_keepsTimbradoColumn() {
+    float[] w = SifenKudePdfService.HEADER_COLUMN_WEIGHTS;
+    float sum = w[0] + w[1] + w[2];
+
+    assertThat(w[0]).as("logo column wider").isGreaterThan(2f);
+    assertThat(w[1]).as("address column narrower").isLessThan(12f);
+    // Was 5 / (2 + 12 + 5) = 5/19; must be unchanged.
+    assertThat(w[2] / sum).isEqualTo(5f / 19f, org.assertj.core.data.Offset.offset(0.0001f));
+    assertThat(SifenKudePdfService.LOGO_CELL_HEIGHT).isGreaterThan(70f);
+  }
+
+  /**
+   * Issue #179: the sale / receiver grid is packed two-up (colspan 3 + 3) instead of one full-width
+   * field per row — "Moneda" and "Tipo de Operación" now share a row, as do "Fecha y hora de
+   * Emisión" and "Condición de Venta".
+   */
+  @Test
+  void buildKudePdf_saleGrid_isPackedTwoUp() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    var positions = textPositions(result.bytes(), 1);
+
+    assertThat(xOf(positions, "Fecha y hora de Emisión: "))
+        .isLessThan(xOf(positions, "Condición de Venta: "));
+    assertThat(yOf(positions, "Fecha y hora de Emisión: "))
+        .isEqualTo(
+            yOf(positions, "Condición de Venta: "), org.assertj.core.data.Offset.offset(0.5f));
+
+    assertThat(xOf(positions, "Moneda: ")).isLessThan(xOf(positions, "Tipo de Operación: "));
+    assertThat(yOf(positions, "Moneda: "))
+        .isEqualTo(
+            yOf(positions, "Tipo de Operación: "), org.assertj.core.data.Offset.offset(0.5f));
+  }
+
+  private SifenInvoiceDetail exoneradoDetail() {
+    SifenInvoiceLine line =
+        new SifenInvoiceLine(
+            "SVC-1",
+            "Corte de cabello",
+            null,
+            1,
+            "77",
+            BigDecimal.valueOf(50_000),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(50_000),
+            SifenTaxAffectation.EXONERADO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
+    SifenInvoiceTotals totals =
+        new SifenInvoiceTotals(
+            BigDecimal.ZERO, // exemptSubtotal
+            BigDecimal.valueOf(50_000), // exoneratedSubtotal
+            BigDecimal.ZERO, // taxedSubtotal5
+            BigDecimal.ZERO, // taxedSubtotal10
+            BigDecimal.valueOf(50_000), // grossTotal
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(50_000), // netTotal
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
+    return new SifenInvoiceDetail(
+        List.of(line),
+        totals,
+        1,
+        List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(50_000), null, null)));
+  }
+
+  private record TextAt(String text, float x, float y) {}
+
+  /** Parses page {@code page}'s content stream for every {@code (text)Tj} and its x/y (from Tm). */
+  private static java.util.List<TextAt> textPositions(byte[] pdf, int page) throws Exception {
+    PdfReader reader = new PdfReader(pdf);
+    String s =
+        new String(reader.getPageContent(page), java.nio.charset.StandardCharsets.ISO_8859_1);
+    java.util.regex.Matcher m =
+        java.util.regex.Pattern.compile(
+                "1 0 0 1 ([-\\d.]+) ([-\\d.]+) Tm\\s*/F\\d+ [\\d.]+ Tf\\s*\\(((?:[^()\\\\]|\\\\.)*)\\)Tj")
+            .matcher(s);
+    java.util.List<TextAt> out = new java.util.ArrayList<>();
+    while (m.find()) {
+      out.add(
+          new TextAt(
+              unescapePdfString(m.group(3)),
+              Float.parseFloat(m.group(1)),
+              Float.parseFloat(m.group(2))));
+    }
+    return out;
+  }
+
+  /** Decodes PDF string escapes so accented labels (é, í, ó, ñ — WinAnsi) compare literally. */
+  private static String unescapePdfString(String raw) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < raw.length(); i++) {
+      char c = raw.charAt(i);
+      if (c != '\\') {
+        sb.append(c);
+        continue;
+      }
+      char n = raw.charAt(++i);
+      if (n >= '0' && n <= '7') {
+        int end = Math.min(i + 3, raw.length());
+        int j = i;
+        while (j < end && raw.charAt(j) >= '0' && raw.charAt(j) <= '7') {
+          j++;
+        }
+        sb.append((char) Integer.parseInt(raw.substring(i, j), 8));
+        i = j - 1;
+      } else {
+        sb.append(
+            switch (n) {
+              case 'n' -> '\n';
+              case 'r' -> '\r';
+              case 't' -> '\t';
+              default -> n;
+            });
+      }
+    }
+    return sb.toString();
+  }
+
+  private static float xOf(java.util.List<TextAt> positions, String exactText) {
+    return find(positions, exactText).x();
+  }
+
+  private static float yOf(java.util.List<TextAt> positions, String exactText) {
+    return find(positions, exactText).y();
+  }
+
+  private static TextAt find(java.util.List<TextAt> positions, String exactText) {
+    return positions.stream()
+        .filter(t -> t.text().equals(exactText))
+        .findFirst()
+        .orElseThrow(
+            () ->
+                new AssertionError(
+                    "text not found in PDF: '"
+                        + exactText
+                        + "' — have: "
+                        + positions.stream().map(TextAt::text).toList()));
+  }
+
+  /** x of the numeric cell on the same row (same y ± 1pt) as the given label. */
+  private static float valueXInSameRow(java.util.List<TextAt> positions, String label) {
+    float labelY =
+        positions.stream()
+            .filter(t -> t.text().equals(label))
+            .map(TextAt::y)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("label not found in PDF: " + label));
+    return positions.stream()
+        .filter(t -> Math.abs(t.y() - labelY) < 1f && t.text().matches("[\\d.]+"))
+        .map(TextAt::x)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no numeric value on row: " + label));
+  }
+
   private static String extractPage(byte[] pdf, int page) throws Exception {
     PdfReader reader = new PdfReader(pdf);
     return new PdfTextExtractor(reader).getTextFromPage(page);
