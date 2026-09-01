@@ -491,7 +491,7 @@
         "issueDateLabel": "Fecha de emisión del comprobante",
         "issueDateEditableToggle": "Editar la fecha de emisión",
         "issueDateLegend": "El documento puede tener fecha hasta 30 días atrás o 5 días adelante respecto al envío a SIFEN.",
-        "issueDateRequired": "Ingresá la fecha de emisión (DD/MM/AAAA).",
+        "issueDateRequired": "Ingresá la fecha de emisión.",
         "issueDateOutOfRange": "La fecha de emisión debe estar entre 30 días atrás y 5 días adelante respecto de hoy.",
         "linesSection": "Ítems",
         "addLine": "Agregar ítem",

@@ -20,7 +20,6 @@ import {
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { downloadInvoiceHistoryReport } from "../api/downloadInvoiceHistoryReport";
-import { DateField } from "../components/DateField";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
@@ -433,18 +432,20 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
         >
           <div className="flex flex-col gap-1 min-w-[140px]">
             <Label htmlFor="filter-from">{t("femme.billing.history.filterFrom")}</Label>
-            <DateField
+            <Input
               id="filter-from"
+              type="date"
               value={filterFrom}
-              onChange={(v) => handleFilterChange(() => setFilterFrom(v))}
+              onChange={(e) => handleFilterChange(() => setFilterFrom(e.target.value))}
             />
           </div>
           <div className="flex flex-col gap-1 min-w-[140px]">
             <Label htmlFor="filter-to">{t("femme.billing.history.filterTo")}</Label>
-            <DateField
+            <Input
               id="filter-to"
+              type="date"
               value={filterTo}
-              onChange={(v) => handleFilterChange(() => setFilterTo(v))}
+              onChange={(e) => handleFilterChange(() => setFilterTo(e.target.value))}
             />
           </div>
           <div className="flex flex-col gap-1 min-w-[140px]">
@@ -1548,16 +1549,17 @@ function NewInvoiceTab({
               <Label htmlFor="billing-issue-date">
                 {t("femme.billing.invoice.issueDateLabel")}
               </Label>
-              <DateField
+              <Input
                 id="billing-issue-date"
+                type="date"
                 value={issueDate}
-                onChange={(v) => {
-                  setIssueDate(v);
+                onChange={(e) => {
+                  setIssueDate(e.target.value);
                   setIssueDateError(null);
                 }}
                 disabled={!issueDateEditable}
-                ariaInvalid={!!issueDateError}
-                ariaDescribedby={issueDateError ? "billing-issue-date-err" : undefined}
+                aria-invalid={issueDateError ? true : undefined}
+                aria-describedby={issueDateError ? "billing-issue-date-err" : undefined}
                 className="mt-1 w-full"
               />
             </div>
