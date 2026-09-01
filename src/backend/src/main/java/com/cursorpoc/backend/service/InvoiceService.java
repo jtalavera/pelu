@@ -25,6 +25,7 @@ import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.web.dto.InvoiceCorrectionRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceLineRequest;
 import com.cursorpoc.backend.web.dto.InvoiceLineResponse;
@@ -97,6 +98,8 @@ public class InvoiceService {
   private final ServiceRecordRepository serviceRecordRepository;
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
+  private final SifenNumberVoidingService sifenNumberVoidingService;
+  private final SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -108,7 +111,9 @@ public class InvoiceService {
       BusinessProfileRepository businessProfileRepository,
       ServiceRecordRepository serviceRecordRepository,
       FemmeTimeProperties timeProperties,
-      SifenInvoiceHeaderService sifenInvoiceHeaderService) {
+      SifenInvoiceHeaderService sifenInvoiceHeaderService,
+      SifenNumberVoidingService sifenNumberVoidingService,
+      SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -119,6 +124,8 @@ public class InvoiceService {
     this.serviceRecordRepository = serviceRecordRepository;
     this.timeProperties = timeProperties;
     this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
+    this.sifenNumberVoidingService = sifenNumberVoidingService;
+    this.sifenSubmissionPersistence = sifenSubmissionPersistence;
   }
 
   @Transactional
@@ -172,7 +179,162 @@ public class InvoiceService {
     invoice.setIssuedAt(resolveIssuedAt(request.issuedAt()));
     invoice.setStatus(InvoiceStatus.ISSUED);
 
-    // 4. Client
+    // 4. Client identity + recipient email (shared with issue #175's correction flow).
+    Client client = applyClientIdentity(tenantId, invoice, ClientIdentityInput.from(request));
+    boolean taxExemptReceiver = isTaxExemptReceiver(invoice);
+
+    // Snapshot the salon RUC at issue time so PDF reprints remain faithful
+    businessProfileRepository
+        .findByTenantId(tenantId)
+        .ifPresent(bp -> invoice.setBusinessRuc(bp.getRuc()));
+
+    // 4b. Optional link to the "ficha de servicio" this invoice was generated from —
+    // issuing the invoice auto-closes the ficha (Issue #53).
+    ServiceRecord serviceRecord = null;
+    if (request.serviceRecordId() != null) {
+      serviceRecord =
+          serviceRecordRepository
+              .findByIdAndTenant_Id(request.serviceRecordId(), tenantId)
+              .orElseThrow(
+                  () ->
+                      new ResponseStatusException(
+                          HttpStatus.NOT_FOUND, "SERVICE_RECORD_NOT_FOUND"));
+      if (serviceRecord.getStatus() != ServiceRecordStatus.OPEN) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_NOT_OPEN");
+      }
+      if (invoiceRepository.existsByServiceRecord_Id(serviceRecord.getId())) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_ALREADY_INVOICED");
+      }
+      invoice.setServiceRecord(serviceRecord);
+    }
+
+    BigDecimal tipsAmount =
+        request.tipsAmount() != null
+            ? request.tipsAmount().setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+    invoice.setTipsAmount(tipsAmount);
+
+    // 5. Lines · 6. Discount · 6b. Gs. 7M identification guard · 7/8. Payments — all shared with
+    // issue #175's correction flow.
+    BigDecimal subtotal = rebuildLines(tenantId, invoice, request.lines(), taxExemptReceiver);
+    BigDecimal total =
+        applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
+    requireClientIdentificationForThreshold(invoice, total);
+    rebuildPayments(invoice, request.payments(), total);
+
+    // 9. Save and increment stamp
+    invoiceRepository.save(invoice);
+    stamp.setNextEmissionNumber(nextNumber + 1);
+    stamp.setLockedAfterInvoice(true);
+
+    // 10. Auto-close the linked ficha de servicio, if any (Issue #53)
+    if (serviceRecord != null) {
+      serviceRecord.setStatus(ServiceRecordStatus.CLOSED);
+      serviceRecord.setClosedAt(Instant.now());
+    }
+
+    return toDetailDto(invoice);
+  }
+
+  /**
+   * Issue #175: corrects the client / lines / discount / payments of a {@code REJECTED} SIFEN
+   * invoice and re-queues it for transmission <b>under the exact same CDC</b>. Manual Técnico V150
+   * §6.5: the CDC is built only from fields no user can edit in this domain (issuer RUC+DV,
+   * document type, establishment, expedition point, document number, contributor type, emission
+   * date, emission type, security code), so every field this method can change automatically
+   * qualifies for resend under the same number — no runtime "diff" is needed.
+   *
+   * <p>Never touches {@code sifenControlNumber}, {@code sifenSecurityCode}, {@code invoiceNumber},
+   * {@code fiscalStamp} or {@code issuedAt}. The controller then runs the same {@code
+   * prepareAndSign} + {@code enqueue} pipeline {@code issueInvoice} uses.
+   */
+  @Transactional
+  public InvoiceResponse correctAndResendInvoice(
+      long tenantId, long invoiceId, InvoiceCorrectionRequest request) {
+    Invoice invoice =
+        invoiceRepository
+            .findByIdAndTenant_Id(invoiceId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+
+    if (invoice.getSifenSubmissionStatus() != SifenSubmissionStatus.REJECTED) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "INVOICE_NOT_REJECTED");
+    }
+    // Guard: once SIFEN has actually approved the number's inutilización, it's dead for good.
+    sifenNumberVoidingService.requireVoidingStillPending(invoiceId);
+
+    // Wipe the rejected content and re-derive it, on the same Invoice row.
+    invoice.getLines().clear();
+    invoice.getPaymentAllocations().clear();
+    invoice.setClient(null);
+    invoice.setClientDisplayName(null);
+    invoice.setClientRucOverride(null);
+    invoice.setClientIdentityDocumentOverride(null);
+    invoice.setClientIdentityDocumentTypeOverride(null);
+    invoice.setClientTaxpayerTypeOverride(null);
+    invoice.setDiscountType(DiscountType.NONE);
+    invoice.setDiscountValue(null);
+
+    applyClientIdentity(tenantId, invoice, ClientIdentityInput.from(request));
+    boolean taxExemptReceiver = isTaxExemptReceiver(invoice);
+    BigDecimal subtotal = rebuildLines(tenantId, invoice, request.lines(), taxExemptReceiver);
+    BigDecimal total =
+        applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
+    requireClientIdentificationForThreshold(invoice, total);
+    rebuildPayments(invoice, request.payments(), total);
+
+    // The number is reused, not abandoned — call off its pending inutilización and clear the
+    // rejected SIFEN result so the resend runs through the normal pipeline.
+    sifenNumberVoidingService.cancelPendingForInvoice(invoiceId);
+    sifenSubmissionPersistence.resetForCorrection(tenantId, invoiceId);
+
+    Hibernate.initialize(invoice.getLines());
+    Hibernate.initialize(invoice.getPaymentAllocations());
+    return toDetailDto(invoice);
+  }
+
+  // ── Shared building blocks (issueInvoice + correctAndResendInvoice) ──────────────────────────
+
+  /**
+   * The subset of an invoice request that identifies the client — same fields on {@link
+   * InvoiceCreateRequest} and {@link InvoiceCorrectionRequest}.
+   */
+  private record ClientIdentityInput(
+      Long clientId,
+      String clientDisplayName,
+      String clientRucOverride,
+      String clientIdentityDocumentOverride,
+      String clientIdentityDocumentTypeOverride,
+      String clientTaxpayerTypeOverride,
+      String email) {
+
+    static ClientIdentityInput from(InvoiceCreateRequest r) {
+      return new ClientIdentityInput(
+          r.clientId(),
+          r.clientDisplayName(),
+          r.clientRucOverride(),
+          r.clientIdentityDocumentOverride(),
+          r.clientIdentityDocumentTypeOverride(),
+          r.clientTaxpayerTypeOverride(),
+          r.email());
+    }
+
+    static ClientIdentityInput from(InvoiceCorrectionRequest r) {
+      return new ClientIdentityInput(
+          r.clientId(),
+          r.clientDisplayName(),
+          r.clientRucOverride(),
+          r.clientIdentityDocumentOverride(),
+          r.clientIdentityDocumentTypeOverride(),
+          r.clientTaxpayerTypeOverride(),
+          r.email());
+    }
+  }
+
+  /**
+   * Steps 4 + recipient-email of {@code issueInvoice}. Returns the linked {@link Client} or null.
+   */
+  private Client applyClientIdentity(long tenantId, Invoice invoice, ClientIdentityInput request) {
     Client client = null;
     if (request.clientId() != null) {
       client =
@@ -221,16 +383,6 @@ public class InvoiceService {
       }
     }
 
-    // Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes the whole
-    // sale IVA-exonerada — resolved from the same overrides SIFEN's receiver block reads, so it
-    // never falls back to a linked client's profile document (issue #96).
-    boolean taxExemptReceiver =
-        ClientIdentityDocumentType.resolve(
-                invoice.getClientIdentityDocumentTypeOverride(),
-                invoice.getClientRucOverride(),
-                invoice.getClientIdentityDocumentOverride())
-            == ClientIdentityDocumentType.TARJETA_DIPLOMATICA;
-
     // Issue #173: recipient email for the KuDE / cancellation notice. Stored on the invoice
     // (takes priority over the client's own email on file) and, when it's a new value for a
     // linked client, written back to that client's profile.
@@ -245,44 +397,33 @@ public class InvoiceService {
       }
       client.setEmail(recipientEmail);
     }
+    return client;
+  }
 
-    // Snapshot the salon RUC at issue time so PDF reprints remain faithful
-    businessProfileRepository
-        .findByTenantId(tenantId)
-        .ifPresent(bp -> invoice.setBusinessRuc(bp.getRuc()));
+  /**
+   * Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes the whole sale
+   * IVA-exonerada — resolved from the same overrides SIFEN's receiver block reads, so it never
+   * falls back to a linked client's profile document (issue #96).
+   */
+  private static boolean isTaxExemptReceiver(Invoice invoice) {
+    return ClientIdentityDocumentType.resolve(
+            invoice.getClientIdentityDocumentTypeOverride(),
+            invoice.getClientRucOverride(),
+            invoice.getClientIdentityDocumentOverride())
+        == ClientIdentityDocumentType.TARJETA_DIPLOMATICA;
+  }
 
-    // 4b. Optional link to the "ficha de servicio" this invoice was generated from —
-    // issuing the invoice auto-closes the ficha (Issue #53).
-    ServiceRecord serviceRecord = null;
-    if (request.serviceRecordId() != null) {
-      serviceRecord =
-          serviceRecordRepository
-              .findByIdAndTenant_Id(request.serviceRecordId(), tenantId)
-              .orElseThrow(
-                  () ->
-                      new ResponseStatusException(
-                          HttpStatus.NOT_FOUND, "SERVICE_RECORD_NOT_FOUND"));
-      if (serviceRecord.getStatus() != ServiceRecordStatus.OPEN) {
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_NOT_OPEN");
-      }
-      if (invoiceRepository.existsByServiceRecord_Id(serviceRecord.getId())) {
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_ALREADY_INVOICED");
-      }
-      invoice.setServiceRecord(serviceRecord);
-    }
-
-    BigDecimal tipsAmount =
-        request.tipsAmount() != null
-            ? request.tipsAmount().setScale(2, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO;
-    invoice.setTipsAmount(tipsAmount);
-
-    // 5. Lines
-    if (request.lines() == null || request.lines().isEmpty()) {
+  /** Step 5 of {@code issueInvoice}: rebuilds {@code invoice.lines}, returns the gross subtotal. */
+  private BigDecimal rebuildLines(
+      long tenantId,
+      Invoice invoice,
+      List<InvoiceLineRequest> lineRequests,
+      boolean taxExemptReceiver) {
+    if (lineRequests == null || lineRequests.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LINES_REQUIRED");
     }
     BigDecimal subtotal = BigDecimal.ZERO;
-    for (InvoiceLineRequest lr : request.lines()) {
+    for (InvoiceLineRequest lr : lineRequests) {
       InvoiceLine line = new InvoiceLine();
       line.setInvoice(invoice);
       line.setDescription(lr.description());
@@ -368,31 +509,33 @@ public class InvoiceService {
       invoice.getLines().add(line);
     }
     invoice.setSubtotal(subtotal.setScale(2, RoundingMode.HALF_UP));
+    return subtotal;
+  }
 
-    // 6. Discount
+  /** Step 6 of {@code issueInvoice}: applies the global discount, returns the total. */
+  private BigDecimal applyGlobalDiscount(
+      Invoice invoice, String discountTypeStr, BigDecimal discountValue, BigDecimal subtotal) {
     BigDecimal discountAmount = BigDecimal.ZERO;
     DiscountType discountType = DiscountType.NONE;
-    if (request.discountType() != null) {
+    if (discountTypeStr != null) {
       try {
-        discountType = DiscountType.valueOf(request.discountType().toUpperCase());
+        discountType = DiscountType.valueOf(discountTypeStr.toUpperCase());
       } catch (IllegalArgumentException e) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_DISCOUNT_TYPE");
       }
     }
-    if (discountType == DiscountType.FIXED && request.discountValue() != null) {
-      discountAmount = request.discountValue().setScale(2, RoundingMode.HALF_UP);
+    if (discountType == DiscountType.FIXED && discountValue != null) {
+      discountAmount = discountValue.setScale(2, RoundingMode.HALF_UP);
       if (discountAmount.compareTo(subtotal) > 0) {
         discountAmount = subtotal;
       }
-    } else if (discountType == DiscountType.PERCENT && request.discountValue() != null) {
+    } else if (discountType == DiscountType.PERCENT && discountValue != null) {
       discountAmount =
-          subtotal
-              .multiply(request.discountValue())
-              .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+          subtotal.multiply(discountValue).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
     invoice.setDiscountType(discountType);
     if (discountType != DiscountType.NONE) {
-      invoice.setDiscountValue(request.discountValue());
+      invoice.setDiscountValue(discountValue);
     }
 
     BigDecimal total = subtotal.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
@@ -400,32 +543,38 @@ public class InvoiceService {
       total = BigDecimal.ZERO;
     }
     invoice.setTotal(total);
+    return total;
+  }
 
-    // 6b. SIFEN HU-02 AC-05: Gs. 7.000.000+ requires client identification (RUC or identity
-    // document), sin excepción — checked here so it blocks issuance up front, before payments.
-    // The linked client's profile RUC/document is never used as a fallback here — must match
-    // SifenInvoiceHeaderService#buildReceiverData exactly, or a large invoice could pass this
-    // check using the client's profile data yet still be submitted to SIFEN with a blank
-    // receiver, since the header service no longer falls back either (this is what
-    // isReceiverUnidentified ultimately reflects — see its Javadoc cross-reference).
-    if (total.compareTo(CLIENT_IDENTIFICATION_THRESHOLD) >= 0) {
-      String ruc = invoice.getClientRucOverride();
-      String identityDocument = invoice.getClientIdentityDocumentOverride();
-      ClientIdentityDocumentType explicitType = invoice.getClientIdentityDocumentTypeOverride();
-      ClientIdentityDocumentType resolvedType =
-          ClientIdentityDocumentType.resolve(explicitType, ruc, identityDocument);
-      if (resolvedType == ClientIdentityDocumentType.INNOMINADO) {
-        throw new ResponseStatusException(
-            HttpStatus.BAD_REQUEST, "SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
-      }
+  /**
+   * Step 6b of {@code issueInvoice}. SIFEN HU-02 AC-05: Gs. 7.000.000+ requires client
+   * identification (RUC or identity document), sin excepción. The linked client's profile
+   * RUC/document is never used as a fallback — must match {@code
+   * SifenInvoiceHeaderService#buildReceiverData} exactly.
+   */
+  private static void requireClientIdentificationForThreshold(Invoice invoice, BigDecimal total) {
+    if (total.compareTo(CLIENT_IDENTIFICATION_THRESHOLD) < 0) {
+      return;
     }
+    ClientIdentityDocumentType resolvedType =
+        ClientIdentityDocumentType.resolve(
+            invoice.getClientIdentityDocumentTypeOverride(),
+            invoice.getClientRucOverride(),
+            invoice.getClientIdentityDocumentOverride());
+    if (resolvedType == ClientIdentityDocumentType.INNOMINADO) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
+    }
+  }
 
-    // 7. Payments
-    if (request.payments() == null || request.payments().isEmpty()) {
+  /** Steps 7 + 8 of {@code issueInvoice}: rebuilds payment allocations and validates the sum. */
+  private static void rebuildPayments(
+      Invoice invoice, List<InvoicePaymentAllocationRequest> paymentRequests, BigDecimal total) {
+    if (paymentRequests == null || paymentRequests.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENTS_REQUIRED");
     }
     BigDecimal paymentsSum = BigDecimal.ZERO;
-    for (InvoicePaymentAllocationRequest pr : request.payments()) {
+    for (InvoicePaymentAllocationRequest pr : paymentRequests) {
       PaymentMethod method;
       try {
         method = PaymentMethod.valueOf(pr.method().toUpperCase());
@@ -433,8 +582,7 @@ public class InvoiceService {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_PAYMENT_METHOD");
       }
       // Issue #170: SIFEN's E7.1.1/gPagTarCD group is mandatory for card payments and requires
-      // the card brand — collect and validate it here so it's always present by the time the
-      // invoice reaches SifenInvoiceDetailService.
+      // the card brand.
       CardBrand cardBrand = null;
       if (method == PaymentMethod.CREDIT_CARD || method == PaymentMethod.DEBIT_CARD) {
         if (pr.cardBrand() == null || pr.cardBrand().isBlank()) {
@@ -462,25 +610,10 @@ public class InvoiceService {
       invoice.getPaymentAllocations().add(allocation);
       paymentsSum = paymentsSum.add(pr.amount());
     }
-
-    // 8. Validate payment sum equals total (issue #139: tips are collected/stored separately
-    // and never factor into the invoiced amount to reconcile against payment methods).
+    // Issue #139: tips are collected/stored separately and never factor into this reconciliation.
     if (paymentsSum.setScale(2, RoundingMode.HALF_UP).compareTo(total) != 0) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENT_SUM_MISMATCH");
     }
-
-    // 9. Save and increment stamp
-    invoiceRepository.save(invoice);
-    stamp.setNextEmissionNumber(nextNumber + 1);
-    stamp.setLockedAfterInvoice(true);
-
-    // 10. Auto-close the linked ficha de servicio, if any (Issue #53)
-    if (serviceRecord != null) {
-      serviceRecord.setStatus(ServiceRecordStatus.CLOSED);
-      serviceRecord.setClosedAt(Instant.now());
-    }
-
-    return toDetailDto(invoice);
   }
 
   @Transactional(readOnly = true)

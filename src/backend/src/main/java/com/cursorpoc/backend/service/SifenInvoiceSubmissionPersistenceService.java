@@ -88,6 +88,33 @@ class SifenInvoiceSubmissionPersistenceService {
     return signedAt;
   }
 
+  /**
+   * Issue #175: wipes every SIFEN-result field on a {@code REJECTED} invoice so {@code
+   * correctAndResendInvoice} can re-run it through the normal {@code prepareAndSign} + transmit
+   * pipeline. Deliberately keeps {@code sifenControlNumber} and {@code sifenSecurityCode} — the CDC
+   * never changes for a same-number correction (Manual Técnico V150 §6.5). {@code sifenSignedAt} is
+   * cleared so {@link #prepareForSubmission} re-stamps it with the real resend instant (the
+   * signature's {@code dFecFirma} must reflect when the corrected document is actually signed), and
+   * the attempt/lease/retry bookkeeping is reset so the resend starts clean.
+   */
+  @Transactional
+  void resetForCorrection(long tenantId, long invoiceId) {
+    Invoice invoice = requireInvoice(tenantId, invoiceId);
+    if (invoice.getSifenSubmissionStatus() != SifenSubmissionStatus.REJECTED) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "INVOICE_NOT_REJECTED");
+    }
+    invoice.setSifenSubmissionStatus(null);
+    invoice.setSifenSubmissionProtocolNumber(null);
+    invoice.setSifenSubmissionResultCode(null);
+    invoice.setSifenSubmissionMessage(null);
+    invoice.setSifenSubmittedAt(null);
+    invoice.setSifenQueryDocumentContent(null);
+    invoice.setSifenSignedAt(null);
+    invoice.setSifenAttemptCount(0);
+    invoice.setSifenNextAttemptAt(null);
+    invoice.setSifenProcessingStartedAt(null);
+  }
+
   @Transactional
   void persistQrData(long tenantId, long invoiceId, String qrUrl, String publicConsultationUrl) {
     Invoice invoice = requireInvoice(tenantId, invoiceId);

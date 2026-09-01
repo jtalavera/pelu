@@ -24,6 +24,7 @@ import { downloadSifenKude, sendSifenKudeByEmail } from "../api/downloadSifenKud
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { FieldValidationError } from "./FieldValidationError";
+import { InvoiceCorrectionForm } from "./InvoiceCorrectionForm";
 import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
@@ -61,6 +62,9 @@ export type InvoiceDetail = {
   clientRucOverride: string | null;
   /** Issue #174 AC-01: "TARJETA_DIPLOMATICA" here means the sale was issued IVA-exonerada. */
   clientIdentityDocumentTypeOverride?: string | null;
+  /** Issue #175: prefill for the "Corregir y reenviar" form. */
+  clientIdentityDocumentOverride?: string | null;
+  clientTaxpayerTypeOverride?: string | null;
   status: string;
   subtotal: string;
   discountType: string;
@@ -186,11 +190,14 @@ export function InvoiceDetailModal({
   invoiceId,
   onClose,
   onVoided,
+  onCorrected,
   allowVoid = true,
 }: {
   invoiceId: number;
   onClose: () => void;
   onVoided?: () => void;
+  /** Issue #175: called after a rejected invoice is corrected and re-queued. */
+  onCorrected?: () => void;
   allowVoid?: boolean;
 }) {
   const { t } = useTranslation();
@@ -223,6 +230,7 @@ export function InvoiceDetailModal({
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [showCorrectionForm, setShowCorrectionForm] = useState(false);
   const [identifyClientType, setIdentifyClientType] = useState<"COMPANY" | "PERSON" | "FOREIGN">(
     "PERSON",
   );
@@ -447,6 +455,20 @@ export function InvoiceDetailModal({
   const sifenCancelEligible =
     invoice?.sifenSubmissionStatus === "APPROVED" ||
     invoice?.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION";
+
+  if (showCorrectionForm && invoice) {
+    return (
+      <InvoiceCorrectionForm
+        invoiceId={invoice.id}
+        onClose={() => setShowCorrectionForm(false)}
+        onResent={() => {
+          setShowCorrectionForm(false);
+          onCorrected?.();
+          onClose();
+        }}
+      />
+    );
+  }
 
   return (
     <Modal
@@ -778,6 +800,41 @@ export function InvoiceDetailModal({
                               }
                             >
                               {t("femme.billing.history.detail.sifen.revalidateButton")}
+                            </Button>
+                          </div>
+                        </div>
+                      </AccordionItem>
+                    )}
+
+                    {/* Issue #175: correct & resend a rejected invoice under the same CDC. */}
+                    {invoice.sifenSubmissionStatus === "REJECTED" && (
+                      <AccordionItem
+                        title={t("femme.billing.history.detail.sifen.correctResendTitle")}
+                        data-testid="sifen-tab-correct-resend"
+                      >
+                        <div className="flex flex-col gap-2">
+                          <Text
+                            variant="small"
+                            className="text-[rgb(var(--color-muted-foreground))]"
+                          >
+                            {t("femme.billing.history.detail.sifen.correctResendExplanation")}
+                          </Text>
+                          {invoice.sifenSubmissionMessage && (
+                            <Alert
+                              variant="destructive"
+                              title={t("femme.billing.history.detail.sifen.rejectionMessageTitle")}
+                            >
+                              {invoice.sifenSubmissionMessage}
+                            </Alert>
+                          )}
+                          <div>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              data-testid="sifen-correct-resend-button"
+                              onClick={() => setShowCorrectionForm(true)}
+                            >
+                              {t("femme.billing.history.detail.sifen.correctResendButton")}
                             </Button>
                           </div>
                         </div>

@@ -107,6 +107,53 @@ class SifenNumberVoidingServiceTest {
     assertThat(saved.getReason()).isNotBlank();
   }
 
+  // ── Issue #175: correct & resend guards ───────────────────────────────────────────────────
+
+  @Test
+  void requireVoidingStillPending_isNoOp_whenNoRecordOrStillPending() {
+    when(repository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.empty());
+    service.requireVoidingStillPending(INVOICE_ID); // no throw
+
+    SifenNumberVoidingEvent pending = new SifenNumberVoidingEvent();
+    pending.setStatus(SifenNumberVoidingStatus.PENDING);
+    when(repository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(pending));
+    service.requireVoidingStillPending(INVOICE_ID); // no throw
+  }
+
+  @Test
+  void requireVoidingStillPending_throws_onceSifenApprovedTheVoiding() {
+    SifenNumberVoidingEvent approved = new SifenNumberVoidingEvent();
+    approved.setStatus(SifenNumberVoidingStatus.APPROVED);
+    when(repository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(approved));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.requireVoidingStillPending(INVOICE_ID))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_NUMBER_ALREADY_VOIDED");
+  }
+
+  @Test
+  void cancelPendingForInvoice_marksAPendingRecordCancelled() {
+    SifenNumberVoidingEvent pending = new SifenNumberVoidingEvent();
+    pending.setStatus(SifenNumberVoidingStatus.PENDING);
+    when(repository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(pending));
+
+    service.cancelPendingForInvoice(INVOICE_ID);
+
+    assertThat(pending.getStatus()).isEqualTo(SifenNumberVoidingStatus.CANCELLED);
+  }
+
+  @Test
+  void cancelPendingForInvoice_leavesANonPendingRecordUntouched() {
+    SifenNumberVoidingEvent submitted = new SifenNumberVoidingEvent();
+    submitted.setStatus(SifenNumberVoidingStatus.REJECTED);
+    when(repository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(submitted));
+
+    service.cancelPendingForInvoice(INVOICE_ID);
+
+    assertThat(submitted.getStatus()).isEqualTo(SifenNumberVoidingStatus.REJECTED);
+  }
+
   /** Idempotency: a lease-related retry or reconciler pass must never double-record. */
   @Test
   void recordPendingForRejectedInvoice_isIdempotent_whenARowAlreadyExists() {
