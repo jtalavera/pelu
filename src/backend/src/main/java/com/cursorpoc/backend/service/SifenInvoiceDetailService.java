@@ -166,6 +166,15 @@ public class SifenInvoiceDetailService {
       taxAmount = BigDecimal.ZERO;
     }
 
+    // E733/dPropIVA: "proporción gravada" — 100 only for Gravado (and, in theory, the partial
+    // percentage for Gravado parcial). SIFEN rejects a non-zero value for Exonerado/Exento
+    // ("Proporción gravada del IVA incorrecta para forma de afectación Exonerado o Exento").
+    BigDecimal taxProportion =
+        affectation == SifenTaxAffectation.GRAVADO
+                || affectation == SifenTaxAffectation.GRAVADO_PARCIAL
+            ? BigDecimal.valueOf(100)
+            : BigDecimal.ZERO;
+
     String fullDescription = line.getDescription();
     boolean tooLongForItemName = fullDescription.length() > MAX_ITEM_NAME_LENGTH;
     String itemName =
@@ -192,7 +201,7 @@ public class SifenInvoiceDetailService {
         globalDiscountAmount,
         netTotal,
         affectation,
-        BigDecimal.valueOf(100),
+        taxProportion,
         ratePercent,
         taxableBase,
         taxAmount);

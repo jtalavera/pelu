@@ -228,6 +228,8 @@ class SifenInvoiceDetailServiceTest {
 
     assertThat(line.taxAffectation()).isEqualTo(SifenTaxAffectation.EXONERADO);
     assertThat(line.taxAmount()).isEqualByComparingTo("0");
+    // SIFEN rejects a non-zero dPropIVA for Exonerado/Exento.
+    assertThat(line.taxProportion()).isEqualByComparingTo("0");
     assertThat(detail.totals().exoneratedSubtotal()).isEqualByComparingTo("100000.00");
     assertThat(detail.totals().exemptSubtotal()).isEqualByComparingTo("0");
     assertThat(detail.totals().grossTotal()).isEqualByComparingTo("100000.00");
