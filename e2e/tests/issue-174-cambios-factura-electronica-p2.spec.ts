@@ -219,7 +219,10 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
     const dateField = page.locator("#billing-issue-date");
     await expect(dateField).toBeDisabled();
-    await expect(page.getByText(/720 hours \(30 days\)/)).toBeVisible();
+    // Issue #181: the legend copy was shortened.
+    await expect(
+      page.getByText(/30 days in the past or 5 days in the future/),
+    ).toBeVisible();
 
     await page.getByLabel("Edit the issue date").check();
     await expect(dateField).toBeEnabled();

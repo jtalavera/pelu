@@ -79,6 +79,45 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("qInvoiceNumber") Integer qInvoiceNumber,
       Pageable pageable);
 
+  /**
+   * Issue #181: header-only projection for the "Historial de comprobantes" Excel/PDF report. Same
+   * filters and ordering as {@link #findByTenantWithFiltersPaged}, but a single query with no lazy
+   * {@code lines}/{@code paymentAllocations}/{@code client} loading per row (the report shows only
+   * cabecera data) — {@code LEFT JOIN i.client c} + {@code COALESCE} resolves the display name the
+   * same way {@code InvoiceService.toListItemDto} does.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.InvoiceReportRow(
+          i.invoiceNumber,
+          COALESCE(c.fullName, i.clientDisplayName),
+          i.status,
+          i.total,
+          i.issuedAt,
+          i.sifenSubmissionStatus)
+      FROM Invoice i
+      LEFT JOIN i.client c
+      WHERE i.tenant.id = :tenantId
+      AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
+      AND (:toDate IS NULL OR i.issuedAt <= :toDate)
+      AND (:clientId IS NULL OR i.client.id = :clientId)
+      AND (:status IS NULL OR i.status = :status)
+      AND (:q IS NULL
+           OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
+           OR (:qInvoiceNumber IS NOT NULL AND i.invoiceNumber = :qInvoiceNumber))
+      ORDER BY i.issuedAt DESC
+      """)
+  List<com.cursorpoc.backend.service.InvoiceReportRow> findReportRows(
+      @Param("tenantId") Long tenantId,
+      @Param("fromDate") Instant fromDate,
+      @Param("toDate") Instant toDate,
+      @Param("clientId") Long clientId,
+      @Param("status") InvoiceStatus status,
+      @Param("q") String q,
+      @Param("qInvoiceNumber") Integer qInvoiceNumber,
+      Pageable pageable);
+
   @Query(
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i

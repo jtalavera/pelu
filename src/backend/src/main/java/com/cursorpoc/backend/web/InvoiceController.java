@@ -3,6 +3,7 @@ package com.cursorpoc.backend.web;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.FeatureFlagService;
 import com.cursorpoc.backend.service.InvoiceHistoryReportService;
+import com.cursorpoc.backend.service.InvoiceReportRow;
 import com.cursorpoc.backend.service.InvoiceService;
 import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
@@ -12,7 +13,6 @@ import com.cursorpoc.backend.service.SifenSubmissionQueue;
 import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
-import com.cursorpoc.backend.web.dto.InvoiceListItemResponse;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
@@ -168,7 +168,7 @@ public class InvoiceController {
     Instant fromInstant = from != null ? Instant.parse(from) : null;
     Instant toInstant = to != null ? Instant.parse(to) : null;
     try {
-      List<InvoiceListItemResponse> rows =
+      List<InvoiceReportRow> rows =
           invoiceService.listInvoicesForReport(
               tenantId, fromInstant, toInstant, clientId, status, q);
       boolean xlsx = "xlsx".equalsIgnoreCase(format) || "excel".equalsIgnoreCase(format);

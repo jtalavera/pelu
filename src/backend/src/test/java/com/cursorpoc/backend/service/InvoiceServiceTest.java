@@ -802,6 +802,28 @@ class InvoiceServiceTest {
     assertThat(result.content().get(1).sifenSubmissionStatus()).isNull();
   }
 
+  /**
+   * Issue #181: the report list resolves the same filters as the paged list but loads a header-only
+   * projection ({@code findReportRows}) — no per-invoice line/payment/client lazy initialization.
+   */
+  @Test
+  void listInvoicesForReport_usesHeaderOnlyProjectionQuery() {
+    var row =
+        new InvoiceReportRow(
+            42,
+            "ANA GARCIA",
+            InvoiceStatus.ISSUED,
+            new BigDecimal("10000"),
+            Instant.now(),
+            SifenSubmissionStatus.APPROVED);
+    when(invoiceRepository.findReportRows(eq(1L), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(List.of(row));
+
+    var result = invoiceService.listInvoicesForReport(1L, null, null, null, "ISSUED", null);
+
+    assertThat(result).containsExactly(row);
+  }
+
   @Test
   void resolveInvoiceListRange_incompleteRejects() {
     Instant a = Instant.parse("2026-01-01T00:00:00Z");

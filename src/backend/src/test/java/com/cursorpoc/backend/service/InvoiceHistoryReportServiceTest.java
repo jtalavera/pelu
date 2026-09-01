@@ -3,7 +3,8 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
-import com.cursorpoc.backend.web.dto.InvoiceListItemResponse;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -19,29 +20,21 @@ class InvoiceHistoryReportServiceTest {
   private final InvoiceHistoryReportService service =
       new InvoiceHistoryReportService(new FemmeTimeProperties());
 
-  private static final List<InvoiceListItemResponse> ROWS =
+  private static final List<InvoiceReportRow> ROWS =
       List.of(
-          new InvoiceListItemResponse(
-              1L,
+          new InvoiceReportRow(
               7,
-              "0000007",
               "ANA GARCIA",
-              "ISSUED",
+              InvoiceStatus.ISSUED,
               new BigDecimal("150000.00"),
               Instant.parse("2026-08-20T13:00:00Z"),
-              "Corte, Color",
-              "CASH",
-              "APPROVED"),
-          new InvoiceListItemResponse(
-              2L,
+              SifenSubmissionStatus.APPROVED),
+          new InvoiceReportRow(
               8,
-              "0000008",
               "CONSUMIDOR FINAL",
-              "VOIDED",
+              InvoiceStatus.VOIDED,
               new BigDecimal("50000.00"),
               Instant.parse("2026-08-21T09:30:00Z"),
-              "Manicura",
-              "TRANSFER",
               null));
 
   @Test

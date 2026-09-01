@@ -530,7 +530,7 @@ public class InvoiceService {
    * query the paged endpoint uses so the report always matches what's on screen.
    */
   @Transactional(readOnly = true)
-  public List<InvoiceListItemResponse> listInvoicesForReport(
+  public List<InvoiceReportRow> listInvoicesForReport(
       long tenantId, Instant fromDate, Instant toDate, Long clientId, String statusStr, String q) {
     Instant[] fromTo = resolveInvoiceListRange(fromDate, toDate, clientId);
     InvoiceStatus status = null;
@@ -543,14 +543,15 @@ public class InvoiceService {
     }
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
     Integer qInvoiceNumber = parseInvoiceNumberQuery(qTrimmed);
-    Pageable pageable = PageRequest.of(0, 5000);
-    return invoiceRepository
-        .findByTenantWithFiltersPaged(
-            tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, qInvoiceNumber, pageable)
-        .getContent()
-        .stream()
-        .map(InvoiceService::toListItemDto)
-        .collect(Collectors.toList());
+    return invoiceRepository.findReportRows(
+        tenantId,
+        fromTo[0],
+        fromTo[1],
+        clientId,
+        status,
+        qTrimmed,
+        qInvoiceNumber,
+        PageRequest.of(0, 5000));
   }
 
   /**

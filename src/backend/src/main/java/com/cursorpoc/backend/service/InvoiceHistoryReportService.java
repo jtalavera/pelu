@@ -1,7 +1,8 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
-import com.cursorpoc.backend.web.dto.InvoiceListItemResponse;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
@@ -50,7 +51,7 @@ public class InvoiceHistoryReportService {
 
   // ── PDF ────────────────────────────────────────────────────────────────────
 
-  public byte[] renderPdf(List<InvoiceListItemResponse> rows, Instant from, Instant to) {
+  public byte[] renderPdf(List<InvoiceReportRow> rows, Instant from, Instant to) {
     ZoneId zone = timeProperties.zoneId();
     DateTimeFormatter dateTimeFmt =
         DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(zone).withLocale(ES_PY);
@@ -82,22 +83,18 @@ public class InvoiceHistoryReportService {
       }
 
       BigDecimal grandTotal = BigDecimal.ZERO;
-      for (InvoiceListItemResponse r : rows) {
-        addCell(table, r.invoiceNumberFormatted(), bodyFont, Element.ALIGN_LEFT);
+      for (InvoiceReportRow r : rows) {
+        addCell(table, formatInvoiceNumber(r.invoiceNumber()), bodyFont, Element.ALIGN_LEFT);
         addCell(
             table,
             r.issuedAt() != null ? dateTimeFmt.format(r.issuedAt()) : "",
             bodyFont,
             Element.ALIGN_LEFT);
-        addCell(
-            table,
-            r.clientDisplayName() != null ? r.clientDisplayName() : "",
-            bodyFont,
-            Element.ALIGN_LEFT);
+        addCell(table, r.clientName() != null ? r.clientName() : "", bodyFont, Element.ALIGN_LEFT);
         addCell(table, statusLabel(r.status()), bodyFont, Element.ALIGN_LEFT);
         addCell(table, sifenStatusLabel(r.sifenSubmissionStatus()), bodyFont, Element.ALIGN_LEFT);
         addCell(table, formatMoneyGs(r.total()), bodyFont, Element.ALIGN_RIGHT);
-        if ("ISSUED".equals(r.status()) && r.total() != null) {
+        if (r.status() == InvoiceStatus.ISSUED && r.total() != null) {
           grandTotal = grandTotal.add(r.total());
         }
       }
@@ -132,7 +129,7 @@ public class InvoiceHistoryReportService {
 
   // ── Excel (.xlsx) ──────────────────────────────────────────────────────────
 
-  public byte[] renderXlsx(List<InvoiceListItemResponse> rows, Instant from, Instant to) {
+  public byte[] renderXlsx(List<InvoiceReportRow> rows, Instant from, Instant to) {
     ZoneId zone = timeProperties.zoneId();
     DateTimeFormatter dateTimeFmt =
         DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(zone).withLocale(ES_PY);
@@ -159,12 +156,12 @@ public class InvoiceHistoryReportService {
       }
 
       int rowIdx = 3;
-      for (InvoiceListItemResponse r : rows) {
+      for (InvoiceReportRow r : rows) {
         Row row = sheet.createRow(rowIdx++);
-        row.createCell(0).setCellValue(r.invoiceNumberFormatted());
+        row.createCell(0).setCellValue(formatInvoiceNumber(r.invoiceNumber()));
         row.createCell(1)
             .setCellValue(r.issuedAt() != null ? dateTimeFmt.format(r.issuedAt()) : "");
-        row.createCell(2).setCellValue(r.clientDisplayName() != null ? r.clientDisplayName() : "");
+        row.createCell(2).setCellValue(r.clientName() != null ? r.clientName() : "");
         row.createCell(3).setCellValue(statusLabel(r.status()));
         row.createCell(4).setCellValue(sifenStatusLabel(r.sifenSubmissionStatus()));
         row.createCell(5)
@@ -184,30 +181,31 @@ public class InvoiceHistoryReportService {
 
   // ── shared labels ─────────────────────────────────────────────────────────
 
-  private static String statusLabel(String status) {
+  private static String formatInvoiceNumber(int number) {
+    return String.format("%07d", number);
+  }
+
+  private static String statusLabel(InvoiceStatus status) {
     if (status == null) {
       return "";
     }
     return switch (status) {
-      case "ISSUED" -> "Emitida";
-      case "VOIDED" -> "Anulada";
-      default -> status;
+      case ISSUED -> "Emitida";
+      case VOIDED -> "Anulada";
     };
   }
 
-  private static String sifenStatusLabel(String status) {
-    if (status == null || status.isBlank()) {
+  private static String sifenStatusLabel(SifenSubmissionStatus status) {
+    if (status == null) {
       return "-";
     }
     return switch (status) {
-      case "QUEUED" -> "En cola";
-      case "PENDING_VERIFICATION" -> "Pendiente de verificación";
-      case "APPROVED" -> "Aprobado";
-      case "APPROVED_WITH_OBSERVATION" -> "Aprobado con observación";
-      case "REJECTED" -> "Rechazado";
-      case "CANCELLED" -> "Cancelado";
-      case "ERROR" -> "Error";
-      default -> status;
+      case QUEUED -> "En cola";
+      case PENDING_VERIFICATION -> "Pendiente de verificación";
+      case APPROVED -> "Aprobado";
+      case APPROVED_WITH_OBSERVATION -> "Aprobado con observación";
+      case REJECTED -> "Rechazado";
+      case CANCELLED -> "Cancelado";
     };
   }
 
