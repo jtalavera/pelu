@@ -650,6 +650,43 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='dBasExe']")).isEqualTo("47619.04761905");
   }
 
+  /**
+   * Issue #174 AC-01: for an Exonerado line (iAfecIVA=2, "Tarjeta Diplomática de exoneración
+   * fiscal" receiver) SIFEN rejects any non-zero E733/dPropIVA — "Proporción gravada del IVA
+   * incorrecta para forma de afectación Exonerado o Exento". dTasaIVA / dBasGravIVA / dLiqIVAItem
+   * must also be 0.
+   */
+  @Test
+  void buildDocument_exoneradoLine_emitsZeroTaxProportionAndZeroTax() throws Exception {
+    SifenInvoiceLine exoneradoLine =
+        new SifenInvoiceLine(
+            "SVC-3",
+            "Servicio a diplomático",
+            null,
+            1,
+            "77",
+            BigDecimal.valueOf(50_000),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(50_000),
+            SifenTaxAffectation.EXONERADO,
+            // A stale 100 here must NOT reach the XML — the service forces it to 0 for Exonerado.
+            BigDecimal.valueOf(100),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
+    SifenInvoiceDetail exoneradoDetail =
+        new SifenInvoiceDetail(List.of(exoneradoLine), detail.totals(), 1, detail.payments());
+
+    Document doc = service.buildDocument(header, exoneradoDetail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iAfecIVA']")).isEqualTo("2");
+    assertThat(xpath(doc, "//*[local-name()='dPropIVA']")).isEqualTo("0");
+    assertThat(xpath(doc, "//*[local-name()='dTasaIVA']")).isEqualTo("0");
+    assertThat(xpath(doc, "//*[local-name()='dBasGravIVA']")).isEqualTo("0");
+    assertThat(xpath(doc, "//*[local-name()='dLiqIVAItem']")).isEqualTo("0");
+  }
+
   // ---------------------------------------------------------------------------------------------
   // SIFEN HU-14: nota de crédito, nota de débito, autofactura, nota de remisión.
   // ---------------------------------------------------------------------------------------------

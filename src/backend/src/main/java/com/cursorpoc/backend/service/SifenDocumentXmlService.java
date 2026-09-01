@@ -695,7 +695,15 @@ public class SifenDocumentXmlService {
       Element gCamIVA = el(doc, gCamItem, "gCamIVA", null);
       el(doc, gCamIVA, "iAfecIVA", String.valueOf(line.taxAffectation().sifenCode()));
       el(doc, gCamIVA, "dDesAfecIVA", taxAffectationDescription(line.taxAffectation()));
-      el(doc, gCamIVA, "dPropIVA", line.taxProportion().toPlainString());
+      // E733/dPropIVA: SIFEN rejects a non-zero "proporción gravada" for Exonerado (iAfecIVA=2) or
+      // Exento (iAfecIVA=3) — "Proporción gravada del IVA incorrecta para forma de afectación
+      // Exonerado o Exento". Only Gravado / Gravado parcial carry a real proportion.
+      BigDecimal propIva =
+          (line.taxAffectation() == SifenTaxAffectation.GRAVADO
+                  || line.taxAffectation() == SifenTaxAffectation.GRAVADO_PARCIAL)
+              ? line.taxProportion()
+              : BigDecimal.ZERO;
+      el(doc, gCamIVA, "dPropIVA", propIva.toPlainString());
       el(doc, gCamIVA, "dTasaIVA", line.taxRatePercent().toPlainString());
       el(doc, gCamIVA, "dBasGravIVA", line.taxableBase().toPlainString());
       el(doc, gCamIVA, "dLiqIVAItem", line.taxAmount().toPlainString());
