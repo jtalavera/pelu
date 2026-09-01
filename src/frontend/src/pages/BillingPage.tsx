@@ -1579,7 +1579,7 @@ function NewInvoiceTab({
             </label>
           </div>
           <FieldValidationError id="billing-issue-date-err">{issueDateError}</FieldValidationError>
-          <Text className="text-xs text-[rgb(var(--color-muted-foreground))]">
+          <Text variant="muted" className="mt-1 text-sm">
             {t("femme.billing.invoice.issueDateLegend")}
           </Text>
         </Card>
@@ -1634,7 +1634,7 @@ function NewInvoiceTab({
                 {clientEmailError}
               </FieldValidationError>
             ) : (
-              <Text id="billing-client-email-hint" className="mt-1 text-xs text-[rgb(var(--color-muted-foreground))]">
+              <Text id="billing-client-email-hint" variant="muted" className="mt-1 text-sm">
                 {t("femme.billing.invoice.clientEmailHint")}
               </Text>
             )}
@@ -1932,7 +1932,8 @@ function NewInvoiceTab({
             {taxExemptReceiver && (
               <Text
                 data-testid="billing-tax-exempt-note"
-                className="mb-1 text-xs text-[rgb(var(--color-muted-foreground))]"
+                variant="muted"
+                className="mb-1 text-sm"
               >
                 {t("femme.billing.invoice.taxExemptNote")}
               </Text>
@@ -2023,10 +2024,7 @@ function NewInvoiceTab({
                     }
                   />
                   {idx === 0 ? (
-                    <Text
-                      id="pay-amount-0-hint"
-                      className="mt-1 text-xs text-[rgb(var(--color-muted-foreground))]"
-                    >
+                    <Text id="pay-amount-0-hint" variant="muted" className="mt-1 text-sm">
                       {t("femme.billing.invoice.paymentAmountFirstRowHint")}
                     </Text>
                   ) : (
