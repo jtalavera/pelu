@@ -491,7 +491,7 @@
         "issueDateLabel": "Comprobante issue date",
         "issueDateEditableToggle": "Edit the issue date",
         "issueDateLegend": "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
-        "issueDateRequired": "Enter the issue date (DD/MM/YYYY).",
+        "issueDateRequired": "Enter the issue date.",
         "issueDateOutOfRange": "The issue date must be between 30 days ago and 5 days from now.",
         "linesSection": "Items",
         "addLine": "Add item",

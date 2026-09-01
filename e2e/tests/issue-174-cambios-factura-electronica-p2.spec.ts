@@ -238,8 +238,8 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     const tooOld = new Date();
     tooOld.setDate(tooOld.getDate() - 40);
     const pad = (n: number) => String(n).padStart(2, "0");
-    const dmy = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-    await dateField.fill(dmy(tooOld));
+    const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    await dateField.fill(ymd(tooOld));
 
     let posted = false;
     page.on("request", (r) => {
@@ -252,7 +252,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     // 3 days back is inside the window → issues, and the invoice keeps that emission date.
     const backdated = new Date();
     backdated.setDate(backdated.getDate() - 3);
-    await dateField.fill(dmy(backdated));
+    await dateField.fill(ymd(backdated));
     const { id } = await clickIssueInvoiceAndExpectSuccess(page);
 
     const view = await apiGetJson<{ issuedAt: string }>(request, token, `/api/invoices/${id}`);
@@ -330,7 +330,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
   // ── AC-06 ──────────────────────────────────────────────────────────────────
 
-  test("AC6 · History default filter is one month back, shown as DD/MM/YYYY", async ({ page }) => {
+  test("AC6 · History default filter is one month back", async ({ page }) => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
@@ -339,10 +339,10 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     const today = new Date();
     const from = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
     const pad = (n: number) => String(n).padStart(2, "0");
-    const dmy = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    await expect(page.locator("#filter-from")).toHaveValue(dmy(from));
-    await expect(page.locator("#filter-to")).toHaveValue(dmy(today));
+    await expect(page.locator("#filter-from")).toHaveValue(ymd(from));
+    await expect(page.locator("#filter-to")).toHaveValue(ymd(today));
   });
 
   // ── AC-03 ──────────────────────────────────────────────────────────────────
