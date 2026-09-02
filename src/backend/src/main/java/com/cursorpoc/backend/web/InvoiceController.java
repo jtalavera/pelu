@@ -12,6 +12,7 @@ import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
 import com.cursorpoc.backend.service.SifenSubmissionQueue;
 import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
+import com.cursorpoc.backend.web.dto.InvoiceCorrectionRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
@@ -290,6 +291,33 @@ public class InvoiceController {
         "POST /api/invoices/{}/sifen/identify-client tenantId={} status=200",
         id,
         principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Issue #175: corrects a {@code REJECTED} SIFEN invoice's client / lines / discount / payments
+   * and re-queues it for transmission under the same CDC (Manual Técnico V150 §6.5 — no CDC field
+   * is user-editable in this domain, so any such correction qualifies). Same {@code prepareAndSign}
+   * + {@code enqueue} pipeline as {@code issue()}. Guards: {@code INVOICE_NOT_REJECTED} (409) if
+   * the invoice isn't currently Rechazado, {@code SIFEN_NUMBER_ALREADY_VOIDED} (409) if SIFEN
+   * already approved the number's inutilización.
+   */
+  @PostMapping("/{id}/sifen/correct-and-resend")
+  public ResponseEntity<InvoiceResponse> correctAndResend(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody InvoiceCorrectionRequest request) {
+    requirePrincipal(principal);
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/invoices/{}/sifen/correct-and-resend tenantId={}", id, tenantId);
+    // A valid certificate is required to re-sign — fail fast before mutating anything (AC-04 of
+    // HU-22's own contract).
+    sifenCertificateService.requireActiveCertificate(tenantId);
+    invoiceService.correctAndResendInvoice(tenantId, id, request);
+    sifenInvoiceSubmissionService.prepareAndSign(tenantId, id);
+    sifenSubmissionQueue.enqueue(tenantId, id, 1, Duration.ZERO, UUID.randomUUID().toString());
+    InvoiceResponse response = invoiceService.getInvoice(tenantId, id);
+    log.info("POST /api/invoices/{}/sifen/correct-and-resend tenantId={} status=200", id, tenantId);
     return ResponseEntity.ok(response);
   }
 

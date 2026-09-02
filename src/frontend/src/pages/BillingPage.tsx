@@ -22,6 +22,7 @@ import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { downloadInvoiceHistoryReport } from "../api/downloadInvoiceHistoryReport";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { InvoiceCorrectionForm } from "../components/InvoiceCorrectionForm";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude } from "../api/downloadSifenKude";
@@ -271,6 +272,8 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const [pageNum, setPageNum] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  // Issue #175: "Corregir y reenviar" opened directly from a Rechazado row.
+  const [correctionInvoiceId, setCorrectionInvoiceId] = useState<number | null>(null);
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Issue #174 AC-05: "Descargar reporte" dropdown (Excel / PDF) next to "Actualizar".
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
@@ -643,7 +646,22 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                       </Badge>
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                      <SifenStatusBadge status={inv.sifenSubmissionStatus} />
+                      <div className="flex flex-col items-center gap-1">
+                        <SifenStatusBadge status={inv.sifenSubmissionStatus} />
+                        {inv.sifenSubmissionStatus === "REJECTED" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid={`invoice-row-correct-resend-${inv.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCorrectionInvoiceId(inv.id);
+                            }}
+                          >
+                            {t("femme.billing.history.detail.sifen.correctResendButton")}
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -677,6 +695,21 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
           onClose={() => setSelectedInvoiceId(null)}
           onVoided={() => {
             setSelectedInvoiceId(null);
+            void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+          }}
+          onCorrected={() => {
+            setSelectedInvoiceId(null);
+            void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+          }}
+        />
+      )}
+
+      {correctionInvoiceId !== null && (
+        <InvoiceCorrectionForm
+          invoiceId={correctionInvoiceId}
+          onClose={() => setCorrectionInvoiceId(null)}
+          onResent={() => {
+            setCorrectionInvoiceId(null);
             void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
           }}
         />

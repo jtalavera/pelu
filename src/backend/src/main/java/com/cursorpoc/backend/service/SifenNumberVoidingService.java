@@ -123,6 +123,46 @@ public class SifenNumberVoidingService {
         event.getDeadlineDate());
   }
 
+  /**
+   * Issue #175: a rejected invoice may be corrected and resent under the same CDC (its number is
+   * reused, not abandoned) only while the auto-recorded inutilización is still merely {@code
+   * PENDING} — once SIFEN has actually approved the voiding, the number is genuinely dead. A
+   * missing record (never rejected, or the auto-trigger hasn't fired yet) is fine.
+   */
+  @Transactional(readOnly = true)
+  public void requireVoidingStillPending(long invoiceId) {
+    repository
+        .findByInvoiceId(invoiceId)
+        .ifPresent(
+            event -> {
+              if (event.getStatus() == SifenNumberVoidingStatus.APPROVED
+                  || event.getStatus() == SifenNumberVoidingStatus.APPROVED_WITH_OBSERVATION) {
+                throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "SIFEN_NUMBER_ALREADY_VOIDED");
+              }
+            });
+  }
+
+  /**
+   * Issue #175: called by {@code InvoiceService.correctAndResendInvoice} — the rejected number is
+   * being reused under the same CDC, so its pending inutilización must be called off ({@link
+   * SifenNumberVoidingStatus#CANCELLED}). No-op if there is no record or it isn't {@code PENDING}
+   * (a submitted/approved voiding is caught earlier by {@link #requireVoidingStillPending}).
+   */
+  @Transactional
+  public void cancelPendingForInvoice(long invoiceId) {
+    repository
+        .findByInvoiceId(invoiceId)
+        .ifPresent(
+            event -> {
+              if (event.getStatus() == SifenNumberVoidingStatus.PENDING) {
+                event.setStatus(SifenNumberVoidingStatus.CANCELLED);
+                log.info(
+                    "SIFEN number voiding cancelled (corrected & resent) invoiceId={}", invoiceId);
+              }
+            });
+  }
+
   /** Manual Técnico V150 sección 11.6.2: first 15 natural days of the month following the event. */
   static LocalDate computeDeadline(LocalDate eventDate) {
     return eventDate.plusMonths(1).withDayOfMonth(1).plusDays(14);

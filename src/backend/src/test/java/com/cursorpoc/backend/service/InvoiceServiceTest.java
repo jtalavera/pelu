@@ -23,6 +23,7 @@ import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.web.dto.InvoiceCorrectionRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceLineRequest;
 import com.cursorpoc.backend.web.dto.InvoicePaymentAllocationRequest;
@@ -58,6 +59,8 @@ class InvoiceServiceTest {
   @Mock private BusinessProfileRepository businessProfileRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
   @Mock private SifenInvoiceHeaderService sifenInvoiceHeaderService;
+  @Mock private SifenNumberVoidingService sifenNumberVoidingService;
+  @Mock private SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
 
   // SIFEN HU-10: a real instance (via @Spy, not @Mock) so @InjectMocks' constructor injection
   // resolves this new dependency to something whose zoneId() actually works, same as every other
@@ -1220,5 +1223,154 @@ class InvoiceServiceTest {
     invoice.setIssuedAt(Instant.now());
     invoice.setDiscountType(DiscountType.NONE);
     return invoice;
+  }
+
+  // ── Issue #175: correct & resend a REJECTED invoice under the same CDC ──────────────────────
+
+  private Invoice buildRejectedInvoice() {
+    Invoice invoice = buildIssuedInvoice();
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.REJECTED);
+    invoice.setSifenControlNumber("01" + "4".repeat(42));
+    invoice.setSifenSecurityCode("123456789");
+    // A stale line/payment from the rejected attempt, to prove they're replaced.
+    var staleLine = new com.cursorpoc.backend.domain.InvoiceLine();
+    staleLine.setInvoice(invoice);
+    staleLine.setDescription("Servicio viejo");
+    staleLine.setQuantity(1);
+    staleLine.setUnitPrice(new BigDecimal("999999.00"));
+    staleLine.setLineTotal(new BigDecimal("999999.00"));
+    staleLine.setTaxRate(BigDecimal.ZERO);
+    staleLine.setTaxAmount(BigDecimal.ZERO);
+    invoice.getLines().add(staleLine);
+    return invoice;
+  }
+
+  private InvoiceCorrectionRequest correctionRequest(
+      List<InvoiceLineRequest> lines, List<InvoicePaymentAllocationRequest> payments) {
+    return new InvoiceCorrectionRequest(
+        null, "CLIENTE CORREGIDO", null, null, null, null, null, null, null, lines, payments);
+  }
+
+  @Test
+  void correctAndResendInvoice_happyPath_rebuildsContent_keepsCdcAndNumber_cancelsVoiding() {
+    Invoice invoice = buildRejectedInvoice();
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    var line =
+        new InvoiceLineRequest(null, "Corte nuevo", 2, new BigDecimal("30000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
+
+    InvoiceResponse result =
+        invoiceService.correctAndResendInvoice(
+            1L, 100L, correctionRequest(List.of(line), List.of(payment)));
+
+    // Content rebuilt from the new request.
+    assertThat(result.lines()).hasSize(1);
+    assertThat(result.lines().get(0).description()).isEqualTo("Corte nuevo");
+    assertThat(result.total()).isEqualByComparingTo(new BigDecimal("60000.00"));
+    assertThat(result.payments()).hasSize(1);
+    // CDC and number untouched.
+    assertThat(invoice.getSifenControlNumber()).isEqualTo("01" + "4".repeat(42));
+    assertThat(invoice.getSifenSecurityCode()).isEqualTo("123456789");
+    assertThat(invoice.getInvoiceNumber()).isEqualTo(43);
+    // The pending inutilización is called off and the SIFEN result is reset.
+    org.mockito.Mockito.verify(sifenNumberVoidingService).requireVoidingStillPending(100L);
+    org.mockito.Mockito.verify(sifenNumberVoidingService).cancelPendingForInvoice(100L);
+    org.mockito.Mockito.verify(sifenSubmissionPersistence).resetForCorrection(1L, 100L);
+  }
+
+  @Test
+  void correctAndResendInvoice_notRejected_throwsConflict() {
+    Invoice issued = buildIssuedInvoice(); // no SIFEN status
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(issued));
+
+    var line = new InvoiceLineRequest(null, "X", 1, new BigDecimal("1000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("1000.00"), null, null);
+
+    assertThatThrownBy(
+            () ->
+                invoiceService.correctAndResendInvoice(
+                    1L, 100L, correctionRequest(List.of(line), List.of(payment))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVOICE_NOT_REJECTED");
+    org.mockito.Mockito.verifyNoInteractions(sifenSubmissionPersistence);
+  }
+
+  @Test
+  void correctAndResendInvoice_numberAlreadyVoided_throwsConflict() {
+    Invoice invoice = buildRejectedInvoice();
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+    org.mockito.Mockito.doThrow(
+            new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_NUMBER_ALREADY_VOIDED"))
+        .when(sifenNumberVoidingService)
+        .requireVoidingStillPending(100L);
+
+    var line = new InvoiceLineRequest(null, "X", 1, new BigDecimal("1000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("1000.00"), null, null);
+
+    assertThatThrownBy(
+            () ->
+                invoiceService.correctAndResendInvoice(
+                    1L, 100L, correctionRequest(List.of(line), List.of(payment))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_NUMBER_ALREADY_VOIDED");
+    org.mockito.Mockito.verify(sifenNumberVoidingService, org.mockito.Mockito.never())
+        .cancelPendingForInvoice(org.mockito.ArgumentMatchers.anyLong());
+    org.mockito.Mockito.verifyNoInteractions(sifenSubmissionPersistence);
+  }
+
+  @Test
+  void correctAndResendInvoice_stillEnforcesCardBrand_paymentSum_andThreshold() {
+    Invoice invoice = buildRejectedInvoice();
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    // Card payment without a brand → CARD_BRAND_REQUIRED (issue #170 rule survives the extraction).
+    var line = new InvoiceLineRequest(null, "Corte", 1, new BigDecimal("50000.00"), null, null);
+    var noBrand =
+        new InvoicePaymentAllocationRequest("CREDIT_CARD", new BigDecimal("50000.00"), null, null);
+    assertThatThrownBy(
+            () ->
+                invoiceService.correctAndResendInvoice(
+                    1L, 100L, correctionRequest(List.of(line), List.of(noBrand))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("CARD_BRAND_REQUIRED");
+
+    // Payment sum ≠ total → PAYMENT_SUM_MISMATCH.
+    var short_ =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("40000.00"), null, null);
+    assertThatThrownBy(
+            () ->
+                invoiceService.correctAndResendInvoice(
+                    1L, 100L, correctionRequest(List.of(line), List.of(short_))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("PAYMENT_SUM_MISMATCH");
+
+    // Gs. 7.000.000+ without identification → SIFEN_CLIENT_IDENTIFICATION_REQUIRED.
+    var bigLine =
+        new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("7000000.00"), null, null);
+    var bigPay =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("7000000.00"), null, null);
+    assertThatThrownBy(
+            () ->
+                invoiceService.correctAndResendInvoice(
+                    1L,
+                    100L,
+                    new InvoiceCorrectionRequest(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(bigLine),
+                        List.of(bigPay))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
   }
 }
