@@ -31,6 +31,7 @@ import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -1344,6 +1345,38 @@ class InvoiceServiceTest {
     org.mockito.Mockito.verify(sifenNumberVoidingService, org.mockito.Mockito.never())
         .cancelPendingForInvoice(org.mockito.ArgumentMatchers.anyLong());
     org.mockito.Mockito.verifyNoInteractions(sifenSubmissionPersistence);
+  }
+
+  // ── Issue #190: SIFEN 72h resend-window deadline surfaced on the detail DTO ────────────────
+
+  @Test
+  void getInvoice_rejected_exposesCorrectResendDeadline72hAfterEmission() {
+    Invoice invoice = buildRejectedInvoice();
+    Instant emittedAt = Instant.parse("2026-08-01T10:00:00Z");
+    invoice.setIssuedAt(emittedAt);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    InvoiceResponse result = invoiceService.getInvoice(1L, 100L);
+
+    assertThat(result.sifenCorrectResendDeadlineAt())
+        .isEqualTo(emittedAt.plus(Duration.ofHours(72)));
+  }
+
+  @Test
+  void getInvoice_notRejected_hasNoCorrectResendDeadline() {
+    Invoice issued = buildIssuedInvoice();
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(issued));
+
+    assertThat(invoiceService.getInvoice(1L, 100L).sifenCorrectResendDeadlineAt()).isNull();
+  }
+
+  @Test
+  void getInvoice_rejectedButVoided_hasNoCorrectResendDeadline() {
+    Invoice invoice = buildRejectedInvoice();
+    invoice.setStatus(InvoiceStatus.VOIDED);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    assertThat(invoiceService.getInvoice(1L, 100L).sifenCorrectResendDeadlineAt()).isNull();
   }
 
   @Test

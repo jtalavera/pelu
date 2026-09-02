@@ -6,6 +6,8 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
 import { isValidEmail } from "../lib/validateEmail";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
+import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { useDateLocale } from "../i18n/dateLocale";
 import { InvoiceClientFields } from "./invoice/InvoiceClientFields";
 import type { InvoiceClientFieldsValue } from "./invoice/InvoiceClientFields";
 import { InvoiceLinesEditor } from "./invoice/InvoiceLinesEditor";
@@ -48,10 +50,15 @@ export function InvoiceCorrectionForm({
   onResent: () => void;
 }) {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Issue #190: header data shown read-only above the client section + the SIFEN resend-window check.
+  const [invoiceNumberFormatted, setInvoiceNumberFormatted] = useState("");
+  const [issuedAt, setIssuedAt] = useState<string | null>(null);
+  const [correctResendDeadlineAt, setCorrectResendDeadlineAt] = useState<string | null>(null);
 
   const [clientFields, setClientFields] = useState<InvoiceClientFieldsValue>({
     selection: null,
@@ -97,6 +104,9 @@ export function InvoiceCorrectionForm({
   }, [invoiceId]);
 
   function prefill(detail: InvoiceDetail, clientProfile: ClientProfile | null) {
+    setInvoiceNumberFormatted(detail.invoiceNumberFormatted);
+    setIssuedAt(detail.issuedAt);
+    setCorrectResendDeadlineAt(detail.sifenCorrectResendDeadlineAt ?? null);
     const docType =
       detail.clientIdentityDocumentTypeOverride ?? (detail.clientRucOverride ? "RUC" : "RUC");
     const docNumber =
@@ -343,16 +353,31 @@ export function InvoiceCorrectionForm({
     }
   }
 
+  // Issue #190: past SIFEN's 72h transmission window a resend is transmitted extemporaneously and
+  // very likely rejected — warn, but never block (the user can still try, or void the number).
+  const windowExpired =
+    correctResendDeadlineAt != null &&
+    Date.now() > new Date(correctResendDeadlineAt).getTime();
+
   return (
     <Modal
       open
       onClose={onClose}
-      title={t("femme.billing.history.detail.sifen.correctResendTitle")}
+      title={
+        invoiceNumberFormatted
+          ? t("femme.billing.history.detail.sifen.correctResendTitleWithNumber", {
+              number: invoiceNumberFormatted,
+            })
+          : t("femme.billing.history.detail.sifen.correctResendTitle")
+      }
       className="max-w-4xl"
     >
       <div className="flex flex-col gap-4">
         <Text variant="muted" className="text-sm">
           {t("femme.billing.history.detail.sifen.correctResendExplanation")}
+        </Text>
+        <Text variant="muted" className="text-sm" data-testid="sifen-correct-resend-window-hint">
+          {t("femme.billing.history.detail.sifen.correctResendWindowHint")}
         </Text>
 
         {loading && (
@@ -378,6 +403,28 @@ export function InvoiceCorrectionForm({
               <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
                 {submitError}
               </Alert>
+            )}
+
+            {windowExpired && (
+              <Alert
+                variant="warning"
+                title={t("femme.billing.history.detail.sifen.correctResendWindowExpiredTitle")}
+                data-testid="sifen-correct-resend-window-expired"
+              >
+                {t("femme.billing.history.detail.sifen.correctResendWindowExpiredWarning", {
+                  date: issuedAt ? formatParaguayDateTime(issuedAt, dateLocale) : "",
+                })}
+              </Alert>
+            )}
+
+            {/* Issue #190: emission date, read-only, above the client section. */}
+            {issuedAt && (
+              <div className="text-sm" data-testid="sifen-correct-resend-emission-date">
+                <span className="font-medium">
+                  {t("femme.billing.history.detail.sifen.correctResendEmissionDateLabel")}:{" "}
+                </span>
+                {formatParaguayDateTime(issuedAt, dateLocale)}
+              </div>
             )}
 
             <Card className="p-4 flex flex-col gap-4">

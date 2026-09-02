@@ -35,7 +35,10 @@ export type ListInvoicesParams = {
 };
 
 /** Paged invoice list. Covers all four history tables in the app. */
-export function listInvoicesPaged(params: ListInvoicesParams): Promise<PagedInvoicesResponse> {
+export function listInvoicesPaged(
+  params: ListInvoicesParams,
+  signal?: AbortSignal,
+): Promise<PagedInvoicesResponse> {
   const qs = new URLSearchParams();
   if (params.from) qs.set("from", params.from);
   if (params.to) qs.set("to", params.to);
@@ -44,5 +47,5 @@ export function listInvoicesPaged(params: ListInvoicesParams): Promise<PagedInvo
   if (params.q) qs.set("q", params.q);
   if (params.page != null) qs.set("page", String(params.page));
   if (params.size != null) qs.set("size", String(params.size));
-  return femmeJson<PagedInvoicesResponse>(`/api/invoices?${qs.toString()}`);
+  return femmeJson<PagedInvoicesResponse>(`/api/invoices?${qs.toString()}`, { signal });
 }

@@ -333,6 +333,12 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
     };
   }, [reportMenuOpen]);
 
+  // Issue #190: one in-flight list request at a time. Rapidly paging (especially bouncing off the
+  // last page) used to stack overlapping requests with no cancellation; on a constrained DB that
+  // could saturate it and leave the whole app stuck on "Cargando…". Every new load aborts the
+  // previous one.
+  const loadAbortRef = useRef<AbortController | null>(null);
+
   const loadInvoices = useCallback(
     async (from: string, to: string, status: string, q: string, page: number, size: number) => {
       setLoadError(null);
@@ -346,28 +352,50 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
             `femme.billing.history.rangeError${rangeErr.charAt(0).toUpperCase()}${rangeErr.slice(1)}`,
           ),
         );
+        loadAbortRef.current?.abort();
+        loadAbortRef.current = null;
         setInvoicePage(null);
         return;
       }
+      loadAbortRef.current?.abort();
+      const controller = new AbortController();
+      loadAbortRef.current = controller;
       setLoading(true);
       try {
-        const data = await listInvoicesPaged({
-          from: localDateYmdToIsoStart(from),
-          to: localDateYmdToIsoEnd(to),
-          status: status || undefined,
-          q: q || undefined,
-          page,
-          size,
-        });
+        const data = await listInvoicesPaged(
+          {
+            from: localDateYmdToIsoStart(from),
+            to: localDateYmdToIsoEnd(to),
+            status: status || undefined,
+            q: q || undefined,
+            page,
+            size,
+          },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
         setInvoicePage(data);
+        // Stranded past the last page (row count shrank, or a stale page number): snap back to the
+        // last real page instead of showing a dead, control-less empty view.
+        if (data.totalPages > 0 && page > data.totalPages - 1) {
+          setPageNum(data.totalPages - 1);
+        }
       } catch (err) {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+          return;
+        }
         setLoadError(translateApiError(err, t, "femme.billing.history.loadError"));
       } finally {
-        setLoading(false);
+        if (loadAbortRef.current === controller) {
+          setLoading(false);
+          loadAbortRef.current = null;
+        }
       }
     },
     [t],
   );
+
+  useEffect(() => () => loadAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
@@ -548,7 +576,19 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
           <Text>{t("femme.billing.history.loading")}</Text>
         </div>
       ) : dateRangeError ? null : invoices.length === 0 ? (
-        <Text variant="muted">{t("femme.billing.history.empty")}</Text>
+        <div className="flex flex-col gap-3">
+          <Text variant="muted">{t("femme.billing.history.empty")}</Text>
+          {pageNum > 0 && (
+            // Safety net: never strand the user on an empty page with no way back (issue #190).
+            <Pagination
+              page={pageNum + 1}
+              pageCount={Math.max(totalPages, pageNum + 1)}
+              onPageChange={(p) => setPageNum(p - 1)}
+              previousLabel={t("femme.pagination.previous")}
+              nextLabel={t("femme.pagination.next")}
+            />
+          )}
+        </div>
       ) : (
         <div
           style={{

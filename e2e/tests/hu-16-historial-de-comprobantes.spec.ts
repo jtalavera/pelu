@@ -63,7 +63,8 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Number" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Date", exact: true })).toBeVisible();
+    // Issue #190 — "Date" was relabelled "Invoice date" to distinguish it from "Sent to SIFEN".
+    await expect(page.getByRole("columnheader", { name: "Invoice date" })).toBeVisible();
     // Issue #186 · AC3 — the SIFEN-sent date is its own column, distinct from the comprobante date.
     await expect(page.getByRole("columnheader", { name: "Sent to SIFEN" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Client" })).toBeVisible();
