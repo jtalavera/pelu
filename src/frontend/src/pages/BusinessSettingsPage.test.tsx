@@ -63,6 +63,8 @@ describe("BusinessSettingsPage", () => {
       taxpayerType: null,
       economicActivityCode: null,
       economicActivityDescription: null,
+      sifenFantasyName: null,
+      kudeFooterMessage: null,
       sifenDepartmentCode: null,
       sifenDepartmentName: null,
       sifenCityCode: null,
@@ -154,6 +156,7 @@ describe("BusinessSettingsPage", () => {
       screen.getByLabelText(/economic activity description/i),
       "Peluquería y otros tratamientos de belleza",
     );
+    await user.type(screen.getByLabelText(/trade name/i), "Peluquería Lucía");
 
     const saveBtns = screen.getAllByRole("button", { name: /save changes/i });
     await user.click(saveBtns[0]);
@@ -165,6 +168,7 @@ describe("BusinessSettingsPage", () => {
         taxpayerType: "LEGAL_ENTITY",
         economicActivityCode: "96020",
         economicActivityDescription: "Peluquería y otros tratamientos de belleza",
+        sifenFantasyName: "Peluquería Lucía",
         sifenDepartmentCode: null,
         sifenDepartmentName: null,
         sifenCityCode: null,

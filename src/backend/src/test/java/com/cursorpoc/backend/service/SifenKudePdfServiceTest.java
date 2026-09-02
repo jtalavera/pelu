@@ -250,22 +250,56 @@ class SifenKudePdfServiceTest {
     var normal = service.buildKudePdf(TENANT_ID, INVOICE_ID);
     assertThat(extractPage(normal.bytes(), 1)).contains("DE generado en ambiente de prueba");
 
-    // The production-style sample shows the real razón social, no test legend, MUESTRA- filename.
+    // The production-style sample shows the real razón social, no test legend, MUESTRA- filename —
+    // and the same fantasy-name-first header layout as a real KuDE.
     var sample = service.buildProductionSampleKudePdf(TENANT_ID, INVOICE_ID);
     String samplePage1 = extractPage(sample.bytes(), 1);
     assertThat(samplePage1).contains("Lucía Zymanscki de Onieva Vit S.A.");
     assertThat(samplePage1).doesNotContain("ambiente de prueba");
+    assertThat(samplePage1.indexOf("Fantasía Demo"))
+        .isLessThan(samplePage1.indexOf("Lucía Zymanscki de Onieva Vit S.A."));
     assertThat(sample.filename()).isEqualTo("MUESTRA-KUDE-20260728-1137152-0000007.pdf");
   }
 
+  /**
+   * KuDE header layout: when the emisor has a nombre de fantasía it goes on top (prominent) and the
+   * razón social below; with no fantasy name the razón social keeps the prominent slot.
+   */
+  @Test
+  void buildKudePdf_withFantasyName_rendersFantasyNameBeforeRazonSocial() throws Exception {
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID))
+        .thenReturn(headerWith("Lucía Zymanscki de Onieva Vit S.A.", "Peluquería Lucía"));
+
+    String page1 = extractPage(service.buildKudePdf(TENANT_ID, INVOICE_ID).bytes(), 1);
+
+    assertThat(page1).contains("Peluquería Lucía");
+    assertThat(page1).contains("Lucía Zymanscki de Onieva Vit S.A.");
+    assertThat(page1.indexOf("Peluquería Lucía"))
+        .isLessThan(page1.indexOf("Lucía Zymanscki de Onieva Vit S.A."));
+  }
+
+  @Test
+  void buildKudePdf_withoutFantasyName_rendersRazonSocial() throws Exception {
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID))
+        .thenReturn(headerWith("Lucía Zymanscki de Onieva Vit S.A.", null));
+
+    String page1 = extractPage(service.buildKudePdf(TENANT_ID, INVOICE_ID).bytes(), 1);
+
+    assertThat(page1).contains("Lucía Zymanscki de Onieva Vit S.A.");
+  }
+
   private SifenInvoiceHeader headerWithBusinessName(String businessName) {
+    return headerWith(businessName, header.issuer().fantasyName());
+  }
+
+  private SifenInvoiceHeader headerWith(String businessName, String fantasyName) {
     SifenIssuerData i = header.issuer();
     SifenIssuerData issuerWithName =
         new SifenIssuerData(
             i.ruc(),
             i.rucCheckDigit(),
             businessName,
-            i.fantasyName(),
+            fantasyName,
             i.address(),
             i.taxpayerType(),
             i.economicActivityCode(),

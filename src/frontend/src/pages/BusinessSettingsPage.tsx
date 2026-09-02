@@ -38,6 +38,8 @@ type BusinessProfileResponse = {
   taxpayerType: TaxpayerType | null;
   economicActivityCode: string | null;
   economicActivityDescription: string | null;
+  sifenFantasyName: string | null;
+  kudeFooterMessage: string | null;
   sifenDepartmentCode: string | null;
   sifenDepartmentName: string | null;
   sifenCityCode: string | null;
@@ -136,6 +138,10 @@ export default function BusinessSettingsPage() {
   const [taxpayerType, setTaxpayerType] = useState<TaxpayerType | "">("");
   const [economicActivityCode, setEconomicActivityCode] = useState("");
   const [economicActivityDescription, setEconomicActivityDescription] = useState("");
+  const [sifenFantasyName, setSifenFantasyName] = useState("");
+  // Round-tripped unchanged: BusinessProfileService.update replaces this field from every
+  // request, so omitting it here would silently wipe it. No editor for it yet (KuDE footer).
+  const [kudeFooterMessage, setKudeFooterMessage] = useState<string | null>(null);
   const [locality, setLocality] = useState<Locality | null>(null);
   const [rucError, setRucError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -166,6 +172,8 @@ export default function BusinessSettingsPage() {
       setTaxpayerType(data.taxpayerType ?? "");
       setEconomicActivityCode(data.economicActivityCode ?? "");
       setEconomicActivityDescription(data.economicActivityDescription ?? "");
+      setSifenFantasyName(data.sifenFantasyName ?? "");
+      setKudeFooterMessage(data.kudeFooterMessage ?? null);
       setLocality(localityFromProfile(data));
     } catch {
       setLoadError(t("femme.businessSettings.loadError"));
@@ -278,6 +286,8 @@ export default function BusinessSettingsPage() {
         taxpayerType: taxpayerType || null,
         economicActivityCode: economicActivityCode.trim() || null,
         economicActivityDescription: economicActivityDescription.trim() || null,
+        sifenFantasyName: sifenFantasyName.trim() || null,
+        kudeFooterMessage: kudeFooterMessage || null,
         sifenDepartmentCode: locality?.departmentCode ?? null,
         sifenDepartmentName: locality?.departmentName ?? null,
         sifenCityCode: locality?.cityCode ?? null,
@@ -629,6 +639,26 @@ export default function BusinessSettingsPage() {
                   onBlur={() => setFocusField(null)}
                   style={buildInputStyle(false, focusField === "economicActivityDescription")}
                 />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label htmlFor="sifenFantasyName" style={labelStyle}>
+                  {t("femme.businessSettings.sifenFantasyName")}
+                </label>
+                <input
+                  id="sifenFantasyName"
+                  value={sifenFantasyName}
+                  onChange={(e) => {
+                    setSifenFantasyName(e.target.value);
+                    if (saveValidationError) setSaveValidationError(null);
+                  }}
+                  aria-describedby="sifenFantasyName-hint"
+                  onFocus={() => setFocusField("sifenFantasyName")}
+                  onBlur={() => setFocusField(null)}
+                  style={buildInputStyle(false, focusField === "sifenFantasyName")}
+                />
+                <p id="sifenFantasyName-hint" style={hintStyle}>
+                  {t("femme.businessSettings.sifenFantasyNameHint")}
+                </p>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <Label htmlFor="business-locality">{t("femme.clients.locality")}</Label>
