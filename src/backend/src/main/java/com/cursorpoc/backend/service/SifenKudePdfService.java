@@ -300,7 +300,6 @@ public class SifenKudePdfService {
       document.open();
 
       Font titleFont = new Font(Font.HELVETICA, 13, Font.BOLD);
-      Font subtitleFont = new Font(Font.HELVETICA, 10, Font.ITALIC);
       Font labelFont = new Font(Font.HELVETICA, 9, Font.BOLD);
       Font bodyFont = new Font(Font.HELVETICA, 9);
       Font legendFont = new Font(Font.HELVETICA, 8, Font.ITALIC);
@@ -311,15 +310,7 @@ public class SifenKudePdfService {
       // header/sale data (not at the very bottom as in the manual's single-page example) so it
       // stays guaranteed on page 1 per AC-13 even when the item table spills onto later pages.
       addHeaderBlock(
-          document,
-          documentType,
-          documentNumber,
-          header,
-          profile,
-          titleFont,
-          subtitleFont,
-          labelFont,
-          bodyFont);
+          document, documentType, documentNumber, header, profile, titleFont, labelFont, bodyFont);
       addSaleAndReceiverBlock(document, issuedAt, header, client, labelFont, bodyFont);
       addQrAndControlNumberBlock(
           document,
@@ -354,7 +345,6 @@ public class SifenKudePdfService {
       SifenInvoiceHeader header,
       BusinessProfile profile,
       Font titleFont,
-      Font subtitleFont,
       Font labelFont,
       Font bodyFont)
       throws DocumentException {
@@ -369,10 +359,18 @@ public class SifenKudePdfService {
     table.setWidths(HEADER_COLUMN_WEIGHTS);
     table.addCell(logoCell(logoDataUrl));
 
+    // El nombre de fantasía, cuando está configurado, va destacado arriba (es la marca que el
+    // cliente reconoce) y la razón social debajo en cuerpo normal — el layout habitual de las
+    // facturas paraguayas. Sin nombre de fantasía, la razón social ocupa el lugar destacado.
+    // En ambiente de prueba, issuer.businessName() es la leyenda obligatoria D105 §10, que
+    // sigue apareciendo (más chica si hay nombre de fantasía) y sigue siendo el contenido de
+    // dNomEmi en el DE.
     Paragraph businessInfo = new Paragraph();
-    businessInfo.add(new Chunk(issuer.businessName() + "\n", titleFont));
     if (hasText(issuer.fantasyName())) {
-      businessInfo.add(new Chunk(issuer.fantasyName() + "\n", subtitleFont));
+      businessInfo.add(new Chunk(issuer.fantasyName() + "\n", titleFont));
+      businessInfo.add(new Chunk(issuer.businessName() + "\n", bodyFont));
+    } else {
+      businessInfo.add(new Chunk(issuer.businessName() + "\n", titleFont));
     }
     if (hasText(issuer.economicActivityDescription())) {
       businessInfo.add(new Chunk(issuer.economicActivityDescription() + "\n", bodyFont));

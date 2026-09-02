@@ -56,6 +56,58 @@ class BusinessProfileServiceTest {
   }
 
   @Test
+  void update_persistsSifenFantasyName_andReturnsItInTheResponse() {
+    var req =
+        new BusinessProfileUpdateRequest(
+            "Salon X",
+            "80000005-6",
+            "Addr",
+            "021",
+            "a@b.com",
+            null,
+            "INDIVIDUAL",
+            "96020",
+            "Peluquería",
+            null,
+            null,
+            null,
+            null,
+            "Peluquería Lucía",
+            null);
+
+    var response = service.update(5L, req);
+
+    assertThat(profile.getSifenFantasyName()).isEqualTo("Peluquería Lucía");
+    assertThat(response.sifenFantasyName()).isEqualTo("Peluquería Lucía");
+  }
+
+  @Test
+  void update_blankSifenFantasyName_clearsIt() {
+    profile.setSifenFantasyName("Antiguo");
+    var req =
+        new BusinessProfileUpdateRequest(
+            "Salon X",
+            "80000005-6",
+            "Addr",
+            "021",
+            "a@b.com",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "  ",
+            null);
+
+    service.update(5L, req);
+
+    assertThat(profile.getSifenFantasyName()).isNull();
+  }
+
+  @Test
   void isRucReadyForInvoicing_falseWhenMissing() {
     profile.setRuc(null);
     assertThat(service.isRucReadyForInvoicing(5L)).isFalse();

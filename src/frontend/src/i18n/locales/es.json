@@ -347,6 +347,8 @@
       "economicActivityCode": "Código de actividad económica",
       "economicActivityCodeHint": "Código de clasificación de actividad económica de la DNIT (ej.: 96020).",
       "economicActivityDescription": "Descripción de la actividad económica",
+      "sifenFantasyName": "Nombre de fantasía",
+      "sifenFantasyNameHint": "Opcional. El nombre comercial que aparece destacado en el encabezado del KuDE, con la razón social debajo.",
       "sectionLogo": "Logo",
       "logoDimensions": "{{width}} × {{height}} px",
       "logoFileName": "{{name}}",

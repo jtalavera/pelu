@@ -35,7 +35,11 @@ const DEMO_TENANT_ID = 1;
 const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 const FIXTURE_CERT_RUC = "12345678-9";
 
-async function enableSifen(request: APIRequestContext, token: string) {
+async function enableSifen(
+  request: APIRequestContext,
+  token: string,
+  sifenFantasyName: string | null = null,
+) {
   await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
   await apiPutJson(request, token, "/api/business-profile", {
     businessName: "Peluqueria E2E 179",
@@ -51,7 +55,7 @@ async function enableSifen(request: APIRequestContext, token: string) {
     sifenDepartmentName: "CENTRAL",
     sifenCityCode: "5044",
     sifenCityName: "FERNANDO DE LA MORA",
-    sifenFantasyName: null,
+    sifenFantasyName,
     kudeFooterMessage: null,
   });
   const certRes = await request.post(
@@ -60,13 +64,19 @@ async function enableSifen(request: APIRequestContext, token: string) {
   expect(certRes.ok(), await certRes.text()).toBeTruthy();
 }
 
-async function kudeText(request: APIRequestContext, token: string, invoiceId: number) {
+async function kudeText(
+  request: APIRequestContext,
+  token: string,
+  invoiceId: number,
+  opts: { sample?: boolean } = {},
+) {
   await request.post(
     `${apiBaseUrl()}/api/admin/sifen-test-support/invoices/${invoiceId}/prepare-as-approved`,
   );
-  const res = await request.get(`${apiBaseUrl()}/api/invoices/${invoiceId}/sifen/kude`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await request.get(
+    `${apiBaseUrl()}/api/invoices/${invoiceId}/sifen/kude${opts.sample ? "?sample=true" : ""}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
   expect(res.ok(), await res.text()).toBeTruthy();
   const pdf = Buffer.from(await res.body());
   expect(pdf.subarray(0, 4).toString("latin1")).toBe("%PDF");
@@ -152,5 +162,37 @@ test.describe("Issue #179 · KuDE — correcciones de layout", () => {
     ]) {
       expect(text, `KuDE must still contain "${field}"`).toContain(field);
     }
+  });
+
+  test("el nombre de fantasía aparece destacado en el encabezado, con la razón social debajo", async ({
+    request,
+  }) => {
+    test.setTimeout(90_000);
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    await enableSifen(request, token, "Peluquería Lucía");
+    const seed = await seedCategoryServiceProfessional(request, token);
+
+    const inv = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: null,
+      clientDisplayName: "CLIENTE FANTASIA",
+      clientRucOverride: "80000005-6",
+      clientIdentityDocumentOverride: null,
+      email: "fantasia179@example.com",
+      lines: [
+        { serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 55000 },
+      ],
+      payments: [{ method: "CASH", amount: 55000 }],
+    });
+
+    // Production-style sample (e2e runs against SIFEN test env, so only the sample carries the
+    // real razón social, not the D105 §10 legend): fantasy name on top, razón social below it.
+    const sampleText = await kudeText(request, token, inv.id, { sample: true });
+    expect(sampleText).toContain("Peluquería Lucía");
+    expect(sampleText).toContain("Peluqueria E2E 179");
+    expect(sampleText.indexOf("Peluquería Lucía")).toBeLessThan(
+      sampleText.indexOf("Peluqueria E2E 179"),
+    );
   });
 });

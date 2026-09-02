@@ -291,6 +291,7 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await page.getByLabel("Department and city").fill("Fernando de la Mora");
     await expect(page.getByRole("option", { name: /FERNANDO DE LA MORA \(CENTRAL\)/ })).toBeVisible();
     await page.getByRole("option", { name: /FERNANDO DE LA MORA \(CENTRAL\)/ }).click();
+    await page.getByLabel("Trade name").fill("Peluquería Lucía");
 
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Your business details were saved.")).toBeVisible();
@@ -301,6 +302,8 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await expect(page.getByLabel("Department and city")).toHaveValue(
       "FERNANDO DE LA MORA (CENTRAL)",
     );
+    // The trade name (nombre de fantasía) persists — it used to be wiped on every settings save.
+    await expect(page.getByLabel("Trade name")).toHaveValue("Peluquería Lucía");
   });
 
   test("HU-22 · Adenda con el flag desactivado, la sección de datos fiscales SIFEN no aparece", async ({
