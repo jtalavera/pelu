@@ -45,6 +45,33 @@ class InvoiceHistoryReportServiceTest {
   }
 
   @Test
+  void computeGrandTotal_excludesVoidedAndSifenRejected() {
+    var rows =
+        List.of(
+            new InvoiceReportRow(
+                1,
+                "A",
+                InvoiceStatus.ISSUED,
+                new BigDecimal("100000"),
+                Instant.now(),
+                SifenSubmissionStatus.APPROVED),
+            new InvoiceReportRow(
+                2,
+                "B",
+                InvoiceStatus.ISSUED,
+                new BigDecimal("70000"),
+                Instant.now(),
+                SifenSubmissionStatus.REJECTED),
+            new InvoiceReportRow(
+                3, "C", InvoiceStatus.VOIDED, new BigDecimal("50000"), Instant.now(), null),
+            new InvoiceReportRow(
+                4, "D", InvoiceStatus.ISSUED, new BigDecimal("30000"), Instant.now(), null));
+
+    assertThat(InvoiceHistoryReportService.computeGrandTotal(rows))
+        .isEqualByComparingTo(new BigDecimal("130000"));
+  }
+
+  @Test
   void renderXlsx_hasHeaderRowAndOneDataRowPerInvoice_headerDataOnly() throws Exception {
     byte[] xlsx = service.renderXlsx(ROWS, Instant.parse("2026-08-01T00:00:00Z"), Instant.now());
     assertThat(xlsx).isNotEmpty();

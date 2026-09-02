@@ -7,6 +7,7 @@ import com.cursorpoc.backend.domain.SifenNumberVoidingEvent;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenNumberVoidingStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingEventResponse;
@@ -61,6 +62,7 @@ public class SifenNumberVoidingService {
 
   private final SifenNumberVoidingEventRepository repository;
   private final InvoiceRepository invoiceRepository;
+  private final FiscalStampRepository fiscalStampRepository;
   private final SifenNumberVoidingEventXmlService eventXmlService;
   private final SifenDocumentSigningService signingService;
   private final SifenEventClient eventClient;
@@ -76,12 +78,14 @@ public class SifenNumberVoidingService {
   public SifenNumberVoidingService(
       SifenNumberVoidingEventRepository repository,
       InvoiceRepository invoiceRepository,
+      FiscalStampRepository fiscalStampRepository,
       SifenNumberVoidingEventXmlService eventXmlService,
       SifenDocumentSigningService signingService,
       SifenEventClient eventClient,
       FemmeTimeProperties timeProperties) {
     this.repository = repository;
     this.invoiceRepository = invoiceRepository;
+    this.fiscalStampRepository = fiscalStampRepository;
     this.eventXmlService = eventXmlService;
     this.signingService = signingService;
     this.eventClient = eventClient;
@@ -185,6 +189,93 @@ public class SifenNumberVoidingService {
     return repository.findByTenantIdOrderByDeadlineDateAsc(tenantId).stream()
         .map(this::toResponse)
         .toList();
+  }
+
+  /**
+   * Count + soonest deadline of the tenant's still-{@code PENDING} inutilizaciones (for the
+   * dashboard alert).
+   */
+  public record PendingVoidingSummary(int count, LocalDate soonestDeadline) {}
+
+  @Transactional(readOnly = true)
+  public Optional<PendingVoidingSummary> pendingSummary(long tenantId) {
+    List<SifenNumberVoidingEvent> pending =
+        repository.findByTenantIdAndStatus(tenantId, SifenNumberVoidingStatus.PENDING);
+    if (pending.isEmpty()) {
+      return Optional.empty();
+    }
+    LocalDate soonest =
+        pending.stream()
+            .map(SifenNumberVoidingEvent::getDeadlineDate)
+            .min(LocalDate::compareTo)
+            .orElseThrow();
+    return Optional.of(new PendingVoidingSummary(pending.size(), soonest));
+  }
+
+  /**
+   * RT-25 "manual" path: an ADMIN declares a range of <b>unused</b> document numbers voided
+   * (numbers skipped by a system error, a batch never issued, …). Creates a {@code PENDING} event —
+   * the admin then submits it to SIFEN with the same per-row "Submit to SIFEN" action the
+   * auto-recorded ones use. Guards (all {@link ResponseStatusException}):
+   *
+   * <ul>
+   *   <li>{@code NO_ACTIVE_FISCAL_STAMP} — no active timbrado to anchor the range on.
+   *   <li>{@code INVALID_NUMBER_RANGE} — {@code from < 1} or {@code from > to}.
+   *   <li>{@code EMISSION_OUT_OF_RANGE} — the range escapes the active stamp's own range.
+   *   <li>{@code SIFEN_VOIDING_RANGE_HAS_ISSUED_INVOICES} — a number in the range was actually
+   *       issued.
+   *   <li>{@code SIFEN_VOIDING_RANGE_OVERLAPS} — overlaps another non-CANCELLED voiding for this
+   *       stamp.
+   * </ul>
+   */
+  @Transactional
+  public SifenNumberVoidingEventResponse createManual(
+      long tenantId, int rangeFrom, int rangeTo, String reason) {
+    FiscalStamp stamp =
+        fiscalStampRepository
+            .findByTenant_IdAndActiveTrue(tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.CONFLICT, "NO_ACTIVE_FISCAL_STAMP"));
+
+    if (rangeFrom < 1 || rangeFrom > rangeTo) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_NUMBER_RANGE");
+    }
+    if (rangeFrom < stamp.getRangeFrom() || rangeTo > stamp.getRangeTo()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EMISSION_OUT_OF_RANGE");
+    }
+    if (invoiceRepository.existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
+        tenantId, stamp.getId(), rangeFrom, rangeTo)) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "SIFEN_VOIDING_RANGE_HAS_ISSUED_INVOICES");
+    }
+    boolean overlaps =
+        repository.findByTenantIdAndFiscalStamp_Id(tenantId, stamp.getId()).stream()
+            .filter(e -> e.getStatus() != SifenNumberVoidingStatus.CANCELLED)
+            .anyMatch(e -> rangeFrom <= e.getRangeTo() && rangeTo >= e.getRangeFrom());
+    if (overlaps) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_VOIDING_RANGE_OVERLAPS");
+    }
+
+    LocalDateTime now = LocalDateTime.now(timeProperties.zoneId());
+    SifenNumberVoidingEvent event = new SifenNumberVoidingEvent();
+    event.setTenantId(tenantId);
+    event.setFiscalStamp(stamp);
+    event.setInvoiceId(null);
+    event.setDocumentType(SifenDocumentType.FACTURA);
+    event.setRangeFrom(rangeFrom);
+    event.setRangeTo(rangeTo);
+    event.setReason(reason.trim());
+    event.setStatus(SifenNumberVoidingStatus.PENDING);
+    event.setDeadlineDate(computeDeadline(now.toLocalDate()));
+    event.setCreatedAt(now);
+    repository.save(event);
+    log.info(
+        "SIFEN number voiding created manually tenantId={} range={}-{} deadline={}",
+        tenantId,
+        rangeFrom,
+        rangeTo,
+        event.getDeadlineDate());
+    return toResponse(event);
   }
 
   /**

@@ -167,7 +167,9 @@
         "fiscalExpiringSoon": "El timbrado fiscal vence en menos de 30 días.",
         "fiscalLowRange": "Queda menos del 10% del rango de numeración de facturas.",
         "fiscalNoActiveStamp": "No hay timbrado activo. En Configuración → Timbrado cargá y activá uno.",
-        "fiscalExpiredOrExhausted": "El timbrado está vencido o se agotó el rango de numeración. Cargá un timbrado nuevo en Configuración → Timbrado."
+        "fiscalExpiredOrExhausted": "El timbrado está vencido o se agotó el rango de numeración. Cargá un timbrado nuevo en Configuración → Timbrado.",
+        "sifenVoidingPending": "Tenés inutilizaciones de numeración pendientes de reportar a SIFEN. Revisá Configuración → SIFEN.",
+        "sifenVoidingOverdue": "Hay inutilizaciones de numeración vencidas sin reportar a SIFEN. Reportalas en Configuración → SIFEN."
       },
       "greetingMorning": "Buenos días",
       "greetingAfternoon": "Buenas tardes",
@@ -258,7 +260,19 @@
       "reasonTooShort": "Ingresá un motivo de al menos 5 caracteres.",
       "submit": "Enviar a SIFEN",
       "submitting": "Enviando…",
-      "resultMessage": "Respuesta de SIFEN: {{message}}"
+      "resultMessage": "Respuesta de SIFEN: {{message}}",
+      "pendingSummary_one": "{{count}} inutilización pendiente de reportar — vence el {{deadline}}.",
+      "pendingSummary_other": "{{count}} inutilizaciones pendientes de reportar — la más próxima vence el {{deadline}}.",
+      "manualTitle": "Registrar inutilización manual",
+      "manualLead": "Reportá un rango de números de factura que nunca se usaron (saltados por un error, un lote no emitido). Debe estar dentro del timbrado activo y no incluir números ya emitidos.",
+      "manualRangeFromLabel": "Desde",
+      "manualRangeToLabel": "Hasta",
+      "manualReasonLabel": "Motivo",
+      "manualSubmit": "Registrar",
+      "manualSubmitting": "Registrando…",
+      "manualRangeInvalid": "Ingresá números enteros mayores a 0.",
+      "manualRangeOrder": "El número \"hasta\" debe ser mayor o igual que \"desde\".",
+      "manualCreated": "Inutilización registrada. Ahora podés enviarla a SIFEN."
     },
     "taxes": {
       "pageTitle": "Impuestos",
@@ -436,6 +450,7 @@
         "metricOpeningAmount": "Monto inicial",
         "todayInvoicesTitle": "Comprobantes de hoy",
         "todayTotal": "Total del día: {{amount}}",
+        "todayTotalExcludesRejected": "El total del día no incluye comprobantes rechazados por SIFEN.",
         "colInvoiceNumber": "Nº Factura",
         "colServices": "Servicios",
         "colMethod": "Método",
@@ -925,6 +940,8 @@
       "SIFEN_CERT_RUC_MISMATCH": "El RUC del certificado no coincide con el RUC configurado del negocio. Conexión rechazada.",
       "SIFEN_RATE_LIMIT_EXCEEDED": "Demasiadas solicitudes a SIFEN para este negocio en este momento. Esto se reintenta automáticamente en breve.",
       "SIFEN_NUMBER_VOIDING_NO_RESPONSE": "SIFEN no respondió a la solicitud de inutilización. Intentá de nuevo en unos minutos.",
+      "SIFEN_VOIDING_RANGE_HAS_ISSUED_INVOICES": "Ese rango incluye números de factura ya emitidos; no se puede inutilizar.",
+      "SIFEN_VOIDING_RANGE_OVERLAPS": "Ese rango se superpone con otra inutilización de numeración.",
       "SIFEN_NUMBER_VOIDING_ALREADY_APPROVED": "Esta solicitud de inutilización ya fue aprobada por SIFEN.",
       "SIFEN_NUMBER_VOIDING_NOT_FOUND": "No se encontró la solicitud de inutilización.",
       "SIFEN_CONNECTION_REJECTED": "No se pudo establecer una conexión segura con SIFEN. Intentá de nuevo más tarde.",

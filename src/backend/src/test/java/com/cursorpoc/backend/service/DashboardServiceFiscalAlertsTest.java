@@ -30,6 +30,7 @@ class DashboardServiceFiscalAlertsTest {
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private FiscalStampRepository fiscalStampRepository;
   @Mock private BusinessProfileService businessProfileService;
+  @Mock private SifenNumberVoidingService sifenNumberVoidingService;
 
   private DashboardService dashboardService;
 
@@ -43,7 +44,8 @@ class DashboardServiceFiscalAlertsTest {
             appointmentRepository,
             invoiceRepository,
             fiscalStampRepository,
-            businessProfileService);
+            businessProfileService,
+            sifenNumberVoidingService);
   }
 
   @Test
@@ -95,6 +97,39 @@ class DashboardServiceFiscalAlertsTest {
     DashboardResponse d = dashboardService.build(1L);
 
     assertThat(d.fiscalAlerts()).anyMatch(a -> "fiscalExpiringSoon".equals(a.messageKey()));
+  }
+
+  @Test
+  void warningWhenNumberVoidingsPending() {
+    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp()));
+    when(sifenNumberVoidingService.pendingSummary(1L))
+        .thenReturn(
+            Optional.of(
+                new SifenNumberVoidingService.PendingVoidingSummary(
+                    2, LocalDate.now(ZONE).plusDays(10))));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.fiscalAlerts()).anyMatch(a -> "sifenVoidingPending".equals(a.messageKey()));
+  }
+
+  @Test
+  void warningWhenNumberVoidingsOverdue() {
+    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp()));
+    when(sifenNumberVoidingService.pendingSummary(1L))
+        .thenReturn(
+            Optional.of(
+                new SifenNumberVoidingService.PendingVoidingSummary(
+                    1, LocalDate.now(ZONE).minusDays(1))));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.fiscalAlerts()).anyMatch(a -> "sifenVoidingOverdue".equals(a.messageKey()));
+    assertThat(d.fiscalAlerts()).noneMatch(a -> "sifenVoidingPending".equals(a.messageKey()));
   }
 
   private static FiscalStamp activeStamp() {
