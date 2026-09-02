@@ -15,6 +15,7 @@ import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.SifenNumberVoidingEvent;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenNumberVoidingStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
@@ -264,6 +265,85 @@ class SifenNumberVoidingServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .extracting("statusCode")
         .isEqualTo(HttpStatus.BAD_GATEWAY);
+  }
+
+  // ── Follow-up: auto-void the invoice + invoice-scoped submit ─────────────────────────────
+
+  @Test
+  void statusForInvoice_returnsTheRecordedStatusOrEmpty() {
+    SifenNumberVoidingEvent e = new SifenNumberVoidingEvent();
+    e.setStatus(SifenNumberVoidingStatus.PENDING);
+    when(repository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(e));
+    assertThat(service.statusForInvoice(INVOICE_ID)).contains(SifenNumberVoidingStatus.PENDING);
+
+    when(repository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.empty());
+    assertThat(service.statusForInvoice(INVOICE_ID)).isEmpty();
+  }
+
+  private SifenNumberVoidingEvent pendingEventForInvoice() {
+    SifenNumberVoidingEvent event = new SifenNumberVoidingEvent();
+    event.setId(7L);
+    event.setInvoiceId(INVOICE_ID);
+    event.setDocumentType(SifenDocumentType.FACTURA);
+    event.setRangeFrom(42);
+    event.setRangeTo(42);
+    event.setStatus(SifenNumberVoidingStatus.PENDING);
+    event.setDeadlineDate(LocalDate.of(2026, 9, 15));
+    event.setCreatedAt(LocalDateTime.now());
+    return event;
+  }
+
+  @Test
+  void recordSubmissionResult_approvedWithInvoice_voidsTheInvoice() {
+    SifenNumberVoidingEvent event = pendingEventForInvoice();
+    when(repository.findByIdAndTenantId(7L, TENANT_ID)).thenReturn(Optional.of(event));
+    Invoice inv = new Invoice();
+    inv.setStatus(InvoiceStatus.ISSUED);
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(inv));
+
+    service.recordSubmissionResult(
+        TENANT_ID,
+        7L,
+        "Motivo suficientemente largo para el evento",
+        new SifenSubmissionResult(
+            SifenSubmissionStatus.APPROVED, "P123", "0600", "Aprobado", LocalDateTime.now()));
+
+    assertThat(event.getStatus()).isEqualTo(SifenNumberVoidingStatus.APPROVED);
+    assertThat(inv.getStatus()).isEqualTo(InvoiceStatus.VOIDED);
+    assertThat(inv.getVoidReason()).contains("P123");
+  }
+
+  @Test
+  void recordSubmissionResult_rejected_leavesTheInvoiceUntouched() {
+    SifenNumberVoidingEvent event = pendingEventForInvoice();
+    when(repository.findByIdAndTenantId(7L, TENANT_ID)).thenReturn(Optional.of(event));
+
+    service.recordSubmissionResult(
+        TENANT_ID,
+        7L,
+        "Motivo suficientemente largo para el evento",
+        new SifenSubmissionResult(
+            SifenSubmissionStatus.REJECTED, null, "4004", "Rechazado", LocalDateTime.now()));
+
+    assertThat(event.getStatus()).isEqualTo(SifenNumberVoidingStatus.REJECTED);
+    verify(invoiceRepository, never()).findByIdAndTenant_Id(anyLong(), anyLong());
+  }
+
+  @Test
+  void submitForInvoice_throws_whenInvoiceIsNotRejected() {
+    Invoice inv = new Invoice();
+    inv.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(inv));
+
+    assertThatThrownBy(
+            () ->
+                service.submitForInvoice(
+                    TENANT_ID, INVOICE_ID, "Motivo suficientemente largo para el evento"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVOICE_NOT_REJECTED");
+    verify(repository, never()).save(any());
   }
 
   @Test
