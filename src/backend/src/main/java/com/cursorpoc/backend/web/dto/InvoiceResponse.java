@@ -88,4 +88,14 @@ public record InvoiceResponse(
     // Current "inutilización de numeración" state for this invoice's number
     // (SifenNumberVoidingStatus name), or null if none was ever recorded. Once APPROVED /
     // APPROVED_WITH_OBSERVATION the number is dead — the frontend hides "Corregir y reenviar".
-    String sifenNumberVoidingStatus) {}
+    String sifenNumberVoidingStatus,
+    // Issue #190: the instant up to which correcting & resending this rejected DE still falls
+    // inside
+    // SIFEN's transmission window. SIFEN requires the XML to be transmitted within 72h of the
+    // digital signature ("Manual Técnico: hasta 72 horas posteriores a la firma digital"); past
+    // that
+    // a resend is transmitted extemporaneously and SIFEN is very likely to reject it. Anchored on
+    // the invoice's emission instant (issuedAt) + 72h. Non-null only while the invoice is actually
+    // in the "resolve rejected" flow (REJECTED, not voided, number not inutilizado); the frontend
+    // shows a non-blocking warning once now is past it — the resend itself is never blocked.
+    Instant sifenCorrectResendDeadlineAt) {}

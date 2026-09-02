@@ -82,6 +82,16 @@ public class InvoiceService {
   static final Duration MAX_ISSUE_FUTUREDATE = Duration.ofHours(120);
 
   /**
+   * Issue #190: SIFEN's transmission window — the XML must reach SIFEN within 72h of the digital
+   * signature ("Manual Técnico: hasta 72 horas posteriores a la información declarada en el campo
+   * firma digital"). A correct-and-resend past this window transmits extemporaneously and is very
+   * likely to be rejected. Anchored on the emission instant so it survives {@code
+   * resetForCorrection} clearing {@code sifenSignedAt}; surfaced (non-blocking) via {@link
+   * InvoiceResponse#sifenCorrectResendDeadlineAt}.
+   */
+  static final Duration SIFEN_CORRECT_RESEND_WINDOW = Duration.ofHours(72);
+
+  /**
    * Issue #174 AC-01: services are priced IVA-incluido (10%). When the receiver presents a "Tarjeta
    * Diplomática de exoneración fiscal", every item and the totals must be shown/emitted net of that
    * IVA — the unit price is divided by this factor and the line becomes exonerada.
@@ -900,7 +910,30 @@ public class InvoiceService {
         toInstant(i.getSifenCancellationNotifiedAt()),
         i.getId() == null
             ? null
-            : sifenNumberVoidingService.statusForInvoice(i.getId()).map(Enum::name).orElse(null));
+            : sifenNumberVoidingService.statusForInvoice(i.getId()).map(Enum::name).orElse(null),
+        sifenCorrectResendDeadline(i));
+  }
+
+  /**
+   * Issue #190: the instant past which correcting &amp; resending this rejected DE falls outside
+   * SIFEN's 72h transmission window (see {@link #SIFEN_CORRECT_RESEND_WINDOW}). Non-null only while
+   * the invoice is actually in the "resolve rejected" flow — Rechazado, not anulado, and its number
+   * not already inutilizado ante SIFEN. The frontend uses it only for a non-blocking warning.
+   */
+  private Instant sifenCorrectResendDeadline(Invoice i) {
+    if (i.getSifenSubmissionStatus() != SifenSubmissionStatus.REJECTED
+        || i.getStatus() == InvoiceStatus.VOIDED
+        || i.getIssuedAt() == null) {
+      return null;
+    }
+    if (i.getId() != null) {
+      String voidingStatus =
+          sifenNumberVoidingService.statusForInvoice(i.getId()).map(Enum::name).orElse(null);
+      if ("APPROVED".equals(voidingStatus) || "APPROVED_WITH_OBSERVATION".equals(voidingStatus)) {
+        return null;
+      }
+    }
+    return i.getIssuedAt().plus(SIFEN_CORRECT_RESEND_WINDOW);
   }
 
   /**

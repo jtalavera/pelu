@@ -72,10 +72,13 @@ test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tena
     expect(rawText).not.toContain("privatekey");
     expect(rawText).not.toContain(VALID_PASSWORD.toLowerCase());
 
+    // Issue #190 — the 4 allowed fields are the table's column headers.
+    const listSection = page.getByTestId("sifen-certificate-list-section");
+    await expect(listSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
+    await expect(listSection.getByRole("columnheader", { name: "Issued on" })).toBeVisible();
+    await expect(listSection.getByRole("columnheader", { name: "Expires on" })).toBeVisible();
+    await expect(listSection.getByRole("columnheader", { name: "Status" })).toBeVisible();
     const row = page.getByTestId("sifen-certificate-row").first();
-    await expect(row.getByText("Upload date")).toBeVisible();
-    await expect(row.getByText("Issued on")).toBeVisible();
-    await expect(row.getByText("Expires on")).toBeVisible();
     // Status is rendered as a badge (Valid/Expired/Not yet valid), not repeated as a text label
     // per row — assert the badge itself is present.
     await expect(

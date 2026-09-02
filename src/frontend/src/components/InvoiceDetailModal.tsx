@@ -123,6 +123,12 @@ export type InvoiceDetail = {
    * Once APPROVED* the number is dead — "Corregir y reenviar" is hidden.
    */
   sifenNumberVoidingStatus?: string | null;
+  /**
+   * Issue #190: instant up to which a correct-and-resend still falls inside SIFEN's 72h
+   * transmission window (emission + 72h). Non-null only while the invoice is in the "resolve
+   * rejected" flow. Used only for a non-blocking warning — the resend itself is never blocked.
+   */
+  sifenCorrectResendDeadlineAt?: string | null;
 };
 
 /** SIFEN HU-11 AC-04: must stay in sync with the backend's SifenForeignCountry enum. */
@@ -954,6 +960,24 @@ export function InvoiceDetailModal({
                               >
                                 {t("femme.billing.history.detail.sifen.correctResendExplanation")}
                               </Text>
+
+                              {/* Issue #190: past SIFEN's 72h transmission window, warn (non-blocking). */}
+                              {invoice.sifenCorrectResendDeadlineAt &&
+                                nowMs >
+                                  new Date(invoice.sifenCorrectResendDeadlineAt).getTime() && (
+                                  <Alert
+                                    variant="warning"
+                                    title={t(
+                                      "femme.billing.history.detail.sifen.correctResendWindowExpiredTitle",
+                                    )}
+                                    data-testid="sifen-correct-resend-window-expired"
+                                  >
+                                    {t(
+                                      "femme.billing.history.detail.sifen.correctResendWindowExpiredWarning",
+                                      { date: formatParaguayDateTime(invoice.issuedAt, dateLocale) },
+                                    )}
+                                  </Alert>
+                                )}
 
                               {!showNullifyForm && (
                                 <div className="flex flex-wrap gap-2">

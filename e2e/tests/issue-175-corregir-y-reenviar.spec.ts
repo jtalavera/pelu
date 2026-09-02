@@ -155,6 +155,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     const form = page.getByRole("dialog", { name: "Correct and resend" });
     // Issue #186 · AC4 — the correction form matches the ficha-de-servicio detail modal size.
     await expect(form).toHaveClass(/max-w-4xl/);
+    // Issue #190 — the invoice number is in the title, and the emission date shows read-only.
+    await expect(form.getByRole("heading", { name: /Correct and resend — Invoice #\d+/ })).toBeVisible();
+    await expect(form.getByTestId("sifen-correct-resend-emission-date")).toBeVisible();
     const priceField = form.locator("#line-price-0");
     await expect(priceField).toHaveValue("55.000");
     await priceField.fill("60000");

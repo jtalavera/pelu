@@ -29,7 +29,9 @@ import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -372,6 +374,24 @@ public class SifenInvoiceTestSupportController {
    * this endpoint exercises the trigger's own real logic (idempotency, deadline computation,
    * persistence) end to end.
    */
+  /**
+   * Issue #190: backdates an invoice's emission instant so Playwright can exercise the "past
+   * SIFEN's 72h resend window" warning ({@link
+   * com.cursorpoc.backend.web.dto.InvoiceResponse#sifenCorrectResendDeadlineAt}) without waiting on
+   * a real clock.
+   */
+  @PostMapping("/invoices/{id}/backdate-issued-at/{hoursAgo}")
+  @Transactional
+  public void backdateIssuedAt(@PathVariable long id, @PathVariable long hoursAgo) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/backdate-issued-at/{}", id, hoursAgo);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    invoice.setIssuedAt(Instant.now().minus(hoursAgo, ChronoUnit.HOURS));
+  }
+
   @PostMapping("/invoices/{id}/simulate-sifen-rejection")
   @Transactional
   public void simulateSifenRejection(@PathVariable long id) {
