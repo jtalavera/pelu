@@ -287,6 +287,19 @@ class SifenInvoiceHeaderServiceTest {
         .isEqualTo(SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND);
   }
 
+  /**
+   * KuDE de muestra "estilo producción": aún en el ambiente de prueba, {@code forceRealIssuerName}
+   * usa la razón social real en vez de la leyenda — pero {@code testEnvironmentNotice()} sigue
+   * reflejando que el documento se emitió en prueba (no se falsea).
+   */
+  @Test
+  void buildHeader_forceRealIssuerName_inTestEnvironment_usesRealBusinessName() {
+    SifenInvoiceHeader header = service.buildHeader(TENANT_ID, INVOICE_ID, true);
+
+    assertThat(header.testEnvironmentNotice()).isTrue();
+    assertThat(header.issuer().businessName()).isEqualTo("Lucía Zymanscki de Onieva Vit S.A.");
+  }
+
   /** AC-08 (contrast): in production, the real business name is used, not the test legend. */
   @Test
   void buildHeader_productionEnvironment_usesRealBusinessName() {

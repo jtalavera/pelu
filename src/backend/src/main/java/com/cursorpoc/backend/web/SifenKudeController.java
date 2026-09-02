@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.web;
 
+import com.cursorpoc.backend.config.SifenConnectionProperties;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.SifenKudeEmailService;
 import com.cursorpoc.backend.service.SifenKudePdfService;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -39,31 +41,61 @@ public class SifenKudeController {
 
   private final SifenKudePdfService pdfService;
   private final SifenKudeEmailService emailService;
+  private final SifenConnectionProperties connectionProperties;
 
-  public SifenKudeController(SifenKudePdfService pdfService, SifenKudeEmailService emailService) {
+  public SifenKudeController(
+      SifenKudePdfService pdfService,
+      SifenKudeEmailService emailService,
+      SifenConnectionProperties connectionProperties) {
     this.pdfService = pdfService;
     this.emailService = emailService;
+    this.connectionProperties = connectionProperties;
   }
 
-  /** AC-16: downloadable from the invoice detail screen. */
+  /**
+   * AC-16: downloadable from the invoice detail screen.
+   *
+   * <p>{@code ?sample=true} renders a "production-style" preview instead — same KuDE, but with the
+   * issuer's real razón social in place of the test-environment legend, and a {@code MUESTRA-}
+   * filename prefix (see {@link SifenKudePdfService#buildProductionSampleKudePdf}). Only meaningful
+   * while the SIFEN connection runs against the test environment; in production the sample would be
+   * byte-identical to the real KuDE, so it is rejected with {@code SIFEN_KUDE_SAMPLE_ONLY_IN_TEST}.
+   */
   @GetMapping(value = "/{id}/sifen/kude", produces = MediaType.APPLICATION_PDF_VALUE)
   public ResponseEntity<byte[]> download(
-      @PathVariable long id, @AuthenticationPrincipal FemmeUserPrincipal principal) {
+      @PathVariable long id,
+      @RequestParam(name = "sample", defaultValue = "false") boolean sample,
+      @AuthenticationPrincipal FemmeUserPrincipal principal) {
     requireAuthenticated(principal);
-    log.info("GET /api/invoices/{}/sifen/kude tenantId={}", id, principal.getTenantId());
+    log.info(
+        "GET /api/invoices/{}/sifen/kude tenantId={} sample={}",
+        id,
+        principal.getTenantId(),
+        sample);
     try {
+      if (sample
+          && connectionProperties.activeEnvironment()
+              == SifenConnectionProperties.Environment.PRODUCTION) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_KUDE_SAMPLE_ONLY_IN_TEST");
+      }
       SifenKudePdfService.KudePdfResult result =
-          pdfService.buildKudePdf(principal.getTenantId(), id);
+          sample
+              ? pdfService.buildProductionSampleKudePdf(principal.getTenantId(), id)
+              : pdfService.buildKudePdf(principal.getTenantId(), id);
       log.info(
-          "GET /api/invoices/{}/sifen/kude tenantId={} status=200", id, principal.getTenantId());
+          "GET /api/invoices/{}/sifen/kude tenantId={} sample={} status=200",
+          id,
+          principal.getTenantId(),
+          sample);
       return ResponseEntity.ok()
           .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.filename() + "\"")
           .body(result.bytes());
     } catch (ResponseStatusException ex) {
       log.error(
-          "GET /api/invoices/{}/sifen/kude tenantId={} status={}",
+          "GET /api/invoices/{}/sifen/kude tenantId={} sample={} status={}",
           id,
           principal.getTenantId(),
+          sample,
           ex.getStatusCode().value());
       throw ex;
     }

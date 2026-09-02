@@ -66,6 +66,21 @@ public class SifenInvoiceHeaderService {
 
   @Transactional
   public SifenInvoiceHeader buildHeader(long tenantId, long invoiceId) {
+    return buildHeader(tenantId, invoiceId, false);
+  }
+
+  /**
+   * KuDE de muestra "estilo producción": cuando {@code forceRealIssuerName} es true, la razón
+   * social (D105/dNomEmi) usa siempre {@link BusinessProfile#getBusinessName()} aunque la conexión
+   * SIFEN esté en el ambiente de prueba — para descargar una vista previa del KuDE tal como se verá
+   * en producción. {@link SifenInvoiceHeader#testEnvironmentNotice()} sigue reflejando el ambiente
+   * real (no se falsea): la muestra sólo cambia el nombre mostrado, nunca miente sobre el ambiente.
+   * Este override es exclusivo del KuDE de muestra ({@link
+   * SifenKudePdfService#buildProductionSampleKudePdf}) — la emisión real del DE (XML) nunca lo usa.
+   */
+  @Transactional
+  public SifenInvoiceHeader buildHeader(
+      long tenantId, long invoiceId, boolean forceRealIssuerName) {
     Invoice invoice =
         invoiceRepository
             .findByIdAndTenant_Id(invoiceId, tenantId)
@@ -94,7 +109,7 @@ public class SifenInvoiceHeaderService {
         stamp.getExpeditionPoint(),
         stamp.getValidFrom(),
         stamp.getValidUntil(),
-        buildIssuerData(profile, testEnvironment),
+        buildIssuerData(profile, testEnvironment && !forceRealIssuerName),
         buildReceiverData(invoice),
         testEnvironment);
   }
@@ -135,10 +150,10 @@ public class SifenInvoiceHeaderService {
   }
 
   /** AC-03: datos del emisor; AC-08: leyenda de ambiente de prueba en vez de la razón social. */
-  private SifenIssuerData buildIssuerData(BusinessProfile profile, boolean testEnvironment) {
+  private SifenIssuerData buildIssuerData(BusinessProfile profile, boolean useTestLegend) {
     ParaguayRucValidator.RucParts rucParts = ParaguayRucValidator.split(profile.getRuc());
     String businessName =
-        testEnvironment ? TEST_ENVIRONMENT_ISSUER_NAME_LEGEND : profile.getBusinessName();
+        useTestLegend ? TEST_ENVIRONMENT_ISSUER_NAME_LEGEND : profile.getBusinessName();
     return new SifenIssuerData(
         rucParts.base(),
         rucParts.checkDigit(),

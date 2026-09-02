@@ -130,7 +130,23 @@ public class SifenKudePdfService {
    */
   @Transactional(readOnly = true)
   public KudePdfResult buildKudePdf(long tenantId, long invoiceId) {
-    return buildKudePdf(tenantId, invoiceId, false);
+    return buildKudePdf(tenantId, invoiceId, false, false, "");
+  }
+
+  /**
+   * KuDE de muestra "estilo producción": el mismo KuDE, pero con la razón social real del emisor en
+   * vez de la leyenda obligatoria del ambiente de prueba (Manual Técnico, validación D105 §10),
+   * para mostrarle a un cliente cómo se verá su factura en producción. El PDF es, por lo demás,
+   * idéntico al KuDE real (mismo layout, CDC, ítems y totales); el QR y la URL de consulta pública
+   * siguen siendo los persistidos en la factura (ambiente de prueba) porque no se pueden regenerar
+   * a producción sin el CSC de producción del contribuyente. La única marca de que es una muestra
+   * es el prefijo {@code MUESTRA-} del nombre de archivo. Sólo tiene sentido mientras la conexión
+   * SIFEN está en el ambiente de prueba — {@code SifenKudeController} lo rechaza en producción,
+   * donde la muestra sería idéntica al KuDE real.
+   */
+  @Transactional(readOnly = true)
+  public KudePdfResult buildProductionSampleKudePdf(long tenantId, long invoiceId) {
+    return buildKudePdf(tenantId, invoiceId, false, true, "MUESTRA-");
   }
 
   /**
@@ -140,12 +156,20 @@ public class SifenKudePdfService {
    */
   @Transactional(readOnly = true)
   public KudePdfResult buildCancelledKudePdf(long tenantId, long invoiceId) {
-    return buildKudePdf(tenantId, invoiceId, true);
+    return buildKudePdf(tenantId, invoiceId, true, false, "");
   }
 
-  private KudePdfResult buildKudePdf(long tenantId, long invoiceId, boolean allowCancelled) {
+  private KudePdfResult buildKudePdf(
+      long tenantId,
+      long invoiceId,
+      boolean allowCancelled,
+      boolean forceRealIssuerName,
+      String filenamePrefix) {
     Invoice invoice = requireDeliverableInvoice(tenantId, invoiceId, allowCancelled);
-    SifenInvoiceHeader header = headerService.buildHeader(tenantId, invoiceId);
+    SifenInvoiceHeader header =
+        forceRealIssuerName
+            ? headerService.buildHeader(tenantId, invoiceId, true)
+            : headerService.buildHeader(tenantId, invoiceId);
     SifenInvoiceDetail detail = detailService.buildDetail(tenantId, invoiceId);
     BusinessProfile profile = businessProfileRepository.findByTenantId(tenantId).orElse(null);
 
@@ -166,7 +190,8 @@ public class SifenKudePdfService {
             invoice.getClient(),
             pendingValidation);
     return new KudePdfResult(
-        pdf, buildFilename(header, invoice.getIssuedAt(), invoice.getInvoiceNumber()));
+        pdf,
+        filenamePrefix + buildFilename(header, invoice.getIssuedAt(), invoice.getInvoiceNumber()));
   }
 
   /**

@@ -20,7 +20,11 @@ import {
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
-import { downloadSifenKude, sendSifenKudeByEmail } from "../api/downloadSifenKude";
+import {
+  downloadSifenKude,
+  fetchSifenEnvironment,
+  sendSifenKudeByEmail,
+} from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { FieldValidationError } from "./FieldValidationError";
@@ -220,6 +224,9 @@ export function InvoiceDetailModal({
   const [sifenCheckMessage, setSifenCheckMessage] = useState<string | null>(null);
   const [kudeDownloading, setKudeDownloading] = useState(false);
   const [kudeError, setKudeError] = useState<string | null>(null);
+  const [sampleKudeDownloading, setSampleKudeDownloading] = useState(false);
+  const [sampleKudeError, setSampleKudeError] = useState<string | null>(null);
+  const [sifenEnvironment, setSifenEnvironment] = useState<"TEST" | "PRODUCTION" | null>(null);
   const [kudeEmail, setKudeEmail] = useState("");
   const [kudeEmailSending, setKudeEmailSending] = useState(false);
   const [kudeEmailError, setKudeEmailError] = useState<string | null>(null);
@@ -273,6 +280,21 @@ export function InvoiceDetailModal({
     };
   }, [invoiceId, t]);
 
+  // Only used to decide whether to offer the "production-style" sample KuDE (test environment only).
+  useEffect(() => {
+    let cancelled = false;
+    fetchSifenEnvironment()
+      .then((env) => {
+        if (!cancelled) setSifenEnvironment(env);
+      })
+      .catch(() => {
+        if (!cancelled) setSifenEnvironment(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleDownloadPdf() {
     setPdfError(null);
     try {
@@ -315,6 +337,23 @@ export function InvoiceDetailModal({
       setKudeError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setKudeDownloading(false);
+    }
+  }
+
+  /**
+   * Downloads the "production-style" sample KuDE: same document with the issuer's real razón social
+   * instead of the test-environment legend, so the business can preview how its invoice will look
+   * in production. Downloaded as MUESTRA-…pdf; only offered while SIFEN runs against test.
+   */
+  async function handleDownloadSampleKude() {
+    setSampleKudeError(null);
+    setSampleKudeDownloading(true);
+    try {
+      await downloadSifenKude(invoiceId, { sample: true });
+    } catch (err) {
+      setSampleKudeError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setSampleKudeDownloading(false);
     }
   }
 
@@ -677,7 +716,7 @@ export function InvoiceDetailModal({
                           {kudeError}
                         </Alert>
                       )}
-                      <div>
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -689,7 +728,34 @@ export function InvoiceDetailModal({
                             ? t("femme.billing.history.detail.sifen.kudeDownloading")
                             : t("femme.billing.history.detail.sifen.kudeDownloadButton")}
                         </Button>
+                        {sifenEnvironment === "TEST" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={sampleKudeDownloading}
+                            data-testid="sifen-kude-sample-download-button"
+                            onClick={() => void handleDownloadSampleKude()}
+                          >
+                            {sampleKudeDownloading
+                              ? t("femme.billing.history.detail.sifen.kudeSampleDownloading")
+                              : t("femme.billing.history.detail.sifen.kudeSampleDownloadButton")}
+                          </Button>
+                        )}
                       </div>
+                      {sifenEnvironment === "TEST" && (
+                        <Text
+                          variant="small"
+                          className="text-[rgb(var(--color-muted-foreground))]"
+                          data-testid="sifen-kude-sample-hint"
+                        >
+                          {t("femme.billing.history.detail.sifen.kudeSampleHint")}
+                        </Text>
+                      )}
+                      {sampleKudeError && (
+                        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                          {sampleKudeError}
+                        </Alert>
+                      )}
                     </div>
                   )}
 
