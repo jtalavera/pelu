@@ -235,15 +235,14 @@ function ServiceRecordHistoryTab() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm" style={{ tableLayout: "fixed" }}>
               <colgroup>
-                <col style={{ width: "20%" }} />
-                <col style={{ width: "34%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "40%" }} />
                 <col style={{ width: "18%" }} />
-                <col style={{ width: "16%" }} />
-                <col style={{ width: "12%" }} />
+                <col style={{ width: "18%" }} />
               </colgroup>
               <thead>
                 <tr>
-                  {["colDate", "colClient", "colTotal", "colStatus", ""].map((key, i) => (
+                  {["colDate", "colClient", "colTotal", "colStatus"].map((key, i) => (
                     <th
                       key={i}
                       style={{
@@ -265,7 +264,32 @@ function ServiceRecordHistoryTab() {
               </thead>
               <tbody>
                 {records.map((r) => (
-                  <tr key={r.id} style={{ borderTop: "var(--border-default)" }}>
+                  <tr
+                    key={r.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t("femme.serviceRecords.history.openDetail", {
+                      client: r.clientFullName,
+                    })}
+                    onClick={() => setSelectedId(r.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedId(r.id);
+                      }
+                    }}
+                    style={{
+                      borderTop: "var(--border-default)",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background =
+                        "var(--color-rose-lt)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLTableRowElement).style.background = "";
+                    }}
+                  >
                     <td style={{ padding: "10px 12px" }}>{formatParaguayDateTime(r.createdAt, dateLocale)}</td>
                     <td style={{ padding: "10px 12px" }}>{r.clientFullName}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>
@@ -273,11 +297,6 @@ function ServiceRecordHistoryTab() {
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>
                       <StatusBadge status={r.status} />
-                    </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedId(r.id)}>
-                        {t("femme.serviceRecords.history.viewDetail")}
-                      </Button>
                     </td>
                   </tr>
                 ))}

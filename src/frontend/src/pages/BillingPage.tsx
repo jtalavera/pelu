@@ -564,22 +564,26 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
               style={{ tableLayout: "fixed" }}
             >
               <colgroup>
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "20%" }} />
                 <col style={{ width: "11%" }} />
-                <col style={{ width: "17%" }} />
-                <col style={{ width: "27%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "17%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>
                   {[
                     { key: "colNumber", align: "left" },
                     { key: "colDate", align: "left" },
+                    { key: "colSifenSentAt", align: "left" },
                     { key: "colClient", align: "left" },
                     { key: "colTotal", align: "right" },
                     { key: "colStatus", align: "center" },
                     { key: "colSifenStatus", align: "center" },
+                    { key: "", align: "center" },
                   ].map(({ key, align }, i) => (
                     <th
                       key={i}
@@ -634,6 +638,11 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     <td style={{ padding: "10px 12px" }}>
                       {formatParaguayDateTime(inv.issuedAt, dateLocale)}
                     </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {inv.sifenSubmittedAt
+                        ? formatParaguayDateTime(inv.sifenSubmittedAt, dateLocale)
+                        : "—"}
+                    </td>
                     <td style={{ padding: "10px 12px" }}>{inv.clientDisplayName ?? "—"}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>
                       {formatAmountDecimal(inv.total)}
@@ -646,22 +655,22 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                       </Badge>
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                      <div className="flex flex-col items-center gap-1">
-                        <SifenStatusBadge status={inv.sifenSubmissionStatus} />
-                        {inv.sifenSubmissionStatus === "REJECTED" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            data-testid={`invoice-row-correct-resend-${inv.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCorrectionInvoiceId(inv.id);
-                            }}
-                          >
-                            {t("femme.billing.history.detail.sifen.correctResendButton")}
-                          </Button>
-                        )}
-                      </div>
+                      <SifenStatusBadge status={inv.sifenSubmissionStatus} />
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      {inv.sifenSubmissionStatus === "REJECTED" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`invoice-row-correct-resend-${inv.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCorrectionInvoiceId(inv.id);
+                          }}
+                        >
+                          {t("femme.billing.history.detail.sifen.correctResendButton")}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}

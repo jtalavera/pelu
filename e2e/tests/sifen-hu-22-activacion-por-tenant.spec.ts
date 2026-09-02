@@ -311,7 +311,9 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
-    await expect(page.getByLabel("Business name")).toBeVisible();
+    await expect(page.getByLabel("Business or legal name")).toBeVisible();
+    // The trade name (nombre de fantasía) is now in the General section, shown even with the flag off.
+    await expect(page.getByLabel("Trade name")).toBeVisible();
     await expect(page.getByText("SIFEN tax data")).toHaveCount(0);
   });
 

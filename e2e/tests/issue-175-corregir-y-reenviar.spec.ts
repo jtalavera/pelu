@@ -153,6 +153,8 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
 
     // Correction form — prefilled from the rejected invoice; fix the unit price.
     const form = page.getByRole("dialog", { name: "Correct and resend" });
+    // Issue #186 · AC4 — the correction form matches the ficha-de-servicio detail modal size.
+    await expect(form).toHaveClass(/max-w-4xl/);
     const priceField = form.locator("#line-price-0");
     await expect(priceField).toHaveValue("55.000");
     await priceField.fill("60000");

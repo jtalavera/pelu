@@ -186,7 +186,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     await loginAsDemo(page);
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     // The underlying page (History table row, hidden "New record" tab) stays mounted behind
     // the modal, so scope to the dialog to avoid duplicate-match ambiguity on shared line ids.
@@ -224,7 +224,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     await loginAsDemo(page);
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
     // The underlying page (History table row, hidden "New record" tab) stays mounted behind
     // the modal, so scope to the dialog to avoid duplicate-match ambiguity.
     const dialog = page.getByRole("dialog", { name: "Service record detail" });
@@ -240,7 +240,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     // Reload fresh from the server and confirm the removed line really is gone.
     const row2 = await findHistoryRow(page, client.fullName);
     await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.getByRole("button", { name: "View" }).click();
+    await row2.click();
     await expect(dialog.getByText(/^50\.000$/)).toBeVisible({ timeout: 15_000 });
     await expect(dialog.locator('[id^="service-record-line-svc-"]')).toHaveCount(1);
   });
@@ -260,7 +260,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     await loginAsDemo(page);
     const row = await findHistoryRow(page, originalClient.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
     // The underlying page (History table row, hidden "New record" tab) stays mounted behind
     // the modal, so scope to the dialog to avoid duplicate-match ambiguity.
     const dialog = page.getByRole("dialog", { name: "Service record detail" });
@@ -276,7 +276,7 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     // Reload fresh from the server and confirm the new client really persisted.
     const row2 = await findHistoryRow(page, newClient.fullName);
     await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.getByRole("button", { name: "View" }).click();
+    await row2.click();
     await expect(dialog.getByText(newClient.fullName)).toBeVisible({ timeout: 15_000 });
 
     const oldClientGone = await findHistoryRow(page, originalClient.fullName);

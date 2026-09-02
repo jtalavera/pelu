@@ -11,6 +11,7 @@ export type InvoiceListItem = {
   servicesSummary?: string | null;
   paymentMethodsSummary?: string | null;
   sifenSubmissionStatus?: string | null;
+  sifenSubmittedAt?: string | null;
 };
 
 export type PagedInvoicesResponse = {
