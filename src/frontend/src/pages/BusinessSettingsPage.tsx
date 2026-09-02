@@ -471,6 +471,26 @@ export default function BusinessSettingsPage() {
             )}
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
+            <label htmlFor="sifenFantasyName" style={labelStyle}>
+              {t("femme.businessSettings.sifenFantasyName")}
+            </label>
+            <input
+              id="sifenFantasyName"
+              value={sifenFantasyName}
+              onChange={(e) => {
+                setSifenFantasyName(e.target.value);
+                if (saveValidationError) setSaveValidationError(null);
+              }}
+              aria-describedby="sifenFantasyName-hint"
+              onFocus={() => setFocusField("sifenFantasyName")}
+              onBlur={() => setFocusField(null)}
+              style={buildInputStyle(false, focusField === "sifenFantasyName")}
+            />
+            <p id="sifenFantasyName-hint" style={hintStyle}>
+              {t("femme.businessSettings.sifenFantasyNameHint")}
+            </p>
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <label htmlFor="address" style={labelStyle}>
               {t("femme.businessSettings.address")}
             </label>
@@ -639,26 +659,6 @@ export default function BusinessSettingsPage() {
                   onBlur={() => setFocusField(null)}
                   style={buildInputStyle(false, focusField === "economicActivityDescription")}
                 />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label htmlFor="sifenFantasyName" style={labelStyle}>
-                  {t("femme.businessSettings.sifenFantasyName")}
-                </label>
-                <input
-                  id="sifenFantasyName"
-                  value={sifenFantasyName}
-                  onChange={(e) => {
-                    setSifenFantasyName(e.target.value);
-                    if (saveValidationError) setSaveValidationError(null);
-                  }}
-                  aria-describedby="sifenFantasyName-hint"
-                  onFocus={() => setFocusField("sifenFantasyName")}
-                  onBlur={() => setFocusField(null)}
-                  style={buildInputStyle(false, focusField === "sifenFantasyName")}
-                />
-                <p id="sifenFantasyName-hint" style={hintStyle}>
-                  {t("femme.businessSettings.sifenFantasyNameHint")}
-                </p>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <Label htmlFor="business-locality">{t("femme.clients.locality")}</Label>

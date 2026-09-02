@@ -147,7 +147,10 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     await page.goto("/app/service-records");
     await page.getByRole("tab", { name: "History", exact: true }).click();
     await page.locator("#service-record-history-text-filter").fill(client.fullName);
-    await page.getByRole("button", { name: "View" }).click();
+    await page
+      .locator('tbody tr[role="button"]')
+      .filter({ hasText: client.fullName })
+      .click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();

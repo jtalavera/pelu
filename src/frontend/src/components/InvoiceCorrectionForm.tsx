@@ -344,7 +344,12 @@ export function InvoiceCorrectionForm({
   }
 
   return (
-    <Modal open onClose={onClose} title={t("femme.billing.history.detail.sifen.correctResendTitle")}>
+    <Modal
+      open
+      onClose={onClose}
+      title={t("femme.billing.history.detail.sifen.correctResendTitle")}
+      className="max-w-4xl"
+    >
       <div className="flex flex-col gap-4">
         <Text variant="muted" className="text-sm">
           {t("femme.billing.history.detail.sifen.correctResendExplanation")}

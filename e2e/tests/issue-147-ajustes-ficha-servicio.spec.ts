@@ -35,7 +35,13 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     await page.goto("/app/service-records");
     await page.getByRole("tab", { name: "History", exact: true }).click();
     await page.locator("#service-record-history-text-filter").fill(client.fullName);
-    await page.getByRole("button", { name: "View" }).click();
+    // Issue #186 · AC2 — the whole row opens the detail; there is no "View" button anymore.
+    const historyRow = page
+      .locator('tbody tr[role="button"]')
+      .filter({ hasText: client.fullName });
+    await expect(historyRow).toBeVisible({ timeout: 30_000 });
+    await expect(historyRow.getByRole("button", { name: "View" })).toHaveCount(0);
+    await historyRow.click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();

@@ -645,9 +645,7 @@ public class InvoiceService {
         invoiceRepository.sumIssuedTotalWithFilters(
             tenantId, fromTo[0], fromTo[1], clientId, qTrimmed, qInvoiceNumber);
     List<InvoiceListItemResponse> content =
-        invoicePage.getContent().stream()
-            .map(InvoiceService::toListItemDto)
-            .collect(Collectors.toList());
+        invoicePage.getContent().stream().map(this::toListItemDto).collect(Collectors.toList());
     return new PagedInvoicesResponse(
         content,
         invoicePage.getNumber(),
@@ -758,7 +756,7 @@ public class InvoiceService {
     return toDetailDto(invoice);
   }
 
-  private static InvoiceListItemResponse toListItemDto(Invoice i) {
+  private InvoiceListItemResponse toListItemDto(Invoice i) {
     Hibernate.initialize(i.getLines());
     Hibernate.initialize(i.getPaymentAllocations());
     if (i.getClient() != null) {
@@ -774,7 +772,8 @@ public class InvoiceService {
         i.getIssuedAt(),
         buildServicesSummary(i),
         buildPaymentMethodsSummary(i),
-        i.getSifenSubmissionStatus() != null ? i.getSifenSubmissionStatus().name() : null);
+        i.getSifenSubmissionStatus() != null ? i.getSifenSubmissionStatus().name() : null,
+        toInstant(i.getSifenSubmittedAt()));
   }
 
   private static String buildServicesSummary(Invoice i) {

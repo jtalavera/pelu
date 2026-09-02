@@ -33,6 +33,7 @@ import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -782,6 +783,7 @@ class InvoiceServiceTest {
     submitted.setTotal(new BigDecimal("10000"));
     submitted.setIssuedAt(Instant.now());
     submitted.setSifenSubmissionStatus(SifenSubmissionStatus.APPROVED);
+    submitted.setSifenSubmittedAt(LocalDateTime.now());
 
     Invoice neverSubmitted = new Invoice();
     neverSubmitted.setId(102L);
@@ -802,7 +804,9 @@ class InvoiceServiceTest {
 
     assertThat(result.content()).hasSize(2);
     assertThat(result.content().get(0).sifenSubmissionStatus()).isEqualTo("APPROVED");
+    assertThat(result.content().get(0).sifenSubmittedAt()).isNotNull();
     assertThat(result.content().get(1).sifenSubmissionStatus()).isNull();
+    assertThat(result.content().get(1).sifenSubmittedAt()).isNull();
   }
 
   /**

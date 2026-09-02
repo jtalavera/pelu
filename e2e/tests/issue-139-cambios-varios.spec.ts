@@ -112,7 +112,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await loginAsDemo(page);
     const row = await findServiceRecordHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
     await page.getByRole("button", { name: "Generate invoice" }).click();
 
     await expect(page).toHaveURL(/\/app\/billing/);
@@ -215,8 +215,11 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     });
 
     await page.getByRole("tab", { name: "History" }).click();
+    // Filter by the edited free-text name — the invoice's stored clientDisplayName — so the
+    // history table narrows to just this invoice. Scope to the interactive history rows so the
+    // (hidden) Cash Register today's-invoices table can't be picked up.
     await page.locator("#invoice-history-text-filter").fill(editedName);
-    const row = page.locator("tbody tr").first();
+    const row = page.locator('tbody tr[role="button"]').first();
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(client.fullName);
     await expect(row).not.toContainText(editedName);

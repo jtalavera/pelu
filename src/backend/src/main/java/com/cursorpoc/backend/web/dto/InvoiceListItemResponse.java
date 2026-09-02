@@ -13,4 +13,5 @@ public record InvoiceListItemResponse(
     Instant issuedAt,
     String servicesSummary,
     String paymentMethodsSummary,
-    String sifenSubmissionStatus) {}
+    String sifenSubmissionStatus,
+    Instant sifenSubmittedAt) {}

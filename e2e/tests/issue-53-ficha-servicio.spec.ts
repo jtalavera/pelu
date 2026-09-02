@@ -164,7 +164,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     // modal, so all locators below are scoped to the dialog to avoid duplicate-match ambiguity.
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
     const dialog = page.getByRole("dialog", { name: "Service record detail" });
     await expect(dialog.getByTestId("service-record-status")).toHaveText("Open");
     await expect(dialog.getByText(/^80\.000$/)).toBeVisible();
@@ -183,7 +183,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     // this is the issue #119 AC7 regression guard for edits to an OPEN record.
     const row2 = await findHistoryRow(page, client.fullName);
     await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.getByRole("button", { name: "View" }).click();
+    await row2.click();
     await expect(dialog.getByText(/^130\.000$/)).toBeVisible({ timeout: 15_000 });
   });
 
@@ -232,7 +232,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await loginAsDemo(page);
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     await expect(page.getByTestId("service-record-status")).toHaveText("Open");
     // Issue #119 AC8: "Generate invoice" uses the dark-green design-system success variant.
@@ -271,7 +271,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     // The ficha auto-closed and can no longer be modified.
     const row2 = await findHistoryRow(page, client.fullName);
     await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.getByRole("button", { name: "View" }).click();
+    await row2.click();
     await expect(page.getByTestId("service-record-status")).toHaveText("Closed");
     await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Void record" })).toHaveCount(0);
@@ -304,7 +304,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await loginAsDemo(page);
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
     await page.getByRole("button", { name: "Void record" }).click();
     await page.getByLabel("Reason").fill("Cliente se retiró antes de comenzar");
     await page.getByRole("button", { name: "Confirm void" }).click();

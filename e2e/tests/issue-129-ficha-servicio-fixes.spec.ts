@@ -110,7 +110,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await loginAsDemo(page);
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
 
     const dialog = page.getByRole("dialog", { name: "Service record detail" });
     const box = await dialog.boundingBox();
@@ -146,7 +146,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
 
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
     const dialog = page.getByRole("dialog", { name: "Service record detail" });
     await expect(dialog.locator('[id^="service-record-line-svc-"]')).toHaveCount(0);
   });
@@ -178,7 +178,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
 
     const row = await findHistoryRow(page, client.fullName);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByRole("button", { name: "View" }).click();
+    await row.click();
     const dialog = page.getByRole("dialog", { name: "Service record detail" });
 
     // Backend defaults: quantity → 1, unit price → 0, professional stays unset.

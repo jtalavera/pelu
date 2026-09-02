@@ -6,19 +6,19 @@ test.describe("HU-02 · Configurar datos del negocio", () => {
   test("HU-02 · 1 admin ve datos del tenant cargados desde el servidor", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
-    await expect(page.getByLabel("Business name")).toHaveValue("Demo salon");
+    await expect(page.getByLabel("Business or legal name")).toHaveValue("Demo salon");
   });
 
   test("HU-02 · 2 guardar cambios persiste y muestra confirmación", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
     const unique = `Demo salon E2E ${Date.now()}`;
-    await page.getByLabel("Business name").fill(unique);
+    await page.getByLabel("Business or legal name").fill(unique);
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Your business details were saved.")).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel("Business name")).toHaveValue(unique);
-    await page.getByLabel("Business name").fill("Demo salon");
+    await expect(page.getByLabel("Business or legal name")).toHaveValue(unique);
+    await page.getByLabel("Business or legal name").fill("Demo salon");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Your business details were saved.")).toBeVisible();
   });
@@ -57,5 +57,32 @@ test.describe("HU-02 · Configurar datos del negocio", () => {
     await setControlledInputValue(page.getByLabel("Contact email"), "@no-prefix.com");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.locator("#contactEmail-error")).toBeVisible();
+  });
+
+  // Issue #186 · AC5 + AC6 — the business-name field is relabelled, and the trade-name field
+  // sits directly below it in the General section (visible regardless of the SIFEN flag).
+  test("Issue #186 · nombre del negocio relabelado y nombre de fantasía debajo", async ({ page }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/settings/business");
+
+    const businessName = page.locator("#businessName");
+    const tradeName = page.locator("#sifenFantasyName");
+    await expect(businessName).toBeVisible();
+    await expect(tradeName).toBeVisible();
+
+    // AC6 — the label reads "Business or legal name".
+    await expect(page.locator('label[for="businessName"]')).toHaveText(/Business or legal name/);
+
+    // AC5 — trade name sits below the business name and above the address (i.e. in the
+    // General section, right after business name). Read-only: the /api/business-profile
+    // singleton is mutated by other specs running in parallel.
+    const bnBox = await businessName.boundingBox();
+    const tnBox = await tradeName.boundingBox();
+    const addressBox = await page.locator("#address").boundingBox();
+    expect(tnBox!.y).toBeGreaterThan(bnBox!.y);
+    expect(tnBox!.y).toBeLessThan(addressBox!.y);
+
+    // The hint still describes the KuDE header use.
+    await expect(page.locator("#sifenFantasyName-hint")).toBeVisible();
   });
 });
