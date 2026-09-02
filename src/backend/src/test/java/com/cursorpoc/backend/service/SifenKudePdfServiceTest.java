@@ -233,6 +233,62 @@ class SifenKudePdfServiceTest {
     assertThat(pageSize.getHeight()).isEqualTo(com.lowagie.text.PageSize.A4.getHeight());
   }
 
+  /**
+   * KuDE de muestra "estilo producción": {@code buildProductionSampleKudePdf} pide el header con
+   * {@code forceRealIssuerName=true} (razón social real) y el archivo se descarga con prefijo
+   * {@code MUESTRA-}. El KuDE normal, en cambio, sigue mostrando la leyenda del ambiente de prueba.
+   */
+  @Test
+  void buildProductionSampleKudePdf_showsRealBusinessName_andMuestraFilename() throws Exception {
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID))
+        .thenReturn(
+            headerWithBusinessName(SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND));
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID, true))
+        .thenReturn(headerWithBusinessName("Lucía Zymanscki de Onieva Vit S.A."));
+
+    // The real KuDE still shows the mandatory test-environment legend in place of the razón social.
+    var normal = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    assertThat(extractPage(normal.bytes(), 1)).contains("DE generado en ambiente de prueba");
+
+    // The production-style sample shows the real razón social, no test legend, MUESTRA- filename.
+    var sample = service.buildProductionSampleKudePdf(TENANT_ID, INVOICE_ID);
+    String samplePage1 = extractPage(sample.bytes(), 1);
+    assertThat(samplePage1).contains("Lucía Zymanscki de Onieva Vit S.A.");
+    assertThat(samplePage1).doesNotContain("ambiente de prueba");
+    assertThat(sample.filename()).isEqualTo("MUESTRA-KUDE-20260728-1137152-0000007.pdf");
+  }
+
+  private SifenInvoiceHeader headerWithBusinessName(String businessName) {
+    SifenIssuerData i = header.issuer();
+    SifenIssuerData issuerWithName =
+        new SifenIssuerData(
+            i.ruc(),
+            i.rucCheckDigit(),
+            businessName,
+            i.fantasyName(),
+            i.address(),
+            i.taxpayerType(),
+            i.economicActivityCode(),
+            i.economicActivityDescription(),
+            i.phone(),
+            i.contactEmail(),
+            i.departmentCode(),
+            i.departmentName(),
+            i.cityCode(),
+            i.cityName());
+    return new SifenInvoiceHeader(
+        header.controlNumber(),
+        header.issueDateTime(),
+        header.stampNumber(),
+        header.establishment(),
+        header.expeditionPoint(),
+        header.stampValidFrom(),
+        header.stampValidUntil(),
+        issuerWithName,
+        header.receiver(),
+        header.testEnvironmentNotice());
+  }
+
   /** AC-03/AC-04: business, timbrado and sale data appear on page 1. */
   @Test
   void buildKudePdf_page1_containsBusinessTimbradoAndSaleData() throws Exception {
