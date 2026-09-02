@@ -84,4 +84,8 @@ public record InvoiceResponse(
     Instant sifenKudeEmailedAt,
     // Issue #173: set once the client was emailed a cancellation notice for this document; null
     // until then (and while the document hasn't been cancelled with SIFEN).
-    Instant sifenCancellationNotifiedAt) {}
+    Instant sifenCancellationNotifiedAt,
+    // Current "inutilización de numeración" state for this invoice's number
+    // (SifenNumberVoidingStatus name), or null if none was ever recorded. Once APPROVED /
+    // APPROVED_WITH_OBSERVATION the number is dead — the frontend hides "Corregir y reenviar".
+    String sifenNumberVoidingStatus) {}

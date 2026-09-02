@@ -232,4 +232,107 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     expect(res.status()).toBe(409);
     expect(await res.text()).toContain("INVOICE_NOT_REJECTED");
   });
+
+  // Follow-up: "Anular comprobante" on a rejected invoice = inutilizar its numeración ante SIFEN,
+  // and once the number is dead "Corregir y reenviar" must disappear (row + detail + backend).
+  test("'Anular comprobante' de una rechazada inutiliza la numeración y bloquea corregir y reenviar", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    await ensureCertificate(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+
+    const clientName = `E2E 186 ANULAR RECHAZADA ${Date.now()}`;
+    const invoiceId = await issueRejectedInvoice(
+      request,
+      token,
+      seed.serviceId,
+      seed.serviceFullName,
+      clientName,
+    );
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(clientName);
+    const row = page.locator('tbody tr[role="button"]', { hasText: clientName }).first();
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    const dialog = page.getByRole("dialog");
+    const resolve = dialog.getByTestId("sifen-tab-correct-resend");
+    await resolve.locator("summary").click();
+    await expect(resolve.getByTestId("sifen-correct-resend-button")).toBeVisible();
+    await expect(resolve.getByTestId("sifen-nullify-number-button")).toBeVisible();
+    // The only "Void invoice" affordance is inside this section — no generic footer button.
+    await expect(dialog.getByRole("button", { name: "Void invoice", exact: true })).toHaveCount(1);
+
+    await resolve.getByTestId("sifen-nullify-number-button").click();
+    await resolve.getByLabel("Reason").fill("Venta cargada por error, no se va a reenviar");
+    await resolve.getByTestId("sifen-nullify-number-confirm").click();
+    // application-e2e points SIFEN at an unreachable endpoint — the synchronous submit surfaces 502.
+    await expect(
+      resolve.getByText("SIFEN did not respond to the voiding request. Try again shortly."),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    // Fabricate SIFEN approving the inutilización → the invoice is voided automatically.
+    const fab = await request.post(
+      `${apiBaseUrl()}/api/admin/sifen-test-support/invoices/${invoiceId}/fabricate-number-voiding-result/true`,
+    );
+    expect(fab.ok(), await fab.text()).toBeTruthy();
+
+    const after = await apiGetJson<InvoiceView & { status: string }>(
+      request,
+      token,
+      `/api/invoices/${invoiceId}`,
+    );
+    expect(after.status).toBe("VOIDED");
+
+    // Row: no correct-resend shortcut anymore.
+    await page.reload();
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(clientName);
+    const row2 = page.locator('tbody tr[role="button"]', { hasText: clientName }).first();
+    await expect(row2).toBeVisible({ timeout: 30_000 });
+    await expect(
+      row2.locator('[data-testid^="invoice-row-correct-resend-"]'),
+    ).toHaveCount(0);
+
+    // Detail: the section shows the "resolved" note instead of the actions.
+    await row2.click();
+    const resolve2 = page.getByRole("dialog").getByTestId("sifen-tab-correct-resend");
+    await resolve2.locator("summary").click();
+    await expect(resolve2.getByTestId("sifen-rejected-resolved-note")).toBeVisible();
+    await expect(resolve2.getByTestId("sifen-correct-resend-button")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // Backend: correct-and-resend is refused for a voided invoice.
+    const resend = await request.post(
+      `${apiBaseUrl()}/api/invoices/${invoiceId}/sifen/correct-and-resend`,
+      {
+        headers: authHeaders(token),
+        data: {
+          clientId: null,
+          clientDisplayName: "X",
+          email: "anular186@example.com",
+          lines: [
+            {
+              serviceId: seed.serviceId,
+              description: seed.serviceFullName,
+              quantity: 1,
+              unitPrice: 55000,
+            },
+          ],
+          payments: [{ method: "CASH", amount: 55000 }],
+        },
+      },
+    );
+    expect(resend.status()).toBe(409);
+    expect(await resend.text()).toContain("INVOICE_ALREADY_VOIDED");
+  });
 });

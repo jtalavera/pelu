@@ -117,6 +117,12 @@ export type InvoiceDetail = {
   sifenClientIdentificationCountryCode?: string | null;
   sifenClientIdentificationResultCode?: string | null;
   sifenClientIdentificationMessage?: string | null;
+  /**
+   * Current "inutilización de numeración" state for this invoice's number
+   * (PENDING/APPROVED/APPROVED_WITH_OBSERVATION/REJECTED/CANCELLED), or null if none was recorded.
+   * Once APPROVED* the number is dead — "Corregir y reenviar" is hidden.
+   */
+  sifenNumberVoidingStatus?: string | null;
 };
 
 /** SIFEN HU-11 AC-04: must stay in sync with the backend's SifenForeignCountry enum. */
@@ -218,6 +224,12 @@ export function InvoiceDetailModal({
   const [voiding, setVoiding] = useState(false);
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidSuccess, setVoidSuccess] = useState(false);
+  // "Anular comprobante" for a rejected invoice = inutilizar su numeración ante SIFEN.
+  const [showNullifyForm, setShowNullifyForm] = useState(false);
+  const [nullifyReason, setNullifyReason] = useState("");
+  const [nullifyReasonError, setNullifyReasonError] = useState<string | null>(null);
+  const [nullifying, setNullifying] = useState(false);
+  const [nullifyError, setNullifyError] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [checkingSifenStatus, setCheckingSifenStatus] = useState(false);
   const [sifenCheckError, setSifenCheckError] = useState<string | null>(null);
@@ -488,6 +500,36 @@ export function InvoiceDetailModal({
     }
   }
 
+  async function handleNullifyNumber(e: React.FormEvent) {
+    e.preventDefault();
+    setNullifyError(null);
+    const trimmed = nullifyReason.trim();
+    if (trimmed.length < 5) {
+      setNullifyReasonError(
+        t("femme.billing.history.detail.sifen.nullifyNumberReasonTooShort"),
+      );
+      return;
+    }
+    setNullifyReasonError(null);
+    setNullifying(true);
+    try {
+      const updated = await femmePostJson<InvoiceDetail>(
+        `/api/invoices/${invoiceId}/sifen/nullify-number`,
+        { reason: trimmed },
+      );
+      setInvoice(updated);
+      setShowNullifyForm(false);
+      setNullifyReason("");
+      if (updated.status === "VOIDED") {
+        onVoided?.();
+      }
+    } catch (err) {
+      setNullifyError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setNullifying(false);
+    }
+  }
+
   // Issue #145: "Cancelar factura en Sifen" merges the standalone "Anular comprobante" action for
   // any invoice currently eligible for SIFEN cancellation — same condition the SIFEN cancel block
   // below already gates on, kept in sync here so only one of the two ever renders.
@@ -692,6 +734,10 @@ export function InvoiceDetailModal({
                 invoice.sifenSubmissionStatus === "CANCELLED" &&
                 !!invoice.sifenCancellationRequestedAt;
               const identifyHistoryVisible = !!invoice.sifenClientIdentificationRequestedAt;
+              // Number inutilizada ante SIFEN → dead for good, no more "corregir y reenviar".
+              const numberInutilizado =
+                invoice.sifenNumberVoidingStatus === "APPROVED" ||
+                invoice.sifenNumberVoidingStatus === "APPROVED_WITH_OBSERVATION";
 
               return (
                 <div
@@ -872,19 +918,15 @@ export function InvoiceDetailModal({
                       </AccordionItem>
                     )}
 
-                    {/* Issue #175: correct & resend a rejected invoice under the same CDC. */}
+                    {/* Issue #175 + follow-up: resolve a rejected invoice — correct & resend under
+                        the same CDC, or "Anular comprobante" (= inutilizar its numeración ante
+                        SIFEN). */}
                     {invoice.sifenSubmissionStatus === "REJECTED" && (
                       <AccordionItem
-                        title={t("femme.billing.history.detail.sifen.correctResendTitle")}
+                        title={t("femme.billing.history.detail.sifen.resolveRejectedTitle")}
                         data-testid="sifen-tab-correct-resend"
                       >
-                        <div className="flex flex-col gap-2">
-                          <Text
-                            variant="small"
-                            className="text-[rgb(var(--color-muted-foreground))]"
-                          >
-                            {t("femme.billing.history.detail.sifen.correctResendExplanation")}
-                          </Text>
+                        <div className="flex flex-col gap-3">
                           {invoice.sifenSubmissionMessage && (
                             <Alert
                               variant="destructive"
@@ -893,16 +935,129 @@ export function InvoiceDetailModal({
                               {invoice.sifenSubmissionMessage}
                             </Alert>
                           )}
-                          <div>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              data-testid="sifen-correct-resend-button"
-                              onClick={() => setShowCorrectionForm(true)}
+
+                          {numberInutilizado || invoice.status === "VOIDED" ? (
+                            <Text
+                              variant="small"
+                              className="text-[rgb(var(--color-muted-foreground))]"
+                              data-testid="sifen-rejected-resolved-note"
                             >
-                              {t("femme.billing.history.detail.sifen.correctResendButton")}
-                            </Button>
-                          </div>
+                              {numberInutilizado
+                                ? t("femme.billing.history.detail.sifen.numberInutilizadoNote")
+                                : t("femme.billing.history.detail.sifen.rejectedVoidedNote")}
+                            </Text>
+                          ) : (
+                            <>
+                              <Text
+                                variant="small"
+                                className="text-[rgb(var(--color-muted-foreground))]"
+                              >
+                                {t("femme.billing.history.detail.sifen.correctResendExplanation")}
+                              </Text>
+
+                              {!showNullifyForm && (
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    data-testid="sifen-correct-resend-button"
+                                    onClick={() => setShowCorrectionForm(true)}
+                                  >
+                                    {t("femme.billing.history.detail.sifen.correctResendButton")}
+                                  </Button>
+                                  {allowVoid && (
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      data-testid="sifen-nullify-number-button"
+                                      onClick={() => setShowNullifyForm(true)}
+                                    >
+                                      {t("femme.billing.history.detail.voidButton")}
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+
+                              {showNullifyForm && (
+                                <form
+                                  onSubmit={(e) => void handleNullifyNumber(e)}
+                                  noValidate
+                                  className="flex flex-col gap-3"
+                                >
+                                  <Text
+                                    variant="small"
+                                    className="text-[rgb(var(--color-muted-foreground))]"
+                                  >
+                                    {t(
+                                      "femme.billing.history.detail.sifen.nullifyNumberExplanation",
+                                    )}
+                                  </Text>
+                                  {nullifyError && (
+                                    <Alert
+                                      variant="destructive"
+                                      title={t("femme.billing.errorTitle")}
+                                    >
+                                      {nullifyError}
+                                    </Alert>
+                                  )}
+                                  <div>
+                                    <Label htmlFor="nullify-reason">
+                                      {t(
+                                        "femme.billing.history.detail.sifen.nullifyNumberReasonLabel",
+                                      )}
+                                    </Label>
+                                    <Textarea
+                                      id="nullify-reason"
+                                      value={nullifyReason}
+                                      onChange={(e) => {
+                                        setNullifyReason(e.target.value);
+                                        setNullifyReasonError(null);
+                                      }}
+                                      rows={2}
+                                      className="mt-1 w-full"
+                                      aria-invalid={!!nullifyReasonError}
+                                      aria-describedby={
+                                        nullifyReasonError ? "nullify-reason-err" : undefined
+                                      }
+                                    />
+                                    <FieldValidationError id="nullify-reason-err">
+                                      {nullifyReasonError}
+                                    </FieldValidationError>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      type="submit"
+                                      variant="danger"
+                                      size="sm"
+                                      disabled={nullifying}
+                                      data-testid="sifen-nullify-number-confirm"
+                                    >
+                                      {nullifying
+                                        ? t(
+                                            "femme.billing.history.detail.sifen.nullifyNumberSubmitting",
+                                          )
+                                        : t(
+                                            "femme.billing.history.detail.sifen.nullifyNumberConfirm",
+                                          )}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => {
+                                        setShowNullifyForm(false);
+                                        setNullifyReason("");
+                                        setNullifyReasonError(null);
+                                        setNullifyError(null);
+                                      }}
+                                    >
+                                      {t("femme.billing.history.detail.voidCancel")}
+                                    </Button>
+                                  </div>
+                                </form>
+                              )}
+                            </>
+                          )}
                         </div>
                       </AccordionItem>
                     )}
@@ -1434,22 +1589,31 @@ export function InvoiceDetailModal({
                   {t("femme.billing.history.detail.downloadPdf")}
                 </Button>
               )}
-              {allowVoid && invoice.status === "ISSUED" && !showVoidForm && !sifenCancelEligible && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setShowVoidForm(true)}
-                >
-                  {t("femme.billing.history.detail.voidButton")}
-                </Button>
-              )}
+              {allowVoid &&
+                invoice.status === "ISSUED" &&
+                !showVoidForm &&
+                !sifenCancelEligible &&
+                invoice.sifenSubmissionStatus !== "REJECTED" && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setShowVoidForm(true)}
+                  >
+                    {t("femme.billing.history.detail.voidButton")}
+                  </Button>
+                )}
               <Button variant="secondary" size="sm" onClick={onClose}>
                 {t("femme.billing.history.detail.close")}
               </Button>
             </div>
 
-            {/* Void form */}
-            {allowVoid && showVoidForm && invoice.status === "ISSUED" && !sifenCancelEligible && (
+            {/* Void form — rejected invoices are anulados from the "Resolver factura rechazada"
+                section above (that also inutiliza the numeración ante SIFEN). */}
+            {allowVoid &&
+              showVoidForm &&
+              invoice.status === "ISSUED" &&
+              !sifenCancelEligible &&
+              invoice.sifenSubmissionStatus !== "REJECTED" && (
               <form
                 className="border-t border-[rgb(var(--color-border))] pt-4 flex flex-col gap-3"
                 onSubmit={(e) => void handleVoid(e)}

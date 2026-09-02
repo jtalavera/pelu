@@ -247,6 +247,10 @@ public class InvoiceService {
    * <p>Never touches {@code sifenControlNumber}, {@code sifenSecurityCode}, {@code invoiceNumber},
    * {@code fiscalStamp} or {@code issuedAt}. The controller then runs the same {@code
    * prepareAndSign} + {@code enqueue} pipeline {@code issueInvoice} uses.
+   *
+   * <p>Guards (409): {@code INVOICE_ALREADY_VOIDED} if the comprobante is anulado (its number was
+   * inutilizado), {@code INVOICE_NOT_REJECTED} if it isn't currently Rechazado, {@code
+   * SIFEN_NUMBER_ALREADY_VOIDED} if SIFEN already approved the number's inutilización.
    */
   @Transactional
   public InvoiceResponse correctAndResendInvoice(
@@ -257,6 +261,11 @@ public class InvoiceService {
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
 
+    if (invoice.getStatus() == InvoiceStatus.VOIDED) {
+      // The comprobante was already anulado (e.g. its number was inutilizado ante SIFEN) — its
+      // number must never be reused, so a same-CDC resend is off the table.
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "INVOICE_ALREADY_VOIDED");
+    }
     if (invoice.getSifenSubmissionStatus() != SifenSubmissionStatus.REJECTED) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "INVOICE_NOT_REJECTED");
     }
@@ -888,7 +897,10 @@ public class InvoiceService {
         i.getSifenClientIdentificationResultCode(),
         i.getSifenClientIdentificationMessage(),
         toInstant(i.getSifenKudeEmailedAt()),
-        toInstant(i.getSifenCancellationNotifiedAt()));
+        toInstant(i.getSifenCancellationNotifiedAt()),
+        i.getId() == null
+            ? null
+            : sifenNumberVoidingService.statusForInvoice(i.getId()).map(Enum::name).orElse(null));
   }
 
   /**

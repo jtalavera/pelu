@@ -658,7 +658,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                       <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                      {inv.sifenSubmissionStatus === "REJECTED" && (
+                      {inv.sifenSubmissionStatus === "REJECTED" && inv.status === "ISSUED" && (
                         <Button
                           variant="outline"
                           size="sm"

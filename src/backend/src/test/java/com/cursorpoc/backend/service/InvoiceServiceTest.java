@@ -1303,6 +1303,26 @@ class InvoiceServiceTest {
   }
 
   @Test
+  void correctAndResendInvoice_voidedInvoice_throwsConflict() {
+    Invoice invoice = buildRejectedInvoice();
+    invoice.setStatus(InvoiceStatus.VOIDED);
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    var line = new InvoiceLineRequest(null, "X", 1, new BigDecimal("1000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("1000.00"), null, null);
+
+    assertThatThrownBy(
+            () ->
+                invoiceService.correctAndResendInvoice(
+                    1L, 100L, correctionRequest(List.of(line), List.of(payment))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVOICE_ALREADY_VOIDED");
+    org.mockito.Mockito.verifyNoInteractions(sifenSubmissionPersistence);
+    org.mockito.Mockito.verifyNoInteractions(sifenNumberVoidingService);
+  }
+
+  @Test
   void correctAndResendInvoice_numberAlreadyVoided_throwsConflict() {
     Invoice invoice = buildRejectedInvoice();
     when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));

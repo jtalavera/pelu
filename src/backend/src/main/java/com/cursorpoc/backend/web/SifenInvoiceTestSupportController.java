@@ -4,14 +4,17 @@ import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.SifenNumberVoidingEvent;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenNumberVoidingStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
+import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.service.SifenCertificateSecretStore;
 import com.cursorpoc.backend.service.SifenCertificateService;
@@ -95,6 +98,7 @@ public class SifenInvoiceTestSupportController {
   private final SifenInvoiceDetailService detailService;
   private final SifenQrCodeService qrCodeService;
   private final SifenNumberVoidingService numberVoidingService;
+  private final SifenNumberVoidingEventRepository numberVoidingEventRepository;
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceNotificationService notificationService;
 
@@ -110,6 +114,7 @@ public class SifenInvoiceTestSupportController {
       SifenInvoiceDetailService detailService,
       SifenQrCodeService qrCodeService,
       SifenNumberVoidingService numberVoidingService,
+      SifenNumberVoidingEventRepository numberVoidingEventRepository,
       FemmeTimeProperties timeProperties,
       SifenInvoiceNotificationService notificationService) {
     this.invoiceRepository = invoiceRepository;
@@ -123,6 +128,7 @@ public class SifenInvoiceTestSupportController {
     this.detailService = detailService;
     this.qrCodeService = qrCodeService;
     this.numberVoidingService = numberVoidingService;
+    this.numberVoidingEventRepository = numberVoidingEventRepository;
     this.timeProperties = timeProperties;
     this.notificationService = notificationService;
   }
@@ -377,6 +383,51 @@ public class SifenInvoiceTestSupportController {
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
     numberVoidingService.recordPendingForRejectedInvoice(invoice.getTenant().getId(), id);
+  }
+
+  /**
+   * Fabricates the result of the "inutilización de numeración" submit for a rejected invoice — same
+   * rationale as {@link #fabricateCancellationResult(long, boolean)} (e2e's SIFEN endpoint is
+   * unreachable, so a real submit never resolves APPROVED). {@code approved=true} mirrors {@code
+   * SifenNumberVoidingService.recordSubmissionResult} + its auto-void step: the event goes {@code
+   * APPROVED} and the invoice is voided.
+   */
+  @PostMapping("/invoices/{id}/fabricate-number-voiding-result/{approved}")
+  @Transactional
+  public void fabricateNumberVoidingResult(@PathVariable long id, @PathVariable boolean approved) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/fabricate-number-voiding-result/{}",
+        id,
+        approved);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    numberVoidingService.recordPendingForRejectedInvoice(invoice.getTenant().getId(), id);
+    SifenNumberVoidingEvent event =
+        numberVoidingEventRepository
+            .findByInvoiceId(id)
+            .orElseThrow(
+                () ->
+                    new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "SIFEN_NUMBER_VOIDING_NOT_FOUND"));
+    event.setSubmittedAt(LocalDateTime.now(timeProperties.zoneId()));
+    event.setReason("E2E inutilización");
+    if (approved) {
+      event.setResultCode("0600");
+      event.setMessage("Evento registrado correctamente");
+      event.setProtocolNumber("135791113");
+      event.setStatus(SifenNumberVoidingStatus.APPROVED);
+      if (invoice.getStatus() == InvoiceStatus.ISSUED) {
+        invoice.setStatus(InvoiceStatus.VOIDED);
+        invoice.setVoidReason("Numeración inutilizada ante SIFEN (protocolo 135791113)");
+      }
+    } else {
+      event.setResultCode("4004");
+      event.setMessage("Rango de numeración inconsistente");
+      event.setStatus(SifenNumberVoidingStatus.REJECTED);
+    }
   }
 
   private void prepareWithQrAndStatus(long id, SifenSubmissionStatus status) {

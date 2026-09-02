@@ -9,6 +9,7 @@ import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
 import com.cursorpoc.backend.service.SifenInvoiceClientIdentificationService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
+import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenSubmissionQueue;
 import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
@@ -17,6 +18,7 @@ import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
+import com.cursorpoc.backend.web.dto.SifenNumberVoidingSubmitRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import java.time.Instant;
@@ -61,6 +63,7 @@ public class InvoiceController {
   private final FeatureFlagService featureFlagService;
   private final SifenCertificateService sifenCertificateService;
   private final SifenSubmissionQueue sifenSubmissionQueue;
+  private final SifenNumberVoidingService sifenNumberVoidingService;
 
   public InvoiceController(
       InvoiceService invoiceService,
@@ -70,7 +73,8 @@ public class InvoiceController {
       SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService,
       FeatureFlagService featureFlagService,
       SifenCertificateService sifenCertificateService,
-      SifenSubmissionQueue sifenSubmissionQueue) {
+      SifenSubmissionQueue sifenSubmissionQueue,
+      SifenNumberVoidingService sifenNumberVoidingService) {
     this.invoiceService = invoiceService;
     this.invoiceHistoryReportService = invoiceHistoryReportService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
@@ -79,6 +83,7 @@ public class InvoiceController {
     this.featureFlagService = featureFlagService;
     this.sifenCertificateService = sifenCertificateService;
     this.sifenSubmissionQueue = sifenSubmissionQueue;
+    this.sifenNumberVoidingService = sifenNumberVoidingService;
   }
 
   /**
@@ -319,6 +324,37 @@ public class InvoiceController {
     InvoiceResponse response = invoiceService.getInvoice(tenantId, id);
     log.info("POST /api/invoices/{}/sifen/correct-and-resend tenantId={} status=200", id, tenantId);
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * "Anular comprobante" for a SIFEN-rejected invoice: submits the (auto-recorded) "inutilización
+   * de numeración" event to SIFEN. On a SIFEN approval the invoice is voided too. Never emits a
+   * cancellation event — a rejected DE was never approved, there is nothing to cancel. Guards
+   * (409): {@code INVOICE_NOT_REJECTED} if it isn't Rechazado, {@code
+   * SIFEN_NUMBER_VOIDING_ALREADY_APPROVED} if the number was already inutilizado.
+   */
+  @PostMapping("/{id}/sifen/nullify-number")
+  public ResponseEntity<InvoiceResponse> nullifyNumber(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody SifenNumberVoidingSubmitRequest request) {
+    requirePrincipal(principal);
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/invoices/{}/sifen/nullify-number tenantId={}", id, tenantId);
+    try {
+      sifenCertificateService.requireActiveCertificate(tenantId);
+      sifenNumberVoidingService.submitForInvoice(tenantId, id, request.reason());
+      InvoiceResponse response = invoiceService.getInvoice(tenantId, id);
+      log.info("POST /api/invoices/{}/sifen/nullify-number tenantId={} status=200", id, tenantId);
+      return ResponseEntity.ok(response);
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/invoices/{}/sifen/nullify-number tenantId={} status={}",
+          id,
+          tenantId,
+          ex.getStatusCode());
+      throw ex;
+    }
   }
 
   private static void requirePrincipal(FemmeUserPrincipal principal) {

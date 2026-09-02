@@ -4,6 +4,7 @@ import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.SifenNumberVoidingEvent;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenNumberVoidingStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
@@ -124,6 +125,17 @@ public class SifenNumberVoidingService {
   }
 
   /**
+   * Current inutilización state for one invoice's number, or empty if none was ever recorded (never
+   * rejected, or the auto-trigger hasn't fired). Read-only; used by {@code
+   * InvoiceService.toDetailDto} so the frontend can hide "Corregir y reenviar" once the number is
+   * genuinely dead.
+   */
+  @Transactional(readOnly = true)
+  public Optional<SifenNumberVoidingStatus> statusForInvoice(long invoiceId) {
+    return repository.findByInvoiceId(invoiceId).map(SifenNumberVoidingEvent::getStatus);
+  }
+
+  /**
    * Issue #175: a rejected invoice may be corrected and resent under the same CDC (its number is
    * reused, not abandoned) only while the auto-recorded inutilización is still merely {@code
    * PENDING} — once SIFEN has actually approved the voiding, the number is genuinely dead. A
@@ -173,6 +185,35 @@ public class SifenNumberVoidingService {
     return repository.findByTenantIdOrderByDeadlineDateAsc(tenantId).stream()
         .map(this::toResponse)
         .toList();
+  }
+
+  /**
+   * Issue: invoice-scoped entry point for {@code POST /api/invoices/{id}/sifen/nullify-number} —
+   * the "Anular comprobante" action on a SIFEN-rejected invoice. Ensures the (auto-recorded)
+   * pending inutilización exists, then submits it to SIFEN exactly like {@link #submit}. On a SIFEN
+   * approval {@link #recordSubmissionResult} also voids the invoice ({@link
+   * #voidInvoiceForApprovedNumberVoiding}). Never emits a cancellation event — a rejected DE was
+   * never approved.
+   */
+  public SifenNumberVoidingEventResponse submitForInvoice(
+      long tenantId, long invoiceId, String reason) {
+    Invoice invoice =
+        invoiceRepository
+            .findByIdAndTenant_Id(invoiceId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    if (invoice.getSifenSubmissionStatus() != SifenSubmissionStatus.REJECTED) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "INVOICE_NOT_REJECTED");
+    }
+    self().recordPendingForRejectedInvoice(tenantId, invoiceId);
+    SifenNumberVoidingEvent event =
+        repository
+            .findByInvoiceId(invoiceId)
+            .orElseThrow(
+                () ->
+                    new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "SIFEN_NUMBER_VOIDING_NOT_FOUND"));
+    return submit(tenantId, event.getId(), reason);
   }
 
   public SifenNumberVoidingEventResponse submit(long tenantId, long id, String reason) {
@@ -234,8 +275,40 @@ public class SifenNumberVoidingService {
     event.setResultCode(result.resultCode());
     event.setMessage(result.message());
     event.setProtocolNumber(result.protocolNumber());
-    event.setStatus(mapStatus(result.status()));
+    SifenNumberVoidingStatus mapped = mapStatus(result.status());
+    event.setStatus(mapped);
+    if ((mapped == SifenNumberVoidingStatus.APPROVED
+            || mapped == SifenNumberVoidingStatus.APPROVED_WITH_OBSERVATION)
+        && event.getInvoiceId() != null) {
+      voidInvoiceForApprovedNumberVoiding(tenantId, event.getInvoiceId(), result.protocolNumber());
+    }
     return toResponse(event);
+  }
+
+  /**
+   * Once SIFEN approves the inutilización, the rejected DE's number is genuinely dead — the
+   * comprobante is voided internally too (reusing {@link com.cursorpoc.backend.domain.enums
+   * .InvoiceStatus#VOIDED}, with a system reason), so it stops showing "Corregir y reenviar" and
+   * drops out of the "issued" set. No SIFEN cancellation event is involved: a rejected DE was never
+   * approved, there is nothing to cancel.
+   */
+  private void voidInvoiceForApprovedNumberVoiding(
+      long tenantId, long invoiceId, String protocolNumber) {
+    invoiceRepository
+        .findByIdAndTenant_Id(invoiceId, tenantId)
+        .filter(inv -> inv.getStatus() == InvoiceStatus.ISSUED)
+        .ifPresent(
+            inv -> {
+              inv.setStatus(InvoiceStatus.VOIDED);
+              inv.setVoidReason(
+                  protocolNumber == null || protocolNumber.isBlank()
+                      ? "Numeración inutilizada ante SIFEN"
+                      : "Numeración inutilizada ante SIFEN (protocolo " + protocolNumber + ")");
+              log.info(
+                  "Invoice voided after SIFEN-approved number inutilización tenantId={} invoiceId={}",
+                  tenantId,
+                  invoiceId);
+            });
   }
 
   private static SifenNumberVoidingStatus mapStatus(SifenSubmissionStatus status) {
