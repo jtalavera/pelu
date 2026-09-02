@@ -45,6 +45,7 @@ class SifenNumberVoidingServiceTest {
 
   @Mock private SifenNumberVoidingEventRepository repository;
   @Mock private InvoiceRepository invoiceRepository;
+  @Mock private com.cursorpoc.backend.repository.FiscalStampRepository fiscalStampRepository;
   @Mock private SifenNumberVoidingEventXmlService eventXmlService;
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenEventClient eventClient;
@@ -58,6 +59,7 @@ class SifenNumberVoidingServiceTest {
         new SifenNumberVoidingService(
             repository,
             invoiceRepository,
+            fiscalStampRepository,
             eventXmlService,
             signingService,
             eventClient,
@@ -66,9 +68,12 @@ class SifenNumberVoidingServiceTest {
 
   private FiscalStamp stamp() {
     FiscalStamp stamp = new FiscalStamp();
+    stamp.setId(9L);
     stamp.setStampNumber("12345678");
     stamp.setEstablishment(1);
     stamp.setExpeditionPoint(1);
+    stamp.setRangeFrom(1);
+    stamp.setRangeTo(1_000);
     return stamp;
   }
 
@@ -357,6 +362,132 @@ class SifenNumberVoidingServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .extracting("statusCode")
         .isEqualTo(HttpStatus.CONFLICT);
+  }
+
+  // ── RT-25 "manual" path + dashboard summary ──────────────────────────────────────────────
+
+  @Test
+  void createManual_happyPath_createsAPendingRowWithNoInvoice() {
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(TENANT_ID))
+        .thenReturn(Optional.of(stamp()));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
+            TENANT_ID, 9L, 500, 510))
+        .thenReturn(false);
+    when(repository.findByTenantIdAndFiscalStamp_Id(TENANT_ID, 9L)).thenReturn(List.of());
+
+    var out = service.createManual(TENANT_ID, 500, 510, "Numeración saltada por error del sistema");
+
+    ArgumentCaptor<SifenNumberVoidingEvent> captor =
+        ArgumentCaptor.forClass(SifenNumberVoidingEvent.class);
+    verify(repository).save(captor.capture());
+    SifenNumberVoidingEvent saved = captor.getValue();
+    assertThat(saved.getInvoiceId()).isNull();
+    assertThat(saved.getRangeFrom()).isEqualTo(500);
+    assertThat(saved.getRangeTo()).isEqualTo(510);
+    assertThat(saved.getStatus()).isEqualTo(SifenNumberVoidingStatus.PENDING);
+    assertThat(saved.getDocumentType()).isEqualTo(SifenDocumentType.FACTURA);
+    assertThat(saved.getDeadlineDate()).isNotNull();
+    assertThat(out.rangeFrom()).isEqualTo(500);
+  }
+
+  @Test
+  void createManual_noActiveStamp_throwsConflict() {
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(TENANT_ID))
+        .thenReturn(Optional.empty());
+    assertThatThrownBy(() -> service.createManual(TENANT_ID, 1, 2, "Motivo válido largo"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("NO_ACTIVE_FISCAL_STAMP");
+  }
+
+  @Test
+  void createManual_invertedRange_throwsBadRequest() {
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(TENANT_ID))
+        .thenReturn(Optional.of(stamp()));
+    assertThatThrownBy(() -> service.createManual(TENANT_ID, 10, 5, "Motivo válido largo"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVALID_NUMBER_RANGE");
+  }
+
+  @Test
+  void createManual_outsideStampRange_throwsBadRequest() {
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(TENANT_ID))
+        .thenReturn(Optional.of(stamp()));
+    assertThatThrownBy(() -> service.createManual(TENANT_ID, 900, 1_500, "Motivo válido largo"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("EMISSION_OUT_OF_RANGE");
+  }
+
+  @Test
+  void createManual_rangeHasIssuedInvoices_throwsConflict() {
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(TENANT_ID))
+        .thenReturn(Optional.of(stamp()));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
+            TENANT_ID, 9L, 500, 510))
+        .thenReturn(true);
+    assertThatThrownBy(() -> service.createManual(TENANT_ID, 500, 510, "Motivo válido largo"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_VOIDING_RANGE_HAS_ISSUED_INVOICES");
+  }
+
+  @Test
+  void createManual_overlapsAnotherNonCancelledEvent_throwsConflict() {
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(TENANT_ID))
+        .thenReturn(Optional.of(stamp()));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
+            TENANT_ID, 9L, 500, 510))
+        .thenReturn(false);
+    SifenNumberVoidingEvent existing = new SifenNumberVoidingEvent();
+    existing.setRangeFrom(505);
+    existing.setRangeTo(520);
+    existing.setStatus(SifenNumberVoidingStatus.PENDING);
+    when(repository.findByTenantIdAndFiscalStamp_Id(TENANT_ID, 9L)).thenReturn(List.of(existing));
+
+    assertThatThrownBy(() -> service.createManual(TENANT_ID, 500, 510, "Motivo válido largo"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SIFEN_VOIDING_RANGE_OVERLAPS");
+  }
+
+  @Test
+  void createManual_ignoresACancelledOverlappingEvent() {
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(TENANT_ID))
+        .thenReturn(Optional.of(stamp()));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
+            TENANT_ID, 9L, 500, 510))
+        .thenReturn(false);
+    SifenNumberVoidingEvent cancelled = new SifenNumberVoidingEvent();
+    cancelled.setRangeFrom(505);
+    cancelled.setRangeTo(520);
+    cancelled.setStatus(SifenNumberVoidingStatus.CANCELLED);
+    when(repository.findByTenantIdAndFiscalStamp_Id(TENANT_ID, 9L)).thenReturn(List.of(cancelled));
+
+    service.createManual(TENANT_ID, 500, 510, "Motivo válido largo");
+
+    verify(repository).save(any());
+  }
+
+  @Test
+  void pendingSummary_countsPendingAndSoonestDeadline_ignoringTerminals() {
+    SifenNumberVoidingEvent p1 = new SifenNumberVoidingEvent();
+    p1.setStatus(SifenNumberVoidingStatus.PENDING);
+    p1.setDeadlineDate(LocalDate.of(2026, 10, 15));
+    SifenNumberVoidingEvent p2 = new SifenNumberVoidingEvent();
+    p2.setStatus(SifenNumberVoidingStatus.PENDING);
+    p2.setDeadlineDate(LocalDate.of(2026, 9, 15));
+    when(repository.findByTenantIdAndStatus(TENANT_ID, SifenNumberVoidingStatus.PENDING))
+        .thenReturn(List.of(p1, p2));
+
+    var summary = service.pendingSummary(TENANT_ID);
+
+    assertThat(summary).isPresent();
+    assertThat(summary.get().count()).isEqualTo(2);
+    assertThat(summary.get().soonestDeadline()).isEqualTo(LocalDate.of(2026, 9, 15));
+  }
+
+  @Test
+  void pendingSummary_emptyWhenNoPending() {
+    when(repository.findByTenantIdAndStatus(TENANT_ID, SifenNumberVoidingStatus.PENDING))
+        .thenReturn(List.of());
+    assertThat(service.pendingSummary(TENANT_ID)).isEmpty();
   }
 
   private static Document newDocument() {

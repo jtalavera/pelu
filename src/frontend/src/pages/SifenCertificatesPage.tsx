@@ -17,7 +17,20 @@ type SifenCertificateRow = {
   status: SifenCertificateStatus;
 };
 
-type SifenNumberVoidingStatus = "PENDING" | "APPROVED" | "APPROVED_WITH_OBSERVATION" | "REJECTED";
+type SifenNumberVoidingStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "APPROVED_WITH_OBSERVATION"
+  | "REJECTED"
+  | "CANCELLED";
+
+function parsePositiveInt(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  if (!Number.isSafeInteger(n) || n < 1) return null;
+  return n;
+}
 
 type SifenNumberVoidingRow = {
   id: number;
@@ -92,6 +105,14 @@ export default function SifenCertificatesPage() {
   const [voidingSubmitting, setVoidingSubmitting] = useState<number | null>(null);
   const [voidingSubmitErrors, setVoidingSubmitErrors] = useState<Record<number, string>>({});
 
+  const [manualFrom, setManualFrom] = useState("");
+  const [manualTo, setManualTo] = useState("");
+  const [manualReason, setManualReason] = useState("");
+  const [manualErrors, setManualErrors] = useState<Record<string, string | null>>({});
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualSuccess, setManualSuccess] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+
   const load = useCallback(async () => {
     if (!isTenantAdmin) {
       setLoading(false);
@@ -144,6 +165,43 @@ export default function SifenCertificatesPage() {
       }));
     } finally {
       setVoidingSubmitting(null);
+    }
+  }
+
+  async function createManualVoiding() {
+    setManualError(null);
+    setManualSuccess(false);
+    const from = parsePositiveInt(manualFrom);
+    const to = parsePositiveInt(manualTo);
+    const reason = manualReason.trim();
+    const errs: Record<string, string | null> = {};
+    if (from == null || to == null) {
+      errs.range = t("femme.sifenNumberVoiding.manualRangeInvalid");
+    } else if (from > to) {
+      errs.range = t("femme.sifenNumberVoiding.manualRangeOrder");
+    }
+    if (reason.length < 5) {
+      errs.reason = t("femme.sifenNumberVoiding.reasonTooShort");
+    }
+    setManualErrors(errs);
+    if (Object.values(errs).some(Boolean)) return;
+
+    setManualSubmitting(true);
+    try {
+      const created = await femmePostJson<SifenNumberVoidingRow>("/api/sifen/number-voiding", {
+        rangeFrom: from,
+        rangeTo: to,
+        reason,
+      });
+      setVoidingRows((prev) => [created, ...(prev ?? [])]);
+      setManualFrom("");
+      setManualTo("");
+      setManualReason("");
+      setManualSuccess(true);
+    } catch (err) {
+      setManualError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setManualSubmitting(false);
     }
   }
 
@@ -465,6 +523,31 @@ export default function SifenCertificatesPage() {
         <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
           {t("femme.sifenNumberVoiding.lead")}
         </Text>
+        {voidingRows && voidingRows.some((r) => r.status === "PENDING")
+          ? (() => {
+              const pending = voidingRows.filter((r) => r.status === "PENDING");
+              const soonest = pending.reduce((a, b) =>
+                a.deadlineDate <= b.deadlineDate ? a : b,
+              );
+              const dl = deadlineLabel(soonest.deadlineDate);
+              return (
+                <Text
+                  variant="small"
+                  data-testid="sifen-number-voiding-summary"
+                  style={{
+                    marginBottom: 12,
+                    fontWeight: 500,
+                    color: dl.overdue ? "var(--color-danger)" : "var(--color-ink-2)",
+                  }}
+                >
+                  {t("femme.sifenNumberVoiding.pendingSummary", {
+                    count: pending.length,
+                    deadline: fmtDate(`${soonest.deadlineDate}T00:00:00`),
+                  })}
+                </Text>
+              );
+            })()
+          : null}
         {voidingLoadError ? (
           <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
             {voidingLoadError}
@@ -582,6 +665,133 @@ export default function SifenCertificatesPage() {
             })}
           </div>
         )}
+
+        {isTenantAdmin ? (
+          <div
+            data-testid="sifen-number-voiding-manual-form"
+            style={{
+              marginTop: 16,
+              paddingTop: 14,
+              borderTop: "var(--border-default)",
+            }}
+          >
+            <Text style={{ fontWeight: 500, marginBottom: 4 }}>
+              {t("femme.sifenNumberVoiding.manualTitle")}
+            </Text>
+            <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 12 }}>
+              {t("femme.sifenNumberVoiding.manualLead")}
+            </Text>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+              <div>
+                <label htmlFor="manual-range-from" style={labelStyle}>
+                  {t("femme.sifenNumberVoiding.manualRangeFromLabel")}
+                </label>
+                <input
+                  id="manual-range-from"
+                  inputMode="numeric"
+                  value={manualFrom}
+                  onChange={(e) => {
+                    setManualFrom(e.target.value);
+                    setManualErrors((p) => ({ ...p, range: null }));
+                  }}
+                  style={{
+                    padding: "8px 11px",
+                    border: manualErrors.range
+                      ? "1px solid var(--color-danger)"
+                      : "1px solid var(--color-stone-md)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: 12,
+                    width: 120,
+                  }}
+                />
+              </div>
+              <div>
+                <label htmlFor="manual-range-to" style={labelStyle}>
+                  {t("femme.sifenNumberVoiding.manualRangeToLabel")}
+                </label>
+                <input
+                  id="manual-range-to"
+                  inputMode="numeric"
+                  value={manualTo}
+                  onChange={(e) => {
+                    setManualTo(e.target.value);
+                    setManualErrors((p) => ({ ...p, range: null }));
+                  }}
+                  style={{
+                    padding: "8px 11px",
+                    border: manualErrors.range
+                      ? "1px solid var(--color-danger)"
+                      : "1px solid var(--color-stone-md)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: 12,
+                    width: 120,
+                  }}
+                />
+              </div>
+            </div>
+            <FieldValidationError id="manual-range-err">
+              {manualErrors.range || null}
+            </FieldValidationError>
+            <div style={{ marginTop: 8 }}>
+              <label htmlFor="manual-reason" style={labelStyle}>
+                {t("femme.sifenNumberVoiding.manualReasonLabel")}
+              </label>
+              <textarea
+                id="manual-reason"
+                value={manualReason}
+                placeholder={t("femme.sifenNumberVoiding.reasonPlaceholder")}
+                onChange={(e) => {
+                  setManualReason(e.target.value);
+                  setManualErrors((p) => ({ ...p, reason: null }));
+                }}
+                aria-invalid={!!manualErrors.reason}
+                aria-describedby={manualErrors.reason ? "manual-reason-err" : undefined}
+                style={{
+                  padding: "8px 11px",
+                  border: manualErrors.reason
+                    ? "1px solid var(--color-danger)"
+                    : "1px solid var(--color-stone-md)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: 12,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  minHeight: 60,
+                }}
+              />
+              <FieldValidationError id="manual-reason-err">
+                {manualErrors.reason || null}
+              </FieldValidationError>
+            </div>
+            {manualError ? (
+              <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
+                {manualError}
+              </Alert>
+            ) : null}
+            {manualSuccess ? (
+              <Text
+                variant="small"
+                data-testid="sifen-number-voiding-manual-success"
+                style={{ color: "var(--color-timbrado-valid-fg)", marginTop: 6 }}
+              >
+                {t("femme.sifenNumberVoiding.manualCreated")}
+              </Text>
+            ) : null}
+            <div style={{ marginTop: 10 }}>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="min-h-11"
+                disabled={manualSubmitting}
+                onClick={() => void createManualVoiding()}
+              >
+                {manualSubmitting
+                  ? t("femme.sifenNumberVoiding.manualSubmitting")
+                  : t("femme.sifenNumberVoiding.manualSubmit")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );

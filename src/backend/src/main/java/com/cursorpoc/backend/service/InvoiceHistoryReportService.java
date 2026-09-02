@@ -82,7 +82,6 @@ public class InvoiceHistoryReportService {
         addCell(table, h, headerFont, Element.ALIGN_LEFT);
       }
 
-      BigDecimal grandTotal = BigDecimal.ZERO;
       for (InvoiceReportRow r : rows) {
         addCell(table, formatInvoiceNumber(r.invoiceNumber()), bodyFont, Element.ALIGN_LEFT);
         addCell(
@@ -94,15 +93,17 @@ public class InvoiceHistoryReportService {
         addCell(table, statusLabel(r.status()), bodyFont, Element.ALIGN_LEFT);
         addCell(table, sifenStatusLabel(r.sifenSubmissionStatus()), bodyFont, Element.ALIGN_LEFT);
         addCell(table, formatMoneyGs(r.total()), bodyFont, Element.ALIGN_RIGHT);
-        if (r.status() == InvoiceStatus.ISSUED && r.total() != null) {
-          grandTotal = grandTotal.add(r.total());
-        }
       }
+      BigDecimal grandTotal = computeGrandTotal(rows);
       document.add(table);
       document.add(new Paragraph(" "));
       document.add(
           new Paragraph(
-              "Comprobantes: " + rows.size() + "     Total emitido: " + formatMoneyGs(grandTotal),
+              "Comprobantes: "
+                  + rows.size()
+                  + "     Total emitido: "
+                  + formatMoneyGs(grandTotal)
+                  + "  (no incluye comprobantes rechazados por SIFEN)",
               boldFont));
 
       document.close();
@@ -180,6 +181,22 @@ public class InvoiceHistoryReportService {
   }
 
   // ── shared labels ─────────────────────────────────────────────────────────
+
+  /**
+   * "Total emitido": only valid facturación counts — an ISSUED comprobante still rejected by SIFEN
+   * (not corrected/resent, not inutilizado) is provisional and excluded.
+   */
+  static BigDecimal computeGrandTotal(List<InvoiceReportRow> rows) {
+    BigDecimal total = BigDecimal.ZERO;
+    for (InvoiceReportRow r : rows) {
+      if (r.status() == InvoiceStatus.ISSUED
+          && r.total() != null
+          && r.sifenSubmissionStatus() != SifenSubmissionStatus.REJECTED) {
+        total = total.add(r.total());
+      }
+    }
+    return total;
+  }
 
   private static String formatInvoiceNumber(int number) {
     return String.format("%07d", number);

@@ -2716,6 +2716,12 @@ function CashSessionTab({
             </span>
           </div>
 
+          {visibleTodayInvoices.some((inv) => inv.sifenSubmissionStatus === "REJECTED") ? (
+            <Text variant="small" className="text-[var(--color-ink-3)]" style={{ marginBottom: 12 }}>
+              {t("femme.billing.session.todayTotalExcludesRejected")}
+            </Text>
+          ) : null}
+
           <div style={{ marginBottom: 12 }}>
             <ListSearchField
               id="billing-session-today-filter"

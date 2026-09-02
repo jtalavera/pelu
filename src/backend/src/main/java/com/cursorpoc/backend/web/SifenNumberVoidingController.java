@@ -3,6 +3,7 @@ package com.cursorpoc.backend.web;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
+import com.cursorpoc.backend.web.dto.SifenNumberVoidingCreateRequest;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingEventResponse;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingSubmitRequest;
 import jakarta.validation.Valid;
@@ -41,6 +42,25 @@ public class SifenNumberVoidingController {
     List<SifenNumberVoidingEventResponse> out = service.listForTenant(tenantId);
     log.info("GET /api/sifen/number-voiding tenantId={} status=200", tenantId);
     return out;
+  }
+
+  @PostMapping
+  public SifenNumberVoidingEventResponse create(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @Valid @RequestBody SifenNumberVoidingCreateRequest request) {
+    requireTenantAdmin(principal);
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/sifen/number-voiding method=POST tenantId={}", tenantId);
+    try {
+      SifenNumberVoidingEventResponse out =
+          service.createManual(tenantId, request.rangeFrom(), request.rangeTo(), request.reason());
+      log.info("POST /api/sifen/number-voiding tenantId={} status=200", tenantId);
+      return out;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/sifen/number-voiding tenantId={} status={}", tenantId, ex.getStatusCode());
+      throw ex;
+    }
   }
 
   @PostMapping("/{id}/submit")

@@ -27,18 +27,21 @@ public class DashboardService {
   private final InvoiceRepository invoiceRepository;
   private final FiscalStampRepository fiscalStampRepository;
   private final BusinessProfileService businessProfileService;
+  private final SifenNumberVoidingService sifenNumberVoidingService;
 
   public DashboardService(
       FemmeTimeProperties timeProperties,
       AppointmentRepository appointmentRepository,
       InvoiceRepository invoiceRepository,
       FiscalStampRepository fiscalStampRepository,
-      BusinessProfileService businessProfileService) {
+      BusinessProfileService businessProfileService,
+      SifenNumberVoidingService sifenNumberVoidingService) {
     this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
     this.invoiceRepository = invoiceRepository;
     this.fiscalStampRepository = fiscalStampRepository;
     this.businessProfileService = businessProfileService;
+    this.sifenNumberVoidingService = sifenNumberVoidingService;
   }
 
   @Transactional(readOnly = true)
@@ -111,6 +114,26 @@ public class DashboardService {
                         "blocking",
                         "fiscalNoActiveStamp",
                         "No active fiscal stamp. Add and activate a stamp in Settings."));
+              }
+            });
+
+    // RT-25: unreported "inutilización de numeración" events have a hard SIFEN deadline.
+    sifenNumberVoidingService
+        .pendingSummary(tenantId)
+        .ifPresent(
+            summary -> {
+              if (summary.soonestDeadline().isBefore(today)) {
+                alerts.add(
+                    new DashboardResponse.FiscalAlert(
+                        "warning",
+                        "sifenVoidingOverdue",
+                        "There are document-number voidings past their SIFEN deadline."));
+              } else {
+                alerts.add(
+                    new DashboardResponse.FiscalAlert(
+                        "warning",
+                        "sifenVoidingPending",
+                        "You have document-number voidings pending submission to SIFEN."));
               }
             });
 

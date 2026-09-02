@@ -52,6 +52,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
   boolean existsByTenant_IdAndFiscalStamp_Id(Long tenantId, Long fiscalStampId);
 
+  boolean existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
+      Long tenantId, Long fiscalStampId, int rangeFrom, int rangeTo);
+
   List<Invoice> findByTenant_IdAndIssuedAtBetweenOrderByIssuedAtDesc(
       Long tenantId, Instant from, Instant to);
 
@@ -123,6 +126,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
       WHERE i.tenant.id = :tenantId
       AND i.status = 'ISSUED'
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
       AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
@@ -153,6 +157,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
       WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
       AND i.issuedAt >= :from AND i.issuedAt < :to
       """)
   BigDecimal sumTotalByTenantAndStatusAndIssuedBetween(
@@ -166,6 +171,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       SELECT COALESCE(SUM(p.amount), 0) FROM InvoicePaymentAllocation p
       JOIN p.invoice i
       WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
       AND i.issuedAt >= :from AND i.issuedAt < :to
       """)
   BigDecimal sumPaymentsByTenantAndStatusAndIssuedBetween(
