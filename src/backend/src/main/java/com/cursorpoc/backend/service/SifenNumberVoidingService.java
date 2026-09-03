@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
+import com.cursorpoc.backend.web.dto.PagedSifenNumberVoidingResponse;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingEventResponse;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,6 +21,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -184,11 +189,32 @@ public class SifenNumberVoidingService {
     return eventDate.plusMonths(1).withDayOfMonth(1).plusDays(14);
   }
 
+  /**
+   * Issue #194: the "Numeración inutilizada" tab paginates this list server-side, like the invoice
+   * history table. The response also carries the tenant-wide pending summary so the "X pendientes"
+   * line stays correct on any page.
+   */
   @Transactional(readOnly = true)
-  public List<SifenNumberVoidingEventResponse> listForTenant(long tenantId) {
-    return repository.findByTenantIdOrderByDeadlineDateAsc(tenantId).stream()
-        .map(this::toResponse)
-        .toList();
+  public PagedSifenNumberVoidingResponse listForTenant(long tenantId, int page, int size) {
+    // Deadline first (soonest on top), then newest first within the same deadline so a just-created
+    // row lands on page 1.
+    Pageable pageable =
+        PageRequest.of(
+            Math.max(0, page),
+            Math.max(1, Math.min(size, 200)),
+            Sort.by(Sort.Order.asc("deadlineDate"), Sort.Order.desc("id")));
+    Page<SifenNumberVoidingEvent> result = repository.findByTenantId(tenantId, pageable);
+    List<SifenNumberVoidingEventResponse> content =
+        result.getContent().stream().map(this::toResponse).toList();
+    Optional<PendingVoidingSummary> summary = pendingSummary(tenantId);
+    return new PagedSifenNumberVoidingResponse(
+        content,
+        result.getNumber(),
+        result.getSize(),
+        result.getTotalElements(),
+        result.getTotalPages(),
+        summary.map(PendingVoidingSummary::count).orElse(0),
+        summary.map(PendingVoidingSummary::soonestDeadline).orElse(null));
   }
 
   /**

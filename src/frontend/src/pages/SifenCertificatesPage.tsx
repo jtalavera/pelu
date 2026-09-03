@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Heading, Spinner, Text } from "@design-system";
+import { Alert, Button, Heading, PageSizeSelect, Pagination, Spinner, Text } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
@@ -43,6 +43,21 @@ type SifenNumberVoidingRow = {
   message: string | null;
   invoiceId: number | null;
 };
+
+// Issue #194: the "Numeración inutilizada" tab paginates this list server-side, like the invoice
+// history table. `pendingCount` / `soonestPendingDeadline` are tenant-wide (across every page) so
+// the summary line stays correct while paging.
+type PagedNumberVoiding = {
+  content: SifenNumberVoidingRow[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  pendingCount: number;
+  soonestPendingDeadline: string | null;
+};
+
+type SifenSettingsTab = "certificate" | "numberVoiding";
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -87,6 +102,25 @@ const tdStyle: React.CSSProperties = {
   verticalAlign: "top",
 };
 
+// Issue #194: tab strip mirroring the Facturación page (see BillingPage).
+const tabBase: React.CSSProperties = {
+  padding: "6px 14px",
+  borderRadius: "var(--radius-md)",
+  fontSize: 12,
+  cursor: "pointer",
+  border: "var(--border-default)",
+  background: "var(--color-white)",
+  color: "var(--color-ink-2)",
+};
+
+const tabActive: React.CSSProperties = {
+  ...tabBase,
+  background: "var(--color-rose-lt)",
+  border: "1px solid var(--color-rose-md)",
+  color: "var(--color-rose-dk)",
+  fontWeight: 500,
+};
+
 function stripDataUrlPrefix(dataUrl: string): string {
   const commaIndex = dataUrl.indexOf(",");
   return commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
@@ -115,6 +149,8 @@ export default function SifenCertificatesPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isTenantAdmin = me?.role === "ADMIN";
 
+  const [activeTab, setActiveTab] = useState<SifenSettingsTab>("certificate");
+
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<SifenCertificateRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -126,8 +162,10 @@ export default function SifenCertificatesPage() {
   const [success, setSuccess] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const [voidingRows, setVoidingRows] = useState<SifenNumberVoidingRow[] | null>(null);
+  const [voiding, setVoiding] = useState<PagedNumberVoiding | null>(null);
   const [voidingLoadError, setVoidingLoadError] = useState<string | null>(null);
+  const [voidingPageNum, setVoidingPageNum] = useState(0);
+  const [voidingPageSize, setVoidingPageSize] = useState(10);
   const [voidingReasons, setVoidingReasons] = useState<Record<number, string>>({});
   const [voidingSubmitting, setVoidingSubmitting] = useState<number | null>(null);
   const [voidingSubmitErrors, setVoidingSubmitErrors] = useState<Record<number, string>>({});
@@ -147,7 +185,6 @@ export default function SifenCertificatesPage() {
     }
     setLoading(true);
     setLoadError(null);
-    setVoidingLoadError(null);
     try {
       const data = await femmeJson<SifenCertificateRow[]>("/api/sifen/certificates");
       setRows(data);
@@ -156,17 +193,36 @@ export default function SifenCertificatesPage() {
     } finally {
       setLoading(false);
     }
-    try {
-      const voiding = await femmeJson<SifenNumberVoidingRow[]>("/api/sifen/number-voiding");
-      setVoidingRows(voiding);
-    } catch {
-      setVoidingLoadError(t("femme.sifenNumberVoiding.loadError"));
-    }
   }, [t, isTenantAdmin]);
+
+  const loadVoiding = useCallback(
+    async (page: number, size: number) => {
+      if (!isTenantAdmin) return;
+      setVoidingLoadError(null);
+      try {
+        const qs = new URLSearchParams({ page: String(page), size: String(size) });
+        const data = await femmeJson<PagedNumberVoiding>(
+          `/api/sifen/number-voiding?${qs.toString()}`,
+        );
+        setVoiding(data);
+        // Stranded past the last page (rows shrank, or a stale page number): snap back.
+        if (data.totalPages > 0 && page > data.totalPages - 1) {
+          setVoidingPageNum(data.totalPages - 1);
+        }
+      } catch {
+        setVoidingLoadError(t("femme.sifenNumberVoiding.loadError"));
+      }
+    },
+    [t, isTenantAdmin],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadVoiding(voidingPageNum, voidingPageSize);
+  }, [loadVoiding, voidingPageNum, voidingPageSize]);
 
   async function submitVoiding(id: number) {
     const reason = (voidingReasons[id] ?? "").trim();
@@ -180,11 +236,10 @@ export default function SifenCertificatesPage() {
     }
     setVoidingSubmitting(id);
     try {
-      const updated = await femmePostJson<SifenNumberVoidingRow>(
-        `/api/sifen/number-voiding/${id}/submit`,
-        { reason },
-      );
-      setVoidingRows((prev) => (prev ? prev.map((r) => (r.id === id ? updated : r)) : prev));
+      await femmePostJson<SifenNumberVoidingRow>(`/api/sifen/number-voiding/${id}/submit`, {
+        reason,
+      });
+      await loadVoiding(voidingPageNum, voidingPageSize);
     } catch (err) {
       setVoidingSubmitErrors((prev) => ({
         ...prev,
@@ -215,16 +270,21 @@ export default function SifenCertificatesPage() {
 
     setManualSubmitting(true);
     try {
-      const created = await femmePostJson<SifenNumberVoidingRow>("/api/sifen/number-voiding", {
+      await femmePostJson<SifenNumberVoidingRow>("/api/sifen/number-voiding", {
         rangeFrom: from,
         rangeTo: to,
         reason,
       });
-      setVoidingRows((prev) => [created, ...(prev ?? [])]);
       setManualFrom("");
       setManualTo("");
       setManualReason("");
       setManualSuccess(true);
+      // The new row sorts by deadline; jump back to the first page so it is visible.
+      if (voidingPageNum === 0) {
+        await loadVoiding(0, voidingPageSize);
+      } else {
+        setVoidingPageNum(0);
+      }
     } catch (err) {
       setManualError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -392,311 +452,188 @@ export default function SifenCertificatesPage() {
     );
   }
 
+  const voidingRows = voiding?.content ?? null;
+  const voidingTotalPages = voiding?.totalPages ?? 0;
+  const voidingTotalElements = voiding?.totalElements ?? 0;
+  const voidingShowingFrom =
+    voidingTotalElements === 0 ? 0 : voidingPageNum * voidingPageSize + 1;
+  const voidingShowingTo = Math.min((voidingPageNum + 1) * voidingPageSize, voidingTotalElements);
+
   return (
     <div>
-      {loadError ? (
-        <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
-          {loadError}
-        </Alert>
-      ) : null}
-      {saveError ? (
-        <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
-          {saveError}
-        </Alert>
-      ) : null}
-      {success ? (
-        <Alert variant="success" title={t("femme.sifenCertificates.savedTitle")}>
-          {t("femme.sifenCertificates.savedBody")}
-        </Alert>
-      ) : null}
+      <div
+        style={{ display: "flex", gap: 4, marginBottom: 14 }}
+        role="tablist"
+        aria-label={t("femme.sifenSettings.tablistLabel")}
+      >
+        {(["certificate", "numberVoiding"] as const).map((tabKey) => (
+          <button
+            key={tabKey}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tabKey}
+            style={activeTab === tabKey ? tabActive : tabBase}
+            onClick={() => setActiveTab(tabKey)}
+          >
+            {t(`femme.sifenSettings.tab.${tabKey}`)}
+          </button>
+        ))}
+      </div>
 
-      <section data-testid="sifen-certificate-upload-section" style={sectionCardStyle}>
-        <Text style={{ fontWeight: 500, marginBottom: 4 }}>
-          {t("femme.sifenCertificates.uploadTitle")}
-        </Text>
-        <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
-          {t("femme.sifenCertificates.uploadLead")}
-        </Text>
-        <form onSubmit={onSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div>
-            <label htmlFor="sifen-cert-file" style={labelStyle}>
-              {t("femme.sifenCertificates.fileLabel")}
-            </label>
-            <input
-              id="sifen-cert-file"
-              ref={fileInputRef}
-              type="file"
-              accept=".p12,application/x-pkcs12"
-              onChange={onFileChange}
-              aria-invalid={!!fieldErrors.file}
-              aria-describedby={fieldErrors.file ? "sifen-cert-file-err" : undefined}
-              style={{ fontSize: 12 }}
-            />
-            <FieldValidationError id="sifen-cert-file-err">{fieldErrors.file}</FieldValidationError>
-          </div>
-          <div>
-            <label htmlFor="sifen-cert-password" style={labelStyle}>
-              {t("femme.sifenCertificates.passwordLabel")}
-            </label>
-            <input
-              id="sifen-cert-password"
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setFieldErrors((prev) => ({ ...prev, password: null }));
-                setSaveError(null);
-                setSuccess(false);
-              }}
-              aria-invalid={!!fieldErrors.password}
-              aria-describedby={fieldErrors.password ? "sifen-cert-password-err" : undefined}
-              style={{
-                padding: "8px 11px",
-                border: fieldErrors.password
-                  ? "1px solid var(--color-danger)"
-                  : "1px solid var(--color-stone-md)",
-                borderRadius: "var(--radius-md)",
-                fontSize: 12,
-                width: "100%",
-                boxSizing: "border-box",
-              }}
-            />
-            <FieldValidationError id="sifen-cert-password-err">
-              {fieldErrors.password}
-            </FieldValidationError>
-          </div>
-          <div>
-            <Button type="submit" variant="primary" className="min-h-11" disabled={uploading}>
-              {uploading
-                ? t("femme.sifenCertificates.uploading")
-                : t("femme.sifenCertificates.upload")}
-            </Button>
-          </div>
-        </form>
-      </section>
+      <div role="tabpanel" hidden={activeTab !== "certificate"}>
+        {loadError ? (
+          <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
+            {loadError}
+          </Alert>
+        ) : null}
+        {saveError ? (
+          <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
+            {saveError}
+          </Alert>
+        ) : null}
+        {success ? (
+          <Alert variant="success" title={t("femme.sifenCertificates.savedTitle")}>
+            {t("femme.sifenCertificates.savedBody")}
+          </Alert>
+        ) : null}
 
-      <section data-testid="sifen-certificate-list-section">
-        <Text style={{ fontWeight: 500, marginBottom: 10 }}>
-          {t("femme.sifenCertificates.listTitle")}
-        </Text>
-        {rows.length === 0 ? (
-          <div
-            data-testid="sifen-certificate-empty-state"
+        <section data-testid="sifen-certificate-upload-section" style={sectionCardStyle}>
+          <Text style={{ fontWeight: 500, marginBottom: 4 }}>
+            {t("femme.sifenCertificates.uploadTitle")}
+          </Text>
+          <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
+            {t("femme.sifenCertificates.uploadLead")}
+          </Text>
+          <form
+            onSubmit={onSubmit}
+            noValidate
             style={{ display: "flex", flexDirection: "column", gap: 12 }}
           >
-            <Text variant="muted">{t("femme.sifenCertificates.empty")}</Text>
             <div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-11"
-                onClick={() => {
-                  fileInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  fileInputRef.current?.focus();
+              <label htmlFor="sifen-cert-file" style={labelStyle}>
+                {t("femme.sifenCertificates.fileLabel")}
+              </label>
+              <input
+                id="sifen-cert-file"
+                ref={fileInputRef}
+                type="file"
+                accept=".p12,application/x-pkcs12"
+                onChange={onFileChange}
+                aria-invalid={!!fieldErrors.file}
+                aria-describedby={fieldErrors.file ? "sifen-cert-file-err" : undefined}
+                style={{ fontSize: 12 }}
+              />
+              <FieldValidationError id="sifen-cert-file-err">{fieldErrors.file}</FieldValidationError>
+            </div>
+            <div>
+              <label htmlFor="sifen-cert-password" style={labelStyle}>
+                {t("femme.sifenCertificates.passwordLabel")}
+              </label>
+              <input
+                id="sifen-cert-password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, password: null }));
+                  setSaveError(null);
+                  setSuccess(false);
                 }}
-              >
-                {t("femme.sifenCertificates.emptyCta")}
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? "sifen-cert-password-err" : undefined}
+                style={{
+                  padding: "8px 11px",
+                  border: fieldErrors.password
+                    ? "1px solid var(--color-danger)"
+                    : "1px solid var(--color-stone-md)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: 12,
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              />
+              <FieldValidationError id="sifen-cert-password-err">
+                {fieldErrors.password}
+              </FieldValidationError>
+            </div>
+            <div>
+              <Button type="submit" variant="primary" className="min-h-11" disabled={uploading}>
+                {uploading
+                  ? t("femme.sifenCertificates.uploading")
+                  : t("femme.sifenCertificates.upload")}
               </Button>
             </div>
-          </div>
-        ) : (
-          <div style={tableWrapStyle}>
-            <div className="overflow-x-auto">
-              <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colUploadedAt")}</th>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colNotBefore")}</th>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colNotAfter")}</th>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colStatus")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} data-testid="sifen-certificate-row">
-                      <td style={tdStyle}>{fmtDate(row.uploadedAt)}</td>
-                      <td style={tdStyle}>{fmtDate(row.notBefore)}</td>
-                      <td style={tdStyle}>{fmtDate(row.notAfter)}</td>
-                      <td style={tdStyle}>{statusBadge(row.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </section>
+          </form>
+        </section>
 
-      <section data-testid="sifen-number-voiding-section" style={sectionCardStyle}>
-        <Text style={{ fontWeight: 500, marginBottom: 4 }}>
-          {t("femme.sifenNumberVoiding.title")}
-        </Text>
-        <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
-          {t("femme.sifenNumberVoiding.lead")}
-        </Text>
-        {voidingRows && voidingRows.some((r) => r.status === "PENDING")
-          ? (() => {
-              const pending = voidingRows.filter((r) => r.status === "PENDING");
-              const soonest = pending.reduce((a, b) =>
-                a.deadlineDate <= b.deadlineDate ? a : b,
-              );
-              const dl = deadlineLabel(soonest.deadlineDate);
-              return (
-                <Text
-                  variant="small"
-                  data-testid="sifen-number-voiding-summary"
-                  style={{
-                    marginBottom: 12,
-                    fontWeight: 500,
-                    color: dl.overdue ? "var(--color-danger)" : "var(--color-ink-2)",
+        <section data-testid="sifen-certificate-list-section">
+          <Text style={{ fontWeight: 500, marginBottom: 10 }}>
+            {t("femme.sifenCertificates.listTitle")}
+          </Text>
+          {rows.length === 0 ? (
+            <div
+              data-testid="sifen-certificate-empty-state"
+              style={{ display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              <Text variant="muted">{t("femme.sifenCertificates.empty")}</Text>
+              <div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="min-h-11"
+                  onClick={() => {
+                    fileInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    fileInputRef.current?.focus();
                   }}
                 >
-                  {t("femme.sifenNumberVoiding.pendingSummary", {
-                    count: pending.length,
-                    deadline: fmtDate(`${soonest.deadlineDate}T00:00:00`),
-                  })}
-                </Text>
-              );
-            })()
-          : null}
-        {voidingLoadError ? (
-          <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
-            {voidingLoadError}
-          </Alert>
-        ) : voidingRows == null ? (
-          <Text variant="small" style={{ color: "var(--color-ink-3)" }}>
-            {t("femme.sifenNumberVoiding.loading")}
-          </Text>
-        ) : voidingRows.length === 0 ? (
-          <Text variant="muted">{t("femme.sifenNumberVoiding.empty")}</Text>
-        ) : (
-          <div style={tableWrapStyle}>
-            <div className="overflow-x-auto">
-              <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("femme.sifenNumberVoiding.colRange")}</th>
-                    <th style={thStyle}>{t("femme.sifenNumberVoiding.colDeadline")}</th>
-                    <th style={thStyle}>{t("femme.sifenNumberVoiding.colStatus")}</th>
-                    <th style={thStyle}>{t("femme.sifenNumberVoiding.colActions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {voidingRows.map((row) => {
-                    const deadline = deadlineLabel(row.deadlineDate);
-                    const submittable = row.status === "PENDING" || row.status === "REJECTED";
-                    return (
-                      <tr key={row.id} data-testid="sifen-number-voiding-row">
-                        <td style={tdStyle}>
-                          {row.documentType} {row.rangeFrom}
-                          {row.rangeTo !== row.rangeFrom ? `–${row.rangeTo}` : ""}
-                        </td>
-                        <td
-                          style={{
-                            ...tdStyle,
-                            ...(deadline.overdue ? { color: "var(--color-danger)" } : {}),
-                          }}
-                        >
-                          {deadline.text}
-                        </td>
-                        <td style={tdStyle}>
-                          <span
-                            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                          >
-                            {voidingStatusBadge(row.status)}
-                            {row.invoiceId != null ? (
-                              <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
-                                {t("femme.sifenNumberVoiding.automaticBadge")}
-                              </span>
-                            ) : null}
-                          </span>
-                        </td>
-                        <td style={{ ...tdStyle, minWidth: 240 }}>
-                          {row.message ? (
-                            <Text
-                              variant="small"
-                              style={{ color: "var(--color-ink-3)", marginBottom: 8 }}
-                            >
-                              {t("femme.sifenNumberVoiding.resultMessage", {
-                                message: row.message,
-                              })}
-                            </Text>
-                          ) : null}
-                          {submittable ? (
-                            <div
-                              style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                            >
-                              <label htmlFor={`voiding-reason-${row.id}`} style={labelStyle}>
-                                {t("femme.sifenNumberVoiding.reasonLabel")}
-                              </label>
-                              <textarea
-                                id={`voiding-reason-${row.id}`}
-                                value={voidingReasons[row.id] ?? row.reason ?? ""}
-                                placeholder={t("femme.sifenNumberVoiding.reasonPlaceholder")}
-                                onChange={(e) =>
-                                  setVoidingReasons((prev) => ({
-                                    ...prev,
-                                    [row.id]: e.target.value,
-                                  }))
-                                }
-                                aria-invalid={!!voidingSubmitErrors[row.id]}
-                                aria-describedby={
-                                  voidingSubmitErrors[row.id]
-                                    ? `voiding-reason-${row.id}-err`
-                                    : undefined
-                                }
-                                style={{
-                                  padding: "8px 11px",
-                                  border: voidingSubmitErrors[row.id]
-                                    ? "1px solid var(--color-danger)"
-                                    : "1px solid var(--color-stone-md)",
-                                  borderRadius: "var(--radius-md)",
-                                  fontSize: 12,
-                                  width: "100%",
-                                  boxSizing: "border-box",
-                                  minHeight: 60,
-                                }}
-                              />
-                              <FieldValidationError id={`voiding-reason-${row.id}-err`}>
-                                {voidingSubmitErrors[row.id] || null}
-                              </FieldValidationError>
-                              <div>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="secondary"
-                                  className="min-h-11"
-                                  disabled={voidingSubmitting === row.id}
-                                  onClick={() => void submitVoiding(row.id)}
-                                >
-                                  {voidingSubmitting === row.id
-                                    ? t("femme.sifenNumberVoiding.submitting")
-                                    : t("femme.sifenNumberVoiding.submit")}
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <Text variant="small" style={{ color: "var(--color-ink-3)" }}>
-                              —
-                            </Text>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                  {t("femme.sifenCertificates.emptyCta")}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div style={tableWrapStyle}>
+              <div className="overflow-x-auto">
+                <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>{t("femme.sifenCertificates.colUploadedAt")}</th>
+                      <th style={thStyle}>{t("femme.sifenCertificates.colNotBefore")}</th>
+                      <th style={thStyle}>{t("femme.sifenCertificates.colNotAfter")}</th>
+                      <th style={thStyle}>{t("femme.sifenCertificates.colStatus")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.id} data-testid="sifen-certificate-row">
+                        <td style={tdStyle}>{fmtDate(row.uploadedAt)}</td>
+                        <td style={tdStyle}>{fmtDate(row.notBefore)}</td>
+                        <td style={tdStyle}>{fmtDate(row.notAfter)}</td>
+                        <td style={tdStyle}>{statusBadge(row.status)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
 
-        {isTenantAdmin ? (
+      <div role="tabpanel" hidden={activeTab !== "numberVoiding"}>
+        <section data-testid="sifen-number-voiding-section" style={sectionCardStyle}>
+          <Text style={{ fontWeight: 500, marginBottom: 4 }}>
+            {t("femme.sifenNumberVoiding.title")}
+          </Text>
+          <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
+            {t("femme.sifenNumberVoiding.lead")}
+          </Text>
+
           <div
             data-testid="sifen-number-voiding-manual-form"
             style={{
-              marginTop: 16,
-              paddingTop: 14,
-              borderTop: "var(--border-default)",
+              marginBottom: 16,
+              paddingBottom: 14,
+              borderBottom: "var(--border-default)",
             }}
           >
             <Text style={{ fontWeight: 500, marginBottom: 4 }}>
@@ -815,8 +752,195 @@ export default function SifenCertificatesPage() {
               </Button>
             </div>
           </div>
-        ) : null}
-      </section>
+
+          {voiding && voiding.pendingCount > 0 && voiding.soonestPendingDeadline
+            ? (() => {
+                const dl = deadlineLabel(voiding.soonestPendingDeadline);
+                return (
+                  <Text
+                    variant="small"
+                    data-testid="sifen-number-voiding-summary"
+                    style={{
+                      marginBottom: 12,
+                      fontWeight: 500,
+                      color: dl.overdue ? "var(--color-danger)" : "var(--color-ink-2)",
+                    }}
+                  >
+                    {t("femme.sifenNumberVoiding.pendingSummary", {
+                      count: voiding.pendingCount,
+                      deadline: fmtDate(`${voiding.soonestPendingDeadline}T00:00:00`),
+                    })}
+                  </Text>
+                );
+              })()
+            : null}
+
+          {voidingLoadError ? (
+            <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
+              {voidingLoadError}
+            </Alert>
+          ) : voidingRows == null ? (
+            <Text variant="small" style={{ color: "var(--color-ink-3)" }}>
+              {t("femme.sifenNumberVoiding.loading")}
+            </Text>
+          ) : voidingRows.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Text variant="muted">{t("femme.sifenNumberVoiding.empty")}</Text>
+              {voidingPageNum > 0 ? (
+                <Pagination
+                  page={voidingPageNum + 1}
+                  pageCount={Math.max(voidingTotalPages, voidingPageNum + 1)}
+                  onPageChange={(p) => setVoidingPageNum(p - 1)}
+                  previousLabel={t("femme.pagination.previous")}
+                  nextLabel={t("femme.pagination.next")}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <div style={tableWrapStyle}>
+              <div className="overflow-x-auto">
+                <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>{t("femme.sifenNumberVoiding.colRange")}</th>
+                      <th style={thStyle}>{t("femme.sifenNumberVoiding.colDeadline")}</th>
+                      <th style={thStyle}>{t("femme.sifenNumberVoiding.colStatus")}</th>
+                      <th style={thStyle}>{t("femme.sifenNumberVoiding.colActions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {voidingRows.map((row) => {
+                      const deadline = deadlineLabel(row.deadlineDate);
+                      const submittable = row.status === "PENDING" || row.status === "REJECTED";
+                      return (
+                        <tr key={row.id} data-testid="sifen-number-voiding-row">
+                          <td style={tdStyle}>
+                            {row.documentType} {row.rangeFrom}
+                            {row.rangeTo !== row.rangeFrom ? `–${row.rangeTo}` : ""}
+                          </td>
+                          <td
+                            style={{
+                              ...tdStyle,
+                              ...(deadline.overdue ? { color: "var(--color-danger)" } : {}),
+                            }}
+                          >
+                            {deadline.text}
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                              {voidingStatusBadge(row.status)}
+                              {row.invoiceId != null ? (
+                                <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
+                                  {t("femme.sifenNumberVoiding.automaticBadge")}
+                                </span>
+                              ) : null}
+                            </span>
+                          </td>
+                          <td style={{ ...tdStyle, minWidth: 240 }}>
+                            {row.message ? (
+                              <Text
+                                variant="small"
+                                style={{ color: "var(--color-ink-3)", marginBottom: 8 }}
+                              >
+                                {t("femme.sifenNumberVoiding.resultMessage", {
+                                  message: row.message,
+                                })}
+                              </Text>
+                            ) : null}
+                            {submittable ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                <label htmlFor={`voiding-reason-${row.id}`} style={labelStyle}>
+                                  {t("femme.sifenNumberVoiding.reasonLabel")}
+                                </label>
+                                <textarea
+                                  id={`voiding-reason-${row.id}`}
+                                  value={voidingReasons[row.id] ?? row.reason ?? ""}
+                                  placeholder={t("femme.sifenNumberVoiding.reasonPlaceholder")}
+                                  onChange={(e) =>
+                                    setVoidingReasons((prev) => ({
+                                      ...prev,
+                                      [row.id]: e.target.value,
+                                    }))
+                                  }
+                                  aria-invalid={!!voidingSubmitErrors[row.id]}
+                                  aria-describedby={
+                                    voidingSubmitErrors[row.id]
+                                      ? `voiding-reason-${row.id}-err`
+                                      : undefined
+                                  }
+                                  style={{
+                                    padding: "8px 11px",
+                                    border: voidingSubmitErrors[row.id]
+                                      ? "1px solid var(--color-danger)"
+                                      : "1px solid var(--color-stone-md)",
+                                    borderRadius: "var(--radius-md)",
+                                    fontSize: 12,
+                                    width: "100%",
+                                    boxSizing: "border-box",
+                                    minHeight: 60,
+                                  }}
+                                />
+                                <FieldValidationError id={`voiding-reason-${row.id}-err`}>
+                                  {voidingSubmitErrors[row.id] || null}
+                                </FieldValidationError>
+                                <div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="secondary"
+                                    className="min-h-11"
+                                    disabled={voidingSubmitting === row.id}
+                                    onClick={() => void submitVoiding(row.id)}
+                                  >
+                                    {voidingSubmitting === row.id
+                                      ? t("femme.sifenNumberVoiding.submitting")
+                                      : t("femme.sifenNumberVoiding.submit")}
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <Text variant="small" style={{ color: "var(--color-ink-3)" }}>
+                                —
+                              </Text>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                style={{ borderTop: "var(--border-default)" }}
+              >
+                <PageSizeSelect
+                  value={voidingPageSize}
+                  onChange={(s) => {
+                    setVoidingPageSize(s);
+                    setVoidingPageNum(0);
+                  }}
+                  label={t("femme.pagination.rowsPerPage")}
+                />
+                <Text variant="small" className="text-[var(--color-ink-3)]">
+                  {t("femme.pagination.showingRange", {
+                    from: voidingShowingFrom,
+                    to: voidingShowingTo,
+                    total: voidingTotalElements,
+                  })}
+                </Text>
+                <Pagination
+                  page={voidingPageNum + 1}
+                  pageCount={voidingTotalPages}
+                  onPageChange={(p) => setVoidingPageNum(p - 1)}
+                  previousLabel={t("femme.pagination.previous")}
+                  nextLabel={t("femme.pagination.next")}
+                />
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

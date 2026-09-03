@@ -173,7 +173,7 @@ class SifenNumberVoidingServiceTest {
   }
 
   @Test
-  void listForTenant_mapsRowsToResponses() {
+  void listForTenant_mapsRowsToResponses_andCarriesThePendingSummary() {
     SifenNumberVoidingEvent event = new SifenNumberVoidingEvent();
     event.setId(5L);
     event.setDocumentType(SifenDocumentType.FACTURA);
@@ -183,15 +183,22 @@ class SifenNumberVoidingServiceTest {
     event.setStatus(SifenNumberVoidingStatus.PENDING);
     event.setDeadlineDate(LocalDate.of(2026, 9, 15));
     event.setCreatedAt(LocalDateTime.of(2026, 8, 13, 10, 0));
-    when(repository.findByTenantIdOrderByDeadlineDateAsc(TENANT_ID)).thenReturn(List.of(event));
+    when(repository.findByTenantId(
+            eq(TENANT_ID), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(event)));
+    when(repository.findByTenantIdAndStatus(TENANT_ID, SifenNumberVoidingStatus.PENDING))
+        .thenReturn(List.of(event));
 
-    List<com.cursorpoc.backend.web.dto.SifenNumberVoidingEventResponse> out =
-        service.listForTenant(TENANT_ID);
+    com.cursorpoc.backend.web.dto.PagedSifenNumberVoidingResponse out =
+        service.listForTenant(TENANT_ID, 0, 10);
 
-    assertThat(out).hasSize(1);
-    assertThat(out.get(0).id()).isEqualTo(5L);
-    assertThat(out.get(0).status()).isEqualTo("PENDING");
-    assertThat(out.get(0).rangeFrom()).isEqualTo(10);
+    assertThat(out.content()).hasSize(1);
+    assertThat(out.content().get(0).id()).isEqualTo(5L);
+    assertThat(out.content().get(0).status()).isEqualTo("PENDING");
+    assertThat(out.content().get(0).rangeFrom()).isEqualTo(10);
+    assertThat(out.totalElements()).isEqualTo(1);
+    assertThat(out.pendingCount()).isEqualTo(1);
+    assertThat(out.soonestPendingDeadline()).isEqualTo(LocalDate.of(2026, 9, 15));
   }
 
   @Test

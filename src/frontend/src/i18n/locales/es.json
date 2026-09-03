@@ -210,6 +210,13 @@
       "tabFeatureFlags": "Funcionalidades",
       "tabSifen": "SIFEN"
     },
+    "sifenSettings": {
+      "tablistLabel": "Secciones de configuración SIFEN",
+      "tab": {
+        "certificate": "Certificado",
+        "numberVoiding": "Numeración inutilizada"
+      }
+    },
     "sifenCertificates": {
       "title": "Certificados SIFEN",
       "forbidden": "Solo el administrador del negocio puede gestionar los certificados de SIFEN.",

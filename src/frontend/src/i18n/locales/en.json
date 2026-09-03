@@ -210,6 +210,13 @@
       "tabFeatureFlags": "Feature flags",
       "tabSifen": "SIFEN"
     },
+    "sifenSettings": {
+      "tablistLabel": "SIFEN settings sections",
+      "tab": {
+        "certificate": "Certificate",
+        "numberVoiding": "Voided numbering"
+      }
+    },
     "sifenCertificates": {
       "title": "SIFEN certificates",
       "forbidden": "Only the business administrator can manage SIFEN certificates.",
