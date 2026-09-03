@@ -2791,14 +2791,13 @@ function CashSessionTab({
                 }}
               >
                 <colgroup>
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "20%" }} />
-                  <col style={{ width: "16%" }} />
-                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "24%" }} />
+                  <col style={{ width: "17%" }} />
+                  <col style={{ width: "13%" }} />
                   <col style={{ width: "11%" }} />
                   <col style={{ width: "11%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "11%" }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -2823,7 +2822,6 @@ function CashSessionTab({
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
                       {t("femme.billing.history.colSifenStatus")}
                     </th>
-                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -2841,6 +2839,20 @@ function CashSessionTab({
                     return (
                       <tr
                         key={inv.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={t("femme.billing.history.openDetail", {
+                          invoiceNumber: inv.invoiceNumberFormatted,
+                        })}
+                        data-testid={`billing-today-row-${inv.id}`}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setSelectedInvoiceId(inv.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedInvoiceId(inv.id);
+                          }
+                        }}
                         onMouseEnter={() => setHoveredRowId(inv.id)}
                         onMouseLeave={() => setHoveredRowId(null)}
                       >
@@ -2875,16 +2887,6 @@ function CashSessionTab({
                         </td>
                         <td style={cell}>
                           <SifenStatusBadge status={inv.sifenSubmissionStatus} />
-                        </td>
-                        <td style={{ ...cell, textAlign: "right" }}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            data-testid={`billing-today-view-${inv.id}`}
-                            onClick={() => setSelectedInvoiceId(inv.id)}
-                          >
-                            {t("femme.billing.history.viewDetail")}
-                          </Button>
                         </td>
                       </tr>
                     );

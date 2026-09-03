@@ -67,12 +67,64 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 4,
 };
 
+// Issue #198: the SIFEN settings page adopts the same visual language as Configuración → Timbrado
+// (FiscalStampSettingsPage) — uppercase micro-label section titles with a bottom rule, and the
+// "add" forms wrapped in a stone card.
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 500,
+  letterSpacing: "0.06em",
+  color: "var(--color-ink-3)",
+  textTransform: "uppercase",
+  margin: "0 0 10px",
+  paddingBottom: 6,
+  borderBottom: "var(--border-default)",
+};
+
 const sectionCardStyle: React.CSSProperties = {
   border: "var(--border-default)",
   borderRadius: "var(--radius-xl)",
   padding: 16,
   marginBottom: 16,
   background: "var(--color-white)",
+};
+
+const createSectionCardStyle: React.CSSProperties = {
+  ...sectionCardStyle,
+  background: "var(--color-stone)",
+};
+
+// Issue #198: same input/button styling as the "Agregar timbrado" form.
+function buildInputStyle(hasError: boolean, focused: boolean): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: "8px 11px",
+    border: hasError ? "1px solid var(--color-danger)" : "1px solid var(--color-stone-md)",
+    borderRadius: "var(--radius-md)",
+    fontSize: 12,
+    color: "var(--color-ink)",
+    background: "var(--color-white)",
+    width: "100%",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+  if (focused) {
+    base.boxShadow = hasError
+      ? "0 0 0 3px var(--color-danger-lt)"
+      : "0 0 0 3px var(--color-rose-lt)";
+    if (!hasError) base.borderColor = "var(--color-rose)";
+  }
+  return base;
+}
+
+const primaryBtn: React.CSSProperties = {
+  background: "var(--color-rose)",
+  color: "var(--color-on-primary)",
+  border: "none",
+  borderRadius: "var(--radius-md)",
+  padding: "8px 16px",
+  fontSize: 12,
+  fontWeight: 500,
+  cursor: "pointer",
 };
 
 // Issue #190: certificates and voided numbers are shown in real tables, styled like the
@@ -174,6 +226,7 @@ export default function SifenCertificatesPage() {
   const [manualTo, setManualTo] = useState("");
   const [manualReason, setManualReason] = useState("");
   const [manualErrors, setManualErrors] = useState<Record<string, string | null>>({});
+  const [focusField, setFocusField] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSuccess, setManualSuccess] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
@@ -497,10 +550,8 @@ export default function SifenCertificatesPage() {
           </Alert>
         ) : null}
 
-        <section data-testid="sifen-certificate-upload-section" style={sectionCardStyle}>
-          <Text style={{ fontWeight: 500, marginBottom: 4 }}>
-            {t("femme.sifenCertificates.uploadTitle")}
-          </Text>
+        <section data-testid="sifen-certificate-upload-section" style={createSectionCardStyle}>
+          <div style={sectionTitleStyle}>{t("femme.sifenCertificates.uploadTitle")}</div>
           <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
             {t("femme.sifenCertificates.uploadLead")}
           </Text>
@@ -541,16 +592,12 @@ export default function SifenCertificatesPage() {
                 }}
                 aria-invalid={!!fieldErrors.password}
                 aria-describedby={fieldErrors.password ? "sifen-cert-password-err" : undefined}
-                style={{
-                  padding: "8px 11px",
-                  border: fieldErrors.password
-                    ? "1px solid var(--color-danger)"
-                    : "1px solid var(--color-stone-md)",
-                  borderRadius: "var(--radius-md)",
-                  fontSize: 12,
-                  width: "100%",
-                  boxSizing: "border-box",
-                }}
+                onFocus={() => setFocusField("sifen-cert-password")}
+                onBlur={() => setFocusField(null)}
+                style={buildInputStyle(
+                  !!fieldErrors.password,
+                  focusField === "sifen-cert-password",
+                )}
               />
               <FieldValidationError id="sifen-cert-password-err">
                 {fieldErrors.password}
@@ -567,9 +614,7 @@ export default function SifenCertificatesPage() {
         </section>
 
         <section data-testid="sifen-certificate-list-section">
-          <Text style={{ fontWeight: 500, marginBottom: 10 }}>
-            {t("femme.sifenCertificates.listTitle")}
-          </Text>
+          <div style={sectionTitleStyle}>{t("femme.sifenCertificates.listTitle")}</div>
           {rows.length === 0 ? (
             <div
               data-testid="sifen-certificate-empty-state"
@@ -620,22 +665,21 @@ export default function SifenCertificatesPage() {
       </div>
 
       <div role="tabpanel" hidden={activeTab !== "numberVoiding"}>
-        <section data-testid="sifen-number-voiding-section" style={sectionCardStyle}>
-          <div
+        <section data-testid="sifen-number-voiding-section">
+          <form
             data-testid="sifen-number-voiding-manual-form"
-            style={{
-              marginBottom: 16,
-              paddingBottom: 14,
-              borderBottom: "var(--border-default)",
+            onSubmit={(e) => {
+              e.preventDefault();
+              void createManualVoiding();
             }}
+            noValidate
+            style={createSectionCardStyle}
           >
-            <Text style={{ fontWeight: 500, marginBottom: 4 }}>
-              {t("femme.sifenNumberVoiding.manualTitle")}
-            </Text>
+            <div style={sectionTitleStyle}>{t("femme.sifenNumberVoiding.manualTitle")}</div>
             <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 12 }}>
               {t("femme.sifenNumberVoiding.manualLead")}
             </Text>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <label htmlFor="manual-range-from" style={labelStyle}>
                   {t("femme.sifenNumberVoiding.manualRangeFromLabel")}
@@ -648,15 +692,11 @@ export default function SifenCertificatesPage() {
                     setManualFrom(e.target.value);
                     setManualErrors((p) => ({ ...p, range: null }));
                   }}
-                  style={{
-                    padding: "8px 11px",
-                    border: manualErrors.range
-                      ? "1px solid var(--color-danger)"
-                      : "1px solid var(--color-stone-md)",
-                    borderRadius: "var(--radius-md)",
-                    fontSize: 12,
-                    width: 120,
-                  }}
+                  aria-invalid={!!manualErrors.range}
+                  aria-describedby={manualErrors.range ? "manual-range-err" : undefined}
+                  onFocus={() => setFocusField("manual-range-from")}
+                  onBlur={() => setFocusField(null)}
+                  style={buildInputStyle(!!manualErrors.range, focusField === "manual-range-from")}
                 />
               </div>
               <div>
@@ -671,84 +711,70 @@ export default function SifenCertificatesPage() {
                     setManualTo(e.target.value);
                     setManualErrors((p) => ({ ...p, range: null }));
                   }}
-                  style={{
-                    padding: "8px 11px",
-                    border: manualErrors.range
-                      ? "1px solid var(--color-danger)"
-                      : "1px solid var(--color-stone-md)",
-                    borderRadius: "var(--radius-md)",
-                    fontSize: 12,
-                    width: 120,
-                  }}
+                  aria-invalid={!!manualErrors.range}
+                  aria-describedby={manualErrors.range ? "manual-range-err" : undefined}
+                  onFocus={() => setFocusField("manual-range-to")}
+                  onBlur={() => setFocusField(null)}
+                  style={buildInputStyle(!!manualErrors.range, focusField === "manual-range-to")}
                 />
               </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <FieldValidationError id="manual-range-err">
+                  {manualErrors.range || null}
+                </FieldValidationError>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label htmlFor="manual-reason" style={labelStyle}>
+                  {t("femme.sifenNumberVoiding.manualReasonLabel")}
+                </label>
+                <textarea
+                  id="manual-reason"
+                  value={manualReason}
+                  placeholder={t("femme.sifenNumberVoiding.reasonPlaceholder")}
+                  onChange={(e) => {
+                    setManualReason(e.target.value);
+                    setManualErrors((p) => ({ ...p, reason: null }));
+                  }}
+                  aria-invalid={!!manualErrors.reason}
+                  aria-describedby={manualErrors.reason ? "manual-reason-err" : undefined}
+                  onFocus={() => setFocusField("manual-reason")}
+                  onBlur={() => setFocusField(null)}
+                  style={{
+                    ...buildInputStyle(!!manualErrors.reason, focusField === "manual-reason"),
+                    minHeight: 60,
+                  }}
+                />
+                <FieldValidationError id="manual-reason-err">
+                  {manualErrors.reason || null}
+                </FieldValidationError>
+              </div>
+              {manualError ? (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
+                    {manualError}
+                  </Alert>
+                </div>
+              ) : null}
+              {manualSuccess ? (
+                <Text
+                  variant="small"
+                  data-testid="sifen-number-voiding-manual-success"
+                  style={{ gridColumn: "1 / -1", color: "var(--color-timbrado-valid-fg)" }}
+                >
+                  {t("femme.sifenNumberVoiding.manualCreated")}
+                </Text>
+              ) : null}
+              <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
+                <button type="submit" style={primaryBtn} disabled={manualSubmitting}>
+                  {manualSubmitting
+                    ? t("femme.sifenNumberVoiding.manualSubmitting")
+                    : t("femme.sifenNumberVoiding.manualSubmit")}
+                </button>
+              </div>
             </div>
-            <FieldValidationError id="manual-range-err">
-              {manualErrors.range || null}
-            </FieldValidationError>
-            <div style={{ marginTop: 8 }}>
-              <label htmlFor="manual-reason" style={labelStyle}>
-                {t("femme.sifenNumberVoiding.manualReasonLabel")}
-              </label>
-              <textarea
-                id="manual-reason"
-                value={manualReason}
-                placeholder={t("femme.sifenNumberVoiding.reasonPlaceholder")}
-                onChange={(e) => {
-                  setManualReason(e.target.value);
-                  setManualErrors((p) => ({ ...p, reason: null }));
-                }}
-                aria-invalid={!!manualErrors.reason}
-                aria-describedby={manualErrors.reason ? "manual-reason-err" : undefined}
-                style={{
-                  padding: "8px 11px",
-                  border: manualErrors.reason
-                    ? "1px solid var(--color-danger)"
-                    : "1px solid var(--color-stone-md)",
-                  borderRadius: "var(--radius-md)",
-                  fontSize: 12,
-                  width: "100%",
-                  boxSizing: "border-box",
-                  minHeight: 60,
-                }}
-              />
-              <FieldValidationError id="manual-reason-err">
-                {manualErrors.reason || null}
-              </FieldValidationError>
-            </div>
-            {manualError ? (
-              <Alert variant="destructive" title={t("femme.sifenCertificates.errorTitle")}>
-                {manualError}
-              </Alert>
-            ) : null}
-            {manualSuccess ? (
-              <Text
-                variant="small"
-                data-testid="sifen-number-voiding-manual-success"
-                style={{ color: "var(--color-timbrado-valid-fg)", marginTop: 6 }}
-              >
-                {t("femme.sifenNumberVoiding.manualCreated")}
-              </Text>
-            ) : null}
-            <div style={{ marginTop: 10 }}>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="min-h-11"
-                disabled={manualSubmitting}
-                onClick={() => void createManualVoiding()}
-              >
-                {manualSubmitting
-                  ? t("femme.sifenNumberVoiding.manualSubmitting")
-                  : t("femme.sifenNumberVoiding.manualSubmit")}
-              </Button>
-            </div>
-          </div>
+          </form>
 
-          <Text style={{ fontWeight: 500, marginBottom: 4 }}>
-            {t("femme.sifenNumberVoiding.title")}
-          </Text>
+          <div style={sectionTitleStyle}>{t("femme.sifenNumberVoiding.title")}</div>
           <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
             {t("femme.sifenNumberVoiding.lead")}
           </Text>

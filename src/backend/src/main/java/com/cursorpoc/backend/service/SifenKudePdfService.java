@@ -395,7 +395,7 @@ public class SifenKudePdfService {
     // populated example on page 198 only shows RUC/Timbrado/Fecha de Inicio de Vigencia.
     addLine(
         timbradoInfo,
-        "Fecha de Inicio de Vigencia",
+        "Inicio de Vigencia",
         DATE_FORMAT.format(header.stampValidFrom()),
         labelFont,
         bodyFont);
