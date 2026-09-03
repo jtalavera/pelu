@@ -110,6 +110,7 @@ public class InvoiceService {
   private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
   private final SifenNumberVoidingService sifenNumberVoidingService;
   private final SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
+  private final DuplicateClientEmailPolicy duplicateClientEmailPolicy;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -123,7 +124,8 @@ public class InvoiceService {
       FemmeTimeProperties timeProperties,
       SifenInvoiceHeaderService sifenInvoiceHeaderService,
       SifenNumberVoidingService sifenNumberVoidingService,
-      SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence) {
+      SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence,
+      DuplicateClientEmailPolicy duplicateClientEmailPolicy) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -136,6 +138,7 @@ public class InvoiceService {
     this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
     this.sifenSubmissionPersistence = sifenSubmissionPersistence;
+    this.duplicateClientEmailPolicy = duplicateClientEmailPolicy;
   }
 
   @Transactional
@@ -411,7 +414,8 @@ public class InvoiceService {
     if (client != null
         && recipientEmail != null
         && !recipientEmail.equalsIgnoreCase(client.getEmail())) {
-      if (clientRepository.findByTenantIdAndEmail(tenantId, recipientEmail).isPresent()) {
+      if (duplicateClientEmailPolicy.isUniquenessEnforced(tenantId)
+          && clientRepository.findByTenantIdAndEmail(tenantId, recipientEmail).isPresent()) {
         throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
       }
       client.setEmail(recipientEmail);
