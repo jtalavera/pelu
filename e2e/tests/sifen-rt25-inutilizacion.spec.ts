@@ -27,6 +27,13 @@ import { loginAsDemo } from "../fixtures/auth";
 
 type IssuedInvoice = { id: number };
 
+// Issue #194: Configuración → SIFEN is now split into "Certificate" and "Voided numbering" tabs
+// (same tab pattern as the Facturación page). Everything RT-25 touches lives under the second one.
+async function openVoidingTab(page: Page) {
+  await page.goto("/app/settings/sifen");
+  await page.getByRole("tab", { name: "Voided numbering" }).click();
+}
+
 async function createInvoice(request: APIRequestContext, token: string): Promise<IssuedInvoice> {
   const seed = await seedCategoryServiceProfessional(request, token);
   const client = await seedClient(request, token, `E2E RT25 ${Date.now()}-${Math.random()}`);
@@ -60,7 +67,7 @@ async function rejectAndGetVoidingRow(page: Page, request: APIRequestContext, to
   );
 
   await loginAsDemo(page);
-  await page.goto("/app/settings/sifen");
+  await openVoidingTab(page);
   await expect(page.getByTestId("sifen-number-voiding-section")).toBeVisible();
   return page
     .getByTestId("sifen-number-voiding-row")
@@ -135,7 +142,7 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     const to = from + 4;
 
     await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
+    await openVoidingTab(page);
     const form = page.getByTestId("sifen-number-voiding-manual-form");
     await expect(form).toBeVisible();
     await form.locator("#manual-range-from").fill(String(from));
@@ -168,7 +175,7 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     );
 
     await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
+    await openVoidingTab(page);
     const form = page.getByTestId("sifen-number-voiding-manual-form");
     await form.locator("#manual-range-from").fill(String(detail.invoiceNumber));
     await form.locator("#manual-range-to").fill(String(detail.invoiceNumber));
@@ -203,7 +210,7 @@ test.describe("RT-25 · Inutilización de numeración", () => {
 
     // UI: the SIFEN settings section shows the summary line.
     await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
+    await openVoidingTab(page);
     await expect(page.getByTestId("sifen-number-voiding-summary")).toBeVisible();
     await expect(page.getByTestId("sifen-number-voiding-summary")).toContainText("pending submission");
   });

@@ -133,13 +133,12 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     const cdcBefore = before.sifenControlNumber;
     expect(cdcBefore).toBeTruthy();
 
-    // The pending inutilización was recorded by simulate-sifen-rejection.
-    const voidingBefore = await apiGetJson<{ invoiceId: number; status: string }[]>(
-      request,
-      token,
-      "/api/sifen/number-voiding",
-    );
-    expect(voidingBefore.find((v) => v.invoiceId === invoiceId)?.status).toBe("PENDING");
+    // The pending inutilización was recorded by simulate-sifen-rejection. Issue #194: the list
+    // endpoint is now paged ({ content, page, size, … }).
+    const voidingBefore = await apiGetJson<{
+      content: { invoiceId: number; status: string }[];
+    }>(request, token, "/api/sifen/number-voiding?size=200");
+    expect(voidingBefore.content.find((v) => v.invoiceId === invoiceId)?.status).toBe("PENDING");
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
@@ -183,12 +182,10 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     expect(Number(after.lines[0].unitPrice)).toBe(60000);
 
     // The pending inutilización was called off.
-    const voidingAfter = await apiGetJson<{ invoiceId: number; status: string }[]>(
-      request,
-      token,
-      "/api/sifen/number-voiding",
-    );
-    expect(voidingAfter.find((v) => v.invoiceId === invoiceId)?.status).toBe("CANCELLED");
+    const voidingAfter = await apiGetJson<{
+      content: { invoiceId: number; status: string }[];
+    }>(request, token, "/api/sifen/number-voiding?size=200");
+    expect(voidingAfter.content.find((v) => v.invoiceId === invoiceId)?.status).toBe("CANCELLED");
 
     // And the corrected document can now be approved.
     await post(request, `/api/admin/sifen-test-support/invoices/${invoiceId}/prepare-as-approved`);

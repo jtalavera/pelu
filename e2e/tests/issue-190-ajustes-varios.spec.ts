@@ -201,7 +201,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/settings/sifen");
 
-    // Certificates table.
+    // Certificates table (issue #194: now under the "Certificate" tab, the default one).
     const certSection = page.getByTestId("sifen-certificate-list-section");
     await expect(certSection.getByRole("table")).toBeVisible();
     await expect(certSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
@@ -209,6 +209,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
 
     // Voided-numbers table, with a per-row action column + the submit button in the row.
+    await page.getByRole("tab", { name: "Voided numbering" }).click();
     const voidingSection = page.getByTestId("sifen-number-voiding-section");
     await expect(voidingSection.getByRole("table")).toBeVisible();
     await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();
