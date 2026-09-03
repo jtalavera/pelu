@@ -621,13 +621,6 @@ export default function SifenCertificatesPage() {
 
       <div role="tabpanel" hidden={activeTab !== "numberVoiding"}>
         <section data-testid="sifen-number-voiding-section" style={sectionCardStyle}>
-          <Text style={{ fontWeight: 500, marginBottom: 4 }}>
-            {t("femme.sifenNumberVoiding.title")}
-          </Text>
-          <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
-            {t("femme.sifenNumberVoiding.lead")}
-          </Text>
-
           <div
             data-testid="sifen-number-voiding-manual-form"
             style={{
@@ -752,6 +745,13 @@ export default function SifenCertificatesPage() {
               </Button>
             </div>
           </div>
+
+          <Text style={{ fontWeight: 500, marginBottom: 4 }}>
+            {t("femme.sifenNumberVoiding.title")}
+          </Text>
+          <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
+            {t("femme.sifenNumberVoiding.lead")}
+          </Text>
 
           {voiding && voiding.pendingCount > 0 && voiding.soonestPendingDeadline
             ? (() => {
