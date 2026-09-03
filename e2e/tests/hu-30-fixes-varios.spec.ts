@@ -117,7 +117,7 @@ test.describe("HU-30 · Fixes varios", () => {
     );
 
     // Open the Ver modal for this invoice via the history tab
-    await page.locator("tbody tr[role=\"button\"]").first().click();
+    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
 
     // Wait for modal
     const modal = page.getByRole("dialog");
@@ -223,7 +223,7 @@ test.describe("HU-30 · Fixes varios", () => {
     });
 
     // Clicking a row opens the detail modal (issue #163: the standalone "View" button was removed)
-    await page.locator("tbody tr[role=\"button\"]").first().click();
+    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press("Escape");
   });

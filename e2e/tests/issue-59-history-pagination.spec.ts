@@ -112,8 +112,11 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     // Wait for invoice row to appear. History rows are <tr role="button"> (issue #163
     // AC10), so their a11y role is "button", not "row" — match by tag instead.
-    const tbody = page.locator("table tbody");
-    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 30_000 });
+    // Billing keeps all tabs mounted (hidden via the `hidden` attribute) and the Caja
+    // tab's today-invoices rows now also carry role="button" (issue #198), so restrict
+    // to the visible (History) tab's rows.
+    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // PageSizeSelect should be present. Billing keeps all tabs mounted (hidden via
     // the `hidden` attribute), so scope to the visible (History) tab's control.
@@ -139,8 +142,8 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    const tbody = page.locator("table tbody");
-    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 30_000 });
+    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Range text should be present (e.g. "1–1 of 1" or "1–10 of N"). Scope to the
     // visible tab since billing keeps all tabs mounted (hidden via `hidden`).
@@ -164,11 +167,11 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    const tbody = page.locator("table tbody");
-    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 30_000 });
+    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Should show exactly 10 rows on first page
-    await expect(tbody.locator('tr[role="button"]')).toHaveCount(10);
+    await expect(historyRows).toHaveCount(10);
 
     // Next button should be enabled
     const nextBtn = page.getByRole("button", { name: /next/i });
@@ -176,7 +179,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     // Click next to get page 2
     await nextBtn.click();
-    await expect(tbody.locator('tr[role="button"]').first()).toBeVisible({ timeout: 15_000 });
+    await expect(historyRows.first()).toBeVisible({ timeout: 15_000 });
 
     // Prev button should now be enabled
     const prevBtn = page.getByRole("button", { name: /previous/i });
@@ -210,17 +213,21 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
     // Wait for session card to show (session is already open)
     await expect(page.getByText(/cash register is open/i)).toBeVisible({ timeout: 30_000 });
 
-    // Wait for today's invoice table
-    const tbody = page.locator("table tbody").last();
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    // Wait for a row in the "Comprobantes de hoy" table (Caja is the default tab).
+    await expect(
+      page.locator('[data-testid^="billing-today-row-"]').first(),
+    ).toBeVisible({ timeout: 30_000 });
 
-    // PageSizeSelect should be present
-    const select = page.getByLabel("Rows per page:").last();
+    // PageSizeSelect should be present. Billing keeps every tab mounted (hidden via the
+    // `hidden` attribute), so scope to the visible (Caja) tab's control.
+    const select = page.getByLabel("Rows per page:").filter({ visible: true });
     await expect(select).toBeVisible();
     await expect(select).toHaveValue("10");
 
     // Showing range text (e.g. "1–1 of 1")
-    await expect(page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/)).toBeVisible();
+    await expect(
+      page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/).filter({ visible: true }).first(),
+    ).toBeVisible();
   });
 
   test("#59-T3-2 · Total del día reflects all ISSUED invoices (issuedTotal from backend)", async ({

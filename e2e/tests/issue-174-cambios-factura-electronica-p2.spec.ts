@@ -379,7 +379,10 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(clientName);
-    const row = page.locator('tbody tr[role="button"]').filter({ hasText: clientName });
+    const row = page
+      .locator('tbody tr[role="button"]')
+      .filter({ hasText: clientName })
+      .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 

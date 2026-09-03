@@ -51,7 +51,10 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     // Clicking the History tab (no page reload) refreshes the list on its own — see HU-16 · 4.
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const histRow = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    const histRow = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
     // Total in history table must use dot separator, no decimals
     await expect(histRow).toContainText("5.000");
@@ -113,7 +116,10 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.getByRole("tab", { name: "Cash Register" }).click();
     await page.getByRole("tab", { name: "History" }).click();
 
-    const histRow = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    const histRow = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
   });
 
@@ -151,7 +157,10 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const histRow = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    const histRow = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
 
     // No standalone "View" button exists anymore — only the row itself is interactive.
@@ -215,7 +224,9 @@ test.describe("HU-16 · Historial de comprobantes", () => {
 
     // Plain invoice: no correction button, "Sent to SIFEN" cell shows "—".
     await page.locator("#invoice-history-text-filter").fill(plainClient.fullName);
-    const plainRow = page.locator('tbody tr[role="button"]', { hasText: plainClient.fullName }).first();
+    const plainRow = page
+      .locator('tbody tr[role="button"]', { hasText: plainClient.fullName })
+      .filter({ visible: true });
     await expect(plainRow).toBeVisible({ timeout: 30_000 });
     await expect(plainRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(0);
     // cells: [number, date, sentToSifen, client, total, status, sifenStatus, action]
@@ -225,7 +236,9 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     // Rejected invoice: correction button lives in the LAST cell, and the ESTADO SIFEN cell
     // (nth 6) holds only the badge, not the button. "Sent to SIFEN" cell shows a real date.
     await page.locator("#invoice-history-text-filter").fill(rejectedName);
-    const rejRow = page.locator('tbody tr[role="button"]', { hasText: rejectedName }).first();
+    const rejRow = page
+      .locator('tbody tr[role="button"]', { hasText: rejectedName })
+      .filter({ visible: true });
     await expect(rejRow).toBeVisible({ timeout: 30_000 });
     const resendButton = rejRow.locator('[data-testid^="invoice-row-correct-resend-"]');
     await expect(resendButton).toBeVisible();

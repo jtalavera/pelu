@@ -91,7 +91,7 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await page.locator("#invoice-history-text-filter").fill(rejectedName);
     const rejectedRow = page
       .locator('tbody tr[role="button"]', { hasText: rejectedName })
-      .first();
+      .filter({ visible: true });
     await expect(rejectedRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toBeVisible();
     await rejectedRow.click();
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toBeVisible();
@@ -100,7 +100,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
 
     // Approved → no accordion, no row button.
     await page.locator("#invoice-history-text-filter").fill(okName);
-    const okRow = page.locator('tbody tr[role="button"]', { hasText: okName }).first();
+    const okRow = page
+      .locator('tbody tr[role="button"]', { hasText: okName })
+      .filter({ visible: true });
     await expect(okRow).toBeVisible({ timeout: 30_000 });
     await expect(okRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(0);
     await okRow.click();
@@ -146,7 +148,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await page.locator("#invoice-history-text-filter").fill(clientName);
 
     // Row button (visible only for REJECTED).
-    const row = page.locator('tbody tr[role="button"]', { hasText: clientName }).first();
+    const row = page
+      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
 
@@ -259,7 +263,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(clientName);
-    const row = page.locator('tbody tr[role="button"]', { hasText: clientName }).first();
+    const row = page
+      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -297,7 +303,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await page.reload();
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(clientName);
-    const row2 = page.locator('tbody tr[role="button"]', { hasText: clientName }).first();
+    const row2 = page
+      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .filter({ visible: true });
     await expect(row2).toBeVisible({ timeout: 30_000 });
     await expect(
       row2.locator('[data-testid^="invoice-row-correct-resend-"]'),

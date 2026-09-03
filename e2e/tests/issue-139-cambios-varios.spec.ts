@@ -219,7 +219,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     // history table narrows to just this invoice. Scope to the interactive history rows so the
     // (hidden) Cash Register today's-invoices table can't be picked up.
     await page.locator("#invoice-history-text-filter").fill(editedName);
-    const row = page.locator('tbody tr[role="button"]').first();
+    const row = page.locator('tbody tr[role="button"]').filter({ visible: true }).first();
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(client.fullName);
     await expect(row).not.toContainText(editedName);

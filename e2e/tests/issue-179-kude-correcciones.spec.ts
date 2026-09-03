@@ -151,7 +151,7 @@ test.describe("Issue #179 · KuDE — correcciones de layout", () => {
     for (const field of [
       "RUC",
       "Timbrado N",
-      "Fecha de Inicio de Vigencia",
+      "Inicio de Vigencia",
       "Factura electrónica",
       "Fecha y hora de Emisión",
       "Condición de Venta",
