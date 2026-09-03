@@ -140,6 +140,21 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=false)");
       }
 
+      // SIFEN testing: same idempotent seed as SIFEN_ELECTRONIC_INVOICING above — V51's Flyway
+      // INSERT only reaches dev/prod (Flyway is disabled for the `e2e` profile), so this runner is
+      // what makes the flag exist for Playwright. Keep the description in sync with V51.
+      if (featureFlagRepository.findByFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL").isEmpty()) {
+        FeatureFlag allowDuplicateClientEmail = new FeatureFlag();
+        allowDuplicateClientEmail.setFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL");
+        allowDuplicateClientEmail.setEnabled(false);
+        allowDuplicateClientEmail.setDescription(
+            "Test environment only: skip the per-tenant client-email uniqueness check so SIFEN"
+                + " electronic-invoicing testing can reuse the same recipient email. Ignored unless"
+                + " the SIFEN environment is TEST.");
+        featureFlagRepository.save(allowDuplicateClientEmail);
+        log.info("Seeded feature flag ALLOW_DUPLICATE_CLIENT_EMAIL (enabled=false)");
+      }
+
       if (appUserRepository.count() == 0) {
         Tenant tenant =
             tenantRepository

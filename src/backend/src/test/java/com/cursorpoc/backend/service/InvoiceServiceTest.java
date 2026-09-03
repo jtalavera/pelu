@@ -3,7 +3,11 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -63,6 +67,7 @@ class InvoiceServiceTest {
   @Mock private SifenInvoiceHeaderService sifenInvoiceHeaderService;
   @Mock private SifenNumberVoidingService sifenNumberVoidingService;
   @Mock private SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
+  @Mock private DuplicateClientEmailPolicy duplicateClientEmailPolicy;
 
   // SIFEN HU-10: a real instance (via @Spy, not @Mock) so @InjectMocks' constructor injection
   // resolves this new dependency to something whose zoneId() actually works, same as every other
@@ -97,6 +102,10 @@ class InvoiceServiceTest {
     activeStamp.setRangeTo(9999999);
     activeStamp.setNextEmissionNumber(1);
     activeStamp.setActive(true);
+
+    // Default: the client-email uniqueness check is enforced. The recipient-email write-back test
+    // overrides this to false to exercise the ALLOW_DUPLICATE_CLIENT_EMAIL path.
+    lenient().when(duplicateClientEmailPolicy.isUniquenessEnforced(anyLong())).thenReturn(true);
   }
 
   @Test
@@ -999,6 +1008,56 @@ class InvoiceServiceTest {
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
     assertThat(result.clientId()).isEqualTo(7L);
+  }
+
+  /**
+   * Issue #173's recipient-email write-back normally rejects an email already used by another
+   * client with CLIENT_EMAIL_DUPLICATE. With ALLOW_DUPLICATE_CLIENT_EMAIL lifting uniqueness (SIFEN
+   * test environment), the write-back proceeds without the lookup.
+   */
+  @Test
+  void issueInvoice_recipientEmailWriteBack_allowsDuplicate_whenPolicyLiftsUniqueness() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+    when(duplicateClientEmailPolicy.isUniquenessEnforced(1L)).thenReturn(false);
+
+    Client client = new Client();
+    client.setId(7L);
+    client.setTenant(tenant);
+    client.setFullName("Ana García");
+    client.setEmail("old@b.com");
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            7L,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            null,
+            null,
+            "taken@b.com",
+            null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.clientId()).isEqualTo(7L);
+    assertThat(client.getEmail()).isEqualTo("taken@b.com");
+    verify(clientRepository, never()).findByTenantIdAndEmail(anyLong(), any());
   }
 
   /**

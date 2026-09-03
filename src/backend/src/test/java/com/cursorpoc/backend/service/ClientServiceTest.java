@@ -3,8 +3,10 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +35,7 @@ class ClientServiceTest {
 
   @Mock private ClientRepository clientRepository;
   @Mock private TenantRepository tenantRepository;
+  @Mock private DuplicateClientEmailPolicy duplicateClientEmailPolicy;
 
   @InjectMocks private ClientService clientService;
 
@@ -46,6 +49,10 @@ class ClientServiceTest {
     tenant.setName("Demo");
 
     lenient().when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    // Default: the client-email uniqueness check is enforced (production behaviour). Individual
+    // tests override this to false to exercise the ALLOW_DUPLICATE_CLIENT_EMAIL path.
+    lenient().when(duplicateClientEmailPolicy.isUniquenessEnforced(anyLong())).thenReturn(true);
 
     lenient()
         .when(clientRepository.save(any(Client.class)))
@@ -323,6 +330,38 @@ class ClientServiceTest {
             ex ->
                 assertThat(((ResponseStatusException) ex).getStatusCode())
                     .isEqualTo(HttpStatus.CONFLICT));
+  }
+
+  @Test
+  void create_duplicateEmail_allowed_whenPolicyLiftsUniqueness_succeeds() {
+    // SIFEN test environment + ALLOW_DUPLICATE_CLIENT_EMAIL on → the email lookup is skipped.
+    when(duplicateClientEmailPolicy.isUniquenessEnforced(1L)).thenReturn(false);
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response = clientService.create(1L, new ClientRequest("New", null, "a@b.com", null));
+
+    assertThat(response.email()).isEqualTo("a@b.com");
+    verify(clientRepository).save(any(Client.class));
+    verify(clientRepository, never()).findByTenantIdAndEmail(anyLong(), any());
+  }
+
+  @Test
+  void update_duplicateEmail_allowed_whenPolicyLiftsUniqueness_succeeds() {
+    Client c = buildClient(5L, "Ana", null, "old@b.com", null);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c));
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+    when(duplicateClientEmailPolicy.isUniquenessEnforced(1L)).thenReturn(false);
+
+    var response =
+        clientService.update(1L, 5L, new ClientRequest("Ana", null, "taken@b.com", null));
+
+    assertThat(response.email()).isEqualTo("taken@b.com");
+    verify(clientRepository, never()).findByTenantIdAndEmail(anyLong(), any());
   }
 
   @Test
