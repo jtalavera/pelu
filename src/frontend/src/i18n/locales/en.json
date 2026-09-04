@@ -259,6 +259,7 @@
       "statusApproved": "Approved",
       "statusApprovedWithObservation": "Approved with observation",
       "statusRejected": "Rejected",
+      "statusCancelled": "Cancelled",
       "automaticBadge": "Automatic",
       "deadlineDaysLeft_one": "{{count}} day left",
       "deadlineDaysLeft_other": "{{count}} days left",

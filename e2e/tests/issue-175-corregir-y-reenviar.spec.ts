@@ -191,6 +191,21 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     }>(request, token, "/api/sifen/number-voiding?size=200");
     expect(voidingAfter.content.find((v) => v.invoiceId === invoiceId)?.status).toBe("CANCELLED");
 
+    // UI: the "Voided document numbers" tab reflects it as Cancelled — not the misleading "Pending
+    // submission" the badge used to fall back to for any non-approved/rejected status — with no
+    // deadline countdown and no "Submit to SIFEN" action, since there is nothing left to report.
+    await page.goto("/app/settings/sifen");
+    await page.getByRole("tab", { name: "Voided numbering" }).click();
+    const voidingRow = page
+      .getByTestId("sifen-number-voiding-row")
+      .filter({ hasText: `FACTURA ${before.invoiceNumber}` });
+    await expect(voidingRow).toBeVisible();
+    await expect(voidingRow.getByText("Cancelled", { exact: true })).toBeVisible();
+    await expect(voidingRow.getByText("Pending submission")).toHaveCount(0);
+    // Range | Deadline | Status | Action — deadline is the 2nd column, no countdown once cancelled.
+    await expect(voidingRow.locator("td").nth(1)).toHaveText("—");
+    await expect(voidingRow.getByRole("button", { name: "Submit to SIFEN" })).toHaveCount(0);
+
     // And the corrected document can now be approved.
     await post(request, `/api/admin/sifen-test-support/invoices/${invoiceId}/prepare-as-approved`);
     const approved = await apiGetJson<InvoiceView>(request, token, `/api/invoices/${invoiceId}`);
