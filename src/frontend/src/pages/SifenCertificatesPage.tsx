@@ -390,6 +390,13 @@ export default function SifenCertificatesPage() {
         </span>
       );
     }
+    if (status === "CANCELLED") {
+      return (
+        <span style={{ ...badgeStyle, background: "var(--color-stone)", color: "var(--color-ink-3)" }}>
+          {t("femme.sifenNumberVoiding.statusCancelled")}
+        </span>
+      );
+    }
     return (
       <span style={{ ...badgeStyle, background: "var(--color-stone)", color: "var(--color-ink-2)" }}>
         {t("femme.sifenNumberVoiding.statusPending")}
@@ -836,6 +843,7 @@ export default function SifenCertificatesPage() {
                   </thead>
                   <tbody>
                     {voidingRows.map((row) => {
+                      const cancelled = row.status === "CANCELLED";
                       const deadline = deadlineLabel(row.deadlineDate);
                       const submittable = row.status === "PENDING" || row.status === "REJECTED";
                       return (
@@ -847,10 +855,12 @@ export default function SifenCertificatesPage() {
                           <td
                             style={{
                               ...tdStyle,
-                              ...(deadline.overdue ? { color: "var(--color-danger)" } : {}),
+                              ...(!cancelled && deadline.overdue
+                                ? { color: "var(--color-danger)" }
+                                : {}),
                             }}
                           >
-                            {deadline.text}
+                            {cancelled ? "—" : deadline.text}
                           </td>
                           <td style={tdStyle}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
