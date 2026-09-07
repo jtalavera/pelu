@@ -220,7 +220,7 @@ test.describe("HU-40 · Suspender / reactivar un tenant", () => {
       await page.getByLabel("Email").fill(DEMO_EMAIL);
       await page.getByLabel("Password").fill(DEMO_PASSWORD);
       await page.getByRole("button", { name: "Sign in" }).click();
-      await expect(page.getByText("Invalid email or password.")).toBeVisible();
+      await expect(page.getByText("Email or password is incorrect.")).toBeVisible();
       await expect(page).toHaveURL(/\/login/);
 
       // AC-4: reactivating restores access immediately — no new credentials, no waiting.

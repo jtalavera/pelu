@@ -78,6 +78,9 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag GUIDED_TOUR (enabled=true)");
       }
 
+      // SIFEN testing: same idempotent seed as GUIDED_TOUR above — V51's Flyway INSERT only reaches
+      // dev/prod (Flyway is disabled for the `e2e` profile), so this runner is what makes the flag
+      // exist for Playwright. Keep the description in sync with V51.
       if (featureFlagRepository.findByFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL").isEmpty()) {
         FeatureFlag allowDuplicateClientEmail = new FeatureFlag();
         allowDuplicateClientEmail.setFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL");
@@ -89,7 +92,6 @@ public class FemmeDataInitializer {
         featureFlagRepository.save(allowDuplicateClientEmail);
         log.info("Seeded feature flag ALLOW_DUPLICATE_CLIENT_EMAIL (enabled=false)");
       }
-
 
       // SIFEN HU-22 (Fase 5): same idempotent seed as GUIDED_TOUR above. V28's Flyway INSERT only
       // reaches dev/prod (Flyway is disabled for the `e2e` profile, JPA create-drop only builds the
@@ -116,23 +118,6 @@ public class FemmeDataInitializer {
         defaultTier.setDescription("Tier por defecto.");
         tierRepository.save(defaultTier);
         log.info("Seeded default tier 'Estándar'");
-      // SIFEN testing: same idempotent seed as SIFEN_ELECTRONIC_INVOICING above — V51's Flyway
-      // INSERT only reaches dev/prod (Flyway is disabled for the `e2e` profile), so this runner is
-      // what makes the flag exist for Playwright. Keep the description in sync with V51.
-
-      if (appUserRepository.count() == 0) {
-        Tenant tenant =
-            tenantRepository
-                .findFirstByOrderByIdAsc()
-                .orElseGet(
-                    () -> {
-                      Tenant t = new Tenant();
-                      t.setName("Demo salon");
-                      tenantRepository.save(t);
-                      return t;
-                    });
-        seedDemoTenantData(tenant);
-      }
 
         Tier premiumTier = new Tier();
         premiumTier.setName("Premium");

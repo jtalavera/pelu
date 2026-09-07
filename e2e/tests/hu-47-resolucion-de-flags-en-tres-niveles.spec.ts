@@ -292,7 +292,10 @@ test.describe("HU-47 · Resolución de flags en 3 niveles", () => {
     await page.getByRole("button", { name: new RegExp(tenant.name) }).click();
     await expect(page.getByText(SIFEN_FLAG)).toBeVisible();
 
-    await page.getByRole("link", { name: new RegExp(`Edit in ${tier.name}`) }).click();
+    // The redesigned page repeats the identical "Edit in {tier} →" deep-link on every flag row
+    // (one per seeded flag) whenever the selected tenant has a tier — they all point at the same
+    // tier edit modal, so any one of them exercises this AC.
+    await page.getByRole("link", { name: new RegExp(`Edit in ${tier.name}`) }).first().click();
 
     await expect(page).toHaveURL(/\/platform\/tiers/);
     await expect(page.getByRole("dialog", { name: "Edit tier" })).toBeVisible();
