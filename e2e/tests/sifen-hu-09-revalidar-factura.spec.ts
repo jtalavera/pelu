@@ -64,7 +64,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName });
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }

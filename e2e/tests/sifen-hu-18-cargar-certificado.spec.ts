@@ -47,12 +47,12 @@ test.describe("SIFEN HU-18 · Cargar un nuevo certificado y clave para un tenant
     expect(body.toLowerCase()).not.toContain("privatekey");
 
     await expect(page.getByText("The certificate was uploaded and stored securely.")).toBeVisible();
-    const rows = page.getByTestId("sifen-certificate-row");
-    await expect(rows.first()).toBeVisible();
-    const firstRow = rows.first();
-    await expect(firstRow.getByText("Upload date")).toBeVisible();
-    await expect(firstRow.getByText("Issued on")).toBeVisible();
-    await expect(firstRow.getByText("Expires on")).toBeVisible();
+    // Issue #190 — certificates are shown in a table; the field labels are column headers.
+    const listSection = page.getByTestId("sifen-certificate-list-section");
+    await expect(listSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
+    await expect(listSection.getByRole("columnheader", { name: "Issued on" })).toBeVisible();
+    await expect(listSection.getByRole("columnheader", { name: "Expires on" })).toBeVisible();
+    await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
   });
 
   test("HU-18 · 3 cargar un segundo certificado no elimina ni afecta los anteriores (AC-10)", async ({

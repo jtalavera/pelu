@@ -88,6 +88,7 @@ public class SifenInvoiceCancellationService {
   private final SifenDocumentSigningService signingService;
   private final SifenEventClient eventClient;
   private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceNotificationService notificationService;
 
   /**
    * Real bug, confirmed live: {@code cancel()}'s calls to {@code prepareForCancellation}/{@code
@@ -111,12 +112,14 @@ public class SifenInvoiceCancellationService {
       SifenCancellationEventXmlService eventXmlService,
       SifenDocumentSigningService signingService,
       SifenEventClient eventClient,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceNotificationService notificationService) {
     this.invoiceRepository = invoiceRepository;
     this.eventXmlService = eventXmlService;
     this.signingService = signingService;
     this.eventClient = eventClient;
     this.timeProperties = timeProperties;
+    this.notificationService = notificationService;
   }
 
   private SifenInvoiceCancellationService self() {
@@ -153,6 +156,13 @@ public class SifenInvoiceCancellationService {
 
     SifenSubmissionResult result = response.get();
     self().recordCancellationResult(tenantId, invoiceId, result);
+    if (result.status() == SifenSubmissionStatus.APPROVED
+        || result.status() == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+      // Issue #173 item 3: SIFEN approved the cancellation — email the client a notice with the
+      // cancelled document's data + KuDE. Best-effort; never throws, so the cancellation still
+      // succeeds even if the notice can't be sent.
+      notificationService.emailCancellationNotice(tenantId, invoiceId);
+    }
     log.info(
         "SIFEN cancellation resolved tenantId={} invoiceId={} controlNumber={} status={}",
         tenantId,

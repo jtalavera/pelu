@@ -7,8 +7,16 @@ import { apiBaseUrl } from "./baseUrl";
  * downloads a corrupt file, throws the raw error body on failure so callers can forward it to
  * translateApiError().
  */
-export async function downloadSifenKude(invoiceId: number): Promise<void> {
-  const url = `${apiBaseUrl()}/api/invoices/${invoiceId}/sifen/kude`;
+export async function downloadSifenKude(
+  invoiceId: number,
+  options: { sample?: boolean } = {},
+): Promise<void> {
+  // `sample=true` asks for the "production-style" preview KuDE — real razón social instead of the
+  // test-environment legend, downloaded as MUESTRA-…pdf. Only accepted while SIFEN runs against the
+  // test environment (see SifenKudeController).
+  const url = `${apiBaseUrl()}/api/invoices/${invoiceId}/sifen/kude${
+    options.sample ? "?sample=true" : ""
+  }`;
   const res = await fetch(url, { headers: authHeaders({ json: false }) });
   if (!res.ok) {
     throw new Error(await res.text());
@@ -35,6 +43,21 @@ export async function sendSifenKudeByEmail(invoiceId: number, email: string): Pr
   if (!res.ok) {
     throw new Error(await res.text());
   }
+}
+
+/**
+ * The SIFEN environment this deployment connects to. The invoice detail screen uses it to only
+ * offer the "production-style" sample KuDE while running against SIFEN's test environment.
+ */
+export async function fetchSifenEnvironment(): Promise<"TEST" | "PRODUCTION"> {
+  const res = await fetch(`${apiBaseUrl()}/api/sifen/environment`, {
+    headers: authHeaders({ json: false }),
+  });
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+  const body = (await res.json()) as { environment?: string };
+  return body.environment === "PRODUCTION" ? "PRODUCTION" : "TEST";
 }
 
 function filenameFromContentDisposition(contentDisposition: string | null): string | null {

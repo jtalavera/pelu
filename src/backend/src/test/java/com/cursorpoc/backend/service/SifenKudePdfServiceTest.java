@@ -134,7 +134,7 @@ class SifenKudePdfServiceTest {
             List.of(line),
             totals,
             1,
-            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000))));
+            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000), null, null)));
 
     org.mockito.Mockito.lenient()
         .when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
@@ -233,6 +233,96 @@ class SifenKudePdfServiceTest {
     assertThat(pageSize.getHeight()).isEqualTo(com.lowagie.text.PageSize.A4.getHeight());
   }
 
+  /**
+   * KuDE de muestra "estilo producción": {@code buildProductionSampleKudePdf} pide el header con
+   * {@code forceRealIssuerName=true} (razón social real) y el archivo se descarga con prefijo
+   * {@code MUESTRA-}. El KuDE normal, en cambio, sigue mostrando la leyenda del ambiente de prueba.
+   */
+  @Test
+  void buildProductionSampleKudePdf_showsRealBusinessName_andMuestraFilename() throws Exception {
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID))
+        .thenReturn(
+            headerWithBusinessName(SifenInvoiceHeaderService.TEST_ENVIRONMENT_ISSUER_NAME_LEGEND));
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID, true))
+        .thenReturn(headerWithBusinessName("Lucía Zymanscki de Onieva Vit S.A."));
+
+    // The real KuDE still shows the mandatory test-environment legend in place of the razón social.
+    var normal = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    assertThat(extractPage(normal.bytes(), 1)).contains("DE generado en ambiente de prueba");
+
+    // The production-style sample shows the real razón social, no test legend, MUESTRA- filename —
+    // and the same fantasy-name-first header layout as a real KuDE.
+    var sample = service.buildProductionSampleKudePdf(TENANT_ID, INVOICE_ID);
+    String samplePage1 = extractPage(sample.bytes(), 1);
+    assertThat(samplePage1).contains("Lucía Zymanscki de Onieva Vit S.A.");
+    assertThat(samplePage1).doesNotContain("ambiente de prueba");
+    assertThat(samplePage1.indexOf("Fantasía Demo"))
+        .isLessThan(samplePage1.indexOf("Lucía Zymanscki de Onieva Vit S.A."));
+    assertThat(sample.filename()).isEqualTo("MUESTRA-KUDE-20260728-1137152-0000007.pdf");
+  }
+
+  /**
+   * KuDE header layout: when the emisor has a nombre de fantasía it goes on top (prominent) and the
+   * razón social below; with no fantasy name the razón social keeps the prominent slot.
+   */
+  @Test
+  void buildKudePdf_withFantasyName_rendersFantasyNameBeforeRazonSocial() throws Exception {
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID))
+        .thenReturn(headerWith("Lucía Zymanscki de Onieva Vit S.A.", "Peluquería Lucía"));
+
+    String page1 = extractPage(service.buildKudePdf(TENANT_ID, INVOICE_ID).bytes(), 1);
+
+    assertThat(page1).contains("Peluquería Lucía");
+    assertThat(page1).contains("Lucía Zymanscki de Onieva Vit S.A.");
+    assertThat(page1.indexOf("Peluquería Lucía"))
+        .isLessThan(page1.indexOf("Lucía Zymanscki de Onieva Vit S.A."));
+  }
+
+  @Test
+  void buildKudePdf_withoutFantasyName_rendersRazonSocial() throws Exception {
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID))
+        .thenReturn(headerWith("Lucía Zymanscki de Onieva Vit S.A.", null));
+
+    String page1 = extractPage(service.buildKudePdf(TENANT_ID, INVOICE_ID).bytes(), 1);
+
+    assertThat(page1).contains("Lucía Zymanscki de Onieva Vit S.A.");
+  }
+
+  private SifenInvoiceHeader headerWithBusinessName(String businessName) {
+    return headerWith(businessName, header.issuer().fantasyName());
+  }
+
+  private SifenInvoiceHeader headerWith(String businessName, String fantasyName) {
+    SifenIssuerData i = header.issuer();
+    SifenIssuerData issuerWithName =
+        new SifenIssuerData(
+            i.ruc(),
+            i.rucCheckDigit(),
+            businessName,
+            fantasyName,
+            i.address(),
+            i.taxpayerType(),
+            i.economicActivityCode(),
+            i.economicActivityDescription(),
+            i.phone(),
+            i.contactEmail(),
+            i.departmentCode(),
+            i.departmentName(),
+            i.cityCode(),
+            i.cityName());
+    return new SifenInvoiceHeader(
+        header.controlNumber(),
+        header.issueDateTime(),
+        header.stampNumber(),
+        header.establishment(),
+        header.expeditionPoint(),
+        header.stampValidFrom(),
+        header.stampValidUntil(),
+        issuerWithName,
+        header.receiver(),
+        header.testEnvironmentNotice());
+  }
+
   /** AC-03/AC-04: business, timbrado and sale data appear on page 1. */
   @Test
   void buildKudePdf_page1_containsBusinessTimbradoAndSaleData() throws Exception {
@@ -259,8 +349,12 @@ class SifenKudePdfServiceTest {
     assertThat(page1).contains("Operación presencial");
   }
 
+  /**
+   * Issue #173 item 4: a "Sin nominar" comprobante still prints the receiver rows, with "Sin
+   * nombre" / "X" placeholders instead of omitting the block entirely.
+   */
   @Test
-  void buildKudePdf_omitsClientBlockForAnonymousReceiver() throws Exception {
+  void buildKudePdf_showsSinNombrePlaceholdersForAnonymousReceiver() throws Exception {
     SifenReceiverData anonymous =
         new SifenReceiverData(null, null, null, null, null, null, null, null, null);
     SifenInvoiceHeader anonymousHeader =
@@ -280,7 +374,36 @@ class SifenKudePdfServiceTest {
     var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
     String allText = extractPage(result.bytes(), 1);
 
-    assertThat(allText).doesNotContain("Operación presencial");
+    assertThat(allText).contains("Sin nombre");
+    assertThat(allText).contains("Operación presencial");
+  }
+
+  /**
+   * Issue #173 item 6: the always-empty "Cuotas" / "Tipo de Cambio" rows are gone; "Moneda"
+   * (spanning the whole grid now) and the still-relevant sale rows remain.
+   */
+  @Test
+  void buildKudePdf_saleBlock_dropsCuotasAndTipoDeCambio() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).doesNotContain("Cuotas");
+    assertThat(page1).doesNotContain("Tipo de Cambio");
+    assertThat(page1).contains("Moneda");
+    assertThat(page1).contains("Guaraníes");
+    assertThat(page1).contains("Fecha y hora de Emisión");
+    assertThat(page1).contains("Condición de Venta");
+  }
+
+  /** Issue #173 item 3: the cancellation-notice email can build a KuDE for a CANCELLED invoice. */
+  @Test
+  void buildCancelledKudePdf_allowsCancelledInvoice() throws Exception {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
+
+    var result = service.buildCancelledKudePdf(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.bytes()).isNotEmpty();
+    assertThat(new PdfReader(result.bytes()).getNumberOfPages()).isGreaterThanOrEqualTo(1);
   }
 
   /** AC-08: the CDC is grouped visually in eleven 4-character blocks. */
@@ -357,6 +480,17 @@ class SifenKudePdfServiceTest {
     assertThat(page1).contains("Página 1 / ");
   }
 
+  /** AC-12 regression: the displayed total must match the PDF's real page count. */
+  @Test
+  void buildKudePdf_pageNumberingTotalMatchesActualPageCount() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    PdfReader reader = new PdfReader(result.bytes());
+    int actualPages = reader.getNumberOfPages();
+    String page1 = extractPage(result.bytes(), 1);
+
+    assertThat(page1).contains("Página 1 / " + actualPages);
+  }
+
   /** AC-11: an optional logo and free message are the only allowed extras. */
   @Test
   void buildKudePdf_showsOptionalFreeMessageWhenConfigured() throws Exception {
@@ -414,6 +548,206 @@ class SifenKudePdfServiceTest {
     assertThat(xObjects).isNotNull();
     assertThat(xObjects.getKeys()).isNotEmpty();
     assertThat(SifenKudePdfService.QR_WIDTH_POINTS).isGreaterThanOrEqualTo(25f * (72f / 25.4f));
+  }
+
+  /**
+   * Issue #179: for a fully IVA-exonerada operation (e.g. a "Tarjeta Diplomática de exoneración
+   * fiscal" receiver — every line rate 0, iAfecIVA=2), Subtotal / Total de la operación / Total en
+   * Guaraníes must be printed under the items table's "Exentas" column, not "10%".
+   */
+  @Test
+  void buildKudePdf_exoneradoTotals_landUnderExentasColumnNotTenPercent() throws Exception {
+    when(detailService.buildDetail(TENANT_ID, INVOICE_ID)).thenReturn(exoneradoDetail());
+
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    var positions = textPositions(result.bytes(), 1);
+
+    float fivePctX = xOf(positions, "5%");
+    for (String row : List.of("Subtotal", "Total de la operación", "Total en Guaraníes")) {
+      assertThat(valueXInSameRow(positions, row))
+          .as("'%s' amount must sit left of the 5%%/10%% columns (i.e. under Exentas)", row)
+          .isLessThan(fivePctX);
+    }
+  }
+
+  /** Contrast / regression: a plain 10% invoice keeps its totals under the "10%" column. */
+  @Test
+  void buildKudePdf_gravado10Totals_landUnderTenPercentColumn() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    var positions = textPositions(result.bytes(), 1);
+
+    float fivePctX = xOf(positions, "5%");
+    assertThat(valueXInSameRow(positions, "Subtotal")).isGreaterThan(fivePctX);
+  }
+
+  /**
+   * Issue #179: the logo box is bigger, taken from the address column — but the timbrado column
+   * (RUC / Timbrado / vigencia / doc type + number) keeps its exact 5/19 share so it doesn't move.
+   */
+  @Test
+  void headerLayout_enlargesLogo_shrinksAddress_keepsTimbradoColumn() {
+    float[] w = SifenKudePdfService.HEADER_COLUMN_WEIGHTS;
+    float sum = w[0] + w[1] + w[2];
+
+    assertThat(w[0]).as("logo column wider").isGreaterThan(2f);
+    assertThat(w[1]).as("address column narrower").isLessThan(12f);
+    // Was 5 / (2 + 12 + 5) = 5/19; must be unchanged.
+    assertThat(w[2] / sum).isEqualTo(5f / 19f, org.assertj.core.data.Offset.offset(0.0001f));
+    assertThat(SifenKudePdfService.LOGO_CELL_HEIGHT).isGreaterThan(70f);
+  }
+
+  /**
+   * Issue #179: the sale / receiver grid is packed two-up (colspan 3 + 3) instead of one full-width
+   * field per row — "Moneda" and "Tipo de Operación" now share a row, as do "Fecha y hora de
+   * Emisión" and "Condición de Venta".
+   */
+  @Test
+  void buildKudePdf_saleGrid_isPackedTwoUp() throws Exception {
+    var result = service.buildKudePdf(TENANT_ID, INVOICE_ID);
+    var positions = textPositions(result.bytes(), 1);
+
+    assertThat(xOf(positions, "Fecha y hora de Emisión: "))
+        .isLessThan(xOf(positions, "Condición de Venta: "));
+    assertThat(yOf(positions, "Fecha y hora de Emisión: "))
+        .isEqualTo(
+            yOf(positions, "Condición de Venta: "), org.assertj.core.data.Offset.offset(0.5f));
+
+    assertThat(xOf(positions, "Moneda: ")).isLessThan(xOf(positions, "Tipo de Operación: "));
+    assertThat(yOf(positions, "Moneda: "))
+        .isEqualTo(
+            yOf(positions, "Tipo de Operación: "), org.assertj.core.data.Offset.offset(0.5f));
+  }
+
+  private SifenInvoiceDetail exoneradoDetail() {
+    SifenInvoiceLine line =
+        new SifenInvoiceLine(
+            "SVC-1",
+            "Corte de cabello",
+            null,
+            1,
+            "77",
+            BigDecimal.valueOf(50_000),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(50_000),
+            SifenTaxAffectation.EXONERADO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
+    SifenInvoiceTotals totals =
+        new SifenInvoiceTotals(
+            BigDecimal.ZERO, // exemptSubtotal
+            BigDecimal.valueOf(50_000), // exoneratedSubtotal
+            BigDecimal.ZERO, // taxedSubtotal5
+            BigDecimal.ZERO, // taxedSubtotal10
+            BigDecimal.valueOf(50_000), // grossTotal
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(50_000), // netTotal
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
+    return new SifenInvoiceDetail(
+        List.of(line),
+        totals,
+        1,
+        List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(50_000), null, null)));
+  }
+
+  private record TextAt(String text, float x, float y) {}
+
+  /** Parses page {@code page}'s content stream for every {@code (text)Tj} and its x/y (from Tm). */
+  private static java.util.List<TextAt> textPositions(byte[] pdf, int page) throws Exception {
+    PdfReader reader = new PdfReader(pdf);
+    String s =
+        new String(reader.getPageContent(page), java.nio.charset.StandardCharsets.ISO_8859_1);
+    java.util.regex.Matcher m =
+        java.util.regex.Pattern.compile(
+                "1 0 0 1 ([-\\d.]+) ([-\\d.]+) Tm\\s*/F\\d+ [\\d.]+ Tf\\s*\\(((?:[^()\\\\]|\\\\.)*)\\)Tj")
+            .matcher(s);
+    java.util.List<TextAt> out = new java.util.ArrayList<>();
+    while (m.find()) {
+      out.add(
+          new TextAt(
+              unescapePdfString(m.group(3)),
+              Float.parseFloat(m.group(1)),
+              Float.parseFloat(m.group(2))));
+    }
+    return out;
+  }
+
+  /** Decodes PDF string escapes so accented labels (é, í, ó, ñ — WinAnsi) compare literally. */
+  private static String unescapePdfString(String raw) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < raw.length(); i++) {
+      char c = raw.charAt(i);
+      if (c != '\\') {
+        sb.append(c);
+        continue;
+      }
+      char n = raw.charAt(++i);
+      if (n >= '0' && n <= '7') {
+        int end = Math.min(i + 3, raw.length());
+        int j = i;
+        while (j < end && raw.charAt(j) >= '0' && raw.charAt(j) <= '7') {
+          j++;
+        }
+        sb.append((char) Integer.parseInt(raw.substring(i, j), 8));
+        i = j - 1;
+      } else {
+        sb.append(
+            switch (n) {
+              case 'n' -> '\n';
+              case 'r' -> '\r';
+              case 't' -> '\t';
+              default -> n;
+            });
+      }
+    }
+    return sb.toString();
+  }
+
+  private static float xOf(java.util.List<TextAt> positions, String exactText) {
+    return find(positions, exactText).x();
+  }
+
+  private static float yOf(java.util.List<TextAt> positions, String exactText) {
+    return find(positions, exactText).y();
+  }
+
+  private static TextAt find(java.util.List<TextAt> positions, String exactText) {
+    return positions.stream()
+        .filter(t -> t.text().equals(exactText))
+        .findFirst()
+        .orElseThrow(
+            () ->
+                new AssertionError(
+                    "text not found in PDF: '"
+                        + exactText
+                        + "' — have: "
+                        + positions.stream().map(TextAt::text).toList()));
+  }
+
+  /** x of the numeric cell on the same row (same y ± 1pt) as the given label. */
+  private static float valueXInSameRow(java.util.List<TextAt> positions, String label) {
+    float labelY =
+        positions.stream()
+            .filter(t -> t.text().equals(label))
+            .map(TextAt::y)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("label not found in PDF: " + label));
+    return positions.stream()
+        .filter(t -> Math.abs(t.y() - labelY) < 1f && t.text().matches("[\\d.]+"))
+        .map(TextAt::x)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no numeric value on row: " + label));
   }
 
   private static String extractPage(byte[] pdf, int page) throws Exception {

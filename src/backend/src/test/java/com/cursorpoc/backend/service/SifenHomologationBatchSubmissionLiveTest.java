@@ -729,7 +729,10 @@ class SifenHomologationBatchSubmissionLiveTest {
 
     SifenInvoiceDetail detail =
         new SifenInvoiceDetail(
-            List.of(line), totals, 1, List.of(new SifenPaymentDetail(1, LINE_UNIT_PRICE)));
+            List.of(line),
+            totals,
+            1,
+            List.of(new SifenPaymentDetail(1, LINE_UNIT_PRICE, null, null)));
 
     SifenDocumentTypeExtras extras = buildExtras(type, referencedCdc);
 

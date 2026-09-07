@@ -195,6 +195,15 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       const paymentSelects = document.querySelectorAll("select");
       expect(paymentSelects.length).toBeGreaterThan(0);
     });
+
+    it("renders the recipient email field below the client search (issue #173)", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      const emailInput = document.querySelector("#billing-client-email");
+      expect(emailInput).not.toBeNull();
+      expect(emailInput?.getAttribute("type")).toBe("email");
+    });
   });
 
   describe("Invoice history (HU-16)", () => {

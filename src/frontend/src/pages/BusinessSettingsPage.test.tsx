@@ -62,6 +62,8 @@ describe("BusinessSettingsPage", () => {
       taxpayerType: null,
       economicActivityCode: null,
       economicActivityDescription: null,
+      sifenFantasyName: null,
+      kudeFooterMessage: null,
       sifenDepartmentCode: null,
       sifenDepartmentName: null,
       sifenCityCode: null,
@@ -77,13 +79,13 @@ describe("BusinessSettingsPage", () => {
   it("loads business settings and shows the save action", async () => {
     renderPage();
     expect(await screen.findByRole("button", { name: /save/i })).toBeTruthy();
-    expect(screen.getByLabelText(/business name/i)).toBeTruthy();
+    expect(screen.getByLabelText(/business or legal name/i)).toBeTruthy();
   });
 
   it("shows a success alert at the top after saving", async () => {
     const user = userEvent.setup();
     renderPage();
-    await screen.findByLabelText(/business name/i);
+    await screen.findByLabelText(/business or legal name/i);
     const saveBtns = screen.getAllByRole("button", { name: /save changes/i });
     await user.click(saveBtns[0]);
     expect(await screen.findByText("Saved")).toBeTruthy();
@@ -136,15 +138,37 @@ describe("BusinessSettingsPage", () => {
 
   it("hides the SIFEN tax data section when the feature flag is off", async () => {
     renderPage();
-    await screen.findByLabelText(/business name/i);
+    await screen.findByLabelText(/business or legal name/i);
     expect(screen.queryByText(/SIFEN tax data/i)).toBeNull();
+  });
+
+  it("shows the trade name field right below the business name, even with the SIFEN flag off", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const businessName = await screen.findByLabelText(/business or legal name/i);
+    const tradeName = screen.getByLabelText(/trade name/i);
+    expect(tradeName).toBeTruthy();
+    // trade name comes after the business name in DOM order
+    expect(
+      businessName.compareDocumentPosition(tradeName) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.type(tradeName, "Salón Demo");
+    const saveBtns = screen.getAllByRole("button", { name: /save changes/i });
+    await user.click(saveBtns[0]);
+    expect(await screen.findByText("Saved")).toBeTruthy();
+    expect(femmePutJsonMock).toHaveBeenCalledWith(
+      "/api/business-profile",
+      expect.objectContaining({ sifenFantasyName: "Salón Demo" }),
+    );
   });
 
   it("shows the SIFEN tax data section and saves it when the feature flag is on", async () => {
     sifenInvoicingFlagEnabled = true;
     const user = userEvent.setup();
     renderPage();
-    await screen.findByLabelText(/business name/i);
+    await screen.findByLabelText(/business or legal name/i);
     expect(screen.getByText(/SIFEN tax data/i)).toBeTruthy();
 
     await user.click(screen.getByRole("radio", { name: /legal entity/i }));
@@ -153,6 +177,7 @@ describe("BusinessSettingsPage", () => {
       screen.getByLabelText(/economic activity description/i),
       "Peluquería y otros tratamientos de belleza",
     );
+    await user.type(screen.getByLabelText(/trade name/i), "Peluquería Lucía");
 
     const saveBtns = screen.getAllByRole("button", { name: /save changes/i });
     await user.click(saveBtns[0]);
@@ -164,6 +189,7 @@ describe("BusinessSettingsPage", () => {
         taxpayerType: "LEGAL_ENTITY",
         economicActivityCode: "96020",
         economicActivityDescription: "Peluquería y otros tratamientos de belleza",
+        sifenFantasyName: "Peluquería Lucía",
         sifenDepartmentCode: null,
         sifenDepartmentName: null,
         sifenCityCode: null,

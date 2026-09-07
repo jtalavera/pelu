@@ -4,14 +4,17 @@ import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.SifenNumberVoidingEvent;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenNumberVoidingStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
+import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.service.SifenCertificateSecretStore;
 import com.cursorpoc.backend.service.SifenCertificateService;
@@ -19,13 +22,16 @@ import com.cursorpoc.backend.service.SifenInvoiceDetail;
 import com.cursorpoc.backend.service.SifenInvoiceDetailService;
 import com.cursorpoc.backend.service.SifenInvoiceHeader;
 import com.cursorpoc.backend.service.SifenInvoiceHeaderService;
+import com.cursorpoc.backend.service.SifenInvoiceNotificationService;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenQrCodeService;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,7 +100,9 @@ public class SifenInvoiceTestSupportController {
   private final SifenInvoiceDetailService detailService;
   private final SifenQrCodeService qrCodeService;
   private final SifenNumberVoidingService numberVoidingService;
+  private final SifenNumberVoidingEventRepository numberVoidingEventRepository;
   private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceNotificationService notificationService;
 
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
@@ -108,7 +116,9 @@ public class SifenInvoiceTestSupportController {
       SifenInvoiceDetailService detailService,
       SifenQrCodeService qrCodeService,
       SifenNumberVoidingService numberVoidingService,
-      FemmeTimeProperties timeProperties) {
+      SifenNumberVoidingEventRepository numberVoidingEventRepository,
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceNotificationService notificationService) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
@@ -120,7 +130,9 @@ public class SifenInvoiceTestSupportController {
     this.detailService = detailService;
     this.qrCodeService = qrCodeService;
     this.numberVoidingService = numberVoidingService;
+    this.numberVoidingEventRepository = numberVoidingEventRepository;
     this.timeProperties = timeProperties;
+    this.notificationService = notificationService;
   }
 
   /**
@@ -285,6 +297,31 @@ public class SifenInvoiceTestSupportController {
   }
 
   /**
+   * Issue #173 item 2: e2e points SIFEN at an unreachable port, so the real submission listener
+   * never sees an Aprobado result and never fires the KuDE auto-email. This calls the real trigger
+   * ({@link SifenInvoiceNotificationService#emailKudeAfterApproval}) directly against a
+   * fabricated-approved invoice so Playwright can assert the observable outcome (the invoice's
+   * {@code sifenKudeEmailedAt} timestamp — the email itself is disabled/logged in e2e).
+   */
+  @PostMapping("/invoices/{id}/run-approval-notifications")
+  public void runApprovalNotifications(@PathVariable long id) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/run-approval-notifications", id);
+    notificationService.emailKudeAfterApproval(DEMO_TENANT_ID, id);
+  }
+
+  /**
+   * Issue #173 item 3: same rationale as {@link #runApprovalNotifications(long)} — calls the real
+   * trigger ({@link SifenInvoiceNotificationService#emailCancellationNotice}) directly so
+   * Playwright can assert the {@code sifenCancellationNotifiedAt} timestamp after a fabricated
+   * cancellation.
+   */
+  @PostMapping("/invoices/{id}/run-cancellation-notifications")
+  public void runCancellationNotifications(@PathVariable long id) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/run-cancellation-notifications", id);
+    notificationService.emailCancellationNotice(DEMO_TENANT_ID, id);
+  }
+
+  /**
    * SIFEN HU-11 AC-05/AC-06: fabricates the result of a client-identification attempt directly —
    * same rationale as {@link #fabricateCancellationResult(long, boolean)}, since this system has
    * never reached a real "Aprobado" DE to genuinely identify a client on. {@code approved=true}
@@ -337,6 +374,24 @@ public class SifenInvoiceTestSupportController {
    * this endpoint exercises the trigger's own real logic (idempotency, deadline computation,
    * persistence) end to end.
    */
+  /**
+   * Issue #190: backdates an invoice's emission instant so Playwright can exercise the "past
+   * SIFEN's 72h resend window" warning ({@link
+   * com.cursorpoc.backend.web.dto.InvoiceResponse#sifenCorrectResendDeadlineAt}) without waiting on
+   * a real clock.
+   */
+  @PostMapping("/invoices/{id}/backdate-issued-at/{hoursAgo}")
+  @Transactional
+  public void backdateIssuedAt(@PathVariable long id, @PathVariable long hoursAgo) {
+    log.info("POST /api/admin/sifen-test-support/invoices/{}/backdate-issued-at/{}", id, hoursAgo);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    invoice.setIssuedAt(Instant.now().minus(hoursAgo, ChronoUnit.HOURS));
+  }
+
   @PostMapping("/invoices/{id}/simulate-sifen-rejection")
   @Transactional
   public void simulateSifenRejection(@PathVariable long id) {
@@ -348,6 +403,51 @@ public class SifenInvoiceTestSupportController {
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
     numberVoidingService.recordPendingForRejectedInvoice(invoice.getTenant().getId(), id);
+  }
+
+  /**
+   * Fabricates the result of the "inutilización de numeración" submit for a rejected invoice — same
+   * rationale as {@link #fabricateCancellationResult(long, boolean)} (e2e's SIFEN endpoint is
+   * unreachable, so a real submit never resolves APPROVED). {@code approved=true} mirrors {@code
+   * SifenNumberVoidingService.recordSubmissionResult} + its auto-void step: the event goes {@code
+   * APPROVED} and the invoice is voided.
+   */
+  @PostMapping("/invoices/{id}/fabricate-number-voiding-result/{approved}")
+  @Transactional
+  public void fabricateNumberVoidingResult(@PathVariable long id, @PathVariable boolean approved) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/fabricate-number-voiding-result/{}",
+        id,
+        approved);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    numberVoidingService.recordPendingForRejectedInvoice(invoice.getTenant().getId(), id);
+    SifenNumberVoidingEvent event =
+        numberVoidingEventRepository
+            .findByInvoiceId(id)
+            .orElseThrow(
+                () ->
+                    new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "SIFEN_NUMBER_VOIDING_NOT_FOUND"));
+    event.setSubmittedAt(LocalDateTime.now(timeProperties.zoneId()));
+    event.setReason("E2E inutilización");
+    if (approved) {
+      event.setResultCode("0600");
+      event.setMessage("Evento registrado correctamente");
+      event.setProtocolNumber("135791113");
+      event.setStatus(SifenNumberVoidingStatus.APPROVED);
+      if (invoice.getStatus() == InvoiceStatus.ISSUED) {
+        invoice.setStatus(InvoiceStatus.VOIDED);
+        invoice.setVoidReason("Numeración inutilizada ante SIFEN (protocolo 135791113)");
+      }
+    } else {
+      event.setResultCode("4004");
+      event.setMessage("Rango de numeración inconsistente");
+      event.setStatus(SifenNumberVoidingStatus.REJECTED);
+    }
   }
 
   private void prepareWithQrAndStatus(long id, SifenSubmissionStatus status) {

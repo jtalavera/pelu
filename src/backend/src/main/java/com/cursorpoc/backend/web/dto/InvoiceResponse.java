@@ -16,6 +16,11 @@ public record InvoiceResponse(
     // or that client has no email; the backend already falls back to it server-side regardless (see
     // SifenKudeEmailService#resolveRecipientEmail), this is purely so the field isn't left blank.
     String clientEmail,
+    // Issue #173: the email captured on the comprobante form for this specific document (what the
+    // KuDE / cancellation notice is actually sent to). May differ from clientEmail for an
+    // occasional
+    // client or when the operator typed a one-off address.
+    String recipientEmail,
     String clientRucOverride,
     String clientIdentityDocumentOverride,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
@@ -73,4 +78,24 @@ public record InvoiceResponse(
     String sifenClientIdentificationAddress,
     String sifenClientIdentificationCountryCode,
     String sifenClientIdentificationResultCode,
-    String sifenClientIdentificationMessage) {}
+    String sifenClientIdentificationMessage,
+    // Issue #173: set once the KuDE for this document was auto-emailed after a successful SIFEN
+    // result; null until then (and while SIFEN hasn't approved it).
+    Instant sifenKudeEmailedAt,
+    // Issue #173: set once the client was emailed a cancellation notice for this document; null
+    // until then (and while the document hasn't been cancelled with SIFEN).
+    Instant sifenCancellationNotifiedAt,
+    // Current "inutilización de numeración" state for this invoice's number
+    // (SifenNumberVoidingStatus name), or null if none was ever recorded. Once APPROVED /
+    // APPROVED_WITH_OBSERVATION the number is dead — the frontend hides "Corregir y reenviar".
+    String sifenNumberVoidingStatus,
+    // Issue #190: the instant up to which correcting & resending this rejected DE still falls
+    // inside
+    // SIFEN's transmission window. SIFEN requires the XML to be transmitted within 72h of the
+    // digital signature ("Manual Técnico: hasta 72 horas posteriores a la firma digital"); past
+    // that
+    // a resend is transmitted extemporaneously and SIFEN is very likely to reject it. Anchored on
+    // the invoice's emission instant (issuedAt) + 72h. Non-null only while the invoice is actually
+    // in the "resolve rejected" flow (REJECTED, not voided, number not inutilizado); the frontend
+    // shows a non-blocking warning once now is past it — the resend itself is never blocked.
+    Instant sifenCorrectResendDeadlineAt) {}

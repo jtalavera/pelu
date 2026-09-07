@@ -71,6 +71,17 @@ public class SifenKudePdfService {
   /** AC-13: minimum 25mm, of which zxing's own quiet zone covers the "3mm margen seguro" part. */
   static final float QR_WIDTH_POINTS = 30f * (72f / 25.4f);
 
+  /** Issue #179: height of the header's logo box (was 70pt). */
+  static final float LOGO_CELL_HEIGHT = 96f;
+
+  /**
+   * Header row column widths: logo | business info (address) | timbrado data. Issue #179 enlarged
+   * the logo column at the expense of the address column ({@code 2 → 4} / {@code 12 → 10}); the
+   * timbrado column keeps its exact {@code 5 / 19} share (RUC, Timbrado, vigencia, doc type +
+   * number must not move).
+   */
+  static final float[] HEADER_COLUMN_WEIGHTS = {4f, 10f, 5f};
+
   private static final int QR_PIXELS = 300;
 
   private static final DateTimeFormatter DATE_FORMAT =
@@ -119,8 +130,46 @@ public class SifenKudePdfService {
    */
   @Transactional(readOnly = true)
   public KudePdfResult buildKudePdf(long tenantId, long invoiceId) {
-    Invoice invoice = requireDeliverableInvoice(tenantId, invoiceId);
-    SifenInvoiceHeader header = headerService.buildHeader(tenantId, invoiceId);
+    return buildKudePdf(tenantId, invoiceId, false, false, "");
+  }
+
+  /**
+   * KuDE de muestra "estilo producción": el mismo KuDE, pero con la razón social real del emisor en
+   * vez de la leyenda obligatoria del ambiente de prueba (Manual Técnico, validación D105 §10),
+   * para mostrarle a un cliente cómo se verá su factura en producción. El PDF es, por lo demás,
+   * idéntico al KuDE real (mismo layout, CDC, ítems y totales); el QR y la URL de consulta pública
+   * siguen siendo los persistidos en la factura (ambiente de prueba) porque no se pueden regenerar
+   * a producción sin el CSC de producción del contribuyente. La única marca de que es una muestra
+   * es el prefijo {@code MUESTRA-} del nombre de archivo. Sólo tiene sentido mientras la conexión
+   * SIFEN está en el ambiente de prueba — {@code SifenKudeController} lo rechaza en producción,
+   * donde la muestra sería idéntica al KuDE real.
+   */
+  @Transactional(readOnly = true)
+  public KudePdfResult buildProductionSampleKudePdf(long tenantId, long invoiceId) {
+    return buildKudePdf(tenantId, invoiceId, false, true, "MUESTRA-");
+  }
+
+  /**
+   * Issue #173: the cancellation-notice email (sent after SIFEN approves the cancellation, when the
+   * invoice is already {@code CANCELLED}) still attaches this document's KuDE — the receiver needs
+   * to see exactly which document was voided.
+   */
+  @Transactional(readOnly = true)
+  public KudePdfResult buildCancelledKudePdf(long tenantId, long invoiceId) {
+    return buildKudePdf(tenantId, invoiceId, true, false, "");
+  }
+
+  private KudePdfResult buildKudePdf(
+      long tenantId,
+      long invoiceId,
+      boolean allowCancelled,
+      boolean forceRealIssuerName,
+      String filenamePrefix) {
+    Invoice invoice = requireDeliverableInvoice(tenantId, invoiceId, allowCancelled);
+    SifenInvoiceHeader header =
+        forceRealIssuerName
+            ? headerService.buildHeader(tenantId, invoiceId, true)
+            : headerService.buildHeader(tenantId, invoiceId);
     SifenInvoiceDetail detail = detailService.buildDetail(tenantId, invoiceId);
     BusinessProfile profile = businessProfileRepository.findByTenantId(tenantId).orElse(null);
 
@@ -141,7 +190,8 @@ public class SifenKudePdfService {
             invoice.getClient(),
             pendingValidation);
     return new KudePdfResult(
-        pdf, buildFilename(header, invoice.getIssuedAt(), invoice.getInvoiceNumber()));
+        pdf,
+        filenamePrefix + buildFilename(header, invoice.getIssuedAt(), invoice.getInvoiceNumber()));
   }
 
   /**
@@ -186,16 +236,23 @@ public class SifenKudePdfService {
    */
   @Transactional(readOnly = true)
   Invoice requireDeliverableInvoice(long tenantId, long invoiceId) {
+    return requireDeliverableInvoice(tenantId, invoiceId, false);
+  }
+
+  Invoice requireDeliverableInvoice(long tenantId, long invoiceId, boolean allowCancelled) {
     Invoice invoice =
         invoiceRepository
             .findByIdAndTenant_Id(invoiceId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
     SifenSubmissionStatus status = invoice.getSifenSubmissionStatus();
-    if (status != SifenSubmissionStatus.APPROVED
-        && status != SifenSubmissionStatus.APPROVED_WITH_OBSERVATION
-        && status != SifenSubmissionStatus.PENDING_VERIFICATION
-        && status != SifenSubmissionStatus.QUEUED) {
+    boolean deliverable =
+        status == SifenSubmissionStatus.APPROVED
+            || status == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION
+            || status == SifenSubmissionStatus.PENDING_VERIFICATION
+            || status == SifenSubmissionStatus.QUEUED
+            || (allowCancelled && status == SifenSubmissionStatus.CANCELLED);
+    if (!deliverable) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "SIFEN_KUDE_ONLY_FOR_APPROVED_INVOICES");
     }
@@ -243,7 +300,6 @@ public class SifenKudePdfService {
       document.open();
 
       Font titleFont = new Font(Font.HELVETICA, 13, Font.BOLD);
-      Font subtitleFont = new Font(Font.HELVETICA, 10, Font.ITALIC);
       Font labelFont = new Font(Font.HELVETICA, 9, Font.BOLD);
       Font bodyFont = new Font(Font.HELVETICA, 9);
       Font legendFont = new Font(Font.HELVETICA, 8, Font.ITALIC);
@@ -254,15 +310,7 @@ public class SifenKudePdfService {
       // header/sale data (not at the very bottom as in the manual's single-page example) so it
       // stays guaranteed on page 1 per AC-13 even when the item table spills onto later pages.
       addHeaderBlock(
-          document,
-          documentType,
-          documentNumber,
-          header,
-          profile,
-          titleFont,
-          subtitleFont,
-          labelFont,
-          bodyFont);
+          document, documentType, documentNumber, header, profile, titleFont, labelFont, bodyFont);
       addSaleAndReceiverBlock(document, issuedAt, header, client, labelFont, bodyFont);
       addQrAndControlNumberBlock(
           document,
@@ -297,24 +345,32 @@ public class SifenKudePdfService {
       SifenInvoiceHeader header,
       BusinessProfile profile,
       Font titleFont,
-      Font subtitleFont,
       Font labelFont,
       Font bodyFont)
       throws DocumentException {
     SifenIssuerData issuer = header.issuer();
     String logoDataUrl = profile != null ? profile.getLogoDataUrl() : null;
 
-    // Flat 3-column table (not nested) so the business-name column keeps enough width to avoid
-    // mid-name wrapping: logo | business info | timbrado data, roughly 11% / 63% / 26%.
+    // Issue #179: a bigger logo, taken from the business-info (address) column — the timbrado
+    // column (RUC / Timbrado / vigencia / doc type + number) keeps its exact 5/19 ≈ 26% share.
+    // logo | business info | timbrado data ≈ 21% / 53% / 26%.
     PdfPTable table = new PdfPTable(3);
     table.setWidthPercentage(100);
-    table.setWidths(new float[] {2f, 12f, 5f});
+    table.setWidths(HEADER_COLUMN_WEIGHTS);
     table.addCell(logoCell(logoDataUrl));
 
+    // El nombre de fantasía, cuando está configurado, va destacado arriba (es la marca que el
+    // cliente reconoce) y la razón social debajo en cuerpo normal — el layout habitual de las
+    // facturas paraguayas. Sin nombre de fantasía, la razón social ocupa el lugar destacado.
+    // En ambiente de prueba, issuer.businessName() es la leyenda obligatoria D105 §10, que
+    // sigue apareciendo (más chica si hay nombre de fantasía) y sigue siendo el contenido de
+    // dNomEmi en el DE.
     Paragraph businessInfo = new Paragraph();
-    businessInfo.add(new Chunk(issuer.businessName() + "\n", titleFont));
     if (hasText(issuer.fantasyName())) {
-      businessInfo.add(new Chunk(issuer.fantasyName() + "\n", subtitleFont));
+      businessInfo.add(new Chunk(issuer.fantasyName() + "\n", titleFont));
+      businessInfo.add(new Chunk(issuer.businessName() + "\n", bodyFont));
+    } else {
+      businessInfo.add(new Chunk(issuer.businessName() + "\n", titleFont));
     }
     if (hasText(issuer.economicActivityDescription())) {
       businessInfo.add(new Chunk(issuer.economicActivityDescription() + "\n", bodyFont));
@@ -339,7 +395,7 @@ public class SifenKudePdfService {
     // populated example on page 198 only shows RUC/Timbrado/Fecha de Inicio de Vigencia.
     addLine(
         timbradoInfo,
-        "Fecha de Inicio de Vigencia",
+        "Inicio de Vigencia",
         DATE_FORMAT.format(header.stampValidFrom()),
         labelFont,
         bodyFont);
@@ -378,14 +434,17 @@ public class SifenKudePdfService {
             : null;
     if (logo != null) {
       PdfPCell cell = new PdfPCell(logo, true);
-      cell.setFixedHeight(70f);
+      // Issue #179: bigger logo box.
+      cell.setFixedHeight(LOGO_CELL_HEIGHT);
+      cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+      cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
       return cell;
     }
     PdfPCell placeholder =
         new PdfPCell(
             new com.lowagie.text.Phrase(
                 "LOGO", new Font(Font.HELVETICA, 9, Font.BOLD, java.awt.Color.GRAY)));
-    placeholder.setFixedHeight(70f);
+    placeholder.setFixedHeight(LOGO_CELL_HEIGHT);
     placeholder.setHorizontalAlignment(Element.ALIGN_CENTER);
     placeholder.setVerticalAlignment(Element.ALIGN_MIDDLE);
     return placeholder;
@@ -396,7 +455,8 @@ public class SifenKudePdfService {
       String base64 = logoDataUrl.substring(logoDataUrl.indexOf(',') + 1);
       byte[] bytes = Base64.getDecoder().decode(base64);
       Image image = Image.getInstance(bytes);
-      image.scaleToFit(80, 80);
+      // Issue #179: fill the enlarged logo box.
+      image.scaleToFit(115, LOGO_CELL_HEIGHT - 6);
       return image;
     } catch (Exception e) {
       // AC-11: the logo is optional and never blocks generating the rest of the KuDE.
@@ -421,6 +481,8 @@ public class SifenKudePdfService {
     PdfPTable table = new PdfPTable(6);
     table.setWidthPercentage(100);
 
+    // Issue #179: pack the sale/receiver fields into a compact two-up grid (colspan 3 + 3) instead
+    // of one full-width row per field. Issue #173 item 6: "Cuotas" / "Tipo de Cambio" stay gone.
     addGridCell(
         table,
         "Fecha y hora de Emisión",
@@ -429,29 +491,42 @@ public class SifenKudePdfService {
         labelFont,
         bodyFont);
     addGridCell(table, "Condición de Venta", "Contado", 3, labelFont, bodyFont);
-    addGridCell(table, "Cuotas", "", 2, labelFont, bodyFont);
-    addGridCell(table, "Moneda", "Guaraníes (PYG)", 2, labelFont, bodyFont);
-    addGridCell(table, "Tipo de Cambio", "", 2, labelFont, bodyFont);
+    addGridCell(table, "Moneda", "Guaraníes (PYG)", 3, labelFont, bodyFont);
+    addGridCell(table, "Tipo de Operación", "Operación presencial", 3, labelFont, bodyFont);
 
-    if (isReceiverIdentified(header)) {
-      SifenReceiverData receiver = header.receiver();
-      if (hasText(receiver.ruc())) {
-        addGridCell(table, "RUC del Cliente", receiver.ruc(), 6, labelFont, bodyFont);
-      } else if (hasText(receiver.identityDocumentNumber())) {
-        addGridCell(
-            table,
-            "Documento del Cliente",
-            receiver.identityDocumentNumber(),
-            6,
-            labelFont,
-            bodyFont);
-      }
-      if (hasText(receiver.name())) {
-        addGridCell(table, "Nombre o Razón Social", receiver.name(), 6, labelFont, bodyFont);
-      }
-      if (hasText(receiver.address())) {
-        addGridCell(table, "Dirección", receiver.address(), 6, labelFont, bodyFont);
-      }
+    // The receiver block always renders now (Issue #173 item 4). "RUC del Cliente" falls back to
+    // "X" and "Nombre o Razón Social" to "Sin nombre" for a "Sin nominar" comprobante — i.e. one
+    // with no RUC, no identity document and no real display name (the occasional-client placeholder
+    // "CONSUMIDOR FINAL" isn't a real name).
+    SifenReceiverData receiver = header.receiver();
+    boolean hasRuc = hasText(receiver.ruc());
+    boolean hasDoc = !hasRuc && hasText(receiver.identityDocumentNumber());
+    boolean hasRealName =
+        hasText(receiver.name())
+            && !OCCASIONAL_CLIENT_DISPLAY_NAME.equalsIgnoreCase(receiver.name().trim());
+
+    if (hasRuc) {
+      addGridCell(table, "RUC del Cliente", receiver.ruc(), 3, labelFont, bodyFont);
+    } else if (hasDoc) {
+      addGridCell(
+          table,
+          "Documento del Cliente",
+          receiver.identityDocumentNumber(),
+          3,
+          labelFont,
+          bodyFont);
+    } else {
+      addGridCell(table, "RUC del Cliente", "X", 3, labelFont, bodyFont);
+    }
+    addGridCell(
+        table,
+        "Nombre o Razón Social",
+        hasRealName ? receiver.name() : "Sin nombre",
+        3,
+        labelFont,
+        bodyFont);
+
+    if (hasRuc || hasDoc || hasRealName) {
       String phone = client != null ? client.getPhone() : null;
       String email = client != null ? client.getEmail() : null;
       if (hasText(phone) || hasText(email)) {
@@ -459,16 +534,18 @@ public class SifenKudePdfService {
         addGridCell(
             table, "Correo Electrónico", hasText(email) ? email : "", 3, labelFont, bodyFont);
       }
-      addGridCell(table, "Tipo de Operación", "Operación presencial", 6, labelFont, bodyFont);
+    }
+    if (hasText(receiver.address())) {
+      addGridCell(table, "Dirección", receiver.address(), 6, labelFont, bodyFont);
     }
 
     document.add(table);
   }
 
-  private static boolean isReceiverIdentified(SifenInvoiceHeader header) {
-    SifenReceiverData r = header.receiver();
-    return hasText(r.ruc()) || hasText(r.identityDocumentNumber()) || hasText(r.name());
-  }
+  /**
+   * Mirrors {@code InvoiceService.OCCASIONAL_CLIENT_DISPLAY_NAME} — the placeholder isn't a name.
+   */
+  private static final String OCCASIONAL_CLIENT_DISPLAY_NAME = "CONSUMIDOR FINAL";
 
   /** One bordered "label: value" cell spanning {@code colspan} of the grid's 6 columns. */
   private static void addGridCell(
@@ -603,54 +680,89 @@ public class SifenKudePdfService {
   }
 
   /**
-   * The 7 columns rows 1-3 (colspan 6 + 1) and the IVA row (7 discrete cells) both fill. Weights
-   * sum to 92, matching {@link #addItemsTable}'s column widths exactly, so the divider before the
-   * last column (82/92) lines up with the items table's divider between its "5%" and "10%" columns
-   * (also 82/92 — 8+22+8+6+10+8+10=82 of a 92 total).
+   * Label column + the three "Valor de Venta" sub-columns (Exentas / 5% / 10%). Weights sum to 92
+   * and reproduce {@link #addItemsTable}'s column widths exactly (label 0-62, Exentas 62-72, 5%
+   * 72-82, 10% 82-92), so every totals amount sits directly under the items-table column it belongs
+   * to.
    */
-  private static final float[] TOTALS_COLUMN_WEIGHTS = {26f, 10f, 11f, 10f, 11f, 14f, 10f};
+  private static final float[] TOTALS_COLUMN_WEIGHTS = {62f, 10f, 10f, 10f};
+
+  /** 0 = Exentas column, 1 = 5% column, 2 = 10% column. */
+  static int totalsValueColumn(SifenInvoiceTotals totals) {
+    if (totals.taxedSubtotal10() != null && totals.taxedSubtotal10().signum() > 0) {
+      return 2;
+    }
+    if (totals.taxedSubtotal5() != null && totals.taxedSubtotal5().signum() > 0) {
+      return 1;
+    }
+    // Issue #179: a fully Exenta / Exonerada operation (e.g. "Tarjeta Diplomática de exoneración
+    // fiscal" receiver) — Subtotal / Total de la operación / Total en Guaraníes must fall under
+    // "Exentas", never "10%".
+    return 0;
+  }
 
   private void addTotalsBlock(
       Document document, SifenInvoiceTotals totals, Font labelFont, Font bodyFont)
       throws DocumentException {
     // AC-12: this is the last content added to the flowing document, so it always lands on the
     // real last page — no manual page-break bookkeeping needed. Manual Técnico section 13.4.3
-    // ("Ejemplo de subtotales y totales de KuDE (FE)"): Subtotal/Total/Total en Guaraníes each on
-    // their own line, but the IVA breakdown (5%, 10%, Total IVA) all renders on one line.
+    // ("Ejemplo de subtotales y totales de KuDE (FE)").
     PdfPTable table = new PdfPTable(TOTALS_COLUMN_WEIGHTS);
     table.setWidthPercentage(100);
-    addTotalsRow(table, "Subtotal", formatMoney(totals.grossTotal()), labelFont, bodyFont);
-    addTotalsRow(
-        table, "Total de la operación", formatMoney(totals.netTotal()), labelFont, bodyFont);
-    addTotalsRow(table, "Total en Guaraníes", formatMoney(totals.netTotal()), labelFont, bodyFont);
 
-    addTotalsCell(table, "Liquidación IVA:", labelFont, Element.ALIGN_LEFT);
-    addTotalsCell(table, "(5%)", labelFont, Element.ALIGN_LEFT);
-    addTotalsCell(table, formatMoney(totals.iva5()), bodyFont, Element.ALIGN_RIGHT);
-    addTotalsCell(table, "(10%)", labelFont, Element.ALIGN_LEFT);
-    addTotalsCell(table, formatMoney(totals.iva10()), bodyFont, Element.ALIGN_RIGHT);
-    addTotalsCell(table, "Total IVA:", labelFont, Element.ALIGN_LEFT);
-    addTotalsCell(table, formatMoney(totals.totalIva()), bodyFont, Element.ALIGN_RIGHT);
+    int valueColumn = totalsValueColumn(totals);
+    addTaxAlignedRow(
+        table, "Subtotal", formatMoney(totals.grossTotal()), valueColumn, labelFont, bodyFont);
+    addTaxAlignedRow(
+        table,
+        "Total de la operación",
+        formatMoney(totals.netTotal()),
+        valueColumn,
+        labelFont,
+        bodyFont);
+    addTaxAlignedRow(
+        table,
+        "Total en Guaraníes",
+        formatMoney(totals.netTotal()),
+        valueColumn,
+        labelFont,
+        bodyFont);
+
+    // IVA liquidation — the 5% / 10% amounts stay under their own columns; "Total IVA" on its own
+    // row under the 10% column.
+    addTotalsCell(table, "Liquidación IVA", labelFont, Element.ALIGN_LEFT, 1);
+    addTotalsCell(table, "", bodyFont, Element.ALIGN_RIGHT, 1);
+    addTotalsCell(table, formatMoney(totals.iva5()), bodyFont, Element.ALIGN_RIGHT, 1);
+    addTotalsCell(table, formatMoney(totals.iva10()), bodyFont, Element.ALIGN_RIGHT, 1);
+    addTotalsCell(table, "Total IVA", labelFont, Element.ALIGN_LEFT, 3);
+    addTotalsCell(table, formatMoney(totals.totalIva()), bodyFont, Element.ALIGN_RIGHT, 1);
 
     document.add(table);
   }
 
-  /** One "label spans everything but the last column, value in the last column" row. */
-  private static void addTotalsRow(
-      PdfPTable table, String label, String value, Font labelFont, Font bodyFont) {
+  /**
+   * One row: bold label in the label column, the amount under its "Valor de Venta" sub-column
+   * ({@code valueColumn}: 0 = Exentas, 1 = 5%, 2 = 10%), the other two sub-columns left blank.
+   */
+  private static void addTaxAlignedRow(
+      PdfPTable table, String label, String value, int valueColumn, Font labelFont, Font bodyFont) {
     PdfPCell labelCell = new PdfPCell(new com.lowagie.text.Phrase(label, labelFont));
-    labelCell.setColspan(TOTALS_COLUMN_WEIGHTS.length - 1);
     labelCell.setPadding(4);
     table.addCell(labelCell);
-    PdfPCell valueCell = new PdfPCell(new com.lowagie.text.Phrase(value, bodyFont));
-    valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-    valueCell.setPadding(4);
-    table.addCell(valueCell);
+    for (int i = 0; i < 3; i++) {
+      PdfPCell cell =
+          new PdfPCell(new com.lowagie.text.Phrase(i == valueColumn ? value : "", bodyFont));
+      cell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+      cell.setPadding(4);
+      table.addCell(cell);
+    }
   }
 
-  private static void addTotalsCell(PdfPTable table, String text, Font font, int align) {
+  private static void addTotalsCell(
+      PdfPTable table, String text, Font font, int align, int colspan) {
     PdfPCell cell = new PdfPCell(new com.lowagie.text.Phrase(text, font));
     cell.setHorizontalAlignment(align);
+    cell.setColspan(colspan);
     cell.setPadding(4);
     table.addCell(cell);
   }
@@ -723,6 +835,12 @@ public class SifenKudePdfService {
   private static final class PageNumberEvent extends PdfPageEventHelper {
     private PdfTemplate totalPagesTemplate;
     private com.lowagie.text.pdf.BaseFont baseFont;
+    // Tracks the last page actually rendered via onEndPage. writer.getPageNumber() can no
+    // longer be trusted at onCloseDocument time: OpenPDF bumps its internal page counter while
+    // probing whether trailing content (e.g. the totals/optional-message blocks) fits on the
+    // current page, even when that probe never produces a real extra page — re-reading it here
+    // was inflating the total by one on single-page KuDEs (AC-12 regression).
+    private int lastPageNumber;
 
     @Override
     public void onOpenDocument(PdfWriter writer, Document document) {
@@ -740,8 +858,9 @@ public class SifenKudePdfService {
 
     @Override
     public void onEndPage(PdfWriter writer, Document document) {
+      lastPageNumber = writer.getPageNumber();
       com.lowagie.text.pdf.PdfContentByte cb = writer.getDirectContent();
-      String text = "Página " + writer.getPageNumber() + " / ";
+      String text = "Página " + lastPageNumber + " / ";
       float x = document.right() - 60;
       float y = document.bottom() - 20;
       cb.beginText();
@@ -757,7 +876,7 @@ public class SifenKudePdfService {
       totalPagesTemplate.beginText();
       totalPagesTemplate.setFontAndSize(baseFont, 8);
       totalPagesTemplate.setTextMatrix(0, 0);
-      totalPagesTemplate.showText(String.valueOf(writer.getPageNumber()));
+      totalPagesTemplate.showText(String.valueOf(lastPageNumber));
       totalPagesTemplate.endText();
     }
   }

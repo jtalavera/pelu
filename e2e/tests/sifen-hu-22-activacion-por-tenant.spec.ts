@@ -297,6 +297,7 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await page.getByLabel("Department and city").fill("Fernando de la Mora");
     await expect(page.getByRole("option", { name: /FERNANDO DE LA MORA \(CENTRAL\)/ })).toBeVisible();
     await page.getByRole("option", { name: /FERNANDO DE LA MORA \(CENTRAL\)/ }).click();
+    await page.getByLabel("Trade name").fill("Peluquería Lucía");
 
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Your business details were saved.")).toBeVisible();
@@ -307,6 +308,8 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await expect(page.getByLabel("Department and city")).toHaveValue(
       "FERNANDO DE LA MORA (CENTRAL)",
     );
+    // The trade name (nombre de fantasía) persists — it used to be wiped on every settings save.
+    await expect(page.getByLabel("Trade name")).toHaveValue("Peluquería Lucía");
   });
 
   test("HU-22 · Adenda con el flag desactivado, la sección de datos fiscales SIFEN no aparece", async ({
@@ -314,7 +317,9 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
-    await expect(page.getByLabel("Business name")).toBeVisible();
+    await expect(page.getByLabel("Business or legal name")).toBeVisible();
+    // The trade name (nombre de fantasía) is now in the General section, shown even with the flag off.
+    await expect(page.getByLabel("Trade name")).toBeVisible();
     await expect(page.getByText("SIFEN tax data")).toHaveCount(0);
   });
 

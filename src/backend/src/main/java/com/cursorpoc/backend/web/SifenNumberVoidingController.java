@@ -3,10 +3,11 @@ package com.cursorpoc.backend.web;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
+import com.cursorpoc.backend.web.dto.PagedSifenNumberVoidingResponse;
+import com.cursorpoc.backend.web.dto.SifenNumberVoidingCreateRequest;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingEventResponse;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingSubmitRequest;
 import jakarta.validation.Valid;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -33,14 +35,42 @@ public class SifenNumberVoidingController {
   }
 
   @GetMapping
-  public List<SifenNumberVoidingEventResponse> list(
-      @AuthenticationPrincipal FemmeUserPrincipal principal) {
+  public PagedSifenNumberVoidingResponse list(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
     requirePrincipal(principal);
     long tenantId = principal.getTenantId();
-    log.info("GET /api/sifen/number-voiding method=GET tenantId={}", tenantId);
-    List<SifenNumberVoidingEventResponse> out = service.listForTenant(tenantId);
-    log.info("GET /api/sifen/number-voiding tenantId={} status=200", tenantId);
+    log.info(
+        "GET /api/sifen/number-voiding method=GET tenantId={} page={} size={}",
+        tenantId,
+        page,
+        size);
+    PagedSifenNumberVoidingResponse out = service.listForTenant(tenantId, page, size);
+    log.info(
+        "GET /api/sifen/number-voiding tenantId={} status=200 total={}",
+        tenantId,
+        out.totalElements());
     return out;
+  }
+
+  @PostMapping
+  public SifenNumberVoidingEventResponse create(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @Valid @RequestBody SifenNumberVoidingCreateRequest request) {
+    requireTenantAdmin(principal);
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/sifen/number-voiding method=POST tenantId={}", tenantId);
+    try {
+      SifenNumberVoidingEventResponse out =
+          service.createManual(tenantId, request.rangeFrom(), request.rangeTo(), request.reason());
+      log.info("POST /api/sifen/number-voiding tenantId={} status=200", tenantId);
+      return out;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/sifen/number-voiding tenantId={} status={}", tenantId, ex.getStatusCode());
+      throw ex;
+    }
   }
 
   @PostMapping("/{id}/submit")

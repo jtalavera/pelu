@@ -76,11 +76,16 @@ test.describe("Estado SIFEN column on invoice tables", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
 
-    // Cash Register tab (default) — today's invoices table.
+    // Cash Register tab (default) — today's invoices table. Its rows are <tr role="button">
+    // (issue #198), so match by tag, and scope to the visible tab (billing keeps every tab
+    // mounted, hidden via the `hidden` attribute).
     await expect(page.getByRole("columnheader", { name: "SIFEN status", exact: true })).toBeVisible({
       timeout: 30_000,
     });
-    const todayRow = page.locator("tbody").getByRole("row").filter({ hasText: client.fullName });
+    const todayRow = page
+      .locator('tbody tr[role="button"]')
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(todayRow).toBeVisible({ timeout: 30_000 });
     await expect(todayRow.getByText("Approved", { exact: true })).toBeVisible();
 
@@ -89,7 +94,10 @@ test.describe("Estado SIFEN column on invoice tables", () => {
     await expect(page.getByRole("columnheader", { name: "SIFEN status", exact: true })).toBeVisible();
     // History rows are <tr role="button"> (issue #163 AC10), so their a11y role is "button",
     // not "row" — match by tag instead of getByRole("row").
-    const historyRow = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    const historyRow = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(historyRow).toBeVisible({ timeout: 30_000 });
     await expect(historyRow.getByText("Approved", { exact: true })).toBeVisible();
   });
@@ -123,7 +131,10 @@ test.describe("Estado SIFEN column on invoice tables", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    const row = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row.getByText("Queued", { exact: true })).toBeVisible();
   });
@@ -151,7 +162,10 @@ test.describe("Estado SIFEN column on invoice tables", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    const row = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText("—");
   });

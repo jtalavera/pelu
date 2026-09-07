@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.repository.InvoiceRepository;
@@ -62,7 +63,15 @@ public class SifenInvoiceDetailService {
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
 
     BigDecimal globalDiscountPercent = globalDiscountPercent(invoice);
-    List<SifenInvoiceLine> lines = buildLines(invoice, globalDiscountPercent);
+    // Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes every line
+    // IVA-exonerada (its amounts were already netted at issue time — see InvoiceService).
+    boolean exonerated =
+        ClientIdentityDocumentType.resolve(
+                invoice.getClientIdentityDocumentTypeOverride(),
+                invoice.getClientRucOverride(),
+                invoice.getClientIdentityDocumentOverride())
+            == ClientIdentityDocumentType.TARJETA_DIPLOMATICA;
+    List<SifenInvoiceLine> lines = buildLines(invoice, globalDiscountPercent, exonerated);
     SifenInvoiceTotals totals = buildTotals(invoice, lines, globalDiscountPercent);
     List<SifenPaymentDetail> payments = buildPayments(invoice);
 
@@ -98,15 +107,17 @@ public class SifenInvoiceDetailService {
   }
 
   /** AC-01/AC-02/AC-03/AC-05: una línea por servicio, con su desglose de descuentos e IVA. */
-  private List<SifenInvoiceLine> buildLines(Invoice invoice, BigDecimal globalDiscountPercent) {
+  private List<SifenInvoiceLine> buildLines(
+      Invoice invoice, BigDecimal globalDiscountPercent, boolean exonerated) {
     List<SifenInvoiceLine> result = new ArrayList<>(invoice.getLines().size());
     for (InvoiceLine line : invoice.getLines()) {
-      result.add(buildLine(line, globalDiscountPercent));
+      result.add(buildLine(line, globalDiscountPercent, exonerated));
     }
     return result;
   }
 
-  private SifenInvoiceLine buildLine(InvoiceLine line, BigDecimal globalDiscountPercent) {
+  private SifenInvoiceLine buildLine(
+      InvoiceLine line, BigDecimal globalDiscountPercent, boolean exonerated) {
     BigDecimal quantity = BigDecimal.valueOf(line.getQuantity());
     BigDecimal grossLineTotal = line.getUnitPrice().multiply(quantity);
     // EA002/dDescItem, per-unit — this line's own particular discount, isolated to itself.
@@ -128,10 +139,12 @@ public class SifenInvoiceDetailService {
             .multiply(quantity);
 
     BigDecimal taxRate = line.getTaxRate() != null ? line.getTaxRate() : BigDecimal.ZERO;
-    boolean taxed = taxRate.compareTo(BigDecimal.ZERO) > 0;
+    boolean taxed = !exonerated && taxRate.compareTo(BigDecimal.ZERO) > 0;
 
     SifenTaxAffectation affectation =
-        taxed ? SifenTaxAffectation.GRAVADO : SifenTaxAffectation.EXENTO;
+        exonerated
+            ? SifenTaxAffectation.EXONERADO
+            : (taxed ? SifenTaxAffectation.GRAVADO : SifenTaxAffectation.EXENTO);
     BigDecimal ratePercent;
     BigDecimal taxableBase;
     BigDecimal taxAmount;
@@ -152,6 +165,15 @@ public class SifenInvoiceDetailService {
       taxableBase = BigDecimal.ZERO;
       taxAmount = BigDecimal.ZERO;
     }
+
+    // E733/dPropIVA: "proporción gravada" — 100 only for Gravado (and, in theory, the partial
+    // percentage for Gravado parcial). SIFEN rejects a non-zero value for Exonerado/Exento
+    // ("Proporción gravada del IVA incorrecta para forma de afectación Exonerado o Exento").
+    BigDecimal taxProportion =
+        affectation == SifenTaxAffectation.GRAVADO
+                || affectation == SifenTaxAffectation.GRAVADO_PARCIAL
+            ? BigDecimal.valueOf(100)
+            : BigDecimal.ZERO;
 
     String fullDescription = line.getDescription();
     boolean tooLongForItemName = fullDescription.length() > MAX_ITEM_NAME_LENGTH;
@@ -179,7 +201,7 @@ public class SifenInvoiceDetailService {
         globalDiscountAmount,
         netTotal,
         affectation,
-        BigDecimal.valueOf(100),
+        taxProportion,
         ratePercent,
         taxableBase,
         taxAmount);
@@ -199,6 +221,7 @@ public class SifenInvoiceDetailService {
   private SifenInvoiceTotals buildTotals(
       Invoice invoice, List<SifenInvoiceLine> lines, BigDecimal globalDiscountPercent) {
     BigDecimal exempt = BigDecimal.ZERO;
+    BigDecimal exonerated = BigDecimal.ZERO;
     BigDecimal taxed5 = BigDecimal.ZERO;
     BigDecimal taxed10 = BigDecimal.ZERO;
     BigDecimal base5 = BigDecimal.ZERO;
@@ -213,7 +236,9 @@ public class SifenInvoiceDetailService {
       itemDiscountTotal = itemDiscountTotal.add(line.itemDiscountAmount().multiply(quantity));
       globalDiscountTotal = globalDiscountTotal.add(line.globalDiscountAmount().multiply(quantity));
 
-      if (line.taxAffectation() == SifenTaxAffectation.EXENTO) {
+      if (line.taxAffectation() == SifenTaxAffectation.EXONERADO) {
+        exonerated = exonerated.add(line.netTotal());
+      } else if (line.taxAffectation() == SifenTaxAffectation.EXENTO) {
         exempt = exempt.add(line.netTotal());
       } else if (line.taxRatePercent().compareTo(BigDecimal.valueOf(5)) == 0) {
         taxed5 = taxed5.add(line.netTotal());
@@ -226,15 +251,23 @@ public class SifenInvoiceDetailService {
       }
     }
 
-    BigDecimal gross = exempt.add(taxed5).add(taxed10);
-    // F012/dRedon: the manual's own plug for the (typically zero, occasionally a few céntimos)
+    BigDecimal gross = exempt.add(exonerated).add(taxed5).add(taxed10);
+    // F013/dRedon: the manual's own plug for the (typically zero, occasionally a few céntimos)
     // rounding gap between the formula-driven per-item totals (EA008, summed here as `gross`) and
     // what Invoice.total actually charged — expected whenever a discount percentage doesn't divide
-    // evenly across every item (the same reason SIFEN gives EA003a/EA004 a ±0.8 tolerance).
+    // evenly across every item (the same reason SIFEN gives EA003a/EA004 a ±0.8 tolerance). dRedon
+    // is an unsigned numeric field (Manual Técnico V150 p.103-104, no sign digit in its pattern) —
+    // when per-line rounding happens to drift `gross` a hair below invoice.getTotal(), floor at
+    // zero rather than emit a negative value SIFEN rejects outright as "XML malformado" (issue
+    // #170, dRedon=-0.01 on a 12-line discounted invoice).
     BigDecimal roundingAdjustment = gross.subtract(invoice.getTotal());
+    if (roundingAdjustment.signum() < 0) {
+      roundingAdjustment = BigDecimal.ZERO;
+    }
 
     return new SifenInvoiceTotals(
         exempt,
+        exonerated,
         taxed5,
         taxed10,
         gross,
@@ -257,7 +290,11 @@ public class SifenInvoiceDetailService {
     List<SifenPaymentDetail> payments = new ArrayList<>();
     for (InvoicePaymentAllocation allocation : invoice.getPaymentAllocations()) {
       payments.add(
-          new SifenPaymentDetail(mapPaymentType(allocation.getMethod()), allocation.getAmount()));
+          new SifenPaymentDetail(
+              mapPaymentType(allocation.getMethod()),
+              allocation.getAmount(),
+              allocation.getCardBrand(),
+              allocation.getCardBrandOtherDescription()));
     }
     return payments;
   }

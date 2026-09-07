@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   Checkbox,
+  FloatingDropdown,
   Heading,
   Input,
   Label,
@@ -18,13 +19,16 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
+import { downloadInvoiceHistoryReport } from "../api/downloadInvoiceHistoryReport";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { InvoiceCorrectionForm } from "../components/InvoiceCorrectionForm";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
+import { isValidEmail } from "../lib/validateEmail";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
 import {
   ServiceSearchField,
@@ -81,6 +85,8 @@ type InvoiceLineForm = {
 type PaymentForm = {
   method: string;
   amount: string;
+  cardBrand: string;
+  cardBrandOtherDescription: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -147,6 +153,20 @@ const PAYMENT_METHODS = [
   "OTHER",
 ] as const;
 
+const CARD_PAYMENT_METHODS = new Set(["DEBIT_CARD", "CREDIT_CARD"]);
+
+// SIFEN Manual Técnico V150, E7.1.1/gPagTarCD — mandatory card brand when paying with
+// Tarjeta de crédito/débito (issue #170).
+const CARD_BRANDS = [
+  "VISA",
+  "MASTERCARD",
+  "AMEX",
+  "MAESTRO",
+  "PANAL",
+  "CABAL",
+  "OTHER",
+] as const;
+
 function capitalize(s: string): string {
   if (!s) return "";
   return s
@@ -168,14 +188,39 @@ function paymentMethodsLabel(
     .join(" + ");
 }
 
-/** Local calendar dates: 6 months ago through today. */
+/** Local calendar date as `YYYY-MM-DD`. */
+function localTodayYmd(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Issue #174 AC-04: SIFEN's technical limits for a DE's emission date — backdated up to 720h
+ * (30 days), future-dated up to 120h (5 days) from "now". Compared at day granularity here; the
+ * backend re-checks it to the hour.
+ */
+function issueDateOutOfRange(ymd: string): boolean {
+  const parts = ymd.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return true;
+  const [y, m, d] = parts;
+  const picked = new Date(y, m - 1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const min = new Date(today);
+  min.setDate(min.getDate() - 30);
+  const max = new Date(today);
+  max.setDate(max.getDate() + 5);
+  return picked < min || picked > max;
+}
+
+/** Issue #174 AC-06: default filter is one month back through today (was six months). */
 function getDefaultInvoiceHistoryDateRange(): { from: string; to: string } {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
   const fmtYmd = (dt: Date) =>
     `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  return { from: fmtYmd(sixMonthsAgo), to: fmtYmd(today) };
+  return { from: fmtYmd(oneMonthAgo), to: fmtYmd(today) };
 }
 
 function isFromOlderThan6Months(fromYmd: string): boolean {
@@ -227,7 +272,72 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const [pageNum, setPageNum] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  // Issue #175: "Corregir y reenviar" opened directly from a Rechazado row.
+  const [correctionInvoiceId, setCorrectionInvoiceId] = useState<number | null>(null);
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Issue #174 AC-05: "Descargar reporte" dropdown (Excel / PDF) next to "Actualizar".
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
+  const [reportDownloading, setReportDownloading] = useState<"pdf" | "xlsx" | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const reportAnchorRef = useRef<HTMLDivElement>(null);
+  const reportPanelRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadReport = useCallback(
+    async (format: "pdf" | "xlsx") => {
+      setReportMenuOpen(false);
+      setReportError(null);
+      if (invoiceHistoryRangeErrorKey(filterFrom, filterTo)) {
+        setReportError(t("femme.billing.history.report.rangeInvalid"));
+        return;
+      }
+      setReportDownloading(format);
+      try {
+        await downloadInvoiceHistoryReport(
+          {
+            from: localDateYmdToIsoStart(filterFrom),
+            to: localDateYmdToIsoEnd(filterTo),
+            status: filterStatus || undefined,
+            q: listTextQuery || undefined,
+          },
+          format,
+        );
+      } catch (err) {
+        setReportError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+      } finally {
+        setReportDownloading(null);
+      }
+    },
+    [filterFrom, filterTo, filterStatus, listTextQuery, t],
+  );
+
+  useEffect(() => {
+    if (!reportMenuOpen) return;
+    function onDocMouseDown(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        reportAnchorRef.current?.contains(target) ||
+        reportPanelRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setReportMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setReportMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [reportMenuOpen]);
+
+  // Issue #190: one in-flight list request at a time. Rapidly paging (especially bouncing off the
+  // last page) used to stack overlapping requests with no cancellation; on a constrained DB that
+  // could saturate it and leave the whole app stuck on "Cargando…". Every new load aborts the
+  // previous one.
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadInvoices = useCallback(
     async (from: string, to: string, status: string, q: string, page: number, size: number) => {
@@ -242,28 +352,50 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
             `femme.billing.history.rangeError${rangeErr.charAt(0).toUpperCase()}${rangeErr.slice(1)}`,
           ),
         );
+        loadAbortRef.current?.abort();
+        loadAbortRef.current = null;
         setInvoicePage(null);
         return;
       }
+      loadAbortRef.current?.abort();
+      const controller = new AbortController();
+      loadAbortRef.current = controller;
       setLoading(true);
       try {
-        const data = await listInvoicesPaged({
-          from: localDateYmdToIsoStart(from),
-          to: localDateYmdToIsoEnd(to),
-          status: status || undefined,
-          q: q || undefined,
-          page,
-          size,
-        });
+        const data = await listInvoicesPaged(
+          {
+            from: localDateYmdToIsoStart(from),
+            to: localDateYmdToIsoEnd(to),
+            status: status || undefined,
+            q: q || undefined,
+            page,
+            size,
+          },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
         setInvoicePage(data);
+        // Stranded past the last page (row count shrank, or a stale page number): snap back to the
+        // last real page instead of showing a dead, control-less empty view.
+        if (data.totalPages > 0 && page > data.totalPages - 1) {
+          setPageNum(data.totalPages - 1);
+        }
       } catch (err) {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+          return;
+        }
         setLoadError(translateApiError(err, t, "femme.billing.history.loadError"));
       } finally {
-        setLoading(false);
+        if (loadAbortRef.current === controller) {
+          setLoading(false);
+          loadAbortRef.current = null;
+        }
       }
     },
     [t],
   );
+
+  useEffect(() => () => loadAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
@@ -371,8 +503,59 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
           >
             {t("femme.billing.history.refresh")}
           </Button>
+          <div ref={reportAnchorRef} className="relative">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              data-testid="invoice-history-report-button"
+              aria-haspopup="menu"
+              aria-expanded={reportMenuOpen}
+              disabled={reportDownloading !== null}
+              onClick={() => setReportMenuOpen((o) => !o)}
+            >
+              {reportDownloading !== null
+                ? t("femme.billing.history.report.downloading")
+                : t("femme.billing.history.report.button")}
+            </Button>
+            <FloatingDropdown anchorRef={reportAnchorRef} open={reportMenuOpen} ref={reportPanelRef}>
+              <ul
+                role="menu"
+                className="rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] py-1 shadow-lg"
+              >
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="invoice-history-report-xlsx"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    onClick={() => void handleDownloadReport("xlsx")}
+                  >
+                    {t("femme.billing.history.report.excel")}
+                  </button>
+                </li>
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="invoice-history-report-pdf"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    onClick={() => void handleDownloadReport("pdf")}
+                  >
+                    {t("femme.billing.history.report.pdf")}
+                  </button>
+                </li>
+              </ul>
+            </FloatingDropdown>
+          </div>
         </form>
       </div>
+
+      {reportError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {reportError}
+        </Alert>
+      )}
 
       {dateRangeError && (
         <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
@@ -393,7 +576,19 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
           <Text>{t("femme.billing.history.loading")}</Text>
         </div>
       ) : dateRangeError ? null : invoices.length === 0 ? (
-        <Text variant="muted">{t("femme.billing.history.empty")}</Text>
+        <div className="flex flex-col gap-3">
+          <Text variant="muted">{t("femme.billing.history.empty")}</Text>
+          {pageNum > 0 && (
+            // Safety net: never strand the user on an empty page with no way back (issue #190).
+            <Pagination
+              page={pageNum + 1}
+              pageCount={Math.max(totalPages, pageNum + 1)}
+              onPageChange={(p) => setPageNum(p - 1)}
+              previousLabel={t("femme.pagination.previous")}
+              nextLabel={t("femme.pagination.next")}
+            />
+          )}
+        </div>
       ) : (
         <div
           style={{
@@ -409,22 +604,26 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
               style={{ tableLayout: "fixed" }}
             >
               <colgroup>
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "20%" }} />
                 <col style={{ width: "11%" }} />
-                <col style={{ width: "17%" }} />
-                <col style={{ width: "27%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "17%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>
                   {[
                     { key: "colNumber", align: "left" },
                     { key: "colDate", align: "left" },
+                    { key: "colSifenSentAt", align: "left" },
                     { key: "colClient", align: "left" },
                     { key: "colTotal", align: "right" },
                     { key: "colStatus", align: "center" },
                     { key: "colSifenStatus", align: "center" },
+                    { key: "", align: "center" },
                   ].map(({ key, align }, i) => (
                     <th
                       key={i}
@@ -479,6 +678,11 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     <td style={{ padding: "10px 12px" }}>
                       {formatParaguayDateTime(inv.issuedAt, dateLocale)}
                     </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {inv.sifenSubmittedAt
+                        ? formatParaguayDateTime(inv.sifenSubmittedAt, dateLocale)
+                        : "—"}
+                    </td>
                     <td style={{ padding: "10px 12px" }}>{inv.clientDisplayName ?? "—"}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>
                       {formatAmountDecimal(inv.total)}
@@ -492,6 +696,21 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>
                       <SifenStatusBadge status={inv.sifenSubmissionStatus} />
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      {inv.sifenSubmissionStatus === "REJECTED" && inv.status === "ISSUED" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`invoice-row-correct-resend-${inv.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCorrectionInvoiceId(inv.id);
+                          }}
+                        >
+                          {t("femme.billing.history.detail.sifen.correctResendButton")}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -525,6 +744,21 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
           onClose={() => setSelectedInvoiceId(null)}
           onVoided={() => {
             setSelectedInvoiceId(null);
+            void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+          }}
+          onCorrected={() => {
+            setSelectedInvoiceId(null);
+            void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+          }}
+        />
+      )}
+
+      {correctionInvoiceId !== null && (
+        <InvoiceCorrectionForm
+          invoiceId={correctionInvoiceId}
+          onClose={() => setCorrectionInvoiceId(null)}
+          onResent={() => {
+            setCorrectionInvoiceId(null);
             void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
           }}
         />
@@ -644,6 +878,15 @@ function NewInvoiceTab({
   const [clientTaxpayerType, setClientTaxpayerType] = useState(
     effectiveInitialClient?.taxpayerType ?? "PERSONA_FISICA",
   );
+  // Issue #173: recipient email for this comprobante. Pre-filled from the selected client's
+  // profile, editable; a new value is written back to the client on issue.
+  const [clientEmail, setClientEmail] = useState(effectiveInitialClient?.email ?? "");
+  const [clientEmailError, setClientEmailError] = useState<string | null>(null);
+  // Issue #174 AC-04: emission date. Read-only (and "now") unless the user explicitly ticks the
+  // checkbox to edit it, in which case it must stay inside SIFEN's -720h/+120h window.
+  const [issueDateEditable, setIssueDateEditable] = useState(false);
+  const [issueDate, setIssueDate] = useState(localTodayYmd());
+  const [issueDateError, setIssueDateError] = useState<string | null>(null);
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
   );
@@ -700,7 +943,7 @@ function NewInvoiceTab({
         ],
   );
   const [payments, setPayments] = useState<PaymentForm[]>([
-    { method: "CASH", amount: "" },
+    { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -719,6 +962,9 @@ function NewInvoiceTab({
     setSubmitError(null);
     setPdfError(null);
     setGlobalErrors([]);
+    setIssueDateEditable(false);
+    setIssueDate(localTodayYmd());
+    setIssueDateError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
@@ -743,12 +989,15 @@ function NewInvoiceTab({
    */
   function loadClientIdentity(client: {
     fullName: string;
+    email?: string | null;
     ruc?: string | null;
     identityDocumentNumber?: string | null;
     identityDocumentType?: string | null;
     taxpayerType?: string | null;
   }) {
     setClientDisplayName(client.fullName);
+    setClientEmail(client.email ?? "");
+    setClientEmailError(null);
     const resolved = resolveIdentityDocumentTypeAndNumber(client);
     if (resolved.type === "INNOMINADO") {
       setClientIdentityDocumentType("RUC");
@@ -769,6 +1018,8 @@ function NewInvoiceTab({
       setClientIdentityDocumentType("RUC");
       setClientIdentityDocumentNumber("");
       setClientTaxpayerType("PERSONA_FISICA");
+      setClientEmail("");
+      setClientEmailError(null);
     }
   }
 
@@ -776,8 +1027,16 @@ function NewInvoiceTab({
   // the displayed Total equals the value payments must sum to:
   //   gross line totals → per-item discounts → net subtotal → global discount.
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  // Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes the sale
+  // IVA-exonerada — every item and the totals are shown net of the included 10% IVA. Must mirror
+  // InvoiceService.issueInvoice exactly: unitPrice / 1.10 rounded to whole guaraníes.
+  const taxExemptReceiver = clientIdentityDocumentType === "TARJETA_DIPLOMATICA";
+  const effectiveUnitPrice = (l: InvoiceLineForm) => {
+    const raw = parseMaskedMoney(l.unitPrice);
+    return taxExemptReceiver ? Math.round(raw / 1.1) : raw;
+  };
   const lineGross = (l: InvoiceLineForm) =>
-    (parseFloat(l.quantity) || 0) * parseMaskedMoney(l.unitPrice);
+    (parseFloat(l.quantity) || 0) * effectiveUnitPrice(l);
   const lineDiscountAmount = (l: InvoiceLineForm) => {
     if (!l.discountEnabled || !l.discountValue) return 0;
     const gross = lineGross(l);
@@ -816,22 +1075,22 @@ function NewInvoiceTab({
   );
   const remaining = amountToCollect - assignedPayments;
 
-  // When the invoice total changes, auto-fill any CASH payment row with the amount
-  // needed to cover the remaining balance. Watching `amountToCollect` (not `remaining`)
-  // avoids a circular dependency: setting the CASH amount would change `remaining`,
-  // re-firing the effect forever.
+  // Issue #174 AC-02: whenever Total changes, the first payment row's "Monto" follows it
+  // (covering the remaining balance after the other rows) — regardless of the first row's payment
+  // method, where the old behaviour only kept a CASH first row in sync. The user can still edit it
+  // afterwards for a partial payment; watching `amountToCollect` alone (not the assigned sum)
+  // keeps that manual edit from being overwritten and avoids a feedback loop.
   useEffect(() => {
     if (amountToCollect <= 0) return;
     setPayments((prev) => {
-      const nonCashTotal = prev
-        .filter((p) => p.method !== "CASH")
+      if (prev.length === 0) return prev;
+      const othersTotal = prev
+        .slice(1)
         .reduce((acc, p) => acc + parseMaskedMoney(p.amount), 0);
-      const cashFill = Math.max(0, amountToCollect - nonCashTotal);
-      return prev.map((p) =>
-        p.method === "CASH"
-          ? { ...p, amount: cashFill > 0 ? maskMoneyInput(cashFill.toFixed(0)) : "" }
-          : p,
-      );
+      const firstFill = Math.max(0, amountToCollect - othersTotal);
+      const nextAmount = firstFill > 0 ? maskMoneyInput(firstFill.toFixed(0)) : "";
+      if (prev[0].amount === nextAmount) return prev;
+      return prev.map((p, i) => (i === 0 ? { ...p, amount: nextAmount } : p));
     });
   }, [amountToCollect]);
 
@@ -960,7 +1219,10 @@ function NewInvoiceTab({
       const used = new Set(prev.map((p) => p.method));
       const next = PAYMENT_METHODS.find((m) => !used.has(m));
       if (!next) return prev;
-      return [...prev, { method: next, amount: "" }];
+      return [
+        ...prev,
+        { method: next, amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+      ];
     });
   }
 
@@ -976,7 +1238,20 @@ function NewInvoiceTab({
   function updatePayment(idx: number, field: keyof PaymentForm, value: string) {
     const next = field === "amount" ? maskMoneyInput(value) : value;
     setPayments((prev) =>
-      prev.map((p, i) => (i === idx ? { ...p, [field]: next } : p)),
+      prev.map((p, i) => {
+        if (i !== idx) return p;
+        const updated = { ...p, [field]: next };
+        // Issue #170: clear the card fields when they no longer apply, so a stale brand/
+        // description never rides along after switching payment method or brand.
+        if (field === "method" && !CARD_PAYMENT_METHODS.has(next)) {
+          updated.cardBrand = "";
+          updated.cardBrandOtherDescription = "";
+        }
+        if (field === "cardBrand" && next !== "OTHER") {
+          updated.cardBrandOtherDescription = "";
+        }
+        return updated;
+      }),
     );
     if (paymentErrors[idx]) {
       setPaymentErrors((prev) => {
@@ -1045,6 +1320,17 @@ function NewInvoiceTab({
       const amount = parseMaskedMoney(p.amount);
       if (!Number.isFinite(amount) || amount <= 0) {
         newPaymentErrors[i] = t("femme.billing.invoice.paymentAmountInvalid");
+        return;
+      }
+      // Issue #170: SIFEN rejects card payments missing the mandatory card brand group.
+      if (CARD_PAYMENT_METHODS.has(p.method) && !p.cardBrand.trim()) {
+        newPaymentErrors[i] = t("femme.billing.invoice.cardBrandRequired");
+      } else if (
+        CARD_PAYMENT_METHODS.has(p.method) &&
+        p.cardBrand === "OTHER" &&
+        !p.cardBrandOtherDescription.trim()
+      ) {
+        newPaymentErrors[i] = t("femme.billing.invoice.cardBrandOtherDescriptionRequired");
       }
     });
 
@@ -1064,7 +1350,38 @@ function NewInvoiceTab({
       if (total >= SIFEN_CLIENT_IDENTIFICATION_THRESHOLD && (isInnominado || !numberTrim)) {
         errors.push(t("femme.billing.invoice.clientIdentificationRequiredThreshold"));
       }
+      // Issue #174 AC-01: a diplomatic-exoneration receiver must carry its card number, so the
+      // exoneration the form is already applying to the amounts also reaches SIFEN.
+      if (taxExemptReceiver && !numberTrim) {
+        errors.push(t("femme.billing.invoice.diplomaticCardNumberRequired"));
+      }
     }
+
+    // Issue #173: with SIFEN e-invoicing enabled the KuDE is auto-emailed after approval, so a
+    // recipient email is mandatory — except for a "Sin identificar" (INNOMINADO) comprobante.
+    let newClientEmailError: string | null = null;
+    {
+      const emailTrim = clientEmail.trim();
+      const emailRequired =
+        sifenEnabled && clientIdentityDocumentType !== "INNOMINADO";
+      if (emailRequired && !emailTrim) {
+        newClientEmailError = t("femme.billing.invoice.clientEmailRequired");
+      } else if (emailTrim && !isValidEmail(emailTrim)) {
+        newClientEmailError = t("femme.clients.emailInvalid");
+      }
+    }
+    setClientEmailError(newClientEmailError);
+
+    // Issue #174 AC-04: only validated when the user chose to edit the emission date.
+    let newIssueDateError: string | null = null;
+    if (issueDateEditable) {
+      if (!issueDate) {
+        newIssueDateError = t("femme.billing.invoice.issueDateRequired");
+      } else if (issueDateOutOfRange(issueDate)) {
+        newIssueDateError = t("femme.billing.invoice.issueDateOutOfRange");
+      }
+    }
+    setIssueDateError(newIssueDateError);
 
     setLineErrors(newLineErrors);
     setPaymentErrors(newPaymentErrors);
@@ -1074,6 +1391,8 @@ function NewInvoiceTab({
       Object.keys(newLineErrors).length === 0 &&
       Object.keys(newPaymentErrors).length === 0 &&
       newDiscountValueError === null &&
+      newClientEmailError === null &&
+      newIssueDateError === null &&
       errors.length === 0;
     return { ok, lineErrors: newLineErrors, paymentErrors: newPaymentErrors, globalErrors: errors };
   }
@@ -1094,6 +1413,16 @@ function NewInvoiceTab({
             return "client-identity-document-number";
           }
           if (isRucType && numberTrim && !clientDisplayName.trim()) return "client-display-name";
+        }
+        {
+          const emailTrim = clientEmail.trim();
+          const emailRequired = sifenEnabled && clientIdentityDocumentType !== "INNOMINADO";
+          if (
+            (emailRequired && !emailTrim) ||
+            (emailTrim && !isValidEmail(emailTrim))
+          ) {
+            return "billing-client-email";
+          }
         }
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
@@ -1128,6 +1457,13 @@ function NewInvoiceTab({
       clientIdentityDocumentOverride: !isRucType && !isInnominado ? numberTrim || null : null,
       clientIdentityDocumentTypeOverride: numberTrim ? clientIdentityDocumentType : null,
       clientTaxpayerTypeOverride: isRucType && numberTrim ? clientTaxpayerType : null,
+      email: clientEmail.trim() || null,
+      // Issue #174 AC-04: only sent when the user opted to edit the emission date — noon local
+      // time on the picked day, well inside SIFEN's hour-granular window.
+      issuedAt:
+        issueDateEditable && issueDate
+          ? new Date(`${issueDate}T12:00:00`).toISOString()
+          : null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
         discountType !== "NONE" && discountValue
@@ -1151,6 +1487,11 @@ function NewInvoiceTab({
       payments: payments.map((p) => ({
         method: p.method,
         amount: parseMaskedMoney(p.amount),
+        cardBrand: CARD_PAYMENT_METHODS.has(p.method) ? p.cardBrand : null,
+        cardBrandOtherDescription:
+          CARD_PAYMENT_METHODS.has(p.method) && p.cardBrand === "OTHER"
+            ? p.cardBrandOtherDescription
+            : null,
       })),
       serviceRecordId: serviceRecordId,
       tipsAmount: tipsAmount.trim() !== "" ? tipsAmountNum : null,
@@ -1172,6 +1513,11 @@ function NewInvoiceTab({
       setClientDisplayName("");
       setClientIdentityDocumentType("RUC");
       setClientIdentityDocumentNumber("");
+      setClientEmail("");
+      setClientEmailError(null);
+      setIssueDateEditable(false);
+      setIssueDate(localTodayYmd());
+      setIssueDateError(null);
       setDiscountType("NONE");
       setDiscountValue("");
       setDiscountValueError(null);
@@ -1187,7 +1533,9 @@ function NewInvoiceTab({
           discountValue: "",
         },
       ]);
-      setPayments([{ method: "CASH", amount: "" }]);
+      setPayments([
+        { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+      ]);
       setTipsAmount("");
       setServiceRecordId(null);
       setLineErrors({});
@@ -1273,6 +1621,53 @@ function NewInvoiceTab({
       {!rucValidForInvoicing && <FiscalRucWarning />}
 
       <form onSubmit={(e) => void handleSubmit(e)} noValidate className="flex flex-col gap-6">
+        {/* Issue #174 AC-04: emission date — read-only unless explicitly unlocked. */}
+        <Card className="p-4 sm:p-6 flex flex-col gap-3">
+          <Heading as="h3" className="text-base">
+            {t("femme.billing.invoice.issueDateSection")}
+          </Heading>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-[160px]">
+              <Label htmlFor="billing-issue-date">
+                {t("femme.billing.invoice.issueDateLabel")}
+              </Label>
+              <Input
+                id="billing-issue-date"
+                type="date"
+                value={issueDate}
+                onChange={(e) => {
+                  setIssueDate(e.target.value);
+                  setIssueDateError(null);
+                }}
+                disabled={!issueDateEditable}
+                aria-invalid={issueDateError ? true : undefined}
+                aria-describedby={issueDateError ? "billing-issue-date-err" : undefined}
+                className="mt-1 w-full"
+              />
+            </div>
+            <label
+              htmlFor="billing-issue-date-editable"
+              className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
+            >
+              <Checkbox
+                id="billing-issue-date-editable"
+                checked={issueDateEditable}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setIssueDateEditable(on);
+                  setIssueDateError(null);
+                  if (!on) setIssueDate(localTodayYmd());
+                }}
+              />
+              {t("femme.billing.invoice.issueDateEditableToggle")}
+            </label>
+          </div>
+          <FieldValidationError id="billing-issue-date-err">{issueDateError}</FieldValidationError>
+          <Text variant="muted" className="mt-1 text-sm">
+            {t("femme.billing.invoice.issueDateLegend")}
+          </Text>
+        </Card>
+
         {/* Client section */}
         <Card className="p-4 sm:p-6 flex flex-col gap-4">
           <Heading as="h3" className="text-base">
@@ -1297,6 +1692,37 @@ function NewInvoiceTab({
             label={t("femme.billing.invoice.clientSearchLabel")}
             placeholder={t("femme.billing.invoice.clientPlaceholder")}
           />
+          <div>
+            <Label htmlFor="billing-client-email">
+              {t("femme.billing.invoice.clientEmailLabel")}
+            </Label>
+            <Input
+              id="billing-client-email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={clientEmail}
+              onChange={(e) => {
+                setClientEmail(e.target.value);
+                setClientEmailError(null);
+              }}
+              placeholder={t("femme.billing.invoice.clientEmailPlaceholder")}
+              aria-invalid={clientEmailError ? true : undefined}
+              aria-describedby={
+                clientEmailError ? "billing-client-email-err" : "billing-client-email-hint"
+              }
+              className="mt-1 w-full"
+            />
+            {clientEmailError ? (
+              <FieldValidationError id="billing-client-email-err">
+                {clientEmailError}
+              </FieldValidationError>
+            ) : (
+              <Text id="billing-client-email-hint" variant="muted" className="mt-1 text-sm">
+                {t("femme.billing.invoice.clientEmailHint")}
+              </Text>
+            )}
+          </div>
           <div className="flex flex-col gap-4 border-t border-[rgb(var(--color-border))] pt-4">
             <label
               htmlFor="client-unnamed-invoice"
@@ -1587,6 +2013,15 @@ function NewInvoiceTab({
 
           {/* Summary */}
           <div className="flex flex-col gap-1 text-sm">
+            {taxExemptReceiver && (
+              <Text
+                data-testid="billing-tax-exempt-note"
+                variant="muted"
+                className="mb-1 text-sm"
+              >
+                {t("femme.billing.invoice.taxExemptNote")}
+              </Text>
+            )}
             <div className="flex justify-between">
               <span className="text-[rgb(var(--color-muted-foreground))]">
                 {t("femme.billing.invoice.subtotal")}
@@ -1622,7 +2057,14 @@ function NewInvoiceTab({
           </div>
 
           <div className="flex flex-col gap-3">
-            {payments.map((payment, idx) => (
+            {payments.map((payment, idx) => {
+              const paymentAmountNum = parseMaskedMoney(payment.amount);
+              const amountIsInvalid =
+                !Number.isFinite(paymentAmountNum) || paymentAmountNum <= 0;
+              const isCardPayment = CARD_PAYMENT_METHODS.has(payment.method);
+              const cardError =
+                !amountIsInvalid && paymentErrors[idx] ? paymentErrors[idx] : undefined;
+              return (
               <div key={idx} className="flex flex-wrap gap-2 items-start">
                 <div className="flex-1 min-w-[160px]">
                   <Label htmlFor={`pay-method-${idx}`}>
@@ -1656,15 +2098,70 @@ function NewInvoiceTab({
                     onChange={(e) => updatePayment(idx, "amount", e.target.value)}
                     placeholder={t("femme.billing.invoice.paymentAmountPlaceholder")}
                     className="mt-1 w-full"
-                    aria-invalid={!!paymentErrors[idx]}
+                    aria-invalid={amountIsInvalid && !!paymentErrors[idx]}
                     aria-describedby={
-                      paymentErrors[idx] ? `pay-amount-err-${idx}` : undefined
+                      idx === 0
+                        ? "pay-amount-0-hint"
+                        : amountIsInvalid && paymentErrors[idx]
+                          ? `pay-amount-err-${idx}`
+                          : undefined
                     }
                   />
-                  <FieldValidationError id={`pay-amount-err-${idx}`}>
-                    {paymentErrors[idx]}
-                  </FieldValidationError>
+                  {idx === 0 ? (
+                    <Text id="pay-amount-0-hint" variant="muted" className="mt-1 text-sm">
+                      {t("femme.billing.invoice.paymentAmountFirstRowHint")}
+                    </Text>
+                  ) : (
+                    <FieldValidationError id={`pay-amount-err-${idx}`}>
+                      {amountIsInvalid ? paymentErrors[idx] : undefined}
+                    </FieldValidationError>
+                  )}
                 </div>
+                {isCardPayment && (
+                  <div className="flex-1 min-w-[160px]">
+                    <Label htmlFor={`pay-card-brand-${idx}`}>
+                      {t("femme.billing.invoice.cardBrandLabel")}
+                    </Label>
+                    <Select
+                      id={`pay-card-brand-${idx}`}
+                      value={payment.cardBrand}
+                      onChange={(e) => updatePayment(idx, "cardBrand", e.target.value)}
+                      className="mt-1 w-full"
+                      aria-invalid={!!cardError}
+                      aria-describedby={cardError ? `pay-card-brand-err-${idx}` : undefined}
+                    >
+                      <option value="" disabled>
+                        {t("femme.billing.invoice.cardBrandPlaceholder")}
+                      </option>
+                      {CARD_BRANDS.map((brand) => (
+                        <option key={brand} value={brand}>
+                          {t(`femme.billing.invoice.cardBrand${capitalize(brand)}`)}
+                        </option>
+                      ))}
+                    </Select>
+                    <FieldValidationError id={`pay-card-brand-err-${idx}`}>
+                      {cardError}
+                    </FieldValidationError>
+                  </div>
+                )}
+                {isCardPayment && payment.cardBrand === "OTHER" && (
+                  <div className="flex-1 min-w-[160px]">
+                    <Label htmlFor={`pay-card-brand-other-${idx}`}>
+                      {t("femme.billing.invoice.cardBrandOtherDescriptionLabel")}
+                    </Label>
+                    <Input
+                      id={`pay-card-brand-other-${idx}`}
+                      value={payment.cardBrandOtherDescription}
+                      onChange={(e) =>
+                        updatePayment(idx, "cardBrandOtherDescription", e.target.value)
+                      }
+                      placeholder={t(
+                        "femme.billing.invoice.cardBrandOtherDescriptionPlaceholder",
+                      )}
+                      className="mt-1 w-full"
+                    />
+                  </div>
+                )}
                 {payments.length > 1 && (
                   <div className="flex items-end pb-1">
                     <Button
@@ -1679,7 +2176,8 @@ function NewInvoiceTab({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <Button
@@ -2258,6 +2756,12 @@ function CashSessionTab({
             </span>
           </div>
 
+          {visibleTodayInvoices.some((inv) => inv.sifenSubmissionStatus === "REJECTED") ? (
+            <Text variant="small" className="text-[var(--color-ink-3)]" style={{ marginBottom: 12 }}>
+              {t("femme.billing.session.todayTotalExcludesRejected")}
+            </Text>
+          ) : null}
+
           <div style={{ marginBottom: 12 }}>
             <ListSearchField
               id="billing-session-today-filter"
@@ -2287,14 +2791,13 @@ function CashSessionTab({
                 }}
               >
                 <colgroup>
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "20%" }} />
-                  <col style={{ width: "16%" }} />
-                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "24%" }} />
+                  <col style={{ width: "17%" }} />
+                  <col style={{ width: "13%" }} />
                   <col style={{ width: "11%" }} />
                   <col style={{ width: "11%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "11%" }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -2319,7 +2822,6 @@ function CashSessionTab({
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
                       {t("femme.billing.history.colSifenStatus")}
                     </th>
-                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -2337,6 +2839,20 @@ function CashSessionTab({
                     return (
                       <tr
                         key={inv.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={t("femme.billing.history.openDetail", {
+                          invoiceNumber: inv.invoiceNumberFormatted,
+                        })}
+                        data-testid={`billing-today-row-${inv.id}`}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setSelectedInvoiceId(inv.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedInvoiceId(inv.id);
+                          }
+                        }}
                         onMouseEnter={() => setHoveredRowId(inv.id)}
                         onMouseLeave={() => setHoveredRowId(null)}
                       >
@@ -2371,16 +2887,6 @@ function CashSessionTab({
                         </td>
                         <td style={cell}>
                           <SifenStatusBadge status={inv.sifenSubmissionStatus} />
-                        </td>
-                        <td style={{ ...cell, textAlign: "right" }}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            data-testid={`billing-today-view-${inv.id}`}
-                            onClick={() => setSelectedInvoiceId(inv.id)}
-                          >
-                            {t("femme.billing.history.viewDetail")}
-                          </Button>
                         </td>
                       </tr>
                     );

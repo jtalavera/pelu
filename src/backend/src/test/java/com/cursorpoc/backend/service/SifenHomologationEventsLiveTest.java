@@ -472,7 +472,10 @@ class SifenHomologationEventsLiveTest {
             BigDecimal.ZERO);
     SifenInvoiceDetail detail =
         new SifenInvoiceDetail(
-            List.of(line), totals, 1, List.of(new SifenPaymentDetail(1, LINE_UNIT_PRICE)));
+            List.of(line),
+            totals,
+            1,
+            List.of(new SifenPaymentDetail(1, LINE_UNIT_PRICE, null, null)));
 
     LocalDateTime signatureTimestamp = issueDateTime.minusMinutes(2);
     Document unsigned =

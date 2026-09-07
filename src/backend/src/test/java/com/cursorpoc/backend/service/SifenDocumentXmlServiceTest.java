@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
@@ -26,6 +27,8 @@ class SifenDocumentXmlServiceTest {
   private SifenControlNumberFields cdcFields;
   private String cdc;
   private SifenInvoiceHeader header;
+  private SifenInvoiceLine line;
+  private SifenInvoiceTotals totals;
   private SifenInvoiceDetail detail;
 
   @BeforeEach
@@ -66,7 +69,7 @@ class SifenDocumentXmlServiceTest {
             receiver,
             false);
 
-    SifenInvoiceLine line =
+    line =
         new SifenInvoiceLine(
             "SVC-1",
             "Corte de cabello",
@@ -82,7 +85,7 @@ class SifenDocumentXmlServiceTest {
             BigDecimal.valueOf(10),
             BigDecimal.valueOf(90909.09),
             BigDecimal.valueOf(9090.91));
-    SifenInvoiceTotals totals =
+    totals =
         new SifenInvoiceTotals(
             BigDecimal.ZERO,
             BigDecimal.ZERO,
@@ -105,7 +108,7 @@ class SifenDocumentXmlServiceTest {
             List.of(line),
             totals,
             1,
-            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000))));
+            List.of(new SifenPaymentDetail(1, BigDecimal.valueOf(100_000), null, null)));
   }
 
   /** AC-01: the built document has a single, real <DE Id="cdc"> element covering the invoice. */
@@ -493,6 +496,73 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='dMonTiPag']")).isEqualTo("100000");
   }
 
+  /** Issue #170: cash/transfer payments must never carry the card-only E7.1.1/gPagTarCD group. */
+  @Test
+  void buildDocument_cashPayment_neverEmitsCardPaymentGroup() throws Exception {
+    Document doc = service.buildDocument(header, detail, cdcFields, LocalDateTime.now());
+
+    NodeList gPagTarCD = (NodeList) xpathNodes(doc, "//*[local-name()='gPagTarCD']");
+    assertThat(gPagTarCD.getLength()).isZero();
+  }
+
+  /**
+   * Issue #170 (SIFEN live rejection): a credit/debit card payment must emit the mandatory
+   * E7.1.1/gPagTarCD group with the card brand and a hardcoded POS processing form.
+   */
+  @Test
+  void buildDocument_creditCardPayment_emitsCardPaymentGroup() throws Exception {
+    SifenInvoiceDetail cardDetail =
+        new SifenInvoiceDetail(
+            List.of(line),
+            totals,
+            1,
+            List.of(new SifenPaymentDetail(3, BigDecimal.valueOf(100_000), CardBrand.VISA, null)));
+
+    Document doc = service.buildDocument(header, cardDetail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='gPagTarCD']/*[local-name()='iDenTarj']"))
+        .isEqualTo("1");
+    assertThat(xpath(doc, "//*[local-name()='gPagTarCD']/*[local-name()='dDesDenTarj']"))
+        .isEqualTo("Visa");
+    assertThat(xpath(doc, "//*[local-name()='gPagTarCD']/*[local-name()='iForProPa']"))
+        .isEqualTo("1");
+  }
+
+  /**
+   * Issue #170: brand "Otro" (99) must emit the free-text description captured at issuance, not a
+   * fixed catalog label.
+   */
+  @Test
+  void buildDocument_debitCardPaymentWithOtherBrand_emitsFreeTextDescription() throws Exception {
+    SifenInvoiceDetail cardDetail =
+        new SifenInvoiceDetail(
+            List.of(line),
+            totals,
+            1,
+            List.of(
+                new SifenPaymentDetail(
+                    4, BigDecimal.valueOf(100_000), CardBrand.OTHER, "Union Pay")));
+
+    Document doc = service.buildDocument(header, cardDetail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='gPagTarCD']/*[local-name()='iDenTarj']"))
+        .isEqualTo("99");
+    assertThat(xpath(doc, "//*[local-name()='gPagTarCD']/*[local-name()='dDesDenTarj']"))
+        .isEqualTo("Union Pay");
+  }
+
+  /**
+   * Issue #170: dRedon (F013) is an unsigned SIFEN field — confirms the built XML never emits a
+   * leading "-" for it, whatever totals feed the document.
+   */
+  @Test
+  void buildDocument_neverEmitsNegativeRedon() throws Exception {
+    Document doc = service.buildDocument(header, detail, cdcFields, LocalDateTime.now());
+
+    String redon = xpath(doc, "//*[local-name()='dRedon']");
+    assertThat(redon).doesNotStartWith("-");
+  }
+
   /**
    * SIFEN HU-13 bonus finding: the real production currency catalog (Monedas_v150.xsd's {@code
    * <CodeName>} for PYG) spells the currency description without an accent — "Guarani", not
@@ -578,6 +648,43 @@ class SifenDocumentXmlServiceTest {
     assertThat(xpath(doc, "//*[local-name()='dDesAfecIVA']"))
         .isEqualTo("Gravado parcial (Grav- Exento)");
     assertThat(xpath(doc, "//*[local-name()='dBasExe']")).isEqualTo("47619.04761905");
+  }
+
+  /**
+   * Issue #174 AC-01: for an Exonerado line (iAfecIVA=2, "Tarjeta Diplomática de exoneración
+   * fiscal" receiver) SIFEN rejects any non-zero E733/dPropIVA — "Proporción gravada del IVA
+   * incorrecta para forma de afectación Exonerado o Exento". dTasaIVA / dBasGravIVA / dLiqIVAItem
+   * must also be 0.
+   */
+  @Test
+  void buildDocument_exoneradoLine_emitsZeroTaxProportionAndZeroTax() throws Exception {
+    SifenInvoiceLine exoneradoLine =
+        new SifenInvoiceLine(
+            "SVC-3",
+            "Servicio a diplomático",
+            null,
+            1,
+            "77",
+            BigDecimal.valueOf(50_000),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(50_000),
+            SifenTaxAffectation.EXONERADO,
+            // A stale 100 here must NOT reach the XML — the service forces it to 0 for Exonerado.
+            BigDecimal.valueOf(100),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO);
+    SifenInvoiceDetail exoneradoDetail =
+        new SifenInvoiceDetail(List.of(exoneradoLine), detail.totals(), 1, detail.payments());
+
+    Document doc = service.buildDocument(header, exoneradoDetail, cdcFields, LocalDateTime.now());
+
+    assertThat(xpath(doc, "//*[local-name()='iAfecIVA']")).isEqualTo("2");
+    assertThat(xpath(doc, "//*[local-name()='dPropIVA']")).isEqualTo("0");
+    assertThat(xpath(doc, "//*[local-name()='dTasaIVA']")).isEqualTo("0");
+    assertThat(xpath(doc, "//*[local-name()='dBasGravIVA']")).isEqualTo("0");
+    assertThat(xpath(doc, "//*[local-name()='dLiqIVAItem']")).isEqualTo("0");
   }
 
   // ---------------------------------------------------------------------------------------------

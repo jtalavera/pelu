@@ -94,6 +94,8 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("E2E HU33 KuDE siempre");
+    // Issue #173: with SIFEN active the recipient email is mandatory unless "Sin identificar".
+    await page.locator("#billing-client-email").fill("hu33-kude@example.com");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
@@ -111,12 +113,10 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
       ),
       downloadBtn.click(),
     ]);
-    // RT-28/RT-20 widened SifenKudePdfService#requireDeliverableInvoice to also deliver the KuDE
-    // for PENDING_VERIFICATION/QUEUED invoices (point-of-sale delivery ahead of SIFEN approval),
-    // so this succeeds — AC-01 here only proves the button targets the KuDE endpoint at all,
-    // never the legacy one.
+    // AC-01: the button targets the KuDE endpoint, never the legacy one. RT-20/RT-28: a
+    // freshly-issued (QUEUED / pendiente de verificación) SIFEN invoice already has its CDC/QR, so
+    // the KuDE downloads right away (200), no approval needed.
     expect(kudeResponse.status()).toBe(200);
-
     expect(legacyPdfRequestUrls).toHaveLength(0);
   });
 
@@ -160,7 +160,10 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName });
+    const row = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: client.fullName })
+      .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 

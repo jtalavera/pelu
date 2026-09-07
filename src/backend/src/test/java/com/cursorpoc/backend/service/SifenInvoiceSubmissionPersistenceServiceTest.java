@@ -142,4 +142,51 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
     assertThat(invoice.getSifenSubmissionStatus())
         .isEqualTo(com.cursorpoc.backend.domain.enums.SifenSubmissionStatus.QUEUED);
   }
+
+  /** Issue #175: resetForCorrection wipes the SIFEN result but keeps the CDC/security code. */
+  @Test
+  void resetForCorrection_clearsResultFields_butKeepsCdcAndSecurityCode() {
+    invoice.setSifenSubmissionStatus(
+        com.cursorpoc.backend.domain.enums.SifenSubmissionStatus.REJECTED);
+    invoice.setSifenControlNumber("01" + "4".repeat(42));
+    invoice.setSifenSecurityCode("987654321");
+    invoice.setSifenSubmissionProtocolNumber("111");
+    invoice.setSifenSubmissionResultCode("400");
+    invoice.setSifenSubmissionMessage("XML mal formado");
+    invoice.setSifenSubmittedAt(businessNow());
+    invoice.setSifenSignedAt(businessNow().minusHours(1));
+    invoice.setSifenAttemptCount(3);
+    invoice.setSifenNextAttemptAt(businessNow());
+    invoice.setSifenProcessingStartedAt(businessNow());
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(invoice));
+
+    persistence.resetForCorrection(TENANT_ID, INVOICE_ID);
+
+    assertThat(invoice.getSifenSubmissionStatus()).isNull();
+    assertThat(invoice.getSifenSubmissionProtocolNumber()).isNull();
+    assertThat(invoice.getSifenSubmissionResultCode()).isNull();
+    assertThat(invoice.getSifenSubmissionMessage()).isNull();
+    assertThat(invoice.getSifenSubmittedAt()).isNull();
+    assertThat(invoice.getSifenSignedAt()).isNull();
+    assertThat(invoice.getSifenAttemptCount()).isZero();
+    assertThat(invoice.getSifenNextAttemptAt()).isNull();
+    assertThat(invoice.getSifenProcessingStartedAt()).isNull();
+    // CDC survives — same-number correction (Manual Técnico V150 §6.5).
+    assertThat(invoice.getSifenControlNumber()).isEqualTo("01" + "4".repeat(42));
+    assertThat(invoice.getSifenSecurityCode()).isEqualTo("987654321");
+  }
+
+  @Test
+  void resetForCorrection_rejectsAnInvoiceThatIsNotRejected() {
+    invoice.setSifenSubmissionStatus(
+        com.cursorpoc.backend.domain.enums.SifenSubmissionStatus.APPROVED);
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(invoice));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> persistence.resetForCorrection(TENANT_ID, INVOICE_ID))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("INVOICE_NOT_REJECTED");
+  }
 }

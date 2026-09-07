@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.repository.InvoiceRepository;
@@ -78,6 +79,17 @@ class SifenInvoiceDetailServiceTest {
     allocation.setInvoice(invoice);
     allocation.setMethod(method);
     allocation.setAmount(amount);
+    invoice.getPaymentAllocations().add(allocation);
+  }
+
+  private void addCardPayment(
+      PaymentMethod method, BigDecimal amount, CardBrand cardBrand, String otherDescription) {
+    InvoicePaymentAllocation allocation = new InvoicePaymentAllocation();
+    allocation.setInvoice(invoice);
+    allocation.setMethod(method);
+    allocation.setAmount(amount);
+    allocation.setCardBrand(cardBrand);
+    allocation.setCardBrandOtherDescription(otherDescription);
     invoice.getPaymentAllocations().add(allocation);
   }
 
@@ -197,6 +209,32 @@ class SifenInvoiceDetailServiceTest {
     assertThat(line.taxAmount()).isEqualByComparingTo("0");
   }
 
+  /**
+   * Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes every line
+   * EXONERADO (iAfecIVA=2) with zero IVA, and its net total lands in the exonerated subtotal bucket
+   * (F003/dSubExo).
+   */
+  @Test
+  void buildDetail_diplomaticReceiver_marksLinesExoneradoAndFillsExoneratedSubtotal() {
+    invoice.setClientIdentityDocumentTypeOverride(
+        com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType.TARJETA_DIPLOMATICA);
+    invoice.setClientIdentityDocumentOverride("DIP-001");
+    // Already netted at issue time (see InvoiceService), so the line carries a 0 tax rate.
+    addLine("Corte", 1, new BigDecimal("100000.00"), BigDecimal.ZERO);
+    finalizeTotals(BigDecimal.ZERO);
+
+    SifenInvoiceDetail detail = service.buildDetail(TENANT_ID, INVOICE_ID);
+    SifenInvoiceLine line = detail.lines().get(0);
+
+    assertThat(line.taxAffectation()).isEqualTo(SifenTaxAffectation.EXONERADO);
+    assertThat(line.taxAmount()).isEqualByComparingTo("0");
+    // SIFEN rejects a non-zero dPropIVA for Exonerado/Exento.
+    assertThat(line.taxProportion()).isEqualByComparingTo("0");
+    assertThat(detail.totals().exoneratedSubtotal()).isEqualByComparingTo("100000.00");
+    assertThat(detail.totals().exemptSubtotal()).isEqualByComparingTo("0");
+    assertThat(detail.totals().grossTotal()).isEqualByComparingTo("100000.00");
+  }
+
   /** AC-03: SIFEN only accepts 5% or 10% for a gravado line — any other rate is rejected. */
   @Test
   void buildDetail_unsupportedTaxRate_throws() {
@@ -307,6 +345,31 @@ class SifenInvoiceDetailServiceTest {
     assertThat(sumOfLines).isEqualByComparingTo(invoice.getTotal());
   }
 
+  /**
+   * Issue #170: reproduces the exact Comprobante #0001032 shape that SIFEN rejected live with "XML
+   * malformado [El valor -0.01 del elemento: dRedon es invalido]" — 12 lines (two at 10.000, one at
+   * 20.000, one at 30.000, eight at 50.000 Gs), a 50.000 Gs global discount, subtotal 470.000,
+   * total 420.000. Summing each line's independently-HALF_UP-rounded globalDiscountAmount drifts
+   * 0.01 above the true 50.000 Gs discount, which would otherwise make {@code roundingAdjustment}
+   * (dRedon) come out as -0.01 — an unsigned SIFEN field that must never be negative.
+   */
+  @Test
+  void buildTotals_discountRoundingDrift_neverProducesNegativeRedon() {
+    addLine("LAVADO", 1, new BigDecimal("10000.00"), BigDecimal.ZERO);
+    addLine("MANOS", 1, new BigDecimal("10000.00"), BigDecimal.ZERO);
+    addLine("PIES", 1, new BigDecimal("20000.00"), BigDecimal.ZERO);
+    addLine("SPA DE PIES", 1, new BigDecimal("30000.00"), BigDecimal.ZERO);
+    for (int i = 0; i < 8; i++) {
+      addLine("Producto " + i, 1, new BigDecimal("50000.00"), BigDecimal.ZERO);
+    }
+    finalizeTotals(new BigDecimal("50000.00"));
+
+    SifenInvoiceDetail detail = service.buildDetail(TENANT_ID, INVOICE_ID);
+
+    assertThat(invoice.getTotal()).isEqualByComparingTo("420000.00");
+    assertThat(detail.totals().roundingAdjustment().signum()).isGreaterThanOrEqualTo(0);
+  }
+
   /** AC-06: each payment allocation maps to SIFEN's payment-type code; sale is always Contado. */
   @Test
   void buildDetail_paymentAllocations_mapToSifenPaymentTypes() {
@@ -324,6 +387,37 @@ class SifenInvoiceDetailServiceTest {
     assertThat(detail.payments())
         .extracting(SifenPaymentDetail::typeCode)
         .containsExactly(1, 3, 4, 5, 99);
+  }
+
+  /**
+   * Issue #170: the card brand captured on a CREDIT_CARD/DEBIT_CARD allocation must reach {@link
+   * SifenPaymentDetail} unchanged, so {@code SifenDocumentXmlService} can emit the mandatory
+   * gPagTarCD group.
+   */
+  @Test
+  void buildDetail_cardPayment_threadsCardBrandIntoPaymentDetail() {
+    addLine("Corte", 1, new BigDecimal("100.00"), BigDecimal.ZERO);
+    finalizeTotals(BigDecimal.ZERO);
+    addCardPayment(PaymentMethod.CREDIT_CARD, new BigDecimal("100.00"), CardBrand.VISA, null);
+
+    SifenInvoiceDetail detail = service.buildDetail(TENANT_ID, INVOICE_ID);
+
+    assertThat(detail.payments()).hasSize(1);
+    assertThat(detail.payments().get(0).cardBrand()).isEqualTo(CardBrand.VISA);
+    assertThat(detail.payments().get(0).cardBrandOtherDescription()).isNull();
+  }
+
+  @Test
+  void buildDetail_cardPaymentWithOtherBrand_threadsFreeTextDescription() {
+    addLine("Corte", 1, new BigDecimal("100.00"), BigDecimal.ZERO);
+    finalizeTotals(BigDecimal.ZERO);
+    addCardPayment(
+        PaymentMethod.DEBIT_CARD, new BigDecimal("100.00"), CardBrand.OTHER, "Union Pay");
+
+    SifenInvoiceDetail detail = service.buildDetail(TENANT_ID, INVOICE_ID);
+
+    assertThat(detail.payments().get(0).cardBrand()).isEqualTo(CardBrand.OTHER);
+    assertThat(detail.payments().get(0).cardBrandOtherDescription()).isEqualTo("Union Pay");
   }
 
   @Test
