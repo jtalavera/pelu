@@ -15,6 +15,10 @@ const MT_BASE_URL = `http://localhost:${MT_FRONTEND_PORT}`;
 
 process.env.MT_API_BASE = MT_API_BASE;
 process.env.MT_BASE_URL = MT_BASE_URL;
+// `e2e/fixtures/api.ts` reads `API_BASE` from `PLAYWRIGHT_API_BASE_URL` at module eval and otherwise
+// defaults to :8080. This suite's backend is on :8081, so point every `fixtures/api.ts` network
+// helper (apiGetJson, createAppointmentApi, ensureCashSessionOpenApi, …) at the mt backend.
+process.env.PLAYWRIGHT_API_BASE_URL = MT_API_BASE;
 
 const videoMode =
   (process.env.E2E_VIDEO as "on" | "retain-on-failure" | "off" | undefined) ??
