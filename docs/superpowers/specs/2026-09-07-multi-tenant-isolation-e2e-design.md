@@ -60,9 +60,22 @@ same-email-in-two-tenants case is a deliberate fixture, not a blocker.
     email disabled).
   - Vite on `:5174` with `VITE_API_BASE_URL=http://127.0.0.1:8081`.
   - Chosen ports avoid any clash with a normal dev stack on `:8080` / `:5173`.
-- `testDir: ./tests/mt-isolation`.
+- `testDir: ./tests/mt-isolation` (resolved relative to the config file →
+  `e2e/tests/mt-isolation/`, a new subdirectory of the existing `e2e/tests/`).
 - `workers: 1`, `retries: 0` locally / `2` on CI, `reuseExistingServer: !CI`.
 - `globalSetup: ./global-setup.mt.ts`.
+
+The existing `playwright.config.ts` has `testDir: "./tests"` and discovers
+specs recursively, so it needs a one-line guard to skip the new subdirectory:
+
+```ts
+// playwright.config.ts
+testDir: "./tests",
+testIgnore: "mt-isolation/**",   // the mt-isolation suite runs from its own config
+```
+
+This is the only edit to an existing e2e file (besides the two `package.json`
+scripts).
 
 Rationale vs. alternatives:
 
@@ -327,6 +340,7 @@ New `e2e/package.json` scripts:
 
 ```
 e2e/
+├── playwright.config.ts                  # edit — add testIgnore: "mt-isolation/**"
 ├── playwright.mt-isolation.config.ts     # new
 ├── global-setup.mt.ts                    # new
 ├── fixtures/mt/
@@ -346,8 +360,8 @@ e2e/
 CLAUDE.md                                  # E2E section update
 ```
 
-No file outside these new paths + `e2e/package.json` + `CLAUDE.md` + the new
-workflow is modified.
+Existing files modified: `e2e/playwright.config.ts` (one-line `testIgnore`),
+`e2e/package.json` (2 scripts), `CLAUDE.md` (E2E section). Nothing else.
 
 ## Rollout / implementation order
 
