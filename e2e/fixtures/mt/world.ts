@@ -17,11 +17,16 @@ import { PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD } from "../auth";
  * first tenant created here is id=1.
  *
  * Divergence baked into the world, so isolation specs have something to tell apart:
- *  - T-A ("MT Salón Aurora") — its tier *includes* SIFEN_ELECTRONIC_INVOICING; RUC set; an active
- *    fiscal stamp; 2 categories / 3 services / 2 professionals / 3 clients.
- *  - T-B ("MT Barbería Boreal") — a *different* tier *without* the SIFEN flag; RUC set; NO stamp;
- *    1 category / 2 services (names deliberately copied from two of T-A's) / 2 professionals /
+ *  - T-A ("MT Salón Aurora") — its tier *includes* SIFEN_ELECTRONIC_INVOICING; RUC set; a full
+ *    SIFEN issuer profile (address / taxpayer type / economic activity / contact / department+city,
+ *    all demanded by `SifenInvoiceHeaderService.requireIssuerDataComplete`); an uploaded valid
+ *    SIFEN certificate; an active fiscal stamp; 2 categories / 3 services / 2 professionals /
  *    3 clients.
+ *  - T-B ("MT Barbería Boreal") — a *different* tier *without* the SIFEN flag; RUC set; NO SIFEN
+ *    certificate and only the minimal (RUC-only) business profile; an active fiscal stamp (every
+ *    invoice-issuing tenant needs one — `InvoiceService.issueInvoice` step 2 requires an active
+ *    timbrado regardless of SIFEN); 1 category / 2 services (names deliberately copied from two of
+ *    T-A's) / 2 professionals / 3 clients.
  *  - T-C ("MT Ceval Suspendido") — created active, admin activated, seeded (1 service / 1
  *    professional / 1 client), then SUSPENDED. Its admin can no longer log in.
  *  - `mt-shared@e2e.local` — invited as an admin of BOTH A and B, both activations with the same
@@ -46,6 +51,18 @@ export const MT_WORLD_FILE = path.resolve(E2E_DIR, ".mt-world.json");
 const SIFEN_FLAG = "SIFEN_ELECTRONIC_INVOICING";
 /** RUC value shared with HU-14's business-profile spec. */
 const MT_RUC = "80000005-6";
+
+/**
+ * T-A's tier enables SIFEN e-invoicing, and `InvoiceController.issue` refuses to create ANY invoice
+ * for a SIFEN tenant with no active certificate (`SifenCertificateService.requireActiveCertificate`
+ * → 412 `SIFEN_NO_VALID_CERTIFICATE`, nothing persisted). So the world must give T-A a valid
+ * certificate or every mt-caja / mt-ficha invoice scenario is dead on arrival. Same test .p12 +
+ * password `sifen-hu-18-cargar-certificado.spec.ts` uses; `POST /api/sifen/certificates` takes JSON
+ * `{ fileBase64, password }` (see `SifenCertificateUploadRequest`), not multipart. A freshly
+ * uploaded VALID cert is picked up immediately by `requireActiveCertificate` — no activate step.
+ */
+const SIFEN_TEST_CERT_PATH = path.resolve(E2E_DIR, "fixtures", "sifen", "test-cert.p12");
+const SIFEN_TEST_CERT_PASSWORD = "TestPass123!";
 
 /** Verbatim constants — later tasks match tenants/identities by these exact values. */
 const MT = {
@@ -297,16 +314,36 @@ async function deriveSifenEnabled(platformToken: string, tenantId: number): Prom
 // Tenant-scoped seeding (uses the tenant admin's own token).
 // --------------------------------------------------------------------------------------------------
 
-async function putBusinessProfile(token: string, businessName: string): Promise<void> {
+/**
+ * `sifenIssuer: true` (T-A only) fills the whole SIFEN issuer fieldset that
+ * `SifenInvoiceHeaderService.requireIssuerDataComplete` demands before `POST /api/invoices` will
+ * create anything for a SIFEN-enabled tenant (address, taxpayer type, economic activity, contact
+ * phone/email, department + city). Same values `sifen-hu-22-activacion-por-tenant.spec.ts` uses.
+ * Without this, T-A's every invoice attempt 412s (`SIFEN_ISSUER_ADDRESS_MISSING` and friends) and
+ * the mt-caja / mt-ficha suites cannot run at all. T-B/T-C stay on the minimal profile (RUC only) —
+ * SIFEN is off for them, so the extra fields would be inert anyway.
+ */
+async function putBusinessProfile(
+  token: string,
+  businessName: string,
+  opts: { sifenIssuer?: boolean } = {},
+): Promise<void> {
+  const sifen = opts.sifenIssuer
+    ? {
+        address: "Avda. Mcal. Lopez 1234",
+        phone: "0981123456",
+        contactEmail: "mt-aurora-sifen@e2e.local",
+        taxpayerType: "INDIVIDUAL",
+        economicActivityCode: "96020",
+        economicActivityDescription: "Peluqueria y otros tratamientos de belleza",
+        sifenDepartmentCode: "12",
+        sifenDepartmentName: "CENTRAL",
+        sifenCityCode: "5044",
+        sifenCityName: "FERNANDO DE LA MORA",
+      }
+    : { address: null, phone: null, contactEmail: null };
   await must("PUT", "/api/business-profile", {
-    body: {
-      businessName,
-      ruc: MT_RUC,
-      address: null,
-      phone: null,
-      contactEmail: null,
-      logoDataUrl: null,
-    },
+    body: { businessName, ruc: MT_RUC, logoDataUrl: null, ...sifen },
     token,
   });
 }
@@ -359,6 +396,23 @@ async function ensureActiveFiscalStamp(token: string): Promise<void> {
     token,
   });
   await must("POST", `/api/fiscal-stamps/${created.id}/activate`, { body: {}, token });
+}
+
+/**
+ * Idempotent: uploads the test SIFEN certificate for T-A only if the tenant has none yet. Called on
+ * BOTH provisioning paths (fresh + re-derive) — on a reused mt backend the cert already exists, so
+ * `GET /api/sifen/certificates` returns a non-empty list and this is a no-op.
+ */
+async function ensureSifenCertificate(token: string): Promise<void> {
+  const existing = await must<Array<{ id: number }>>("GET", "/api/sifen/certificates", { token });
+  if (existing.length > 0) {
+    return;
+  }
+  const fileBase64 = readFileSync(SIFEN_TEST_CERT_PATH).toString("base64");
+  await must("POST", "/api/sifen/certificates", {
+    body: { fileBase64, password: SIFEN_TEST_CERT_PASSWORD },
+    token,
+  });
 }
 
 const byIdAsc = <T extends { id: number }>(rows: T[]): T[] =>
@@ -453,7 +507,7 @@ async function fullProvision(platformToken: string): Promise<MtWorld> {
   const tokenC = await loginOrThrow(MT.C.adminEmail, MT.C.adminPassword);
 
   // --- T-A: RUC + stamp + 2 categories / 3 services / 2 professionals / 3 clients ---
-  await putBusinessProfile(tokenA, MT.A.name);
+  await putBusinessProfile(tokenA, MT.A.name, { sifenIssuer: true });
   const aCat1 = await createCategory(tokenA, "MT Cat Aurora Cabello");
   const aCat2 = await createCategory(tokenA, "MT Cat Aurora Color");
   const aSvc1 = await createService(tokenA, A_SERVICE_NAMES[0], aCat1);
@@ -464,8 +518,11 @@ async function fullProvision(platformToken: string): Promise<MtWorld> {
   const aClients = [];
   for (let i = 1; i <= 3; i++) aClients.push(await createClient(tokenA, `MT Cliente Aurora ${i}`));
   await ensureActiveFiscalStamp(tokenA);
+  await ensureSifenCertificate(tokenA);
 
-  // --- T-B: RUC, NO stamp, 1 category / 2 services (names copied from A) / 2 professionals / 3 clients ---
+  // --- T-B: RUC, minimal (non-SIFEN) profile, 1 category / 2 services (names copied from A) /
+  //     2 professionals / 3 clients, + an active fiscal stamp (traditional numbering still needs
+  //     one — see InvoiceService.issueInvoice step 2), but NO SIFEN certificate. ---
   await putBusinessProfile(tokenB, MT.B.name);
   const bCat = await createCategory(tokenB, "MT Cat Boreal");
   const bSvc1 = await createService(tokenB, A_SERVICE_NAMES[0], bCat);
@@ -474,6 +531,7 @@ async function fullProvision(platformToken: string): Promise<MtWorld> {
   const bProf2 = await createProfessional(tokenB, "MT Prof Boreal Dos", mtPinFor("B", 1));
   const bClients = [];
   for (let i = 1; i <= 3; i++) bClients.push(await createClient(tokenB, `MT Cliente Boreal ${i}`));
+  await ensureActiveFiscalStamp(tokenB);
 
   // --- T-C: minimal seed (backend state only — not recorded in the world), THEN suspend ---
   const cCat = await createCategory(tokenC, "MT Cat Ceval");
@@ -560,6 +618,10 @@ async function rederiveWorld(platformToken: string, tokenA: string): Promise<MtW
   }
 
   const tokenB = await loginOrThrow(MT.B.adminEmail, MT.B.adminPassword);
+
+  // T-A's tier enables SIFEN — it must carry a valid certificate to emit any invoice. A partial
+  // prior provisioning could have skipped this; re-assert it here (no-op when already present).
+  await ensureSifenCertificate(tokenA);
 
   const [aDerived, bDerived, sifenA, sifenB] = await Promise.all([
     deriveCatalog(tokenA, "A"),
