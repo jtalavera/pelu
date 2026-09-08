@@ -5,7 +5,6 @@ import { useMe } from "../../hooks/useMe";
 export default function SettingsLayout() {
   const { t } = useTranslation();
   const { me } = useMe();
-  const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
   const isTenantAdmin = me?.role === "ADMIN";
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -63,11 +62,6 @@ export default function SettingsLayout() {
           <NavLink to="/app/settings/taxes" className={navClass}>
             {t("femme.settings.tabTaxes")}
           </NavLink>
-          {isSystemAdmin ? (
-            <NavLink to="/app/settings/feature-flags" className={navClass}>
-              {t("femme.settings.tabFeatureFlags")}
-            </NavLink>
-          ) : null}
           {isTenantAdmin ? (
             <NavLink to="/app/settings/sifen" className={navClass}>
               {t("femme.settings.tabSifen")}

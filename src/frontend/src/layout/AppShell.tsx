@@ -276,7 +276,7 @@ function AppShellInner() {
             letterSpacing: "-0.01em",
           }}
         >
-          {t("femme.appName")}
+          {me?.tenantName ?? t("femme.appName")}
         </span>
 
 

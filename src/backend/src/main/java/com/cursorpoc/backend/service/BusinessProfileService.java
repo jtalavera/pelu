@@ -33,11 +33,20 @@ public class BusinessProfileService {
     return toDto(bp);
   }
 
+  /**
+   * A pure check with no side effect — unlike {@link #loadOrThrow}, it must NOT lazily create a
+   * default profile: callers (e.g. {@code DashboardService}) may invoke this more than once within
+   * the same read-only transaction, and a lazy-create there previously caused a {@code
+   * NonUniqueObjectException} (the first call's unflushed insert isn't visible to the second call's
+   * lookup, so it tried to persist a second entity for the same tenant id). A tenant with no
+   * profile row yet simply isn't RUC-ready.
+   */
   @Transactional(readOnly = true)
   public boolean isRucReadyForInvoicing(long tenantId) {
-    BusinessProfile bp = loadOrThrow(tenantId);
-    String ruc = bp.getRuc();
-    return ruc != null && ParaguayRucValidator.isValid(ruc);
+    return businessProfileRepository
+        .findByTenantId(tenantId)
+        .map(bp -> bp.getRuc() != null && ParaguayRucValidator.isValid(bp.getRuc()))
+        .orElse(false);
   }
 
   @Transactional

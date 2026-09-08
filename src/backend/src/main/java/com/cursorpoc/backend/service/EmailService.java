@@ -47,10 +47,58 @@ public class EmailService {
     return enabled && !connectionString.isBlank();
   }
 
-  public void sendActivationLink(String toEmail, String activationUrl, Locale locale) {
-    String subject = messageSource.getMessage("email.activation.subject", null, locale);
+  public void sendActivationLink(
+      String toEmail, String activationUrl, String tenantName, Locale locale) {
+    String subject =
+        messageSource.getMessage("email.activation.subject", new Object[] {tenantName}, locale);
     String body =
-        messageSource.getMessage("email.activation.body", new Object[] {activationUrl}, locale);
+        messageSource.getMessage(
+            "email.activation.body", new Object[] {activationUrl, tenantName}, locale);
+
+    if (!isEffectivelyEnabled()) {
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
+          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          toEmail,
+          subject,
+          body);
+      return;
+    }
+
+    try {
+      EmailClient client =
+          new EmailClientBuilder().connectionString(connectionString).buildClient();
+      EmailMessage message =
+          new EmailMessage()
+              .setSenderAddress(senderAddress)
+              .setToRecipients(new EmailAddress(toEmail))
+              .setSubject(subject)
+              .setBodyPlainText(body);
+      client.beginSend(message).getFinalResult();
+      log.info(
+          "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
+          senderAddress,
+          toEmail,
+          subject,
+          locale.getLanguage());
+    } catch (Exception ex) {
+      log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
+  }
+
+  /**
+   * HU-44 AC-2/AC-4: sends the password-reset link — same shape and dev/e2e logging fallback as
+   * {@link #sendActivationLink} — used both by the self-service "forgot password" flow and by a
+   * Platform-Admin-triggered reset for a tenant user who already activated their account.
+   */
+  public void sendPasswordResetLink(
+      String toEmail, String resetUrl, String tenantName, Locale locale) {
+    String subject =
+        messageSource.getMessage("email.passwordReset.subject", new Object[] {tenantName}, locale);
+    String body =
+        messageSource.getMessage(
+            "email.passwordReset.body", new Object[] {resetUrl, tenantName}, locale);
 
     if (!isEffectivelyEnabled()) {
       log.info(

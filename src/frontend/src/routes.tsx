@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./layout/AppShell";
+import { PlatformShell } from "./layout/PlatformShell";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
+import { PlatformAdminRoute } from "./auth/PlatformAdminRoute";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -18,8 +20,13 @@ import PropinasPage from "./pages/PropinasPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 import SifenCertificatesPage from "./pages/SifenCertificatesPage";
+import PlatformDashboardPage from "./pages/PlatformDashboardPage";
+import PlatformTenantsPage from "./pages/PlatformTenantsPage";
+import PlatformTiersPage from "./pages/PlatformTiersPage";
+import PlatformImportPage from "./pages/PlatformImportPage";
 
 export function AppRoutes() {
   return (
@@ -27,6 +34,7 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/activate" element={<ActivatePage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/design-system" element={<DesignSystemShowcasePage />} />
       <Route
         element={
@@ -49,9 +57,21 @@ export function AppRoutes() {
           <Route path="business" element={<BusinessSettingsPage />} />
           <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
           <Route path="taxes" element={<TaxSettingsPage />} />
-          <Route path="feature-flags" element={<FeatureFlagsPage />} />
           <Route path="sifen" element={<SifenCertificatesPage />} />
         </Route>
+      </Route>
+      <Route
+        element={
+          <PlatformAdminRoute>
+            <PlatformShell />
+          </PlatformAdminRoute>
+        }
+      >
+        <Route path="/platform" element={<PlatformDashboardPage />} />
+        <Route path="/platform/tenants" element={<PlatformTenantsPage />} />
+        <Route path="/platform/tiers" element={<PlatformTiersPage />} />
+        <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
+        <Route path="/platform/import" element={<PlatformImportPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>

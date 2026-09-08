@@ -1,8 +1,21 @@
 import { expect, type Page } from "@playwright/test";
 
-/** Seeded by `FemmeDataInitializer` for non-`test` profiles (including `e2e`). */
+/**
+ * HU-58: provisioned dynamically by `global-setup.ts` (once, before the whole suite runs) via the
+ * real Platform Admin API — creates a tenant, invites this email as its admin, and activates it —
+ * instead of a hardcoded backend boot seed. `FemmeDataInitializer` no longer creates any tenant or
+ * user.
+ */
 export const DEMO_EMAIL = "isabelzymanscki@gmail.com";
 export const DEMO_PASSWORD = "Demo123!";
+
+/**
+ * HU-34: a tenant-independent PLATFORM_ADMIN used by HU-35's login-routing tests. Bootstrapped by
+ * `PlatformAdminBootstrap` (HU-57) on every boot with zero PLATFORM_ADMIN users — see
+ * application-e2e.properties' app.femme.platform-admin.* for these exact credentials.
+ */
+export const PLATFORM_ADMIN_EMAIL = "platform-admin@pelu";
+export const PLATFORM_ADMIN_PASSWORD = ".The.Platform@admin.2026";
 
 /**
  * Injected before every page navigation to mark all guided tours as "seen".
@@ -71,5 +84,36 @@ export async function loginAs(page: Page, email: string, password: string) {
   const loginResp = await loginPromise;
   expect(loginResp.ok(), `login failed (${loginResp.status()}): ${loginResp.statusText()}`).toBeTruthy();
   await expect(page).toHaveURL(/\/app/, { timeout: 25_000 });
+}
+
+/**
+ * HU-35 AC-2: logs in through the single, shared login screen and expects the Platform Admin
+ * routing destination (`/platform`), not the tenant business panel (`/app`).
+ */
+export async function loginAsPlatformAdmin(page: Page) {
+  await page.addInitScript(markToursSeenScript);
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(PLATFORM_ADMIN_EMAIL);
+  await page.getByLabel("Password").fill(PLATFORM_ADMIN_PASSWORD);
+  const loginPromise = page.waitForResponse((r) => {
+    try {
+      const u = new URL(r.url());
+      return u.pathname.endsWith("/api/auth/login") && r.request().method() === "POST";
+    } catch {
+      return false;
+    }
+  });
+  await page.getByRole("button", { name: "Sign in" }).click();
+  const loginResp = await loginPromise;
+  expect(loginResp.ok(), `login failed (${loginResp.status()}): ${loginResp.statusText()}`).toBeTruthy();
+  await expect(page).toHaveURL(/\/platform/, { timeout: 25_000 });
+  // PlatformAdminRoute gates rendering behind an async /api/me fetch (unlike ProtectedRoute's
+  // synchronous sessionStorage check for /app), so the URL can change before PlatformShell — and
+  // its useIdleLogout timer — actually mounts. Wait for real dashboard content, same as
+  // loginAsDemo does for /app, so callers relying on the idle timer's clock starting immediately
+  // (e.g. tests using page.clock) aren't racing this fetch.
+  await expect(page.getByRole("heading", { name: "Platform Admin", level: 1 })).toBeVisible({
+    timeout: 20_000,
+  });
 }
 

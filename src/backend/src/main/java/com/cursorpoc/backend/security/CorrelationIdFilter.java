@@ -38,7 +38,11 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     MDC.put(MDC_CORRELATION_ID, correlationId);
 
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth != null && auth.getPrincipal() instanceof FemmeUserPrincipal principal) {
+    // HU-34: a PLATFORM_ADMIN principal has no tenant — skip the MDC tenant key rather than call
+    // the throwing getTenantId() (mirrors ApiEndpointLoggingFilter's resolveTenantId()).
+    if (auth != null
+        && auth.getPrincipal() instanceof FemmeUserPrincipal principal
+        && principal.hasTenant()) {
       MDC.put(MDC_TENANT_ID, String.valueOf(principal.getTenantId()));
     }
 

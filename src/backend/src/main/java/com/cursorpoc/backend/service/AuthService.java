@@ -1,13 +1,15 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
+import com.cursorpoc.backend.domain.AppUserActivationToken;
 import com.cursorpoc.backend.domain.PasswordResetToken;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ProfessionalActivationToken;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
+import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
@@ -29,7 +31,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -59,79 +63,92 @@ public class AuthService {
   private final AppUserRepository appUserRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final ProfessionalActivationTokenRepository activationTokenRepository;
+  private final AppUserActivationTokenRepository appUserActivationTokenRepository;
   private final ProfessionalRepository professionalRepository;
   private final TenantRepository tenantRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final FemmeJwtProperties jwtProperties;
-  private final FemmeSystemAdminProperties systemAdminProperties;
   private final EmailService emailService;
 
   public AuthService(
       AppUserRepository appUserRepository,
       PasswordResetTokenRepository passwordResetTokenRepository,
       ProfessionalActivationTokenRepository activationTokenRepository,
+      AppUserActivationTokenRepository appUserActivationTokenRepository,
       ProfessionalRepository professionalRepository,
       TenantRepository tenantRepository,
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
       FemmeJwtProperties jwtProperties,
-      FemmeSystemAdminProperties systemAdminProperties,
       EmailService emailService) {
     this.appUserRepository = appUserRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.activationTokenRepository = activationTokenRepository;
+    this.appUserActivationTokenRepository = appUserActivationTokenRepository;
     this.professionalRepository = professionalRepository;
     this.tenantRepository = tenantRepository;
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
     this.jwtProperties = jwtProperties;
-    this.systemAdminProperties = systemAdminProperties;
     this.emailService = emailService;
   }
 
   public TokenResponse login(LoginRequest request, String origin) {
     String email = request.email().trim().toLowerCase();
-    if (email.equalsIgnoreCase(systemAdminProperties.getEmail())) {
-      AppUser systemUser =
-          appUserRepository
-              .findByEmail(email)
-              .orElseThrow(
-                  () ->
-                      new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
-      if (systemUser.getRole() != UserRole.SYSTEM_ADMIN) {
+
+    // HU-34: PLATFORM_ADMIN is tenant-independent — try a tenant-less lookup by email before
+    // falling back to the tenant-scoped path below. findAllByEmail() (not the single-result
+    // findByEmail()) because email is only unique per (tenant_id, email) — the same email can
+    // also exist as a tenant-scoped user elsewhere, which would make a single-result query throw.
+    Optional<AppUser> platformCandidate =
+        appUserRepository.findAllByEmail(email).stream()
+            .filter(u -> u.getRole() == UserRole.PLATFORM_ADMIN)
+            .findFirst();
+    if (platformCandidate.isPresent()) {
+      AppUser platformUser = platformCandidate.get();
+      if (!passwordEncoder.matches(request.password(), platformUser.getPasswordHash())) {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
       }
-      if (!passwordEncoder.matches(request.password(), systemUser.getPasswordHash())) {
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
-      }
-      if (!systemUser.isEnabled()) {
+      if (!platformUser.isEnabled()) {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
       }
       Instant now = Instant.now();
       String token =
           jwtService.createAccessToken(
-              systemUser.getId(),
-              systemUser.getTenant().getId(),
-              systemUser.getEmail(),
-              systemUser.getRole(),
+              platformUser.getId(),
+              null,
+              platformUser.getEmail(),
+              platformUser.getRole(),
               null,
               now);
       return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
     }
 
-    Tenant tenant = resolveTenant(origin);
-    AppUser user =
-        appUserRepository
-            .findByEmailAndTenant_Id(email, tenant.getId())
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
-    if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+    // No tenant is resolved up front any more (see candidateUsersForLogin): when the Origin
+    // doesn't match a tenant's custom domain, we gather every AppUser this email could belong to
+    // across all tenants and let password verification — not a guessed tenant — decide which one
+    // is real. This also means a suspended tenant, a disabled user, and a wrong password all
+    // collapse into the exact same outcome below (HU-40 AC-2's anti-enumeration guarantee, now
+    // covering "email doesn't exist anywhere" too): none of them ever produce a valid match.
+    List<AppUser> candidates = candidateUsersForLogin(origin, email);
+    List<AppUser> validMatches =
+        candidates.stream()
+            .filter(u -> passwordEncoder.matches(request.password(), u.getPasswordHash()))
+            .filter(AppUser::isEnabled)
+            .filter(u -> u.getTenant().getStatus() == TenantStatus.ACTIVE)
+            .toList();
+
+    if (validMatches.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
     }
-    if (!user.isEnabled()) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+    if (validMatches.size() > 1) {
+      // Only reachable when the exact same password is independently valid for this email in two
+      // or more active tenants — i.e. the caller already proved they hold valid credentials for
+      // more than one account. Nothing is revealed to anyone who doesn't.
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "TENANT_AMBIGUOUS");
     }
+    AppUser user = validMatches.get(0);
     Long professionalId = null;
     if (user.getRole() == UserRole.PROFESSIONAL) {
       professionalId =
@@ -149,12 +166,40 @@ public class AuthService {
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
   }
 
+  /**
+   * Candidate {@link AppUser} rows this login attempt could resolve to: exactly the one tenant a
+   * custom domain matches (if any), or — when no domain matches — every tenant this email exists in
+   * at all. Password/enabled/active-tenant filtering in {@link #login} decides the rest.
+   */
+  private List<AppUser> candidateUsersForLogin(String origin, String email) {
+    Optional<Tenant> domainTenant = resolveTenantByDomain(origin);
+    if (domainTenant.isPresent()) {
+      return appUserRepository
+          .findByEmailAndTenant_Id(email, domainTenant.get().getId())
+          .map(List::of)
+          .orElseGet(List::of);
+    }
+    return appUserRepository.findAllByEmail(email).stream()
+        .filter(u -> u.getTenant() != null) // excludes PLATFORM_ADMIN rows defensively
+        .toList();
+  }
+
+  private Optional<Tenant> resolveTenantByDomain(String origin) {
+    String host = extractHost(origin);
+    if (host == null) {
+      return Optional.empty();
+    }
+    return tenantRepository.findByDomain(host);
+  }
+
   public TokenResponse refresh(FemmeUserPrincipal principal) {
     Instant now = Instant.now();
     String token =
         jwtService.createAccessToken(
             principal.getUserId(),
-            principal.getTenantId(),
+            // HU-34: PLATFORM_ADMIN has no tenant — getTenantId() would throw; refresh must
+            // preserve whatever tenant state (present or absent) the original token had.
+            principal.getTenantIdOrNull(),
             principal.getUsername(),
             principal.getRole(),
             principal.getProfessionalId(),
@@ -163,24 +208,71 @@ public class AuthService {
   }
 
   @Transactional
-  public void forgotPassword(ForgotPasswordRequest request, String origin) {
-    Tenant tenant = resolveTenant(origin);
-    Optional<AppUser> userOpt =
-        appUserRepository.findByEmailAndTenant_Id(
-            request.email().trim().toLowerCase(), tenant.getId());
-    if (userOpt.isEmpty()) {
+  public void forgotPassword(ForgotPasswordRequest request, String origin, Locale locale) {
+    String email = request.email().trim().toLowerCase();
+    Optional<Tenant> tenantOpt =
+        resolveTenantByDomain(origin).or(() -> resolveTenantByUniqueEmail(email));
+    if (tenantOpt.isEmpty()) {
+      // Deliberately silent — same "no enumeration" behavior whether the email doesn't exist at
+      // all or exists in more than one tenant (either way, there's no single account to reset).
       return;
     }
-    AppUser user = userOpt.get();
+    Optional<AppUser> userOpt =
+        appUserRepository.findByEmailAndTenant_Id(email, tenantOpt.get().getId());
+    if (userOpt.isEmpty()) {
+      // Deliberately silent — same "no enumeration" behavior whether or not the email exists.
+      return;
+    }
+    issuePasswordResetToken(userOpt.get(), locale);
+  }
+
+  /**
+   * Used only by {@link #forgotPassword}, which has no password to check — so unlike {@link
+   * #login}'s credentials-first resolution, this just needs "does this email belong to exactly one
+   * tenant," silently giving up (same as a nonexistent email) when it doesn't.
+   */
+  private Optional<Tenant> resolveTenantByUniqueEmail(String email) {
+    List<Long> tenantIds =
+        appUserRepository.findAllByEmail(email).stream()
+            .map(AppUser::getTenantId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+    return tenantIds.size() == 1 ? tenantRepository.findById(tenantIds.get(0)) : Optional.empty();
+  }
+
+  /**
+   * HU-44 AC-2/AC-3/AC-4: Platform-Admin-triggered equivalent of {@link #forgotPassword} for a
+   * tenant user who already activated their account but lost access. The caller already knows the
+   * exact {@link AppUser} (no Origin/domain resolution — the Platform Admin isn't on the tenant's
+   * own frontend), and the raw token is returned so Playwright e2e coverage can exercise the full
+   * reset flow without reading the (dev-logged in e2e) email.
+   */
+  @Transactional
+  public String triggerPasswordResetForUser(AppUser user, Locale locale) {
+    return issuePasswordResetToken(user, locale);
+  }
+
+  /**
+   * HU-44 AC-3: invalidates any previously issued, still-unused reset link for this user before
+   * issuing and emailing a new one — shared by the self-service and Platform-Admin-triggered entry
+   * points above.
+   */
+  private String issuePasswordResetToken(AppUser user, Locale locale) {
+    passwordResetTokenRepository.invalidateAllForUser(user.getId());
+
     String raw = UUID.randomUUID().toString();
-    String hash = sha256Hex(raw);
     PasswordResetToken entity = new PasswordResetToken();
     entity.setUser(user);
-    entity.setTokenHash(hash);
+    entity.setTokenHash(sha256Hex(raw));
     entity.setExpiresAt(Instant.now().plus(48, ChronoUnit.HOURS));
     entity.setUsed(false);
     passwordResetTokenRepository.save(entity);
-    log.info("password reset link (dev): http://localhost:5173/reset-password?token={}", raw);
+
+    String resetUrl = frontendUrl + "/reset-password?token=" + raw;
+    emailService.sendPasswordResetLink(
+        user.getEmail(), resetUrl, user.getTenant().getName(), locale);
+    return raw;
   }
 
   @Transactional
@@ -233,7 +325,8 @@ public class AuthService {
     professionalRepository.save(professional);
 
     String activationUrl = frontendUrl + "/activate?token=" + raw;
-    emailService.sendActivationLink(email, activationUrl, locale);
+    emailService.sendActivationLink(
+        email, activationUrl, professional.getTenant().getName(), locale);
 
     return new GrantAccessResponse(true, raw);
   }
@@ -255,34 +348,81 @@ public class AuthService {
     professionalRepository.save(professional);
   }
 
+  /**
+   * HU-41: {@code ActivatePage} is shared by both flows (AC-4), so this transparently checks the
+   * professional-scoped token table first, then the app-user-scoped one (Platform-Admin-invited
+   * tenant {@code ADMIN} users) — the frontend never needs to know which kind of token it has.
+   */
   @Transactional(readOnly = true)
   public ActivationTokenInfoResponse validateActivationToken(String rawToken) {
     String hash = sha256Hex(rawToken);
-    ProfessionalActivationToken token =
-        activationTokenRepository
+    Optional<ProfessionalActivationToken> professionalToken =
+        activationTokenRepository.findByTokenHashAndUsedFalse(hash);
+    if (professionalToken.isPresent()) {
+      ProfessionalActivationToken token = professionalToken.get();
+      if (token.getExpiresAt().isBefore(Instant.now())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
+      }
+      Professional prof = token.getProfessional();
+      return new ActivationTokenInfoResponse(
+          prof.getId(), prof.getFullName(), prof.getEmail(), prof.getTenant().getName());
+    }
+
+    AppUserActivationToken userToken =
+        appUserActivationTokenRepository
             .findByTokenHashAndUsedFalse(hash)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
-    if (token.getExpiresAt().isBefore(Instant.now())) {
+    if (userToken.getExpiresAt().isBefore(Instant.now())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
-    Professional prof = token.getProfessional();
-    return new ActivationTokenInfoResponse(prof.getId(), prof.getFullName(), prof.getEmail());
+    return new ActivationTokenInfoResponse(
+        null,
+        null,
+        userToken.getAppUser().getEmail(),
+        userToken.getAppUser().getTenant().getName());
   }
 
+  /**
+   * HU-41: activates the account behind an activation token — a {@code Professional} (existing
+   * flow) or a Platform-Admin-invited tenant {@code ADMIN} {@link AppUser} (AC-2/AC-4/AC-5), tried
+   * in that order, same as {@link #validateActivationToken}.
+   */
   @Transactional
-  public void activateProfessionalAccount(ActivateProfessionalRequest request) {
+  public void activateAccount(ActivateProfessionalRequest request) {
     validatePasswordStrength(request.password());
     if (!request.password().equals(request.confirmPassword())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORDS_DO_NOT_MATCH");
     }
 
     String hash = sha256Hex(request.token());
-    ProfessionalActivationToken activationToken =
-        activationTokenRepository
+    Optional<ProfessionalActivationToken> professionalToken =
+        activationTokenRepository.findByTokenHashAndUsedFalse(hash);
+    if (professionalToken.isPresent()) {
+      activateProfessionalAccount(professionalToken.get(), request.password());
+      return;
+    }
+
+    AppUserActivationToken userToken =
+        appUserActivationTokenRepository
             .findByTokenHashAndUsedFalse(hash)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TOKEN"));
+    if (userToken.getExpiresAt().isBefore(Instant.now())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
+    }
+
+    AppUser user = userToken.getAppUser();
+    user.setPasswordHash(passwordEncoder.encode(request.password()));
+    user.setEnabled(true);
+    appUserRepository.save(user);
+
+    userToken.setUsed(true);
+    appUserActivationTokenRepository.save(userToken);
+  }
+
+  private void activateProfessionalAccount(
+      ProfessionalActivationToken activationToken, String rawPassword) {
     if (activationToken.getExpiresAt().isBefore(Instant.now())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
@@ -303,7 +443,7 @@ public class AuthService {
       user.setRole(UserRole.PROFESSIONAL);
       user.setEnabled(true);
     }
-    user.setPasswordHash(passwordEncoder.encode(request.password()));
+    user.setPasswordHash(passwordEncoder.encode(rawPassword));
     appUserRepository.save(user);
 
     professional.setUser(user);
@@ -330,22 +470,6 @@ public class AuthService {
     if (!PASSWORD_SPECIAL.matcher(password).matches()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_WEAK");
     }
-  }
-
-  private Tenant resolveTenant(String origin) {
-    String host = extractHost(origin);
-    if (host != null) {
-      Optional<Tenant> byDomain = tenantRepository.findByDomain(host);
-      if (byDomain.isPresent()) {
-        return byDomain.get();
-      }
-    }
-    return tenantRepository
-        .findById(1L)
-        .orElseThrow(
-            () ->
-                new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR, "DEFAULT_TENANT_NOT_FOUND"));
   }
 
   private static String extractHost(String origin) {

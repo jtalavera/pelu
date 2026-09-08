@@ -2,12 +2,13 @@ package com.cursorpoc.backend.web.dto;
 
 public record MeResponse(
     long userId,
-    long tenantId,
+    /** Null only for {@code PLATFORM_ADMIN} (HU-35) — genuinely tenant-independent. */
+    Long tenantId,
+    /** Same null-only-for-{@code PLATFORM_ADMIN} rule as {@link #tenantId}. */
+    String tenantName,
     String email,
     String role,
     Long professionalId,
-    /** When role is {@code SYSTEM_ADMIN}, the salon tenant to preview (flags, UI). */
-    Long previewTenantId,
     /**
      * Profile data from the linked Professional; null for admin users without a linked
      * Professional.

@@ -5,3 +5,4 @@ build/
 .idea/
 *.log
 src/main/resources/application-local.properties
+run-local-azure-dev.sh

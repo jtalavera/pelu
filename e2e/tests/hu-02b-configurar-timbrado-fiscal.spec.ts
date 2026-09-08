@@ -3,6 +3,7 @@ import {
   API_BASE,
   apiPostJson,
   apiPutJson,
+  ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
   isoDateLocal,
   listFiscalStamps,
@@ -65,6 +66,8 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
+    // Guarantee a healthy active stamp exists regardless of which specs ran before this one.
+    await ensureActiveFiscalStampForInvoices(request, token);
     const stamps = await listFiscalStamps(request, token);
     const active = stamps.find((s) => s.active);
     expect(active).toBeTruthy();
@@ -255,18 +258,22 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
-    const stamps = await listFiscalStamps(request, token);
-    const target =
-      stamps.find((s) => s.active) ?? stamps.sort((a, b) => a.id - b.id)[stamps.length - 1];
-    expect(target).toBeTruthy();
+    // Use a dedicated stamp driven to <10% remaining rather than mutating whatever stamp happens
+    // to be active — the backend is shared across the whole suite, and leaving a near-exhausted
+    // stamp active would make every later spec's invoice issuance 409 with
+    // FISCAL_STAMP_RANGE_EXHAUSTED.
     const from = new Date();
     const untilFar = new Date();
     untilFar.setDate(untilFar.getDate() + 400);
-    await apiPutJson(request, token, `/api/fiscal-stamps/${target!.id}`, {
+    const nearlyExhausted = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
+      stampNumber: `4${Date.now().toString().slice(-7)}`,
       validFrom: isoDateLocal(from),
       validUntil: isoDateLocal(untilFar),
-      nextEmissionNumber: target!.rangeTo - 8,
+      rangeFrom: 4_000_000,
+      rangeTo: 4_000_100,
+      initialEmissionNumber: 4_000_093, // 7 of 101 numbers left → under 10%
     });
+    await apiPostJson(request, token, `/api/fiscal-stamps/${nearlyExhausted.id}/activate`, {});
 
     await loginAsDemo(page);
     await page.goto("/app");
@@ -275,5 +282,11 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
         exact: true,
       }),
     ).toBeVisible();
+
+    // Restore a healthy active stamp for the rest of the suite.
+    await request.post(`${API_BASE}/api/fiscal-stamps/${nearlyExhausted.id}/deactivate`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    await ensureActiveFiscalStampForInvoices(request, token);
   });
 });

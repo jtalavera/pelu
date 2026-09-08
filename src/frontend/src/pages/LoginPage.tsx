@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Alert, Button, Heading, Input, Label, Text } from "@design-system";
 import { apiBaseUrl } from "../api/baseUrl";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
+import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTour } from "../tour/useTour";
@@ -35,7 +36,8 @@ export default function LoginPage() {
         body: JSON.stringify({ email: email.trim(), password }),
       });
       if (!res.ok) {
-        setError(t("femme.login.errorInvalid"));
+        const text = await res.text();
+        setError(translateApiError(new Error(text), t, "femme.login.errorInvalid"));
         return;
       }
       const data = (await res.json()) as { accessToken: string };
@@ -49,13 +51,16 @@ export default function LoginPage() {
       } catch {
         // keep ADMIN default
       }
+      // HU-35 AC-2/AC-3: routing is decided purely by the role returned by the backend (via the
+      // JWT), with no manual "access type" selector. A Platform Admin always lands on the
+      // platform area, regardless of any tenant-app return path (they can't reach those anyway).
       const destination =
-        from !== "/app"
-          ? from
-          : role === "PROFESSIONAL"
-            ? "/app/calendar"
-            : role === "SYSTEM_ADMIN"
-              ? "/app/settings/feature-flags"
+        role === "PLATFORM_ADMIN"
+          ? "/platform"
+          : from !== "/app"
+            ? from
+            : role === "PROFESSIONAL"
+              ? "/app/calendar"
               : "/app";
       navigate(destination, { replace: true });
     } catch {

@@ -45,7 +45,9 @@ public class ApiEndpointLoggingFilter extends OncePerRequestFilter {
 
   private static String resolveTenantId() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth != null && auth.getPrincipal() instanceof FemmeUserPrincipal p) {
+    // HU-34: PLATFORM_ADMIN has no tenant — log "-" for it, same as an unauthenticated request,
+    // rather than calling the throwing getTenantId().
+    if (auth != null && auth.getPrincipal() instanceof FemmeUserPrincipal p && p.hasTenant()) {
       return String.valueOf(p.getTenantId());
     }
     return "-";

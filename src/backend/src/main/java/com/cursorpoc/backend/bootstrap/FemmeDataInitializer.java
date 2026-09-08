@@ -1,45 +1,18 @@
 package com.cursorpoc.backend.bootstrap;
 
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.BusinessProfile;
-import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FeatureFlag;
 import com.cursorpoc.backend.domain.FiscalStamp;
-import com.cursorpoc.backend.domain.Professional;
-import com.cursorpoc.backend.domain.ProfessionalSchedule;
-import com.cursorpoc.backend.domain.SalonService;
-import com.cursorpoc.backend.domain.ServiceCategory;
-import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.Tier;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
-import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
-import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
-import com.cursorpoc.backend.repository.InvoiceRepository;
-import com.cursorpoc.backend.repository.ProfessionalRepository;
-import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
-import com.cursorpoc.backend.repository.SalonServiceRepository;
-import com.cursorpoc.backend.repository.ServiceCategoryRepository;
-import com.cursorpoc.backend.repository.TaxRepository;
-import com.cursorpoc.backend.repository.TenantRepository;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
+import com.cursorpoc.backend.repository.TierRepository;
 import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -47,7 +20,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -55,63 +27,43 @@ public class FemmeDataInitializer {
 
   private static final Logger log = LoggerFactory.getLogger(FemmeDataInitializer.class);
 
-  private static final String SERVICES_SEED_CSV = "seed/servicios_peluqueria_normalizado.csv";
-  private static final String CLIENTS_SEED_CSV = "seed/clientes_filtrado_v2.csv";
-
-  private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
   private final BusinessProfileRepository businessProfileRepository;
   private final FiscalStampRepository fiscalStampRepository;
   private final FeatureFlagRepository featureFlagRepository;
-  private final ServiceCategoryRepository serviceCategoryRepository;
-  private final SalonServiceRepository salonServiceRepository;
-  private final ProfessionalRepository professionalRepository;
-  private final ProfessionalScheduleRepository professionalScheduleRepository;
-  private final TaxRepository taxRepository;
-  private final ClientRepository clientRepository;
-  private final InvoiceRepository invoiceRepository;
-  private final AppointmentRepository appointmentRepository;
-  private final FemmeSystemAdminProperties systemAdminProperties;
+  private final TierRepository tierRepository;
   private final PasswordEncoder passwordEncoder;
 
   public FemmeDataInitializer(
-      TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       BusinessProfileRepository businessProfileRepository,
       FiscalStampRepository fiscalStampRepository,
       FeatureFlagRepository featureFlagRepository,
-      ServiceCategoryRepository serviceCategoryRepository,
-      SalonServiceRepository salonServiceRepository,
-      ProfessionalRepository professionalRepository,
-      ProfessionalScheduleRepository professionalScheduleRepository,
-      TaxRepository taxRepository,
-      ClientRepository clientRepository,
-      InvoiceRepository invoiceRepository,
-      AppointmentRepository appointmentRepository,
-      FemmeSystemAdminProperties systemAdminProperties,
+      TierRepository tierRepository,
       PasswordEncoder passwordEncoder) {
-    this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.fiscalStampRepository = fiscalStampRepository;
     this.featureFlagRepository = featureFlagRepository;
-    this.serviceCategoryRepository = serviceCategoryRepository;
-    this.salonServiceRepository = salonServiceRepository;
-    this.professionalRepository = professionalRepository;
-    this.professionalScheduleRepository = professionalScheduleRepository;
-    this.taxRepository = taxRepository;
-    this.clientRepository = clientRepository;
-    this.invoiceRepository = invoiceRepository;
-    this.appointmentRepository = appointmentRepository;
-    this.systemAdminProperties = systemAdminProperties;
+    this.tierRepository = tierRepository;
     this.passwordEncoder = passwordEncoder;
   }
 
-  // Disabled as a production hotfix: this runner reconciles the catalog/client tables against
-  // static seed CSVs on every boot and was hard-deleting clients that had gained real invoices/
-  // appointments since the CSV was last updated, tripping fk_inv_client / fk_appt_client and
-  // crash-looping the container. Left in place pending a proper refactor; re-enable by setting
-  // femme.data-init.enabled=true.
+  // HU-56: this runner used to also reconcile the salon catalog (categories/services) and client
+  // list against static seed CSVs for the first tenant on every boot — that logic hard-deleted
+  // clients that had gained real invoices/appointments since the CSV was last updated, tripping
+  // fk_inv_client / fk_appt_client and crash-looping the container in prod (2026-07-14). HU-56
+  // removed that reconciliation from system boot entirely. HU-58 went further and removed this
+  // runner's own creation of a demo tenant + admin user too — per the PRD's "Sin seed hardcodeado"
+  // (no tenant/user/service/client/professional is created automatically at boot, only the first
+  // Platform Admin — see PlatformAdminBootstrap below). The Playwright e2e suite now provisions its
+  // own tenant + tenant admin dynamically via the real Platform Admin API (see
+  // e2e/global-setup.ts), the same way a real onboarding would, instead of relying on a
+  // backend-seeded tenant id=1. What remains below (feature flags, tiers) is genuinely
+  // tenant-independent platform configuration, not a specific tenant's business data — Flyway's
+  // equivalent inserts (V28, V41, V43) don't reach the `e2e` profile (Flyway disabled there, JPA
+  // create-drop only builds the schema), so this runner is what makes them exist for Playwright.
+  // Re-enable this runner by setting femme.data-init.enabled=true (dev opt-in / e2e).
   @Bean
   @Profile("!test")
   @ConditionalOnProperty(name = "femme.data-init.enabled", havingValue = "true")
@@ -124,6 +76,21 @@ public class FemmeDataInitializer {
         guidedTour.setDescription("Show guided tour tooltips on every screen");
         featureFlagRepository.save(guidedTour);
         log.info("Seeded feature flag GUIDED_TOUR (enabled=true)");
+      }
+
+      // SIFEN testing: same idempotent seed as GUIDED_TOUR above — V51's Flyway INSERT only reaches
+      // dev/prod (Flyway is disabled for the `e2e` profile), so this runner is what makes the flag
+      // exist for Playwright. Keep the description in sync with V51.
+      if (featureFlagRepository.findByFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL").isEmpty()) {
+        FeatureFlag allowDuplicateClientEmail = new FeatureFlag();
+        allowDuplicateClientEmail.setFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL");
+        allowDuplicateClientEmail.setEnabled(false);
+        allowDuplicateClientEmail.setDescription(
+            "Test environment only: skip the per-tenant client-email uniqueness check so SIFEN"
+                + " electronic-invoicing testing can reuse the same recipient email. Ignored unless"
+                + " the SIFEN environment is TEST.");
+        featureFlagRepository.save(allowDuplicateClientEmail);
+        log.info("Seeded feature flag ALLOW_DUPLICATE_CLIENT_EMAIL (enabled=false)");
       }
 
       // SIFEN HU-22 (Fase 5): same idempotent seed as GUIDED_TOUR above. V28's Flyway INSERT only
@@ -140,59 +107,35 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=false)");
       }
 
-      // SIFEN testing: same idempotent seed as SIFEN_ELECTRONIC_INVOICING above — V51's Flyway
-      // INSERT only reaches dev/prod (Flyway is disabled for the `e2e` profile), so this runner is
-      // what makes the flag exist for Playwright. Keep the description in sync with V51.
-      if (featureFlagRepository.findByFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL").isEmpty()) {
-        FeatureFlag allowDuplicateClientEmail = new FeatureFlag();
-        allowDuplicateClientEmail.setFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL");
-        allowDuplicateClientEmail.setEnabled(false);
-        allowDuplicateClientEmail.setDescription(
-            "Test environment only: skip the per-tenant client-email uniqueness check so SIFEN"
-                + " electronic-invoicing testing can reuse the same recipient email. Ignored unless"
-                + " the SIFEN environment is TEST.");
-        featureFlagRepository.save(allowDuplicateClientEmail);
-        log.info("Seeded feature flag ALLOW_DUPLICATE_CLIENT_EMAIL (enabled=false)");
-      }
+      // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's
+      // full tier CRUD hasn't landed yet). V41's Flyway INSERT only reaches dev/prod the same way
+      // V28's flag INSERT does above — Flyway is disabled for the `e2e` profile — so this runner
+      // seeds the same default tier there too. HU-38 (editar tenant) needs a *second* tier to
+      // exercise an actual tier change (V43's Flyway INSERT, mirrored here for the same reason).
+      if (tierRepository.count() == 0) {
+        Tier defaultTier = new Tier();
+        defaultTier.setName("Estándar");
+        defaultTier.setDescription("Tier por defecto.");
+        tierRepository.save(defaultTier);
+        log.info("Seeded default tier 'Estándar'");
 
-      if (appUserRepository.count() == 0) {
-        Tenant tenant =
-            tenantRepository
-                .findFirstByOrderByIdAsc()
-                .orElseGet(
-                    () -> {
-                      Tenant t = new Tenant();
-                      t.setName("Demo salon");
-                      tenantRepository.save(t);
-                      return t;
-                    });
-        seedDemoTenantData(tenant);
-      }
-
-      tenantRepository.findFirstByOrderByIdAsc().ifPresent(tenant -> seedCatalogFromCsv(tenant));
-
-      tenantRepository.findFirstByOrderByIdAsc().ifPresent(tenant -> seedClientsFromCsv(tenant));
-
-      var systemEmail = systemAdminProperties.getEmail().trim().toLowerCase();
-      if (appUserRepository.findByEmail(systemEmail).isEmpty()) {
-        tenantRepository
-            .findById(systemAdminProperties.getTenantId())
-            .ifPresentOrElse(
-                t -> {
-                  AppUser root = new AppUser();
-                  root.setTenant(t);
-                  root.setEmail(systemEmail);
-                  root.setPasswordHash(passwordEncoder.encode(systemAdminProperties.getPassword()));
-                  root.setRole(UserRole.SYSTEM_ADMIN);
-                  appUserRepository.save(root);
-                  log.info("Seeded system admin user {} on tenant id={}", systemEmail, t.getId());
-                },
-                () ->
-                    log.warn(
-                        "Skipped system admin seed: no tenant with id={}",
-                        systemAdminProperties.getTenantId()));
+        Tier premiumTier = new Tier();
+        premiumTier.setName("Premium");
+        premiumTier.setDescription("Tier con funcionalidades ampliadas.");
+        tierRepository.save(premiumTier);
+        log.info("Seeded tier 'Premium'");
       }
     };
+  }
+
+  // HU-57: the first-ever Platform Admin is now bootstrapped by PlatformAdminBootstrap, not here
+  // — that bean runs on every boot regardless of femme.data-init.enabled (production never sets
+  // that flag but still needs a way in), unlike this bean which stays opt-in dev/e2e-only. See
+  // PlatformAdminBootstrap's javadoc and the PRD's "Sin seed hardcodeado" definition.
+  @Bean
+  @Profile("!test")
+  CommandLineRunner platformAdminBootstrapRunner(PlatformAdminBootstrap platformAdminBootstrap) {
+    return args -> platformAdminBootstrap.bootstrapIfNeeded();
   }
 
   public void seedDemoTenantData(Tenant tenant) {
@@ -231,320 +174,4 @@ public class FemmeDataInitializer {
         "Seeded demo admin user isabelzymanscki@gmail.com (password Demo123!) on tenant id={}",
         tenant.getId());
   }
-
-  /**
-   * Ensures the three standard Paraguayan IVA rates exist for this tenant, then returns IVA 10%.
-   */
-  private Tax seedDefaultTaxesIfAbsent(Tenant tenant) {
-    var existing = taxRepository.findByTenant_IdOrderByNameAsc(tenant.getId());
-    if (!existing.isEmpty()) {
-      return existing.stream()
-          .filter(t -> t.getRate().compareTo(BigDecimal.TEN) == 0)
-          .findFirst()
-          .orElse(existing.get(0));
-    }
-    Tax iva10 = new Tax();
-    iva10.setTenant(tenant);
-    iva10.setName("IVA 10%");
-    iva10.setRate(new BigDecimal("10.00"));
-    iva10.setActive(true);
-    taxRepository.save(iva10);
-
-    Tax iva5 = new Tax();
-    iva5.setTenant(tenant);
-    iva5.setName("IVA 5%");
-    iva5.setRate(new BigDecimal("5.00"));
-    iva5.setActive(true);
-    taxRepository.save(iva5);
-
-    Tax exento = new Tax();
-    exento.setTenant(tenant);
-    exento.setName("Exento");
-    exento.setRate(BigDecimal.ZERO);
-    exento.setActive(true);
-    taxRepository.save(exento);
-
-    log.info("Seeded default tax types (IVA 10%, IVA 5%, Exento) for tenant id={}", tenant.getId());
-    return iva10;
-  }
-
-  /**
-   * Reconciles service categories and services for the tenant against the authoritative CSV ({@code
-   * seed/servicios_peluqueria_normalizado.csv}): categories/services present in the CSV but missing
-   * in the DB are created; categories/services present in the DB but absent from the CSV are
-   * deleted. Professionals are seeded separately and only if none exist yet.
-   */
-  public void seedCatalogFromCsv(Tenant tenant) {
-    Long tenantId = tenant.getId();
-    if (tenantId == null) {
-      return;
-    }
-
-    Tax defaultTax = seedDefaultTaxesIfAbsent(tenant);
-
-    List<ServiceCsvRow> csvRows = readServiceCsvRows();
-
-    LinkedHashSet<String> desiredCategoryNames = new LinkedHashSet<>();
-    LinkedHashMap<String, ServiceCsvRow> desiredServices = new LinkedHashMap<>();
-    for (ServiceCsvRow row : csvRows) {
-      desiredCategoryNames.add(row.categoryName());
-      desiredServices.putIfAbsent(serviceKey(row.name(), row.categoryName()), row);
-    }
-
-    Map<String, ServiceCategory> categoriesByName = new LinkedHashMap<>();
-    int createdCategories = 0;
-    for (String categoryName : desiredCategoryNames) {
-      ServiceCategory category =
-          serviceCategoryRepository.findByNameAndTenant_Id(categoryName, tenantId).orElse(null);
-      if (category == null) {
-        category = new ServiceCategory();
-        category.setTenant(tenant);
-        category.setName(categoryName);
-        category.setActive(true);
-        category.setAccentKey("stone");
-        category = serviceCategoryRepository.save(category);
-        createdCategories++;
-      }
-      categoriesByName.put(categoryName, category);
-    }
-
-    List<SalonService> existingServices =
-        salonServiceRepository.findByTenant_IdOrderByNameAsc(tenantId);
-    Set<String> existingServiceKeys = new HashSet<>();
-    int deletedServices = 0;
-    for (SalonService service : existingServices) {
-      String key = serviceKey(service.getName(), service.getCategory().getName());
-      if (desiredServices.containsKey(key)) {
-        existingServiceKeys.add(key);
-      } else {
-        salonServiceRepository.delete(service);
-        deletedServices++;
-      }
-    }
-
-    int insertedServices = 0;
-    for (ServiceCsvRow row : desiredServices.values()) {
-      String key = serviceKey(row.name(), row.categoryName());
-      if (existingServiceKeys.contains(key)) {
-        continue;
-      }
-      SalonService service = new SalonService();
-      service.setTenant(tenant);
-      service.setCategory(categoriesByName.get(row.categoryName()));
-      service.setTax(defaultTax);
-      service.setName(row.name());
-      service.setPriceMinor(BigDecimal.ZERO);
-      service.setDurationMinutes(FemmeSalonCatalogBootstrapData.DEFAULT_SERVICE_DURATION_MINUTES);
-      service.setActive(true);
-      salonServiceRepository.save(service);
-      insertedServices++;
-    }
-
-    // Now that stale services have been removed, orphan categories (absent from the CSV) have no
-    // remaining services and can be safely deleted.
-    List<ServiceCategory> existingCategories =
-        serviceCategoryRepository.findByTenant_IdOrderByNameAsc(tenantId);
-    int deletedCategories = 0;
-    for (ServiceCategory category : existingCategories) {
-      if (!desiredCategoryNames.contains(category.getName())) {
-        serviceCategoryRepository.delete(category);
-        deletedCategories++;
-      }
-    }
-
-    seedProfessionalsIfEmpty(tenant);
-
-    log.info(
-        "Reconciled salon catalog from CSV for tenant id={}: categories total={} (created={},"
-            + " removed={}), services total={} (inserted={}, removed={})",
-        tenantId,
-        desiredCategoryNames.size(),
-        createdCategories,
-        deletedCategories,
-        desiredServices.size(),
-        insertedServices,
-        deletedServices);
-  }
-
-  private void seedProfessionalsIfEmpty(Tenant tenant) {
-    Long tenantId = tenant.getId();
-    if (tenantId == null || professionalRepository.countByTenant_Id(tenantId) > 0) {
-      return;
-    }
-
-    for (FemmeSalonCatalogBootstrapData.ProfessionalRow row :
-        FemmeSalonCatalogBootstrapData.PROFESSIONALS) {
-      Professional professional = new Professional();
-      professional.setTenant(tenant);
-      professional.setFullName(row.fullName());
-      professional.setActive(true);
-      professional.setSystemAccessAllowed(false);
-      professionalRepository.save(professional);
-      // Issue #39: seed Mon-Sat (days 1-6) 09:00-19:00 for every active professional.
-      LocalTime start = LocalTime.of(9, 0);
-      LocalTime end = LocalTime.of(19, 0);
-      for (short day = 1; day <= 6; day++) {
-        ProfessionalSchedule schedule = new ProfessionalSchedule();
-        schedule.setProfessional(professional);
-        schedule.setDayOfWeek(day);
-        schedule.setStartTime(start);
-        schedule.setEndTime(end);
-        professionalScheduleRepository.save(schedule);
-      }
-    }
-
-    log.info(
-        "Seeded {} professionals for tenant id={}",
-        FemmeSalonCatalogBootstrapData.PROFESSIONALS.size(),
-        tenantId);
-  }
-
-  private static String serviceKey(String name, String categoryName) {
-    return name + ' ' + categoryName;
-  }
-
-  /**
-   * Reads {@code nombre,categoria,precio} rows from the services seed CSV. Category and price are
-   * always the last two comma-separated fields; the service name is everything before them, which
-   * may itself contain commas when quoted (e.g. {@code "CASTAÑO CAOBA CENIZA 4,51",Coloración,0}).
-   */
-  private List<ServiceCsvRow> readServiceCsvRows() {
-    List<ServiceCsvRow> rows = new ArrayList<>();
-    ClassPathResource csv = new ClassPathResource(SERVICES_SEED_CSV);
-    try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(csv.getInputStream(), StandardCharsets.UTF_8))) {
-      String line = reader.readLine();
-      if (line != null && line.startsWith("﻿")) {
-        line = line.substring(1);
-      }
-      // skip header line, now read data rows
-      while ((line = reader.readLine()) != null) {
-        if (line.isBlank()) {
-          continue;
-        }
-        int lastComma = line.lastIndexOf(',');
-        if (lastComma < 0) {
-          continue;
-        }
-        String rest = line.substring(0, lastComma);
-        int secondLastComma = rest.lastIndexOf(',');
-        if (secondLastComma < 0) {
-          continue;
-        }
-        String categoryName = rest.substring(secondLastComma + 1).trim();
-        String name = unquoteCsvField(rest.substring(0, secondLastComma));
-        if (name.isEmpty() || categoryName.isEmpty()) {
-          continue;
-        }
-        rows.add(new ServiceCsvRow(name, categoryName));
-      }
-    } catch (IOException e) {
-      log.error("Failed to read service seed CSV: {}", e.getMessage());
-    }
-    return rows;
-  }
-
-  private static String unquoteCsvField(String field) {
-    String trimmed = field.trim();
-    if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-      trimmed = trimmed.substring(1, trimmed.length() - 1).replace("\"\"", "\"");
-    }
-    return trimmed;
-  }
-
-  /**
-   * Reconciles clients for the tenant against the authoritative CSV ({@code
-   * seed/clientes_filtrado_v2.csv}): clients present in the CSV but missing in the DB are created;
-   * clients present in the DB but absent from the CSV are deleted.
-   */
-  public void seedClientsFromCsv(Tenant tenant) {
-    Long tenantId = tenant.getId();
-    if (tenantId == null) {
-      return;
-    }
-
-    LinkedHashMap<String, ClientCsvRow> desiredClients = readClientCsvRows();
-    if (desiredClients.isEmpty()) {
-      return;
-    }
-
-    List<Client> existingClients = clientRepository.findByTenant_Id(tenantId);
-    Set<String> existingNames = new HashSet<>();
-    int deleted = 0;
-    int skippedInUse = 0;
-    for (Client client : existingClients) {
-      if (desiredClients.containsKey(client.getFullName())) {
-        existingNames.add(client.getFullName());
-      } else if (invoiceRepository.existsByClient_Id(client.getId())
-          || appointmentRepository.existsByClient_Id(client.getId())) {
-        // This client has real invoices/appointments tied to it (created via live usage since
-        // the seed CSV was last updated). Deleting it would violate fk_inv_client/fk_appt_client
-        // and crash this CommandLineRunner on every subsequent boot. Keep it instead.
-        existingNames.add(client.getFullName());
-        skippedInUse++;
-      } else {
-        clientRepository.delete(client);
-        deleted++;
-      }
-    }
-
-    int inserted = 0;
-    for (ClientCsvRow row : desiredClients.values()) {
-      if (existingNames.contains(row.fullName())) {
-        continue;
-      }
-      Client client = new Client();
-      client.setTenant(tenant);
-      client.setFullName(row.fullName());
-      client.setActive(row.active());
-      client.setVisitCount(0);
-      clientRepository.save(client);
-      inserted++;
-    }
-
-    log.info(
-        "Reconciled clients from CSV for tenant id={}: total={} (inserted={}, removed={},"
-            + " skippedInUse={})",
-        tenantId,
-        desiredClients.size(),
-        inserted,
-        deleted,
-        skippedInUse);
-  }
-
-  /** Reads {@code Descripcion;Estado} rows from the clients seed CSV, deduplicated by name. */
-  private LinkedHashMap<String, ClientCsvRow> readClientCsvRows() {
-    LinkedHashMap<String, ClientCsvRow> rows = new LinkedHashMap<>();
-    ClassPathResource csv = new ClassPathResource(CLIENTS_SEED_CSV);
-    try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(csv.getInputStream(), StandardCharsets.UTF_8))) {
-      String line = reader.readLine();
-      if (line != null && line.startsWith("﻿")) {
-        line = line.substring(1);
-      }
-      // skip header line, now read data rows
-      while ((line = reader.readLine()) != null) {
-        if (line.isBlank()) {
-          continue;
-        }
-        String[] parts = line.split(";", -1);
-        if (parts.length < 2) {
-          continue;
-        }
-        String fullName = parts[0].trim();
-        if (fullName.isEmpty()) {
-          continue;
-        }
-        boolean active = "ACTIVO".equalsIgnoreCase(parts[1].trim());
-        rows.putIfAbsent(fullName, new ClientCsvRow(fullName, active));
-      }
-    } catch (IOException e) {
-      log.error("Failed to read client seed CSV: {}", e.getMessage());
-    }
-    return rows;
-  }
-
-  private record ServiceCsvRow(String name, String categoryName) {}
-
-  private record ClientCsvRow(String fullName, boolean active) {}
 }

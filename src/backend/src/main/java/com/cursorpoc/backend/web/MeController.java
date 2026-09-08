@@ -1,11 +1,10 @@
 package com.cursorpoc.backend.web;
 
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.Professional;
-import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.AuthService;
 import com.cursorpoc.backend.web.dto.ChangePasswordRequest;
@@ -32,31 +31,30 @@ public class MeController {
 
   private static final Logger log = LoggerFactory.getLogger(MeController.class);
 
-  private final FemmeSystemAdminProperties systemAdminProperties;
   private final ProfessionalRepository professionalRepository;
   private final AppUserRepository appUserRepository;
+  private final TenantRepository tenantRepository;
   private final PasswordEncoder passwordEncoder;
 
   public MeController(
-      FemmeSystemAdminProperties systemAdminProperties,
       ProfessionalRepository professionalRepository,
       AppUserRepository appUserRepository,
+      TenantRepository tenantRepository,
       PasswordEncoder passwordEncoder) {
-    this.systemAdminProperties = systemAdminProperties;
     this.professionalRepository = professionalRepository;
     this.appUserRepository = appUserRepository;
+    this.tenantRepository = tenantRepository;
     this.passwordEncoder = passwordEncoder;
   }
 
   @GetMapping("/me")
   public MeResponse me(@AuthenticationPrincipal FemmeUserPrincipal principal) {
-    log.info("GET /api/me tenantId={}", principal == null ? "null" : principal.getTenantId());
+    log.info("GET /api/me tenantId={}", principal == null ? "null" : principal.getTenantIdOrNull());
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    Long preview =
-        principal.getRole() == UserRole.SYSTEM_ADMIN ? systemAdminProperties.getTenantId() : null;
-
+    // HU-35: PLATFORM_ADMIN has no tenant and no linked Professional — getProfessionalId() is
+    // always null for that role, so this branch is naturally skipped without a tenant lookup.
     MeProfileResponse profile = null;
     if (principal.getProfessionalId() != null) {
       profile =
@@ -73,16 +71,24 @@ public class MeController {
               .orElse(null);
     }
 
+    String tenantName =
+        principal.getTenantIdOrNull() == null
+            ? null
+            : tenantRepository
+                .findById(principal.getTenantIdOrNull())
+                .map(t -> t.getName())
+                .orElse(null);
+
     MeResponse resp =
         new MeResponse(
             principal.getUserId(),
-            principal.getTenantId(),
+            principal.getTenantIdOrNull(),
+            tenantName,
             principal.getUsername(),
             principal.getRole().name(),
             principal.getProfessionalId(),
-            preview,
             profile);
-    log.info("GET /api/me tenantId={} status=200", principal.getTenantId());
+    log.info("GET /api/me tenantId={} status=200", principal.getTenantIdOrNull());
     return resp;
   }
 
@@ -91,16 +97,18 @@ public class MeController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @RequestBody MeProfileUpdateRequest request) {
     log.info(
-        "PUT /api/me/profile tenantId={}", principal == null ? "null" : principal.getTenantId());
+        "PUT /api/me/profile tenantId={}",
+        principal == null ? "null" : principal.getTenantIdOrNull());
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
 
     if (principal.getProfessionalId() == null) {
-      // Admin without linked Professional: only allow email update on AppUser
+      // Admin without linked Professional (incl. HU-35's tenant-less PLATFORM_ADMIN): only allow
+      // email update on AppUser
       log.error(
           "PUT /api/me/profile tenantId={} status=403 - admin has no linked professional",
-          principal.getTenantId());
+          principal.getTenantIdOrNull());
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PROFILE_NOT_EDITABLE_FOR_ADMIN");
     }
 
@@ -145,7 +153,7 @@ public class MeController {
       @RequestBody ChangePasswordRequest request) {
     log.info(
         "POST /api/me/change-password tenantId={}",
-        principal == null ? "null" : principal.getTenantId());
+        principal == null ? "null" : principal.getTenantIdOrNull());
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
@@ -161,7 +169,7 @@ public class MeController {
     user.setPasswordHash(passwordEncoder.encode(newPassword));
     appUserRepository.save(user);
 
-    log.info("POST /api/me/change-password tenantId={} status=200", principal.getTenantId());
+    log.info("POST /api/me/change-password tenantId={} status=200", principal.getTenantIdOrNull());
     return ResponseEntity.noContent().build();
   }
 }

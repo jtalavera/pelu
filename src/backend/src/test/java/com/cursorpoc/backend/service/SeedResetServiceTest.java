@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.bootstrap.FemmeDataInitializer;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppUserTourStateRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
@@ -55,6 +56,7 @@ class SeedResetServiceTest {
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private ProfessionalScheduleRepository professionalScheduleRepository;
   @Mock private ProfessionalActivationTokenRepository professionalActivationTokenRepository;
+  @Mock private AppUserActivationTokenRepository appUserActivationTokenRepository;
   @Mock private ClientRepository clientRepository;
   @Mock private AppointmentRepository appointmentRepository;
   @Mock private InvoiceRepository invoiceRepository;
@@ -81,6 +83,7 @@ class SeedResetServiceTest {
             professionalRepository,
             professionalScheduleRepository,
             professionalActivationTokenRepository,
+            appUserActivationTokenRepository,
             clientRepository,
             appointmentRepository,
             invoiceRepository,
@@ -106,12 +109,12 @@ class SeedResetServiceTest {
     verify(fiscalStampRepository, never()).deleteByTenant_Id(any());
   }
 
+  // HU-58: reset no longer reconciles a hardcoded catalog/client CSV (DemoTenantCatalogSeedService
+  // was removed) — it only restores the tenant's admin login capability.
   @Test
-  void resetDemoTenant_reseedsCatalogAndClientsAfterDeletingUnlockedStamps() {
+  void resetDemoTenant_reseedsAdminLoginAfterDeletingUnlockedStamps() {
     service.resetDemoTenant();
 
     verify(femmeDataInitializer, times(1)).seedDemoTenantData(any(Tenant.class));
-    verify(femmeDataInitializer).seedCatalogFromCsv(any(Tenant.class));
-    verify(femmeDataInitializer).seedClientsFromCsv(any(Tenant.class));
   }
 }

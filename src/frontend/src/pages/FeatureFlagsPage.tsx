@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Badge, Button, Heading, Spinner, Switch, Text } from "@design-system";
 import { femmeDeleteJson, femmeJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { getDateLocale } from "../i18n/dateLocale";
-import { useFeatureFlagsState } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+import { TenantSearchField, type TenantSelection } from "../components/TenantSearchField";
 
 type TenantFlagChange = {
   changedAt: string;
@@ -14,12 +15,18 @@ type TenantFlagChange = {
   newEnabled: boolean;
 };
 
+type FeatureFlagSource = "GLOBAL" | "TIER" | "OVERRIDE";
+
 type TenantRow = {
   flagKey: string;
   description: string | null;
   globalEnabled: boolean;
+  hasTier: boolean;
+  tierEnabled: boolean | null;
   hasOverride: boolean;
   overrideEnabled: boolean | null;
+  effectiveEnabled: boolean;
+  effectiveSource: FeatureFlagSource;
   lastChange: TenantFlagChange | null;
 };
 
@@ -33,31 +40,40 @@ type SifenHomologation = {
 
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
+/**
+ * HU-36: lives under `/platform/feature-flags` (mounted inside `PlatformShell`, gated to
+ * `PLATFORM_ADMIN` by `PlatformAdminRoute`), not `/app/settings/feature-flags` — Platform Admin is
+ * tenant-independent, so it manages an explicitly chosen tenant's flags via the "Tenant ID" form
+ * below rather than an implicit preview tenant. Deliberately does not call `useFeatureFlagsState()`
+ * (unlike before HU-36): that hook requires `FeatureFlagProvider`, mounted only inside `AppShell`
+ * for a tenant-scoped session — `PlatformShell` skips it on purpose (see its own comment) since a
+ * Platform Admin has no "current tenant" app session whose flags cache would need refreshing.
+ */
 export default function FeatureFlagsPage() {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
   const { me } = useMe();
-  const { refetch: refetchFlags } = useFeatureFlagsState();
   const [rows, setRows] = useState<TenantRow[] | null>(null);
   const [homologation, setHomologation] = useState<SifenHomologation | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [tenantSelection, setTenantSelection] = useState<TenantSelection>(null);
+  const selectedTenant = tenantSelection?.tenant ?? null;
+  const selectedTenantId = selectedTenant?.id ?? null;
 
-  const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
-  const effectiveTenantId =
-    me?.role === "SYSTEM_ADMIN" ? (me.previewTenantId ?? me.tenantId) : (me?.tenantId ?? null);
+  const isPlatformAdmin = me?.role === "PLATFORM_ADMIN";
 
   const load = useCallback(async () => {
-    if (!isSystemAdmin || effectiveTenantId == null) return;
+    if (!isPlatformAdmin || selectedTenantId == null) return;
     setLoadError(null);
     try {
       const [data, homologationData] = await Promise.all([
-        femmeJson<TenantRow[]>(`/api/admin/feature-flags/tenants/${effectiveTenantId}`, {
+        femmeJson<TenantRow[]>(`/api/admin/feature-flags/tenants/${selectedTenantId}`, {
           json: false,
         }),
         femmeJson<SifenHomologation>(
-          `/api/admin/feature-flags/tenants/${effectiveTenantId}/sifen-homologation`,
+          `/api/admin/feature-flags/tenants/${selectedTenantId}/sifen-homologation`,
           { json: false },
         ),
       ]);
@@ -67,19 +83,33 @@ export default function FeatureFlagsPage() {
       setRows(null);
       setLoadError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     }
-  }, [isSystemAdmin, t, effectiveTenantId]);
+  }, [isPlatformAdmin, t, selectedTenantId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  function handleTenantSelect(selection: TenantSelection) {
+    setRows(null);
+    setHomologation(null);
+    setLoadError(null);
+    setTenantSelection(selection);
+  }
+
+  function handleChangeTenant() {
+    setTenantSelection(null);
+    setRows(null);
+    setHomologation(null);
+    setLoadError(null);
+  }
+
   async function setHomologationStatus(status: SifenHomologationStatus) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey("sifen-homologation");
     try {
       const updated = await femmePutJson<SifenHomologation>(
-        `/api/admin/feature-flags/tenants/${effectiveTenantId}/sifen-homologation`,
+        `/api/admin/feature-flags/tenants/${selectedTenantId}/sifen-homologation`,
         { status },
       );
       setHomologation(updated);
@@ -91,7 +121,7 @@ export default function FeatureFlagsPage() {
   }
 
   async function setGlobalEnabled(flagKey: string, enabled: boolean, description: string | null) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
@@ -100,7 +130,6 @@ export default function FeatureFlagsPage() {
         description: description ?? undefined,
       });
       await load();
-      await refetchFlags();
     } catch (e) {
       setActionError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -109,16 +138,15 @@ export default function FeatureFlagsPage() {
   }
 
   async function setTenantOverride(flagKey: string, enabled: boolean) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
       await femmePutJson(
-        `/api/admin/feature-flags/tenants/${effectiveTenantId}/${encodeURIComponent(flagKey)}`,
+        `/api/admin/feature-flags/tenants/${selectedTenantId}/${encodeURIComponent(flagKey)}`,
         { enabled },
       );
       await load();
-      await refetchFlags();
     } catch (e) {
       setActionError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -127,15 +155,14 @@ export default function FeatureFlagsPage() {
   }
 
   async function removeOverride(flagKey: string) {
-    if (effectiveTenantId == null) return;
+    if (selectedTenantId == null) return;
     setActionError(null);
     setBusyKey(flagKey);
     try {
       await femmeDeleteJson(
-        `/api/admin/feature-flags/tenants/${effectiveTenantId}/${encodeURIComponent(flagKey)}`,
+        `/api/admin/feature-flags/tenants/${selectedTenantId}/${encodeURIComponent(flagKey)}`,
       );
       await load();
-      await refetchFlags();
     } catch (e) {
       setActionError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -143,7 +170,7 @@ export default function FeatureFlagsPage() {
     }
   }
 
-  if (!isSystemAdmin) {
+  if (!isPlatformAdmin) {
     return (
       <div>
         <Heading as="h2" className="text-[var(--color-ink)]">
@@ -156,12 +183,37 @@ export default function FeatureFlagsPage() {
     );
   }
 
+  if (selectedTenantId == null) {
+    return (
+      <div className="min-w-0">
+        <div className="mb-6">
+          <Heading as="h2" className="text-[var(--color-ink)]">
+            {t("femme.featureFlags.title")}
+          </Heading>
+          <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
+            {t("femme.featureFlags.subtitle")}
+          </Text>
+        </div>
+        <div className="max-w-sm">
+          <TenantSearchField
+            id="tenant-search-field"
+            value={tenantSelection}
+            onChange={handleTenantSelect}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (loadError) {
     return (
       <div>
         <Alert variant="destructive" title={t("femme.featureFlags.errorTitle")}>
           {loadError}
         </Alert>
+        <Button type="button" size="sm" variant="outline" className="mt-4" onClick={handleChangeTenant}>
+          {t("femme.featureFlags.changeTenant")}
+        </Button>
       </div>
     );
   }
@@ -177,13 +229,21 @@ export default function FeatureFlagsPage() {
 
   return (
     <div className="min-w-0">
-      <div className="mb-6">
-        <Heading as="h2" className="text-[var(--color-ink)]">
-          {t("femme.featureFlags.title")}
-        </Heading>
-        <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
-          {t("femme.featureFlags.subtitle")}
-        </Text>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Heading as="h2" className="text-[var(--color-ink)]">
+            {t("femme.featureFlags.title")}
+          </Heading>
+          <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
+            {t("femme.featureFlags.subtitle")}
+          </Text>
+          <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
+            {t("femme.featureFlags.managingTenant", { tenantName: selectedTenant?.name })}
+          </Text>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={handleChangeTenant}>
+          {t("femme.featureFlags.changeTenant")}
+        </Button>
       </div>
 
       {actionError ? (
@@ -194,10 +254,11 @@ export default function FeatureFlagsPage() {
 
       <ul className="flex flex-col gap-3">
         {rows.map((row) => {
-          const effective =
-            row.hasOverride && row.overrideEnabled != null
-              ? row.overrideEnabled
-              : row.globalEnabled;
+          // HU-47: the backend resolves the 3-level precedence (override > tier > global) and
+          // reports both the effective value and which level produced it — trust it rather than
+          // recomputing here, since re-deriving it client-side would need to know about the tier
+          // level too.
+          const effective = row.effectiveEnabled;
           const busy = busyKey === row.flagKey;
           return (
             <li
@@ -211,7 +272,7 @@ export default function FeatureFlagsPage() {
                 <p className="mb-3 text-sm text-[var(--color-ink-2)]">{row.description}</p>
               ) : null}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
                     {t("femme.featureFlags.globalDefault")}
@@ -235,12 +296,42 @@ export default function FeatureFlagsPage() {
                 </div>
                 <div>
                   <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
+                    {t("femme.featureFlags.tierDefault")}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {row.hasTier ? (
+                      <span className="text-sm text-[var(--color-ink-2)]">
+                        {row.tierEnabled
+                          ? t("femme.featureFlags.stateOn")
+                          : t("femme.featureFlags.stateOff")}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-[var(--color-ink-3)]">
+                        {t("femme.featureFlags.tierNotDefined")}
+                      </span>
+                    )}
+                    {selectedTenant?.tierId != null ? (
+                      <Link
+                        to={`/platform/tiers?open=${selectedTenant.tierId}`}
+                        className="text-xs font-medium text-[var(--color-rose)] underline-offset-4 hover:underline"
+                      >
+                        {t("femme.featureFlags.tierDefaultEditLink", {
+                          tierName: selectedTenant.tierName,
+                        })}
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
                     {t("femme.featureFlags.thisTenant")}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     {!row.hasOverride ? (
                       <span className="text-sm text-[var(--color-ink-2)]">
-                        {t("femme.featureFlags.usingGlobal")}
+                        {row.effectiveSource === "TIER"
+                          ? t("femme.featureFlags.usingTier")
+                          : t("femme.featureFlags.usingGlobal")}
                       </span>
                     ) : (
                       <span className="text-sm text-[var(--color-ink-2)]">
@@ -271,6 +362,30 @@ export default function FeatureFlagsPage() {
                     ) : null}
                   </div>
                 </div>
+              </div>
+
+              <div
+                className="mt-3 flex flex-wrap items-center gap-2"
+                data-testid={`feature-flag-source-${row.flagKey}`}
+              >
+                <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
+                  {t("femme.featureFlags.effectiveValue")}
+                </span>
+                <Badge variant={effective ? "success" : "secondary"}>
+                  {effective ? t("femme.featureFlags.stateOn") : t("femme.featureFlags.stateOff")}
+                </Badge>
+                <Badge
+                  variant={
+                    row.effectiveSource === "OVERRIDE"
+                      ? "info"
+                      : row.effectiveSource === "TIER"
+                        ? "warning"
+                        : "outline"
+                  }
+                  data-testid={`feature-flag-source-badge-${row.flagKey}`}
+                >
+                  {t(`femme.featureFlags.source.${row.effectiveSource.toLowerCase()}`)}
+                </Badge>
               </div>
 
               {row.lastChange ? (

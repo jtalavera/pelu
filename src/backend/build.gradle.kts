@@ -50,6 +50,9 @@ dependencies {
     // before; zxing:core alone is enough (no javase/awt-integration submodule needed — the raster
     // is built by hand from its BitMatrix, see SifenQrImageService).
     implementation("com.google.zxing:core:3.5.3")
+    // HU-50 (Épica E — Importación de datos vía Excel): reads .xlsx header rows to validate them
+    // against the standard column template per entity. poi-ooxml pulls in poi (binary .xls) too,
+    // which we deliberately do NOT accept (see ExcelHeaderValidationService — only XSSFWorkbook).
     // Issue #174 AC-05: .xlsx export of the invoice-history report (header data only).
     implementation("org.apache.poi:poi-ooxml:5.3.0")
 
