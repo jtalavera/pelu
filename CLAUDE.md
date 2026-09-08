@@ -49,6 +49,20 @@ npm run test:with-evidence                  # Timestamped HTML/video/traces in e
 npx playwright test tests/auth.spec.ts --headed  # Single spec
 ```
 
+#### Multi-tenant isolation suite
+
+```bash
+npm run test:mt                             # 3-tenant isolation suite, own backend on :8081
+npm run test:mt -- tests/mt-isolation/mt-turnos.spec.ts   # single file
+npm run test:mt:headed                      # visible browser
+```
+
+Separate Playwright config (`e2e/playwright.mt-isolation.config.ts`) — starts its own
+Spring Boot (`:8081`) + Vite (`:5174`) and provisions three divergent tenants via
+`global-setup.mt.ts` (`workers: 1`). Runs in CI on every PR to (and push to)
+`develop`/`main` via `.github/workflows/e2e-mt-isolation.yml`. The main `npm test`
+suite excludes `tests/mt-isolation/**` (`testIgnore` in `playwright.config.ts`).
+
 ### Database
 
 ```bash

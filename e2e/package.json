@@ -11,7 +11,9 @@
     "test:headed": "playwright test --headed",
     "test:with-backend": "E2E_WITH_BACKEND=1 playwright test",
     "test:with-backend:headed": "E2E_WITH_BACKEND=1 playwright test --headed",
-    "test:with-evidence": "bash ../scripts/run-e2e-with-evidence.sh"
+    "test:with-evidence": "bash ../scripts/run-e2e-with-evidence.sh",
+    "test:mt": "playwright test --config playwright.mt-isolation.config.ts",
+    "test:mt:headed": "playwright test --config playwright.mt-isolation.config.ts --headed"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",
