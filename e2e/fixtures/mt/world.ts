@@ -28,9 +28,11 @@ import { PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD } from "../auth";
  *    password: the `TENANT_AMBIGUOUS` fixture (login with no matching Origin resolves to >1 tenant).
  *
  * Idempotent: the mt backend is reused across local runs (`reuseExistingServer`). If T-A's admin can
- * already log in, the world exists — every id is re-derived from the list endpoints and nothing is
- * re-created. A partial/failed prior provisioning is NOT self-healing: restart the mt backend (fresh
- * H2) and delete `e2e/.mt-world.json`.
+ * already log in, the world exists — A's and B's ids are re-derived from the list endpoints (sorted
+ * by id, i.e. creation order, so the result is byte-identical to a fresh provision), C is confirmed
+ * SUSPENDED from the platform tenant listing (never reactivated), and nothing is re-created. A
+ * partial/failed prior provisioning is NOT self-healing: restart the mt backend (fresh H2) and
+ * delete `e2e/.mt-world.json`.
  */
 
 const __filename = fileURLToPath(import.meta.url);
@@ -300,6 +302,9 @@ async function ensureActiveFiscalStamp(token: string): Promise<void> {
   await must("POST", `/api/fiscal-stamps/${created.id}/activate`, { body: {}, token });
 }
 
+const byIdAsc = <T extends { id: number }>(rows: T[]): T[] =>
+  [...rows].sort((a, b) => a.id - b.id);
+
 async function deriveCatalog(
   token: string,
   key: TenantKey,
@@ -310,16 +315,43 @@ async function deriveCatalog(
     must<Array<{ id: number }>>("GET", "/api/professionals", { token }),
     must<Array<{ id: number }>>("GET", "/api/clients", { token }),
   ]);
+  // The list endpoints sort by NAME (professionals by fullName; services category-grouped, then
+  // name), not creation order — so re-sort by the H2 identity id (creation-ordered) before any
+  // positional mapping, otherwise the re-derived world diverges from the fresh one and, worse,
+  // `professionalPins` gets paired to the wrong professional.
+  const sortedProfs = byIdAsc(profs);
   return {
     catalog: {
-      categoryIds: cats.map((c) => c.id),
-      serviceIds: svcs.map((s) => s.id),
-      serviceNames: svcs.map((s) => s.name),
+      categoryIds: byIdAsc(cats).map((c) => c.id),
+      serviceIds: byIdAsc(svcs).map((s) => s.id),
+      serviceNames: byIdAsc(svcs).map((s) => s.name),
     },
-    professionalIds: profs.map((p) => p.id),
+    professionalIds: sortedProfs.map((p) => p.id),
     // PINs aren't returned by any list endpoint; reconstruct them from the fixed per-tenant scheme.
-    professionalPins: profs.map((_, i) => mtPinFor(key, i)),
-    clientIds: clients.map((c) => c.id),
+    professionalPins: sortedProfs.map((_, i) => mtPinFor(key, i)),
+    clientIds: byIdAsc(clients).map((c) => c.id),
+  };
+}
+
+/**
+ * T-C as recorded in the world: id + admin creds + tier, with EMPTY catalog/professional/client
+ * arrays. C is suspended, so the re-derive path can't read its tenant-scoped data without
+ * reactivating it (forbidden); no scenario needs C's specific ids anyway. Both provisioning paths
+ * use this so the fresh and re-derived `MtWorld` blobs are byte-identical.
+ */
+function emptyCatalogTenantC(id: number, tierId: number): MtTenant {
+  return {
+    key: "C",
+    id,
+    name: MT.C.name,
+    adminEmail: MT.C.adminEmail,
+    adminPassword: MT.C.adminPassword,
+    tierId,
+    sifenEnabled: false,
+    catalog: { categoryIds: [], serviceIds: [], serviceNames: [] },
+    professionalIds: [],
+    professionalPins: [],
+    clientIds: [],
   };
 }
 
@@ -335,7 +367,9 @@ async function fullProvision(platformToken: string): Promise<MtWorld> {
 
   const tenantAId = await createTenant(platformToken, MT.A.name, tierAId);
   const tenantBId = await createTenant(platformToken, MT.B.name, tierBId);
-  const tenantCId = await createTenant(platformToken, MT.C.name, tierAId);
+  // C goes on the SIFEN-less Boreal tier (no scenario depends on C's tier) so its recorded
+  // sifenEnabled=false stays consistent with its tier resolution.
+  const tenantCId = await createTenant(platformToken, MT.C.name, tierBId);
 
   await inviteAndActivateAdmin(platformToken, tenantAId, MT.A.adminEmail, MT.A.adminPassword);
   await inviteAndActivateAdmin(platformToken, tenantBId, MT.B.adminEmail, MT.B.adminPassword);
@@ -382,11 +416,11 @@ async function fullProvision(platformToken: string): Promise<MtWorld> {
   const bClients = [];
   for (let i = 1; i <= 3; i++) bClients.push(await createClient(tokenB, `MT Cliente Boreal ${i}`));
 
-  // --- T-C: minimal seed, THEN suspend ---
+  // --- T-C: minimal seed (backend state only — not recorded in the world), THEN suspend ---
   const cCat = await createCategory(tokenC, "MT Cat Ceval");
-  const cSvc = await createService(tokenC, "MT Servicio Ceval", cCat);
-  const cProf = await createProfessional(tokenC, "MT Prof Ceval Uno", mtPinFor("C", 0));
-  const cClient = await createClient(tokenC, "MT Cliente Ceval 1");
+  await createService(tokenC, "MT Servicio Ceval", cCat);
+  await createProfessional(tokenC, "MT Prof Ceval Uno", mtPinFor("C", 0));
+  await createClient(tokenC, "MT Cliente Ceval 1");
   await setTenantStatus(platformToken, tenantCId, "SUSPENDED");
 
   const [sifenA, sifenB] = await Promise.all([
@@ -429,19 +463,10 @@ async function fullProvision(platformToken: string): Promise<MtWorld> {
       professionalPins: [mtPinFor("B", 0), mtPinFor("B", 1)],
       clientIds: bClients,
     },
-    tenantC: {
-      key: "C",
-      id: tenantCId,
-      name: MT.C.name,
-      adminEmail: MT.C.adminEmail,
-      adminPassword: MT.C.adminPassword,
-      tierId: tierAId,
-      sifenEnabled: false,
-      catalog: { categoryIds: [cCat], serviceIds: [cSvc], serviceNames: ["MT Servicio Ceval"] },
-      professionalIds: [cProf],
-      professionalPins: [mtPinFor("C", 0)],
-      clientIds: [cClient],
-    },
+    // C's tenant-scoped ids are intentionally NOT recorded: no scenario needs them, and keeping
+    // them empty makes the fresh and re-derived worlds byte-identical (the re-derive path can't
+    // read a suspended tenant's catalog without reactivating it, which it must never do).
+    tenantC: emptyCatalogTenantC(tenantCId, tierBId),
     sharedAmbiguousEmail: MT.sharedAmbiguousEmail,
     sharedAmbiguousPassword: MT.sharedAmbiguousPassword,
   };
@@ -466,13 +491,16 @@ async function rederiveWorld(platformToken: string, tokenA: string): Promise<MtW
   const rowB = findRow(MT.B.name);
   const rowC = findRow(MT.C.name);
 
-  const tokenB = await loginOrThrow(MT.B.adminEmail, MT.B.adminPassword);
+  // C must never be reactivated — an interrupt between a reactivate/suspend pair would strand it
+  // ACTIVE and break the "C is suspended" invariant for every later spec. Confirm its status from
+  // the platform listing instead, and don't re-derive its (unused) tenant-scoped catalog at all.
+  if (rowC.status !== "SUSPENDED") {
+    throw new Error(
+      `[mt/world] idempotent re-derive: tenant "${MT.C.name}" is ${rowC.status}, expected SUSPENDED — restart the mt backend and delete ${MT_WORLD_FILE}`,
+    );
+  }
 
-  // C's admin can't log in while suspended — reactivate just long enough to read its catalog back.
-  await setTenantStatus(platformToken, rowC.id, "ACTIVE");
-  const tokenC = await loginOrThrow(MT.C.adminEmail, MT.C.adminPassword);
-  const cDerived = await deriveCatalog(tokenC, "C");
-  await setTenantStatus(platformToken, rowC.id, "SUSPENDED");
+  const tokenB = await loginOrThrow(MT.B.adminEmail, MT.B.adminPassword);
 
   const [aDerived, bDerived, sifenA, sifenB] = await Promise.all([
     deriveCatalog(tokenA, "A"),
@@ -502,16 +530,7 @@ async function rederiveWorld(platformToken: string, tokenA: string): Promise<MtW
       sifenEnabled: sifenB,
       ...bDerived,
     },
-    tenantC: {
-      key: "C",
-      id: rowC.id,
-      name: MT.C.name,
-      adminEmail: MT.C.adminEmail,
-      adminPassword: MT.C.adminPassword,
-      tierId: rowC.tierId ?? 0,
-      sifenEnabled: false,
-      ...cDerived,
-    },
+    tenantC: emptyCatalogTenantC(rowC.id, rowC.tierId ?? 0),
     sharedAmbiguousEmail: MT.sharedAmbiguousEmail,
     sharedAmbiguousPassword: MT.sharedAmbiguousPassword,
   };
