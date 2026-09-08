@@ -21,15 +21,22 @@ test("expectScopedList sees A's own professionals and not B's", async ({ request
   expect(rows.length).toBeGreaterThanOrEqual(world.tenantA.professionalIds.length);
 });
 
-test("expectCrossTenantForbidden: B token cannot read an A professional by id", async ({
+test("expectCrossTenantForbidden: B token is rejected on an A client that really exists", async ({
   request,
 }) => {
+  const aClientPath = `/api/clients/${world.tenantA.clientIds[0]}`;
+
+  // Positive control: A's own token CAN read it — the resource exists and is A's. This proves the
+  // rejection below is real tenant scoping, not a route-absent 404/405 artifact.
+  const tokenA = await mtLoginToken(request, world.tenantA);
+  const ownRead = await request.get(`${process.env.MT_API_BASE}${aClientPath}`, {
+    headers: { Authorization: `Bearer ${tokenA}` },
+  });
+  expect(ownRead.status(), await ownRead.text()).toBe(200);
+
+  // Cross-tenant: B's token must be rejected (403 or scoping-404) on A's client.
   const tokenB = await mtLoginToken(request, world.tenantB);
-  await expectCrossTenantForbidden(
-    request,
-    tokenB,
-    `/api/professionals/${world.tenantA.professionalIds[0]}`,
-  );
+  await expectCrossTenantForbidden(request, tokenB, aClientPath);
 });
 
 test("snapshotTenant + raceAcrossTenants run without cross-contamination", async ({ request }) => {

@@ -211,12 +211,13 @@ export async function snapshotTenant(
   };
 }
 
-/** Deep-equal assertion with a readable diff message — fails if any tenant state moved. */
+/** Deep-equal assertion with a readable first-divergence message — fails if any tenant state moved. */
 export function expectUnchanged(before: TenantSnapshot, after: TenantSnapshot): void {
-  expect(
-    after,
-    `expectUnchanged: tenant state changed\n  before: ${JSON.stringify(before)}\n  after:  ${JSON.stringify(after)}`,
-  ).toEqual(before);
+  const fields = Object.keys(before) as Array<keyof TenantSnapshot>;
+  const diffs = fields
+    .filter((f) => JSON.stringify(before[f]) !== JSON.stringify(after[f]))
+    .map((f) => `  ${f}: ${JSON.stringify(before[f])} -> ${JSON.stringify(after[f])}`);
+  expect(diffs, `expectUnchanged: tenant state changed\n${diffs.join("\n")}`).toEqual([]);
 }
 
 // --------------------------------------------------------------------------------------------------
