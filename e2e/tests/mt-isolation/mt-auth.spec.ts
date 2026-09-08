@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { API_BASE, authHeaders, decodeJwtPayload } from "../../fixtures/api";
 import { loginAs, loginAsPlatformAdmin } from "../../fixtures/auth";
@@ -17,37 +17,6 @@ import { getMtWorld, mtLoginToken, mtPlatformToken } from "../../fixtures/mt/wor
  */
 
 const world = getMtWorld();
-
-/** Origin the mt Vite server serves the SPA from (see playwright.mt-isolation.config.ts). */
-const MT_BASE_URL = process.env.MT_BASE_URL ?? "http://localhost:5174";
-
-/**
- * INFRA WORKAROUND (not a product concern): the mt backend (:8081) runs the plain `e2e` profile,
- * whose CORS allow-list is only `http://localhost:5173` / `http://127.0.0.1:5173` — but this suite
- * serves the SPA from `:5174`, so every browser `fetch` to `:8081` is blocked by CORS and the login
- * form only ever shows "Network error". `playwright.mt-isolation.config.ts` is out of scope for this
- * task (only `mt-auth.spec.ts` may change), so we relax CORS at the Playwright routing layer: the
- * request is still really sent to the real mt backend (real JWT, real tenant scoping — nothing about
- * identity/routing isolation is faked): we forward it with the `Origin` header stripped (so Spring's
- * `CorsFilter` treats it as a non-CORS same-origin call and does not 403 it — and `AuthService` then
- * sees a null origin, exactly the Origin-less path `mtLoginToken` / scenario 3's API check use), and
- * we add the `Access-Control-Allow-Origin` header the backend would send if its config listed
- * `:5174`. Fix for later: add `APP_FRONTEND_URL=http://localhost:5174,http://127.0.0.1:5174` to the
- * mt backend's env in `playwright.mt-isolation.config.ts`.
- */
-async function allowMtBackendCors(context: BrowserContext): Promise<void> {
-  await context.route(`${API_BASE}/**`, async (route) => {
-    const reqHeaders = { ...route.request().headers() };
-    delete reqHeaders.origin;
-    const response = await route.fetch({ headers: reqHeaders });
-    const headers = {
-      ...response.headers(),
-      "access-control-allow-origin": MT_BASE_URL,
-      "access-control-allow-credentials": "true",
-    };
-    await route.fulfill({ response, headers });
-  });
-}
 
 /** Login-screen init: mark guided tours seen (Joyride overlay blocks clicks) + force `en` copy. */
 function markLoginScreenReady() {
@@ -73,7 +42,6 @@ test.describe("mt-auth · identity & routing isolation", () => {
   // Scenario 1 -----------------------------------------------------------------------------------
   test("AC: role-based landing + each tenant's own name in the header", async ({ page, browser }) => {
     test.setTimeout(90_000); // three full browser logins (platform admin + T-A + T-B contexts)
-    await allowMtBackendCors(page.context());
 
     // Platform admin lands on /platform (helper asserts URL + "Platform Admin" heading).
     await loginAsPlatformAdmin(page);
@@ -85,7 +53,6 @@ test.describe("mt-auth · identity & routing isolation", () => {
     for (const tenant of [world.tenantA, world.tenantB]) {
       const other = tenant.key === "A" ? world.tenantB : world.tenantA;
       const ctx = await browser.newContext();
-      await allowMtBackendCors(ctx);
       const p = await ctx.newPage();
       try {
         await loginAs(p, tenant.adminEmail, tenant.adminPassword);
@@ -124,7 +91,6 @@ test.describe("mt-auth · identity & routing isolation", () => {
 
     // UI: the same creds on the single login screen surface the ambiguous-account copy and stay on
     // /login (no session established).
-    await allowMtBackendCors(page.context());
     await page.addInitScript(markLoginScreenReady);
     await page.goto("/login");
     await page.getByLabel("Email").fill(world.sharedAmbiguousEmail);
@@ -148,7 +114,6 @@ test.describe("mt-auth · identity & routing isolation", () => {
   // MUTATES T-C: reactivates it, then restores SUSPENDED in `finally` and asserts the restore.
   test("AC: suspended tenant blocks login; reactivation restores it", async ({ page, request }) => {
     test.setTimeout(60_000);
-    await allowMtBackendCors(page.context());
 
     const loginC = () =>
       request.post(`${API_BASE}/api/auth/login`, {

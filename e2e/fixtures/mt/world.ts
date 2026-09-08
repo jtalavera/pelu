@@ -151,6 +151,65 @@ async function loginOrThrow(email: string, password: string): Promise<string> {
   return token;
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Platform-admin login with a bounded cold-boot retry. `webServer.url` (`/health`) goes 200 as soon
+ * as the web context is up — but `PlatformAdminBootstrap` (a `CommandLineRunner`, gated on
+ * `femme.data-init` / zero existing PLATFORM_ADMIN rows) may not have created this user yet, so the
+ * first login can 401. A connection error (backend process still starting) is likewise transient.
+ * Retry either until a token comes back; a persistent failure throws a message that names the real
+ * suspect. Scoped to provisioning only — tenant admins are created by `fullProvision`, so
+ * `mtLoginToken` (used by specs) has no equivalent race and gets no retry.
+ */
+async function loginPlatformAdminWithRetry(
+  attempts = 12,
+  delayMs = 1000,
+): Promise<string> {
+  let lastReason = "no attempt made";
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const r = await apiFetch<{ accessToken: string }>("POST", "/api/auth/login", {
+        body: { email: PLATFORM_ADMIN_EMAIL, password: PLATFORM_ADMIN_PASSWORD },
+      });
+      if (r.ok && r.json?.accessToken) {
+        return r.json.accessToken;
+      }
+      lastReason = `HTTP ${r.status}: ${r.text.slice(0, 200)}`;
+    } catch (err) {
+      lastReason = `connection error: ${String(err)}`;
+    }
+    if (i < attempts) {
+      await sleep(delayMs);
+    }
+  }
+  throw new Error(
+    `[mt/world] platform admin (${PLATFORM_ADMIN_EMAIL}) not usable after ${attempts} attempts ` +
+      `(~${Math.round((attempts * delayMs) / 1000)}s) against ${mtApiBase()} — last: ${lastReason}. ` +
+      `Is the mt backend up and is PlatformAdminBootstrap / femme.data-init running (application-e2e.properties)?`,
+  );
+}
+
+/**
+ * The idempotent re-derive probe: "does T-A's admin already log in?" A clean 401 means the world
+ * isn't provisioned yet (→ full provision, no retry). A connection error means the backend isn't
+ * accepting requests yet — retry that briefly. (In practice `loginPlatformAdminWithRetry` has
+ * already confirmed the backend is up before this runs, so this is just belt-and-suspenders.)
+ */
+async function probeExistingTenantA(attempts = 5, delayMs = 1000): Promise<string | null> {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await login(MT.A.adminEmail, MT.A.adminPassword);
+    } catch (err) {
+      if (i === attempts) {
+        throw err;
+      }
+      await sleep(delayMs);
+    }
+  }
+  return null;
+}
+
 // --------------------------------------------------------------------------------------------------
 // Deterministic derived values — so the idempotent re-derive path reconstructs the exact same world.
 // --------------------------------------------------------------------------------------------------
@@ -545,8 +604,10 @@ function writeWorld(world: MtWorld): void {
  * Idempotent — safe to call on every `global-setup.mt` run.
  */
 export async function provisionMtWorld(): Promise<MtWorld> {
-  const existingA = await login(MT.A.adminEmail, MT.A.adminPassword);
-  const platformToken = await loginOrThrow(PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD);
+  // Confirm the backend is up AND the platform admin is bootstrapped before anything else — this
+  // absorbs the cold-boot window where /health is 200 but PlatformAdminBootstrap hasn't run.
+  const platformToken = await loginPlatformAdminWithRetry();
+  const existingA = await probeExistingTenantA();
 
   const world = existingA
     ? await rederiveWorld(platformToken, existingA)

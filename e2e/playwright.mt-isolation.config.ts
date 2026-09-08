@@ -47,6 +47,10 @@ const backendServer = {
     // Spring Boot relaxed binding: SERVER_PORT -> server.port. application-e2e.properties
     // does not pin server.port, so this is all that is needed to move the backend to :8081.
     SERVER_PORT: String(MT_BACKEND_PORT),
+    // SecurityConfig.corsConfigurationSource APPENDS APP_FRONTEND_URL (comma-separated) to its
+    // built-in :5173 allow-list. This suite serves the SPA from :5174, so without this every
+    // browser fetch to :8081 is a CORS failure ("Network error" on the login form).
+    APP_FRONTEND_URL: "http://localhost:5174,http://127.0.0.1:5174",
   },
 } as const;
 
