@@ -50,7 +50,7 @@ const backendServer = {
 
 export default defineConfig({
   testDir: "./tests/mt-isolation",
-  // NOTE: Task 2 adds `globalSetup: "./global-setup.mt.ts"` here (that file is created in Task 2).
+  globalSetup: "./global-setup.mt.ts",
   // Artifacts nest under the dirs e2e/.gitignore already excludes (/test-results/, /playwright-report/)
   // so this suite's output never shows up as untracked files.
   outputDir: path.join(__dirname, "test-results", "mt"),
