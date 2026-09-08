@@ -421,6 +421,16 @@ test.describe("mt-isolation · SIFEN / electronic invoicing", () => {
     const aInvoice = await emitInvoice(request, tokenA, "A-crossprobe");
     expect(aInvoice.sifenControlNumber).toBeTruthy();
 
+    // Positive control: the KuDE route resolves for the OWNING tenant. `prepareAndSign` mints the
+    // CDC/QR before the 201, so the KuDE PDF is downloadable the moment the invoice is QUEUED — no
+    // SIFEN approval needed (hu-08 RT-20). This proves the 403/404 below is tenant scoping, not a
+    // dead route that would satisfy `expectCrossTenantForbidden` for the wrong reason.
+    const aOwnKude = await raw(request, "get", tokenA, `/api/invoices/${aInvoice.id}/sifen/kude`);
+    expect(
+      aOwnKude.status,
+      `A's own KuDE GET expected 200, got ${aOwnKude.status}: ${aOwnKude.text.slice(0, 200)}`,
+    ).toBe(200);
+
     // KuDE (GET, PDF): 403/404 for a foreign tenant, never 200 and never a 5xx.
     await expectCrossTenantForbidden(
       request,
@@ -531,6 +541,10 @@ test.describe("mt-isolation · SIFEN / electronic invoicing", () => {
         `A check-status (invoice still ${aSifenStatus}) returned ${aRes.status}: ${aRes.text.slice(0, 400)}`,
       ).toBe(409);
       expect(aRes.text).toContain("SIFEN_INVOICE_");
+      expect(
+        aRes.text,
+        `A's poll response mentions B's invoice id ${bInvoice.id} — CROSS-TENANT LEAK`,
+      ).not.toContain(String(bInvoice.id));
     }
 
     // --- B's side: its own domain answer, independent of whatever A's poll did -------------------

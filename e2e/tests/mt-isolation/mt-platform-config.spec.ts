@@ -155,6 +155,7 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
   test("1 · a per-tenant SIFEN override for A does not touch B or the global default", async ({
     request,
   }) => {
+    test.setTimeout(90_000); // mutates shared platform config — the finally MUST get to run to restore it
     const platformToken = await mtPlatformToken(request);
     const tokenA = await mtLoginToken(request, world.tenantA);
     const tokenB = await mtLoginToken(request, world.tenantB);
@@ -235,6 +236,7 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
   // default; B's resolution is untouched.
   // ────────────────────────────────────────────────────────────────────────────────────────────
   test("2 · changing A's tier shifts A's resolved flags but not B's", async ({ request }) => {
+    test.setTimeout(90_000); // mutates shared platform config — the finally MUST get to run to restore it
     const platformToken = await mtPlatformToken(request);
 
     const originalTierId = (await readTenantRow(request, platformToken, world.tenantA.id)).tierId;
@@ -312,6 +314,7 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
   // ONE: `finally` must re-activate T-B, and a post-finally assertion proves its admin can log in.
   // ────────────────────────────────────────────────────────────────────────────────────────────
   test("3 · suspending B mid-run blocks B only; A and C unaffected", async ({ request }) => {
+    test.setTimeout(90_000); // mutates shared platform config — the finally MUST get to run to restore it
     const platformToken = await mtPlatformToken(request);
     const aToken = await mtLoginToken(request, world.tenantA);
     const bTokenBefore = await mtLoginToken(request, world.tenantB);

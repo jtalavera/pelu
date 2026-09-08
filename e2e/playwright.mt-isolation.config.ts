@@ -40,7 +40,9 @@ const backendServer = {
   cwd: backendDir,
   url: `${MT_API_BASE}/health`,
   reuseExistingServer: !process.env.CI,
-  timeout: 240_000,
+  // First CI run resolves the Gradle dependency cache from cold, then compiles, then boots — all
+  // inside this window. 240s was right on the edge (150-250s observed); 480s gives real headroom.
+  timeout: 480_000,
   env: {
     ...process.env,
     SPRING_PROFILES_ACTIVE: "e2e",

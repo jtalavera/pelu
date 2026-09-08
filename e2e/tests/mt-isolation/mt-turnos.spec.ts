@@ -325,6 +325,17 @@ test.describe("mt-turnos · calendar & appointment isolation", () => {
       idField: "id",
     });
 
+    // Positive control: GET /api/appointments/{id} really resolves for the OWNING tenant, so the
+    // 403/404 probes below prove tenant scoping rather than a non-existent route.
+    const aOwn = await request.get(`${API_BASE}/api/appointments/${a.id}`, {
+      headers: authHeaders(tokenA),
+    });
+    expect(aOwn.status(), await aOwn.text()).toBe(200);
+    const bOwn = await request.get(`${API_BASE}/api/appointments/${b.id}`, {
+      headers: authHeaders(tokenB),
+    });
+    expect(bOwn.status(), await bOwn.text()).toBe(200);
+
     // A single foreign appointment is not even individually addressable across the tenant boundary.
     // (Brief correction: probe GET /api/appointments/{id}, which is tenant-scoped, not /history.)
     await expectCrossTenantForbidden(request, tokenB, `/api/appointments/${a.id}`);
