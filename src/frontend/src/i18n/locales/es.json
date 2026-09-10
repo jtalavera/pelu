@@ -95,7 +95,7 @@
       "title": "Restablecer contraseña",
       "submit": "Enviar enlace",
       "submitting": "Enviando…",
-      "sent": "Si existe una cuenta, revisá los logs del servidor para el enlace (desarrollo).",
+      "sent": "Si existe una cuenta con ese correo, te enviamos un enlace para restablecer tu contraseña. Revisá tu bandeja de entrada.",
       "backToLogin": "Volver al inicio de sesión"
     },
     "nav": {

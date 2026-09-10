@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button, Heading, Input, Label, Text } from "@design-system";
+import i18n from "../i18n";
 import { apiBaseUrl } from "../api/baseUrl";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 
@@ -17,7 +18,10 @@ export default function ForgotPasswordPage() {
     try {
       await fetch(`${apiBaseUrl()}/api/auth/forgot-password`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Language": i18n.resolvedLanguage ?? i18n.language ?? "es",
+        },
         body: JSON.stringify({ email: email.trim() }),
       });
       setDone(true);
