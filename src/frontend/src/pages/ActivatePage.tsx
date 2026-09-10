@@ -23,11 +23,17 @@ export default function ActivatePage() {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [tokenLoading, setTokenLoading] = useState(true);
 
+  const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+
+  // HU-41 follow-up: a Platform-Admin-invited tenant ADMIN (no linked Professional, so
+  // professionalId is null) also sets their full name here — a professional's name already comes
+  // from their ficha, so that flow is unchanged.
+  const isAdminInvite = tokenInfo != null && tokenInfo.professionalId === null;
 
   useEffect(() => {
     if (!rawToken) {
@@ -63,6 +69,11 @@ export default function ActivatePage() {
     e.preventDefault();
     setFormError(null);
 
+    if (isAdminInvite && !fullName.trim()) {
+      setFormError(t("femme.activate.errorFullNameRequired"));
+      return;
+    }
+
     if (password !== confirmPassword) {
       setFormError(t("femme.activate.errorPasswordMismatch"));
       return;
@@ -73,11 +84,18 @@ export default function ActivatePage() {
       const res = await fetch(`${apiBaseUrl()}/api/auth/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: rawToken, password, confirmPassword }),
+        body: JSON.stringify({
+          token: rawToken,
+          password,
+          confirmPassword,
+          ...(isAdminInvite ? { fullName: fullName.trim() } : {}),
+        }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        if (data.error === "PASSWORDS_DO_NOT_MATCH") {
+        if (data.error === "FULL_NAME_REQUIRED") {
+          setFormError(t("femme.activate.errorFullNameRequired"));
+        } else if (data.error === "PASSWORDS_DO_NOT_MATCH") {
           setFormError(t("femme.activate.errorPasswordMismatch"));
         } else if (data.error === "PASSWORD_TOO_WEAK") {
           setFormError(t("femme.activate.errorPasswordWeak"));
@@ -169,6 +187,26 @@ export default function ActivatePage() {
                   : t("femme.activate.subtitle")}
               </Text>
               <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+                {isAdminInvite ? (
+                  <div>
+                    <Label htmlFor="activate-full-name" className="text-[var(--color-ink-2)]">
+                      {t("femme.activate.fullName")}
+                    </Label>
+                    <Input
+                      id="activate-full-name"
+                      name="fullName"
+                      type="text"
+                      autoComplete="name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required
+                      className={inputClassName}
+                      aria-invalid={
+                        formError === t("femme.activate.errorFullNameRequired") ? true : undefined
+                      }
+                    />
+                  </div>
+                ) : null}
                 <div>
                   <Label htmlFor="activate-password" className="text-[var(--color-ink-2)]">
                     {t("femme.activate.password")}

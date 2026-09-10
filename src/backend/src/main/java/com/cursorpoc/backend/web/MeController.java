@@ -79,12 +79,23 @@ public class MeController {
                 .map(t -> t.getName())
                 .orElse(null);
 
+    // HU-41 follow-up: unified human name — the linked Professional's name when there is one,
+    // otherwise the AppUser's own full name (set by an invited ADMIN at activation).
+    String fullName =
+        profile != null
+            ? profile.fullName()
+            : appUserRepository
+                .findById(principal.getUserId())
+                .map(AppUser::getFullName)
+                .orElse(null);
+
     MeResponse resp =
         new MeResponse(
             principal.getUserId(),
             principal.getTenantIdOrNull(),
             tenantName,
             principal.getUsername(),
+            fullName,
             principal.getRole().name(),
             principal.getProfessionalId(),
             profile);

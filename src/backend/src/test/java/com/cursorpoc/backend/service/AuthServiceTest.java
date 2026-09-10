@@ -1,12 +1,14 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
 import com.cursorpoc.backend.domain.AppUser;
+import com.cursorpoc.backend.domain.AppUserActivationToken;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
@@ -17,6 +19,7 @@ import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.JwtService;
+import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
 import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
 import java.util.List;
@@ -198,5 +201,56 @@ class AuthServiceTest {
       return ex;
     }
     throw new AssertionError("expected login() to throw ResponseStatusException");
+  }
+
+  // ── HU-41 follow-up: an invited tenant ADMIN sets a required "full name" at activation ──────
+
+  private AppUserActivationToken appUserActivationToken(AppUser user) {
+    AppUserActivationToken token = new AppUserActivationToken();
+    token.setAppUser(user);
+    token.setTokenHash("hash");
+    token.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
+    token.setUsed(false);
+    return token;
+  }
+
+  @Test
+  void activateAdminAccount_setsTrimmedFullName_andEnablesUser() {
+    AppUser user = user(tenant(1L, TenantStatus.ACTIVE), "admin@tenant.test", "placeholder");
+    user.setEnabled(false);
+    when(activationTokenRepository.findByTokenHashAndUsedFalse(anyString()))
+        .thenReturn(Optional.empty());
+    when(appUserActivationTokenRepository.findByTokenHashAndUsedFalse(anyString()))
+        .thenReturn(Optional.of(appUserActivationToken(user)));
+    when(passwordEncoder.encode("ValidPass1!")).thenReturn("hashed");
+
+    service.activateAccount(
+        new ActivateProfessionalRequest(
+            "tok", "ValidPass1!", "ValidPass1!", "  Ana Gómez Torres  "));
+
+    assertThat(user.getFullName()).isEqualTo("Ana Gómez Torres");
+    assertThat(user.isEnabled()).isTrue();
+    assertThat(user.getPasswordHash()).isEqualTo("hashed");
+  }
+
+  @Test
+  void activateAdminAccount_withBlankFullName_rejectsWithFullNameRequired() {
+    AppUser user = user(tenant(1L, TenantStatus.ACTIVE), "admin@tenant.test", "placeholder");
+    user.setEnabled(false);
+    when(activationTokenRepository.findByTokenHashAndUsedFalse(anyString()))
+        .thenReturn(Optional.empty());
+    when(appUserActivationTokenRepository.findByTokenHashAndUsedFalse(anyString()))
+        .thenReturn(Optional.of(appUserActivationToken(user)));
+
+    ResponseStatusException ex =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () ->
+                service.activateAccount(
+                    new ActivateProfessionalRequest("tok", "ValidPass1!", "ValidPass1!", "   ")));
+
+    assertThat(ex.getStatusCode().value()).isEqualTo(400);
+    assertThat(ex.getReason()).isEqualTo("FULL_NAME_REQUIRED");
+    assertThat(user.isEnabled()).isFalse();
   }
 }

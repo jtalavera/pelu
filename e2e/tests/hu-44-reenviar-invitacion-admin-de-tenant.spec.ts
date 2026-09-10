@@ -55,9 +55,14 @@ async function createTenantAdminViaApi(
   return (await res.json()) as { userId: number; email: string; rawToken: string };
 }
 
-async function activateViaApi(request: APIRequestContext, rawToken: string, password: string) {
+async function activateViaApi(
+  request: APIRequestContext,
+  rawToken: string,
+  password: string,
+  fullName = "E2E Admin",
+) {
   const res = await request.post(`${apiBaseUrl()}/api/auth/activate`, {
-    data: { token: rawToken, password, confirmPassword: password },
+    data: { token: rawToken, password, confirmPassword: password, fullName },
   });
   expect(res.ok(), await res.text()).toBeTruthy();
 }

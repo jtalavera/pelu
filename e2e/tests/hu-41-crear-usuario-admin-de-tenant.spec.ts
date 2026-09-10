@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { apiBaseUrl, authHeaders, loginPlatformAdminApi } from "../fixtures/api";
-import { loginAsPlatformAdmin } from "../fixtures/auth";
+import { loginAs, loginAsPlatformAdmin } from "../fixtures/auth";
 
 // HU-41 · Platform Admin crea un usuario y lo asigna a un tenant como Admin
 // requirements/multi-tenant/HU-41-crear-usuario-admin-de-tenant.md
@@ -161,6 +161,8 @@ test.describe("HU-41 · Platform Admin crea un usuario admin de tenant", () => {
     expect(info.professionalId).toBeNull();
 
     await page.goto(`/activate?token=${rawToken}`);
+    // HU-41 follow-up: an invited admin also sets a required full name here.
+    await page.locator("#activate-full-name").fill("Nora Benítez");
     await page.locator("#activate-password").fill("ValidPass1!");
     await page.locator("#activate-confirm-password").fill("ValidPass1!");
     await page.getByRole("button", { name: "Set password" }).click();
@@ -171,5 +173,68 @@ test.describe("HU-41 · Platform Admin crea un usuario admin de tenant", () => {
       data: { email, password: "ValidPass1!" },
     });
     expect(loginAfterRes.ok(), await loginAfterRes.text()).toBeTruthy();
+  });
+
+  // HU-41 follow-up: the activation form (ActivatePage) also asks the invited admin for a single
+  // required "Full name" field — a professional's name already comes from their ficha, so the
+  // field is admin-only.
+  test("follow-up: the full name is required to activate an admin account", async ({
+    page,
+    request,
+  }) => {
+    const platformToken = await loginPlatformAdminApi(request);
+    const email = `namereq${Date.now()}@e2e-tenant.test`;
+    const createRes = await createTenantAdminViaApi(request, platformToken, 1, email);
+    expect(createRes.ok(), await createRes.text()).toBeTruthy();
+    const { rawToken } = (await createRes.json()) as { rawToken: string };
+
+    await page.goto(`/activate?token=${rawToken}`);
+    await expect(page.locator("#activate-full-name")).toBeVisible();
+
+    // Leave the name empty, fill valid passwords, try to submit.
+    await page.locator("#activate-password").fill("ValidPass1!");
+    await page.locator("#activate-confirm-password").fill("ValidPass1!");
+    await page.getByRole("button", { name: "Set password" }).click();
+
+    await expect(page.getByText("Enter your full name.")).toBeVisible();
+    await expect(page.getByText(/Password set successfully/i)).toHaveCount(0);
+
+    // The account is still not activated — login stays rejected.
+    const loginRes = await request.post(`${apiBaseUrl()}/api/auth/login`, {
+      data: { email, password: "ValidPass1!" },
+    });
+    expect(loginRes.status()).toBe(401);
+  });
+
+  // HU-41 follow-up: the name the admin types at activation is what greets them on the dashboard
+  // and shows in the top-right user chip — not the email local-part.
+  test("follow-up: the activated admin's full name shows in the greeting and the topbar", async ({
+    page,
+    request,
+  }) => {
+    const platformToken = await loginPlatformAdminApi(request);
+    const email = `namedisplay${Date.now()}@e2e-tenant.test`;
+    const password = "ValidPass1!";
+    const fullName = "Ana Gómez Torres";
+
+    const createRes = await createTenantAdminViaApi(request, platformToken, 1, email);
+    expect(createRes.ok(), await createRes.text()).toBeTruthy();
+    const { rawToken } = (await createRes.json()) as { rawToken: string };
+
+    await page.goto(`/activate?token=${rawToken}`);
+    await page.locator("#activate-full-name").fill(fullName);
+    await page.locator("#activate-password").fill(password);
+    await page.locator("#activate-confirm-password").fill(password);
+    await page.getByRole("button", { name: "Set password" }).click();
+    await expect(page.getByText(/Password set successfully/i)).toBeVisible();
+
+    await loginAs(page, email, password);
+
+    // Dashboard greeting ("Good morning, Ana Gómez Torres").
+    await expect(page.locator('[data-tour="dashboard-greeting"]')).toContainText(fullName);
+    // Top-right user chip.
+    await expect(
+      page.getByRole("button", { name: "Open user menu" }).getByText(fullName),
+    ).toBeVisible();
   });
 });

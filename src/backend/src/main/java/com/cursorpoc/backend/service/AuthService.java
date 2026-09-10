@@ -412,8 +412,16 @@ public class AuthService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOKEN_EXPIRED");
     }
 
+    // HU-41 follow-up: a Platform-Admin-invited tenant ADMIN sets their own name here (single
+    // "full name" field) — required, so the app can greet them and show it in the topbar.
+    String fullName = request.fullName() == null ? "" : request.fullName().trim();
+    if (fullName.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "FULL_NAME_REQUIRED");
+    }
+
     AppUser user = userToken.getAppUser();
     user.setPasswordHash(passwordEncoder.encode(request.password()));
+    user.setFullName(fullName);
     user.setEnabled(true);
     appUserRepository.save(user);
 

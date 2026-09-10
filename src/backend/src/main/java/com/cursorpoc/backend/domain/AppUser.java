@@ -34,6 +34,12 @@ public class AppUser {
   @Column(nullable = false, length = 320)
   private String email;
 
+  // HU-41 follow-up: the human name an invited tenant ADMIN sets when activating their account.
+  // Nullable — professionals carry their name on Professional#fullName, and the platform admin /
+  // pre-existing admins have none; callers fall back to the email local-part.
+  @Column(name = "full_name", length = 255)
+  private String fullName;
+
   @Column(name = "password_hash", nullable = false)
   private String passwordHash;
 
@@ -66,6 +72,14 @@ public class AppUser {
 
   public void setEmail(String email) {
     this.email = email;
+  }
+
+  public String getFullName() {
+    return fullName;
+  }
+
+  public void setFullName(String fullName) {
+    this.fullName = fullName;
   }
 
   public String getPasswordHash() {

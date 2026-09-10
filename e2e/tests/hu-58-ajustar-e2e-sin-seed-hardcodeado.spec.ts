@@ -91,7 +91,7 @@ test.describe("HU-58 · Ajustar el entorno e2e para no depender del seed hardcod
 
     const password = "ValidPass1!";
     const activateRes = await request.post(`${apiBaseUrl()}/api/auth/activate`, {
-      data: { token: rawToken, password, confirmPassword: password },
+      data: { token: rawToken, password, confirmPassword: password, fullName: "HU58 Admin" },
     });
     expect(activateRes.ok(), await activateRes.text()).toBeTruthy();
 

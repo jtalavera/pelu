@@ -274,11 +274,25 @@ async function createTenant(platformToken: string, name: string, tierId: number)
   return tenant.id;
 }
 
+/**
+ * HU-41 follow-up: an invited tenant ADMIN now sets a required full name at activation. Derive a
+ * deterministic one from the email local-part so a re-derived world stays byte-identical.
+ */
+function adminFullNameFor(email: string): string {
+  return email
+    .split("@")[0]
+    .split(/[.\-_]/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 async function inviteAndActivateAdmin(
   platformToken: string,
   tenantId: number,
   email: string,
   password: string,
+  fullName: string = adminFullNameFor(email),
 ): Promise<void> {
   const invite = await must<{ rawToken: string }>(
     "POST",
@@ -286,7 +300,7 @@ async function inviteAndActivateAdmin(
     { body: { email }, token: platformToken },
   );
   await must("POST", "/api/auth/activate", {
-    body: { token: invite.rawToken, password, confirmPassword: password },
+    body: { token: invite.rawToken, password, confirmPassword: password, fullName },
   });
 }
 

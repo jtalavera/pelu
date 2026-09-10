@@ -17,6 +17,11 @@ export type Me = {
   /** Same null-only-for-PLATFORM_ADMIN rule as tenantId. */
   tenantName: string | null;
   email: string;
+  /**
+   * The user's human name — an invited ADMIN's self-set full name (HU-41), or a professional's
+   * ficha name. null when none was ever set; callers fall back to the email local-part.
+   */
+  fullName: string | null;
   role: "PLATFORM_ADMIN" | "ADMIN" | "PROFESSIONAL";
   professionalId: number | null;
   /** Profile data from linked Professional; null for admin without linked Professional. */

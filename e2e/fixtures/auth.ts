@@ -8,6 +8,11 @@ import { expect, type Page } from "@playwright/test";
  */
 export const DEMO_EMAIL = "isabelzymanscki@gmail.com";
 export const DEMO_PASSWORD = "Demo123!";
+/**
+ * HU-41 follow-up: an invited tenant ADMIN sets a required full name when activating. The demo
+ * admin's is provisioned here and surfaces in the topbar user chip and the dashboard greeting.
+ */
+export const DEMO_FULL_NAME = "Isabel Zymanscki";
 
 /**
  * HU-34: a tenant-independent PLATFORM_ADMIN used by HU-35's login-routing tests. Bootstrapped by

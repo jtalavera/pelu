@@ -1,5 +1,6 @@
 import {
   DEMO_EMAIL,
+  DEMO_FULL_NAME,
   DEMO_PASSWORD,
   PLATFORM_ADMIN_EMAIL,
   PLATFORM_ADMIN_PASSWORD,
@@ -127,6 +128,7 @@ export default async function globalSetup(): Promise<void> {
     token: rawToken,
     password: DEMO_PASSWORD,
     confirmPassword: DEMO_PASSWORD,
+    fullName: DEMO_FULL_NAME,
   });
   if (!activateRes.ok) {
     throw new Error(
