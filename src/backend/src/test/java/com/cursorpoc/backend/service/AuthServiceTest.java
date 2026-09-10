@@ -1,9 +1,13 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
@@ -20,9 +24,11 @@ import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
+import com.cursorpoc.backend.web.dto.ForgotPasswordRequest;
 import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +58,7 @@ class AuthServiceTest {
   @Mock private PasswordEncoder passwordEncoder;
 
   private AuthService service;
+  private EmailService emailService;
 
   @BeforeEach
   void setUp() {
@@ -59,7 +66,7 @@ class AuthServiceTest {
     jwtProperties.setSecret("unit-test-jwt-secret-min-32-characters-long!!");
     jwtProperties.setAccessTokenTtlSeconds(28_800L);
     JwtService jwtService = new JwtService(jwtProperties);
-    EmailService emailService = mock(EmailService.class);
+    emailService = mock(EmailService.class);
 
     service =
         new AuthService(
@@ -201,6 +208,63 @@ class AuthServiceTest {
       return ex;
     }
     throw new AssertionError("expected login() to throw ResponseStatusException");
+  }
+
+  // ── forgotPassword: never emails a suspended tenant / disabled user; logs why in every case ──
+
+  private void stubSingleTenantResolution(Tenant tenant, AppUser appUser) {
+    when(appUserRepository.findAllByEmail(appUser.getEmail())).thenReturn(List.of(appUser));
+    when(tenantRepository.findById(tenant.getId())).thenReturn(Optional.of(tenant));
+    lenient()
+        .when(appUserRepository.findByEmailAndTenant_Id(appUser.getEmail(), tenant.getId()))
+        .thenReturn(Optional.of(appUser));
+  }
+
+  @Test
+  void forgotPassword_activeTenantEnabledUser_sendsResetEmail() {
+    Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
+    AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
+    stubSingleTenantResolution(tenant, appUser);
+
+    service.forgotPassword(new ForgotPasswordRequest("admin@tenant.test"), null, Locale.ENGLISH);
+
+    verify(emailService)
+        .sendPasswordResetLink(eq("admin@tenant.test"), anyString(), eq("Salon"), any());
+  }
+
+  @Test
+  void forgotPassword_suspendedTenant_doesNotSendResetEmail() {
+    Tenant tenant = tenant(1L, TenantStatus.SUSPENDED);
+    AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
+    stubSingleTenantResolution(tenant, appUser);
+
+    service.forgotPassword(new ForgotPasswordRequest("admin@tenant.test"), null, Locale.ENGLISH);
+
+    verify(emailService, never())
+        .sendPasswordResetLink(anyString(), anyString(), anyString(), any());
+    verify(passwordResetTokenRepository, never()).save(any());
+  }
+
+  @Test
+  void forgotPassword_disabledUser_doesNotSendResetEmail() {
+    Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
+    AppUser appUser = user(tenant, "admin@tenant.test", "hashed");
+    appUser.setEnabled(false);
+    stubSingleTenantResolution(tenant, appUser);
+
+    service.forgotPassword(new ForgotPasswordRequest("admin@tenant.test"), null, Locale.ENGLISH);
+
+    verify(emailService, never())
+        .sendPasswordResetLink(anyString(), anyString(), anyString(), any());
+    verify(passwordResetTokenRepository, never()).save(any());
+  }
+
+  @Test
+  void forgotPassword_unknownEmail_doesNotSendResetEmail() {
+    service.forgotPassword(new ForgotPasswordRequest("nobody@nowhere.test"), null, Locale.ENGLISH);
+
+    verify(emailService, never())
+        .sendPasswordResetLink(anyString(), anyString(), anyString(), any());
   }
 
   // ── HU-41 follow-up: an invited tenant ADMIN sets a required "full name" at activation ──────

@@ -202,6 +202,13 @@ test.describe("mt-auth · identity & routing isolation", () => {
     const ambiguous = await forgot(world.sharedAmbiguousEmail);
     expect(ambiguous.status()).toBe(204);
 
+    // T-C is SUSPENDED → AuthService must NOT send a reset email for its admin, but still returns
+    // the same silent 204 (anti-enumeration). The "no email sent" guarantee itself is asserted in
+    // the backend unit test (AuthServiceTest#forgotPassword_suspendedTenant_doesNotSendResetEmail) —
+    // e2e has no visibility into outbound mail. Here we assert the observable API parity.
+    const suspended = await forgot(world.tenantC.adminEmail);
+    expect(suspended.status()).toBe(204);
+
     // The raw self-service reset token is NOT exposed by any endpoint (unlike the platform-admin
     // resend-invitation path), so we cannot inspect the PasswordResetToken row directly. Instead
     // assert the property that matters: issuing a reset token must NOT disable the account —

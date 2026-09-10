@@ -213,17 +213,41 @@ public class AuthService {
     Optional<Tenant> tenantOpt =
         resolveTenantByDomain(origin).or(() -> resolveTenantByUniqueEmail(email));
     if (tenantOpt.isEmpty()) {
-      // Deliberately silent — same "no enumeration" behavior whether the email doesn't exist at
-      // all or exists in more than one tenant (either way, there's no single account to reset).
+      // Deliberately silent to the caller (same 204, no enumeration) — but logged so operators can
+      // see why nothing was sent.
+      log.info(
+          "Password reset email not sent for {}: NO_SINGLE_TENANT "
+              + "(email unknown or exists in multiple tenants)",
+          email);
       return;
     }
-    Optional<AppUser> userOpt =
-        appUserRepository.findByEmailAndTenant_Id(email, tenantOpt.get().getId());
+    Tenant tenant = tenantOpt.get();
+    Optional<AppUser> userOpt = appUserRepository.findByEmailAndTenant_Id(email, tenant.getId());
     if (userOpt.isEmpty()) {
-      // Deliberately silent — same "no enumeration" behavior whether or not the email exists.
+      log.info(
+          "Password reset email not sent for {}: USER_NOT_FOUND (tenant id={})",
+          email,
+          tenant.getId());
       return;
     }
-    issuePasswordResetToken(userOpt.get(), locale);
+    AppUser user = userOpt.get();
+    if (tenant.getStatus() != TenantStatus.ACTIVE) {
+      log.info(
+          "Password reset email not sent for {}: TENANT_SUSPENDED (tenant id={} name={})",
+          email,
+          tenant.getId(),
+          tenant.getName());
+      return;
+    }
+    if (!user.isEnabled()) {
+      log.info(
+          "Password reset email not sent for {}: USER_DISABLED (user id={} tenant id={})",
+          email,
+          user.getId(),
+          tenant.getId());
+      return;
+    }
+    issuePasswordResetToken(user, locale);
   }
 
   /**
@@ -272,6 +296,11 @@ public class AuthService {
     String resetUrl = frontendUrl + "/reset-password?token=" + raw;
     emailService.sendPasswordResetLink(
         user.getEmail(), resetUrl, user.getTenant().getName(), locale);
+    log.info(
+        "Password reset email sent for {} (user id={} tenant id={})",
+        user.getEmail(),
+        user.getId(),
+        user.getTenant().getId());
     return raw;
   }
 
