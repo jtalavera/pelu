@@ -745,6 +745,7 @@ export default function PlatformTenantsPage() {
                 setTierId(e.target.value);
                 setFormErrors((prev) => (prev ? { ...prev, tier: undefined } : prev));
               }}
+              aria-required="true"
               invalid={!!formErrors?.tier}
               aria-invalid={formErrors?.tier ? "true" : "false"}
               aria-describedby={formErrors?.tier ? "tenant-tier-err" : undefined}
@@ -828,6 +829,7 @@ export default function PlatformTenantsPage() {
                 setEditTierId(e.target.value);
                 setEditFormErrors((prev) => (prev ? { ...prev, tier: undefined } : prev));
               }}
+              aria-required="true"
               invalid={!!editFormErrors?.tier}
               aria-invalid={editFormErrors?.tier ? "true" : "false"}
               aria-describedby={editFormErrors?.tier ? "tenant-edit-tier-err" : undefined}

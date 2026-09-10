@@ -134,6 +134,27 @@ export default async function globalSetup(): Promise<void> {
     );
   }
 
+  // SIFEN_ELECTRONIC_INVOICING is globally ON since V53 (conjunctive resolution: global AND tier
+  // AND tenant). Give the demo tenant an explicit OFF value so plain-invoice specs keep issuing
+  // traditional comprobantes by default; SIFEN specs flip this to true (and back) as they already
+  // do via setTenantFeatureFlag.
+  const sifenBaseline = await fetch(
+    `${API_BASE}/api/admin/feature-flags/tenants/${tenant.id}/SIFEN_ELECTRONIC_INVOICING`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${platformToken}`,
+      },
+      body: JSON.stringify({ enabled: false }),
+    },
+  );
+  if (!sifenBaseline.ok) {
+    throw new Error(
+      `[e2e/global-setup] demo tenant SIFEN baseline failed (${sifenBaseline.status}): ${await sifenBaseline.text()}`,
+    );
+  }
+
   // eslint-disable-next-line no-console
   console.log(
     `[e2e/global-setup] provisioned demo tenant id=${tenant.id} with admin ${DEMO_EMAIL}.`,

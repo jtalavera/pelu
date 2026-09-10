@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, Label, Modal, Spinner, Switch, Text } from "@design-system";
+import { Alert, Badge, Button, Input, Label, Modal, Spinner, Switch, Text } from "@design-system";
 import {
   createPlatformTier,
   deletePlatformTier,
   listPlatformTiers,
   listTierFeatureFlags,
-  setTierFeatureFlagIncluded,
+  setTierFeatureFlagValue,
   updatePlatformTier,
   type PlatformTier,
   type TierFeatureFlagRow,
@@ -180,12 +180,12 @@ export default function PlatformTiersPage() {
     }
   }
 
-  async function toggleTierFlag(flagKey: string, included: boolean) {
+  async function setTierFlagValue(flagKey: string, enabled: boolean) {
     if (!editingTier) return;
     setEditFlagsError(null);
     setFlagBusyKey(flagKey);
     try {
-      await setTierFeatureFlagIncluded(editingTier.id, flagKey, included);
+      await setTierFeatureFlagValue(editingTier.id, flagKey, enabled);
       await loadEditFlags(editingTier.id);
     } catch (e) {
       setEditFlagsError(translateApiError(e, t, "femme.platform.tiers.flags.saveError"));
@@ -561,7 +561,8 @@ export default function PlatformTiersPage() {
           ) : null}
 
           {/* HU-46 AC-1: from this tier's detail (the edit modal), the Platform Admin sees every
-              existing feature flag and marks which ones this tier includes by default. */}
+              feature flag with its global value, sets this tier's value, and sees the effective
+              value at the tier level (global AND tier — HU-47's conjunctive resolution). */}
           <div className="border-t border-[var(--color-stone-md)] pt-4 dark:border-slate-700">
             <Text className="mb-1 font-medium text-[var(--color-ink)]">
               {t("femme.platform.tiers.flags.title")}
@@ -604,6 +605,32 @@ export default function PlatformTiersPage() {
                             {row.description}
                           </div>
                         ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                          <span className="text-[var(--color-ink-3)]">
+                            {t("femme.platform.tiers.flags.global")}:{" "}
+                            <span className="text-[var(--color-ink-2)]">
+                              {row.globalEnabled
+                                ? t("femme.platform.tiers.flags.stateOn")
+                                : t("femme.platform.tiers.flags.stateOff")}
+                            </span>
+                          </span>
+                          <span className="flex items-center gap-1 text-[var(--color-ink-3)]">
+                            {t("femme.platform.tiers.flags.effective")}:{" "}
+                            <Badge variant={row.effectiveEnabled ? "success" : "secondary"}>
+                              {row.effectiveEnabled
+                                ? t("femme.platform.tiers.flags.stateOn")
+                                : t("femme.platform.tiers.flags.stateOff")}
+                            </Badge>
+                          </span>
+                          {!row.effectiveEnabled && !row.globalEnabled ? (
+                            <span
+                              data-testid={`tier-flag-off-by-global-${row.flagKey}`}
+                              className="text-[var(--color-ink-3)]"
+                            >
+                              {t("femme.platform.tiers.flags.effectiveOffByGlobal")}
+                            </span>
+                          ) : null}
+                        </div>
                         {row.lastChange ? (
                           <div
                             data-testid={`tier-flag-history-${row.flagKey}`}
@@ -616,20 +643,20 @@ export default function PlatformTiersPage() {
                               }).format(new Date(row.lastChange.changedAt)),
                               email: row.lastChange.changedByEmail,
                               previous: row.lastChange.previousIncluded
-                                ? t("femme.platform.tiers.flags.included")
-                                : t("femme.platform.tiers.flags.notIncluded"),
+                                ? t("femme.platform.tiers.flags.activated")
+                                : t("femme.platform.tiers.flags.deactivated"),
                               next: row.lastChange.newIncluded
-                                ? t("femme.platform.tiers.flags.included")
-                                : t("femme.platform.tiers.flags.notIncluded"),
+                                ? t("femme.platform.tiers.flags.activated")
+                                : t("femme.platform.tiers.flags.deactivated"),
                             })}
                           </div>
                         ) : null}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <Switch
-                          checked={row.included}
+                          checked={row.tierEnabled}
                           disabled={busy}
-                          onChange={() => void toggleTierFlag(row.flagKey, !row.included)}
+                          onChange={() => void setTierFlagValue(row.flagKey, !row.tierEnabled)}
                           id={`tier-flag-${row.flagKey}`}
                           aria-label={t("femme.platform.tiers.flags.toggleAria", {
                             key: row.flagKey,

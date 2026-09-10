@@ -11,7 +11,7 @@ import { loginAsPlatformAdmin, PLATFORM_ADMIN_EMAIL } from "../fixtures/auth";
 // avoid duplicating what hu-37/hu-38/hu-47's own specs already assert byte-for-byte — see the
 // comment on each test for exactly what gap it closes.
 
-const SIFEN_FLAG = "SIFEN_ELECTRONIC_INVOICING"; // seeded disabled=false globally (V29)
+const SIFEN_FLAG = "SIFEN_ELECTRONIC_INVOICING"; // global default ON since V53
 
 async function createTierViaApi(request: APIRequestContext, platformToken: string, name: string) {
   const res = await request.post(`${apiBaseUrl()}/api/platform/tiers`, {
@@ -22,16 +22,16 @@ async function createTierViaApi(request: APIRequestContext, platformToken: strin
   return (await res.json()) as { id: number; name: string };
 }
 
-async function setTierFlagIncluded(
+async function setTierFlagValue(
   request: APIRequestContext,
   platformToken: string,
   tierId: number,
   flagKey: string,
-  included: boolean,
+  enabled: boolean,
 ) {
   const res = await request.put(
     `${apiBaseUrl()}/api/platform/tiers/${tierId}/feature-flags/${flagKey}`,
-    { headers: authHeaders(platformToken), data: { included } },
+    { headers: authHeaders(platformToken), data: { enabled } },
   );
   expect(res.ok(), await res.text()).toBeTruthy();
 }
@@ -68,7 +68,6 @@ async function getTenantFlagsView(
     tierEnabled: boolean | null;
     hasOverride: boolean;
     effectiveEnabled: boolean;
-    effectiveSource: "GLOBAL" | "TIER" | "OVERRIDE";
   }>;
 }
 
@@ -163,32 +162,30 @@ test.describe("HU-48 · Asignar tier a tenant", () => {
     expect(stillTenant.tierId).toBe(seedTier.id);
   });
 
-  // AC-3: reassigning a tenant's tier updates the effective (tier-sourced) feature-flag resolution
-  // immediately — no restart, no caching layer. This is the genuine gap: hu-38's AC3+AC4 test only
-  // proves a pre-existing *override* survives a tier change; hu-47's spec only changes a tier's own
-  // flag definitions, never reassigns which tier a tenant belongs to. Here the tenant itself moves
-  // from a tier with no opinion on the flag (falls through to the global default, false) to a tier
-  // that explicitly includes it (true) — with no tenant-level override involved at any point.
+  // AC-3: reassigning a tenant's tier updates the effective (conjunctive) feature-flag resolution
+  // immediately — no restart, no caching layer. The tenant moves from a tier with no opinion on the
+  // flag (inherits the global ON) to a tier that turns it OFF — with no tenant-level value involved.
   test("AC3: changing a tenant's tier immediately changes its tier-sourced effective flag value", async ({
     request,
   }) => {
     const platformToken = await loginPlatformAdminApi(request);
     const tierA = await createTierViaApi(request, platformToken, `E2E HU48 TierA ${Date.now()}`);
     const tierB = await createTierViaApi(request, platformToken, `E2E HU48 TierB ${Date.now()}`);
-    await setTierFlagIncluded(request, platformToken, tierB.id, SIFEN_FLAG, true);
+    await setTierFlagValue(request, platformToken, tierB.id, SIFEN_FLAG, false);
 
     const tenant = await createTenantViaApi(request, platformToken, {
       name: `E2E HU48 Reassign ${Date.now()}`,
       domain: null,
       tierId: tierA.id,
     });
+    // A tenant always comes back with a tier assigned.
+    expect(tenant.tierId).toBe(tierA.id);
 
-    // Tier A has no opinion on the flag -> falls through to the global default (false).
+    // Tier A has no opinion on the flag -> inherits the global default (ON).
     let rows = await getTenantFlagsView(request, platformToken, tenant.id);
     let sifen = rows.find((r) => r.flagKey === SIFEN_FLAG);
     expect(sifen?.hasTier).toBe(false);
-    expect(sifen?.effectiveSource).toBe("GLOBAL");
-    expect(sifen?.effectiveEnabled).toBe(false);
+    expect(sifen?.effectiveEnabled).toBe(true);
 
     // Reassign the tenant from tier A to tier B — no tenant-level flag write at all.
     const updateRes = await request.put(`${apiBaseUrl()}/api/platform/tenants/${tenant.id}`, {
@@ -197,14 +194,13 @@ test.describe("HU-48 · Asignar tier a tenant", () => {
     });
     expect(updateRes.ok(), await updateRes.text()).toBeTruthy();
 
-    // Immediately (same test, no wait/restart) the resolved value comes from tier B's default.
+    // Immediately (same test, no wait/restart) tier B's OFF applies.
     rows = await getTenantFlagsView(request, platformToken, tenant.id);
     sifen = rows.find((r) => r.flagKey === SIFEN_FLAG);
     expect(sifen?.hasTier).toBe(true);
-    expect(sifen?.tierEnabled).toBe(true);
+    expect(sifen?.tierEnabled).toBe(false);
     expect(sifen?.hasOverride).toBe(false);
-    expect(sifen?.effectiveSource).toBe("TIER");
-    expect(sifen?.effectiveEnabled).toBe(true);
+    expect(sifen?.effectiveEnabled).toBe(false);
   });
 
   // AC-4: a tier change is audited — when, by whom, and from which tier to which tier — and

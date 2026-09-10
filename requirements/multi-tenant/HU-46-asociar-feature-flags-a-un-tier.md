@@ -24,7 +24,9 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 
 ## Criterios de aceptación
 
-1. **Matriz de flags por tier** — Desde el detalle de un tier, el Platform Admin ve todas las feature flags existentes y puede marcar cuáles están incluidas (habilitadas) en ese tier.
+> **Revisión 2026-09-09:** el tier **activa o desactiva** cada flag (no solo "incluir"); ver HU-47.
+
+1. **Matriz de flags por tier** — Desde el detalle de un tier, el Platform Admin ve todas las feature flags con su valor global, activa o desactiva el valor del tier, y ve el valor efectivo a nivel tier (`global AND tier`). Un tier en OFF sobre una flag global en ON la apaga para todos los tenants de ese tier sin restricción propia.
 2. **Persistencia** — Los cambios en la asociación tier↔flag se guardan y persisten tras recargar la página.
 3. **Sin afectar overrides existentes** — Cambiar qué flags incluye un tier no modifica los overrides puntuales que ya tengan los tenants de ese tier.
 4. **Efecto inmediato para tenants sin override** — Un tenant en ese tier que no tenga un override puntual para una flag ve reflejado el cambio del tier inmediatamente.

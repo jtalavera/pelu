@@ -56,7 +56,7 @@ import { getMtWorld, mtLoginToken } from "../../fixtures/mt/world";
  *        non-SIFEN invoice never gets a `sifenSubmissionStatus` at all.
  *    That is what scenarios 1 and 6 assert for B. This is a **note, not a leak** — B never sees a
  *    byte of A's data — but it is reported, because "SIFEN endpoints are open to tenants whose tier
- *    excludes the SIFEN flag" is a deliberate-or-not product decision worth a second look.
+ *    turns the SIFEN flag off" is a deliberate-or-not product decision worth a second look.
  *
  * 4. `InvoiceController#receiverWillBeIdentified` = "`clientRucOverride` or
  *    `clientIdentityDocumentOverride` is non-blank". The `SIFEN_RECIPIENT_EMAIL_REQUIRED` guard

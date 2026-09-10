@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.bootstrap.FemmeDataInitializer;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.TenantFeatureFlag;
 import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppUserTourStateRepository;
@@ -42,6 +43,7 @@ public class SeedResetService {
 
   private static final Logger log = LoggerFactory.getLogger(SeedResetService.class);
   private static final long DEMO_TENANT_ID = 1L;
+  private static final String SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
@@ -207,6 +209,18 @@ public class SeedResetService {
     // catalog seeds it itself via the real API/Excel-import flows (see e2e/global-setup.ts and
     // e2e/fixtures/api.ts's seedCategoryServiceProfessional/seedClient helpers).
     femmeDataInitializer.seedDemoTenantData(tenant);
+
+    // Since V53 (conjunctive resolution) the global SIFEN_ELECTRONIC_INVOICING default is ON, so
+    // without a tenant-level OFF the demo tenant would route every invoice through the SIFEN
+    // pipeline. The delete above wiped the baseline that e2e/global-setup.ts sets on first
+    // provision — re-establish it so the demo tenant defaults to traditional invoicing after a
+    // reset (SIFEN specs still flip this to true via /api/admin/feature-flags/tenants/1/...).
+    TenantFeatureFlag sifenBaseline = new TenantFeatureFlag();
+    sifenBaseline.setTenantId(DEMO_TENANT_ID);
+    sifenBaseline.setFlagKey(SIFEN_FLAG_KEY);
+    sifenBaseline.setEnabled(false);
+    tenantFeatureFlagRepository.save(sifenBaseline);
+    log.info("Restored demo tenant {} baseline (SIFEN off)", DEMO_TENANT_ID);
 
     log.info("POST /api/admin/seed/reset tenantId={} — reset complete", DEMO_TENANT_ID);
   }

@@ -15,8 +15,6 @@ type TenantFlagChange = {
   newEnabled: boolean;
 };
 
-type FeatureFlagSource = "GLOBAL" | "TIER" | "OVERRIDE";
-
 type TenantRow = {
   flagKey: string;
   description: string | null;
@@ -26,7 +24,6 @@ type TenantRow = {
   hasOverride: boolean;
   overrideEnabled: boolean | null;
   effectiveEnabled: boolean;
-  effectiveSource: FeatureFlagSource;
   lastChange: TenantFlagChange | null;
 };
 
@@ -254,11 +251,17 @@ export default function FeatureFlagsPage() {
 
       <ul className="flex flex-col gap-3">
         {rows.map((row) => {
-          // HU-47: the backend resolves the 3-level precedence (override > tier > global) and
-          // reports both the effective value and which level produced it — trust it rather than
-          // recomputing here, since re-deriving it client-side would need to know about the tier
-          // level too.
+          // HU-47 (conjunctive): the backend resolves `global AND tier AND tenant` and reports the
+          // effective value plus each level's value; the "disabled by" note is derived here from
+          // those level booleans (a missing tier/tenant row = ON / inherit).
           const effective = row.effectiveEnabled;
+          const tenantValue = row.hasOverride ? (row.overrideEnabled ?? true) : true;
+          const disabledBy: string[] = [];
+          if (!row.globalEnabled) disabledBy.push(t("femme.featureFlags.levelGlobal"));
+          if (row.hasTier && row.tierEnabled === false)
+            disabledBy.push(t("femme.featureFlags.levelTier"));
+          if (row.hasOverride && row.overrideEnabled === false)
+            disabledBy.push(t("femme.featureFlags.levelOrganization"));
           const busy = busyKey === row.flagKey;
           return (
             <li
@@ -328,10 +331,8 @@ export default function FeatureFlagsPage() {
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     {!row.hasOverride ? (
-                      <span className="text-sm text-[var(--color-ink-2)]">
-                        {row.effectiveSource === "TIER"
-                          ? t("femme.featureFlags.usingTier")
-                          : t("femme.featureFlags.usingGlobal")}
+                      <span className="text-sm text-[var(--color-ink-3)]">
+                        {t("femme.featureFlags.usingInherited")}
                       </span>
                     ) : (
                       <span className="text-sm text-[var(--color-ink-2)]">
@@ -342,9 +343,9 @@ export default function FeatureFlagsPage() {
                     )}
                     <div className="flex items-center gap-2">
                       <Switch
-                        checked={effective}
+                        checked={tenantValue}
                         disabled={busy}
-                        onChange={() => void setTenantOverride(row.flagKey, !effective)}
+                        onChange={() => void setTenantOverride(row.flagKey, !tenantValue)}
                         id={`ff-tenant-${row.flagKey}`}
                         aria-label={t("femme.featureFlags.tenantSwitchAria", { key: row.flagKey })}
                       />
@@ -366,7 +367,7 @@ export default function FeatureFlagsPage() {
 
               <div
                 className="mt-3 flex flex-wrap items-center gap-2"
-                data-testid={`feature-flag-source-${row.flagKey}`}
+                data-testid={`feature-flag-effective-${row.flagKey}`}
               >
                 <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
                   {t("femme.featureFlags.effectiveValue")}
@@ -374,18 +375,14 @@ export default function FeatureFlagsPage() {
                 <Badge variant={effective ? "success" : "secondary"}>
                   {effective ? t("femme.featureFlags.stateOn") : t("femme.featureFlags.stateOff")}
                 </Badge>
-                <Badge
-                  variant={
-                    row.effectiveSource === "OVERRIDE"
-                      ? "info"
-                      : row.effectiveSource === "TIER"
-                        ? "warning"
-                        : "outline"
-                  }
-                  data-testid={`feature-flag-source-badge-${row.flagKey}`}
-                >
-                  {t(`femme.featureFlags.source.${row.effectiveSource.toLowerCase()}`)}
-                </Badge>
+                {!effective && disabledBy.length > 0 ? (
+                  <span
+                    className="text-xs text-[var(--color-ink-3)]"
+                    data-testid={`feature-flag-disabled-by-${row.flagKey}`}
+                  >
+                    {t("femme.featureFlags.disabledBy", { levels: disabledBy.join(", ") })}
+                  </span>
+                ) : null}
               </div>
 
               {row.lastChange ? (

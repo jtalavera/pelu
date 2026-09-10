@@ -24,7 +24,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 
 ## Criterios de aceptación
 
-1. **Formulario de alta** — El Platform Admin accede a un formulario para crear un tenant con los campos: nombre (obligatorio), dominio (opcional, único en toda la plataforma) y tier inicial (obligatorio, seleccionado de los tiers existentes — ver HU-45).
+1. **Formulario de alta** — El Platform Admin accede a un formulario para crear un tenant con los campos: nombre (obligatorio), dominio (opcional, único en toda la plataforma) y tier inicial (obligatorio, seleccionado de los tiers existentes — ver HU-45). La obligatoriedad del tier se valida en el endpoint (`TENANT_TIER_REQUIRED`) y, desde `V54` (2026-09-09), también a nivel de schema (`tenants.tier_id NOT NULL`; los tenants preexistentes sin tier fueron backfilleados con `Estándar`).
 2. **Validación de nombre** — El sistema rechaza un nombre vacío, mostrando un mensaje de error claro.
 3. **Validación de dominio único** — Si se ingresa un dominio ya usado por otro tenant, el sistema lo rechaza con un mensaje de error claro.
 4. **Estado inicial** — Todo tenant creado queda en estado `Activo`.

@@ -84,13 +84,16 @@ public class FemmeDataInitializer {
       if (featureFlagRepository.findByFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL").isEmpty()) {
         FeatureFlag allowDuplicateClientEmail = new FeatureFlag();
         allowDuplicateClientEmail.setFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL");
-        allowDuplicateClientEmail.setEnabled(false);
+        // Global default ON, mirroring V52 (prod). Under the conjunctive-resolution change (V53) a
+        // per-tenant OFF still enforces uniqueness for that tenant; the environment gate in
+        // DuplicateClientEmailPolicy keeps this inert outside the SIFEN TEST environment.
+        allowDuplicateClientEmail.setEnabled(true);
         allowDuplicateClientEmail.setDescription(
             "Test environment only: skip the per-tenant client-email uniqueness check so SIFEN"
                 + " electronic-invoicing testing can reuse the same recipient email. Ignored unless"
                 + " the SIFEN environment is TEST.");
         featureFlagRepository.save(allowDuplicateClientEmail);
-        log.info("Seeded feature flag ALLOW_DUPLICATE_CLIENT_EMAIL (enabled=false)");
+        log.info("Seeded feature flag ALLOW_DUPLICATE_CLIENT_EMAIL (enabled=true)");
       }
 
       // SIFEN HU-22 (Fase 5): same idempotent seed as GUIDED_TOUR above. V28's Flyway INSERT only
@@ -99,12 +102,15 @@ public class FemmeDataInitializer {
       if (featureFlagRepository.findByFlagKey("SIFEN_ELECTRONIC_INVOICING").isEmpty()) {
         FeatureFlag sifenElectronicInvoicing = new FeatureFlag();
         sifenElectronicInvoicing.setFlagKey("SIFEN_ELECTRONIC_INVOICING");
-        sifenElectronicInvoicing.setEnabled(false);
+        // Global default ON since the conjunctive-resolution change (V53): under global AND tier
+        // AND tenant, a global OFF could no longer be lifted by a tier/tenant. Tenants that must
+        // NOT route through SIFEN carry an explicit OFF at the tier or tenant level.
+        sifenElectronicInvoicing.setEnabled(true);
         sifenElectronicInvoicing.setDescription(
             "Route new invoices through the SIFEN electronic-invoicing pipeline instead of the"
                 + " traditional generator");
         featureFlagRepository.save(sifenElectronicInvoicing);
-        log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=false)");
+        log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=true)");
       }
 
       // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's

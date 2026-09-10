@@ -44,8 +44,9 @@ export function deletePlatformTier(id: number): Promise<void> {
 }
 
 /**
- * HU-46 (Épica D — Tiers y Feature Flags): a tier's feature-flag matrix — every global flag plus
- * whether this tier includes it in its default package, and the last time that changed (AC-5).
+ * HU-46 (Épica D — Tiers y Feature Flags): a tier's feature-flag matrix — every global flag with
+ * the global default, this tier's value for it, the effective value at the tier level
+ * (`globalEnabled && tierEnabled`, HU-47's conjunctive resolution), and the last time it changed.
  */
 export type TierFeatureFlagChange = {
   changedAt: string;
@@ -58,7 +59,8 @@ export type TierFeatureFlagRow = {
   flagKey: string;
   description: string | null;
   globalEnabled: boolean;
-  included: boolean;
+  tierEnabled: boolean;
+  effectiveEnabled: boolean;
   lastChange: TierFeatureFlagChange | null;
 };
 
@@ -66,14 +68,14 @@ export function listTierFeatureFlags(tierId: number): Promise<TierFeatureFlagRow
   return femmeJson<TierFeatureFlagRow[]>(`/api/platform/tiers/${tierId}/feature-flags`);
 }
 
-/** HU-46 AC-1/AC-2: marks (or unmarks) a flag as included in this tier's default package. */
-export function setTierFeatureFlagIncluded(
+/** HU-46 AC-1/AC-2: sets this tier's value (ON/OFF) for a flag. OFF restricts it for the tier's tenants. */
+export function setTierFeatureFlagValue(
   tierId: number,
   flagKey: string,
-  included: boolean,
+  enabled: boolean,
 ): Promise<void> {
   return femmePutJson<void>(
     `/api/platform/tiers/${tierId}/feature-flags/${encodeURIComponent(flagKey)}`,
-    { included },
+    { enabled },
   );
 }

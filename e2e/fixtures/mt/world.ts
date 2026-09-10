@@ -17,12 +17,12 @@ import { PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD } from "../auth";
  * first tenant created here is id=1.
  *
  * Divergence baked into the world, so isolation specs have something to tell apart:
- *  - T-A ("MT Salón Aurora") — its tier *includes* SIFEN_ELECTRONIC_INVOICING; RUC set; a full
+ *  - T-A ("MT Salón Aurora") — its tier leaves SIFEN_ELECTRONIC_INVOICING ON (global default); RUC set; a full
  *    SIFEN issuer profile (address / taxpayer type / economic activity / contact / department+city,
  *    all demanded by `SifenInvoiceHeaderService.requireIssuerDataComplete`); an uploaded valid
  *    SIFEN certificate; an active fiscal stamp; 2 categories / 3 services / 2 professionals /
  *    3 clients.
- *  - T-B ("MT Barbería Boreal") — a *different* tier *without* the SIFEN flag; RUC set; NO SIFEN
+ *  - T-B ("MT Barbería Boreal") — a *different* tier that turns SIFEN OFF; RUC set; NO SIFEN
  *    certificate and only the minimal (RUC-only) business profile; an active fiscal stamp (every
  *    invoice-issuing tenant needs one — `InvoiceService.issueInvoice` step 2 requires an active
  *    timbrado regardless of SIFEN); 1 category / 2 services (names deliberately copied from two of
@@ -254,14 +254,14 @@ async function createTier(platformToken: string, name: string): Promise<number> 
   return tier.id;
 }
 
-async function setTierFlagIncluded(
+async function setTierFlagValue(
   platformToken: string,
   tierId: number,
   flagKey: string,
-  included: boolean,
+  enabled: boolean,
 ): Promise<void> {
   await must("PUT", `/api/platform/tiers/${tierId}/feature-flags/${flagKey}`, {
-    body: { included },
+    body: { enabled },
     token: platformToken,
   });
 }
@@ -473,10 +473,13 @@ function emptyCatalogTenantC(id: number, tierId: number): MtTenant {
 // --------------------------------------------------------------------------------------------------
 
 async function fullProvision(platformToken: string): Promise<MtWorld> {
-  // Two dedicated tiers so A and B genuinely diverge on the SIFEN feature flag.
+  // Two dedicated tiers so A and B genuinely diverge on the SIFEN feature flag. Resolution is
+  // conjunctive (global AND tier AND tenant) and the global default is ON, so B's tier must turn
+  // SIFEN OFF explicitly for B (and C, which shares B's tier) to resolve it disabled.
   const tierAId = await createTier(platformToken, "MT Tier Aurora");
   const tierBId = await createTier(platformToken, "MT Tier Boreal");
-  await setTierFlagIncluded(platformToken, tierAId, SIFEN_FLAG, true);
+  await setTierFlagValue(platformToken, tierAId, SIFEN_FLAG, true);
+  await setTierFlagValue(platformToken, tierBId, SIFEN_FLAG, false);
 
   const tenantAId = await createTenant(platformToken, MT.A.name, tierAId);
   const tenantBId = await createTenant(platformToken, MT.B.name, tierBId);

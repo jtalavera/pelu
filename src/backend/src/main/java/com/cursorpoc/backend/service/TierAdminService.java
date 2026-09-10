@@ -146,8 +146,10 @@ public class TierAdminService {
   }
 
   /**
-   * HU-46 AC-1: every existing global flag, alphabetical, with whether this tier includes it in its
-   * default package (AC-2: reflects whatever was last persisted) plus its audit trail (AC-5).
+   * HU-46 AC-1: every existing global flag, alphabetical, with this tier's value for it ({@code
+   * tierEnabled}, defaulting to ON when the tier has no row — AC-2: reflects whatever was last
+   * persisted), the global default, the effective value at the tier level ({@code global AND tier})
+   * and the flag's audit trail (AC-5).
    */
   @Transactional(readOnly = true)
   public List<TierFeatureFlagRowResponse> listTierFeatureFlags(Long tierId) {
@@ -156,58 +158,63 @@ public class TierAdminService {
     return globals.stream()
         .map(
             g -> {
-              boolean included =
+              boolean tierEnabled =
                   tierFeatureFlagRepository
                       .findByTierIdAndFlagKey(tierId, g.getFlagKey())
-                      .isPresent();
+                      .map(TierFeatureFlag::isEnabled)
+                      .orElse(true);
               TierFeatureFlagChangeResponse lastChange =
                   tierFeatureFlagChangeRepository
                       .findByTierIdAndFlagKey(tierId, g.getFlagKey())
                       .map(this::toChangeResponse)
                       .orElse(null);
               return new TierFeatureFlagRowResponse(
-                  g.getFlagKey(), g.getDescription(), g.isEnabled(), included, lastChange);
+                  g.getFlagKey(),
+                  g.getDescription(),
+                  g.isEnabled(),
+                  tierEnabled,
+                  g.isEnabled() && tierEnabled,
+                  lastChange);
             })
         .toList();
   }
 
   /**
-   * HU-46 AC-1/AC-2: marks a flag as included (or not) in this tier's default package. Included ->
-   * upserts a {@link TierFeatureFlag} row (enabled=true); not included -> deletes any existing row,
-   * so the tier goes back to having no opinion for that flag. AC-3: this never touches {@code
-   * TenantFeatureFlag} rows, so existing tenant overrides in this tier are untouched. AC-5: always
-   * records the change, who made it and when.
+   * HU-46 AC-1/AC-2: sets this tier's value (ON/OFF) for a flag — upserts the {@link
+   * TierFeatureFlag} row with the given value. A tier value of OFF restricts the flag for every
+   * tenant on this tier (HU-47's conjunctive resolution); ON means "inherit" (the default when no
+   * row exists). AC-3: this never touches {@code TenantFeatureFlag} rows, so existing tenant values
+   * in this tier are untouched. AC-5: always records the change, who made it and when.
    */
   @Transactional
-  public void setTierFeatureFlagIncluded(
-      Long tierId, String flagKey, boolean included, long changedByUserId, String changedByEmail) {
+  public void setTierFeatureFlagValue(
+      Long tierId, String flagKey, boolean enabled, long changedByUserId, String changedByEmail) {
     requireTier(tierId);
     featureFlagRepository
         .findByFlagKey(flagKey)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "FLAG_NOT_FOUND"));
 
-    boolean previousIncluded =
-        tierFeatureFlagRepository.findByTierIdAndFlagKey(tierId, flagKey).isPresent();
+    boolean previousEnabled =
+        tierFeatureFlagRepository
+            .findByTierIdAndFlagKey(tierId, flagKey)
+            .map(TierFeatureFlag::isEnabled)
+            .orElse(true);
 
-    if (included) {
-      TierFeatureFlag row =
-          tierFeatureFlagRepository
-              .findByTierIdAndFlagKey(tierId, flagKey)
-              .orElseGet(
-                  () -> {
-                    TierFeatureFlag t = new TierFeatureFlag();
-                    t.setTierId(tierId);
-                    t.setFlagKey(flagKey);
-                    return t;
-                  });
-      row.setEnabled(true);
-      tierFeatureFlagRepository.save(row);
-    } else {
-      tierFeatureFlagRepository.deleteByTierIdAndFlagKey(tierId, flagKey);
-    }
+    TierFeatureFlag row =
+        tierFeatureFlagRepository
+            .findByTierIdAndFlagKey(tierId, flagKey)
+            .orElseGet(
+                () -> {
+                  TierFeatureFlag t = new TierFeatureFlag();
+                  t.setTierId(tierId);
+                  t.setFlagKey(flagKey);
+                  return t;
+                });
+    row.setEnabled(enabled);
+    tierFeatureFlagRepository.save(row);
 
     recordTierFlagChange(
-        tierId, flagKey, previousIncluded, included, changedByUserId, changedByEmail);
+        tierId, flagKey, previousEnabled, enabled, changedByUserId, changedByEmail);
   }
 
   private void recordTierFlagChange(

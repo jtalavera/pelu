@@ -24,11 +24,13 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 
 ## Criterios de aceptación
 
-1. **Orden de precedencia** — Para un tenant y una flag dados, el valor efectivo se calcula así: si existe un override puntual para ese tenant, se usa ese valor; si no, si el tenant tiene un tier y ese tier define la flag, se usa el valor del tier; si no, se usa el default global.
-2. **Tenant sin tier** — Un tenant sin tier asignado se resuelve igual que hoy: default global salvo override puntual.
+> **Revisión 2026-09-09:** la resolución pasa de *precedencia* a *conjunción (AND)*. Ver la nota de implementación al final.
+
+1. **Resolución conjuntiva** — Para un tenant y una flag dados, el valor efectivo es `global AND tier AND tenant`: la flag está activa solo si está activa en el default global, en el valor del tier del tenant (si tiene tier) y en el valor propio del tenant. Un OFF en cualquier nivel apaga el efectivo. Una fila ausente en el nivel tier o tenant significa "heredar" (ON).
+2. **Tenant sin tier** — Defensivo: `tenants.tier_id` es obligatorio desde `V54`, pero un tenant sin tier resuelve con el término tier en ON (solo cuentan global y tenant).
 3. **Consistencia con el mecanismo existente** — La resolución sigue siendo la que consume `GET /api/feature-flags` (vista de cualquier usuario autenticado sobre su propio tenant); ese endpoint no cambia su contrato, solo el cálculo interno.
-4. **Visibilidad para Platform Admin** — La pantalla de administración de flags de un tenant (HU-49) muestra explícitamente de qué nivel proviene el valor efectivo actual (global, tier u override).
-5. **Sin romper flags existentes** — Los tenants y flags existentes antes de esta historia siguen resolviendo exactamente igual que antes si no tienen tier asignado.
+4. **Visibilidad para Platform Admin** — La pantalla de administración de flags de un tenant (HU-49) muestra los 3 valores (global, tier, tenant) y el efectivo; cuando el efectivo es OFF, indica en qué nivel(es) está apagado. El modal del tier (HU-46) muestra el valor global, el del tier y el efectivo a nivel tier.
+5. **Migración sin cambio de comportamiento efectivo** — La migración `V53` preserva el valor efectivo actual de cada tenant (incluye invertir el default global de `SIFEN_ELECTRONIC_INVOICING` a ON e insertar filas OFF a nivel tenant donde corresponde).
 
 ---
 
@@ -60,3 +62,25 @@ Cobertura de pruebas: unit tests en `FeatureFlagServiceTest` (los 3 niveles, pre
 tenant sin tier, tier sin opinión sobre una flag, fuente efectiva en `listTenantView`) y Playwright
 en `e2e/tests/hu-47-resolucion-de-flags-en-tres-niveles.spec.ts` (AC-1 a AC-4 vía API y UI; AC-5
 cubierto junto con AC-2 contra el tenant DEMO sin tier).
+
+## Nota de implementación (2026-09-09) — resolución conjuntiva (AND)
+
+Se reemplazó la precedencia "override > tier > global" por una **conjunción**: el valor efectivo es
+`globalEnabled && tierValue && tenantValue`, donde `tierValue`/`tenantValue` valen `true` cuando no
+hay fila en ese nivel. Motivación: desde el modal de un tier el Platform Admin solo podía *incluir*
+(forzar ON) una flag; no había forma de que un tier **apague** una flag activa a nivel global.
+
+Cambios:
+- `FeatureFlagService#isEnabled`/`resolveAll`/`listTenantView` calculan el AND. `listTenantView` ya
+  no expone `effectiveSource` (se eliminó el enum `FeatureFlagSource`): la UI deriva "apagado en:
+  global/tier/organización" de los booleanos por nivel.
+- `TierFeatureFlag.enabled` pasa a guardar un booleano real (antes siempre `true`).
+  `TierAdminService#setTierFeatureFlagValue` hace upsert del valor; `PUT
+  /api/platform/tiers/{id}/feature-flags/{flagKey}` recibe `{ "enabled": boolean }`.
+  `TierFeatureFlagRowResponse` agrega `tierEnabled` y `effectiveEnabled` (= global AND tier).
+- Migración `V53`: invierte el default global de `SIFEN_ELECTRONIC_INVOICING` a ON, inserta filas
+  OFF a nivel tenant para los que hoy no lo resuelven ON, y borra filas `enabled = 1` redundantes.
+- `V54` + `Tenant#tier` con `optional=false`: todo tenant tiene tier obligatorio (backfill con
+  `Estándar`); el caso "tenant sin tier" queda como código defensivo.
+- Docs relacionadas actualizadas: HU-46 (activar/desactivar por tier), HU-49 (el override solo
+  restringe), PRD (definición de resolución de flags y de tenant/tier).

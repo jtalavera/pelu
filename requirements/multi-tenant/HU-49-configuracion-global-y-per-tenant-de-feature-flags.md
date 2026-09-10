@@ -27,8 +27,8 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 ## Criterios de aceptación
 
 1. **Default global** — El Platform Admin puede ver y modificar el valor por defecto (habilitado/deshabilitado) de cada feature flag a nivel plataforma.
-2. **Override por tenant** — El Platform Admin puede ver el valor efectivo de cada flag para un tenant específico (usando el mecanismo de "tenant en previsualización") y definir un override puntual que prevalece sobre el default global.
-3. **Reset a global** — El Platform Admin puede eliminar el override de un tenant para que la flag vuelva a resolver por el default global (o, tras HU-47, por el default de su tier).
+2. **Valor por tenant** — El Platform Admin puede ver el valor efectivo de cada flag para un tenant específico (usando el mecanismo de "tenant en previsualización") y definir el valor propio del tenant. Desde la revisión conjuntiva de HU-47 (2026-09-09) ese valor solo puede *restringir* (apagar): la flag está activa solo si lo está también en global y en el tier.
+3. **Reset a heredar** — El Platform Admin puede eliminar la fila del tenant ("Volver al global") para que la flag vuelva a heredar (`global AND tier`).
 4. **Historial de cambios** — Cada cambio de override por tenant queda registrado con el valor anterior, el nuevo valor, quién lo hizo y cuándo.
 5. **Vista de solo lectura para el resto de roles** — Cualquier usuario autenticado puede consultar el valor efectivo de las flags de su propio tenant, pero no modificarlas.
 6. **Claves de flag validadas** — El sistema solo acepta claves de flag con el formato `MAYUSCULAS_CON_GUION_BAJO`.

@@ -92,7 +92,11 @@ test.describe("HU-45 · Crear y administrar Tiers", () => {
     const editDlg = page.getByRole("dialog", { name: "Edit tier" });
     await expect(editDlg).toBeVisible();
     await expect(editDlg.getByLabel("Name")).toHaveValue(tierName);
-    await expect(editDlg.getByText("Choose which feature flags this tier includes by default.")).toBeVisible();
+    await expect(
+      editDlg.getByText(
+        "Turn each feature flag on or off for this tier. The effective value also depends on the global default.",
+      ),
+    ).toBeVisible();
   });
 
   // AC-5: creating (or renaming) a tier with a name already used by another tier is rejected with

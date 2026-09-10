@@ -12,9 +12,9 @@ import { getMtWorld, mtLoginToken, mtPlatformToken } from "../../fixtures/mt/wor
  *
  * 1. **Resolved-flags endpoint** `GET /api/admin/feature-flags/tenants/{tenantId}` (platform-admin
  *    token) returns a **bare array** of rows, one per seeded flag:
- *      { flagKey, globalEnabled, hasTier, tierEnabled, hasOverride, overrideEnabled,
- *        effectiveEnabled, effectiveSource: "GLOBAL" | "TIER" | "OVERRIDE" }
- *    (verified against `hu-47-resolucion-de-flags-en-tres-niveles.spec.ts` / `hu-38-editar-tenant`).
+ *      { flagKey, globalEnabled, hasTier, tierEnabled, hasOverride, overrideEnabled, effectiveEnabled }
+ *    where `effectiveEnabled = globalEnabled AND tierEnabled AND overrideEnabled` (missing tier /
+ *    override row = ON / inherit). Verified against `hu-47-resolucion-de-flags-en-tres-niveles.spec.ts`.
  *
  * 2. **Global default endpoint** `GET /api/admin/feature-flags` returns a bare array of
  *    `{ flagKey, enabled }`. This suite only ever READS it — the global default is shared state and
@@ -32,9 +32,9 @@ import { getMtWorld, mtLoginToken, mtPlatformToken } from "../../fixtures/mt/wor
  *    fresh logins (401, indistinguishable from a wrong password) AND rejects an already-issued token
  *    on its next request (401/403). ACTIVE restores both immediately.
  *
- * The mt world (see `fixtures/mt/world.ts`): T-A's tier (id 3) INCLUDES SIFEN_ELECTRONIC_INVOICING;
- * T-B's tier (id 4) EXCLUDES it; the global default for that flag is `false` (V29). T-C is already
- * SUSPENDED and must stay that way.
+ * The mt world (see `fixtures/mt/world.ts`): the global default for SIFEN_ELECTRONIC_INVOICING is
+ * `true` (V53); T-A's tier leaves it ON, T-B's tier turns it OFF (so B resolves it disabled). T-C
+ * is already SUSPENDED and must stay that way.
  *
  * EVERY scenario here mutates shared platform config. Every one wraps its mutation in `try/finally`,
  * restores the original state in `finally`, and then asserts (past the finally) that the restore
@@ -62,7 +62,6 @@ type TenantFlagRow = {
   hasOverride: boolean;
   overrideEnabled: boolean | null;
   effectiveEnabled: boolean;
-  effectiveSource: "GLOBAL" | "TIER" | "OVERRIDE";
 };
 
 type GlobalFlagRow = { flagKey: string; enabled: boolean };
@@ -99,12 +98,9 @@ async function readResolvedFlag(
 /** Just the effective outcome per flag — the shape used to assert "B's resolution never moved". */
 function effectiveMap(
   rows: TenantFlagRow[],
-): Record<string, { effectiveEnabled: boolean; effectiveSource: string }> {
+): Record<string, { effectiveEnabled: boolean }> {
   return Object.fromEntries(
-    rows.map((r) => [
-      r.flagKey,
-      { effectiveEnabled: r.effectiveEnabled, effectiveSource: r.effectiveSource },
-    ]),
+    rows.map((r) => [r.flagKey, { effectiveEnabled: r.effectiveEnabled }]),
   );
 }
 
@@ -168,9 +164,8 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
     const aBefore = await readResolvedFlag(request, platformToken, world.tenantA.id, SIFEN_FLAG);
     expect(
       aBefore.effectiveEnabled,
-      "precondition: A should resolve SIFEN enabled from its tier before the override",
+      "precondition: A should resolve SIFEN enabled (global ON, its tier does not restrict it)",
     ).toBe(true);
-    expect(aBefore.effectiveSource).toBe("TIER");
     expect(bBefore[SIFEN_FLAG]?.effectiveEnabled, "precondition: B resolves SIFEN disabled").toBe(
       false,
     );
@@ -186,7 +181,6 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
       expect(aAfter.effectiveEnabled, "A's SIFEN flag did not fall to the override value").toBe(
         false,
       );
-      expect(aAfter.effectiveSource).toBe("OVERRIDE");
       expect(await readOwnResolvedFlags(request, tokenA)).toHaveProperty(SIFEN_FLAG, false);
 
       // B: resolution byte-identical to baseline — the override on A did not reach it.
@@ -224,7 +218,6 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
     );
     expect(aRestored.hasOverride, "A's override was not cleared by the restore").toBe(false);
     expect(aRestored.effectiveEnabled, "A's SIFEN flag did not return to enabled").toBe(true);
-    expect(aRestored.effectiveSource).toBe("TIER");
     expect(
       (await readGlobalFlag(request, platformToken, SIFEN_FLAG)).enabled,
       "global default drifted across the scenario",
@@ -232,8 +225,8 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────────────────────────
-  // Scenario 2 — moving A onto an empty throwaway tier drops A's resolved SIFEN flag to the global
-  // default; B's resolution is untouched.
+  // Scenario 2 — moving A onto an empty throwaway tier makes A's resolved SIFEN flag fall back to
+  // the global default (no tier setting to apply); B's resolution is untouched.
   // ────────────────────────────────────────────────────────────────────────────────────────────
   test("2 · changing A's tier shifts A's resolved flags but not B's", async ({ request }) => {
     test.setTimeout(90_000); // mutates shared platform config — the finally MUST get to run to restore it
@@ -247,11 +240,11 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
 
     const aBefore = await readResolvedFlag(request, platformToken, world.tenantA.id, SIFEN_FLAG);
     expect(
-      aBefore.effectiveEnabled && aBefore.effectiveSource === "TIER",
-      "precondition: A should resolve SIFEN enabled from its tier before the swap",
+      aBefore.effectiveEnabled,
+      "precondition: A should resolve SIFEN enabled before the swap",
     ).toBe(true);
 
-    // A throwaway tier that includes no flags at all.
+    // A throwaway tier that restricts no flags at all.
     const throwawayTier = await createTier(request, platformToken, `MT throwaway ${Date.now()}`);
 
     try {
@@ -261,14 +254,14 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
       });
       expect(put.ok(), `PUT A onto the throwaway tier failed: ${await put.text()}`).toBeTruthy();
 
-      // A: no override, empty tier ⇒ resolution falls all the way through to the global default.
+      // A: no override, empty tier ⇒ resolution is just the global default (AND inherit).
       const aAfter = await readResolvedFlag(request, platformToken, world.tenantA.id, SIFEN_FLAG);
       expect(aAfter.hasOverride).toBe(false);
+      expect(aAfter.hasTier).toBe(false);
       expect(
         aAfter.effectiveEnabled,
-        "A's SIFEN flag did not fall to the global default after losing its tier",
+        "A's SIFEN flag did not fall to the global default after losing its tier's setting",
       ).toBe(globalSifen);
-      expect(aAfter.effectiveSource).toBe("GLOBAL");
 
       // B: resolution unchanged — A's tier swap did not reach it.
       const bAfter = effectiveMap(await readResolvedFlags(request, platformToken, world.tenantB.id));
@@ -302,7 +295,6 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
       SIFEN_FLAG,
     );
     expect(aRestoredFlag.effectiveEnabled, "A's SIFEN flag did not return to enabled").toBe(true);
-    expect(aRestoredFlag.effectiveSource).toBe("TIER");
     expect(
       effectiveMap(await readResolvedFlags(request, platformToken, world.tenantB.id)),
       "B's resolution moved across the scenario",

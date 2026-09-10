@@ -89,7 +89,6 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           hasOverride: false,
           overrideEnabled: null,
           effectiveEnabled: true,
-          effectiveSource: "GLOBAL",
         },
       ] as never;
     });
@@ -114,7 +113,7 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     expect(await screen.findByText("GUIDED_TOUR")).toBeTruthy();
     expect(screen.getByText("Global default")).toBeTruthy();
     expect(screen.getByText("This organization")).toBeTruthy();
-    expect(screen.getByText("Using global default")).toBeTruthy();
+    expect(screen.getByText("Inherited (no restriction)")).toBeTruthy();
     expect(screen.getByText("Managing Tenant One.")).toBeTruthy();
     expect(vi.mocked(femmeClient.femmeJson)).toHaveBeenCalledWith(
       "/api/admin/feature-flags/tenants/1",
@@ -122,9 +121,9 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     );
   });
 
-  // HU-47 AC-4: the tenant admin view shows explicitly which of the 3 levels (global/tier/override)
-  // produced the currently-effective value.
-  it("shows the tier default and the tier as the effective source when the tenant's tier defines the flag", async () => {
+  // HU-47 (conjunctive): the tenant admin view shows every level's value and, when the effective
+  // value is OFF, which level(s) turned it off.
+  it("shows the effective value OFF and names the tier when the tenant's tier turns the flag off", async () => {
     const user = userEvent.setup();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
       if (path.includes("/api/platform/tenants")) {
@@ -143,7 +142,6 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           hasOverride: false,
           overrideEnabled: null,
           effectiveEnabled: false,
-          effectiveSource: "TIER",
         },
       ] as never;
     });
@@ -152,12 +150,11 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     await submitTenantId(user);
 
     expect(await screen.findByText("Tier default")).toBeTruthy();
-    expect(screen.getByText("Using tier default")).toBeTruthy();
-    const source = screen.getByTestId("feature-flag-source-GUIDED_TOUR");
-    expect(source.textContent).toContain("From tier default");
+    const disabledBy = screen.getByTestId("feature-flag-disabled-by-GUIDED_TOUR");
+    expect(disabledBy.textContent).toContain("Disabled by: tier");
   });
 
-  it("shows the organization override as the effective source even when the tier also defines the flag", async () => {
+  it("names every level that turns the flag off", async () => {
     const user = userEvent.setup();
     vi.mocked(femmeClient.femmeJson).mockImplementation(async (path: string) => {
       if (path.includes("/api/platform/tenants")) {
@@ -170,13 +167,12 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
         {
           flagKey: "GUIDED_TOUR",
           description: "Show guided tour tooltips on every screen",
-          globalEnabled: true,
+          globalEnabled: false,
           hasTier: true,
           tierEnabled: false,
           hasOverride: true,
-          overrideEnabled: true,
-          effectiveEnabled: true,
-          effectiveSource: "OVERRIDE",
+          overrideEnabled: false,
+          effectiveEnabled: false,
         },
       ] as never;
     });
@@ -184,8 +180,10 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     renderPage();
     await submitTenantId(user);
 
-    const source = screen.getByTestId("feature-flag-source-GUIDED_TOUR");
-    expect(source.textContent).toContain("From organization override");
+    const disabledBy = await screen.findByTestId("feature-flag-disabled-by-GUIDED_TOUR");
+    expect(disabledBy.textContent).toContain("global");
+    expect(disabledBy.textContent).toContain("tier");
+    expect(disabledBy.textContent).toContain("organization");
   });
 
   it("toggling global default calls admin PUT and reloads the tenant view", async () => {
@@ -243,7 +241,6 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           hasOverride: true,
           overrideEnabled: true,
           effectiveEnabled: true,
-          effectiveSource: "OVERRIDE",
           lastChange: {
             changedAt: "2026-08-01T15:30:00Z",
             changedByEmail: "platform-admin@pelu",
@@ -282,7 +279,6 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           hasOverride: false,
           overrideEnabled: null,
           effectiveEnabled: false,
-          effectiveSource: "GLOBAL",
           lastChange: null,
         },
       ] as never;
@@ -316,7 +312,6 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
           hasOverride: false,
           overrideEnabled: null,
           effectiveEnabled: false,
-          effectiveSource: "GLOBAL",
           lastChange: null,
         },
       ] as never;

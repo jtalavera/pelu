@@ -4,8 +4,8 @@ import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.TierAdminService;
 import com.cursorpoc.backend.web.dto.TierCreateRequest;
-import com.cursorpoc.backend.web.dto.TierFeatureFlagIncludeRequest;
 import com.cursorpoc.backend.web.dto.TierFeatureFlagRowResponse;
+import com.cursorpoc.backend.web.dto.TierFeatureFlagValueRequest;
 import com.cursorpoc.backend.web.dto.TierResponse;
 import com.cursorpoc.backend.web.dto.TierUpdateRequest;
 import jakarta.validation.Valid;
@@ -137,7 +137,9 @@ public class PlatformTierController {
     }
   }
 
-  /** HU-46 AC-1: every global flag plus whether this tier includes it in its default package. */
+  /**
+   * HU-46 AC-1: every global flag plus this tier's value for it and the effective tier-level value.
+   */
   @GetMapping("/{id}/feature-flags")
   public List<TierFeatureFlagRowResponse> listFeatureFlags(
       @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") Long id) {
@@ -169,15 +171,15 @@ public class PlatformTierController {
   }
 
   /**
-   * HU-46 AC-1/AC-2: marks a flag as included (or not) in this tier's default package; AC-5:
-   * records who made the change and when.
+   * HU-46 AC-1/AC-2: sets this tier's value (ON/OFF) for a flag; AC-5: records who made the change
+   * and when.
    */
   @PutMapping("/{id}/feature-flags/{flagKey}")
-  public ResponseEntity<Void> setFeatureFlagIncluded(
+  public ResponseEntity<Void> setFeatureFlagValue(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("id") Long id,
       @PathVariable("flagKey") String flagKey,
-      @Valid @RequestBody TierFeatureFlagIncludeRequest request) {
+      @Valid @RequestBody TierFeatureFlagValueRequest request) {
     requirePlatformAdmin(principal, "PUT /api/platform/tiers/{id}/feature-flags/{flagKey}");
     log.info(
         "PUT /api/platform/tiers/{}/feature-flags/{} adminUserId={} tierId={}",
@@ -186,8 +188,8 @@ public class PlatformTierController {
         principal.getUserId(),
         id);
     try {
-      tierAdminService.setTierFeatureFlagIncluded(
-          id, flagKey, request.included(), principal.getUserId(), principal.getUsername());
+      tierAdminService.setTierFeatureFlagValue(
+          id, flagKey, request.enabled(), principal.getUserId(), principal.getUsername());
       log.info(
           "PUT /api/platform/tiers/{}/feature-flags/{} adminUserId={} tierId={} status=204",
           id,

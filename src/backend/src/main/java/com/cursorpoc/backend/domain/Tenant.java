@@ -35,12 +35,11 @@ public class Tenant {
   // in every real (non-H2) environment.
   private String domain;
 
-  // HU-37: the tier selected at creation time (HU-45 CRUD). Nullable at the DB/entity level —
-  // like `domain` above — so the many pre-existing tenants fabricated directly by tests/seeds
-  // (with no tier at all) keep working; the platform "create tenant" endpoint is what actually
-  // enforces this as required (AC-1), not the schema.
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "tier_id")
+  // HU-37: the tier selected at creation time (HU-45 CRUD). Mandatory — every tenant has exactly
+  // one tier: enforced by the platform create/update endpoints (TENANT_TIER_REQUIRED) and, since
+  // V54, by the schema (`tenants.tier_id NOT NULL`, pre-existing rows backfilled with 'Estándar').
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "tier_id", nullable = false)
   private Tier tier;
 
   // HU-37 AC-4: every tenant is created ACTIVE. HU-40 adds the suspend/reactivate transitions.
