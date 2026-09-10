@@ -168,7 +168,8 @@
         "dashboard": "Dashboard",
         "tenants": "Tenants",
         "tiers": "Tiers",
-        "featureFlags": "Feature flags",
+        "globalFeatureFlags": "Global feature flags",
+        "featureFlags": "Tenant feature flags",
         "import": "Data import"
       },
       "dashboard": {
@@ -554,8 +555,9 @@
       "emptyBody": "Create a tax to assign it to services."
     },
     "featureFlags": {
-      "title": "Feature flags",
+      "title": "Tenant feature flags",
       "subtitle": "A flag is on only when it is on at all three levels: global, the organization's tier, and the organization. Turning it off at any level disables it. Changes apply when users load the app.",
+      "globalEditLink": "Edit in Global feature flags →",
       "loading": "Loading feature flags…",
       "forbidden": "You need Platform Admin access to manage feature flags.",
       "errorTitle": "Could not update",
@@ -580,7 +582,6 @@
       "levelGlobal": "global",
       "levelTier": "tier",
       "levelOrganization": "organization",
-      "globalSwitchAria": "Global default for {{key}}",
       "tenantSwitchAria": "This organization for {{key}}",
       "lastChange": "Last change: {{date}} by {{email}} — {{previous}} → {{next}}",
       "sifenHomologation": {
@@ -593,6 +594,17 @@
         "markPending": "Mark as pending",
         "pendingWarning": "This organization is not marked as having completed SIFEN homologación (SET pilot testing) yet. Review before relying on electronic invoicing in production."
       }
+    },
+    "globalFeatureFlags": {
+      "title": "Global feature flags",
+      "subtitle": "The platform-wide default for each feature flag. A tenant's effective value also depends on its tier and its own value (see Tenant feature flags).",
+      "loading": "Loading feature flags…",
+      "forbidden": "You need Platform Admin access to manage global feature flags.",
+      "errorTitle": "Could not update",
+      "empty": "No feature flags exist yet.",
+      "stateOn": "On",
+      "stateOff": "Off",
+      "toggleAria": "Turn {{key}} on or off globally"
     },
     "businessSettings": {
       "title": "Business settings",

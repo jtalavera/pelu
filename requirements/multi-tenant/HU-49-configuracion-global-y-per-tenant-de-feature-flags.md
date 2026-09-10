@@ -37,8 +37,10 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02), sal
 
 ## Implementación actual (código)
 
-- Backend: `FeatureFlagController` (`GET/PUT /api/admin/feature-flags`, `GET/PUT/DELETE /api/admin/feature-flags/tenants/{tenantId}/{flagKey}`), `FeatureFlagService` (resolución "override si existe, si no default global"), entidades `FeatureFlag` / `TenantFeatureFlag` / `TenantFeatureFlagChange` (auditoría separada de la fila de override).
-- Frontend: `FeatureFlagsPage.tsx` — toggles de "Global Default" y "This Tenant" por flag, botón "Reset to Global" y texto de último cambio; usa `me.previewTenantId` para elegir el tenant en previsualización.
+- Backend: `FeatureFlagController` (`GET/PUT /api/admin/feature-flags`, `GET/PUT/DELETE /api/admin/feature-flags/tenants/{tenantId}/{flagKey}`), `FeatureFlagService` (resolución conjuntiva, ver HU-47), entidades `FeatureFlag` / `TenantFeatureFlag` / `TenantFeatureFlagChange`.
+- Frontend (revisión 2026-09-10): **dos vistas separadas, ambas solo para PLATFORM_ADMIN**:
+  - `PlatformGlobalFeatureFlagsPage.tsx` — "Funcionalidades Globales" (`/platform/global-feature-flags`): lista y edita el default global de cada flag (AC-1). Usa `GET /api/admin/feature-flags` + `PUT /api/admin/feature-flags/{flagKey}`.
+  - `FeatureFlagsPage.tsx` — "Funcionalidades Tenants" (`/platform/feature-flags`): valor por tenant (AC-2/AC-3), con el default global en **solo lectura** y un link a "Funcionalidades Globales" para editarlo.
 
 ## Notas para estimación y pruebas
 

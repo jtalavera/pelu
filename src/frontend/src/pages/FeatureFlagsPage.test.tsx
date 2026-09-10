@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "../test/renderWithTour";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import * as femmeClient from "../api/femmeClient";
@@ -29,11 +30,13 @@ vi.mock("../api/femmeClient", () => ({
 
 function renderPage() {
   return render(
-    <I18nextProvider i18n={i18n}>
-      <ThemeProvider>
-        <FeatureFlagsPage />
-      </ThemeProvider>
-    </I18nextProvider>,
+    <MemoryRouter>
+      <I18nextProvider i18n={i18n}>
+        <ThemeProvider>
+          <FeatureFlagsPage />
+        </ThemeProvider>
+      </I18nextProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -186,28 +189,15 @@ describe("FeatureFlagsPage (acceptance: Platform Admin can review guided tour fl
     expect(disabledBy.textContent).toContain("organization");
   });
 
-  it("toggling global default calls admin PUT and reloads the tenant view", async () => {
+  it("shows the global default read-only with a link to the Global feature flags page", async () => {
     const user = userEvent.setup();
     renderPage();
     await submitTenantId(user);
     await screen.findByText("GUIDED_TOUR");
-    const globalSwitch = document.getElementById("ff-global-GUIDED_TOUR");
-    expect(globalSwitch).toBeTruthy();
-    await user.click(globalSwitch!);
-    await waitFor(() => {
-      expect(vi.mocked(femmeClient.femmePutJson)).toHaveBeenCalledWith(
-        "/api/admin/feature-flags/GUIDED_TOUR",
-        { enabled: false, description: "Show guided tour tooltips on every screen" },
-      );
-    });
-    // Reloads the tenant view after the write (no separate app-level flags cache to refresh —
-    // Platform Admin never mounts FeatureFlagProvider, see FeatureFlagsPage.tsx).
-    await waitFor(() => {
-      expect(vi.mocked(femmeClient.femmeJson)).toHaveBeenCalledWith(
-        "/api/admin/feature-flags/tenants/1",
-        { json: false },
-      );
-    });
+    // No global toggle on this page anymore — the global default is edited on its own page.
+    expect(document.getElementById("ff-global-GUIDED_TOUR")).toBeNull();
+    const link = screen.getByRole("link", { name: "Edit in Global feature flags →" });
+    expect(link.getAttribute("href")).toBe("/platform/global-feature-flags");
   });
 
   it("changing tenant returns to the tenant search field", async () => {

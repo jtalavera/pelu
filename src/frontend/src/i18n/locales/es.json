@@ -168,7 +168,8 @@
         "dashboard": "Panel",
         "tenants": "Tenants",
         "tiers": "Tiers",
-        "featureFlags": "Funcionalidades",
+        "globalFeatureFlags": "Funcionalidades Globales",
+        "featureFlags": "Funcionalidades Tenants",
         "import": "Importación de datos"
       },
       "dashboard": {
@@ -554,8 +555,9 @@
       "emptyBody": "Creá un impuesto para asignarlo a los servicios."
     },
     "featureFlags": {
-      "title": "Funcionalidades (feature flags)",
+      "title": "Funcionalidades por tenant",
       "subtitle": "Un flag está activo solo si lo está en los tres niveles: global, el tier de la organización y la organización. Apagarlo en cualquier nivel lo desactiva. Los cambios se aplican cuando los usuarios cargan la app.",
+      "globalEditLink": "Editar en Funcionalidades Globales →",
       "loading": "Cargando funcionalidades…",
       "forbidden": "Necesitás acceso de Platform Admin para gestionar las funcionalidades.",
       "errorTitle": "No se pudo actualizar",
@@ -580,7 +582,6 @@
       "levelGlobal": "global",
       "levelTier": "tier",
       "levelOrganization": "organización",
-      "globalSwitchAria": "Predeterminado global para {{key}}",
       "tenantSwitchAria": "Esta organización para {{key}}",
       "lastChange": "Último cambio: {{date}} por {{email}} — {{previous}} → {{next}}",
       "sifenHomologation": {
@@ -593,6 +594,17 @@
         "markPending": "Marcar como pendiente",
         "pendingWarning": "Esta organización todavía no está marcada como que completó la homologación SIFEN (pruebas piloto de la SET). Revisá esto antes de confiar en la facturación electrónica en producción."
       }
+    },
+    "globalFeatureFlags": {
+      "title": "Funcionalidades Globales",
+      "subtitle": "Valor por defecto de cada feature flag para toda la plataforma. El valor efectivo por tenant además depende del tier y del propio tenant (ver Funcionalidades Tenants).",
+      "loading": "Cargando funcionalidades…",
+      "forbidden": "Necesitás acceso de Platform Admin para gestionar las funcionalidades globales.",
+      "errorTitle": "No se pudo actualizar",
+      "empty": "Todavía no hay feature flags.",
+      "stateOn": "Sí",
+      "stateOff": "No",
+      "toggleAria": "Activar o desactivar {{key}} a nivel global"
     },
     "businessSettings": {
       "title": "Configuración del negocio",

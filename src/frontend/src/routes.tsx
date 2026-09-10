@@ -22,6 +22,7 @@ import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FeatureFlagsPage from "./pages/FeatureFlagsPage";
+import PlatformGlobalFeatureFlagsPage from "./pages/PlatformGlobalFeatureFlagsPage";
 import SifenCertificatesPage from "./pages/SifenCertificatesPage";
 import PlatformDashboardPage from "./pages/PlatformDashboardPage";
 import PlatformTenantsPage from "./pages/PlatformTenantsPage";
@@ -70,6 +71,10 @@ export function AppRoutes() {
         <Route path="/platform" element={<PlatformDashboardPage />} />
         <Route path="/platform/tenants" element={<PlatformTenantsPage />} />
         <Route path="/platform/tiers" element={<PlatformTiersPage />} />
+        <Route
+          path="/platform/global-feature-flags"
+          element={<PlatformGlobalFeatureFlagsPage />}
+        />
         <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
         <Route path="/platform/import" element={<PlatformImportPage />} />
       </Route>

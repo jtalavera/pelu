@@ -117,23 +117,6 @@ export default function FeatureFlagsPage() {
     }
   }
 
-  async function setGlobalEnabled(flagKey: string, enabled: boolean, description: string | null) {
-    if (selectedTenantId == null) return;
-    setActionError(null);
-    setBusyKey(flagKey);
-    try {
-      await femmePutJson(`/api/admin/feature-flags/${encodeURIComponent(flagKey)}`, {
-        enabled,
-        description: description ?? undefined,
-      });
-      await load();
-    } catch (e) {
-      setActionError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
-    } finally {
-      setBusyKey(null);
-    }
-  }
-
   async function setTenantOverride(flagKey: string, enabled: boolean) {
     if (selectedTenantId == null) return;
     setActionError(null);
@@ -280,21 +263,20 @@ export default function FeatureFlagsPage() {
                   <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
                     {t("femme.featureFlags.globalDefault")}
                   </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Switch
-                      checked={row.globalEnabled}
-                      disabled={busy}
-                      onChange={() =>
-                        void setGlobalEnabled(row.flagKey, !row.globalEnabled, row.description)
-                      }
-                      id={`ff-global-${row.flagKey}`}
-                      aria-label={t("femme.featureFlags.globalSwitchAria", { key: row.flagKey })}
-                    />
+                  {/* Read-only here — the global default is edited on its own page (Funcionalidades
+                      Globales), same pattern as the tier value being edited on the Tiers page. */}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span className="text-sm text-[var(--color-ink-2)]">
                       {row.globalEnabled
                         ? t("femme.featureFlags.stateOn")
                         : t("femme.featureFlags.stateOff")}
                     </span>
+                    <Link
+                      to="/platform/global-feature-flags"
+                      className="text-xs font-medium text-[var(--color-rose)] underline-offset-4 hover:underline"
+                    >
+                      {t("femme.featureFlags.globalEditLink")}
+                    </Link>
                   </div>
                 </div>
                 <div>
