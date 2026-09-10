@@ -466,6 +466,7 @@
     "sifenCertificates": {
       "title": "SIFEN certificates",
       "forbidden": "Only the business administrator can manage SIFEN certificates.",
+      "featureDisabled": "Electronic invoicing (SIFEN) is not enabled for your business.",
       "loading": "Loading…",
       "loadError": "Could not load certificates.",
       "errorTitle": "Error",

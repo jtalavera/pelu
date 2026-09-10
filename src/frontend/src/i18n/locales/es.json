@@ -466,6 +466,7 @@
     "sifenCertificates": {
       "title": "Certificados SIFEN",
       "forbidden": "Solo el administrador del negocio puede gestionar los certificados de SIFEN.",
+      "featureDisabled": "La facturación electrónica (SIFEN) no está habilitada para tu negocio.",
       "loading": "Cargando…",
       "loadError": "No se pudieron cargar los certificados.",
       "errorTitle": "Error",

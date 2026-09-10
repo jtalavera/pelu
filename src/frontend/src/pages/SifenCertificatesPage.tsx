@@ -6,6 +6,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { useDateLocale } from "../i18n/dateLocale";
 import { useMe } from "../hooks/useMe";
+import { useFeatureFlagsState } from "../hooks/useFeatureFlags";
 
 type SifenCertificateStatus = "VALID" | "EXPIRED" | "NOT_YET_VALID";
 
@@ -200,6 +201,8 @@ export default function SifenCertificatesPage() {
   const dateLocale = useDateLocale();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isTenantAdmin = me?.role === "ADMIN";
+  const { flags, loading: flagsLoading } = useFeatureFlagsState();
+  const sifenEnabled = flags["SIFEN_ELECTRONIC_INVOICING"] ?? false;
 
   const [activeTab, setActiveTab] = useState<SifenSettingsTab>("certificate");
 
@@ -495,7 +498,7 @@ export default function SifenCertificatesPage() {
     );
   }
 
-  if (loading) {
+  if (loading || flagsLoading) {
     return (
       <div
         style={{
@@ -508,6 +511,19 @@ export default function SifenCertificatesPage() {
       >
         <Spinner size="lg" />
         <Text>{t("femme.sifenCertificates.loading")}</Text>
+      </div>
+    );
+  }
+
+  if (!sifenEnabled) {
+    return (
+      <div>
+        <Heading as="h2" className="text-[var(--color-ink)]">
+          {t("femme.sifenCertificates.title")}
+        </Heading>
+        <p className="mt-2 text-sm text-[var(--color-ink-2)]" role="alert">
+          {t("femme.sifenCertificates.featureDisabled")}
+        </p>
       </div>
     );
   }
