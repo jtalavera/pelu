@@ -200,3 +200,5 @@ APP_FEMME_PLATFORM_ADMIN_EMAIL=<email> APP_FEMME_PLATFORM_ADMIN_PASSWORD=<passwo
 ```
 
 Do not set `FEMME_KEYVAULT_ENABLED=false`, `APP_FEMME_JWT_SECRET`, or any `SPRING_DATASOURCE_*` override — leaving those unset is what keeps Key Vault real and the database local. Caveat: this hits real shared dev resources — ACS actually sends email, and the Service Bus queue is the same one the deployed dev backend consumes from.
+
+**Shortcut script**: `src/backend/run-local-azure-dev.sh` sets `FEMME_KEYVAULT_URI`, `FEMME_SERVICEBUS_NAMESPACE`, `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS`, and `APPLICATIONINSIGHTS_CONNECTION_STRING`, then execs `./gradlew bootRun --no-daemon`. It embeds a live ACS connection string, so it's gitignored — never commit it. Still requires `docker compose up -d` and `az login` first. It does not set `APP_FEMME_PLATFORM_ADMIN_EMAIL`/`APP_FEMME_PLATFORM_ADMIN_PASSWORD` — export those separately if you need platform-admin login.
