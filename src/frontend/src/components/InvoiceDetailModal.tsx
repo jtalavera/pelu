@@ -23,7 +23,9 @@ import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import {
   downloadSifenKude,
   fetchSifenEnvironment,
+  fetchSifenKudeBlob,
   sendSifenKudeByEmail,
+  triggerBrowserDownload,
 } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -31,7 +33,7 @@ import { FieldValidationError } from "./FieldValidationError";
 import { InvoiceCorrectionForm } from "./InvoiceCorrectionForm";
 import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
-import { formatAmountDecimal } from "../lib/formatMoney";
+import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 
 export type InvoiceLine = {
@@ -249,6 +251,10 @@ export function InvoiceDetailModal({
   const [kudeEmailSending, setKudeEmailSending] = useState(false);
   const [kudeEmailError, setKudeEmailError] = useState<string | null>(null);
   const [kudeEmailSuccess, setKudeEmailSuccess] = useState(false);
+  // Issue #215: "Enviar por WhatsApp" — shares the already-downloaded KuDE via the Web Share API
+  // when the browser supports sharing files, or falls back to a prefilled wa.me link otherwise.
+  const [kudeWhatsappSending, setKudeWhatsappSending] = useState(false);
+  const [kudeWhatsappError, setKudeWhatsappError] = useState<string | null>(null);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
@@ -388,6 +394,62 @@ export function InvoiceDetailModal({
       setKudeEmailError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setKudeEmailSending(false);
+    }
+  }
+
+  /**
+   * Issue #215: "Enviar por WhatsApp". Downloads the KuDE PDF (same fetch the email/download flow
+   * already uses) and either:
+   *  - shares it via the OS share sheet (Web Share API, `navigator.share({ files })`) when the
+   *    browser supports sharing files — WhatsApp shows up there as one of the targets; or
+   *  - falls back to opening a `wa.me` link with a prefilled text message, inviting the user to
+   *    manually attach the file that was just downloaded (desktop browsers, or any browser without
+   *    file-sharing support).
+   * A `wa.me` link alone can never carry the PDF: `GET /sifen/kude` requires Bearer auth, so the
+   * end client can't fetch it directly from a link — the file always has to move through this
+   * browser first.
+   */
+  async function handleSendKudeWhatsapp() {
+    if (!invoice) return;
+    setKudeWhatsappError(null);
+    setKudeWhatsappSending(true);
+    try {
+      const { blob, filename } = await fetchSifenKudeBlob(invoiceId);
+      const message = t("femme.billing.history.detail.sifen.kudeWhatsappMessage", {
+        client: invoice.clientDisplayName || "",
+        number: invoice.invoiceNumberFormatted,
+        amount: formatGuaraniesGs(invoice.total),
+      });
+
+      // Feature-detect at runtime — the DOM types declare `canShare`/`share` unconditionally, but
+      // most desktop browsers (and Playwright's headless Chromium) don't actually implement them.
+      const hasShareApi =
+        typeof navigator.canShare === "function" && typeof navigator.share === "function";
+      let file: File | null = null;
+      try {
+        file = new File([blob], filename, { type: blob.type || "application/pdf" });
+      } catch {
+        file = null;
+      }
+      const canShareFile = !!(file && hasShareApi && navigator.canShare({ files: [file] }));
+
+      if (canShareFile && file) {
+        await navigator.share({ files: [file], text: message });
+      } else {
+        // Desktop / unsupported browsers: download the PDF locally first — the user attaches it
+        // manually in WhatsApp — then open a prefilled wa.me chat.
+        triggerBrowserDownload(blob, filename);
+        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      // Web Share API throws AbortError when the user simply dismisses the OS share sheet — that's
+      // not a failure worth surfacing.
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      setKudeWhatsappError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setKudeWhatsappSending(false);
     }
   }
 
@@ -1124,6 +1186,20 @@ export function InvoiceDetailModal({
                                 ? t("femme.billing.history.detail.sifen.kudeEmailSending")
                                 : t("femme.billing.history.detail.sifen.kudeEmailButton")}
                             </Button>
+                            {/* Issue #215: "Enviar por WhatsApp" — next to the email send button. Plain
+                                type="button" so it never submits the email form above. */}
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              disabled={kudeWhatsappSending}
+                              data-testid="sifen-kude-send-whatsapp-button"
+                              onClick={() => void handleSendKudeWhatsapp()}
+                            >
+                              {kudeWhatsappSending
+                                ? t("femme.billing.history.detail.sifen.kudeWhatsappSending")
+                                : t("femme.billing.history.detail.sifen.kudeWhatsappButton")}
+                            </Button>
                           </form>
                           {kudeEmailError && (
                             <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
@@ -1137,6 +1213,15 @@ export function InvoiceDetailModal({
                               data-testid="sifen-kude-email-success"
                             >
                               {t("femme.billing.history.detail.sifen.kudeEmailSuccess")}
+                            </Alert>
+                          )}
+                          {kudeWhatsappError && (
+                            <Alert
+                              variant="destructive"
+                              title={t("femme.billing.errorTitle")}
+                              data-testid="sifen-kude-whatsapp-error"
+                            >
+                              {kudeWhatsappError}
                             </Alert>
                           )}
                         </div>

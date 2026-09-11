@@ -328,6 +328,101 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(page.getByTestId("sifen-kude-email-success")).toBeVisible({ timeout: 15_000 });
   });
 
+  test("Issue #215 · el botón «Enviar por WhatsApp» aparece junto al de email y usa el fallback wa.me sin Web Share API", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU08whatsapp ${Date.now()}`);
+
+    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 45000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 45000 }],
+    });
+
+    const prep = await request.post(
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    // NOTE (Issue #215 AC): the real Web Share API branch — `navigator.share({ files })` handing
+    // the KuDE straight to an OS share sheet where WhatsApp appears as a target — cannot be driven
+    // from Playwright: headless Chromium doesn't implement `navigator.share`/`canShare` for files,
+    // and there is no way to script the native share sheet from a browser-automation test even on
+    // real hardware. This test therefore only covers (a) the button's presence next to the email
+    // action and (b) the text-only `wa.me` fallback that fires when the Share API is unavailable
+    // — which is already headless Chromium's real behavior, no stubbing of navigator needed. We do
+    // stub `window.open` so the test asserts the exact `wa.me` URL/text instead of actually
+    // navigating to an external site.
+    await page.addInitScript(() => {
+      (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls = [];
+      window.open = ((url?: string | URL) => {
+        (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls.push(
+          String(url ?? ""),
+        );
+        return null;
+      }) as typeof window.open;
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
+
+    // Same solapa as the email action — the WhatsApp button sits right next to "Send" there.
+    await page.getByTestId("sifen-tab-email").click();
+    await expect(page.getByTestId("sifen-kude-send-email-button")).toBeVisible();
+    const whatsappButton = page.getByTestId("sifen-kude-send-whatsapp-button");
+    await expect(whatsappButton).toBeVisible();
+
+    // No Web Share API in headless Chromium → falls back to downloading the KuDE (same PDF the
+    // email/download flow already fetches) and opening a prefilled wa.me link.
+    const [download, kudeResponse] = await Promise.all([
+      page.waitForEvent("download"),
+      page.waitForResponse(
+        (r) => r.url().includes("/sifen/kude") && r.request().method() === "GET",
+      ),
+      whatsappButton.click(),
+    ]);
+    expect(kudeResponse.ok(), await kudeResponse.text()).toBeTruthy();
+    expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
+
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls.length,
+        ),
+      )
+      .toBeGreaterThan(0);
+
+    const openCalls = await page.evaluate(
+      () => (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls,
+    );
+    expect(openCalls[0]).toContain("https://wa.me/?text=");
+    const decodedMessage = decodeURIComponent(openCalls[0].split("text=")[1]);
+    expect(decodedMessage).toContain(client.fullName);
+    // Money-format convention: dot-separator, no decimals (e.g. "Gs. 45.000"), never "45,000.00".
+    expect(decodedMessage).toMatch(/Gs\.\s?45\.000\b/);
+  });
+
   test("Issue #167 · AC1 el campo de correo se precarga con el email del cliente si está cargado", async ({
     page,
     request,
