@@ -108,11 +108,27 @@ WhatsApp/SMS integration and no public unauthenticated booking flow).
 
 ### Phase 2 (real effort — new paid integration)
 
-6. **Recordatorio de turno por WhatsApp** — same idea as #4 but via a WhatsApp
-   Business API/Twilio-style integration, which is new infrastructure and a
-   per-message cost, not a reuse of existing plumbing. Despite WhatsApp being the
-   dominant channel for this market, email should ship first since it captures
-   most of the no-show-reduction benefit at near-zero incremental cost.
+6. **Recordatorio de turno por WhatsApp** — same idea as #4 but via WhatsApp,
+   which is new infrastructure and a per-message cost, not a reuse of existing
+   plumbing. Despite WhatsApp being the dominant channel for this market, email
+   should ship first since it captures most of the no-show-reduction benefit at
+   near-zero incremental cost.
+
+   **Integration decision (2026-09-11): go directly with Meta's WhatsApp Cloud
+   API (via Embedded Signup), not a BSP like Twilio.** Reasoning: a BSP's markup
+   compounds with volume and this market is price-sensitive; Meta's own
+   Embedded Signup now gives a self-serve onboarding path that used to be a BSP's
+   main advantage; and the team already built the SIFEN integration (certificates,
+   XML signing, government web services, correction/void flows), which is a
+   harder integration than a REST API + webhook against Meta's Graph API — so the
+   "BSP saves engineering effort" argument doesn't hold here. Accepted trade-off:
+   no BSP support escalation path if the WhatsApp Business Account gets flagged
+   or rate-limited — Meta's own support for small senders is hard to reach. This
+   risk is accepted rather than paid for upfront, and only reconsidered if it
+   actually causes a problem in production. Either path requires the same real
+   phone number to be registered to a WhatsApp Business Account (ideally a
+   Paraguay +595 number so clients recognize the sender) — the number rule is
+   BSP-independent.
 
 **Explicitly rejected for this backlog:** a public self-service booking page
 (clients booking their own turno without staff involvement). Considered during
