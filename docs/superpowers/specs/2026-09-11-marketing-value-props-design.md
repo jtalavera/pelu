@@ -82,10 +82,33 @@ WhatsApp/SMS integration and no public unauthenticated booking flow).
    no-show-reduction metric.
    *Message:* "Menos ausencias: tu cliente recibe un recordatorio automático antes
    de su turno."
+5. **Dashboard con gráficos** — the main dashboard today (`DashboardPage.tsx` /
+   `DashboardService`) shows plain numeric cards only; no chart library is
+   installed and no time-series queries exist yet. None of the following need a
+   new table — they're new aggregate queries over data already recorded:
+   - **Tendencia de facturación** (14/30 días) — line/area chart from `Invoice`,
+     grouping the sum that's already computed by day instead of by a single range.
+     The natural hero chart for the page.
+   - **Servicios más vendidos** — bar chart from `InvoiceLine` grouped by service.
+   - **Mezcla de medios de pago** — donut/bar from `InvoicePaymentAllocation` /
+     `PaymentMethod`.
+   - **Turnos por día de semana/hora** — bar chart or heatmap from
+     `Appointment.startAt`, useful for staffing decisions.
+   - **Propinas por profesional** — bar chart reusing the existing Propinas report
+     data; reinforces pillar 5 (transparencia en propinas).
+
+   Needs a charting library (none installed today — `recharts` is the practical
+   choice for a React frontend) plus the new grouped queries above. Real but
+   bounded effort: existing entities, no new integrations, no new data model.
+   *Message:* "Un vistazo y ya sabés cómo va tu semana: cuánto facturaste, qué se
+   vendió más, cómo te pagan tus clientes."
+   *Why it matters beyond the dashboard itself:* a good-looking dashboard is also
+   a sales-demo asset — it's what a prospect sees in the first seconds of a demo,
+   and it visually signals "sistema real" rather than "otra planilla".
 
 ### Phase 2 (real effort — new paid integration)
 
-5. **Recordatorio de turno por WhatsApp** — same idea as #4 but via a WhatsApp
+6. **Recordatorio de turno por WhatsApp** — same idea as #4 but via a WhatsApp
    Business API/Twilio-style integration, which is new infrastructure and a
    per-message cost, not a reuse of existing plumbing. Despite WhatsApp being the
    dominant channel for this market, email should ship first since it captures
