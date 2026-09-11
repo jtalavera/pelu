@@ -1,5 +1,7 @@
 package com.cursorpoc.backend.config;
 
+import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.CorrelationIdFilter;
 import com.cursorpoc.backend.security.JwtAuthenticationFilter;
 import com.cursorpoc.backend.security.JwtService;
@@ -33,8 +35,11 @@ public class SecurityConfig {
   }
 
   @Bean
-  public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
-    return new JwtAuthenticationFilter(jwtService);
+  public JwtAuthenticationFilter jwtAuthenticationFilter(
+      JwtService jwtService,
+      TenantRepository tenantRepository,
+      AppUserRepository appUserRepository) {
+    return new JwtAuthenticationFilter(jwtService, tenantRepository, appUserRepository);
   }
 
   /** RT-21 (Hardening_SIFEN.md): see the filter's own javadoc for why it runs after JWT auth. */

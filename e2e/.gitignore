@@ -6,3 +6,4 @@ node_modules/
 /evidence/*
 !/evidence/README.md
 !/evidence/ACCEPTANCE_MATRIX.md
+.mt-world.json

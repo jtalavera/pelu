@@ -13,8 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * RT-19 (Hardening_SIFEN.md): tracks whether a tenant has completed SIFEN homologación, so a {@code
- * SYSTEM_ADMIN} turning on {@code SIFEN_ELECTRONIC_INVOICING} in production sees whether that
+ * RT-19 (Hardening_SIFEN.md): tracks whether a tenant has completed SIFEN homologación, so a
+ * Platform Admin turning on {@code SIFEN_ELECTRONIC_INVOICING} in production sees whether that
  * tenant was ever cleared — informative, not a hard gate (see {@link SifenHomologationStatus}
  * javadoc).
  */

@@ -15,6 +15,10 @@ test.describe("HU-11 · Buscar cliente existente", () => {
   }) => {
     const token = await loginAsDemoApi(request);
     const unique = `ZzE2E${Date.now()}`;
+    // Client names are stored uppercased by the backend (issue-155) regardless of
+    // the case they're submitted in.
+    const alphaName = `${unique} Alpha`.toUpperCase();
+    const betaName = `${unique} Beta`.toUpperCase();
     await seedClient(request, token, `${unique} Alpha`);
     await seedClient(request, token, `${unique} Beta`);
 
@@ -22,11 +26,11 @@ test.describe("HU-11 · Buscar cliente existente", () => {
     await page.goto("/app/clients");
     const search = page.getByPlaceholder("Search by name, phone, or RUC…").first();
     await search.fill(unique.slice(0, 2));
-    await expect(page.getByText(`${unique} Alpha`, { exact: true })).toBeVisible();
-    await expect(page.getByText(`${unique} Beta`, { exact: true })).toBeVisible();
+    await expect(page.getByText(alphaName, { exact: true })).toBeVisible();
+    await expect(page.getByText(betaName, { exact: true })).toBeVisible();
     await search.fill(`${unique} Alpha`);
-    await expect(page.getByText(`${unique} Alpha`, { exact: true })).toBeVisible();
-    await expect(page.getByText(`${unique} Beta`, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(alphaName, { exact: true })).toBeVisible();
+    await expect(page.getByText(betaName, { exact: true })).toHaveCount(0);
   });
 
   test("HU-11 · 3 resultados muestran teléfono y RUC cuando existen", async ({

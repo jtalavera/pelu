@@ -46,7 +46,9 @@ export function FeatureFlagProvider({ children }: ProviderProps) {
     setLoading(true);
     setError(null);
     try {
-      // Backend resolves effective tenant (SYSTEM_ADMIN sees the preview tenant in app.femme.system-admin.tenant-id).
+      // Resolved for the current tenant-scoped principal's own tenant. PLATFORM_ADMIN never mounts
+      // this provider (PlatformShell deliberately doesn't reuse AppShell) — platform-wide/per-tenant
+      // feature-flag administration lives at /platform/feature-flags instead (HU-36).
       const res = await femmeJson<{ flags: Record<string, boolean> }>("/api/feature-flags", {
         json: false,
       });

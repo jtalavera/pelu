@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 
 /**
  * RT-19 (Hardening_SIFEN.md): a tenant's SIFEN homologación state, one row per tenant, created only
- * once a {@code SYSTEM_ADMIN} explicitly records it — a missing row means {@code PENDING} with no
+ * once a Platform Admin explicitly records it — a missing row means {@code PENDING} with no
  * recorded marker (see {@code SifenHomologationStatusService#getStatus}), the same "absence is the
  * safe default" convention {@link TenantFeatureFlag} uses for unset overrides.
  */

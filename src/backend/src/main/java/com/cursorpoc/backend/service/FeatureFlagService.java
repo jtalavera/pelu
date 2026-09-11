@@ -2,12 +2,16 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.FeatureFlag;
+import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TenantFeatureFlag;
 import com.cursorpoc.backend.domain.TenantFeatureFlagChange;
+import com.cursorpoc.backend.domain.Tier;
+import com.cursorpoc.backend.domain.TierFeatureFlag;
 import com.cursorpoc.backend.repository.FeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagChangeRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TierFeatureFlagRepository;
 import com.cursorpoc.backend.web.dto.FeatureFlagResponse;
 import com.cursorpoc.backend.web.dto.FeatureGlobalUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantFeatureFlagChangeResponse;
@@ -24,6 +28,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * HU-47 (Épica D — Tiers y Feature Flags): resolves a tenant's effective feature-flag value as the
+ * <strong>conjunction (AND)</strong> of the 3 levels defined by the PRD ("Resolución de feature
+ * flags"): global default AND the tenant's assigned tier's value (HU-46's {@link TierFeatureFlag})
+ * AND the tenant's own value ({@link TenantFeatureFlag}). A flag is effective only when every
+ * applicable level is ON; an OFF at any level forces the effective value OFF. A missing row at a
+ * level means "inherit" (ON) — each level can only <em>restrict</em> downward. A tenant without a
+ * tier (defensive: {@code tenants.tier_id} is NOT NULL since V54) contributes ON for the tier term.
+ */
 @Service
 public class FeatureFlagService {
 
@@ -33,6 +46,7 @@ public class FeatureFlagService {
   private final TenantFeatureFlagRepository tenantFeatureFlagRepository;
   private final TenantFeatureFlagChangeRepository tenantFeatureFlagChangeRepository;
   private final TenantRepository tenantRepository;
+  private final TierFeatureFlagRepository tierFeatureFlagRepository;
   private final FemmeTimeProperties timeProperties;
 
   public FeatureFlagService(
@@ -40,37 +54,66 @@ public class FeatureFlagService {
       TenantFeatureFlagRepository tenantFeatureFlagRepository,
       TenantFeatureFlagChangeRepository tenantFeatureFlagChangeRepository,
       TenantRepository tenantRepository,
+      TierFeatureFlagRepository tierFeatureFlagRepository,
       FemmeTimeProperties timeProperties) {
     this.featureFlagRepository = featureFlagRepository;
     this.tenantFeatureFlagRepository = tenantFeatureFlagRepository;
     this.tenantFeatureFlagChangeRepository = tenantFeatureFlagChangeRepository;
     this.tenantRepository = tenantRepository;
+    this.tierFeatureFlagRepository = tierFeatureFlagRepository;
     this.timeProperties = timeProperties;
   }
 
   @Transactional(readOnly = true)
   public boolean isEnabled(String flagKey, long tenantId) {
     requireValidFlagKey(flagKey);
-    Optional<TenantFeatureFlag> override =
-        tenantFeatureFlagRepository.findByTenantIdAndFlagKey(tenantId, flagKey);
-    if (override.isPresent()) {
-      return override.get().isEnabled();
-    }
-    return featureFlagRepository.findByFlagKey(flagKey).map(FeatureFlag::isEnabled).orElse(false);
+    boolean globalEnabled =
+        featureFlagRepository.findByFlagKey(flagKey).map(FeatureFlag::isEnabled).orElse(false);
+    boolean tierValue =
+        findTierFlag(tenantId, flagKey).map(TierFeatureFlag::isEnabled).orElse(true);
+    boolean tenantValue =
+        tenantFeatureFlagRepository
+            .findByTenantIdAndFlagKey(tenantId, flagKey)
+            .map(TenantFeatureFlag::isEnabled)
+            .orElse(true);
+    return globalEnabled && tierValue && tenantValue;
   }
 
   @Transactional(readOnly = true)
   public Map<String, Boolean> resolveAll(long tenantId) {
     List<FeatureFlag> globals = featureFlagRepository.findAllByOrderByFlagKeyAsc();
+    Long tierId = tenantTierId(tenantId);
     Map<String, Boolean> out = new LinkedHashMap<>();
     for (FeatureFlag g : globals) {
       String key = g.getFlagKey();
-      Optional<TenantFeatureFlag> override =
-          tenantFeatureFlagRepository.findByTenantIdAndFlagKey(tenantId, key);
-      boolean value = override.map(TenantFeatureFlag::isEnabled).orElseGet(g::isEnabled);
-      out.put(key, value);
+      boolean tierValue =
+          tierId != null
+              ? tierFeatureFlagRepository
+                  .findByTierIdAndFlagKey(tierId, key)
+                  .map(TierFeatureFlag::isEnabled)
+                  .orElse(true)
+              : true;
+      boolean tenantValue =
+          tenantFeatureFlagRepository
+              .findByTenantIdAndFlagKey(tenantId, key)
+              .map(TenantFeatureFlag::isEnabled)
+              .orElse(true);
+      out.put(key, g.isEnabled() && tierValue && tenantValue);
     }
     return out;
+  }
+
+  /** HU-47: the tenant's assigned tier's id, or null when it has none. */
+  private Long tenantTierId(long tenantId) {
+    return tenantRepository.findById(tenantId).map(Tenant::getTier).map(Tier::getId).orElse(null);
+  }
+
+  private Optional<TierFeatureFlag> findTierFlag(long tenantId, String flagKey) {
+    Long tierId = tenantTierId(tenantId);
+    if (tierId == null) {
+      return Optional.empty();
+    }
+    return tierFeatureFlagRepository.findByTierIdAndFlagKey(tierId, flagKey);
   }
 
   @Transactional(readOnly = true)
@@ -95,26 +138,44 @@ public class FeatureFlagService {
     return new FeatureFlagResponse(row.getFlagKey(), row.isEnabled(), row.getDescription());
   }
 
+  /**
+   * HU-47 AC-4: every global flag for this tenant, alphabetical, showing the global default, the
+   * tenant's tier value (if the tier defines it), the tenant's own value, and the resolved
+   * effective value ({@code global AND tier AND tenant}). The caller derives which level(s) turned
+   * a flag off from the individual booleans.
+   */
   @Transactional(readOnly = true)
   public List<TenantFeatureFlagRowResponse> listTenantView(long tenantId) {
     requireTenant(tenantId);
+    Long tierId = tenantTierId(tenantId);
     List<FeatureFlag> globals = featureFlagRepository.findAllByOrderByFlagKeyAsc();
     return globals.stream()
         .map(
             g -> {
+              String key = g.getFlagKey();
               Optional<TenantFeatureFlag> override =
-                  tenantFeatureFlagRepository.findByTenantIdAndFlagKey(tenantId, g.getFlagKey());
+                  tenantFeatureFlagRepository.findByTenantIdAndFlagKey(tenantId, key);
+              Optional<TierFeatureFlag> tierFlag =
+                  tierId != null
+                      ? tierFeatureFlagRepository.findByTierIdAndFlagKey(tierId, key)
+                      : Optional.empty();
+              boolean tierValue = tierFlag.map(TierFeatureFlag::isEnabled).orElse(true);
+              boolean tenantValue = override.map(TenantFeatureFlag::isEnabled).orElse(true);
+              boolean effectiveEnabled = g.isEnabled() && tierValue && tenantValue;
               TenantFeatureFlagChangeResponse lastChange =
                   tenantFeatureFlagChangeRepository
-                      .findByTenantIdAndFlagKey(tenantId, g.getFlagKey())
+                      .findByTenantIdAndFlagKey(tenantId, key)
                       .map(this::toChangeResponse)
                       .orElse(null);
               return new TenantFeatureFlagRowResponse(
-                  g.getFlagKey(),
+                  key,
                   g.getDescription(),
                   g.isEnabled(),
+                  tierFlag.isPresent(),
+                  tierFlag.map(TierFeatureFlag::isEnabled).orElse(null),
                   override.isPresent(),
                   override.map(TenantFeatureFlag::isEnabled).orElse(null),
+                  effectiveEnabled,
                   lastChange);
             })
         .toList();

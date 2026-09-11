@@ -5,7 +5,10 @@ export type SwitchProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 
 export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
   ({ className, disabled, ...props }, ref) => (
-    <span
+    // A <label> (not <span>) so a click anywhere on the control toggles it — the real <input> is
+    // visually hidden (sr-only) and the track/thumb are pointer-events-none, so without the label
+    // wrapper a mouse click has nothing to hit.
+    <label
       className={cn(
         "inline-flex cursor-pointer items-center",
         disabled && "cursor-not-allowed opacity-50",
@@ -37,7 +40,7 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
           aria-hidden
         />
       </span>
-    </span>
+    </label>
   ),
 );
 

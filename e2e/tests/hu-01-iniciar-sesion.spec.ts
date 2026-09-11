@@ -15,7 +15,7 @@ test.describe("HU-01 · Iniciar sesión", () => {
     await page.getByLabel("Email").fill(DEMO_EMAIL);
     await page.getByLabel("Password").fill("wrong-password");
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByText("Invalid email or password.")).toBeVisible();
+    await expect(page.getByText("Email or password is incorrect.")).toBeVisible();
   });
 
   test("login exitoso redirige al panel", async ({ page }) => {
@@ -38,7 +38,7 @@ test.describe("HU-01 · Iniciar sesión", () => {
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(
       page.getByText(
-        "If an account exists, check the server logs for the reset link (development).",
+        "If an account with that email exists, we've sent a link to reset your password. Check your inbox.",
         { exact: true },
       ),
     ).toBeVisible();

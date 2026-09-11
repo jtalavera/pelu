@@ -1,12 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router-dom";
 import { useMe } from "../../hooks/useMe";
+import { useFeatureFlag } from "../../hooks/useFeatureFlags";
 
 export default function SettingsLayout() {
   const { t } = useTranslation();
   const { me } = useMe();
-  const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
   const isTenantAdmin = me?.role === "ADMIN";
+  const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -63,12 +64,7 @@ export default function SettingsLayout() {
           <NavLink to="/app/settings/taxes" className={navClass}>
             {t("femme.settings.tabTaxes")}
           </NavLink>
-          {isSystemAdmin ? (
-            <NavLink to="/app/settings/feature-flags" className={navClass}>
-              {t("femme.settings.tabFeatureFlags")}
-            </NavLink>
-          ) : null}
-          {isTenantAdmin ? (
+          {isTenantAdmin && sifenEnabled ? (
             <NavLink to="/app/settings/sifen" className={navClass}>
               {t("femme.settings.tabSifen")}
             </NavLink>

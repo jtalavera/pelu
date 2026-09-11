@@ -3,6 +3,8 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.bootstrap.FemmeDataInitializer;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.TenantFeatureFlag;
+import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppUserTourStateRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
@@ -29,11 +31,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Backs the e2e/dev-only {@code POST /api/admin/seed/reset} endpoint (gated behind {@code
+ * femme.data-init.enabled}, disabled in production). HU-58: this tenant is no longer created by a
+ * hardcoded backend boot seed — the Playwright suite provisions it dynamically via the real
+ * Platform Admin tenant-creation API in {@code e2e/global-setup.ts}, and it becomes id=1 simply by
+ * being the first tenant created in each run's fresh, empty database.
+ */
 @Service
 public class SeedResetService {
 
   private static final Logger log = LoggerFactory.getLogger(SeedResetService.class);
   private static final long DEMO_TENANT_ID = 1L;
+  private static final String SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
@@ -45,6 +55,7 @@ public class SeedResetService {
   private final ProfessionalRepository professionalRepository;
   private final ProfessionalScheduleRepository professionalScheduleRepository;
   private final ProfessionalActivationTokenRepository professionalActivationTokenRepository;
+  private final AppUserActivationTokenRepository appUserActivationTokenRepository;
   private final ClientRepository clientRepository;
   private final AppointmentRepository appointmentRepository;
   private final InvoiceRepository invoiceRepository;
@@ -66,6 +77,7 @@ public class SeedResetService {
       ProfessionalRepository professionalRepository,
       ProfessionalScheduleRepository professionalScheduleRepository,
       ProfessionalActivationTokenRepository professionalActivationTokenRepository,
+      AppUserActivationTokenRepository appUserActivationTokenRepository,
       ClientRepository clientRepository,
       AppointmentRepository appointmentRepository,
       InvoiceRepository invoiceRepository,
@@ -85,6 +97,7 @@ public class SeedResetService {
     this.professionalRepository = professionalRepository;
     this.professionalScheduleRepository = professionalScheduleRepository;
     this.professionalActivationTokenRepository = professionalActivationTokenRepository;
+    this.appUserActivationTokenRepository = appUserActivationTokenRepository;
     this.clientRepository = clientRepository;
     this.appointmentRepository = appointmentRepository;
     this.invoiceRepository = invoiceRepository;
@@ -180,12 +193,34 @@ public class SeedResetService {
     long deletedTourState = appUserTourStateRepository.deleteByUser_Tenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_user_tour_state", deletedTourState);
 
+    // HU-41: must also run before deleting app_users — app_user_activation_tokens has a FK to
+    // app_users too (Platform-Admin-invited tenant ADMIN users).
+    long deletedAppUserActivationTokens =
+        appUserActivationTokenRepository.deleteByAppUser_Tenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} app_user_activation_tokens", deletedAppUserActivationTokens);
+
     long deletedUsers = appUserRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_users", deletedUsers);
 
+    // HU-58: this used to also reconcile the catalog/clients against static seed CSVs (via the
+    // now-removed DemoTenantCatalogSeedService) — that hardcoded a specific tenant's business data,
+    // which the PRD's "Sin seed hardcodeado" forbids. Reset now only restores login capability
+    // (the admin user), leaving the catalog empty; the e2e suite that needs a tenant WITH a
+    // catalog seeds it itself via the real API/Excel-import flows (see e2e/global-setup.ts and
+    // e2e/fixtures/api.ts's seedCategoryServiceProfessional/seedClient helpers).
     femmeDataInitializer.seedDemoTenantData(tenant);
-    femmeDataInitializer.seedCatalogFromCsv(tenant);
-    femmeDataInitializer.seedClientsFromCsv(tenant);
+
+    // Since V53 (conjunctive resolution) the global SIFEN_ELECTRONIC_INVOICING default is ON, so
+    // without a tenant-level OFF the demo tenant would route every invoice through the SIFEN
+    // pipeline. The delete above wiped the baseline that e2e/global-setup.ts sets on first
+    // provision — re-establish it so the demo tenant defaults to traditional invoicing after a
+    // reset (SIFEN specs still flip this to true via /api/admin/feature-flags/tenants/1/...).
+    TenantFeatureFlag sifenBaseline = new TenantFeatureFlag();
+    sifenBaseline.setTenantId(DEMO_TENANT_ID);
+    sifenBaseline.setFlagKey(SIFEN_FLAG_KEY);
+    sifenBaseline.setEnabled(false);
+    tenantFeatureFlagRepository.save(sifenBaseline);
+    log.info("Restored demo tenant {} baseline (SIFEN off)", DEMO_TENANT_ID);
 
     log.info("POST /api/admin/seed/reset tenantId={} — reset complete", DEMO_TENANT_ID);
   }

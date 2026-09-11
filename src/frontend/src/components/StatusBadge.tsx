@@ -11,7 +11,8 @@ export type BadgeStatus =
   | "INACTIVE"
   | "OPEN"
   | "CLOSED"
-  | "VOIDED";
+  | "VOIDED"
+  | "SUSPENDED";
 
 const BADGE_STYLE: Record<BadgeStatus, { bg: string; color: string }> = {
   IN_PROGRESS: { bg: "var(--color-rose-lt)",    color: "var(--color-rose-dk)"   },
@@ -25,6 +26,7 @@ const BADGE_STYLE: Record<BadgeStatus, { bg: string; color: string }> = {
   OPEN:        { bg: "var(--color-warning-lt)", color: "var(--color-warning)"   },
   CLOSED:      { bg: "var(--color-success-lt)", color: "var(--color-success)"   },
   VOIDED:      { bg: "var(--color-danger-lt)",  color: "var(--color-danger)"    },
+  SUSPENDED:   { bg: "var(--color-danger-lt)",  color: "var(--color-danger)"    },
 };
 
 export function StatusBadge({ status }: { status: BadgeStatus | string }) {

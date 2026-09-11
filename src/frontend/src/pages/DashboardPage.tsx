@@ -361,7 +361,7 @@ export default function DashboardPage() {
   const hour = now.getHours();
   const greetingKey =
     hour < 12 ? "greetingMorning" : hour < 19 ? "greetingAfternoon" : "greetingEvening";
-  const userName = me?.email.split("@")[0] ?? "";
+  const userName = me?.fullName?.trim() || (me?.email.split("@")[0] ?? "");
 
   const dateLabel = new Intl.DateTimeFormat(locale, {
     weekday: "long",

@@ -1,14 +1,18 @@
 package com.cursorpoc.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.MessageSource;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -83,8 +87,47 @@ class EmailServiceTest {
     assertThatThrownBy(
             () ->
                 service.sendActivationLink(
-                    "cliente@example.com", "https://x/activate", Locale.forLanguageTag("es-PY")))
+                    "cliente@example.com",
+                    "https://x/activate",
+                    "Acme Salon",
+                    Locale.forLanguageTag("es-PY")))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("EMAIL_SEND_FAILED");
+  }
+
+  /**
+   * Regression coverage for the invitation email always saying "Femme" regardless of which tenant
+   * the admin was invited into — {@code tenantName} must reach the {@code MessageSource} as the
+   * body's {@code {1}} argument.
+   */
+  @Test
+  void sendActivationLink_disabled_includesTenantNameInLoggedBody() {
+    MessageSource messageSource = mock(MessageSource.class);
+    when(messageSource.getMessage(eq("email.activation.subject"), any(), any(Locale.class)))
+        .thenReturn("Activate your Femme account");
+    when(messageSource.getMessage(eq("email.activation.body"), any(), any(Locale.class)))
+        .thenAnswer(
+            invocation -> {
+              Object[] args = invocation.getArgument(1);
+              return "You have been granted access to " + args[1] + " on Femme: " + args[0];
+            });
+    EmailService service = new EmailService(messageSource);
+    ReflectionTestUtils.setField(service, "enabled", false);
+    ReflectionTestUtils.setField(service, "connectionString", "");
+    ReflectionTestUtils.setField(service, "senderAddress", "no-reply@example.com");
+
+    assertThatCode(
+            () ->
+                service.sendActivationLink(
+                    "admin@acme.example",
+                    "https://x/activate",
+                    "Acme Salon",
+                    Locale.forLanguageTag("es-PY")))
+        .doesNotThrowAnyException();
+
+    ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
+    verify(messageSource)
+        .getMessage(eq("email.activation.body"), argsCaptor.capture(), any(Locale.class));
+    assertThat(argsCaptor.getValue()).containsExactly("https://x/activate", "Acme Salon");
   }
 }

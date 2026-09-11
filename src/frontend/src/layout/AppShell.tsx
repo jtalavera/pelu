@@ -18,6 +18,15 @@ function getInitials(email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
+// HU-41 follow-up: prefer the user's real name (invited ADMIN's full name, or a professional's
+// ficha name) for the avatar initials; fall back to the email-derived initials.
+function getInitialsFromName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return "?";
+}
+
 function SectionLabel({ label }: { label: string }) {
   return (
     <span
@@ -243,8 +252,13 @@ function AppShellInner() {
   }
 
   const email = me?.email ?? "";
-  const initials = email ? getInitials(email) : "?";
-  const displayName = email.split("@")[0];
+  const fullName = me?.fullName?.trim() ?? "";
+  const displayName = fullName || email.split("@")[0];
+  const initials = fullName
+    ? getInitialsFromName(fullName)
+    : email
+      ? getInitials(email)
+      : "?";
   const isProfessional = me?.role === "PROFESSIONAL";
   return (
     <div>
@@ -276,7 +290,7 @@ function AppShellInner() {
             letterSpacing: "-0.01em",
           }}
         >
-          {t("femme.appName")}
+          {me?.tenantName ?? t("femme.appName")}
         </span>
 
 

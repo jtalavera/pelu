@@ -1,5 +1,10 @@
 import { expect, type APIRequestContext } from "@playwright/test";
-import { DEMO_EMAIL, DEMO_PASSWORD } from "./auth";
+import {
+  DEMO_EMAIL,
+  DEMO_PASSWORD,
+  PLATFORM_ADMIN_EMAIL,
+  PLATFORM_ADMIN_PASSWORD,
+} from "./auth";
 
 /**
  * Backend origin for Playwright `request` calls.
@@ -29,27 +34,40 @@ export function authHeaders(token: string): Record<string, string> {
   };
 }
 
-const SYS_ADMIN_EMAIL = "root@pelu";
-const SYS_ADMIN_PASSWORD = ".The.Super@admin.1982";
-
-export async function loginSystemAdminApi(request: APIRequestContext): Promise<string> {
+// HU-34: this identity is bootstrapped by PlatformAdminBootstrap (HU-57) on every boot with zero
+// PLATFORM_ADMIN users, independent of femme.data-init.enabled — see
+// application-e2e.properties' app.femme.platform-admin.* for the credentials. Credentials live in ./auth
+// (PLATFORM_ADMIN_EMAIL/PASSWORD), shared with HU-35's browser-level login helper
+// (loginAsPlatformAdmin). HU-36 retired the legacy tenant-bound SYSTEM_ADMIN role (and the
+// loginSystemAdminApi helper that used to log in as it) — PLATFORM_ADMIN is now the only
+// platform-operator identity, including for feature-flag administration (see
+// setTenantFeatureFlag below).
+export async function loginPlatformAdminApi(request: APIRequestContext): Promise<string> {
   const res = await request.post(`${API_BASE}/api/auth/login`, {
-    data: { email: SYS_ADMIN_EMAIL, password: SYS_ADMIN_PASSWORD },
+    data: { email: PLATFORM_ADMIN_EMAIL, password: PLATFORM_ADMIN_PASSWORD },
   });
   expect(res.ok(), await res.text()).toBeTruthy();
   const json = (await res.json()) as { accessToken: string };
   return json.accessToken;
 }
 
+/** Decodes a JWT's payload segment (no signature verification) — for asserting on claims in tests. */
+export function decodeJwtPayload(token: string): Record<string, unknown> {
+  const payload = token.split(".")[1] ?? "";
+  const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+  const json = Buffer.from(normalized, "base64").toString("utf-8");
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
 /** Sets a tenant's override for a feature flag (e.g. SIFEN_ELECTRONIC_INVOICING) via the
- * system-admin endpoint — same write path as the toggle at /app/settings/feature-flags. */
+ * Platform Admin endpoint — same write path as the toggle at /platform/feature-flags. */
 export async function setTenantFeatureFlag(
   request: APIRequestContext,
   tenantId: number,
   flagKey: string,
   enabled: boolean,
 ): Promise<void> {
-  const token = await loginSystemAdminApi(request);
+  const token = await loginPlatformAdminApi(request);
   const res = await request.put(`${API_BASE}/api/admin/feature-flags/tenants/${tenantId}/${flagKey}`, {
     headers: authHeaders(token),
     data: { enabled },
@@ -297,7 +315,16 @@ export async function listFiscalStamps(
   return apiGetJson<FiscalStampDto[]>(request, token, "/api/fiscal-stamps");
 }
 
-/** Ensures an active fiscal stamp valid for today so invoice issuance does not fail with FISCAL_STAMP_NOT_VALID. */
+/**
+ * Ensures an active fiscal stamp valid for today AND with enough unused numbers left, so invoice
+ * issuance does not fail with FISCAL_STAMP_NOT_VALID or FISCAL_STAMP_RANGE_EXHAUSTED.
+ *
+ * The headroom check matters because the suite shares one backend: specs like HU-02b's "less than
+ * 10% of the range remains" alert deliberately drive the active stamp to near-exhaustion. Without
+ * it, this helper would treat that wrecked stamp as usable and hand the next spec a stamp that
+ * 409s (FISCAL_STAMP_RANGE_EXHAUSTED) — or 400s a number-voiding as EMISSION_OUT_OF_RANGE — after a
+ * handful of invoices.
+ */
 export async function ensureActiveFiscalStampForInvoices(
   request: APIRequestContext,
   token: string,
@@ -305,11 +332,15 @@ export async function ensureActiveFiscalStampForInvoices(
   const stamps = await listFiscalStamps(request, token);
   const today = new Date();
   const todayStr = isoDateLocal(today);
-  const isValidToday = (s: FiscalStampDto) => {
+  /** Unused numbers a stamp must still have left to be considered usable by this helper. */
+  const RANGE_HEADROOM = 1000;
+  const hasHeadroom = (s: FiscalStampDto) => s.rangeTo - (s.nextEmissionNumber ?? 0) > RANGE_HEADROOM;
+  const isUsable = (s: FiscalStampDto) => {
     if (!s.active) return false;
-    return s.validFrom <= todayStr && s.validUntil >= todayStr;
+    if (s.validFrom > todayStr || s.validUntil < todayStr) return false;
+    return hasHeadroom(s);
   };
-  if (stamps.some(isValidToday)) return;
+  if (stamps.some(isUsable)) return;
 
   for (const s of stamps) {
     await request.post(`${API_BASE}/api/fiscal-stamps/${s.id}/deactivate`, {
@@ -318,7 +349,12 @@ export async function ensureActiveFiscalStampForInvoices(
   }
   const nextYear = new Date(today);
   nextYear.setFullYear(nextYear.getFullYear() + 1);
-  const maxNext = Math.max(100, ...stamps.map((s) => s.nextEmissionNumber ?? 0));
+  // Only healthy stamps inform the starting number — a near-exhausted one (the reason we are
+  // rotating) would otherwise push the fresh stamp to the top of its own range too.
+  const maxNext = Math.max(
+    100,
+    ...stamps.filter(hasHeadroom).map((s) => s.nextEmissionNumber ?? 0),
+  );
   const created = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
     stampNumber: `7${Date.now().toString().slice(-7)}`,
     validFrom: todayStr,

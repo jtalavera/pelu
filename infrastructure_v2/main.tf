@@ -331,6 +331,20 @@ resource "azurerm_role_assignment" "backend_sb_receiver" {
   principal_id         = azurerm_container_app.backend.identity[0].principal_id
 }
 
+# Same group granted Key Vault access via deployer_kv_secrets_officer above — lets developers run
+# the backend locally against the real dev Service Bus queue instead of the in-process fallback.
+resource "azurerm_role_assignment" "deployer_sb_sender" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Sender"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_role_assignment" "deployer_sb_receiver" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Receiver"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
 resource "azurerm_monitor_diagnostic_setting" "service_bus" {
   name                       = "sb-diag"
   target_resource_id         = azurerm_servicebus_namespace.main.id

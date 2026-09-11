@@ -1,9 +1,7 @@
 package com.cursorpoc.backend.web;
 
-import com.cursorpoc.backend.config.FemmeSystemAdminProperties;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
-import com.cursorpoc.backend.security.TenantPathAccess;
 import com.cursorpoc.backend.service.FeatureFlagService;
 import com.cursorpoc.backend.service.SifenHomologationStatusService;
 import com.cursorpoc.backend.web.dto.FeatureFlagResponse;
@@ -34,15 +32,12 @@ public class FeatureFlagController {
   private static final Logger log = LoggerFactory.getLogger(FeatureFlagController.class);
 
   private final FeatureFlagService featureFlagService;
-  private final FemmeSystemAdminProperties systemAdminProperties;
   private final SifenHomologationStatusService sifenHomologationStatusService;
 
   public FeatureFlagController(
       FeatureFlagService featureFlagService,
-      FemmeSystemAdminProperties systemAdminProperties,
       SifenHomologationStatusService sifenHomologationStatusService) {
     this.featureFlagService = featureFlagService;
-    this.systemAdminProperties = systemAdminProperties;
     this.sifenHomologationStatusService = sifenHomologationStatusService;
   }
 
@@ -52,27 +47,29 @@ public class FeatureFlagController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    long effectiveTenantId =
-        principal.getRole() == UserRole.SYSTEM_ADMIN
-            ? systemAdminProperties.getTenantId()
-            : principal.getTenantId();
-    log.info(
-        "GET /api/feature-flags path=/api/feature-flags method=GET tenantId={} effectiveTenantId={}",
-        principal.getTenantId(),
-        effectiveTenantId);
-    var map = featureFlagService.resolveAll(effectiveTenantId);
-    log.info("GET /api/feature-flags tenantId={} status=200", principal.getTenantId());
+    long tenantId = principal.getTenantId();
+    log.info("GET /api/feature-flags path=/api/feature-flags method=GET tenantId={}", tenantId);
+    var map = featureFlagService.resolveAll(tenantId);
+    log.info("GET /api/feature-flags tenantId={} status=200", tenantId);
     return new FeatureFlagsResolvedResponse(map);
   }
+
+  // HU-36: the endpoints below are gated to PLATFORM_ADMIN only (requirePlatformAdmin) and are one
+  // of the explicit "platform routes" carved out of JwtAuthenticationFilter's tenant-optional
+  // allowlist alongside /api/platform/**, /api/auth/**, and /api/me — a PLATFORM_ADMIN's
+  // tenant-less
+  // token cannot authenticate on any other /api/admin/** path. Because the caller is guaranteed
+  // tenant-independent by that check, {tenantId} path segments below are the explicit, deliberate
+  // target of the action — never matched against TenantPathAccess (retired here per HU-36 AC-3: no
+  // bypass on tenant-scoped routes).
 
   @GetMapping("/api/admin/feature-flags")
   public List<FeatureFlagResponse> listGlobals(
       @AuthenticationPrincipal FemmeUserPrincipal principal) {
-    requireSystemAdmin(principal);
-    long tenantId = principal.getTenantId();
-    log.info("GET /api/admin/feature-flags method=GET tenantId={}", tenantId);
+    requirePlatformAdmin(principal);
+    log.info("GET /api/admin/feature-flags method=GET tenantId=null");
     List<FeatureFlagResponse> out = featureFlagService.listAllGlobals();
-    log.info("GET /api/admin/feature-flags tenantId={} status=200", tenantId);
+    log.info("GET /api/admin/feature-flags tenantId=null status=200");
     return out;
   }
 
@@ -81,19 +78,15 @@ public class FeatureFlagController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("flagKey") String flagKey,
       @Valid @RequestBody FeatureGlobalUpdateRequest request) {
-    requireSystemAdmin(principal);
-    long tenantId = principal.getTenantId();
-    log.info("PUT /api/admin/feature-flags/{} method=PUT tenantId={}", flagKey, tenantId);
+    requirePlatformAdmin(principal);
+    log.info("PUT /api/admin/feature-flags/{} method=PUT tenantId=null", flagKey);
     try {
       FeatureFlagResponse out = featureFlagService.updateGlobal(flagKey, request);
-      log.info("PUT /api/admin/feature-flags/{} tenantId={} status=200", flagKey, tenantId);
+      log.info("PUT /api/admin/feature-flags/{} tenantId=null status=200", flagKey);
       return out;
     } catch (ResponseStatusException ex) {
       log.error(
-          "PUT /api/admin/feature-flags/{} tenantId={} status={}",
-          flagKey,
-          tenantId,
-          ex.getStatusCode());
+          "PUT /api/admin/feature-flags/{} tenantId=null status={}", flagKey, ex.getStatusCode());
       throw ex;
     }
   }
@@ -102,17 +95,10 @@ public class FeatureFlagController {
   public List<TenantFeatureFlagRowResponse> listTenantView(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("tenantId") long tenantId) {
-    requireSystemAdmin(principal);
-    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
-    log.info(
-        "GET /api/admin/feature-flags/tenants/{} method=GET tenantId={}",
-        tenantId,
-        principal.getTenantId());
+    requirePlatformAdmin(principal);
+    log.info("GET /api/admin/feature-flags/tenants/{} method=GET tenantId={}", tenantId, tenantId);
     List<TenantFeatureFlagRowResponse> out = featureFlagService.listTenantView(tenantId);
-    log.info(
-        "GET /api/admin/feature-flags/tenants/{} tenantId={} status=200",
-        tenantId,
-        principal.getTenantId());
+    log.info("GET /api/admin/feature-flags/tenants/{} tenantId={} status=200", tenantId, tenantId);
     return out;
   }
 
@@ -122,13 +108,12 @@ public class FeatureFlagController {
       @PathVariable("tenantId") long tenantId,
       @PathVariable("flagKey") String flagKey,
       @Valid @RequestBody TenantFeatureFlagOverrideRequest request) {
-    requireSystemAdmin(principal);
-    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
+    requirePlatformAdmin(principal);
     log.info(
         "PUT /api/admin/feature-flags/tenants/{}/{} method=PUT tenantId={}",
         tenantId,
         flagKey,
-        principal.getTenantId());
+        tenantId);
     try {
       featureFlagService.upsertTenantOverride(
           tenantId, flagKey, request, principal.getUserId(), principal.getUsername());
@@ -136,14 +121,14 @@ public class FeatureFlagController {
           "PUT /api/admin/feature-flags/tenants/{}/{} tenantId={} status=204",
           tenantId,
           flagKey,
-          principal.getTenantId());
+          tenantId);
       return ResponseEntity.noContent().build();
     } catch (ResponseStatusException ex) {
       log.error(
           "PUT /api/admin/feature-flags/tenants/{}/{} tenantId={} status={}",
           tenantId,
           flagKey,
-          principal.getTenantId(),
+          tenantId,
           ex.getStatusCode());
       throw ex;
     }
@@ -154,13 +139,12 @@ public class FeatureFlagController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("tenantId") long tenantId,
       @PathVariable("flagKey") String flagKey) {
-    requireSystemAdmin(principal);
-    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
+    requirePlatformAdmin(principal);
     log.info(
         "DELETE /api/admin/feature-flags/tenants/{}/{} method=DELETE tenantId={}",
         tenantId,
         flagKey,
-        principal.getTenantId());
+        tenantId);
     try {
       featureFlagService.deleteTenantOverride(
           tenantId, flagKey, principal.getUserId(), principal.getUsername());
@@ -168,14 +152,14 @@ public class FeatureFlagController {
           "DELETE /api/admin/feature-flags/tenants/{}/{} tenantId={} status=204",
           tenantId,
           flagKey,
-          principal.getTenantId());
+          tenantId);
       return ResponseEntity.noContent().build();
     } catch (ResponseStatusException ex) {
       log.error(
           "DELETE /api/admin/feature-flags/tenants/{}/{} tenantId={} status={}",
           tenantId,
           flagKey,
-          principal.getTenantId(),
+          tenantId,
           ex.getStatusCode());
       throw ex;
     }
@@ -185,17 +169,16 @@ public class FeatureFlagController {
   public TenantSifenHomologationResponse getSifenHomologationStatus(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("tenantId") long tenantId) {
-    requireSystemAdmin(principal);
-    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
+    requirePlatformAdmin(principal);
     log.info(
         "GET /api/admin/feature-flags/tenants/{}/sifen-homologation method=GET tenantId={}",
         tenantId,
-        principal.getTenantId());
+        tenantId);
     TenantSifenHomologationResponse out = sifenHomologationStatusService.getStatus(tenantId);
     log.info(
         "GET /api/admin/feature-flags/tenants/{}/sifen-homologation tenantId={} status=200",
         tenantId,
-        principal.getTenantId());
+        tenantId);
     return out;
   }
 
@@ -204,12 +187,11 @@ public class FeatureFlagController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @PathVariable("tenantId") long tenantId,
       @Valid @RequestBody TenantSifenHomologationUpdateRequest request) {
-    requireSystemAdmin(principal);
-    TenantPathAccess.requirePathTenantMatchesJwt(principal, tenantId);
+    requirePlatformAdmin(principal);
     log.info(
         "PUT /api/admin/feature-flags/tenants/{}/sifen-homologation method=PUT tenantId={}",
         tenantId,
-        principal.getTenantId());
+        tenantId);
     try {
       TenantSifenHomologationResponse out =
           sifenHomologationStatusService.setStatus(
@@ -217,23 +199,23 @@ public class FeatureFlagController {
       log.info(
           "PUT /api/admin/feature-flags/tenants/{}/sifen-homologation tenantId={} status=200",
           tenantId,
-          principal.getTenantId());
+          tenantId);
       return out;
     } catch (ResponseStatusException ex) {
       log.error(
           "PUT /api/admin/feature-flags/tenants/{}/sifen-homologation tenantId={} status={}",
           tenantId,
-          principal.getTenantId(),
+          tenantId,
           ex.getStatusCode());
       throw ex;
     }
   }
 
-  private static void requireSystemAdmin(FemmeUserPrincipal principal) {
+  private static void requirePlatformAdmin(FemmeUserPrincipal principal) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    if (principal.getRole() != UserRole.SYSTEM_ADMIN) {
+    if (principal.getRole() != UserRole.PLATFORM_ADMIN) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
     }
   }

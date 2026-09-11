@@ -14,7 +14,7 @@ vi.mock("../api/femmeClient", () => ({
   femmePutJson: (...args: unknown[]) => femmePutJsonMock(...args),
 }));
 
-let meRole: "ADMIN" | "PROFESSIONAL" | "SYSTEM_ADMIN" = "ADMIN";
+let meRole: "ADMIN" | "PROFESSIONAL" = "ADMIN";
 vi.mock("../hooks/useMe", () => ({
   useMe: () => ({
     me: {
@@ -23,7 +23,6 @@ vi.mock("../hooks/useMe", () => ({
       email: "isabelzymanscki@gmail.com",
       role: meRole,
       professionalId: null,
-      previewTenantId: null,
     },
     loading: false,
   }),
