@@ -2,15 +2,15 @@ import { authHeaders } from "./authHeaders";
 import { apiBaseUrl } from "./baseUrl";
 
 /**
- * SIFEN HU-08 AC-16: fetches the KuDE PDF for an approved invoice, validates the HTTP response, and
- * triggers a browser file download on success. Same shape as {@code downloadInvoicePdf} — never
- * downloads a corrupt file, throws the raw error body on failure so callers can forward it to
+ * Issue #215: fetches the KuDE PDF bytes without triggering a download, so callers can reuse the
+ * same fetch for either a plain download (see {@link downloadSifenKude}) or a Web Share API /
+ * `wa.me` WhatsApp hand-off. Throws the raw error body on failure so callers can forward it to
  * translateApiError().
  */
-export async function downloadSifenKude(
+export async function fetchSifenKudeBlob(
   invoiceId: number,
   options: { sample?: boolean } = {},
-): Promise<void> {
+): Promise<{ blob: Blob; filename: string }> {
   // `sample=true` asks for the "production-style" preview KuDE — real razón social instead of the
   // test-environment legend, downloaded as MUESTRA-…pdf. Only accepted while SIFEN runs against the
   // test environment (see SifenKudeController).
@@ -22,14 +22,35 @@ export async function downloadSifenKude(
     throw new Error(await res.text());
   }
   const blob = await res.blob();
+  const filename =
+    filenameFromContentDisposition(res.headers.get("Content-Disposition")) ?? `kude-${invoiceId}.pdf`;
+  return { blob, filename };
+}
+
+/** Triggers a browser file download for an already-fetched blob. */
+export function triggerBrowserDownload(blob: Blob, filename: string): void {
   const blobUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = blobUrl;
-  a.download = filenameFromContentDisposition(res.headers.get("Content-Disposition")) ?? `kude-${invoiceId}.pdf`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(blobUrl);
+}
+
+/**
+ * SIFEN HU-08 AC-16: fetches the KuDE PDF for an approved invoice, validates the HTTP response, and
+ * triggers a browser file download on success. Same shape as {@code downloadInvoicePdf} — never
+ * downloads a corrupt file, throws the raw error body on failure so callers can forward it to
+ * translateApiError().
+ */
+export async function downloadSifenKude(
+  invoiceId: number,
+  options: { sample?: boolean } = {},
+): Promise<void> {
+  const { blob, filename } = await fetchSifenKudeBlob(invoiceId, options);
+  triggerBrowserDownload(blob, filename);
 }
 
 /** SIFEN HU-08 AC-17: emails the same KuDE to {@code email} (or the client's own email if blank). */
