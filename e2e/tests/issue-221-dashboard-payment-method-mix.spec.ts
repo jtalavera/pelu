@@ -147,6 +147,20 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
       .allTextContents();
     expect(legendTexts).toContain("Cash");
     expect(legendTexts).toContain("Transfer");
+
+    // Unlike the top-services bar chart (an always-visible Y-axis money label), a donut chart's
+    // per-slice amount is only shown on hover via the Tooltip — so the dot-thousands /
+    // no-decimals Gs. money format has to be asserted there instead. A real `.hover()` is
+    // unreliable here: Playwright's actionability check targets the center point of the
+    // sector's *bounding box*, which for an annular wedge (this chart's `innerRadius`) can fall
+    // inside the donut's hollow middle — off the actual filled path — for a large-enough slice.
+    // Dispatching the DOM event recharts listens for directly on the sector element sidesteps
+    // that geometry entirely (no hit-testing at a computed screen point).
+    const sector = chart.locator(".recharts-pie-sector").first();
+    await sector.dispatchEvent("mouseover");
+    const tooltipValue = chart.locator(".recharts-tooltip-item-value").first();
+    await expect(tooltipValue).toBeVisible({ timeout: 5_000 });
+    await expect(tooltipValue).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
