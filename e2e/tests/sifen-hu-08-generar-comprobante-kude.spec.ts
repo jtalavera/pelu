@@ -337,21 +337,26 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E HU08whatsapp ${Date.now()}`);
 
-    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
-      clientId: client.id,
-      clientDisplayName: client.fullName,
-      clientRucOverride: null,
-      clientIdentityDocumentOverride: null,
-      lines: [
-        {
-          serviceId: seed.serviceId,
-          description: seed.serviceFullName,
-          quantity: 1,
-          unitPrice: 45000,
-        },
-      ],
-      payments: [{ method: "CASH", amount: 45000 }],
-    });
+    const invoice = await apiPostJson<{ id: number; invoiceNumberFormatted: string }>(
+      request,
+      token,
+      "/api/invoices",
+      {
+        clientId: client.id,
+        clientDisplayName: client.fullName,
+        clientRucOverride: null,
+        clientIdentityDocumentOverride: null,
+        lines: [
+          {
+            serviceId: seed.serviceId,
+            description: seed.serviceFullName,
+            quantity: 1,
+            unitPrice: 45000,
+          },
+        ],
+        payments: [{ method: "CASH", amount: 45000 }],
+      },
+    );
 
     const prep = await request.post(
       `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
@@ -405,6 +410,10 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(kudeResponse.ok(), await kudeResponse.text()).toBeTruthy();
     expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
 
+    // The wa.me fallback also surfaces a success confirmation nudging the user to attach the
+    // PDF that was just downloaded (code review follow-up — mirrors the email flow's success Alert).
+    await expect(page.getByTestId("sifen-kude-whatsapp-success")).toBeVisible({ timeout: 15_000 });
+
     await expect
       .poll(() =>
         page.evaluate(
@@ -419,6 +428,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(openCalls[0]).toContain("https://wa.me/?text=");
     const decodedMessage = decodeURIComponent(openCalls[0].split("text=")[1]);
     expect(decodedMessage).toContain(client.fullName);
+    expect(decodedMessage).toContain(invoice.invoiceNumberFormatted);
     // Money-format convention: dot-separator, no decimals (e.g. "Gs. 45.000"), never "45,000.00".
     expect(decodedMessage).toMatch(/Gs\.\s?45\.000\b/);
   });
