@@ -54,6 +54,7 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
           message: "fallback",
         },
       ],
+      inactiveClients: [],
     });
   });
 
@@ -90,9 +91,65 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
       revenueWeek: { invoiced: "0", collected: "0" },
       clientsThisMonth: 1284,
       fiscalAlerts: [],
+      inactiveClients: [],
     });
     renderPage();
     expect(await screen.findByText(/^Gs\.[\s\u00a0]*890/)).toBeTruthy();
     expect(screen.getByText(/^1,284$/)).toBeTruthy();
+  });
+});
+
+describe("DashboardPage inactive clients widget (issue #216)", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    listAppointmentsMock.mockClear();
+    femmeJson.mockReset();
+  });
+
+  function baseDashboard(inactiveClients: unknown[]) {
+    return {
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients,
+    };
+  }
+
+  it("shows the empty state when there are no inactive clients", async () => {
+    femmeJson.mockResolvedValue(baseDashboard([]));
+    renderPage();
+    expect(await screen.findByText("No inactive clients right now")).toBeTruthy();
+  });
+
+  it("renders name, phone and days of inactivity for each inactive client, in server order", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        {
+          clientId: 1,
+          fullName: "Ana Long Gone",
+          phone: "0981000001",
+          daysSinceLastVisit: 200,
+          lastVisitAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          clientId: 2,
+          fullName: "Bruno Never Visited",
+          phone: "0981000002",
+          daysSinceLastVisit: null,
+          lastVisitAt: null,
+        },
+      ]),
+    );
+    renderPage();
+
+    const rows = await screen.findAllByTestId("dashboard-inactive-client-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain("Ana Long Gone");
+    expect(rows[0].textContent).toContain("0981000001");
+    expect(rows[0].textContent).toContain("200 days");
+    expect(rows[1].textContent).toContain("Bruno Never Visited");
+    expect(rows[1].textContent).toContain("Never visited");
   });
 });

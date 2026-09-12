@@ -430,7 +430,15 @@
       "noAppts": "Sin turnos hoy",
       "openAppointmentDetail": "Ver detalle del turno de {{client}} en el Calendario",
       "occupancyTitle": "Ocupación hoy",
-      "occupancyUnit": "turnos"
+      "occupancyUnit": "turnos",
+      "inactiveClientsTitle": "Clientes inactivos",
+      "inactiveClientsSubtitle": "Clientes activos sin turno completado en los últimos {{days}} días",
+      "inactiveClientsEmpty": "No hay clientes inactivos por el momento",
+      "inactiveClientsColClient": "Cliente",
+      "inactiveClientsColPhone": "Teléfono",
+      "inactiveClientsColInactivity": "Días de inactividad",
+      "inactiveClientsDaysValue": "{{days}} días",
+      "inactiveClientsNeverVisited": "Nunca visitó"
     },
     "status": {
       "PENDING": "Pendiente",

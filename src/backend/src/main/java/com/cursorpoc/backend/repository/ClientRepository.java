@@ -1,6 +1,8 @@
 package com.cursorpoc.backend.repository;
 
 import com.cursorpoc.backend.domain.Client;
+import com.cursorpoc.backend.domain.enums.AppointmentStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -46,4 +48,34 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
   Optional<Client> findByTenantIdAndRuc(@Param("tenantId") Long tenantId, @Param("ruc") String ruc);
 
   long deleteByTenant_Id(Long tenantId);
+
+  /**
+   * Issue #216: per active client, the most recent {@code COMPLETED} appointment's {@code startAt}
+   * (or {@code null} when the client never had one) — the raw data the "Panel de clientes
+   * inactivos" dashboard widget is built from. Filtering/sorting/limiting by days of inactivity
+   * happens in {@code DashboardService}, since that requires the tenant's timezone ("today") which
+   * isn't available to a JPQL query.
+   */
+  interface InactiveClientRow {
+    Long getClientId();
+
+    String getFullName();
+
+    String getPhone();
+
+    Instant getLastCompletedVisit();
+  }
+
+  @Query(
+      """
+      SELECT c.id AS clientId, c.fullName AS fullName, c.phone AS phone,
+             MAX(a.startAt) AS lastCompletedVisit
+      FROM Client c
+      LEFT JOIN Appointment a ON a.client = c AND a.status = :completedStatus
+      WHERE c.tenant.id = :tenantId AND c.active = true
+      GROUP BY c.id, c.fullName, c.phone
+      """)
+  List<InactiveClientRow> findActiveClientsWithLastCompletedVisit(
+      @Param("tenantId") Long tenantId,
+      @Param("completedStatus") AppointmentStatus completedStatus);
 }

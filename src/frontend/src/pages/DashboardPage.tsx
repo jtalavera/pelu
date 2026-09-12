@@ -32,7 +32,26 @@ type DashboardResponse = {
   /** Distinct registered clients with ≥1 completed-type appointment in the current calendar month (tenant TZ). */
   clientsThisMonth: number;
   fiscalAlerts: Array<{ severity: string; messageKey: string; message: string }>;
+  /**
+   * Issue #216 · "Panel de clientes inactivos" — active clients with no `COMPLETED` appointment in
+   * the last `INACTIVE_CLIENT_THRESHOLD_DAYS` days (or none ever), ordered by days of inactivity
+   * descending, capped server-side (see `DashboardService.INACTIVE_CLIENTS_LIMIT`).
+   * `daysSinceLastVisit`/`lastVisitAt` are both null when the client never had a completed visit.
+   */
+  inactiveClients: Array<{
+    clientId: number;
+    fullName: string;
+    phone: string | null;
+    daysSinceLastVisit: number | null;
+    lastVisitAt: string | null;
+  }>;
 };
+
+/**
+ * Mirrors the backend's `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — used only to render
+ * the widget's subtitle copy, never to filter/sort (that's all done server-side).
+ */
+const INACTIVE_CLIENT_THRESHOLD_DAYS = 60;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,6 +114,21 @@ const cardStyle: React.CSSProperties = {
   borderRadius: "var(--radius-xl)",
   border: "var(--border-default)",
   padding: 16,
+};
+
+const inactiveClientsThStyle: React.CSSProperties = {
+  textAlign: "left",
+  fontSize: 10,
+  fontWeight: 500,
+  color: "var(--color-ink-3)",
+  padding: "0 8px 8px 0",
+  borderBottom: "0.5px solid var(--color-stone)",
+};
+
+const inactiveClientsTdStyle: React.CSSProperties = {
+  padding: "8px 8px 8px 0",
+  color: "var(--color-ink)",
+  whiteSpace: "nowrap",
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -406,6 +440,7 @@ export default function DashboardPage() {
   }
 
   const a = data.appointmentsToday;
+  const inactiveClients = Array.isArray(data.inactiveClients) ? data.inactiveClients : [];
 
   return (
     <div>
@@ -987,6 +1022,74 @@ export default function DashboardPage() {
                 {t("femme.serviceRecords.dashboard.showMore")}
               </button>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── 6. INACTIVE CLIENTS ── */}
+      <div data-testid="dashboard-inactive-clients" style={{ ...cardStyle, marginTop: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+          {t("femme.dashboard.inactiveClientsTitle")}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2, marginBottom: 12 }}>
+          {t("femme.dashboard.inactiveClientsSubtitle", { days: INACTIVE_CLIENT_THRESHOLD_DAYS })}
+        </div>
+
+        {inactiveClients.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
+            {t("femme.dashboard.inactiveClientsEmpty")}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColClient")}
+                  </th>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColPhone")}
+                  </th>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColInactivity")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {inactiveClients.map((c) => {
+                  const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
+                  return (
+                    <tr
+                      key={c.clientId}
+                      data-testid="dashboard-inactive-client-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={goToClientDetail}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          goToClientDetail();
+                        }
+                      }}
+                      style={{
+                        cursor: "pointer",
+                        borderBottom: "0.5px solid var(--color-stone)",
+                      }}
+                    >
+                      <td style={inactiveClientsTdStyle}>{c.fullName}</td>
+                      <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
+                      <td style={inactiveClientsTdStyle}>
+                        {c.daysSinceLastVisit == null
+                          ? t("femme.dashboard.inactiveClientsNeverVisited")
+                          : t("femme.dashboard.inactiveClientsDaysValue", {
+                              days: c.daysSinceLastVisit,
+                            })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

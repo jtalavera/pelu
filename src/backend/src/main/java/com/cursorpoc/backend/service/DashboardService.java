@@ -5,6 +5,7 @@ import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
+import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.web.dto.DashboardResponse;
@@ -12,9 +13,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,8 +26,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DashboardService {
 
+  /**
+   * Issue #216 — "Panel de clientes inactivos": an active client whose most recent {@code
+   * COMPLETED} appointment is at least this many days in the past (or who never had one) is
+   * considered inactive. Kept as a single named constant rather than a literal repeated in the
+   * query/filter/sort/i18n copy.
+   */
+  public static final int INACTIVE_CLIENT_THRESHOLD_DAYS = 60;
+
+  /** Caps the dashboard widget so a large, long-neglected client base doesn't overload it. */
+  public static final int INACTIVE_CLIENTS_LIMIT = 20;
+
   private final FemmeTimeProperties timeProperties;
   private final AppointmentRepository appointmentRepository;
+  private final ClientRepository clientRepository;
   private final InvoiceRepository invoiceRepository;
   private final FiscalStampRepository fiscalStampRepository;
   private final BusinessProfileService businessProfileService;
@@ -32,12 +48,14 @@ public class DashboardService {
   public DashboardService(
       FemmeTimeProperties timeProperties,
       AppointmentRepository appointmentRepository,
+      ClientRepository clientRepository,
       InvoiceRepository invoiceRepository,
       FiscalStampRepository fiscalStampRepository,
       BusinessProfileService businessProfileService,
       SifenNumberVoidingService sifenNumberVoidingService) {
     this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
+    this.clientRepository = clientRepository;
     this.invoiceRepository = invoiceRepository;
     this.fiscalStampRepository = fiscalStampRepository;
     this.businessProfileService = businessProfileService;
@@ -137,12 +155,65 @@ public class DashboardService {
               }
             });
 
+    List<DashboardResponse.InactiveClient> inactiveClients =
+        buildInactiveClients(tenantId, zone, today);
+
     return new DashboardResponse(
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
         new DashboardResponse.RevenueSummary(invoicedDay, collectedDay),
         new DashboardResponse.RevenueSummary(invoicedWeek, collectedWeek),
         clientsThisMonth,
-        alerts);
+        alerts,
+        inactiveClients);
+  }
+
+  /**
+   * Issue #216: active clients whose last {@code COMPLETED} appointment is {@value
+   * #INACTIVE_CLIENT_THRESHOLD_DAYS}+ days old (or who never had one), ordered by days of
+   * inactivity descending (never-visited clients sort first), capped to {@value
+   * #INACTIVE_CLIENTS_LIMIT}.
+   */
+  private List<DashboardResponse.InactiveClient> buildInactiveClients(
+      long tenantId, ZoneId zone, LocalDate today) {
+    record Candidate(ClientRepository.InactiveClientRow row, Long daysSinceLastVisit) {}
+
+    List<Candidate> candidates = new ArrayList<>();
+    for (ClientRepository.InactiveClientRow row :
+        clientRepository.findActiveClientsWithLastCompletedVisit(
+            tenantId, AppointmentStatus.COMPLETED)) {
+      Instant lastVisit = row.getLastCompletedVisit();
+      if (lastVisit == null) {
+        candidates.add(new Candidate(row, null));
+        continue;
+      }
+      long daysSinceLastVisit =
+          ChronoUnit.DAYS.between(lastVisit.atZone(zone).toLocalDate(), today);
+      if (daysSinceLastVisit >= INACTIVE_CLIENT_THRESHOLD_DAYS) {
+        candidates.add(new Candidate(row, daysSinceLastVisit));
+      }
+    }
+
+    // Never-visited clients (null) sort first, then descending by days of inactivity.
+    Comparator<Candidate> byInactivityDesc =
+        Comparator.comparing(
+            (Candidate c) ->
+                c.daysSinceLastVisit() == null ? Long.MAX_VALUE : c.daysSinceLastVisit(),
+            Comparator.reverseOrder());
+    candidates.sort(byInactivityDesc);
+
+    return candidates.stream()
+        .limit(INACTIVE_CLIENTS_LIMIT)
+        .map(
+            c ->
+                new DashboardResponse.InactiveClient(
+                    c.row().getClientId(),
+                    c.row().getFullName(),
+                    c.row().getPhone(),
+                    c.daysSinceLastVisit(),
+                    c.row().getLastCompletedVisit() != null
+                        ? c.row().getLastCompletedVisit().toString()
+                        : null))
+        .toList();
   }
 
   private static void addFiscalAlerts(
