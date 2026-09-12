@@ -12,14 +12,18 @@ import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.web.dto.DashboardResponse;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -74,13 +78,17 @@ class DashboardServiceAppointmentsByDayOfWeekTest {
     return monday.toInstant();
   }
 
-  private static Instant onDay(java.time.DayOfWeek dow, int hour) {
+  private static Instant onDay(DayOfWeek dow, int hour) {
+    return onDay(dow, hour, 0);
+  }
+
+  private static Instant onDay(DayOfWeek dow, int hour, int minute) {
     ZonedDateTime day =
         ZonedDateTime.now(ZONE)
-            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             .with(dow)
             .withHour(hour)
-            .withMinute(0)
+            .withMinute(minute)
             .withSecond(0)
             .withNano(0);
     return day.toInstant();
@@ -131,6 +139,33 @@ class DashboardServiceAppointmentsByDayOfWeekTest {
   }
 
   @Test
+  void bucketsALateNightAppointmentByTheLocalDayNotTheUtcDay() {
+    // 23:45 Wednesday in America/Asuncion (UTC-3, no DST) is already Thursday in UTC (02:45Z) —
+    // this proves the bucketing converts via the business `ZoneId` (as production code does with
+    // `startAt.atZone(zone).getDayOfWeek()`), not a naive UTC-based day-of-week that would land
+    // this on Thursday instead.
+    Instant wednesdayLateNight = onDay(DayOfWeek.WEDNESDAY, 23, 45);
+    assertThat(wednesdayLateNight.atZone(ZoneId.of("UTC")).getDayOfWeek())
+        .as("sanity check: this instant really is a different UTC calendar day")
+        .isEqualTo(DayOfWeek.THURSDAY);
+
+    when(appointmentRepository.findStartAtsByTenantAndStatusInAndStartAtBetween(
+            eq(1L), any(), any(), any()))
+        .thenReturn(List.of(wednesdayLateNight));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    var byKey =
+        d.appointmentsByDayOfWeek().stream()
+            .collect(
+                java.util.stream.Collectors.toMap(
+                    DashboardResponse.AppointmentsByDayOfWeek::dayOfWeek,
+                    DashboardResponse.AppointmentsByDayOfWeek::count));
+    assertThat(byKey.get("wed")).isEqualTo(1L);
+    assertThat(byKey.get("thu")).isEqualTo(0L);
+  }
+
+  @Test
   void queriesOnlyCountableStatusesExcludingCancelledAndNoShow() {
     when(appointmentRepository.findStartAtsByTenantAndStatusInAndStartAtBetween(
             eq(1L), any(), any(), any()))
@@ -157,9 +192,24 @@ class DashboardServiceAppointmentsByDayOfWeekTest {
             eq(1L), any(), any(), any()))
         .thenReturn(List.of());
 
+    // Same formula as the private `DashboardService.revenueWindow` (business-zone start-of-day of
+    // `today - (REVENUE_TREND_DAYS - 1)` through start-of-day of `today + 1`, exclusive) —
+    // recomputed independently here (rather than via reflection into the private helper) since
+    // that's the one other public surface (`REVENUE_TREND_DAYS`) this test can anchor on.
+    LocalDate today = LocalDate.now(ZONE);
+    Instant expectedFrom =
+        today.minusDays(DashboardService.REVENUE_TREND_DAYS - 1L).atStartOfDay(ZONE).toInstant();
+    Instant expectedTo = today.plusDays(1).atStartOfDay(ZONE).toInstant();
+
     dashboardService.build(1L);
 
+    ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> toCaptor = ArgumentCaptor.forClass(Instant.class);
     Mockito.verify(appointmentRepository)
-        .findStartAtsByTenantAndStatusInAndStartAtBetween(eq(1L), any(), any(), any());
+        .findStartAtsByTenantAndStatusInAndStartAtBetween(
+            eq(1L), any(), fromCaptor.capture(), toCaptor.capture());
+
+    assertThat(fromCaptor.getValue()).isEqualTo(expectedFrom);
+    assertThat(toCaptor.getValue()).isEqualTo(expectedTo);
   }
 }

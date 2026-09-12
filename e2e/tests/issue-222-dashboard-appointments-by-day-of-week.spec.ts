@@ -33,6 +33,12 @@ import { loginAsDemo } from "../fixtures/auth";
  * concurrently — so a before/after snapshot of `GET /api/dashboard` isolates exactly what this
  * test seeded from anything other specs may have left behind, same pattern as the issue #221
  * payment-method-mix spec.
+ *
+ * A separate test below cancels a seeded appointment (via the real `PATCH
+ * /api/appointments/{id}/status`) and asserts its day-of-week bucket does not increase — proving
+ * the CANCELLED/NO_SHOW exclusion end-to-end against the real DB, not just at the
+ * repository-query-construction level (already covered by
+ * `DashboardServiceAppointmentsByDayOfWeekTest`).
  */
 test.describe.configure({ mode: "serial" });
 
@@ -79,6 +85,11 @@ function expectedDayLabel(daysAgo: number): string {
   return new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "America/Asuncion" }).format(
     at,
   );
+}
+
+/** Lowercased `expectedDayLabel` — matches the `dayOfWeek` key the API returns (e.g. "mon"). */
+function expectedDayKey(daysAgo: number): string {
+  return expectedDayLabel(daysAgo).toLowerCase();
 }
 
 test.describe("Issue #222 · Dashboard appointments by day of week chart", () => {
@@ -152,6 +163,46 @@ test.describe("Issue #222 · Dashboard appointments by day of week chart", () =>
     for (const daysAgo of daysAgoList) {
       expect(tickTexts).toContain(expectedDayLabel(daysAgo));
     }
+  });
+
+  // Backend unit tests (`DashboardServiceAppointmentsByDayOfWeekTest`) verify that a CANCELLED
+  // status is excluded at the query-construction level (mocked repository, right status list
+  // passed). This proves the same exclusion end-to-end against the real DB: a genuinely CANCELLED
+  // appointment in a given day-of-week bucket must not increment that bucket's count.
+  test("excludes a CANCELLED appointment from the day-of-week count", async ({ request }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+
+    const daysAgo = 6;
+    const dayKey = expectedDayKey(daysAgo);
+
+    const before = await fetchAppointmentsByDayOfWeek(request, token);
+
+    const client = await seedClient(request, token, `E2E222 Cancelled ${Date.now()}`);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const appt = await createAppointmentApi(request, token, {
+      clientId: client.id,
+      professionalId: seed.professionalId,
+      serviceId: seed.serviceId,
+      startAt: tomorrowLocalIso(10, 0),
+    });
+    // Backdates + completes first (the test-support endpoint always sets COMPLETED), then flips
+    // to CANCELLED via the real status-update endpoint — `AppointmentService.updateStatus` has no
+    // "start not in the past" guard (unlike `create`/`update`), so this is safe to do after the
+    // appointment already sits in the past.
+    await backdateAndComplete(request, token, appt.id, daysAgo);
+    const cancelRes = await request.patch(`${API_BASE}/api/appointments/${appt.id}/status`, {
+      headers: authHeaders(token),
+      data: {
+        status: "CANCELLED",
+        cancelReason: "E2E222 - must not count toward the day-of-week chart",
+      },
+    });
+    expect(cancelRes.ok(), await cancelRes.text()).toBeTruthy();
+
+    const after = await fetchAppointmentsByDayOfWeek(request, token);
+
+    expect(after.get(dayKey) ?? 0).toBe(before.get(dayKey) ?? 0);
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
