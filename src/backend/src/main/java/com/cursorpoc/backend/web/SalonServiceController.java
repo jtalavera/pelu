@@ -2,6 +2,7 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ServiceCatalogService;
+import com.cursorpoc.backend.service.ServicePriceListPdfService;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ServiceResponse;
 import com.cursorpoc.backend.web.dto.ServiceUpsertRequest;
@@ -10,7 +11,10 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,9 +33,12 @@ public class SalonServiceController {
   private static final Logger log = LoggerFactory.getLogger(SalonServiceController.class);
 
   private final ServiceCatalogService serviceCatalogService;
+  private final ServicePriceListPdfService priceListPdfService;
 
-  public SalonServiceController(ServiceCatalogService serviceCatalogService) {
+  public SalonServiceController(
+      ServiceCatalogService serviceCatalogService, ServicePriceListPdfService priceListPdfService) {
     this.serviceCatalogService = serviceCatalogService;
+    this.priceListPdfService = priceListPdfService;
   }
 
   @GetMapping
@@ -74,6 +81,41 @@ public class SalonServiceController {
           principal.getTenantId(),
           ex.getStatusCode().value());
       throw ex;
+    }
+  }
+
+  /**
+   * Issue #217: a shareable PDF price list with the tenant's active services (name + price) and the
+   * business's fantasy name (falling back to its business name) as the document header.
+   */
+  @GetMapping(value = "/price-list/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+  public ResponseEntity<byte[]> priceListPdf(
+      @AuthenticationPrincipal FemmeUserPrincipal principal) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("GET /api/services/price-list/pdf tenantId={}", principal.getTenantId());
+    try {
+      byte[] pdf = priceListPdfService.buildPriceListPdf(principal.getTenantId());
+      log.info("GET /api/services/price-list/pdf tenantId={} status=200", principal.getTenantId());
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"lista-precios.pdf\"")
+          .body(pdf);
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/services/price-list/pdf tenantId={} status={}",
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    } catch (RuntimeException ex) {
+      // ServicePriceListPdfService#render wraps a DocumentException in an IllegalStateException
+      // on PDF-generation failure — not a ResponseStatusException, so it needs its own ERROR log
+      // (path/method/tenant/status) and a SCREAMING_SNAKE_CASE error code instead of leaking
+      // Spring Boot's default, code-less 500 body to the client.
+      log.error(
+          "GET /api/services/price-list/pdf tenantId={} status=500", principal.getTenantId(), ex);
+      throw new ResponseStatusException(
+          HttpStatus.INTERNAL_SERVER_ERROR, "PRICE_LIST_PDF_GENERATION_FAILED", ex);
     }
   }
 
