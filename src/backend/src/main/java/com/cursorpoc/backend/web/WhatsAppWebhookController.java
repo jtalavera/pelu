@@ -1,5 +1,7 @@
 package com.cursorpoc.backend.web;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +35,8 @@ import org.springframework.web.bind.annotation.RestController;
  * never unconditionally. {@code app.femme.whatsapp.webhook-verify-token} (env var {@code
  * WHATSAPP_WEBHOOK_VERIFY_TOKEN}) holds that shared secret; it defaults to blank, which makes
  * {@link #verify} always answer 403 rather than ever echoing a challenge with no real check
- * configured.
+ * configured. The comparison itself uses {@link MessageDigest#isEqual} rather than {@code
+ * String.equals} for a constant-time check.
  */
 @RestController
 @RequestMapping("/api/whatsapp/webhook")
@@ -54,11 +57,17 @@ public class WhatsAppWebhookController {
             + " hubMode={}",
         mode);
 
+    // Constant-time comparison (MessageDigest.isEqual) rather than String.equals, which
+    // short-circuits on the first mismatched byte — low real-world exposure for a webhook setup
+    // secret, but cheap to close off.
     boolean verified =
         "subscribe".equals(mode)
             && verifyToken != null
             && !verifyToken.isBlank()
-            && verifyToken.equals(token);
+            && token != null
+            && MessageDigest.isEqual(
+                token.getBytes(StandardCharsets.UTF_8),
+                verifyToken.getBytes(StandardCharsets.UTF_8));
     if (!verified) {
       log.error("GET /api/whatsapp/webhook tenantId=n/a status=403 reason=VERIFY_TOKEN_MISMATCH");
       return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
