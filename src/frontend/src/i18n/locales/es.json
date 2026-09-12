@@ -430,7 +430,21 @@
       "noAppts": "Sin turnos hoy",
       "openAppointmentDetail": "Ver detalle del turno de {{client}} en el Calendario",
       "occupancyTitle": "Ocupación hoy",
-      "occupancyUnit": "turnos"
+      "occupancyUnit": "turnos",
+      "inactiveClientsTitle": "Clientes inactivos",
+      "inactiveClientsSubtitle": "Clientes activos sin turno completado en los últimos {{days}} días",
+      "inactiveClientsEmpty": "No hay clientes inactivos por el momento",
+      "inactiveClientsColClient": "Cliente",
+      "inactiveClientsColPhone": "Teléfono",
+      "inactiveClientsColInactivity": "Días de inactividad",
+      "inactiveClientsDaysValue": "{{days}} días",
+      "inactiveClientsNeverVisited": "Nunca visitó",
+      "revenueTrendTitle": "Tendencia de facturación",
+      "revenueTrendSubtitle": "Facturación de los últimos {{days}} días",
+      "revenueTrendEmpty": "Todavía no hay facturación en este período",
+      "topServicesTitle": "Servicios más vendidos",
+      "topServicesSubtitle": "Servicios con mayor facturación en los últimos {{days}} días (no incluye ítems personalizados sin un servicio de catálogo vinculado)",
+      "topServicesEmpty": "Todavía no hay servicios facturados en este período"
     },
     "status": {
       "PENDING": "Pendiente",
@@ -1390,6 +1404,11 @@
       "colDuration": "Duración",
       "colPrice": "Precio",
       "colStatus": "Estado",
+      "priceList": {
+        "downloadButton": "Descargar lista de precios",
+        "downloading": "Descargando…",
+        "error": "No se pudo descargar la lista de precios. Intentá de nuevo."
+      },
       "tabs": {
         "services": "Servicios",
         "categories": "Categorías"

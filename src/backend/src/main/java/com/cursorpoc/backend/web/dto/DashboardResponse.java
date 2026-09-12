@@ -8,7 +8,12 @@ public record DashboardResponse(
     RevenueSummary revenueDay,
     RevenueSummary revenueWeek,
     long clientsThisMonth,
-    List<FiscalAlert> fiscalAlerts) {
+    List<FiscalAlert> fiscalAlerts,
+    List<InactiveClient> inactiveClients,
+    int inactiveClientsThresholdDays,
+    List<RevenueTrendPoint> revenueTrend,
+    int revenueTrendDays,
+    List<TopService> topServices) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}
@@ -16,4 +21,33 @@ public record DashboardResponse(
   public record RevenueSummary(BigDecimal invoiced, BigDecimal collected) {}
 
   public record FiscalAlert(String severity, String messageKey, String message) {}
+
+  /**
+   * Issue #216 — "Panel de clientes inactivos". {@code daysSinceLastVisit} is {@code null} when the
+   * client never had a {@code COMPLETED} appointment; {@code lastVisitAt} mirrors that (also {@code
+   * null}).
+   */
+  public record InactiveClient(
+      long clientId, String fullName, String phone, Long daysSinceLastVisit, String lastVisitAt) {}
+
+  /**
+   * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación". One calendar day
+   * (business timezone) of the trailing {@code revenueTrendDays}-day window, ordered oldest first.
+   * {@code date} is an ISO-8601 {@code yyyy-MM-dd} string (not an {@code Instant} — a chart x-axis
+   * has no use for a time-of-day component here). {@code invoiced} is {@code ZERO}, never omitted,
+   * for a day with no {@code ISSUED} invoices, so every point in the series lines up on a
+   * fixed-length, gap-free x-axis. This same shape (day-bucketed points over a fixed trailing
+   * window, one numeric field per series) is the pattern later dashboard charts (issues #220-#223)
+   * are expected to reuse.
+   */
+  public record RevenueTrendPoint(String date, BigDecimal invoiced) {}
+
+  /**
+   * Issue #220 — "Dashboard: gráfico de servicios más vendidos". Top services by invoiced revenue
+   * over the same trailing {@code revenueTrendDays}-day window as {@link #revenueTrend} (no
+   * separate "days" field — both charts share the exact same window, see {@code
+   * DashboardService#buildTopServices}), ordered by {@code revenue} descending, capped server-side
+   * to {@code DashboardService#TOP_SERVICES_LIMIT}.
+   */
+  public record TopService(String serviceName, BigDecimal revenue) {}
 }

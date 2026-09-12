@@ -6,6 +6,9 @@ import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
+import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
+import { TopServicesChart } from "../components/charts/TopServicesChart";
+import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
@@ -32,6 +35,35 @@ type DashboardResponse = {
   /** Distinct registered clients with ≥1 completed-type appointment in the current calendar month (tenant TZ). */
   clientsThisMonth: number;
   fiscalAlerts: Array<{ severity: string; messageKey: string; message: string }>;
+  /**
+   * Issue #216 · "Panel de clientes inactivos" — active clients with no `COMPLETED` appointment in
+   * the last `inactiveClientsThresholdDays` days (or none ever), ordered by days of inactivity
+   * descending, capped server-side (see `DashboardService.INACTIVE_CLIENTS_LIMIT`).
+   * `daysSinceLastVisit`/`lastVisitAt` are both null when the client never had a completed visit.
+   */
+  inactiveClients: Array<{
+    clientId: number;
+    fullName: string;
+    phone: string | null;
+    daysSinceLastVisit: number | null;
+    lastVisitAt: string | null;
+  }>;
+  /** `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — returned so the frontend never hardcodes it. */
+  inactiveClientsThresholdDays: number;
+  /**
+   * Issue #219 · "Dashboard: fundamentos de gráficos + tendencia de facturación" — daily invoiced
+   * (`ISSUED`) revenue over the trailing `revenueTrendDays`-day window, oldest first, one point per
+   * calendar day (business timezone) with no gaps (a day with no invoices is `0`, not omitted).
+   */
+  revenueTrend: Array<{ date: string; invoiced: string | number }>;
+  /** `DashboardService.REVENUE_TREND_DAYS` — returned so the frontend never hardcodes it. */
+  revenueTrendDays: number;
+  /**
+   * Issue #220 · "Dashboard: gráfico de servicios más vendidos" — top services by invoiced
+   * (`ISSUED`) revenue over the same trailing `revenueTrendDays`-day window as `revenueTrend`,
+   * ordered by revenue descending, capped server-side (see `DashboardService.TOP_SERVICES_LIMIT`).
+   */
+  topServices: Array<{ serviceName: string; revenue: string | number }>;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,12 +121,22 @@ function buildCalGrid(year: number, month: number): { day: number; current: bool
 const POLL_MS = 60_000;
 
 // ─── Shared card style ────────────────────────────────────────────────────────
+// `cardStyle` itself now lives in `components/charts/chartTheme.ts` (single source of truth,
+// also used by `ChartCard` — see issue #219 code review) — imported below, not redefined here.
 
-const cardStyle: React.CSSProperties = {
-  background: "var(--color-white)",
-  borderRadius: "var(--radius-xl)",
-  border: "var(--border-default)",
-  padding: 16,
+const inactiveClientsThStyle: React.CSSProperties = {
+  textAlign: "left",
+  fontSize: 10,
+  fontWeight: 500,
+  color: "var(--color-ink-3)",
+  padding: "0 8px 8px 0",
+  borderBottom: "0.5px solid var(--color-stone)",
+};
+
+const inactiveClientsTdStyle: React.CSSProperties = {
+  padding: "8px 8px 8px 0",
+  color: "var(--color-ink)",
+  whiteSpace: "nowrap",
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -406,6 +448,14 @@ export default function DashboardPage() {
   }
 
   const a = data.appointmentsToday;
+  const inactiveClients = Array.isArray(data.inactiveClients) ? data.inactiveClients : [];
+  // Defensive fallback only for a stale frontend build talking to a newer/older backend
+  // (see auto-reload-on-stale-build) — the real value always comes from the server response,
+  // never hardcoded as the source of truth.
+  const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
+  const revenueTrend = Array.isArray(data.revenueTrend) ? data.revenueTrend : [];
+  const revenueTrendDays = data.revenueTrendDays ?? 30;
+  const topServices = Array.isArray(data.topServices) ? data.topServices : [];
 
   return (
     <div>
@@ -531,6 +581,12 @@ export default function DashboardPage() {
           label={t("femme.dashboard.metricClientsMonth")}
         />
       </div>
+
+      {/* ── 3b. REVENUE TREND CHART ── */}
+      <RevenueTrendChart data={revenueTrend} days={revenueTrendDays} locale={locale} />
+
+      {/* ── 3c. TOP SERVICES CHART ── */}
+      <TopServicesChart data={topServices} days={revenueTrendDays} />
 
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
@@ -987,6 +1043,74 @@ export default function DashboardPage() {
                 {t("femme.serviceRecords.dashboard.showMore")}
               </button>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── 6. INACTIVE CLIENTS ── */}
+      <div data-testid="dashboard-inactive-clients" style={{ ...cardStyle, marginTop: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+          {t("femme.dashboard.inactiveClientsTitle")}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2, marginBottom: 12 }}>
+          {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
+        </div>
+
+        {inactiveClients.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
+            {t("femme.dashboard.inactiveClientsEmpty")}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColClient")}
+                  </th>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColPhone")}
+                  </th>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColInactivity")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {inactiveClients.map((c) => {
+                  const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
+                  return (
+                    <tr
+                      key={c.clientId}
+                      data-testid="dashboard-inactive-client-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={goToClientDetail}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          goToClientDetail();
+                        }
+                      }}
+                      style={{
+                        cursor: "pointer",
+                        borderBottom: "0.5px solid var(--color-stone)",
+                      }}
+                    >
+                      <td style={inactiveClientsTdStyle}>{c.fullName}</td>
+                      <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
+                      <td style={inactiveClientsTdStyle}>
+                        {c.daysSinceLastVisit == null
+                          ? t("femme.dashboard.inactiveClientsNeverVisited")
+                          : t("femme.dashboard.inactiveClientsDaysValue", {
+                              days: c.daysSinceLastVisit,
+                            })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
