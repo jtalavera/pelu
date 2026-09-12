@@ -116,26 +116,36 @@ test.describe("Issue #220 · Dashboard top services chart", () => {
     await expect(chart.getByText(/^Gs\. \d{1,3}(\.\d{3})*$/).first()).toBeVisible();
 
     // All three seeded services show up as Y-axis category tick labels. Recharts splits a long
-    // category label across multiple <tspan> lines (dropping the space between words in the
-    // flattened DOM text), so match each tick group by its unique numeric suffix rather than the
-    // exact "E2E Svc <suffix>" string.
-    const suffixOf = (name: string) => name.trim().split(/\s+/).pop()!;
-    const tickLocator = (name: string) =>
-      chart.locator(".recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-label", {
-        hasText: suffixOf(name),
-      });
-    const labelA = tickLocator(serviceA.serviceFullName);
-    const labelB = tickLocator(serviceB.serviceFullName);
-    const labelC = tickLocator(serviceC.serviceFullName);
-    await expect(labelA).toBeVisible();
-    await expect(labelB).toBeVisible();
-    await expect(labelC).toBeVisible();
+    // category label across multiple <tspan> lines, dropping the whitespace between words in the
+    // flattened DOM text (e.g. "E2E Svc 123" renders as textContent "E2E Svc123") — so compare
+    // each tick's full textContent, whitespace-stripped, by exact equality (not a substring/regex
+    // guess) against the same whitespace-stripped expected name.
+    const normalize = (s: string) => s.replace(/\s+/g, "");
+    const tickLabels = chart.locator(
+      ".recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-label",
+    );
+    await expect(tickLabels.first()).toBeVisible({ timeout: 20_000 });
+    const tickTexts = await tickLabels.allTextContents();
+    const normalizedTexts = tickTexts.map(normalize);
+
+    const idxA = normalizedTexts.indexOf(normalize(serviceA.serviceFullName));
+    const idxB = normalizedTexts.indexOf(normalize(serviceB.serviceFullName));
+    const idxC = normalizedTexts.indexOf(normalize(serviceC.serviceFullName));
+    expect(idxA, `expected a tick label for "${serviceA.serviceFullName}"`).toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(idxB, `expected a tick label for "${serviceB.serviceFullName}"`).toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(idxC, `expected a tick label for "${serviceC.serviceFullName}"`).toBeGreaterThanOrEqual(
+      0,
+    );
 
     // ...ordered top-to-bottom by revenue descending (A=2.9M > B=1.9M > C=0.9M).
     const [boxA, boxB, boxC] = await Promise.all([
-      labelA.boundingBox(),
-      labelB.boundingBox(),
-      labelC.boundingBox(),
+      tickLabels.nth(idxA).boundingBox(),
+      tickLabels.nth(idxB).boundingBox(),
+      tickLabels.nth(idxC).boundingBox(),
     ]);
     expect(boxA).toBeTruthy();
     expect(boxB).toBeTruthy();

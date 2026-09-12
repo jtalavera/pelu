@@ -299,6 +299,10 @@ describe("DashboardPage top services chart (issue #220)", () => {
       baseDashboard([{ serviceName: "Corte de cabello", revenue: "500000" }], 45),
     );
     renderPage();
-    expect(await screen.findByText("Top services by revenue over the last 45 days")).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "Top services by revenue over the last 45 days (excludes custom line items not linked to a catalog service)",
+      ),
+    ).toBeTruthy();
   });
 });

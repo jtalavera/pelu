@@ -74,9 +74,9 @@ class DashboardServiceTopServicesTest {
             eq(1L), eq(InvoiceStatus.ISSUED), any(), any()))
         .thenReturn(
             List.of(
-                new ServiceRevenueRow("Corte de cabello", new BigDecimal("500000")),
-                new ServiceRevenueRow("Manicura", new BigDecimal("300000")),
-                new ServiceRevenueRow("Coloración", new BigDecimal("150000"))));
+                new ServiceRevenueRow(1L, "Corte de cabello", new BigDecimal("500000")),
+                new ServiceRevenueRow(2L, "Manicura", new BigDecimal("300000")),
+                new ServiceRevenueRow(3L, "Coloración", new BigDecimal("150000"))));
 
     DashboardResponse d = dashboardService.build(1L);
 
@@ -93,6 +93,7 @@ class DashboardServiceTopServicesTest {
             .mapToObj(
                 i ->
                     new ServiceRevenueRow(
+                        (long) i,
                         "Service " + i,
                         BigDecimal.valueOf(
                             (DashboardService.TOP_SERVICES_LIMIT + 5 - i) * 10_000L)))
