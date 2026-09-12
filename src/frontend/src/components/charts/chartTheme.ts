@@ -63,3 +63,17 @@ export const chartTooltipLabelStyle: CSSProperties = {
   color: CHART_AXIS_TEXT_COLOR,
   marginBottom: 2,
 };
+
+/**
+ * Shared card chrome for every `DashboardPage.tsx` section — metrics, mini calendar, occupancy,
+ * service records, inactive clients, and every `ChartCard` (this issue's revenue trend plus
+ * issues #220-#223's charts). Single source of truth: `DashboardPage.tsx` and `ChartCard.tsx` both
+ * import this instead of each keeping their own byte-for-byte copy, so a future palette/radius
+ * tweak only ever needs to change here.
+ */
+export const cardStyle: CSSProperties = {
+  background: "var(--color-white)",
+  borderRadius: "var(--radius-xl)",
+  border: "var(--border-default)",
+  padding: 16,
+};

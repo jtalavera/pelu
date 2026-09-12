@@ -1,23 +1,19 @@
 import type { ReactNode } from "react";
+import { cardStyle } from "./chartTheme";
 
 /**
  * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación".
  *
  * Reusable card shell for a dashboard chart section: title/subtitle header, themed card chrome
- * matching the rest of `DashboardPage.tsx` (`cardStyle`), and a uniform empty-state message when
- * `isEmpty` is true — so a chart with no data in range renders a friendly message instead of an
- * empty/degenerate chart. Intended for every dashboard chart section, including the sibling charts
- * added by issues #220 (services sold), #221 (payment-method mix), #222 (appointments by
- * day/hour) and #223 (tips by professional) — each wraps its own recharts chart with this same
- * card so the dashboard's chart sections look and behave consistently.
+ * (`cardStyle`, shared with the rest of `DashboardPage.tsx`), and a single fixed-height plot area
+ * that both the chart (`children`) and the empty-state message render inside — so a caller
+ * specifies `height` exactly once and it can never drift between the two (unlike a caller-owned
+ * wrapper `div` around its own `ResponsiveContainer`, which would have to repeat the same number).
+ * Intended for every dashboard chart section, including the sibling charts added by issues #220
+ * (services sold), #221 (payment-method mix), #222 (appointments by day/hour) and #223 (tips by
+ * professional) — each wraps its own recharts chart with this same card so the dashboard's chart
+ * sections look and behave consistently.
  */
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--color-white)",
-  borderRadius: "var(--radius-xl)",
-  border: "var(--border-default)",
-  padding: 16,
-};
 
 export type ChartCardProps = {
   title: string;
@@ -25,8 +21,9 @@ export type ChartCardProps = {
   isEmpty: boolean;
   emptyMessage: string;
   testId?: string;
-  /** Fixed pixel height for the chart's plot area (passed straight to recharts' ResponsiveContainer
-   * by the caller) — kept here only as a prop so callers size their empty-state message the same. */
+  /** Fixed pixel height of the plot area — applies to both the chart and the empty-state message.
+   * Callers pass this straight through to their `ResponsiveContainer` (`height="100%"` on a
+   * `height: "100%"` wrapper) rather than repeating the number themselves. */
   height?: number;
   children: ReactNode;
 };
@@ -44,28 +41,30 @@ export function ChartCard({
     <div data-testid={testId} style={{ ...cardStyle, marginTop: 16, minWidth: 0 }}>
       <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>{title}</div>
       <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2, marginBottom: 12 }}>
-        {subtitle ?? " "}
+        {subtitle ?? " "}
       </div>
 
-      {isEmpty ? (
-        <div
-          data-testid={testId ? `${testId}-empty` : undefined}
-          style={{
-            fontSize: 12,
-            color: "var(--color-ink-3)",
-            padding: "24px 0",
-            textAlign: "center",
-            minHeight: height,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {emptyMessage}
-        </div>
-      ) : (
-        <div style={{ width: "100%", minWidth: 0 }}>{children}</div>
-      )}
+      <div style={{ width: "100%", minWidth: 0, height }}>
+        {isEmpty ? (
+          <div
+            data-testid={testId ? `${testId}-empty` : undefined}
+            style={{
+              width: "100%",
+              height: "100%",
+              fontSize: 12,
+              color: "var(--color-ink-3)",
+              textAlign: "center",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {emptyMessage}
+          </div>
+        ) : (
+          children
+        )}
+      </div>
     </div>
   );
 }

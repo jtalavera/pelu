@@ -49,49 +49,47 @@ export function RevenueTrendChart({
       emptyMessage={t("femme.dashboard.revenueTrendEmpty")}
       height={220}
     >
-      <div style={{ width: "100%", height: 220 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="revenueTrendFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={CHART_PRIMARY_COLOR} stopOpacity={0.35} />
-                <stop offset="95%" stopColor={CHART_PRIMARY_COLOR_LIGHT} stopOpacity={0.05} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={tickFormatter}
-              tick={chartAxisTickStyle}
-              tickLine={false}
-              axisLine={{ stroke: CHART_GRID_COLOR }}
-              interval="preserveStartEnd"
-              minTickGap={24}
-            />
-            <YAxis
-              tickFormatter={(v: number) => formatGuaraniesGs(v)}
-              tick={chartAxisTickStyle}
-              tickLine={false}
-              axisLine={false}
-              width={72}
-            />
-            <Tooltip
-              contentStyle={chartTooltipContentStyle}
-              labelStyle={chartTooltipLabelStyle}
-              labelFormatter={(value) => tickFormatter(String(value ?? ""))}
-              formatter={(value) => [formatGuaraniesGs(Number(value) || 0), t("femme.dashboard.invoiced")]}
-            />
-            <Area
-              type="monotone"
-              dataKey="invoiced"
-              stroke={CHART_PRIMARY_COLOR}
-              strokeWidth={2}
-              fill="url(#revenueTrendFill)"
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="revenueTrendFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={CHART_PRIMARY_COLOR} stopOpacity={0.35} />
+              <stop offset="95%" stopColor={CHART_PRIMARY_COLOR_LIGHT} stopOpacity={0.05} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
+          <XAxis
+            dataKey="date"
+            tickFormatter={tickFormatter}
+            tick={chartAxisTickStyle}
+            tickLine={false}
+            axisLine={{ stroke: CHART_GRID_COLOR }}
+            interval="preserveStartEnd"
+            minTickGap={24}
+          />
+          <YAxis
+            tickFormatter={(v: number) => formatGuaraniesGs(v)}
+            tick={chartAxisTickStyle}
+            tickLine={false}
+            axisLine={false}
+            width={72}
+          />
+          <Tooltip
+            contentStyle={chartTooltipContentStyle}
+            labelStyle={chartTooltipLabelStyle}
+            labelFormatter={(value) => tickFormatter(String(value ?? ""))}
+            formatter={(value) => [formatGuaraniesGs(Number(value) || 0), t("femme.dashboard.invoiced")]}
+          />
+          <Area
+            type="monotone"
+            dataKey="invoiced"
+            stroke={CHART_PRIMARY_COLOR}
+            strokeWidth={2}
+            fill="url(#revenueTrendFill)"
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </ChartCard>
   );
 }

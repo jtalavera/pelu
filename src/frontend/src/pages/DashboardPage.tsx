@@ -7,6 +7,7 @@ import { listAppointments, type Appointment } from "../api/appointments";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
+import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
@@ -113,13 +114,8 @@ function buildCalGrid(year: number, month: number): { day: number; current: bool
 const POLL_MS = 60_000;
 
 // ─── Shared card style ────────────────────────────────────────────────────────
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--color-white)",
-  borderRadius: "var(--radius-xl)",
-  border: "var(--border-default)",
-  padding: 16,
-};
+// `cardStyle` itself now lives in `components/charts/chartTheme.ts` (single source of truth,
+// also used by `ChartCard` — see issue #219 code review) — imported below, not redefined here.
 
 const inactiveClientsThStyle: React.CSSProperties = {
   textAlign: "left",
