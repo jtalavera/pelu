@@ -451,7 +451,11 @@
       "appointmentsByDayOfWeekTitle": "Appointments by day of week",
       "appointmentsByDayOfWeekSubtitle": "Appointment count by day of week over the last {{days}} days",
       "appointmentsByDayOfWeekEmpty": "No appointments in this period yet",
-      "appointmentsByDayOfWeekCountLabel": "Appointments"
+      "appointmentsByDayOfWeekCountLabel": "Appointments",
+      "tipsByProfessionalTitle": "Tips by professional",
+      "tipsByProfessionalSubtitle": "Tip totals by professional over the last {{days}} days (closed service records only)",
+      "tipsByProfessionalEmpty": "No tips recorded in this period yet",
+      "tipsByProfessionalValueLabel": "Tips"
     },
     "status": {
       "PENDING": "Pending",

@@ -451,7 +451,11 @@
       "appointmentsByDayOfWeekTitle": "Turnos por día de semana",
       "appointmentsByDayOfWeekSubtitle": "Cantidad de turnos por día de semana en los últimos {{days}} días",
       "appointmentsByDayOfWeekEmpty": "Todavía no hay turnos en este período",
-      "appointmentsByDayOfWeekCountLabel": "Turnos"
+      "appointmentsByDayOfWeekCountLabel": "Turnos",
+      "tipsByProfessionalTitle": "Propinas por profesional",
+      "tipsByProfessionalSubtitle": "Total de propinas por profesional en los últimos {{days}} días (solo fichas cerradas)",
+      "tipsByProfessionalEmpty": "Todavía no hay propinas registradas en este período",
+      "tipsByProfessionalValueLabel": "Propinas"
     },
     "status": {
       "PENDING": "Pendiente",

@@ -10,7 +10,9 @@ import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
 import { TopServicesChart } from "../components/charts/TopServicesChart";
 import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
 import { AppointmentsByDayOfWeekChart } from "../components/charts/AppointmentsByDayOfWeekChart";
+import { TipsByProfessionalChart } from "../components/charts/TipsByProfessionalChart";
 import { cardStyle } from "../components/charts/chartTheme";
+import { getTipsReport, type TipReportProfessionalTotal } from "../api/propinas";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
@@ -281,6 +283,7 @@ export default function DashboardPage() {
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
+  const [tipsByProfessional, setTipsByProfessional] = useState<TipReportProfessionalTotal[]>([]);
 
   const todayStr = useMemo(() => toLocalDateStr(now), [now]);
 
@@ -291,6 +294,34 @@ export default function DashboardPage() {
     const end = new Date(y, m - 1, d, 23, 59, 59, 999);
     return { from: start.toISOString(), to: end.toISOString() };
   }, [todayStr]);
+
+  /**
+   * Issue #223 — "Dashboard: gráfico de propinas por profesional". This chart's data does NOT come
+   * from `GET /api/dashboard` (no new backend aggregation for this issue) — it reuses the existing
+   * `GET /api/propinas/report` endpoint instead, which needs an explicit `from`/`to` (unlike the
+   * sibling revenueTrend/topServices/paymentMethodMix/appointmentsByDayOfWeek charts, whose shared
+   * trailing-`revenueTrendDays`-day window is computed entirely server-side and opaque to the
+   * frontend — see `DashboardService.revenueWindow`, business-timezone). This is the client-side
+   * equivalent of that same window: local calendar days (today back through
+   * `revenueTrendDays - 1` days ago), the same local-calendar-day approximation `todayRangeIso`
+   * above and `PropinasPage.tsx`'s own report date filters already make. `data?.revenueTrendDays`
+   * is read straight from the last `/api/dashboard` response (defaulting to the server's current
+   * constant, 30, before that first response lands) so this window always matches whatever the
+   * sibling charts are showing rather than a second hardcoded literal.
+   */
+  const tipsWindowRangeIso = useMemo(() => {
+    const windowDays = data?.revenueTrendDays ?? 30;
+    const [y, m, d] = todayStr.split("-").map((x) => parseInt(x, 10));
+    const start = new Date(y, m - 1, d - (windowDays - 1), 0, 0, 0, 0);
+    const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }, [todayStr, data?.revenueTrendDays]);
+
+  useEffect(() => {
+    getTipsReport({ from: tipsWindowRangeIso.from, to: tipsWindowRangeIso.to })
+      .then((r) => setTipsByProfessional(Array.isArray(r.professionalTotals) ? r.professionalTotals : []))
+      .catch(() => setTipsByProfessional([]));
+  }, [tipsWindowRangeIso.from, tipsWindowRangeIso.to]);
 
   // ── Polling dashboard aggregates ──────────────────────────────────────────
   const load = useCallback(async () => {
@@ -614,6 +645,9 @@ export default function DashboardPage() {
 
       {/* ── 3e. APPOINTMENTS BY DAY OF WEEK CHART ── */}
       <AppointmentsByDayOfWeekChart data={appointmentsByDayOfWeek} days={revenueTrendDays} />
+
+      {/* ── 3f. TIPS BY PROFESSIONAL CHART ── */}
+      <TipsByProfessionalChart data={tipsByProfessional} days={revenueTrendDays} />
 
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
