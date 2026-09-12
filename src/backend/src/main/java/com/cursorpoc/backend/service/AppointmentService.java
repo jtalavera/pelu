@@ -168,6 +168,15 @@ public class AppointmentService {
       client = loadClientOrThrow(tenantId, request.clientId());
     }
 
+    // Issue #218: reminder_sent_at tracks "reminded for the CURRENT startAt" — a reschedule moves
+    // the appointment to a new slot the client hasn't been reminded about yet, so reset it here
+    // whenever startAt actually changes. Leaving it untouched when startAt is unchanged (e.g. only
+    // the professional or service was edited) avoids sending a second, redundant reminder for the
+    // same slot.
+    if (!startAt.equals(appointment.getStartAt())) {
+      appointment.setReminderSentAt(null);
+    }
+
     appointment.setProfessional(professional);
     appointment.setSalonService(service);
     appointment.setClient(client);

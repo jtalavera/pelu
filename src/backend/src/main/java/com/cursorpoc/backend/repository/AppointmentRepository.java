@@ -102,6 +102,22 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
   long countDistinctClientsWithAppointmentsBetween(
       @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
 
+  /**
+   * Issue #218: appointments whose reminder hasn't been sent for their current {@code startAt} slot
+   * yet, still in a remindable status, and due to enter the reminder window on this run.
+   */
+  @Query(
+      """
+      SELECT a FROM Appointment a WHERE a.reminderSentAt IS NULL
+      AND a.status IN :statuses
+      AND a.startAt >= :from AND a.startAt < :to
+      ORDER BY a.startAt ASC
+      """)
+  List<Appointment> findDueForReminder(
+      @Param("statuses") List<AppointmentStatus> statuses,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
   long deleteByTenant_Id(Long tenantId);
 
   boolean existsByClient_Id(Long clientId);
