@@ -6,6 +6,7 @@ import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
+import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
@@ -47,6 +48,14 @@ type DashboardResponse = {
   }>;
   /** `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — returned so the frontend never hardcodes it. */
   inactiveClientsThresholdDays: number;
+  /**
+   * Issue #219 · "Dashboard: fundamentos de gráficos + tendencia de facturación" — daily invoiced
+   * (`ISSUED`) revenue over the trailing `revenueTrendDays`-day window, oldest first, one point per
+   * calendar day (business timezone) with no gaps (a day with no invoices is `0`, not omitted).
+   */
+  revenueTrend: Array<{ date: string; invoiced: string | number }>;
+  /** `DashboardService.REVENUE_TREND_DAYS` — returned so the frontend never hardcodes it. */
+  revenueTrendDays: number;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -441,6 +450,8 @@ export default function DashboardPage() {
   // (see auto-reload-on-stale-build) — the real value always comes from the server response,
   // never hardcoded as the source of truth.
   const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
+  const revenueTrend = Array.isArray(data.revenueTrend) ? data.revenueTrend : [];
+  const revenueTrendDays = data.revenueTrendDays ?? 30;
 
   return (
     <div>
@@ -566,6 +577,9 @@ export default function DashboardPage() {
           label={t("femme.dashboard.metricClientsMonth")}
         />
       </div>
+
+      {/* ── 3b. REVENUE TREND CHART ── */}
+      <RevenueTrendChart data={revenueTrend} days={revenueTrendDays} locale={locale} />
 
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">

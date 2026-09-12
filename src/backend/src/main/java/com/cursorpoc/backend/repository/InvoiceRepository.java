@@ -180,6 +180,28 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("from") Instant from,
       @Param("to") Instant to);
 
+  /**
+   * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": lightweight
+   * {@code issuedAt}/{@code total} projection for the revenue-trend chart, same "invoiced" filters
+   * as {@link #sumTotalByTenantAndStatusAndIssuedBetween} (a non-REJECTED SIFEN outcome), bucketed
+   * into calendar days by {@code DashboardService#buildRevenueTrend} — not done as a SQL {@code
+   * GROUP BY} so bucketing can use the tenant's business timezone (same reasoning as {@code
+   * DashboardService#buildInactiveClients}), not the DB server's.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.InvoiceRevenueRow(i.issuedAt, i.total) FROM Invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
+      AND i.issuedAt >= :from AND i.issuedAt < :to
+      """)
+  List<com.cursorpoc.backend.service.InvoiceRevenueRow>
+      findRevenueRowsByTenantAndStatusAndIssuedBetween(
+          @Param("tenantId") Long tenantId,
+          @Param("status") InvoiceStatus status,
+          @Param("from") Instant from,
+          @Param("to") Instant to);
+
   @Query(
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i

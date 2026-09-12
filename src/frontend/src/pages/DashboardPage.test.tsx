@@ -164,3 +164,72 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("DashboardPage revenue trend chart (issue #219)", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    listAppointmentsMock.mockClear();
+    femmeJson.mockReset();
+  });
+
+  function baseDashboard(
+    revenueTrend: Array<{ date: string; invoiced: string | number }>,
+    revenueTrendDays = 30,
+  ) {
+    return {
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+      revenueTrend,
+      revenueTrendDays,
+    };
+  }
+
+  it("shows the empty state when every day in range has zero invoiced revenue", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        { date: "2026-08-01", invoiced: "0" },
+        { date: "2026-08-02", invoiced: 0 },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByText("No invoiced revenue in this period yet")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-revenue-trend-empty")).toBeTruthy();
+  });
+
+  it("renders the chart section (no empty state) once there is invoiced revenue in range", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        { date: "2026-08-01", invoiced: "0" },
+        { date: "2026-08-02", invoiced: "150000" },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByTestId("dashboard-revenue-trend")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-revenue-trend-empty")).toBeNull();
+  });
+
+  it("still shows the empty state gracefully when revenueTrend is missing entirely (stale build)", async () => {
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+    });
+    renderPage();
+    expect(await screen.findByText("No invoiced revenue in this period yet")).toBeTruthy();
+  });
+
+  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
+    femmeJson.mockResolvedValue(baseDashboard([{ date: "2026-08-01", invoiced: "0" }], 45));
+    renderPage();
+    expect(await screen.findByText("Invoiced revenue over the last 45 days")).toBeTruthy();
+  });
+});

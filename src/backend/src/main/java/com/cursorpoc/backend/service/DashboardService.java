@@ -19,7 +19,9 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,16 @@ public class DashboardService {
 
   /** Caps the dashboard widget so a large, long-neglected client base doesn't overload it. */
   public static final int INACTIVE_CLIENTS_LIMIT = 20;
+
+  /**
+   * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": trailing window
+   * (in days, including today) the revenue-trend chart covers. A single named constant, like {@link
+   * #INACTIVE_CLIENT_THRESHOLD_DAYS}, rather than a literal repeated across the
+   * query/bucketing/response — also the "N days (default 30)" parameter the source issue calls for,
+   * kept as a server-side default instead of a query param so the single {@code GET /api/dashboard}
+   * response shape (which sibling issues #220-#223 also extend) stays param-free.
+   */
+  public static final int REVENUE_TREND_DAYS = 30;
 
   private final FemmeTimeProperties timeProperties;
   private final AppointmentRepository appointmentRepository;
@@ -158,6 +170,9 @@ public class DashboardService {
     List<DashboardResponse.InactiveClient> inactiveClients =
         buildInactiveClients(tenantId, zone, today);
 
+    List<DashboardResponse.RevenueTrendPoint> revenueTrend =
+        buildRevenueTrend(tenantId, zone, today);
+
     return new DashboardResponse(
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
         new DashboardResponse.RevenueSummary(invoicedDay, collectedDay),
@@ -165,7 +180,41 @@ public class DashboardService {
         clientsThisMonth,
         alerts,
         inactiveClients,
-        INACTIVE_CLIENT_THRESHOLD_DAYS);
+        INACTIVE_CLIENT_THRESHOLD_DAYS,
+        revenueTrend,
+        REVENUE_TREND_DAYS);
+  }
+
+  /**
+   * Issue #219: sums {@code ISSUED} invoice totals per calendar day (business timezone, same
+   * non-REJECTED-SIFEN-outcome filter as {@code revenueDay}/{@code revenueWeek}) over the trailing
+   * {@link #REVENUE_TREND_DAYS}-day window ending today (inclusive). Always returns exactly {@link
+   * #REVENUE_TREND_DAYS} points, oldest first, one per day — days with no invoices get {@code
+   * BigDecimal.ZERO}, never a gap, so the frontend chart's x-axis is always a fixed, contiguous
+   * range.
+   */
+  private List<DashboardResponse.RevenueTrendPoint> buildRevenueTrend(
+      long tenantId, ZoneId zone, LocalDate today) {
+    LocalDate rangeStartDate = today.minusDays(REVENUE_TREND_DAYS - 1L);
+    Instant rangeStart = rangeStartDate.atStartOfDay(zone).toInstant();
+    Instant rangeEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
+
+    Map<LocalDate, BigDecimal> totalsByDay = new HashMap<>();
+    for (InvoiceRevenueRow row :
+        invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
+            tenantId, InvoiceStatus.ISSUED, rangeStart, rangeEnd)) {
+      LocalDate day = row.issuedAt().atZone(zone).toLocalDate();
+      totalsByDay.merge(day, nz(row.total()), BigDecimal::add);
+    }
+
+    List<DashboardResponse.RevenueTrendPoint> points = new ArrayList<>(REVENUE_TREND_DAYS);
+    for (int i = 0; i < REVENUE_TREND_DAYS; i++) {
+      LocalDate day = rangeStartDate.plusDays(i);
+      points.add(
+          new DashboardResponse.RevenueTrendPoint(
+              day.toString(), totalsByDay.getOrDefault(day, BigDecimal.ZERO)));
+    }
+    return points;
   }
 
   /**
