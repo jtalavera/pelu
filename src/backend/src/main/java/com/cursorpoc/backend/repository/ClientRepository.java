@@ -71,7 +71,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
       SELECT c.id AS clientId, c.fullName AS fullName, c.phone AS phone,
              MAX(a.startAt) AS lastCompletedVisit
       FROM Client c
-      LEFT JOIN Appointment a ON a.client = c AND a.status = :completedStatus
+      LEFT JOIN Appointment a ON a.client = c AND a.status = :completedStatus AND a.tenant.id = :tenantId
       WHERE c.tenant.id = :tenantId AND c.active = true
       GROUP BY c.id, c.fullName, c.phone
       """)

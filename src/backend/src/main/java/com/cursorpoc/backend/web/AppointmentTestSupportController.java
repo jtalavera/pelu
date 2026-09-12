@@ -3,6 +3,7 @@ package com.cursorpoc.backend.web;
 import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
+import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -10,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +30,12 @@ import org.springframework.web.server.ResponseStatusException;
  * create a normal (future) appointment via {@code POST /api/appointments} and then backdate +
  * complete it directly, without waiting on a real clock or duplicating the validation the real
  * endpoints already cover elsewhere.
+ *
+ * <p>Unlike {@link SifenInvoiceTestSupportController}, this endpoint is NOT in {@code
+ * SecurityConfig}'s {@code permitAll} list — it requires a valid JWT like any other endpoint — but
+ * that alone doesn't stop one tenant's user from acting on another tenant's appointment by id, so
+ * the lookup below is tenant-scoped (via the authenticated principal), the same as every production
+ * path in {@code AppointmentService}.
  */
 @RestController
 @RequestMapping("/api/admin/appointment-test-support")
@@ -44,11 +52,22 @@ public class AppointmentTestSupportController {
 
   @PostMapping("/{id}/backdate-and-complete/{daysAgo}")
   @Transactional
-  public void backdateAndComplete(@PathVariable long id, @PathVariable long daysAgo) {
-    log.info("POST /api/admin/appointment-test-support/{}/backdate-and-complete/{}", id, daysAgo);
+  public void backdateAndComplete(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable long id,
+      @PathVariable long daysAgo) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    long tenantId = principal.getTenantId();
+    log.info(
+        "POST /api/admin/appointment-test-support/{}/backdate-and-complete/{} tenantId={}",
+        id,
+        daysAgo,
+        tenantId);
     Appointment appointment =
         appointmentRepository
-            .findById(id)
+            .findByIdAndTenant_Id(id, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "APPOINTMENT_NOT_FOUND"));
 

@@ -55,6 +55,7 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
         },
       ],
       inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
     });
   });
 
@@ -92,6 +93,7 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
       clientsThisMonth: 1284,
       fiscalAlerts: [],
       inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
     });
     renderPage();
     expect(await screen.findByText(/^Gs\.[\s\u00a0]*890/)).toBeTruthy();
@@ -106,7 +108,7 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
     femmeJson.mockReset();
   });
 
-  function baseDashboard(inactiveClients: unknown[]) {
+  function baseDashboard(inactiveClients: unknown[], inactiveClientsThresholdDays = 60) {
     return {
       appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
       revenueDay: { invoiced: "0", collected: "0" },
@@ -114,6 +116,7 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
       clientsThisMonth: 0,
       fiscalAlerts: [],
       inactiveClients,
+      inactiveClientsThresholdDays,
     };
   }
 
@@ -151,5 +154,13 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
     expect(rows[0].textContent).toContain("200 days");
     expect(rows[1].textContent).toContain("Bruno Never Visited");
     expect(rows[1].textContent).toContain("Never visited");
+  });
+
+  it("uses the server-provided threshold in the subtitle copy, not a hardcoded frontend value", async () => {
+    femmeJson.mockResolvedValue(baseDashboard([], 45));
+    renderPage();
+    expect(
+      await screen.findByText("Active clients with no completed visit in the last 45 days"),
+    ).toBeTruthy();
   });
 });

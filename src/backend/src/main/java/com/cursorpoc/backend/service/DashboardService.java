@@ -164,7 +164,8 @@ public class DashboardService {
         new DashboardResponse.RevenueSummary(invoicedWeek, collectedWeek),
         clientsThisMonth,
         alerts,
-        inactiveClients);
+        inactiveClients,
+        INACTIVE_CLIENT_THRESHOLD_DAYS);
   }
 
   /**

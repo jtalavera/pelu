@@ -34,7 +34,7 @@ type DashboardResponse = {
   fiscalAlerts: Array<{ severity: string; messageKey: string; message: string }>;
   /**
    * Issue #216 · "Panel de clientes inactivos" — active clients with no `COMPLETED` appointment in
-   * the last `INACTIVE_CLIENT_THRESHOLD_DAYS` days (or none ever), ordered by days of inactivity
+   * the last `inactiveClientsThresholdDays` days (or none ever), ordered by days of inactivity
    * descending, capped server-side (see `DashboardService.INACTIVE_CLIENTS_LIMIT`).
    * `daysSinceLastVisit`/`lastVisitAt` are both null when the client never had a completed visit.
    */
@@ -45,13 +45,9 @@ type DashboardResponse = {
     daysSinceLastVisit: number | null;
     lastVisitAt: string | null;
   }>;
+  /** `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — returned so the frontend never hardcodes it. */
+  inactiveClientsThresholdDays: number;
 };
-
-/**
- * Mirrors the backend's `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — used only to render
- * the widget's subtitle copy, never to filter/sort (that's all done server-side).
- */
-const INACTIVE_CLIENT_THRESHOLD_DAYS = 60;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -441,6 +437,10 @@ export default function DashboardPage() {
 
   const a = data.appointmentsToday;
   const inactiveClients = Array.isArray(data.inactiveClients) ? data.inactiveClients : [];
+  // Defensive fallback only for a stale frontend build talking to a newer/older backend
+  // (see auto-reload-on-stale-build) — the real value always comes from the server response,
+  // never hardcoded as the source of truth.
+  const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
 
   return (
     <div>
@@ -1032,7 +1032,7 @@ export default function DashboardPage() {
           {t("femme.dashboard.inactiveClientsTitle")}
         </div>
         <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2, marginBottom: 12 }}>
-          {t("femme.dashboard.inactiveClientsSubtitle", { days: INACTIVE_CLIENT_THRESHOLD_DAYS })}
+          {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
         </div>
 
         {inactiveClients.length === 0 ? (

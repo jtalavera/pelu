@@ -9,7 +9,8 @@ public record DashboardResponse(
     RevenueSummary revenueWeek,
     long clientsThisMonth,
     List<FiscalAlert> fiscalAlerts,
-    List<InactiveClient> inactiveClients) {
+    List<InactiveClient> inactiveClients,
+    int inactiveClientsThresholdDays) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}

@@ -92,6 +92,36 @@ class DashboardServiceInactiveClientsTest {
     assertThat(d.inactiveClients()).isEmpty();
   }
 
+  /** Off-by-one boundary: one day short of the threshold must still be excluded. */
+  @Test
+  void excludesClientOneDayBeforeThreshold() {
+    when(clientRepository.findActiveClientsWithLastCompletedVisit(
+            eq(1L), eq(AppointmentStatus.COMPLETED)))
+        .thenReturn(
+            List.of(
+                new Row(
+                    1L,
+                    "Just Under Threshold",
+                    "0981000000",
+                    daysAgo(DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS - 1))));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.inactiveClients()).isEmpty();
+  }
+
+  @Test
+  void exposesThresholdDaysConstantInResponse() {
+    when(clientRepository.findActiveClientsWithLastCompletedVisit(
+            eq(1L), eq(AppointmentStatus.COMPLETED)))
+        .thenReturn(List.of());
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.inactiveClientsThresholdDays())
+        .isEqualTo(DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS);
+  }
+
   @Test
   void includesClientAtOrPastThreshold() {
     when(clientRepository.findActiveClientsWithLastCompletedVisit(
