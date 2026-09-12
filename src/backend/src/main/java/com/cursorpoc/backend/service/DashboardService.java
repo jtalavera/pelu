@@ -49,6 +49,14 @@ public class DashboardService {
    */
   public static final int REVENUE_TREND_DAYS = 30;
 
+  /**
+   * Issue #220 — "Dashboard: gráfico de servicios más vendidos": caps the top-services-by-revenue
+   * chart, same single-named-constant pattern as {@link #INACTIVE_CLIENTS_LIMIT}. The AC calls for
+   * "top 5-10 services by revenue" — 10 is the cap; a tenant with fewer distinct services simply
+   * shows fewer bars.
+   */
+  public static final int TOP_SERVICES_LIMIT = 10;
+
   private final FemmeTimeProperties timeProperties;
   private final AppointmentRepository appointmentRepository;
   private final ClientRepository clientRepository;
@@ -173,6 +181,8 @@ public class DashboardService {
     List<DashboardResponse.RevenueTrendPoint> revenueTrend =
         buildRevenueTrend(tenantId, zone, today);
 
+    List<DashboardResponse.TopService> topServices = buildTopServices(tenantId, zone, today);
+
     return new DashboardResponse(
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
         new DashboardResponse.RevenueSummary(invoicedDay, collectedDay),
@@ -182,7 +192,24 @@ public class DashboardService {
         inactiveClients,
         INACTIVE_CLIENT_THRESHOLD_DAYS,
         revenueTrend,
-        REVENUE_TREND_DAYS);
+        REVENUE_TREND_DAYS,
+        topServices);
+  }
+
+  /**
+   * Issue #219/#220: Instant bounds (business timezone) of the trailing {@link
+   * #REVENUE_TREND_DAYS}-day window ending today (inclusive) — the single day-range computation
+   * {@code buildRevenueTrend} and {@code buildTopServices} both build on, so the revenue-trend
+   * chart and the top-services chart always agree on exactly the same window rather than each
+   * computing it independently.
+   */
+  private record RevenueWindow(LocalDate startDate, Instant start, Instant end) {}
+
+  private static RevenueWindow revenueWindow(ZoneId zone, LocalDate today) {
+    LocalDate startDate = today.minusDays(REVENUE_TREND_DAYS - 1L);
+    Instant start = startDate.atStartOfDay(zone).toInstant();
+    Instant end = today.plusDays(1).atStartOfDay(zone).toInstant();
+    return new RevenueWindow(startDate, start, end);
   }
 
   /**
@@ -195,26 +222,45 @@ public class DashboardService {
    */
   private List<DashboardResponse.RevenueTrendPoint> buildRevenueTrend(
       long tenantId, ZoneId zone, LocalDate today) {
-    LocalDate rangeStartDate = today.minusDays(REVENUE_TREND_DAYS - 1L);
-    Instant rangeStart = rangeStartDate.atStartOfDay(zone).toInstant();
-    Instant rangeEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
+    RevenueWindow window = revenueWindow(zone, today);
 
     Map<LocalDate, BigDecimal> totalsByDay = new HashMap<>();
     for (InvoiceRevenueRow row :
         invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
-            tenantId, InvoiceStatus.ISSUED, rangeStart, rangeEnd)) {
+            tenantId, InvoiceStatus.ISSUED, window.start(), window.end())) {
       LocalDate day = row.issuedAt().atZone(zone).toLocalDate();
       totalsByDay.merge(day, nz(row.total()), BigDecimal::add);
     }
 
     List<DashboardResponse.RevenueTrendPoint> points = new ArrayList<>(REVENUE_TREND_DAYS);
     for (int i = 0; i < REVENUE_TREND_DAYS; i++) {
-      LocalDate day = rangeStartDate.plusDays(i);
+      LocalDate day = window.startDate().plusDays(i);
       points.add(
           new DashboardResponse.RevenueTrendPoint(
               day.toString(), totalsByDay.getOrDefault(day, BigDecimal.ZERO)));
     }
     return points;
+  }
+
+  /**
+   * Issue #220 — "Dashboard: gráfico de servicios más vendidos": top {@link #TOP_SERVICES_LIMIT}
+   * salon services by invoiced revenue (same window/filters as {@link #buildRevenueTrend} — {@code
+   * ISSUED} + non-REJECTED SIFEN outcome), descending. Aggregation happens in SQL ({@code
+   * InvoiceRepository#findServiceRevenueByTenantAndStatusAndIssuedBetween}); this method only caps
+   * the already-descending result to the top N, same as {@code buildInactiveClients} capping to
+   * {@link #INACTIVE_CLIENTS_LIMIT}.
+   */
+  private List<DashboardResponse.TopService> buildTopServices(
+      long tenantId, ZoneId zone, LocalDate today) {
+    RevenueWindow window = revenueWindow(zone, today);
+
+    return invoiceRepository
+        .findServiceRevenueByTenantAndStatusAndIssuedBetween(
+            tenantId, InvoiceStatus.ISSUED, window.start(), window.end())
+        .stream()
+        .limit(TOP_SERVICES_LIMIT)
+        .map(row -> new DashboardResponse.TopService(row.serviceName(), nz(row.totalRevenue())))
+        .toList();
   }
 
   /**

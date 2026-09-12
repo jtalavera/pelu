@@ -233,3 +233,72 @@ describe("DashboardPage revenue trend chart (issue #219)", () => {
     expect(await screen.findByText("Invoiced revenue over the last 45 days")).toBeTruthy();
   });
 });
+
+describe("DashboardPage top services chart (issue #220)", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    listAppointmentsMock.mockClear();
+    femmeJson.mockReset();
+  });
+
+  function baseDashboard(
+    topServices: Array<{ serviceName: string; revenue: string | number }>,
+    revenueTrendDays = 30,
+  ) {
+    return {
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+      revenueTrend: [],
+      revenueTrendDays,
+      topServices,
+    };
+  }
+
+  it("shows the empty state when there is no service revenue in range", async () => {
+    femmeJson.mockResolvedValue(baseDashboard([]));
+    renderPage();
+    expect(await screen.findByText("No invoiced services in this period yet")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-top-services-empty")).toBeTruthy();
+  });
+
+  it("renders the chart section (no empty state) once there is service revenue in range", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        { serviceName: "Corte de cabello", revenue: "500000" },
+        { serviceName: "Manicura", revenue: "300000" },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByTestId("dashboard-top-services")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-top-services-empty")).toBeNull();
+  });
+
+  it("still shows the empty state gracefully when topServices is missing entirely (stale build)", async () => {
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+      revenueTrend: [],
+      revenueTrendDays: 30,
+    });
+    renderPage();
+    expect(await screen.findByText("No invoiced services in this period yet")).toBeTruthy();
+  });
+
+  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([{ serviceName: "Corte de cabello", revenue: "500000" }], 45),
+    );
+    renderPage();
+    expect(await screen.findByText("Top services by revenue over the last 45 days")).toBeTruthy();
+  });
+});

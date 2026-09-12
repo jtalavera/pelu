@@ -7,6 +7,7 @@ import { listAppointments, type Appointment } from "../api/appointments";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
+import { TopServicesChart } from "../components/charts/TopServicesChart";
 import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
@@ -57,6 +58,12 @@ type DashboardResponse = {
   revenueTrend: Array<{ date: string; invoiced: string | number }>;
   /** `DashboardService.REVENUE_TREND_DAYS` — returned so the frontend never hardcodes it. */
   revenueTrendDays: number;
+  /**
+   * Issue #220 · "Dashboard: gráfico de servicios más vendidos" — top services by invoiced
+   * (`ISSUED`) revenue over the same trailing `revenueTrendDays`-day window as `revenueTrend`,
+   * ordered by revenue descending, capped server-side (see `DashboardService.TOP_SERVICES_LIMIT`).
+   */
+  topServices: Array<{ serviceName: string; revenue: string | number }>;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -448,6 +455,7 @@ export default function DashboardPage() {
   const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
   const revenueTrend = Array.isArray(data.revenueTrend) ? data.revenueTrend : [];
   const revenueTrendDays = data.revenueTrendDays ?? 30;
+  const topServices = Array.isArray(data.topServices) ? data.topServices : [];
 
   return (
     <div>
@@ -576,6 +584,9 @@ export default function DashboardPage() {
 
       {/* ── 3b. REVENUE TREND CHART ── */}
       <RevenueTrendChart data={revenueTrend} days={revenueTrendDays} locale={locale} />
+
+      {/* ── 3c. TOP SERVICES CHART ── */}
+      <TopServicesChart data={topServices} days={revenueTrendDays} />
 
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">

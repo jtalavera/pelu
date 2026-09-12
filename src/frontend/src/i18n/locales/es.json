@@ -441,7 +441,10 @@
       "inactiveClientsNeverVisited": "Nunca visitó",
       "revenueTrendTitle": "Tendencia de facturación",
       "revenueTrendSubtitle": "Facturación de los últimos {{days}} días",
-      "revenueTrendEmpty": "Todavía no hay facturación en este período"
+      "revenueTrendEmpty": "Todavía no hay facturación en este período",
+      "topServicesTitle": "Servicios más vendidos",
+      "topServicesSubtitle": "Servicios con mayor facturación en los últimos {{days}} días",
+      "topServicesEmpty": "Todavía no hay servicios facturados en este período"
     },
     "status": {
       "PENDING": "Pendiente",

@@ -202,6 +202,35 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
           @Param("from") Instant from,
           @Param("to") Instant to);
 
+  /**
+   * Issue #220 — "Dashboard: gráfico de servicios más vendidos": revenue per linked {@code
+   * SalonService}, same "invoiced" filters as {@link #sumTotalByTenantAndStatusAndIssuedBetween}
+   * (ISSUED + non-REJECTED SIFEN outcome), summed over the given window and ordered by revenue
+   * descending. Lines with no linked service (a free-text/custom line — {@code serviceId} is
+   * optional on {@code InvoiceLineRequest}) are excluded since they can't be attributed to a named
+   * service. Grouping/summing/ordering is done in SQL (unlike the revenue-trend's day-bucketing,
+   * this doesn't need the tenant's business timezone) — {@code DashboardService#buildTopServices}
+   * caps the result to the top N.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.ServiceRevenueRow(l.salonService.name, SUM(l.lineTotal))
+      FROM InvoiceLine l
+      JOIN l.invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
+      AND i.issuedAt >= :from AND i.issuedAt < :to
+      AND l.salonService IS NOT NULL
+      GROUP BY l.salonService.name
+      ORDER BY SUM(l.lineTotal) DESC
+      """)
+  List<com.cursorpoc.backend.service.ServiceRevenueRow>
+      findServiceRevenueByTenantAndStatusAndIssuedBetween(
+          @Param("tenantId") Long tenantId,
+          @Param("status") InvoiceStatus status,
+          @Param("from") Instant from,
+          @Param("to") Instant to);
+
   @Query(
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
