@@ -16,6 +16,7 @@ import {
   Spinner,
   Text,
 } from "@design-system";
+import { downloadPriceListPdf } from "../api/downloadPriceListPdf";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { listServicesPaged } from "../api/services";
@@ -108,6 +109,9 @@ export default function ServicesPage() {
   const [serviceSaving, setServiceSaving] = useState(false);
   const [serviceReactivating, setServiceReactivating] = useState(false);
   const [activatingCategoryId, setActivatingCategoryId] = useState<number | null>(null);
+
+  const [priceListDownloading, setPriceListDownloading] = useState(false);
+  const [priceListError, setPriceListError] = useState<string | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
   const [editSuccess, setEditSuccess] = useState(false);
@@ -309,6 +313,19 @@ export default function ServicesPage() {
   function dismissServicePageSuccess() {
     setCreateSuccess(false);
     setServiceStatusSuccess(null);
+  }
+
+  /** Issue #217: "Descargar lista de precios" — active services + fantasy name, as a PDF. */
+  async function handleDownloadPriceList() {
+    setPriceListError(null);
+    setPriceListDownloading(true);
+    try {
+      await downloadPriceListPdf();
+    } catch (e) {
+      setPriceListError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setPriceListDownloading(false);
+    }
   }
 
   async function saveService() {
@@ -614,19 +631,34 @@ export default function ServicesPage() {
             {t("femme.services.lead")}
           </div>
         </div>
-        {tab === "services" ? (
-          <button type="button" style={primaryBtn} onClick={openNewService}>
-            {t("femme.services.services.addNew")}
-          </button>
-        ) : (
-          <button data-tour="services-add-category" type="button" style={primaryBtn} onClick={openNewCategory}>
-            {t("femme.services.categories.addNew")}
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11"
+            disabled={priceListDownloading}
+            data-testid="download-price-list-button"
+            onClick={() => void handleDownloadPriceList()}
+          >
+            {priceListDownloading
+              ? t("femme.services.priceList.downloading")
+              : t("femme.services.priceList.downloadButton")}
+          </Button>
+          {tab === "services" ? (
+            <button type="button" style={primaryBtn} onClick={openNewService}>
+              {t("femme.services.services.addNew")}
+            </button>
+          ) : (
+            <button data-tour="services-add-category" type="button" style={primaryBtn} onClick={openNewCategory}>
+              {t("femme.services.categories.addNew")}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Success / Error ── */}
-      {(createSuccess || serviceStatusSuccess || error) && (
+      {(createSuccess || serviceStatusSuccess || error || priceListError) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
           {createSuccess && (
             <Alert variant="success" style={pageAlertStyle}>
@@ -643,6 +675,16 @@ export default function ServicesPage() {
           {error && (
             <Alert variant="destructive" title={t("femme.services.errorTitle")} style={pageAlertStyle}>
               {error}
+            </Alert>
+          )}
+          {priceListError && (
+            <Alert
+              variant="destructive"
+              title={t("femme.services.errorTitle")}
+              style={pageAlertStyle}
+              data-testid="price-list-error"
+            >
+              {priceListError}
             </Alert>
           )}
         </div>

@@ -55,6 +55,17 @@ public class Appointment {
   @Column(name = "cancel_reason", length = 500)
   private String cancelReason;
 
+  /**
+   * Issue #218: when the ~24h-ahead reminder email was sent for this appointment's <em>current</em>
+   * {@code startAt}. Null means "not sent yet for the current slot" — {@link
+   * com.cursorpoc.backend.service.AppointmentService#update} resets it to {@code null} whenever
+   * {@code startAt} actually changes, so a reschedule always gets a fresh reminder for its new
+   * time.
+   */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "reminder_sent_at")
+  private Instant reminderSentAt;
+
   public Long getId() {
     return id;
   }
@@ -125,5 +136,13 @@ public class Appointment {
 
   public void setCancelReason(String cancelReason) {
     this.cancelReason = cancelReason;
+  }
+
+  public Instant getReminderSentAt() {
+    return reminderSentAt;
+  }
+
+  public void setReminderSentAt(Instant reminderSentAt) {
+    this.reminderSentAt = reminderSentAt;
   }
 }

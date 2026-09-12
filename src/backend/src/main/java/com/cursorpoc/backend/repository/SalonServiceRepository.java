@@ -21,6 +21,9 @@ public interface SalonServiceRepository extends JpaRepository<SalonService, Long
       """)
   List<SalonService> findByTenant_IdOrderByNameAsc(@Param("tenantId") Long tenantId);
 
+  /** Issue #217: active services only, for the shareable price-list PDF. */
+  List<SalonService> findByTenant_IdAndActiveTrueOrderByNameAsc(Long tenantId);
+
   @Query(
       value =
           """
