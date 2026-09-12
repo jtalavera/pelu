@@ -444,7 +444,10 @@
       "revenueTrendEmpty": "Todavía no hay facturación en este período",
       "topServicesTitle": "Servicios más vendidos",
       "topServicesSubtitle": "Servicios con mayor facturación en los últimos {{days}} días (no incluye ítems personalizados sin un servicio de catálogo vinculado)",
-      "topServicesEmpty": "Todavía no hay servicios facturados en este período"
+      "topServicesEmpty": "Todavía no hay servicios facturados en este período",
+      "paymentMethodMixTitle": "Mezcla de medios de pago",
+      "paymentMethodMixSubtitle": "Facturación por medio de pago en los últimos {{days}} días",
+      "paymentMethodMixEmpty": "Todavía no hay pagos registrados en este período"
     },
     "status": {
       "PENDING": "Pendiente",

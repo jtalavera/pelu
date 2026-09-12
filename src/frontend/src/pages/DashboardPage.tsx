@@ -8,6 +8,7 @@ import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serv
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
 import { TopServicesChart } from "../components/charts/TopServicesChart";
+import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
 import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
@@ -64,6 +65,13 @@ type DashboardResponse = {
    * ordered by revenue descending, capped server-side (see `DashboardService.TOP_SERVICES_LIMIT`).
    */
   topServices: Array<{ serviceName: string; revenue: string | number }>;
+  /**
+   * Issue #221 · "Dashboard: gráfico de mezcla de medios de pago" — invoiced (`ISSUED`) revenue by
+   * `PaymentMethod` over the same trailing `revenueTrendDays`-day window as `revenueTrend`/
+   * `topServices`, ordered by amount descending, including every payment method actually present
+   * in the window (no fixed/hardcoded subset, capped server-side to nothing).
+   */
+  paymentMethodMix: Array<{ method: string; amount: string | number }>;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -456,6 +464,7 @@ export default function DashboardPage() {
   const revenueTrend = Array.isArray(data.revenueTrend) ? data.revenueTrend : [];
   const revenueTrendDays = data.revenueTrendDays ?? 30;
   const topServices = Array.isArray(data.topServices) ? data.topServices : [];
+  const paymentMethodMix = Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : [];
 
   return (
     <div>
@@ -587,6 +596,9 @@ export default function DashboardPage() {
 
       {/* ── 3c. TOP SERVICES CHART ── */}
       <TopServicesChart data={topServices} days={revenueTrendDays} />
+
+      {/* ── 3d. PAYMENT METHOD MIX CHART ── */}
+      <PaymentMethodMixChart data={paymentMethodMix} days={revenueTrendDays} />
 
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">

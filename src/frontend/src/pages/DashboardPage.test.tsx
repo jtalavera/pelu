@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "../test/renderWithTour";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "../test/renderWithTour";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
@@ -18,6 +18,17 @@ vi.mock("../api/appointments", () => ({
 }));
 
 const listAppointmentsMock = vi.mocked(listAppointments);
+
+// DashboardPage polls on an interval and re-fetches when `t` (i18next) identity changes; without
+// unmounting between tests, a still-mounted instance from an earlier test can re-fetch mid-test
+// using whatever the shared `femmeJson` mock happens to be at that moment (e.g. freshly
+// `mockReset()` by the next test's `beforeEach`, before its own `mockResolvedValue` is set),
+// leaking a second, differently-stated `<DashboardPage>` tree into `document.body` and breaking
+// `getByText`/`getByTestId` uniqueness assertions in whichever test runs next. Explicit cleanup
+// (this file doesn't rely on RTL's automatic afterEach hook) avoids that cross-test pollution.
+afterEach(() => {
+  cleanup();
+});
 
 function renderPage() {
   return render(
@@ -303,6 +314,80 @@ describe("DashboardPage top services chart (issue #220)", () => {
       await screen.findByText(
         "Top services by revenue over the last 45 days (excludes custom line items not linked to a catalog service)",
       ),
+    ).toBeTruthy();
+  });
+});
+
+describe("DashboardPage payment method mix chart (issue #221)", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    listAppointmentsMock.mockClear();
+    femmeJson.mockReset();
+  });
+
+  function baseDashboard(
+    paymentMethodMix: Array<{ method: string; amount: string | number }>,
+    revenueTrendDays = 30,
+  ) {
+    return {
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+      revenueTrend: [],
+      revenueTrendDays,
+      topServices: [],
+      paymentMethodMix,
+    };
+  }
+
+  it("shows the empty state when there are no payment allocations in range", async () => {
+    femmeJson.mockResolvedValue(baseDashboard([]));
+    renderPage();
+    expect(await screen.findByText("No invoiced payments in this period yet")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-payment-method-mix-empty")).toBeTruthy();
+  });
+
+  it("renders the chart section (no empty state) with more than one payment method present, using the shared billing-UI labels", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        { method: "CASH", amount: "500000" },
+        { method: "DEBIT_CARD", amount: "300000" },
+        { method: "TRANSFER", amount: "150000" },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByTestId("dashboard-payment-method-mix")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-payment-method-mix-empty")).toBeNull();
+  });
+
+  it("still shows the empty state gracefully when paymentMethodMix is missing entirely (stale build)", async () => {
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+      revenueTrend: [],
+      revenueTrendDays: 30,
+      topServices: [],
+    });
+    renderPage();
+    expect(await screen.findByText("No invoiced payments in this period yet")).toBeTruthy();
+  });
+
+  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([{ method: "CASH", amount: "500000" }], 45),
+    );
+    renderPage();
+    expect(
+      await screen.findByText("Invoiced revenue by payment method over the last 45 days"),
     ).toBeTruthy();
   });
 });
