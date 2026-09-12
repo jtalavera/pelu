@@ -107,6 +107,15 @@ public class SalonServiceController {
           principal.getTenantId(),
           ex.getStatusCode().value());
       throw ex;
+    } catch (RuntimeException ex) {
+      // ServicePriceListPdfService#render wraps a DocumentException in an IllegalStateException
+      // on PDF-generation failure — not a ResponseStatusException, so it needs its own ERROR log
+      // (path/method/tenant/status) and a SCREAMING_SNAKE_CASE error code instead of leaking
+      // Spring Boot's default, code-less 500 body to the client.
+      log.error(
+          "GET /api/services/price-list/pdf tenantId={} status=500", principal.getTenantId(), ex);
+      throw new ResponseStatusException(
+          HttpStatus.INTERNAL_SERVER_ERROR, "PRICE_LIST_PDF_GENERATION_FAILED", ex);
     }
   }
 

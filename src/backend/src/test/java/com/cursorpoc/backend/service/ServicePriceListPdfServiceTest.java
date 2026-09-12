@@ -64,9 +64,13 @@ class ServicePriceListPdfServiceTest {
   @Test
   void includesOnlyActiveServicesRepositoryQuery() {
     // The repository query itself (findByTenant_IdAndActiveTrueOrderByNameAsc) is what enforces
-    // "active = true only" — the service just renders whatever it returns. Verifying it asks for
-    // the active-only, tenant-scoped query is the unit-level contract for that AC; the SQL
-    // predicate itself is exercised by ServiceCatalogService/repository-level coverage.
+    // "active = true only" — the service just renders whatever it returns. This test only checks
+    // the unit-level contract: that the service asks for the active-only, tenant-scoped query
+    // (mocked below), not that the derived query's SQL predicate actually filters correctly —
+    // there's no repository-level (e.g. @DataJpaTest) test for that derived method in this repo.
+    // The predicate itself is exercised end-to-end against a live H2-backed backend by
+    // e2e/tests/issue-217-lista-precios.spec.ts (seeds one active + one deactivated service and
+    // asserts the deactivated one's name is absent from the returned PDF).
     when(salonServiceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(1L))
         .thenReturn(List.of(service("Corte", 50_000)));
     when(businessProfileRepository.findByTenantId(1L))
