@@ -391,3 +391,92 @@ describe("DashboardPage payment method mix chart (issue #221)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("DashboardPage appointments by day of week chart (issue #222)", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    listAppointmentsMock.mockClear();
+    femmeJson.mockReset();
+  });
+
+  function baseDashboard(
+    appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>,
+    revenueTrendDays = 30,
+  ) {
+    return {
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+      revenueTrend: [],
+      revenueTrendDays,
+      topServices: [],
+      paymentMethodMix: [],
+      appointmentsByDayOfWeek,
+    };
+  }
+
+  const allZero = [
+    { dayOfWeek: "mon", count: 0 },
+    { dayOfWeek: "tue", count: 0 },
+    { dayOfWeek: "wed", count: 0 },
+    { dayOfWeek: "thu", count: 0 },
+    { dayOfWeek: "fri", count: 0 },
+    { dayOfWeek: "sat", count: 0 },
+    { dayOfWeek: "sun", count: 0 },
+  ];
+
+  it("shows the empty state when every day in range has zero appointments", async () => {
+    femmeJson.mockResolvedValue(baseDashboard(allZero));
+    renderPage();
+    expect(await screen.findByText("No appointments in this period yet")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-appointments-by-day-of-week-empty")).toBeTruthy();
+  });
+
+  it("renders the chart section (no empty state) once there are appointments in range", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        { dayOfWeek: "mon", count: 3 },
+        { dayOfWeek: "tue", count: 0 },
+        { dayOfWeek: "wed", count: "2" },
+        { dayOfWeek: "thu", count: 0 },
+        { dayOfWeek: "fri", count: 1 },
+        { dayOfWeek: "sat", count: 0 },
+        { dayOfWeek: "sun", count: 0 },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByTestId("dashboard-appointments-by-day-of-week")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-appointments-by-day-of-week-empty")).toBeNull();
+  });
+
+  it("still shows the empty state gracefully when appointmentsByDayOfWeek is missing entirely (stale build)", async () => {
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+      revenueTrend: [],
+      revenueTrendDays: 30,
+      topServices: [],
+      paymentMethodMix: [],
+    });
+    renderPage();
+    expect(await screen.findByText("No appointments in this period yet")).toBeTruthy();
+  });
+
+  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
+    femmeJson.mockResolvedValue(baseDashboard(allZero, 45));
+    renderPage();
+    expect(
+      await screen.findByText("Appointment count by day of week over the last 45 days"),
+    ).toBeTruthy();
+  });
+
+});

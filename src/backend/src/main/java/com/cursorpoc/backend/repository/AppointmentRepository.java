@@ -118,6 +118,32 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       @Param("from") Instant from,
       @Param("to") Instant to);
 
+  /**
+   * Issue #222 — "Dashboard: gráfico de turnos por día de semana": raw start instants in {@code
+   * [from, to)}, restricted to the same "counts as real appointment activity" statuses as {@link
+   * #countDistinctClientsWithAppointmentsBetween} (excludes {@code CANCELLED}/{@code NO_SHOW}).
+   * Projects only {@code startAt} — day-of-week bucketing needs no other column — leaving the
+   * timezone-aware bucketing itself to {@code DashboardService} (in Java, using {@code
+   * FemmeTimeProperties.zoneId()}) rather than a DB-side {@code GROUP BY}: SQL Server has no clean
+   * IANA-timezone conversion, H2 (used in tests/e2e) would need a different one, and the
+   * appointment volume here is salon-scale, so aggregating the already-small result set in memory
+   * is both simpler and consistent across environments. Deterministic ordering (by {@code startAt}
+   * ascending) even though the caller only counts, for consistency with every other ordered query
+   * in this repository.
+   */
+  @Query(
+      """
+      SELECT a.startAt FROM Appointment a WHERE a.tenant.id = :tenantId
+      AND a.status IN :statuses
+      AND a.startAt >= :from AND a.startAt < :to
+      ORDER BY a.startAt ASC
+      """)
+  List<Instant> findStartAtsByTenantAndStatusInAndStartAtBetween(
+      @Param("tenantId") Long tenantId,
+      @Param("statuses") List<AppointmentStatus> statuses,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
   long deleteByTenant_Id(Long tenantId);
 
   boolean existsByClient_Id(Long clientId);

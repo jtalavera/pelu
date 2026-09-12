@@ -9,6 +9,7 @@ import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal
 import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
 import { TopServicesChart } from "../components/charts/TopServicesChart";
 import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
+import { AppointmentsByDayOfWeekChart } from "../components/charts/AppointmentsByDayOfWeekChart";
 import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
@@ -72,6 +73,14 @@ type DashboardResponse = {
    * in the window (no fixed/hardcoded subset, capped server-side to nothing).
    */
   paymentMethodMix: Array<{ method: string; amount: string | number }>;
+  /**
+   * Issue #222 · "Dashboard: gráfico de turnos por día de semana" — appointment counts by day of
+   * week (business timezone) over the same trailing `revenueTrendDays`-day window as the sibling
+   * charts, counting only `PENDING`/`CONFIRMED`/`IN_PROGRESS`/`COMPLETED` appointments (excludes
+   * `CANCELLED`/`NO_SHOW` — see `DashboardService.buildAppointmentsByDayOfWeek`). Always exactly 7
+   * entries, Monday first, zero-filled for a day with no countable appointments.
+   */
+  appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -465,6 +474,9 @@ export default function DashboardPage() {
   const revenueTrendDays = data.revenueTrendDays ?? 30;
   const topServices = Array.isArray(data.topServices) ? data.topServices : [];
   const paymentMethodMix = Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : [];
+  const appointmentsByDayOfWeek = Array.isArray(data.appointmentsByDayOfWeek)
+    ? data.appointmentsByDayOfWeek
+    : [];
 
   return (
     <div>
@@ -599,6 +611,9 @@ export default function DashboardPage() {
 
       {/* ── 3d. PAYMENT METHOD MIX CHART ── */}
       <PaymentMethodMixChart data={paymentMethodMix} days={revenueTrendDays} />
+
+      {/* ── 3e. APPOINTMENTS BY DAY OF WEEK CHART ── */}
+      <AppointmentsByDayOfWeekChart data={appointmentsByDayOfWeek} days={revenueTrendDays} />
 
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">

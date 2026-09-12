@@ -14,7 +14,8 @@ public record DashboardResponse(
     List<RevenueTrendPoint> revenueTrend,
     int revenueTrendDays,
     List<TopService> topServices,
-    List<PaymentMethodMix> paymentMethodMix) {
+    List<PaymentMethodMix> paymentMethodMix,
+    List<AppointmentsByDayOfWeek> appointmentsByDayOfWeek) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}
@@ -63,4 +64,22 @@ public record DashboardResponse(
    * already used for payment-method labels in the billing UI, rather than a duplicate mapping.
    */
   public record PaymentMethodMix(String method, BigDecimal amount) {}
+
+  /**
+   * Issue #222 — "Dashboard: gráfico de turnos por día de semana". Appointment counts bucketed by
+   * day of week (business timezone), over the same trailing {@code revenueTrendDays}-day window as
+   * {@link #revenueTrend}/{@link #topServices}/{@link #paymentMethodMix} (no separate "days" field,
+   * same reasoning as those). Counts the same statuses as {@code
+   * AppointmentRepository#countDistinctClientsWithAppointmentsBetween} — {@code PENDING}, {@code
+   * CONFIRMED}, {@code IN_PROGRESS}, {@code COMPLETED} — excluding {@code CANCELLED}/{@code
+   * NO_SHOW}, since those slots didn't represent actual salon activity. This is a deliberate
+   * deviation from {@code appointmentsToday.total} (which counts every status, including {@code
+   * CANCELLED}, since it answers "how many slots were booked today" rather than "how much did we
+   * actually work"). {@code dayOfWeek} is always one of {@code "mon".."sun"} (matching the {@code
+   * femme.calendar.days.*}/{@code femme.professionals.days.*} i18n keys already used elsewhere for
+   * weekday labels, so the frontend doesn't need a duplicate mapping) — always exactly 7 entries,
+   * Monday first, zero-filled for a day with no countable appointments (gap-free, same as {@link
+   * #revenueTrend}).
+   */
+  public record AppointmentsByDayOfWeek(String dayOfWeek, long count) {}
 }
