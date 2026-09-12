@@ -430,7 +430,32 @@
       "noAppts": "No appointments today",
       "openAppointmentDetail": "View {{client}}'s appointment detail in the Calendar",
       "occupancyTitle": "Today's occupancy",
-      "occupancyUnit": "appts"
+      "occupancyUnit": "appts",
+      "inactiveClientsTitle": "Inactive clients",
+      "inactiveClientsSubtitle": "Active clients with no completed visit in the last {{days}} days",
+      "inactiveClientsEmpty": "No inactive clients right now",
+      "inactiveClientsColClient": "Client",
+      "inactiveClientsColPhone": "Phone",
+      "inactiveClientsColInactivity": "Days inactive",
+      "inactiveClientsDaysValue": "{{days}} days",
+      "inactiveClientsNeverVisited": "Never visited",
+      "revenueTrendTitle": "Revenue trend",
+      "revenueTrendSubtitle": "Invoiced revenue over the last {{days}} days",
+      "revenueTrendEmpty": "No invoiced revenue in this period yet",
+      "topServicesTitle": "Top services",
+      "topServicesSubtitle": "Top services by revenue over the last {{days}} days (excludes custom line items not linked to a catalog service)",
+      "topServicesEmpty": "No invoiced services in this period yet",
+      "paymentMethodMixTitle": "Payment method mix",
+      "paymentMethodMixSubtitle": "Invoiced revenue by payment method over the last {{days}} days",
+      "paymentMethodMixEmpty": "No invoiced payments in this period yet",
+      "appointmentsByDayOfWeekTitle": "Appointments by day of week",
+      "appointmentsByDayOfWeekSubtitle": "Appointment count by day of week over the last {{days}} days",
+      "appointmentsByDayOfWeekEmpty": "No appointments in this period yet",
+      "appointmentsByDayOfWeekCountLabel": "Appointments",
+      "tipsByProfessionalTitle": "Tips by professional",
+      "tipsByProfessionalSubtitle": "Tip totals by professional over the last {{days}} days (closed service records only)",
+      "tipsByProfessionalEmpty": "No tips recorded in this period yet",
+      "tipsByProfessionalValueLabel": "Tips"
     },
     "status": {
       "PENDING": "Pending",
@@ -1388,6 +1413,11 @@
       "colDuration": "Duration",
       "colPrice": "Price",
       "colStatus": "Status",
+      "priceList": {
+        "downloadButton": "Download price list",
+        "downloading": "Downloading…",
+        "error": "Could not download the price list. Try again."
+      },
       "tabs": {
         "services": "Services",
         "categories": "Categories"
