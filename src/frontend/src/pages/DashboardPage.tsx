@@ -19,7 +19,7 @@ import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs, formatAmountDecimal } from "../lib/formatMoney";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatParaguayDateTime, PARAGUAY_TIMEZONE } from "../lib/paraguayDateTime";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useTour } from "../tour/useTour";
 import { dashboardSteps } from "../tour/steps/dashboard";
@@ -94,6 +94,74 @@ function fmtCount(n: number, numberLocale: string): string {
 
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Issue #223 code-review follow-up: `Y/M/D` of `date` as observed in `timeZone`, not the browser's
+ * local timezone — used to compute the tips-by-professional window in the same *business* timezone
+ * `DashboardService.revenueWindow` uses server-side, instead of `toLocalDateStr`'s browser-local
+ * approximation (which shifts the whole 30-day window by a day for part of each day whenever the
+ * viewer's device timezone differs from `PARAGUAY_TIMEZONE`/`America/Asuncion`).
+ */
+function zonedYmd(date: Date, timeZone: string): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  return { y: Number(map.year), m: Number(map.month), d: Number(map.day) };
+}
+
+/**
+ * Converts wall-clock date/time components *as they would read in `timeZone`* to the UTC instant
+ * they denote — the "guess and correct" technique (no timezone-conversion library in this
+ * frontend): treat the components as if they were already UTC to get a first guess, see what
+ * wall-clock time that guess actually renders as in `timeZone`, and correct by the difference. A
+ * second pass is cheap insurance against a guess landing right on a DST transition (irrelevant for
+ * `America/Asuncion` today — no DST since 2024, see `paraguayDateTime.ts` — but this helper makes
+ * no zone-specific assumption).
+ */
+function zonedDateTimeToUtcMs(
+  y: number,
+  m: number,
+  d: number,
+  h: number,
+  mi: number,
+  s: number,
+  ms: number,
+  timeZone: string,
+): number {
+  let guess = Date.UTC(y, m - 1, d, h, mi, s, ms);
+  for (let i = 0; i < 2; i++) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(guess));
+    const map: Record<string, string> = {};
+    for (const p of parts) map[p.type] = p.value;
+    const observed = Date.UTC(
+      Number(map.year),
+      Number(map.month) - 1,
+      Number(map.day),
+      map.hour === "24" ? 0 : Number(map.hour),
+      Number(map.minute),
+      Number(map.second),
+      ms,
+    );
+    const diff = guess - observed;
+    if (diff === 0) break;
+    guess += diff;
+  }
+  return guess;
 }
 
 function fmtTime(iso: string, locale: string): string {
@@ -302,20 +370,45 @@ export default function DashboardPage() {
    * sibling revenueTrend/topServices/paymentMethodMix/appointmentsByDayOfWeek charts, whose shared
    * trailing-`revenueTrendDays`-day window is computed entirely server-side and opaque to the
    * frontend — see `DashboardService.revenueWindow`, business-timezone). This is the client-side
-   * equivalent of that same window: local calendar days (today back through
-   * `revenueTrendDays - 1` days ago), the same local-calendar-day approximation `todayRangeIso`
-   * above and `PropinasPage.tsx`'s own report date filters already make. `data?.revenueTrendDays`
-   * is read straight from the last `/api/dashboard` response (defaulting to the server's current
+   * equivalent of that same window — but, unlike `todayRangeIso` above (a browser-local
+   * approximation, harmless there since it only scopes "today's" appointments/fichas for the same
+   * viewer), this window's boundary must land on the exact same calendar-day edge the backend's
+   * *business* timezone (`PARAGUAY_TIMEZONE`/`America/Asuncion`, `FemmeTimeProperties
+   * .businessZoneId`'s default) computes — a viewer whose device timezone differs would otherwise
+   * see this chart's tips shifted a day off from the rest of the dashboard for part of each day.
+   * `zonedYmd`/`zonedDateTimeToUtcMs` do that zone-aware conversion. `data?.revenueTrendDays` is
+   * read straight from the last `/api/dashboard` response (defaulting to the server's current
    * constant, 30, before that first response lands) so this window always matches whatever the
    * sibling charts are showing rather than a second hardcoded literal.
    */
   const tipsWindowRangeIso = useMemo(() => {
     const windowDays = data?.revenueTrendDays ?? 30;
-    const [y, m, d] = todayStr.split("-").map((x) => parseInt(x, 10));
-    const start = new Date(y, m - 1, d - (windowDays - 1), 0, 0, 0, 0);
-    const end = new Date(y, m - 1, d, 23, 59, 59, 999);
-    return { from: start.toISOString(), to: end.toISOString() };
-  }, [todayStr, data?.revenueTrendDays]);
+    const today = zonedYmd(now, PARAGUAY_TIMEZONE);
+    // Pure calendar-day arithmetic — `Date.UTC` normalizes a negative day-of-month correctly — no
+    // zone conversion needed yet, this only walks back whole calendar days from "today in zone".
+    const startCalendar = new Date(Date.UTC(today.y, today.m - 1, today.d - (windowDays - 1)));
+    const startMs = zonedDateTimeToUtcMs(
+      startCalendar.getUTCFullYear(),
+      startCalendar.getUTCMonth() + 1,
+      startCalendar.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+      PARAGUAY_TIMEZONE,
+    );
+    const endMs = zonedDateTimeToUtcMs(
+      today.y,
+      today.m,
+      today.d,
+      23,
+      59,
+      59,
+      999,
+      PARAGUAY_TIMEZONE,
+    );
+    return { from: new Date(startMs).toISOString(), to: new Date(endMs).toISOString() };
+  }, [now, data?.revenueTrendDays]);
 
   useEffect(() => {
     getTipsReport({ from: tipsWindowRangeIso.from, to: tipsWindowRangeIso.to })
