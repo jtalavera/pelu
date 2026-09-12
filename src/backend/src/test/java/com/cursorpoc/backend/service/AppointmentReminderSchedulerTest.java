@@ -1,9 +1,12 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,12 +15,9 @@ import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Appointment;
-import com.cursorpoc.backend.domain.Client;
-import com.cursorpoc.backend.domain.Professional;
-import com.cursorpoc.backend.domain.SalonService;
-import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
+import com.cursorpoc.backend.service.AppointmentReminderPersistenceService.ReminderContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -32,23 +32,22 @@ import org.springframework.context.MessageSource;
 
 /**
  * Issue #218: unit coverage for the ~24h-ahead appointment reminder job — scheduler behavior isn't
- * something Playwright can trigger (see the PR description), so this is the acceptance-criteria
- * coverage for the time window, no-duplicate-sends, client-without-email skip, and the
- * reschedule-resets-the-flag decision (that last one is exercised in {@link AppointmentServiceTest}
- * instead, since it's {@code AppointmentService#update} that resets it).
+ * something Playwright can trigger, so this is the acceptance-criteria coverage for the time window
+ * and failure isolation across a batch. {@link AppointmentReminderPersistenceService}'s own test
+ * covers the no-duplicate-sends and client-without-email skip logic, since code review moved that
+ * guard logic there (per-appointment transaction scoping — see that class's Javadoc); the
+ * reschedule-resets-the-flag decision is exercised in {@link AppointmentServiceTest} instead, since
+ * it's {@code AppointmentService#update} that resets it.
  */
 @ExtendWith(MockitoExtension.class)
 class AppointmentReminderSchedulerTest {
 
   @Mock private AppointmentRepository appointmentRepository;
+  @Mock private AppointmentReminderPersistenceService persistenceService;
   @Mock private EmailService emailService;
 
   private MessageSource messageSource;
   private AppointmentReminderScheduler scheduler;
-
-  private Tenant tenant;
-  private Professional professional;
-  private SalonService salonService;
 
   @BeforeEach
   void setUp() {
@@ -58,40 +57,22 @@ class AppointmentReminderSchedulerTest {
         .thenReturn("text");
     scheduler =
         new AppointmentReminderScheduler(
-            appointmentRepository, emailService, messageSource, new FemmeTimeProperties());
-
-    tenant = new Tenant();
-    tenant.setId(1L);
-    tenant.setName("Demo Salon");
-
-    professional = new Professional();
-    professional.setId(10L);
-    professional.setFullName("Ana Gomez");
-
-    salonService = new SalonService();
-    salonService.setId(20L);
-    salonService.setName("Corte");
+            appointmentRepository,
+            persistenceService,
+            emailService,
+            messageSource,
+            new FemmeTimeProperties());
   }
 
-  private Appointment buildAppointment(long id, AppointmentStatus status, Client client) {
+  private static Appointment appointmentStub(long id) {
     Appointment a = new Appointment();
     a.setId(id);
-    a.setTenant(tenant);
-    a.setProfessional(professional);
-    a.setSalonService(salonService);
-    a.setClient(client);
-    a.setStartAt(Instant.now().plus(Duration.ofHours(24)));
-    a.setEndAt(Instant.now().plus(Duration.ofHours(25)));
-    a.setStatus(status);
     return a;
   }
 
-  private Client clientWithEmail(String email) {
-    Client c = new Client();
-    c.setId(30L);
-    c.setFullName("Maria Lopez");
-    c.setEmail(email);
-    return c;
+  private static ReminderContext contextFor(long tenantId, String email) {
+    return new ReminderContext(
+        tenantId, "Demo Salon", email, "Maria Lopez", "Corte", "Ana Gomez", Instant.now());
   }
 
   @Test
@@ -121,76 +102,56 @@ class AppointmentReminderSchedulerTest {
 
   @Test
   void sendDueReminders_sendsReminder_andMarksAppointmentAsReminded() {
-    Client client = clientWithEmail("cliente@example.com");
-    Appointment appointment = buildAppointment(1L, AppointmentStatus.CONFIRMED, client);
     when(appointmentRepository.findDueForReminder(any(), any(), any()))
-        .thenReturn(List.of(appointment));
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L))
+        .thenReturn(contextFor(1L, "cliente@example.com"));
 
     scheduler.sendDueReminders();
 
     verify(emailService).sendPlainTextEmail(eq("cliente@example.com"), anyString(), anyString());
-    assertThat(appointment.getReminderSentAt()).isNotNull();
-    verify(appointmentRepository).save(appointment);
-  }
-
-  @Test
-  void sendDueReminders_clientWithoutEmail_skipsWithoutSendingOrThrowing() {
-    Client client = clientWithEmail(null);
-    Appointment appointment = buildAppointment(2L, AppointmentStatus.PENDING, client);
-    when(appointmentRepository.findDueForReminder(any(), any(), any()))
-        .thenReturn(List.of(appointment));
-
-    scheduler.sendDueReminders();
-
-    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
-    assertThat(appointment.getReminderSentAt()).isNull();
-    verify(appointmentRepository, never()).save(any());
-  }
-
-  @Test
-  void sendDueReminders_appointmentWithNoClient_skipsWithoutSendingOrThrowing() {
-    Appointment appointment = buildAppointment(3L, AppointmentStatus.PENDING, null);
-    when(appointmentRepository.findDueForReminder(any(), any(), any()))
-        .thenReturn(List.of(appointment));
-
-    scheduler.sendDueReminders();
-
-    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
-    assertThat(appointment.getReminderSentAt()).isNull();
-  }
-
-  @Test
-  void sendDueReminders_blankClientEmail_skipsWithoutSendingOrThrowing() {
-    Client client = clientWithEmail("   ");
-    Appointment appointment = buildAppointment(4L, AppointmentStatus.PENDING, client);
-    when(appointmentRepository.findDueForReminder(any(), any(), any()))
-        .thenReturn(List.of(appointment));
-
-    scheduler.sendDueReminders();
-
-    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
+    verify(persistenceService).markReminded(eq(1L), any(Instant.class));
   }
 
   /**
-   * No more than one reminder per appointment: {@code findDueForReminder} filters on {@code
-   * reminderSentAt IS NULL} at the query level, but the scheduler also re-checks it in memory
-   * (belt-and-suspenders — see {@code sendReminder}) so the invariant holds even if a future caller
-   * feeds it an appointment fetched a different way. This test forces that second guard by having
-   * the (mocked) repository return an appointment that's already marked reminded — a real query
-   * would have excluded it, but if the guard here didn't exist, a stale/duplicate row reaching this
-   * method would incorrectly send a second email.
+   * {@link AppointmentReminderPersistenceService#resolveReminderContext} is what encodes "skip,
+   * already reminded" / "skip, no client email" (see its own test) — from the scheduler's point of
+   * view both collapse to the same signal: a {@code null} context means nothing to send.
    */
   @Test
-  void sendDueReminders_doesNotResend_whenAlreadyMarkedReminded() {
-    Client client = clientWithEmail("cliente@example.com");
-    Appointment appointment = buildAppointment(5L, AppointmentStatus.CONFIRMED, client);
-    appointment.setReminderSentAt(Instant.now().minus(Duration.ofMinutes(30)));
+  void sendDueReminders_nullContext_skipsWithoutSendingOrThrowing() {
     when(appointmentRepository.findDueForReminder(any(), any(), any()))
-        .thenReturn(List.of(appointment));
+        .thenReturn(List.of(appointmentStub(2L)));
+    when(persistenceService.resolveReminderContext(2L)).thenReturn(null);
 
-    scheduler.sendDueReminders();
+    assertThatCode(() -> scheduler.sendDueReminders()).doesNotThrowAnyException();
 
     verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
-    verify(appointmentRepository, never()).save(any());
+    verify(persistenceService, never()).markReminded(anyLong(), any());
+  }
+
+  /**
+   * Code review follow-up: a send failure for one appointment must not propagate out of the batch,
+   * must not mark that appointment reminded, and must not stop a later appointment in the same run
+   * from being processed and marked — proving the per-appointment transaction scoping in {@link
+   * AppointmentReminderPersistenceService} actually isolates each appointment's outcome.
+   */
+  @Test
+  void sendDueReminders_emailSendFailure_isIsolatedPerAppointment_andDoesNotStopTheBatch() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(10L), appointmentStub(11L)));
+    when(persistenceService.resolveReminderContext(10L))
+        .thenReturn(contextFor(1L, "fails@example.com"));
+    when(persistenceService.resolveReminderContext(11L))
+        .thenReturn(contextFor(1L, "ok@example.com"));
+    doThrow(new RuntimeException("ACS unreachable"))
+        .when(emailService)
+        .sendPlainTextEmail(eq("fails@example.com"), anyString(), anyString());
+
+    assertThatCode(() -> scheduler.sendDueReminders()).doesNotThrowAnyException();
+
+    verify(persistenceService, never()).markReminded(eq(10L), any());
+    verify(emailService).sendPlainTextEmail(eq("ok@example.com"), anyString(), anyString());
+    verify(persistenceService).markReminded(eq(11L), any(Instant.class));
   }
 }
