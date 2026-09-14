@@ -66,6 +66,18 @@ public class Appointment {
   @Column(name = "reminder_sent_at")
   private Instant reminderSentAt;
 
+  /**
+   * Issue #225: when the ~24h-ahead reminder WhatsApp message was sent for this appointment's
+   * <em>current</em> {@code startAt} -- a separate flag from {@link #reminderSentAt} (email)
+   * because the two channels are independent: either can succeed or fail on its own, and one being
+   * sent must not be conflated with the other. Same reschedule semantics as {@link
+   * #reminderSentAt}: {@link com.cursorpoc.backend.service.AppointmentService#update} resets it to
+   * {@code null} whenever {@code startAt} actually changes.
+   */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "whatsapp_reminder_sent_at")
+  private Instant whatsappReminderSentAt;
+
   public Long getId() {
     return id;
   }
@@ -144,5 +156,13 @@ public class Appointment {
 
   public void setReminderSentAt(Instant reminderSentAt) {
     this.reminderSentAt = reminderSentAt;
+  }
+
+  public Instant getWhatsappReminderSentAt() {
+    return whatsappReminderSentAt;
+  }
+
+  public void setWhatsappReminderSentAt(Instant whatsappReminderSentAt) {
+    this.whatsappReminderSentAt = whatsappReminderSentAt;
   }
 }

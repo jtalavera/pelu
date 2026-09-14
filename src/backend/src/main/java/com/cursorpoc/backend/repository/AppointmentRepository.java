@@ -103,12 +103,17 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
 
   /**
-   * Issue #218: appointments whose reminder hasn't been sent for their current {@code startAt} slot
-   * yet, still in a remindable status, and due to enter the reminder window on this run.
+   * Issue #218 (email) / #225 (WhatsApp): appointments where at least one reminder channel hasn't
+   * been sent yet for their current {@code startAt} slot, still in a remindable status, and due to
+   * enter the reminder window on this run. The {@code OR} (rather than {@code AND}) is what lets an
+   * appointment stay in the result set when e.g. the email already went out but WhatsApp hasn't --
+   * the two channels are resolved and marked independently downstream, so this query only needs to
+   * rule out appointments where BOTH are already done.
    */
   @Query(
       """
-      SELECT a FROM Appointment a WHERE a.reminderSentAt IS NULL
+      SELECT a FROM Appointment a
+      WHERE (a.reminderSentAt IS NULL OR a.whatsappReminderSentAt IS NULL)
       AND a.status IN :statuses
       AND a.startAt >= :from AND a.startAt < :to
       ORDER BY a.startAt ASC

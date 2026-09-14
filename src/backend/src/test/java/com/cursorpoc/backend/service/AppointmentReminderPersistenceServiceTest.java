@@ -26,6 +26,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * here from {@code AppointmentReminderScheduler} when the per-appointment DB work was split into
  * its own short-lived transaction (see the class Javadoc) — this is now where those acceptance
  * criteria are actually exercised.
+ *
+ * <p>Issue #225 extends this coverage to the independent WhatsApp channel: {@link
+ * ReminderContext#clientEmail()} and {@link ReminderContext#clientPhone()} are each resolved (and
+ * skipped) on their own, so a client with phone-but-no-email or email-but-no-phone still gets a
+ * non-null context with exactly one target populated, and each channel's own "already sent for this
+ * slot" flag ({@code reminderSentAt} / {@code whatsappReminderSentAt}) is checked independently of
+ * the other's.
  */
 @ExtendWith(MockitoExtension.class)
 class AppointmentReminderPersistenceServiceTest {
@@ -68,12 +75,17 @@ class AppointmentReminderPersistenceServiceTest {
     return a;
   }
 
-  private static Client clientWithEmail(String email) {
+  private static Client clientWith(String email, String phone) {
     Client c = new Client();
     c.setId(30L);
     c.setFullName("Maria Lopez");
     c.setEmail(email);
+    c.setPhone(phone);
     return c;
+  }
+
+  private static Client clientWithEmail(String email) {
+    return clientWith(email, null);
   }
 
   @Test
@@ -87,6 +99,7 @@ class AppointmentReminderPersistenceServiceTest {
     assertThat(context.tenantId()).isEqualTo(1L);
     assertThat(context.tenantName()).isEqualTo("Demo Salon");
     assertThat(context.clientEmail()).isEqualTo("cliente@example.com");
+    assertThat(context.clientPhone()).isNull();
     assertThat(context.clientName()).isEqualTo("Maria Lopez");
     assertThat(context.serviceName()).isEqualTo("Corte");
     assertThat(context.professionalName()).isEqualTo("Ana Gomez");
@@ -111,15 +124,6 @@ class AppointmentReminderPersistenceServiceTest {
   }
 
   @Test
-  void resolveReminderContext_alreadyReminded_returnsNull() {
-    Appointment appointment = buildAppointment(1L, clientWithEmail("cliente@example.com"));
-    appointment.setReminderSentAt(Instant.now().minus(Duration.ofMinutes(10)));
-    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
-
-    assertThat(service.resolveReminderContext(1L)).isNull();
-  }
-
-  @Test
   void resolveReminderContext_noClient_returnsNull() {
     Appointment appointment = buildAppointment(1L, null);
     when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
@@ -127,20 +131,101 @@ class AppointmentReminderPersistenceServiceTest {
     assertThat(service.resolveReminderContext(1L)).isNull();
   }
 
+  /**
+   * Issue #225: a client with neither email nor phone still yields a (non-null) context — it just
+   * has both targets null, so the scheduler sends nothing on either channel without treating it as
+   * an error case.
+   */
   @Test
-  void resolveReminderContext_clientWithoutEmail_returnsNull() {
+  void resolveReminderContext_clientWithoutEmail_emailTargetIsNull_butContextIsNotNull() {
     Appointment appointment = buildAppointment(1L, clientWithEmail(null));
     when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
 
-    assertThat(service.resolveReminderContext(1L)).isNull();
+    ReminderContext context = service.resolveReminderContext(1L);
+
+    assertThat(context).isNotNull();
+    assertThat(context.clientEmail()).isNull();
+    assertThat(context.clientPhone()).isNull();
   }
 
   @Test
-  void resolveReminderContext_blankClientEmail_returnsNull() {
+  void resolveReminderContext_blankClientEmail_emailTargetIsNull() {
     Appointment appointment = buildAppointment(1L, clientWithEmail("   "));
     when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
 
-    assertThat(service.resolveReminderContext(1L)).isNull();
+    assertThat(service.resolveReminderContext(1L).clientEmail()).isNull();
+  }
+
+  @Test
+  void resolveReminderContext_emailAlreadyReminded_emailTargetIsNull() {
+    Appointment appointment = buildAppointment(1L, clientWithEmail("cliente@example.com"));
+    appointment.setReminderSentAt(Instant.now().minus(Duration.ofMinutes(10)));
+    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+
+    assertThat(service.resolveReminderContext(1L).clientEmail()).isNull();
+  }
+
+  /**
+   * Issue #225: the client's local Paraguay-format phone is normalized to a WhatsApp E.164
+   * destination.
+   */
+  @Test
+  void resolveReminderContext_clientWithLocalPhone_returnsE164WhatsAppTarget() {
+    Appointment appointment = buildAppointment(1L, clientWith(null, "(0981) 123-456"));
+    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+
+    ReminderContext context = service.resolveReminderContext(1L);
+
+    assertThat(context).isNotNull();
+    assertThat(context.clientPhone()).isEqualTo("+595981123456");
+    assertThat(context.clientEmail()).isNull();
+  }
+
+  @Test
+  void resolveReminderContext_clientWithoutPhone_whatsAppTargetIsNull() {
+    Appointment appointment = buildAppointment(1L, clientWith("cliente@example.com", null));
+    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+
+    ReminderContext context = service.resolveReminderContext(1L);
+
+    assertThat(context.clientPhone()).isNull();
+    assertThat(context.clientEmail()).isEqualTo("cliente@example.com");
+  }
+
+  @Test
+  void resolveReminderContext_invalidPhone_whatsAppTargetIsNull() {
+    Appointment appointment = buildAppointment(1L, clientWith(null, "12345"));
+    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+
+    assertThat(service.resolveReminderContext(1L).clientPhone()).isNull();
+  }
+
+  @Test
+  void resolveReminderContext_whatsAppAlreadyReminded_whatsAppTargetIsNull_emailStillTargeted() {
+    Appointment appointment = buildAppointment(1L, clientWith("cliente@example.com", "0981123456"));
+    appointment.setWhatsappReminderSentAt(Instant.now().minus(Duration.ofMinutes(10)));
+    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+
+    ReminderContext context = service.resolveReminderContext(1L);
+
+    assertThat(context.clientPhone()).isNull();
+    assertThat(context.clientEmail()).isEqualTo("cliente@example.com");
+  }
+
+  /**
+   * Independence check: email already sent for this slot must not affect the still-pending WhatsApp
+   * target, and vice versa (covered above) — the two flags are read and applied separately.
+   */
+  @Test
+  void resolveReminderContext_emailAlreadyReminded_whatsAppStillTargeted() {
+    Appointment appointment = buildAppointment(1L, clientWith("cliente@example.com", "0981123456"));
+    appointment.setReminderSentAt(Instant.now().minus(Duration.ofMinutes(10)));
+    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+
+    ReminderContext context = service.resolveReminderContext(1L);
+
+    assertThat(context.clientEmail()).isNull();
+    assertThat(context.clientPhone()).isEqualTo("+595981123456");
   }
 
   @Test
@@ -152,6 +237,7 @@ class AppointmentReminderPersistenceServiceTest {
     service.markReminded(1L, sentAt);
 
     assertThat(appointment.getReminderSentAt()).isEqualTo(sentAt);
+    assertThat(appointment.getWhatsappReminderSentAt()).isNull();
   }
 
   @Test
@@ -159,5 +245,25 @@ class AppointmentReminderPersistenceServiceTest {
     when(appointmentRepository.findById(99L)).thenReturn(Optional.empty());
 
     assertThatCode(() -> service.markReminded(99L, Instant.now())).doesNotThrowAnyException();
+  }
+
+  @Test
+  void markWhatsAppReminded_setsWhatsappReminderSentAt_andLeavesEmailFlagAlone() {
+    Appointment appointment = buildAppointment(1L, clientWith(null, "0981123456"));
+    when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+    Instant sentAt = Instant.now();
+
+    service.markWhatsAppReminded(1L, sentAt);
+
+    assertThat(appointment.getWhatsappReminderSentAt()).isEqualTo(sentAt);
+    assertThat(appointment.getReminderSentAt()).isNull();
+  }
+
+  @Test
+  void markWhatsAppReminded_appointmentNotFound_doesNothing() {
+    when(appointmentRepository.findById(99L)).thenReturn(Optional.empty());
+
+    assertThatCode(() -> service.markWhatsAppReminded(99L, Instant.now()))
+        .doesNotThrowAnyException();
   }
 }

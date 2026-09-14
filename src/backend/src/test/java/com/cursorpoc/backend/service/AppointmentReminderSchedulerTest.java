@@ -36,15 +36,23 @@ import org.springframework.context.MessageSource;
  * and failure isolation across a batch. {@link AppointmentReminderPersistenceService}'s own test
  * covers the no-duplicate-sends and client-without-email skip logic, since code review moved that
  * guard logic there (per-appointment transaction scoping — see that class's Javadoc); the
- * reschedule-resets-the-flag decision is exercised in {@link AppointmentServiceTest} instead, since
+ * reschedule-resets-the-flag decision is exercised in {@code AppointmentServiceTest} instead, since
  * it's {@code AppointmentService#update} that resets it.
+ *
+ * <p>Issue #225 extends this with the independent WhatsApp channel: {@link WhatsAppService} is
+ * mocked here the same way {@link EmailService} already is, and every new test below asserts that
+ * one channel's success/failure/absence never affects the other's — same spirit as the pre-existing
+ * per-appointment batch-isolation test.
  */
 @ExtendWith(MockitoExtension.class)
 class AppointmentReminderSchedulerTest {
 
+  private static final String WHATSAPP_TEMPLATE = "appointment_reminder";
+
   @Mock private AppointmentRepository appointmentRepository;
   @Mock private AppointmentReminderPersistenceService persistenceService;
   @Mock private EmailService emailService;
+  @Mock private WhatsAppService whatsAppService;
 
   private MessageSource messageSource;
   private AppointmentReminderScheduler scheduler;
@@ -60,8 +68,10 @@ class AppointmentReminderSchedulerTest {
             appointmentRepository,
             persistenceService,
             emailService,
+            whatsAppService,
             messageSource,
-            new FemmeTimeProperties());
+            new FemmeTimeProperties(),
+            WHATSAPP_TEMPLATE);
   }
 
   private static Appointment appointmentStub(long id) {
@@ -70,9 +80,9 @@ class AppointmentReminderSchedulerTest {
     return a;
   }
 
-  private static ReminderContext contextFor(long tenantId, String email) {
+  private static ReminderContext contextFor(long tenantId, String email, String phone) {
     return new ReminderContext(
-        tenantId, "Demo Salon", email, "Maria Lopez", "Corte", "Ana Gomez", Instant.now());
+        tenantId, "Demo Salon", email, phone, "Maria Lopez", "Corte", "Ana Gomez", Instant.now());
   }
 
   @Test
@@ -105,12 +115,14 @@ class AppointmentReminderSchedulerTest {
     when(appointmentRepository.findDueForReminder(any(), any(), any()))
         .thenReturn(List.of(appointmentStub(1L)));
     when(persistenceService.resolveReminderContext(1L))
-        .thenReturn(contextFor(1L, "cliente@example.com"));
+        .thenReturn(contextFor(1L, "cliente@example.com", null));
 
     scheduler.sendDueReminders();
 
     verify(emailService).sendPlainTextEmail(eq("cliente@example.com"), anyString(), anyString());
     verify(persistenceService).markReminded(eq(1L), any(Instant.class));
+    verify(whatsAppService, never()).sendTemplateMessage(any(), any(), any(), any());
+    verify(persistenceService, never()).markWhatsAppReminded(anyLong(), any());
   }
 
   /**
@@ -128,6 +140,8 @@ class AppointmentReminderSchedulerTest {
 
     verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
     verify(persistenceService, never()).markReminded(anyLong(), any());
+    verify(whatsAppService, never()).sendTemplateMessage(any(), any(), any(), any());
+    verify(persistenceService, never()).markWhatsAppReminded(anyLong(), any());
   }
 
   /**
@@ -141,9 +155,9 @@ class AppointmentReminderSchedulerTest {
     when(appointmentRepository.findDueForReminder(any(), any(), any()))
         .thenReturn(List.of(appointmentStub(10L), appointmentStub(11L)));
     when(persistenceService.resolveReminderContext(10L))
-        .thenReturn(contextFor(1L, "fails@example.com"));
+        .thenReturn(contextFor(1L, "fails@example.com", null));
     when(persistenceService.resolveReminderContext(11L))
-        .thenReturn(contextFor(1L, "ok@example.com"));
+        .thenReturn(contextFor(1L, "ok@example.com", null));
     doThrow(new RuntimeException("ACS unreachable"))
         .when(emailService)
         .sendPlainTextEmail(eq("fails@example.com"), anyString(), anyString());
@@ -153,5 +167,132 @@ class AppointmentReminderSchedulerTest {
     verify(persistenceService, never()).markReminded(eq(10L), any());
     verify(emailService).sendPlainTextEmail(eq("ok@example.com"), anyString(), anyString());
     verify(persistenceService).markReminded(eq(11L), any(Instant.class));
+  }
+
+  // ---- Issue #225: WhatsApp channel, independent of email ----------------------------------
+
+  @Test
+  void sendDueReminders_clientWithPhoneOnly_sendsWhatsAppOnly() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L))
+        .thenReturn(contextFor(1L, null, "+595981123456"));
+
+    scheduler.sendDueReminders();
+
+    ArgumentCaptor<List<String>> paramsCaptor = ArgumentCaptor.forClass(List.class);
+    verify(whatsAppService)
+        .sendTemplateMessage(
+            eq("+595981123456"), eq(WHATSAPP_TEMPLATE), eq("es"), paramsCaptor.capture());
+    // {{1}} client first name, {{2}} salon name, {{3}} date, {{4}} time -- per the issue #225
+    // proposed template text.
+    assertThat(paramsCaptor.getValue()).hasSize(4);
+    assertThat(paramsCaptor.getValue().get(0)).isEqualTo("Maria");
+    assertThat(paramsCaptor.getValue().get(1)).isEqualTo("Demo Salon");
+    verify(persistenceService).markWhatsAppReminded(eq(1L), any(Instant.class));
+    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
+    verify(persistenceService, never()).markReminded(anyLong(), any());
+  }
+
+  @Test
+  void sendDueReminders_clientWithEmailOnly_sendsEmailOnly() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L))
+        .thenReturn(contextFor(1L, "cliente@example.com", null));
+
+    scheduler.sendDueReminders();
+
+    verify(emailService).sendPlainTextEmail(eq("cliente@example.com"), anyString(), anyString());
+    verify(persistenceService).markReminded(eq(1L), any(Instant.class));
+    verify(whatsAppService, never()).sendTemplateMessage(any(), any(), any(), any());
+    verify(persistenceService, never()).markWhatsAppReminded(anyLong(), any());
+  }
+
+  @Test
+  void sendDueReminders_clientWithBoth_sendsBothChannelsAndMarksBoth() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L))
+        .thenReturn(contextFor(1L, "cliente@example.com", "+595981123456"));
+
+    scheduler.sendDueReminders();
+
+    verify(emailService).sendPlainTextEmail(eq("cliente@example.com"), anyString(), anyString());
+    verify(persistenceService).markReminded(eq(1L), any(Instant.class));
+    verify(whatsAppService)
+        .sendTemplateMessage(eq("+595981123456"), eq(WHATSAPP_TEMPLATE), eq("es"), any());
+    verify(persistenceService).markWhatsAppReminded(eq(1L), any(Instant.class));
+  }
+
+  @Test
+  void sendDueReminders_clientWithNeither_sendsNothing_noError() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L)).thenReturn(contextFor(1L, null, null));
+
+    assertThatCode(() -> scheduler.sendDueReminders()).doesNotThrowAnyException();
+
+    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
+    verify(whatsAppService, never()).sendTemplateMessage(any(), any(), any(), any());
+    verify(persistenceService, never()).markReminded(anyLong(), any());
+    verify(persistenceService, never()).markWhatsAppReminded(anyLong(), any());
+  }
+
+  /**
+   * WhatsApp failing (invalid number, unapproved template, Meta API error) must not block email.
+   */
+  @Test
+  void sendDueReminders_whatsAppSendFails_emailStillSentAndMarked() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L))
+        .thenReturn(contextFor(1L, "cliente@example.com", "+595981123456"));
+    doThrow(new RuntimeException("Meta API error"))
+        .when(whatsAppService)
+        .sendTemplateMessage(eq("+595981123456"), anyString(), anyString(), any());
+
+    assertThatCode(() -> scheduler.sendDueReminders()).doesNotThrowAnyException();
+
+    verify(emailService).sendPlainTextEmail(eq("cliente@example.com"), anyString(), anyString());
+    verify(persistenceService).markReminded(eq(1L), any(Instant.class));
+    verify(persistenceService, never()).markWhatsAppReminded(anyLong(), any());
+  }
+
+  /** And the reverse: email failing must not block WhatsApp. */
+  @Test
+  void sendDueReminders_emailSendFails_whatsAppStillSentAndMarked() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L))
+        .thenReturn(contextFor(1L, "cliente@example.com", "+595981123456"));
+    doThrow(new RuntimeException("ACS unreachable"))
+        .when(emailService)
+        .sendPlainTextEmail(eq("cliente@example.com"), anyString(), anyString());
+
+    assertThatCode(() -> scheduler.sendDueReminders()).doesNotThrowAnyException();
+
+    verify(whatsAppService)
+        .sendTemplateMessage(eq("+595981123456"), anyString(), anyString(), any());
+    verify(persistenceService).markWhatsAppReminded(eq(1L), any(Instant.class));
+    verify(persistenceService, never()).markReminded(anyLong(), any());
+  }
+
+  /**
+   * No double-send on a second run: once {@link AppointmentReminderPersistenceService} reports a
+   * channel already sent (null target), the scheduler must not call that channel again — exercised
+   * here by simulating the second run's context directly (the "already sent" guard itself is {@link
+   * AppointmentReminderPersistenceServiceTest}'s job).
+   */
+  @Test
+  void sendDueReminders_secondRunWithBothAlreadySent_sendsNeitherChannel() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(1L)));
+    when(persistenceService.resolveReminderContext(1L)).thenReturn(contextFor(1L, null, null));
+
+    scheduler.sendDueReminders();
+
+    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
+    verify(whatsAppService, never()).sendTemplateMessage(any(), any(), any(), any());
   }
 }

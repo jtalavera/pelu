@@ -282,14 +282,16 @@ class AppointmentServiceTest {
   }
 
   /**
-   * Issue #218: a reschedule (startAt actually changes) must reset {@code reminderSentAt} to {@code
-   * null} so the appointment's new slot gets a fresh reminder — the reminder already sent described
-   * a slot that no longer exists.
+   * Issue #218 (email) / #225 (WhatsApp): a reschedule (startAt actually changes) must reset both
+   * {@code reminderSentAt} and {@code whatsappReminderSentAt} to {@code null} so the appointment's
+   * new slot gets a fresh reminder on both channels — the reminders already sent described a slot
+   * that no longer exists.
    */
   @Test
   void update_changingStartAt_resetsReminderSentAt() {
     Appointment appointment = buildAppointment(AppointmentStatus.CONFIRMED);
     appointment.setReminderSentAt(Instant.now().minusSeconds(3600));
+    appointment.setWhatsappReminderSentAt(Instant.now().minusSeconds(3600));
     when(appointmentRepository.findByIdAndTenant_Id(1L, TENANT_ID))
         .thenReturn(Optional.of(appointment));
     when(appointmentRepository.countOverlapping(
@@ -306,18 +308,22 @@ class AppointmentServiceTest {
     service.update(TENANT_ID, 1L, req);
 
     assertThat(appointment.getReminderSentAt()).isNull();
+    assertThat(appointment.getWhatsappReminderSentAt()).isNull();
   }
 
   /**
-   * Issue #218: editing an appointment WITHOUT changing startAt (e.g. only the professional) must
-   * not clear an already-sent reminder — the slot the client was reminded about is still the same
-   * one, so a second reminder for it would be a duplicate.
+   * Issue #218 (email) / #225 (WhatsApp): editing an appointment WITHOUT changing startAt (e.g.
+   * only the professional) must not clear an already-sent reminder on either channel — the slot the
+   * client was reminded about is still the same one, so a second reminder for it would be a
+   * duplicate.
    */
   @Test
   void update_keepingSameStartAt_preservesReminderSentAt() {
     Appointment appointment = buildAppointment(AppointmentStatus.CONFIRMED);
     Instant remindedAt = Instant.now().minusSeconds(3600);
+    Instant whatsappRemindedAt = Instant.now().minusSeconds(1800);
     appointment.setReminderSentAt(remindedAt);
+    appointment.setWhatsappReminderSentAt(whatsappRemindedAt);
     when(appointmentRepository.findByIdAndTenant_Id(1L, TENANT_ID))
         .thenReturn(Optional.of(appointment));
     when(appointmentRepository.countOverlapping(
@@ -333,6 +339,7 @@ class AppointmentServiceTest {
     service.update(TENANT_ID, 1L, req);
 
     assertThat(appointment.getReminderSentAt()).isEqualTo(remindedAt);
+    assertThat(appointment.getWhatsappReminderSentAt()).isEqualTo(whatsappRemindedAt);
   }
 
   @Test
