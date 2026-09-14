@@ -63,6 +63,24 @@ class EmailServiceTest {
         .doesNotThrowAnyException();
   }
 
+  /** Issue #218: appointment reminders use this generic send — same dev/e2e fallback. */
+  @Test
+  void sendPlainTextEmail_disabled_logsInsteadOfSending() {
+    EmailService service = newService(false, "");
+
+    assertThatCode(() -> service.sendPlainTextEmail("cliente@example.com", "Subj", "Body"))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void sendPlainTextEmail_realSendFailure_wrapsAsEmailSendFailed() {
+    EmailService service = newService(true, "not-a-valid-connection-string");
+
+    assertThatThrownBy(() -> service.sendPlainTextEmail("cliente@example.com", "Subj", "Body"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("EMAIL_SEND_FAILED");
+  }
+
   /**
    * A real (but invalid/unreachable) configuration must fail with a translatable
    * SCREAMING_SNAKE_CASE code, not a raw Azure SDK exception falling through to Spring's generic
