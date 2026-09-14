@@ -24,6 +24,7 @@ import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TipWithdrawalRepository;
@@ -65,6 +66,8 @@ class SeedResetServiceTest {
   @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
   @Mock private AppUserTourStateRepository appUserTourStateRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
+  @Mock private SifenCertificateRepository sifenCertificateRepository;
+  @Mock private SifenCertificateSecretStore sifenCertificateSecretStore;
   @Mock private FemmeDataInitializer femmeDataInitializer;
 
   private SeedResetService service;
@@ -92,6 +95,8 @@ class SeedResetServiceTest {
             passwordResetTokenRepository,
             appUserTourStateRepository,
             tipWithdrawalRepository,
+            sifenCertificateRepository,
+            sifenCertificateSecretStore,
             femmeDataInitializer);
 
     Tenant tenant = new Tenant();
