@@ -438,7 +438,20 @@
       "inactiveClientsColPhone": "Teléfono",
       "inactiveClientsColInactivity": "Días de inactividad",
       "inactiveClientsDaysValue": "{{days}} días",
-      "inactiveClientsNeverVisited": "Nunca visitó"
+      "inactiveClientsViewAll": "Ver todas"
+    },
+    "inactiveClients": {
+      "pageTitle": "Clientes inactivos",
+      "pageSubtitle": "Clientes activos que no tuvieron un turno completado recientemente, ordenados por más días sin visitar.",
+      "backToDashboard": "Volver al Panel",
+      "loading": "Cargando…",
+      "errorTitle": "Error",
+      "empty": "No hay clientes inactivos.",
+      "colClient": "Cliente",
+      "colPhone": "Teléfono",
+      "colLastVisit": "Última visita",
+      "colInactivity": "Días de inactividad",
+      "daysValue": "{{days}} días"
     },
     "status": {
       "PENDING": "Pendiente",

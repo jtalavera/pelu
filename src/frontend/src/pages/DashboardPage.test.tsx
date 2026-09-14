@@ -138,10 +138,10 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
         },
         {
           clientId: 2,
-          fullName: "Bruno Never Visited",
+          fullName: "Carla Also Gone",
           phone: "0981000002",
-          daysSinceLastVisit: null,
-          lastVisitAt: null,
+          daysSinceLastVisit: 95,
+          lastVisitAt: "2026-05-01T00:00:00Z",
         },
       ]),
     );
@@ -152,8 +152,24 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
     expect(rows[0].textContent).toContain("Ana Long Gone");
     expect(rows[0].textContent).toContain("0981000001");
     expect(rows[0].textContent).toContain("200 days");
-    expect(rows[1].textContent).toContain("Bruno Never Visited");
-    expect(rows[1].textContent).toContain("Never visited");
+    expect(rows[1].textContent).toContain("Carla Also Gone");
+    expect(rows[1].textContent).toContain("95 days");
+  });
+
+  it("shows a 'View all' button linking to the full inactive-clients page when there are results", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        {
+          clientId: 1,
+          fullName: "Ana Long Gone",
+          phone: "0981000001",
+          daysSinceLastVisit: 200,
+          lastVisitAt: "2026-01-01T00:00:00Z",
+        },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByTestId("dashboard-inactive-clients-view-all")).toBeTruthy();
   });
 
   it("uses the server-provided threshold in the subtitle copy, not a hardcoded frontend value", async () => {

@@ -13,6 +13,7 @@ import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import TaxSettingsPage from "./pages/TaxSettingsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
+import InactiveClientsPage from "./pages/InactiveClientsPage";
 import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import ServiceRecordsPage from "./pages/ServiceRecordsPage";
@@ -52,6 +53,7 @@ export function AppRoutes() {
         <Route path="/app/propinas" element={<PropinasPage />} />
         <Route path="/app/clients" element={<ClientsPage />} />
         <Route path="/app/clients/:id" element={<ClientDetailPage />} />
+        <Route path="/app/inactive-clients" element={<InactiveClientsPage />} />
         <Route path="/app/professionals" element={<ProfessionalsPage />} />
         <Route path="/app/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="business" replace />} />
