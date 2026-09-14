@@ -66,6 +66,12 @@ test.describe("HU-07 · Agendar un turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    // calendarVisibleWeekSlotIso picks the next available slot chronologically — late enough in the
+    // current calendar week (e.g. Sunday evening) that can genuinely land in *next* week once
+    // today's remaining hours are exhausted, which the calendar doesn't show by default. Same
+    // week-navigation fallback as this file's first test above, instead of a raw click that assumes
+    // the card is always in the initially-displayed week.
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await expect(page.getByText("Pending", { exact: true })).toBeVisible();
   });

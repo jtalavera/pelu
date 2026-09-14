@@ -3,8 +3,16 @@ import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
   loginAsDemoApi,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+// DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts) — every test
+// below needs the Configuración → SIFEN screen itself (gated by this flag), so it's turned on for
+// the whole file here and restored off afterward, same per-file toggle convention as
+// hu-33-ajustes-facturacion-electronica.spec.ts.
+const DEMO_TENANT_ID = 1;
+const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // Issue #194 — "Ajustes Configuración → SIFEN":
 //   1. The screen is split into tabs (same pattern as Facturación's "Caja" / "Historial"):
@@ -28,6 +36,14 @@ async function seedManualVoidings(request: APIRequestContext, token: string, how
 }
 
 test.describe("Issue #194 · Configuración → SIFEN por solapas", () => {
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
+  });
+
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+  });
+
   test("AC1 · la pantalla se organiza en las solapas 'Certificado' y 'Numeración inutilizada'", async ({
     page,
   }) => {

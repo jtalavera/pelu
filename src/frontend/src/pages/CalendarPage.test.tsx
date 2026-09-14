@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "../test/renderWithTour";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "../test/renderWithTour";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
@@ -18,6 +18,13 @@ vi.mock("../api/femmeClient", () => ({
   femmePutJson: (...args: unknown[]) => femmePutJsonMock(...args),
   femmePatchJson: (...args: unknown[]) => femmePatchJsonMock(...args),
 }));
+
+// Explicit cleanup between tests — `vite.config.ts` doesn't set `globals: true`/RTL's automatic
+// afterEach hook, so a still-mounted component from an earlier test can otherwise leak into
+// `document.body` and pollute later `getByText`/`getByTestId` assertions in this file.
+afterEach(() => {
+  cleanup();
+});
 
 const PROFESSIONAL = { id: 10, fullName: "Ana Gomez", active: true };
 const SERVICE = { id: 20, name: "Haircut", durationMinutes: 60, active: true };
@@ -274,13 +281,24 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("does not show edit button for COMPLETED appointments", async () => {
-      const completedAppt = { ...MOCK_APPOINTMENT, status: "COMPLETED" };
+    it("does not show edit button for IN_PROGRESS appointments", async () => {
+      // Not COMPLETED: HU-19's `CALENDAR_GRID_STATUSES` (`api/appointments.ts`) excludes
+      // COMPLETED/CANCELLED/NO_SHOW from the week grid entirely (see the sibling "does not show
+      // non-grid statuses" test above), so a COMPLETED appointment is never clickable here — this
+      // test previously used COMPLETED and could never actually open the detail modal it asserts
+      // against. It only ever reported green because a still-mounted "Haircut" block from an
+      // earlier test in this file (this file was missing `afterEach(cleanup)`) satisfied the
+      // `waitFor` below without the current render ever producing one; adding `cleanup()` (see
+      // top of file) exposed the stale assertion. IN_PROGRESS is both grid-visible
+      // (`CALENDAR_GRID_STATUSES`) and non-editable (`EDITABLE_STATUSES` — only PENDING/CONFIRMED
+      // are editable, per `CalendarPage.tsx`'s detail-modal "Edit appointment" button gate), so it
+      // exercises the real restriction end-to-end.
+      const inProgressAppt = { ...MOCK_APPOINTMENT, status: "IN_PROGRESS" };
       femmeJsonMock.mockImplementation((url: string) => {
         if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
         if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
         if (url.includes("/api/clients")) return Promise.resolve([]);
-        if (url.includes("/api/appointments")) return Promise.resolve([completedAppt]);
+        if (url.includes("/api/appointments")) return Promise.resolve([inProgressAppt]);
         return Promise.resolve([]);
       });
 

@@ -25,11 +25,12 @@ import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/
 //         takes the safe dev-log branch regardless of what this spec does.
 //  AC-03: the invoice "Ver" dialog shows only the KuDE download button, never both.
 //
-// DEMO_TENANT_ID=1 has this flag OFF by default in the e2e profile (Flyway is disabled there, so
-// V28/V30's seed rows never run — see FeatureFlagService#isEnabled's `.orElse(false)`). Every test
-// below turns it on explicitly and back off in afterEach, so later specs (e.g.
-// hu-35-factura-pdf.spec.ts, alphabetically right after this file, which relies on the legacy PDF
-// format still being reachable) aren't affected.
+// DEMO_TENANT_ID=1 gets an explicit tenant-level OFF override for this flag in
+// e2e/global-setup.ts (global default has been ON since V53's conjunctive resolution, but plain-
+// invoice specs are meant to keep issuing traditional comprobantes by default) — every test below
+// turns it on explicitly and back off in afterEach, restoring that baseline for later specs (e.g.
+// hu-35-factura-pdf.spec.ts, alphabetically right after this file) that assume it off unless they
+// enable it themselves.
 
 const DEMO_TENANT_ID = 1;
 const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";

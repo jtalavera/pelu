@@ -8,8 +8,12 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+const DEMO_TENANT_ID = 1;
+const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // RT-25 (Hardening_SIFEN.md): "Inutilización de numeración" governance. SifenNumberVoidingService
 // automatically records a PENDING voiding entry the moment a real transmit attempt resolves
@@ -29,7 +33,13 @@ type IssuedInvoice = { id: number };
 
 // Issue #194: Configuración → SIFEN is now split into "Certificate" and "Voided numbering" tabs
 // (same tab pattern as the Facturación page). Everything RT-25 touches lives under the second one.
-async function openVoidingTab(page: Page) {
+// Flips SIFEN_ELECTRONIC_INVOICING on right here, not any earlier — every caller creates and/or
+// fabricates its invoice's SIFEN state *before* calling this (those test-support endpoints
+// self-heal issuer data and don't need the flag), and turning the flag on before that would enqueue
+// a real async transmit attempt racing the fabricated status (same class of bug documented in
+// issue-175-corregir-y-reenviar.spec.ts's file header).
+async function openVoidingTab(page: Page, request: APIRequestContext) {
+  await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
   await page.goto("/app/settings/sifen");
   await page.getByRole("tab", { name: "Voided numbering" }).click();
 }
@@ -67,7 +77,7 @@ async function rejectAndGetVoidingRow(page: Page, request: APIRequestContext, to
   );
 
   await loginAsDemo(page);
-  await openVoidingTab(page);
+  await openVoidingTab(page, request);
   await expect(page.getByTestId("sifen-number-voiding-section")).toBeVisible();
   return page
     .getByTestId("sifen-number-voiding-row")
@@ -75,6 +85,14 @@ async function rejectAndGetVoidingRow(page: Page, request: APIRequestContext, to
 }
 
 test.describe("RT-25 · Inutilización de numeración", () => {
+  // DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts). Every test
+  // here needs it on only for openVoidingTab's Configuración → SIFEN screen (see that function's
+  // own comment for why it isn't enabled any earlier, e.g. in a beforeEach) — restore it off after
+  // each test regardless, so later specs sharing this tenant see the documented baseline.
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+  });
+
   test("RT-25 · una factura rechazada por SIFEN registra automáticamente una inutilización pendiente", async ({
     page,
     request,
@@ -142,7 +160,7 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     const to = from + 4;
 
     await loginAsDemo(page);
-    await openVoidingTab(page);
+    await openVoidingTab(page, request);
     const form = page.getByTestId("sifen-number-voiding-manual-form");
     await expect(form).toBeVisible();
     await form.locator("#manual-range-from").fill(String(from));
@@ -175,7 +193,7 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     );
 
     await loginAsDemo(page);
-    await openVoidingTab(page);
+    await openVoidingTab(page, request);
     const form = page.getByTestId("sifen-number-voiding-manual-form");
     await form.locator("#manual-range-from").fill(String(detail.invoiceNumber));
     await form.locator("#manual-range-to").fill(String(detail.invoiceNumber));
@@ -210,7 +228,7 @@ test.describe("RT-25 · Inutilización de numeración", () => {
 
     // UI: the SIFEN settings section shows the summary line.
     await loginAsDemo(page);
-    await openVoidingTab(page);
+    await openVoidingTab(page, request);
     await expect(page.getByTestId("sifen-number-voiding-summary")).toBeVisible();
     await expect(page.getByTestId("sifen-number-voiding-summary")).toContainText("pending submission");
   });

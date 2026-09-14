@@ -329,7 +329,22 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     page,
     request,
   }) => {
+    // Clean slate: the widget groups by status (Open, Closed, Voided) *before* recency (issue #119
+    // AC10 below), and this test voids its own "newer" record partway through — every Open/Closed
+    // "today" record any other spec in the full suite has accumulated (easily hundreds by the time
+    // this file runs) sorts ahead of a single Voided one regardless of how recent it is, so the
+    // just-voided card can end up past both the server's own size=100 fetch cap and everything
+    // revealAllTodayRecords's bounded "More" loop can reveal. POST /api/admin/seed/reset wipes
+    // tenant 1's clients/appointments/service-records (HU-27) and needs no prior auth — same
+    // pattern issue-216-panel-clientes-inactivos.spec.ts and
+    // issue-223-dashboard-tips-by-professional.spec.ts use for an identical crowding problem.
+    // Re-seeds the salon this test (and the shared `seed` variable other tests in this file close
+    // over) needs, since the reset wipes categories/services/professionals too.
+    const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
+    expect(resetRes.ok(), await resetRes.text()).toBeTruthy();
     const token = await loginAsDemoApi(request);
+    seed = await seedCategoryServiceProfessional(request, token);
+
     const olderClient = await seedClient(request, token, `E2E Older ${Date.now()}`);
     await createServiceRecordApi(request, token, {
       clientId: olderClient.id,
@@ -346,11 +361,16 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await page.goto("/app");
     await expect(page.getByText("Today's service records")).toBeVisible();
     await revealAllTodayRecords(page);
-    await expect(page.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(olderClient.fullName)).toBeVisible();
+    // Scoped to the fichas grid: DashboardPage's separate "never visited" inactive-clients panel
+    // (dashboard-inactive-clients, issue #216) also renders a clickable row for these same fresh
+    // clients — they only have a service record, no appointment, so they qualify as "never
+    // visited" too — and a page-wide getByText(name) resolves ambiguously to both widgets.
+    const grid = page.getByTestId("dashboard-service-records-grid");
+    await expect(grid.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
+    await expect(grid.getByText(olderClient.fullName)).toBeVisible();
 
     // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
-    const cards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
+    const cards = grid.getByTestId("dashboard-service-record-card");
     const firstCardText = await cards.first().innerText();
     expect(firstCardText).toContain(newerClient.fullName);
 
@@ -362,9 +382,9 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
     await page.reload();
     await revealAllTodayRecords(page);
-    await expect(page.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(newerClient.fullName)).toBeVisible();
-    const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
+    await expect(grid.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
+    await expect(grid.getByText(newerClient.fullName)).toBeVisible();
+    const reorderedCards = grid.getByTestId("dashboard-service-record-card");
     const firstCardAfterVoid = await reorderedCards.first().innerText();
     expect(firstCardAfterVoid).toContain(olderClient.fullName);
   });

@@ -55,6 +55,29 @@ public class Appointment {
   @Column(name = "cancel_reason", length = 500)
   private String cancelReason;
 
+  /**
+   * Issue #218: when the ~24h-ahead reminder email was sent for this appointment's <em>current</em>
+   * {@code startAt}. Null means "not sent yet for the current slot" — {@link
+   * com.cursorpoc.backend.service.AppointmentService#update} resets it to {@code null} whenever
+   * {@code startAt} actually changes, so a reschedule always gets a fresh reminder for its new
+   * time.
+   */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "reminder_sent_at")
+  private Instant reminderSentAt;
+
+  /**
+   * Issue #225: when the ~24h-ahead reminder WhatsApp message was sent for this appointment's
+   * <em>current</em> {@code startAt} -- a separate flag from {@link #reminderSentAt} (email)
+   * because the two channels are independent: either can succeed or fail on its own, and one being
+   * sent must not be conflated with the other. Same reschedule semantics as {@link
+   * #reminderSentAt}: {@link com.cursorpoc.backend.service.AppointmentService#update} resets it to
+   * {@code null} whenever {@code startAt} actually changes.
+   */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "whatsapp_reminder_sent_at")
+  private Instant whatsappReminderSentAt;
+
   public Long getId() {
     return id;
   }
@@ -125,5 +148,21 @@ public class Appointment {
 
   public void setCancelReason(String cancelReason) {
     this.cancelReason = cancelReason;
+  }
+
+  public Instant getReminderSentAt() {
+    return reminderSentAt;
+  }
+
+  public void setReminderSentAt(Instant reminderSentAt) {
+    this.reminderSentAt = reminderSentAt;
+  }
+
+  public Instant getWhatsappReminderSentAt() {
+    return whatsappReminderSentAt;
+  }
+
+  public void setWhatsappReminderSentAt(Instant whatsappReminderSentAt) {
+    this.whatsappReminderSentAt = whatsappReminderSentAt;
   }
 }

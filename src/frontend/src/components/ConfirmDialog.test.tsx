@@ -1,10 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "../test/renderWithTour";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "../test/renderWithTour";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
 import { ConfirmDialog } from "./ConfirmDialog";
+
+// Explicit cleanup between tests — `vite.config.ts` doesn't set `globals: true`/RTL's automatic
+// afterEach hook, so a still-mounted component from an earlier test can otherwise leak into
+// `document.body` and pollute later `getByRole`/`getByText` assertions in this file.
+afterEach(() => {
+  cleanup();
+});
 
 describe("ConfirmDialog", () => {
   it("renders title, description, and triggers cancel / confirm", async () => {

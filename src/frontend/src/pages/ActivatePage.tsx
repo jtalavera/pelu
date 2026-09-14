@@ -199,10 +199,19 @@ export default function ActivatePage() {
                       autoComplete="name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      required
+                      // Not `required`: the browser's own native validation would block form
+                      // submission (and thus onSubmit) before the custom, translated
+                      // "Enter your full name." FieldValidationError below ever gets a chance to
+                      // render — this field's blank case is already handled by the `isAdminInvite
+                      // && !fullName.trim()` check in onSubmit, which is the one that must win.
                       className={inputClassName}
                       aria-invalid={
                         formError === t("femme.activate.errorFullNameRequired") ? true : undefined
+                      }
+                      aria-describedby={
+                        formError === t("femme.activate.errorFullNameRequired")
+                          ? "activate-form-error"
+                          : undefined
                       }
                     />
                   </div>
@@ -241,7 +250,9 @@ export default function ActivatePage() {
                     className={inputClassName}
                   />
                 </div>
-                {formError ? <FieldValidationError>{formError}</FieldValidationError> : null}
+                {formError ? (
+                  <FieldValidationError id="activate-form-error">{formError}</FieldValidationError>
+                ) : null}
                 <Button
                   type="submit"
                   variant="primary"

@@ -8,7 +8,11 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { bookingAppointmentDialog, ensureCalendarShowsAppointmentByTestId } from "../fixtures/ui";
+import {
+  bookingAppointmentDialog,
+  ensureCalendarShowsAppointmentByTestId,
+  ensureCalendarShowsClientCard,
+} from "../fixtures/ui";
 
 test.describe("HU-19 · Fixes varios del calendario", () => {
   test("filtro de profesionales con placeholder de búsqueda", async ({ page }) => {
@@ -46,6 +50,11 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
+    // calendarVisibleWeekSlotIso picks the next available slot chronologically — late enough in the
+    // current calendar week (e.g. Sunday evening) that can genuinely land in *next* week once
+    // today's remaining hours are exhausted, which the calendar doesn't show by default. Navigate
+    // to whichever week actually has the card instead of assuming it's the one shown initially.
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
     await page.locator("#status-select").selectOption("COMPLETED");

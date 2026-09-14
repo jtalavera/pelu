@@ -73,6 +73,10 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
       clientDisplayName: "Cliente Ocasional",
       clientRucOverride: null,
       clientIdentityDocumentOverride: "4123456",
+      // Issue #173: with SIFEN enabled (the global default since V53) and an identified receiver,
+      // the KuDE auto-email requires a recipient address — otherwise the request 400s with
+      // SIFEN_RECIPIENT_EMAIL_REQUIRED before ever reaching the AC-05 identification check below.
+      email: "hu02-ac05@example.com",
       lines: [
         {
           serviceId: seed.serviceId,

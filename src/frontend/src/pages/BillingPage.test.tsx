@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "../test/renderWithTour";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "../test/renderWithTour";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@design-system";
@@ -13,6 +13,13 @@ vi.mock("../api/femmeClient", () => ({
   femmeJson: (...args: unknown[]) => femmeJson(...args),
   femmePostJson: (...args: unknown[]) => femmePostJson(...args),
 }));
+
+// Explicit cleanup between tests — `vite.config.ts` doesn't set `globals: true`/RTL's automatic
+// afterEach hook, so a still-mounted component from an earlier test can otherwise leak into
+// `document.body` and pollute later `getByText`/`getByTestId` assertions in this file.
+afterEach(() => {
+  cleanup();
+});
 
 vi.mock("../api/baseUrl", () => ({
   apiBaseUrl: () => "http://localhost:8080",

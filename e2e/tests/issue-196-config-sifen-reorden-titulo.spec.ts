@@ -3,8 +3,15 @@ import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
   loginAsDemoApi,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+// DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts) — the
+// Configuración → SIFEN screen this test exercises needs it on. Same per-file toggle convention as
+// hu-33-ajustes-facturacion-electronica.spec.ts.
+const DEMO_TENANT_ID = 1;
+const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // Issue #196 — "Ajustes Configuración → SIFEN":
 //   In Configuración → SIFEN → "Numeración inutilizada", the section title
@@ -22,11 +29,16 @@ async function seedManualVoiding(request: APIRequestContext, token: string) {
 }
 
 test.describe("Issue #196 · Configuración → SIFEN, reorden del título", () => {
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+  });
+
   test("el título 'Numeración inutilizada' va debajo del alta manual y encima de la tabla", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
     await seedManualVoiding(request, token);
 
     await loginAsDemo(page);

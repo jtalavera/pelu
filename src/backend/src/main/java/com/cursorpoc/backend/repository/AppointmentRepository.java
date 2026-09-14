@@ -102,6 +102,53 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
   long countDistinctClientsWithAppointmentsBetween(
       @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
 
+  /**
+   * Issue #218 (email) / #225 (WhatsApp): appointments where at least one reminder channel hasn't
+   * been sent yet for their current {@code startAt} slot, still in a remindable status, and due to
+   * enter the reminder window on this run. The {@code OR} (rather than {@code AND}) is what lets an
+   * appointment stay in the result set when e.g. the email already went out but WhatsApp hasn't --
+   * the two channels are resolved and marked independently downstream, so this query only needs to
+   * rule out appointments where BOTH are already done.
+   */
+  @Query(
+      """
+      SELECT a FROM Appointment a
+      WHERE (a.reminderSentAt IS NULL OR a.whatsappReminderSentAt IS NULL)
+      AND a.status IN :statuses
+      AND a.startAt >= :from AND a.startAt < :to
+      ORDER BY a.startAt ASC
+      """)
+  List<Appointment> findDueForReminder(
+      @Param("statuses") List<AppointmentStatus> statuses,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /**
+   * Issue #222 — "Dashboard: gráfico de turnos por día de semana": raw start instants in {@code
+   * [from, to)}, restricted to the same "counts as real appointment activity" statuses as {@link
+   * #countDistinctClientsWithAppointmentsBetween} (excludes {@code CANCELLED}/{@code NO_SHOW}).
+   * Projects only {@code startAt} — day-of-week bucketing needs no other column — leaving the
+   * timezone-aware bucketing itself to {@code DashboardService} (in Java, using {@code
+   * FemmeTimeProperties.zoneId()}) rather than a DB-side {@code GROUP BY}: SQL Server has no clean
+   * IANA-timezone conversion, H2 (used in tests/e2e) would need a different one, and the
+   * appointment volume here is salon-scale, so aggregating the already-small result set in memory
+   * is both simpler and consistent across environments. Deterministic ordering (by {@code startAt}
+   * ascending) even though the caller only counts, for consistency with every other ordered query
+   * in this repository.
+   */
+  @Query(
+      """
+      SELECT a.startAt FROM Appointment a WHERE a.tenant.id = :tenantId
+      AND a.status IN :statuses
+      AND a.startAt >= :from AND a.startAt < :to
+      ORDER BY a.startAt ASC
+      """)
+  List<Instant> findStartAtsByTenantAndStatusInAndStartAtBetween(
+      @Param("tenantId") Long tenantId,
+      @Param("statuses") List<AppointmentStatus> statuses,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
   long deleteByTenant_Id(Long tenantId);
 
   boolean existsByClient_Id(Long clientId);

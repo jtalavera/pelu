@@ -20,6 +20,7 @@ import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TipWithdrawalRepository;
@@ -64,6 +65,8 @@ public class SeedResetService {
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final AppUserTourStateRepository appUserTourStateRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
+  private final SifenCertificateRepository sifenCertificateRepository;
+  private final SifenCertificateSecretStore sifenCertificateSecretStore;
   private final FemmeDataInitializer femmeDataInitializer;
 
   public SeedResetService(
@@ -86,6 +89,8 @@ public class SeedResetService {
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
+      SifenCertificateRepository sifenCertificateRepository,
+      SifenCertificateSecretStore sifenCertificateSecretStore,
       FemmeDataInitializer femmeDataInitializer) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
@@ -106,6 +111,8 @@ public class SeedResetService {
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.appUserTourStateRepository = appUserTourStateRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
+    this.sifenCertificateRepository = sifenCertificateRepository;
+    this.sifenCertificateSecretStore = sifenCertificateSecretStore;
     this.femmeDataInitializer = femmeDataInitializer;
   }
 
@@ -198,6 +205,18 @@ public class SeedResetService {
     long deletedAppUserActivationTokens =
         appUserActivationTokenRepository.deleteByAppUser_Tenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_user_activation_tokens", deletedAppUserActivationTokens);
+
+    // RT-12: must also run before deleting app_users — sifen_certificates.uploaded_by_user_id has
+    // a FK to app_users (whoever uploaded it). Previously missing here: any e2e/dev run that had
+    // ever uploaded a SIFEN certificate for this tenant (directly, or via the
+    // /sifen-test-support/ensure-valid-certificate fixture many specs use) made every subsequent
+    // reset fail outright with a referential-integrity violation on this delete. The .p12/password
+    // themselves live in the secret store, not the DB row — clear those too so a re-run doesn't
+    // accumulate orphaned local files (same pattern
+    // SifenInvoiceTestSupportController#clearCertificates already uses).
+    long deletedCertificates = sifenCertificateRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    sifenCertificateSecretStore.deleteAll(DEMO_TENANT_ID);
+    log.info("Deleted {} sifen_certificates", deletedCertificates);
 
     long deletedUsers = appUserRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_users", deletedUsers);

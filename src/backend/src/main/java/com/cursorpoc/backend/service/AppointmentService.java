@@ -168,6 +168,16 @@ public class AppointmentService {
       client = loadClientOrThrow(tenantId, request.clientId());
     }
 
+    // Issue #218/#225: reminder_sent_at (email) and whatsapp_reminder_sent_at track "reminded for
+    // the CURRENT startAt" per channel — a reschedule moves the appointment to a new slot the
+    // client hasn't been reminded about yet on either channel, so reset both here whenever startAt
+    // actually changes. Leaving them untouched when startAt is unchanged (e.g. only the
+    // professional or service was edited) avoids sending redundant reminders for the same slot.
+    if (!startAt.equals(appointment.getStartAt())) {
+      appointment.setReminderSentAt(null);
+      appointment.setWhatsappReminderSentAt(null);
+    }
+
     appointment.setProfessional(professional);
     appointment.setSalonService(service);
     appointment.setClient(client);

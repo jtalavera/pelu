@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "../test/renderWithTour";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "../test/renderWithTour";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
@@ -9,6 +9,13 @@ import { SearchableSelect } from "./SearchableSelect";
 describe("SearchableSelect", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("en");
+  });
+
+  // Explicit cleanup between tests — `vite.config.ts` doesn't set `globals: true`/RTL's automatic
+  // afterEach hook, so a still-mounted component from an earlier test can otherwise leak into
+  // `document.body` and pollute later `getByRole` assertions in this file.
+  afterEach(() => {
+    cleanup();
   });
 
   it("highlights the sole filtered option and selects it on Enter", async () => {

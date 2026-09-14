@@ -24,6 +24,7 @@ import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TipWithdrawalRepository;
@@ -65,6 +66,8 @@ class SeedResetServiceTest {
   @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
   @Mock private AppUserTourStateRepository appUserTourStateRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
+  @Mock private SifenCertificateRepository sifenCertificateRepository;
+  @Mock private SifenCertificateSecretStore sifenCertificateSecretStore;
   @Mock private FemmeDataInitializer femmeDataInitializer;
 
   private SeedResetService service;
@@ -92,6 +95,8 @@ class SeedResetServiceTest {
             passwordResetTokenRepository,
             appUserTourStateRepository,
             tipWithdrawalRepository,
+            sifenCertificateRepository,
+            sifenCertificateSecretStore,
             femmeDataInitializer);
 
     Tenant tenant = new Tenant();
@@ -116,5 +121,17 @@ class SeedResetServiceTest {
     service.resetDemoTenant();
 
     verify(femmeDataInitializer, times(1)).seedDemoTenantData(any(Tenant.class));
+  }
+
+  // RT-12: sifen_certificates.uploaded_by_user_id FKs to app_users, so the certificate cleanup
+  // must run before app_users are deleted — otherwise any e2e/dev run that had ever uploaded a
+  // certificate for this tenant would make every subsequent reset fail with a referential-integrity
+  // violation. Locks in both the DB-row cleanup and the backing secret-store file cleanup.
+  @Test
+  void resetDemoTenant_deletesSifenCertificatesAndTheirSecrets() {
+    service.resetDemoTenant();
+
+    verify(sifenCertificateRepository).deleteByTenant_Id(DEMO_TENANT_ID);
+    verify(sifenCertificateSecretStore).deleteAll(DEMO_TENANT_ID);
   }
 }

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import { API_BASE } from "../fixtures/api";
+import { API_BASE, setTenantFeatureFlag } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
@@ -27,7 +27,21 @@ async function upload(page: import("@playwright/test").Page, filePath: string) {
   await expect(page.getByText("The certificate was uploaded and stored securely.")).toBeVisible();
 }
 
+// DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts) — the
+// /app/settings/sifen route every test here exercises is gated by it. Same per-file toggle
+// convention as sifen-hu-18-cargar-certificado.spec.ts.
+const DEMO_TENANT_ID = 1;
+const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tenant", () => {
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
+  });
+
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+  });
+
   test("HU-19 · 1 el listado se muestra en Configuración → SIFEN, en la misma sección que la carga (AC-01)", async ({
     page,
   }) => {
