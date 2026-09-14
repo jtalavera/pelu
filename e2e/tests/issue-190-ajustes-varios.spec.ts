@@ -7,6 +7,7 @@ import {
   ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -193,40 +194,55 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
   });
 
-  test("AC7 · Configuración → SIFEN muestra certificados y numeración inutilizada en tablas", async ({
-    page,
-    request,
-  }) => {
-    test.setTimeout(90_000);
-    const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    await ensureCashSessionOpenApi(request, token);
-    await ensureCertificate(request);
-    const seed = await seedCategoryServiceProfessional(request, token);
+  // DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts) — the
+  // Configuración → SIFEN screen this AC exercises renders a "not enabled" message instead of the
+  // certificate/voiding UI unless the flag is on, so (like hu-33/issue-173/174/179/198's own SIFEN
+  // sub-tests) this scopes the toggle to just this test rather than the whole file, most of which
+  // doesn't need SIFEN at all.
+  test.describe("AC7 · Configuración → SIFEN", () => {
+    const DEMO_TENANT_ID = 1;
+    const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
-    // One rejected invoice → one automatic voiding row to render.
-    const clientName = `E2E190 SIFEN ${Date.now()}`;
-    await issueRejectedInvoice(request, token, seed.serviceId, seed.serviceFullName, clientName);
+    test.afterEach(async ({ request }) => {
+      await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+    });
 
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
+    test("AC7 · Configuración → SIFEN muestra certificados y numeración inutilizada en tablas", async ({
+      page,
+      request,
+    }) => {
+      test.setTimeout(90_000);
+      const token = await loginAsDemoApi(request);
+      await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
+      await ensureActiveFiscalStampForInvoices(request, token);
+      await ensureCashSessionOpenApi(request, token);
+      await ensureCertificate(request);
+      const seed = await seedCategoryServiceProfessional(request, token);
 
-    // Certificates table (issue #194: now under the "Certificate" tab, the default one).
-    const certSection = page.getByTestId("sifen-certificate-list-section");
-    await expect(certSection.getByRole("table")).toBeVisible();
-    await expect(certSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
-    await expect(certSection.getByRole("columnheader", { name: "Status" })).toBeVisible();
-    await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
+      // One rejected invoice → one automatic voiding row to render.
+      const clientName = `E2E190 SIFEN ${Date.now()}`;
+      await issueRejectedInvoice(request, token, seed.serviceId, seed.serviceFullName, clientName);
 
-    // Voided-numbers table, with a per-row action column + the submit button in the row.
-    await page.getByRole("tab", { name: "Voided numbering" }).click();
-    const voidingSection = page.getByTestId("sifen-number-voiding-section");
-    await expect(voidingSection.getByRole("table")).toBeVisible();
-    await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();
-    await expect(voidingSection.getByRole("columnheader", { name: "Action" })).toBeVisible();
-    const row = page.getByTestId("sifen-number-voiding-row").first();
-    await expect(row).toBeVisible();
-    await expect(row.getByLabel("Reason")).toBeVisible();
-    await expect(row.getByRole("button", { name: "Submit to SIFEN" })).toBeVisible();
+      await loginAsDemo(page);
+      await page.goto("/app/settings/sifen");
+
+      // Certificates table (issue #194: now under the "Certificate" tab, the default one).
+      const certSection = page.getByTestId("sifen-certificate-list-section");
+      await expect(certSection.getByRole("table")).toBeVisible();
+      await expect(certSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
+      await expect(certSection.getByRole("columnheader", { name: "Status" })).toBeVisible();
+      await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
+
+      // Voided-numbers table, with a per-row action column + the submit button in the row.
+      await page.getByRole("tab", { name: "Voided numbering" }).click();
+      const voidingSection = page.getByTestId("sifen-number-voiding-section");
+      await expect(voidingSection.getByRole("table")).toBeVisible();
+      await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();
+      await expect(voidingSection.getByRole("columnheader", { name: "Action" })).toBeVisible();
+      const row = page.getByTestId("sifen-number-voiding-row").first();
+      await expect(row).toBeVisible();
+      await expect(row.getByLabel("Reason")).toBeVisible();
+      await expect(row.getByRole("button", { name: "Submit to SIFEN" })).toBeVisible();
+    });
   });
 });

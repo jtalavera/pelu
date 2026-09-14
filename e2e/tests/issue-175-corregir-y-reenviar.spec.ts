@@ -9,6 +9,7 @@ import {
   ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -110,13 +111,29 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toHaveCount(0);
   });
 
-  test("correcting a rejected invoice resends it under the same CDC and it can be approved", async ({
-    page,
-    request,
-  }) => {
-    test.setTimeout(120_000);
-    const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
+  // DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts) — unlike this
+  // file's other tests (which only ever fabricate SIFEN state via /sifen-test-support and never
+  // need the flag itself), this one also visits Configuración → SIFEN's "Voided numbering" tab,
+  // which the flag gates. Scoped to just this test, same per-test toggle convention as
+  // issue-190-ajustes-varios.spec.ts's own "AC7 · Configuración → SIFEN" sub-describe.
+  test.describe("correcting a rejected invoice — also checks Configuración → SIFEN", () => {
+    const DEMO_TENANT_ID = 1;
+    const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
+    test.afterEach(async ({ request }) => {
+      await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+    });
+
+    test("correcting a rejected invoice resends it under the same CDC and it can be approved", async ({
+      page,
+      request,
+    }) => {
+      test.setTimeout(120_000);
+      const token = await loginAsDemoApi(request);
+      // NOT enabled yet here — see file-header comment: the invoice below must be issued with the
+      // flag off so no async SIFEN transmit attempt can race simulate-sifen-rejection's fabricated
+      // status. Enabled further down, only for the final Configuración → SIFEN tab check.
+      await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
     await ensureCertificate(request);
     const seed = await seedCategoryServiceProfessional(request, token);
@@ -194,6 +211,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     // UI: the "Voided document numbers" tab reflects it as Cancelled — not the misleading "Pending
     // submission" the badge used to fall back to for any non-approved/rejected status — with no
     // deadline countdown and no "Submit to SIFEN" action, since there is nothing left to report.
+    // Only enabled now — the invoice creation/rejection/correct-and-resend above must run with the
+    // flag off (see file-header comment); this Configuración → SIFEN screen needs it on to render.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
     await page.goto("/app/settings/sifen");
     await page.getByRole("tab", { name: "Voided numbering" }).click();
     const voidingRow = page
@@ -211,6 +231,7 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     const approved = await apiGetJson<InvoiceView>(request, token, `/api/invoices/${invoiceId}`);
     expect(approved.sifenSubmissionStatus).toBe("APPROVED");
     expect(approved.sifenControlNumber).toBe(cdcBefore);
+    });
   });
 
   test("the backend rejects correct-and-resend for an invoice that is not REJECTED", async ({
