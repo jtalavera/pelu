@@ -50,6 +50,36 @@ function extractPdfShowTextContent(pdf: Buffer): string {
 test.describe("Issue #217 · Lista de precios compartible", () => {
   test.describe.configure({ mode: "serial" });
 
+  test.afterEach(async ({ request }) => {
+    // The PDF-header test below blanks out ruc/address/taxpayerType/economic-activity/SIFEN
+    // department+city on the shared business profile to exercise the fantasy-name fallback with no
+    // other issuer data on file. Business profile is one row per tenant, shared by every spec —
+    // leaving it blank here silently breaks every later SIFEN spec that (like most of them) never
+    // sets its own profile and instead relies on an ambient SIFEN-complete one (real POST
+    // /api/invoices calls SifenInvoiceHeaderService#requireIssuerDataComplete, which has no
+    // self-healing fallback the way the /sifen-test-support fabrication endpoints do). Restore a
+    // complete profile — same shape/RUC as SifenInvoiceTestSupportController#ensureFullIssuerData —
+    // so later specs see the same ambient state whether or not this file happened to run first.
+    const token = await loginAsDemoApi(request);
+    await apiPutJson(request, token, "/api/business-profile", {
+      businessName: "Demo salon",
+      ruc: "12345678-9",
+      address: "Avda. España 123",
+      phone: "021555000",
+      contactEmail: "facturacion@example.com",
+      logoDataUrl: null,
+      taxpayerType: "LEGAL_ENTITY",
+      economicActivityCode: "96020",
+      economicActivityDescription: "Peluquería y otros tratamientos de belleza",
+      sifenDepartmentCode: "12",
+      sifenDepartmentName: "CENTRAL",
+      sifenCityCode: "5044",
+      sifenCityName: "FERNANDO DE LA MORA",
+      sifenFantasyName: null,
+      kudeFooterMessage: null,
+    });
+  });
+
   test("shows the 'Download price list' button on the Services page", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");

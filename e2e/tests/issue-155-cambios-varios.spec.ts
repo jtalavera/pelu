@@ -165,12 +165,19 @@ test.describe("Issue #155 · Cambios varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E155 Dash ${Date.now()}`);
     const now = new Date();
-    now.setHours(now.getHours() + 1, 0, 0, 0);
+    const proposed = new Date(now);
+    proposed.setHours(now.getHours() + 1, 0, 0, 0);
+    // Stay within "today" — DashboardPage's "Panel principal" only lists appointments inside its
+    // own todayRangeIso (business-timezone calendar day). Late at night, a flat "+1 hour" can cross
+    // midnight into tomorrow, where this freshly-created appointment would never show up.
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 0, 0);
+    const startAt = proposed > endOfToday ? endOfToday : proposed;
     await createAppointmentApi(request, token, {
       clientId: client.id,
       professionalId: seed.professionalId,
       serviceId: seed.serviceId,
-      startAt: instantToOffsetIso(now),
+      startAt: instantToOffsetIso(startAt),
     });
 
     await loginAsDemo(page);
