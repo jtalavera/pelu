@@ -864,6 +864,7 @@ public class InvoiceService {
         i.getClient() != null ? i.getClient().getId() : null,
         i.getClientDisplayName(),
         i.getClient() != null ? i.getClient().getEmail() : null,
+        i.getClient() != null ? i.getClient().getPhone() : null,
         i.getRecipientEmail(),
         i.getClientRucOverride(),
         i.getClientIdentityDocumentOverride(),

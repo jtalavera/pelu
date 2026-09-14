@@ -35,6 +35,7 @@ import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
+import { toWhatsAppPhone } from "../lib/paraguayPhone";
 
 export type InvoiceLine = {
   id: number;
@@ -63,6 +64,8 @@ export type InvoiceDetail = {
   clientDisplayName: string;
   /** Issue #167: the linked client's own email on file, if any — used to prefill the KuDE-by-email field. */
   clientEmail?: string | null;
+  /** Issue #215 follow-up: the linked client's own phone on file, if any — used to open the WhatsApp send directly against that contact. */
+  clientPhone?: string | null;
   /** Issue #173: the email captured on the comprobante form for this document. */
   recipientEmail?: string | null;
   clientRucOverride: string | null;
@@ -254,7 +257,6 @@ export function InvoiceDetailModal({
   // Issue #215: "Enviar por WhatsApp" — downloads the KuDE and opens a prefilled wa.me chat.
   const [kudeWhatsappSending, setKudeWhatsappSending] = useState(false);
   const [kudeWhatsappError, setKudeWhatsappError] = useState<string | null>(null);
-  const [kudeWhatsappSuccess, setKudeWhatsappSuccess] = useState(false);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
@@ -399,8 +401,10 @@ export function InvoiceDetailModal({
 
   /**
    * Issue #215: "Enviar por WhatsApp". Downloads the KuDE PDF (same fetch the email/download flow
-   * already uses), then opens a `wa.me` link with a prefilled text message, inviting the user to
-   * manually attach the file that was just downloaded.
+   * already uses), then opens a `wa.me` chat with a prefilled text message, inviting the user to
+   * manually attach the file that was just downloaded. When the linked client has a phone number
+   * on file, the chat opens directly against that contact; otherwise it opens the generic wa.me
+   * composer with no contact preselected.
    * A `wa.me` link alone can never carry the PDF: `GET /sifen/kude` requires Bearer auth, so the
    * end client can't fetch it directly from a link — the file always has to move through this
    * browser first.
@@ -408,7 +412,6 @@ export function InvoiceDetailModal({
   async function handleSendKudeWhatsapp() {
     if (!invoice) return;
     setKudeWhatsappError(null);
-    setKudeWhatsappSuccess(false);
     setKudeWhatsappSending(true);
     try {
       const { blob, filename } = await fetchSifenKudeBlob(invoiceId);
@@ -420,10 +423,14 @@ export function InvoiceDetailModal({
         number: invoice.invoiceNumberFormatted,
         amount: formatGuaraniesGs(invoice.total),
       });
+      const whatsappPhone = toWhatsAppPhone(invoice.clientPhone);
 
       triggerBrowserDownload(blob, filename);
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
-      setKudeWhatsappSuccess(true);
+      window.open(
+        `https://wa.me/${whatsappPhone ?? ""}?text=${encodeURIComponent(message)}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
     } catch (err) {
       setKudeWhatsappError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -1128,7 +1135,7 @@ export function InvoiceDetailModal({
 
                     {kudeEligible && (
                       <AccordionItem
-                        title={t("femme.billing.history.detail.sifen.kudeEmailLabel")}
+                        title={t("femme.billing.history.detail.sifen.kudeShareLabel")}
                         data-testid="sifen-tab-email"
                       >
                         <div className="flex flex-col gap-2">
@@ -1200,15 +1207,6 @@ export function InvoiceDetailModal({
                               data-testid="sifen-kude-whatsapp-error"
                             >
                               {kudeWhatsappError}
-                            </Alert>
-                          )}
-                          {kudeWhatsappSuccess && !kudeWhatsappError && (
-                            <Alert
-                              variant="success"
-                              title={t("femme.billing.history.detail.sifen.kudeWhatsappSuccess")}
-                              data-testid="sifen-kude-whatsapp-success"
-                            >
-                              {t("femme.billing.history.detail.sifen.kudeWhatsappSuccess")}
                             </Alert>
                           )}
                         </div>
