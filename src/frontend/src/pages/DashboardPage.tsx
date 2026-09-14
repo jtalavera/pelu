@@ -19,7 +19,12 @@ import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs, formatAmountDecimal } from "../lib/formatMoney";
-import { formatParaguayDateTime, PARAGUAY_TIMEZONE } from "../lib/paraguayDateTime";
+import {
+  formatParaguayDateTime,
+  PARAGUAY_TIMEZONE,
+  zonedDateTimeToUtcMs,
+  zonedYmd,
+} from "../lib/paraguayDateTime";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useTour } from "../tour/useTour";
 import { dashboardSteps } from "../tour/steps/dashboard";
@@ -96,73 +101,10 @@ function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/**
- * Issue #223 code-review follow-up: `Y/M/D` of `date` as observed in `timeZone`, not the browser's
- * local timezone — used to compute the tips-by-professional window in the same *business* timezone
- * `DashboardService.revenueWindow` uses server-side, instead of `toLocalDateStr`'s browser-local
- * approximation (which shifts the whole 30-day window by a day for part of each day whenever the
- * viewer's device timezone differs from `PARAGUAY_TIMEZONE`/`America/Asuncion`).
- */
-function zonedYmd(date: Date, timeZone: string): { y: number; m: number; d: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const map: Record<string, string> = {};
-  for (const p of parts) map[p.type] = p.value;
-  return { y: Number(map.year), m: Number(map.month), d: Number(map.day) };
-}
-
-/**
- * Converts wall-clock date/time components *as they would read in `timeZone`* to the UTC instant
- * they denote — the "guess and correct" technique (no timezone-conversion library in this
- * frontend): treat the components as if they were already UTC to get a first guess, see what
- * wall-clock time that guess actually renders as in `timeZone`, and correct by the difference. A
- * second pass is cheap insurance against a guess landing right on a DST transition (irrelevant for
- * `America/Asuncion` today — no DST since 2024, see `paraguayDateTime.ts` — but this helper makes
- * no zone-specific assumption).
- */
-function zonedDateTimeToUtcMs(
-  y: number,
-  m: number,
-  d: number,
-  h: number,
-  mi: number,
-  s: number,
-  ms: number,
-  timeZone: string,
-): number {
-  let guess = Date.UTC(y, m - 1, d, h, mi, s, ms);
-  for (let i = 0; i < 2; i++) {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date(guess));
-    const map: Record<string, string> = {};
-    for (const p of parts) map[p.type] = p.value;
-    const observed = Date.UTC(
-      Number(map.year),
-      Number(map.month) - 1,
-      Number(map.day),
-      map.hour === "24" ? 0 : Number(map.hour),
-      Number(map.minute),
-      Number(map.second),
-      ms,
-    );
-    const diff = guess - observed;
-    if (diff === 0) break;
-    guess += diff;
-  }
-  return guess;
-}
+// `zonedYmd`/`zonedDateTimeToUtcMs` (issue #223 code-review follow-up) now live in
+// `../lib/paraguayDateTime` — extracted so `PropinasPage.tsx`'s identical pre-existing
+// browser-local-timezone bug in its default report date range could reuse the same
+// business-timezone calendar-day-boundary logic instead of a second copy.
 
 function fmtTime(iso: string, locale: string): string {
   return new Date(iso).toLocaleTimeString(locale, {

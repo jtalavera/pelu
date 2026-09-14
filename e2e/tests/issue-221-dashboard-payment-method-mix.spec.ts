@@ -84,12 +84,17 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     // A RUC avoids SIFEN_CLIENT_IDENTIFICATION_REQUIRED (invoices at/above Gs. 7,000,000 require
     // client identification) — kept below that threshold anyway, but a real RUC removes any doubt.
+    // Deliberately distinct from issue-220's seeded client RUC ("80000005-6") — the app forbids two
+    // clients sharing a RUC in the same tenant (`ClientService.create`/`update`,
+    // `CLIENT_RUC_DUPLICATE`, a hard rule with no test-only bypass), and both specs' clients are
+    // never deactivated/cleared, so reusing the same literal RUC collided with a 409 whenever both
+    // spec files ran in the same backend boot (e.g. a full `npm test`).
     const client = await seedClient(
       request,
       token,
       `E2E221 PaymentMix ${suffix}`,
       undefined,
-      "80000005-6",
+      "80000006-4",
     );
 
     const before = await fetchPaymentMethodMix(request, token);

@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "../test/renderWithTour";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "../test/renderWithTour";
 import { FieldValidationError } from "./FieldValidationError";
+
+// Explicit cleanup between tests — `vite.config.ts` doesn't set `globals: true`/RTL's automatic
+// afterEach hook, so a still-mounted component from an earlier test can otherwise leak into
+// `document.body` and pollute later `getByRole`/`getByText` assertions in this file.
+afterEach(() => {
+  cleanup();
+});
 
 describe("FieldValidationError", () => {
   it("renders nothing when children is empty", () => {

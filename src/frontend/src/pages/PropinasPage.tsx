@@ -29,29 +29,52 @@ import { SearchableSelect } from "../components/SearchableSelect";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import {
+  formatParaguayDateTime,
+  PARAGUAY_TIMEZONE,
+  zonedDateTimeToUtcMs,
+  zonedYmd,
+} from "../lib/paraguayDateTime";
 
 type Professional = { id: number; fullName: string; active: boolean };
 
-/** Local calendar dates: 30 days ago through today. */
+/**
+ * Business-timezone calendar dates: 30 days ago through today, in `PARAGUAY_TIMEZONE`
+ * (`America/Asuncion`) — not the browser's local timezone. Issue #223 code-review follow-up found
+ * this page had the identical pre-existing bug `DashboardPage.tsx`'s `tipsWindowRangeIso` was
+ * fixed for: `new Date(...)` getters read the *viewer's device* timezone, which can shift this
+ * default 30-day window by a day for a viewer outside `America/Asuncion`. `zonedYmd` computes
+ * "today" as observed in the business timezone instead.
+ */
 function getDefaultReportDateRange(): { from: string; to: string } {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const fmtYmd = (dt: Date) =>
-    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  return { from: fmtYmd(thirtyDaysAgo), to: fmtYmd(today) };
+  const today = zonedYmd(new Date(), PARAGUAY_TIMEZONE);
+  // Pure calendar-day arithmetic — `Date.UTC` normalizes a negative day-of-month correctly — no
+  // zone conversion needed yet, this only walks back whole calendar days from "today in zone".
+  const thirtyDaysAgo = new Date(Date.UTC(today.y, today.m - 1, today.d - 30));
+  const fmtYmd = (y: number, m: number, d: number) =>
+    `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  return {
+    from: fmtYmd(thirtyDaysAgo.getUTCFullYear(), thirtyDaysAgo.getUTCMonth() + 1, thirtyDaysAgo.getUTCDate()),
+    to: fmtYmd(today.y, today.m, today.d),
+  };
 }
 
+/**
+ * Converts a `YYYY-MM-DD` date-input value (interpreted as a calendar day in the business
+ * timezone, matching `getDefaultReportDateRange` above and `DashboardService.revenueWindow`
+ * server-side) to the UTC instant of its start-of-day in `PARAGUAY_TIMEZONE`.
+ */
 function localDateYmdToIsoStart(ymd: string): string {
   const [yy, mm, dd] = ymd.split("-").map(Number);
-  return new Date(yy, mm - 1, dd, 0, 0, 0, 0).toISOString();
+  return new Date(zonedDateTimeToUtcMs(yy, mm, dd, 0, 0, 0, 0, PARAGUAY_TIMEZONE)).toISOString();
 }
 
+/** Same as `localDateYmdToIsoStart` but for the end-of-day instant. */
 function localDateYmdToIsoEnd(ymd: string): string {
   const [yy, mm, dd] = ymd.split("-").map(Number);
-  return new Date(yy, mm - 1, dd, 23, 59, 59, 999).toISOString();
+  return new Date(
+    zonedDateTimeToUtcMs(yy, mm, dd, 23, 59, 59, 999, PARAGUAY_TIMEZONE),
+  ).toISOString();
 }
 
 function ReportTab({ professionals, active }: { professionals: Professional[]; active: boolean }) {

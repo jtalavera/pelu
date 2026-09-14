@@ -3,6 +3,9 @@ import {
   formatParaguayDate,
   formatParaguayDateTime,
   formatParaguayTime,
+  PARAGUAY_TIMEZONE,
+  zonedDateTimeToUtcMs,
+  zonedYmd,
 } from "./paraguayDateTime";
 
 /**
@@ -32,5 +35,29 @@ describe("paraguayDateTime", () => {
     const v = "2026-05-01T02:00:00Z";
     expect(formatParaguayDate(v, "es-PY")).toBe("30/04/2026");
     expect(formatParaguayTime(v, "es-PY")).toBe("23:00");
+  });
+
+  describe("zonedYmd", () => {
+    it("reads the calendar day as observed in the given timezone, not UTC", () => {
+      // 2026-05-01T02:00:00Z is still 2026-04-30 in Asuncion (UTC-3).
+      const v = new Date("2026-05-01T02:00:00Z");
+      expect(zonedYmd(v, PARAGUAY_TIMEZONE)).toEqual({ y: 2026, m: 4, d: 30 });
+      // But it's already 2026-05-01 in UTC.
+      expect(zonedYmd(v, "UTC")).toEqual({ y: 2026, m: 5, d: 1 });
+    });
+  });
+
+  describe("zonedDateTimeToUtcMs", () => {
+    it("converts wall-clock components in the given timezone to the UTC instant they denote", () => {
+      // 2026-04-30 00:00:00.000 in Asuncion (UTC-3) is 2026-04-30T03:00:00.000Z.
+      const ms = zonedDateTimeToUtcMs(2026, 4, 30, 0, 0, 0, 0, PARAGUAY_TIMEZONE);
+      expect(new Date(ms).toISOString()).toBe("2026-04-30T03:00:00.000Z");
+    });
+
+    it("round-trips end-of-day back to the correct next-day UTC instant", () => {
+      // 2026-04-30 23:59:59.999 in Asuncion is 2026-05-01T02:59:59.999Z.
+      const ms = zonedDateTimeToUtcMs(2026, 4, 30, 23, 59, 59, 999, PARAGUAY_TIMEZONE);
+      expect(new Date(ms).toISOString()).toBe("2026-05-01T02:59:59.999Z");
+    });
   });
 });
