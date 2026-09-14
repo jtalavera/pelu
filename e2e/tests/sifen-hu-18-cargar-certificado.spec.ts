@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import { setTenantFeatureFlag } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 // SIFEN spec HU numbering (requirements/sifen/Especificacion_SIFEN_Peluqueria.md) is a
@@ -12,7 +13,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VALID_P12 = path.join(__dirname, "../fixtures/sifen/test-cert.p12");
 const VALID_PASSWORD = "TestPass123!";
 
+// DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts) — the whole
+// "SIFEN" settings nav link (SettingsLayout.tsx) and /app/settings/sifen route it gates is what
+// every test in this file exercises, so it's turned on for the whole file, same per-file toggle
+// convention as hu-33-ajustes-facturacion-electronica.spec.ts.
+const DEMO_TENANT_ID = 1;
+const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 test.describe("SIFEN HU-18 · Cargar un nuevo certificado y clave para un tenant", () => {
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
+  });
+
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+  });
+
   test("HU-18 · 1 admin ve la opción dentro de Configuración → SIFEN con el formulario esperado (AC-01, AC-02)", async ({
     page,
   }) => {

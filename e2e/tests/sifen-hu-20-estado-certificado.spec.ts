@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import { setTenantFeatureFlag } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
@@ -11,6 +12,12 @@ const EXPIRED_P12 = path.join(__dirname, "../fixtures/sifen/expired-cert.p12");
 const NOT_YET_VALID_P12 = path.join(__dirname, "../fixtures/sifen/notyetvalid-cert.p12");
 const PASSWORD = "TestPass123!";
 
+// DEMO_TENANT_ID=1 defaults SIFEN_ELECTRONIC_INVOICING to off (e2e/global-setup.ts) — the
+// /app/settings/sifen route every test here exercises is gated by it. Same per-file toggle
+// convention as sifen-hu-18-cargar-certificado.spec.ts.
+const DEMO_TENANT_ID = 1;
+const FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 async function upload(page: import("@playwright/test").Page, filePath: string) {
   await page.locator("#sifen-cert-file").setInputFiles(filePath);
   await page.locator("#sifen-cert-password").fill(PASSWORD);
@@ -19,6 +26,14 @@ async function upload(page: import("@playwright/test").Page, filePath: string) {
 }
 
 test.describe("SIFEN HU-20 · Calcular el estado de cada certificado según su vigencia", () => {
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
+  });
+
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
+  });
+
   test("HU-20 · 1 certificado vigente hoy muestra el estado Valid (AC-01)", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/sifen");
