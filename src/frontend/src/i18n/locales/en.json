@@ -430,7 +430,18 @@
       "noAppts": "No appointments today",
       "openAppointmentDetail": "View {{client}}'s appointment detail in the Calendar",
       "occupancyTitle": "Today's occupancy",
-      "occupancyUnit": "appts"
+      "occupancyUnit": "appts",
+      "inactiveClientsTitle": "Inactive clients",
+      "inactiveClientsSubtitle": "Active clients with no completed visit in the last {{days}} days",
+      "inactiveClientsEmpty": "No inactive clients right now",
+      "inactiveClientsColClient": "Client",
+      "inactiveClientsColPhone": "Phone",
+      "inactiveClientsColInactivity": "Days inactive",
+      "inactiveClientsDaysValue": "{{days}} days",
+      "inactiveClientsNeverVisited": "Never visited",
+      "revenueTrendTitle": "Revenue trend",
+      "revenueTrendSubtitle": "Invoiced revenue over the last {{days}} days",
+      "revenueTrendEmpty": "No invoiced revenue in this period yet"
     },
     "status": {
       "PENDING": "Pending",
@@ -1387,6 +1398,11 @@
       "colDuration": "Duration",
       "colPrice": "Price",
       "colStatus": "Status",
+      "priceList": {
+        "downloadButton": "Download price list",
+        "downloading": "Downloading…",
+        "error": "Could not download the price list. Try again."
+      },
       "tabs": {
         "services": "Services",
         "categories": "Categories"
