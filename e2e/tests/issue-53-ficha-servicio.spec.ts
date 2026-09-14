@@ -361,11 +361,16 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await page.goto("/app");
     await expect(page.getByText("Today's service records")).toBeVisible();
     await revealAllTodayRecords(page);
-    await expect(page.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(olderClient.fullName)).toBeVisible();
+    // Scoped to the fichas grid: DashboardPage's separate "never visited" inactive-clients panel
+    // (dashboard-inactive-clients, issue #216) also renders a clickable row for these same fresh
+    // clients — they only have a service record, no appointment, so they qualify as "never
+    // visited" too — and a page-wide getByText(name) resolves ambiguously to both widgets.
+    const grid = page.getByTestId("dashboard-service-records-grid");
+    await expect(grid.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
+    await expect(grid.getByText(olderClient.fullName)).toBeVisible();
 
     // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
-    const cards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
+    const cards = grid.getByTestId("dashboard-service-record-card");
     const firstCardText = await cards.first().innerText();
     expect(firstCardText).toContain(newerClient.fullName);
 
@@ -377,9 +382,9 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
     await page.reload();
     await revealAllTodayRecords(page);
-    await expect(page.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(newerClient.fullName)).toBeVisible();
-    const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
+    await expect(grid.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
+    await expect(grid.getByText(newerClient.fullName)).toBeVisible();
+    const reorderedCards = grid.getByTestId("dashboard-service-record-card");
     const firstCardAfterVoid = await reorderedCards.first().innerText();
     expect(firstCardAfterVoid).toContain(olderClient.fullName);
   });
