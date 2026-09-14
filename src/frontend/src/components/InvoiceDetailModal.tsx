@@ -251,11 +251,10 @@ export function InvoiceDetailModal({
   const [kudeEmailSending, setKudeEmailSending] = useState(false);
   const [kudeEmailError, setKudeEmailError] = useState<string | null>(null);
   const [kudeEmailSuccess, setKudeEmailSuccess] = useState(false);
-  // Issue #215: "Enviar por WhatsApp" — shares the already-downloaded KuDE via the Web Share API
-  // when the browser supports sharing files, or falls back to a prefilled wa.me link otherwise.
+  // Issue #215: "Enviar por WhatsApp" — downloads the KuDE and opens a prefilled wa.me chat.
   const [kudeWhatsappSending, setKudeWhatsappSending] = useState(false);
   const [kudeWhatsappError, setKudeWhatsappError] = useState<string | null>(null);
-  const [kudeWhatsappSuccess, setKudeWhatsappSuccess] = useState<"share" | "fallback" | null>(null);
+  const [kudeWhatsappSuccess, setKudeWhatsappSuccess] = useState(false);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
@@ -400,28 +399,16 @@ export function InvoiceDetailModal({
 
   /**
    * Issue #215: "Enviar por WhatsApp". Downloads the KuDE PDF (same fetch the email/download flow
-   * already uses) and either:
-   *  - shares it via the OS share sheet (Web Share API, `navigator.share({ files })`) when the
-   *    browser supports sharing files — WhatsApp shows up there as one of the targets; or
-   *  - falls back to opening a `wa.me` link with a prefilled text message, inviting the user to
-   *    manually attach the file that was just downloaded (desktop browsers, or any browser without
-   *    file-sharing support).
+   * already uses), then opens a `wa.me` link with a prefilled text message, inviting the user to
+   * manually attach the file that was just downloaded.
    * A `wa.me` link alone can never carry the PDF: `GET /sifen/kude` requires Bearer auth, so the
    * end client can't fetch it directly from a link — the file always has to move through this
    * browser first.
-   *
-   * Known limitation (code review, not fixed here): some mobile browsers — notably iOS Safari —
-   * only allow `navigator.share()` when called synchronously inside a user-activation event. The
-   * `await fetchSifenKudeBlob(...)` above means `navigator.share` actually runs after that
-   * activation window may have already expired, which could make the Web Share branch silently
-   * fall through to `NotAllowedError` on some iOS versions. Restructuring this to share before the
-   * fetch isn't possible (there's nothing to share yet), and validating the real behavior needs a
-   * physical iOS device rather than a safe speculative fix — left as-is intentionally.
    */
   async function handleSendKudeWhatsapp() {
     if (!invoice) return;
     setKudeWhatsappError(null);
-    setKudeWhatsappSuccess(null);
+    setKudeWhatsappSuccess(false);
     setKudeWhatsappSending(true);
     try {
       const { blob, filename } = await fetchSifenKudeBlob(invoiceId);
@@ -434,43 +421,10 @@ export function InvoiceDetailModal({
         amount: formatGuaraniesGs(invoice.total),
       });
 
-      // Feature-detect at runtime — the DOM types declare `canShare`/`share` unconditionally, but
-      // most desktop browsers (and Playwright's headless Chromium) don't actually implement them.
-      const hasShareApi =
-        typeof navigator.canShare === "function" && typeof navigator.share === "function";
-      let file: File | null = null;
-      try {
-        file = new File([blob], filename, { type: blob.type || "application/pdf" });
-      } catch {
-        file = null;
-      }
-      let canShareFile = false;
-      if (file && hasShareApi) {
-        try {
-          canShareFile = navigator.canShare({ files: [file] });
-        } catch {
-          // Some browsers throw instead of returning false for an unsupported file type/size —
-          // treat that the same as "can't share" and fall back to the wa.me path below.
-          canShareFile = false;
-        }
-      }
-
-      if (canShareFile && file) {
-        await navigator.share({ files: [file], text: message });
-        setKudeWhatsappSuccess("share");
-      } else {
-        // Desktop / unsupported browsers: download the PDF locally first — the user attaches it
-        // manually in WhatsApp — then open a prefilled wa.me chat.
-        triggerBrowserDownload(blob, filename);
-        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
-        setKudeWhatsappSuccess("fallback");
-      }
+      triggerBrowserDownload(blob, filename);
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      setKudeWhatsappSuccess(true);
     } catch (err) {
-      // Web Share API throws AbortError when the user simply dismisses the OS share sheet — that's
-      // not a failure worth surfacing.
-      if (err instanceof DOMException && err.name === "AbortError") {
-        return;
-      }
       setKudeWhatsappError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setKudeWhatsappSending(false);
@@ -1248,22 +1202,13 @@ export function InvoiceDetailModal({
                               {kudeWhatsappError}
                             </Alert>
                           )}
-                          {kudeWhatsappSuccess === "fallback" && !kudeWhatsappError && (
+                          {kudeWhatsappSuccess && !kudeWhatsappError && (
                             <Alert
                               variant="success"
-                              title={t("femme.billing.history.detail.sifen.kudeWhatsappSuccessFallback")}
+                              title={t("femme.billing.history.detail.sifen.kudeWhatsappSuccess")}
                               data-testid="sifen-kude-whatsapp-success"
                             >
-                              {t("femme.billing.history.detail.sifen.kudeWhatsappSuccessFallback")}
-                            </Alert>
-                          )}
-                          {kudeWhatsappSuccess === "share" && !kudeWhatsappError && (
-                            <Alert
-                              variant="success"
-                              title={t("femme.billing.history.detail.sifen.kudeWhatsappSuccessShared")}
-                              data-testid="sifen-kude-whatsapp-success"
-                            >
-                              {t("femme.billing.history.detail.sifen.kudeWhatsappSuccessShared")}
+                              {t("femme.billing.history.detail.sifen.kudeWhatsappSuccess")}
                             </Alert>
                           )}
                         </div>

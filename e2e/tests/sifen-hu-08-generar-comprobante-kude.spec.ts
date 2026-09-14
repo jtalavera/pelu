@@ -328,7 +328,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(page.getByTestId("sifen-kude-email-success")).toBeVisible({ timeout: 15_000 });
   });
 
-  test("Issue #215 · el botón «Enviar por WhatsApp» aparece junto al de email y usa el fallback wa.me sin Web Share API", async ({
+  test("Issue #215 · el botón «Enviar por WhatsApp» aparece junto al de email y abre un chat de wa.me con el KuDE descargado", async ({
     page,
     request,
   }) => {
@@ -363,14 +363,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     );
     expect(prep.ok(), await prep.text()).toBeTruthy();
 
-    // NOTE (Issue #215 AC): the real Web Share API branch — `navigator.share({ files })` handing
-    // the KuDE straight to an OS share sheet where WhatsApp appears as a target — cannot be driven
-    // from Playwright: headless Chromium doesn't implement `navigator.share`/`canShare` for files,
-    // and there is no way to script the native share sheet from a browser-automation test even on
-    // real hardware. This test therefore only covers (a) the button's presence next to the email
-    // action and (b) the text-only `wa.me` fallback that fires when the Share API is unavailable
-    // — which is already headless Chromium's real behavior, no stubbing of navigator needed. We do
-    // stub `window.open` so the test asserts the exact `wa.me` URL/text instead of actually
+    // Stub `window.open` so the test asserts the exact `wa.me` URL/text instead of actually
     // navigating to an external site.
     await page.addInitScript(() => {
       (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls = [];
@@ -398,8 +391,8 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     const whatsappButton = page.getByTestId("sifen-kude-send-whatsapp-button");
     await expect(whatsappButton).toBeVisible();
 
-    // No Web Share API in headless Chromium → falls back to downloading the KuDE (same PDF the
-    // email/download flow already fetches) and opening a prefilled wa.me link.
+    // Downloads the KuDE (same PDF the email/download flow already fetches) and opens a
+    // prefilled wa.me link.
     const [download, kudeResponse] = await Promise.all([
       page.waitForEvent("download"),
       page.waitForResponse(
@@ -410,8 +403,8 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(kudeResponse.ok(), await kudeResponse.text()).toBeTruthy();
     expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
 
-    // The wa.me fallback also surfaces a success confirmation nudging the user to attach the
-    // PDF that was just downloaded (code review follow-up — mirrors the email flow's success Alert).
+    // Also surfaces a success confirmation nudging the user to attach the PDF that was just
+    // downloaded (mirrors the email flow's success Alert).
     await expect(page.getByTestId("sifen-kude-whatsapp-success")).toBeVisible({ timeout: 15_000 });
 
     await expect
