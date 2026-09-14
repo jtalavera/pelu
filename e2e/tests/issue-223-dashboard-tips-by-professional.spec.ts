@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
+  API_BASE,
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
@@ -98,6 +99,18 @@ test.describe("Issue #223 · Dashboard tips-by-professional chart", () => {
     request,
   }) => {
     test.setTimeout(90_000);
+
+    // Clean slate: TipsByProfessionalChart renders every professional GET /api/propinas/report
+    // returns for the trailing window, with no top-N cap (unlike the sibling TopServicesChart) and
+    // a chart height capped at 360px — with the dozens of professionals other specs across the full
+    // suite accumulate (each with their own completed-tip fixtures, all within the last 30 days by
+    // wall-clock time), recharts can end up not rendering a Y-axis tick label for every bar, making
+    // this test's own two professionals flaky to find. POST /api/admin/seed/reset wipes tenant 1's
+    // professionals/clients/appointments (HU-27) and needs no prior auth — same pattern
+    // issue-216-panel-clientes-inactivos.spec.ts uses for an identical crowding problem.
+    const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
+    expect(resetRes.ok(), await resetRes.text()).toBeTruthy();
+
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);

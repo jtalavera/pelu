@@ -86,6 +86,16 @@ test.describe("Issue #216 · Panel de clientes inactivos", () => {
     page,
     request,
   }) => {
+    // Clean slate: the widget's "never visited" candidates always outrank any dated inactivity
+    // (see DashboardService#buildInactiveClients's comparator) and it's capped to the top 20 —
+    // without a reset, the active clients accumulated by every earlier spec in the full suite (most
+    // of which seed a client without ever completing a visit for it) can easily crowd out this
+    // test's 250d-inactive client from the visible top 20. POST /api/admin/seed/reset wipes tenant
+    // 1's clients/appointments (HU-27) and needs no prior auth — same pattern the AC3 cap test
+    // below already uses for the identical reason.
+    const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
+    expect(resetRes.ok(), await resetRes.text()).toBeTruthy();
+
     const token = await loginAsDemoApi(request);
     const salon = await seedCategoryServiceProfessional(request, token);
     const suffix = Date.now();
