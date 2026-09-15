@@ -18,20 +18,23 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Issue #218: hourly job that emails clients a reminder ~24h ahead of their appointment.
+ * Issue #218: hourly job that emails clients a reminder for their upcoming appointment.
  *
- * <p><b>Time window</b>: on every run, picks up appointments whose {@code startAt} falls in {@code
- * [now + 23h, now + 25h)}. The job itself runs hourly ({@link #REMINDER_INTERVAL_MILLIS}), so an
- * appointment that hasn't aged out of the window yet is revisited on the next run too — that
- * 2h-wide window (1h of margin on each side of the nominal 24h mark) is slack for a slow or missed
- * tick, not something correctness depends on. Correctness (no duplicate sends) comes entirely from
- * {@code reminder_sent_at}: {@link AppointmentRepository#findDueForReminder} only returns
- * appointments where it's still {@code null}, so a second visit inside the window is always a no-op
- * for anything already sent. <b>Known gap</b>: this window/cadence combination only guarantees
- * every appointment is seen at least once if the app stays up continuously — if the process is down
- * for more than ~2h (a deploy, an outage), an appointment's window can close before any run ever
- * queries it, and it silently never gets a reminder. Accepted as-is for the single-Container-App
- * deployment (no distributed lock/backfill needed); revisit if that ever changes.
+ * <p><b>Time window</b>: on every run, picks up every not-yet-reminded appointment whose {@code
+ * startAt} is still in the future but no more than {@link #MAX_LEAD_TIME} (25h) away. For an
+ * appointment booked well in advance, the first tick to see it inside that 25h ceiling is the one
+ * close to the nominal "~24h before" mark, so the common case still reads as a day-ahead reminder.
+ * <b>Issue #218 follow-up (same-day / last-minute bookings, and a startup catch-up sweep)</b>:
+ * there's deliberately no lower bound on how soon the appointment is — a same-day booking made with
+ * only a few hours' notice, or one that missed its nominal window entirely because the process was
+ * down when it should have been picked up, both still match (as long as the appointment hasn't
+ * started yet) and get reminded on the very next tick rather than never. That "next tick" also
+ * includes the first one after a restart, which is what turns this into a startup catch-up sweep
+ * for anything that fell through during the downtime — no separate backfill job needed. Correctness
+ * (no duplicate sends) comes entirely from {@code reminder_sent_at}: {@link
+ * AppointmentRepository#findDueForReminder} only returns appointments where it's still {@code
+ * null}, so revisiting an appointment already reminded is always a no-op regardless of how many
+ * ticks pass.
  *
  * <p><b>Reschedule handling</b>: {@code reminder_sent_at} means "a reminder was sent for THIS
  * {@code startAt}", not "ever sent for this appointment id". {@link AppointmentService#update}
@@ -64,11 +67,12 @@ public class AppointmentReminderScheduler {
 
   static final long REMINDER_INTERVAL_MILLIS = 60L * 60 * 1000; // hourly
 
-  /** Appointments become due once they're at least this far ahead of "now". */
-  static final Duration WINDOW_START_AHEAD = Duration.ofHours(23);
-
-  /** Appointments stop being due once they're this far ahead of "now" (exclusive). */
-  static final Duration WINDOW_END_AHEAD = Duration.ofHours(25);
+  /**
+   * Appointments stop being considered once they're more than this far ahead of "now" — no lower
+   * bound, so same-day bookings and anything a downtime window caused to be missed still match as
+   * long as they haven't started yet.
+   */
+  static final Duration MAX_LEAD_TIME = Duration.ofHours(25);
 
   private static final List<AppointmentStatus> REMINDABLE_STATUSES =
       List.of(AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED);
@@ -101,13 +105,10 @@ public class AppointmentReminderScheduler {
   @Scheduled(fixedDelay = REMINDER_INTERVAL_MILLIS)
   public void sendDueReminders() {
     Instant now = Instant.now();
-    Instant windowStart = now.plus(WINDOW_START_AHEAD);
-    Instant windowEnd = now.plus(WINDOW_END_AHEAD);
+    Instant deadline = now.plus(MAX_LEAD_TIME);
 
     List<Long> dueAppointmentIds =
-        appointmentRepository
-            .findDueForReminder(REMINDABLE_STATUSES, windowStart, windowEnd)
-            .stream()
+        appointmentRepository.findDueForReminder(REMINDABLE_STATUSES, now, deadline).stream()
             .map(Appointment::getId)
             .toList();
 
