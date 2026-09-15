@@ -529,6 +529,7 @@
       "statusRejected": "Rejected",
       "statusCancelled": "Cancelled",
       "automaticBadge": "Automatic",
+      "supersededBadge": "Covered by another voiding",
       "deadlineDaysLeft_one": "{{count}} day left",
       "deadlineDaysLeft_other": "{{count}} days left",
       "deadlineOverdue": "Deadline passed",
@@ -971,6 +972,15 @@
             "checkingStatus": "Checking…",
             "checkStatusStillPending": "SIFEN has not answered yet. The invoice is still pending verification.",
             "checkStatusResolved": "SIFEN answered: status updated.",
+            "historyButton": "View SIFEN message history",
+            "historyTitle": "SIFEN message history",
+            "historyLoading": "Loading history…",
+            "historyEmpty": "No SIFEN messages recorded for this comprobante yet.",
+            "historyEventType": {
+              "SUBMISSION": "Submission",
+              "CANCELLATION": "Cancellation",
+              "CLIENT_IDENTIFICATION": "Client identification"
+            },
             "documentContent": "Full document content",
             "kudeDownloadButton": "Download KuDE (PDF)",
             "kudeDownloading": "Downloading…",
