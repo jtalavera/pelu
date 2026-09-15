@@ -103,14 +103,17 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
       @Param("tenantId") Long tenantId, @Param("from") Instant from, @Param("to") Instant to);
 
   /**
-   * Issue #218: appointments whose reminder hasn't been sent for their current {@code startAt} slot
-   * yet, still in a remindable status, and due to enter the reminder window on this run.
+   * Issue #218 (+ follow-up): appointments whose reminder hasn't been sent for their current {@code
+   * startAt} slot yet, still in a remindable status, that haven't started yet ({@code from}, i.e.
+   * "now") and aren't more than {@code AppointmentReminderScheduler.MAX_LEAD_TIME} away ({@code
+   * to}) — deliberately no lower bound so a same-day booking or one a downtime window caused to be
+   * missed still matches instead of being silently skipped forever.
    */
   @Query(
       """
       SELECT a FROM Appointment a WHERE a.reminderSentAt IS NULL
       AND a.status IN :statuses
-      AND a.startAt >= :from AND a.startAt < :to
+      AND a.startAt > :from AND a.startAt <= :to
       ORDER BY a.startAt ASC
       """)
   List<Appointment> findDueForReminder(
