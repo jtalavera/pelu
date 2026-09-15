@@ -284,8 +284,11 @@ export default function SifenCertificatesPage() {
     void loadVoiding(voidingPageNum, voidingPageSize);
   }, [loadVoiding, voidingPageNum, voidingPageSize]);
 
-  async function submitVoiding(id: number) {
-    const reason = (voidingReasons[id] ?? "").trim();
+  async function submitVoiding(id: number, fallbackReason: string) {
+    // The textarea displays voidingReasons[id] ?? row.reason ?? "" (a pre-filled reason from
+    // creation counts as valid input even if the admin never touched the field) — validation here
+    // must fall back the same way, or a pre-filled reason wrongly triggers "too short".
+    const reason = (voidingReasons[id] ?? fallbackReason ?? "").trim();
     setVoidingSubmitErrors((prev) => ({ ...prev, [id]: "" }));
     if (reason.length < 5) {
       setVoidingSubmitErrors((prev) => ({
@@ -960,7 +963,7 @@ export default function SifenCertificatesPage() {
                                     variant="secondary"
                                     className="min-h-11"
                                     disabled={voidingSubmitting === row.id}
-                                    onClick={() => void submitVoiding(row.id)}
+                                    onClick={() => void submitVoiding(row.id, row.reason ?? "")}
                                   >
                                     {voidingSubmitting === row.id
                                       ? t("femme.sifenNumberVoiding.submitting")
