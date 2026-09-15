@@ -35,7 +35,15 @@ locals {
     ["https://${azurerm_static_web_app.frontend.default_host_name}"],
     [for d in var.frontend_custom_domains : "https://${d}"]
   ))
-  acs_sender_address = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
+  # Per-type sender addresses: once var.email_custom_domain is set (and verified — see the
+  # "Azure Communication Services — email" section below), each sends from its own mailbox on
+  # that domain; until then every one falls back to the single AzureManaged address, unchanged
+  # from before this was split.
+  email_domain_ready               = var.email_custom_domain != ""
+  acs_azure_managed_sender_address = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
+  acs_sender_address_reminders     = local.email_domain_ready ? "${var.email_sender_username_reminders}@${var.email_custom_domain}" : local.acs_azure_managed_sender_address
+  acs_sender_address_invoices      = local.email_domain_ready ? "${var.email_sender_username_invoices}@${var.email_custom_domain}" : local.acs_azure_managed_sender_address
+  acs_sender_address_generic       = local.email_domain_ready ? "${var.email_sender_username_generic}@${var.email_custom_domain}" : local.acs_azure_managed_sender_address
 
   # Tags applied to every resource. Additional tags can be passed via var.tags.
   tags = merge({
@@ -203,6 +211,54 @@ resource "azurerm_communication_service" "main" {
 resource "azurerm_communication_service_email_domain_association" "main" {
   communication_service_id = azurerm_communication_service.main.id
   email_service_domain_id  = azurerm_email_communication_service_domain.main.id
+}
+
+# Custom domain for per-type sender addresses (turnos@/factura@/no-reply@<var.email_custom_domain>).
+# Gated by var.email_custom_domain so this whole module keeps working (on the AzureManaged
+# domain) before the domain is provisioned. Rollout is necessarily two-step because Azure can't
+# verify DNS records that don't exist yet:
+#   1. apply with only email_custom_domain set — creates this resource and computes
+#      verification_records (see output email_domain_verification_records); add those at the
+#      domain's DNS provider (not managed by this Terraform config) and wait for propagation.
+#   2. apply again with email_domain_verification_enabled=true — fires initiateVerification for
+#      each record type. Azure verifies asynchronously; check status in the Portal or via
+#      `az communication email domain show`, and re-run with `-replace` on the relevant
+#      azapi_resource_action if a record wasn't visible yet on the first attempt.
+resource "azurerm_email_communication_service_domain" "custom" {
+  count             = local.email_domain_ready ? 1 : 0
+  name              = var.email_custom_domain
+  email_service_id  = azurerm_email_communication_service.main.id
+  domain_management = "CustomerManaged"
+  tags              = local.tags
+}
+
+resource "azurerm_communication_service_email_domain_association" "custom" {
+  count                    = local.email_domain_ready ? 1 : 0
+  communication_service_id = azurerm_communication_service.main.id
+  email_service_domain_id  = azurerm_email_communication_service_domain.custom[0].id
+}
+
+resource "azurerm_email_communication_service_domain_sender_username" "senders" {
+  for_each = local.email_domain_ready ? {
+    reminders = var.email_sender_username_reminders
+    invoices  = var.email_sender_username_invoices
+    generic   = var.email_sender_username_generic
+  } : {}
+
+  name                    = each.value
+  email_service_domain_id = azurerm_email_communication_service_domain.custom[0].id
+}
+
+resource "azapi_resource_action" "verify_custom_email_domain" {
+  for_each = local.email_domain_ready && var.email_domain_verification_enabled ? toset(
+    ["Domain", "SPF", "DKIM", "DKIM2"]
+  ) : toset([])
+
+  type        = "Microsoft.Communication/emailServices/domains@2023-03-31"
+  resource_id = azurerm_email_communication_service_domain.custom[0].id
+  action      = "initiateVerification"
+  method      = "POST"
+  body        = { verificationType = each.value }
 }
 
 # ---------------------------------------------------------------------------
@@ -451,8 +507,18 @@ resource "azurerm_container_app" "backend" {
       }
 
       env {
-        name  = "ACS_SENDER_ADDRESS"
-        value = local.acs_sender_address
+        name  = "ACS_SENDER_ADDRESS_REMINDERS"
+        value = local.acs_sender_address_reminders
+      }
+
+      env {
+        name  = "ACS_SENDER_ADDRESS_INVOICES"
+        value = local.acs_sender_address_invoices
+      }
+
+      env {
+        name  = "ACS_SENDER_ADDRESS_GENERIC"
+        value = local.acs_sender_address_generic
       }
 
       env {

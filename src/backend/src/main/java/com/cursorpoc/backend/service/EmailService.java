@@ -26,8 +26,14 @@ public class EmailService {
   @Value("${app.femme.email.connection-string:}")
   private String connectionString;
 
-  @Value("${app.femme.email.sender-address:}")
-  private String senderAddress;
+  @Value("${app.femme.email.sender-address.reminders:}")
+  private String senderAddressReminders;
+
+  @Value("${app.femme.email.sender-address.invoices:}")
+  private String senderAddressInvoices;
+
+  @Value("${app.femme.email.sender-address.generic:}")
+  private String senderAddressGeneric;
 
   private final MessageSource messageSource;
 
@@ -58,7 +64,7 @@ public class EmailService {
     if (!isEffectivelyEnabled()) {
       log.info(
           "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
-          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          senderAddressGeneric.isBlank() ? "no-sender-configured" : senderAddressGeneric,
           toEmail,
           subject,
           body);
@@ -70,14 +76,14 @@ public class EmailService {
           new EmailClientBuilder().connectionString(connectionString).buildClient();
       EmailMessage message =
           new EmailMessage()
-              .setSenderAddress(senderAddress)
+              .setSenderAddress(senderAddressGeneric)
               .setToRecipients(new EmailAddress(toEmail))
               .setSubject(subject)
               .setBodyPlainText(body);
       client.beginSend(message).getFinalResult();
       log.info(
           "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
-          senderAddress,
+          senderAddressGeneric,
           toEmail,
           subject,
           locale.getLanguage());
@@ -103,7 +109,7 @@ public class EmailService {
     if (!isEffectivelyEnabled()) {
       log.info(
           "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
-          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          senderAddressGeneric.isBlank() ? "no-sender-configured" : senderAddressGeneric,
           toEmail,
           subject,
           body);
@@ -115,14 +121,14 @@ public class EmailService {
           new EmailClientBuilder().connectionString(connectionString).buildClient();
       EmailMessage message =
           new EmailMessage()
-              .setSenderAddress(senderAddress)
+              .setSenderAddress(senderAddressGeneric)
               .setToRecipients(new EmailAddress(toEmail))
               .setSubject(subject)
               .setBodyPlainText(body);
       client.beginSend(message).getFinalResult();
       log.info(
           "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
-          senderAddress,
+          senderAddressGeneric,
           toEmail,
           subject,
           locale.getLanguage());
@@ -142,7 +148,7 @@ public class EmailService {
     if (!isEffectivelyEnabled()) {
       log.info(
           "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
-          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          senderAddressReminders.isBlank() ? "no-sender-configured" : senderAddressReminders,
           toEmail,
           subject,
           body);
@@ -154,12 +160,12 @@ public class EmailService {
           new EmailClientBuilder().connectionString(connectionString).buildClient();
       EmailMessage message =
           new EmailMessage()
-              .setSenderAddress(senderAddress)
+              .setSenderAddress(senderAddressReminders)
               .setToRecipients(new EmailAddress(toEmail))
               .setSubject(subject)
               .setBodyPlainText(body);
       client.beginSend(message).getFinalResult();
-      log.info("EMAIL SENT from={} to={} subject=\"{}\"", senderAddress, toEmail, subject);
+      log.info("EMAIL SENT from={} to={} subject=\"{}\"", senderAddressReminders, toEmail, subject);
     } catch (Exception ex) {
       log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
@@ -180,7 +186,7 @@ public class EmailService {
     if (!isEffectivelyEnabled()) {
       log.info(
           "EMAIL (dev) from={} to={} subject=\"{}\" attachment={} bytes={}",
-          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          senderAddressInvoices.isBlank() ? "no-sender-configured" : senderAddressInvoices,
           toEmail,
           subject,
           attachmentFilename,
@@ -196,7 +202,7 @@ public class EmailService {
               attachmentFilename, "application/pdf", BinaryData.fromBytes(attachmentBytes));
       EmailMessage message =
           new EmailMessage()
-              .setSenderAddress(senderAddress)
+              .setSenderAddress(senderAddressInvoices)
               .setToRecipients(new EmailAddress(toEmail))
               .setSubject(subject)
               .setBodyPlainText(body)
@@ -204,7 +210,7 @@ public class EmailService {
       client.beginSend(message).getFinalResult();
       log.info(
           "EMAIL SENT (with attachment) from={} to={} subject=\"{}\" attachment={}",
-          senderAddress,
+          senderAddressInvoices,
           toEmail,
           subject,
           attachmentFilename);

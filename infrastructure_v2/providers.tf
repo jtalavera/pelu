@@ -12,3 +12,8 @@ provider "azurerm" {
 
 # Used to resolve Entra ID objects (SQL Entra admin group/user).
 provider "azuread" {}
+
+# Only used for the ACS Email custom-domain verification action (no azurerm resource for it yet).
+provider "azapi" {
+  subscription_id = var.subscription_id
+}
