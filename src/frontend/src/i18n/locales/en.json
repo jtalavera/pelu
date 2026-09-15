@@ -1407,6 +1407,11 @@
       "colDuration": "Duration",
       "colPrice": "Price",
       "colStatus": "Status",
+      "priceList": {
+        "downloadButton": "Download price list",
+        "downloading": "Downloading…",
+        "error": "Could not download the price list. Try again."
+      },
       "tabs": {
         "services": "Services",
         "categories": "Categories"
