@@ -438,7 +438,20 @@
       "inactiveClientsColPhone": "Phone",
       "inactiveClientsColInactivity": "Days inactive",
       "inactiveClientsDaysValue": "{{days}} days",
-      "inactiveClientsNeverVisited": "Never visited"
+      "inactiveClientsViewAll": "View all"
+    },
+    "inactiveClients": {
+      "pageTitle": "Inactive clients",
+      "pageSubtitle": "Active clients who haven't had a completed visit recently, ordered by most days since their last visit.",
+      "backToDashboard": "Back to Dashboard",
+      "loading": "Loading…",
+      "errorTitle": "Error",
+      "empty": "No inactive clients.",
+      "colClient": "Client",
+      "colPhone": "Phone",
+      "colLastVisit": "Last visit",
+      "colInactivity": "Days inactive",
+      "daysValue": "{{days}} days"
     },
     "status": {
       "PENDING": "Pending",
