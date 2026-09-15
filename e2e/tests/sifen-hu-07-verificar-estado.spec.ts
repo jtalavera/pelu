@@ -82,6 +82,8 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
     await expect(section).toBeVisible();
     await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
 
+    // Issue #205 AC-5: "Estado en SIFEN" now starts closed — open it to reach the button.
+    await page.getByTestId("sifen-tab-status").locator("summary").click();
     const checkButton = page.getByTestId("sifen-check-status-button");
     await expect(checkButton).toBeVisible();
 
