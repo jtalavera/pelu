@@ -55,6 +55,14 @@ export type InvoicePayment = {
   cardBrandOtherDescription?: string | null;
 };
 
+/** Issue #205 AC-2: one row of GET /api/invoices/{id}/sifen/history. */
+type SifenEventLogEntry = {
+  eventType: "SUBMISSION" | "CANCELLATION" | "CLIENT_IDENTIFICATION";
+  occurredAt: string;
+  resultCode: string | null;
+  message: string | null;
+};
+
 export type InvoiceDetail = {
   id: number;
   invoiceNumber: number;
@@ -275,6 +283,11 @@ export function InvoiceDetailModal({
   const [identifyFieldErrors, setIdentifyFieldErrors] = useState<Record<string, string>>({});
   const [identifying, setIdentifying] = useState(false);
   const [identifyError, setIdentifyError] = useState<string | null>(null);
+  // Issue #205 AC-2: "ver historial de mensajes SIFEN" popup.
+  const [showSifenHistory, setShowSifenHistory] = useState(false);
+  const [sifenHistoryLoading, setSifenHistoryLoading] = useState(false);
+  const [sifenHistoryError, setSifenHistoryError] = useState<string | null>(null);
+  const [sifenHistory, setSifenHistory] = useState<SifenEventLogEntry[] | null>(null);
 
   // SIFEN HU-10 AC-02: ticks the deadline countdown without a full page refresh.
   useEffect(() => {
@@ -350,6 +363,23 @@ export function InvoiceDetailModal({
       setSifenCheckError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setCheckingSifenStatus(false);
+    }
+  }
+
+  /** Issue #205 AC-2: opens the "historial de mensajes SIFEN" popup, fetching on first open. */
+  async function handleOpenSifenHistory() {
+    setShowSifenHistory(true);
+    setSifenHistoryError(null);
+    setSifenHistoryLoading(true);
+    try {
+      const history = await femmeJson<SifenEventLogEntry[]>(
+        `/api/invoices/${invoiceId}/sifen/history`,
+      );
+      setSifenHistory(history);
+    } catch (err) {
+      setSifenHistoryError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setSifenHistoryLoading(false);
     }
   }
 
@@ -605,6 +635,7 @@ export function InvoiceDetailModal({
   }
 
   return (
+    <>
     <Modal
       open
       onClose={onClose}
@@ -866,7 +897,6 @@ export function InvoiceDetailModal({
                           <SifenStatusBadge status={invoice.sifenSubmissionStatus} />
                         </span>
                       }
-                      defaultOpen
                       data-testid="sifen-tab-status"
                     >
                       <div className="flex flex-col gap-2">
@@ -935,6 +965,16 @@ export function InvoiceDetailModal({
                             </Button>
                           </div>
                         )}
+                        <div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="sifen-history-button"
+                            onClick={() => void handleOpenSifenHistory()}
+                          >
+                            {t("femme.billing.history.detail.sifen.historyButton")}
+                          </Button>
+                        </div>
                       </div>
                     </AccordionItem>
 
@@ -1754,5 +1794,48 @@ export function InvoiceDetailModal({
         )}
       </div>
     </Modal>
+    {showSifenHistory && (
+      <Modal
+        open
+        onClose={() => setShowSifenHistory(false)}
+        title={t("femme.billing.history.detail.sifen.historyTitle")}
+      >
+        <div className="flex flex-col gap-3" data-testid="sifen-history-list">
+          {sifenHistoryLoading && (
+            <div className="flex items-center gap-2">
+              <Spinner size="sm" />
+              <Text>{t("femme.billing.history.detail.sifen.historyLoading")}</Text>
+            </div>
+          )}
+          {sifenHistoryError && (
+            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+              {sifenHistoryError}
+            </Alert>
+          )}
+          {!sifenHistoryLoading && !sifenHistoryError && sifenHistory?.length === 0 && (
+            <Text variant="muted">{t("femme.billing.history.detail.sifen.historyEmpty")}</Text>
+          )}
+          {!sifenHistoryLoading &&
+            sifenHistory?.map((entry, idx) => (
+              <div
+                key={idx}
+                className="rounded border border-[rgb(var(--color-border))] p-2"
+                data-testid="sifen-history-entry"
+              >
+                <Text variant="small" className="font-medium">
+                  {formatParaguayDateTime(entry.occurredAt, dateLocale)} ·{" "}
+                  {t(`femme.billing.history.detail.sifen.historyEventType.${entry.eventType}`)}
+                </Text>
+                {entry.message && (
+                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                    {entry.message}
+                  </Text>
+                )}
+              </div>
+            ))}
+        </div>
+      </Modal>
+    )}
+    </>
   );
 }

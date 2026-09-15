@@ -32,6 +32,7 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
   private static final Duration LEASE_TTL = Duration.ofMinutes(5);
 
   @Mock private InvoiceRepository invoiceRepository;
+  @Mock private SifenInvoiceEventLogService eventLogService;
 
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
   private SifenInvoiceSubmissionPersistenceService persistence;
@@ -39,7 +40,9 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
 
   @BeforeEach
   void setUp() {
-    persistence = new SifenInvoiceSubmissionPersistenceService(invoiceRepository, timeProperties);
+    persistence =
+        new SifenInvoiceSubmissionPersistenceService(
+            invoiceRepository, timeProperties, eventLogService);
     invoice = new Invoice();
   }
 

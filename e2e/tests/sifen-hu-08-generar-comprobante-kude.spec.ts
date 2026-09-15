@@ -212,6 +212,8 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     const section = page.getByTestId("sifen-status-section");
     await expect(section).toBeVisible();
     await expect(section.getByText("Queued", { exact: true })).toBeVisible();
+    // Issue #205 AC-5: "Estado en SIFEN" now starts closed — open it to reach its body content.
+    await page.getByTestId("sifen-tab-status").locator("summary").click();
     await expect(page.getByTestId("sifen-submission-in-progress-note")).toBeVisible();
     await expect(page.getByTestId("sifen-check-status-button")).toHaveCount(0);
 

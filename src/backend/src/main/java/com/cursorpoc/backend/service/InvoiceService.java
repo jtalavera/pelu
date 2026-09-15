@@ -48,6 +48,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -58,6 +60,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class InvoiceService {
+
+  private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
 
   private static final String OCCASIONAL_CLIENT_DISPLAY_NAME = "CONSUMIDOR FINAL";
 
@@ -170,8 +174,19 @@ public class InvoiceService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "FISCAL_STAMP_NOT_VALID");
     }
 
-    // 3. Compute next invoice number
-    int nextNumber = stamp.getNextEmissionNumber();
+    // 3. Compute next invoice number — Issue #205 AC-1: skip past any number range SIFEN has
+    // already approved as inutilizado, so the counter never lands on a permanently-dead number.
+    int candidateNumber = stamp.getNextEmissionNumber();
+    int nextNumber =
+        sifenNumberVoidingService.skipApprovedVoidedNumbers(
+            tenantId, stamp.getId(), candidateNumber);
+    if (nextNumber != candidateNumber) {
+      log.info(
+          "Skipped SIFEN-voided invoice numbers tenantId={} from={} to={}",
+          tenantId,
+          candidateNumber,
+          nextNumber);
+    }
     if (nextNumber > stamp.getRangeTo()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "FISCAL_STAMP_RANGE_EXHAUSTED");
     }
