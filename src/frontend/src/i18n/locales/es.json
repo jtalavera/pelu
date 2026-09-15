@@ -1650,6 +1650,7 @@
         "time": "Hora",
         "duration": "{{minutes}} min",
         "status": "Estado",
+        "reminderSent": "Recordatorio enviado",
         "cancelReason": "Motivo de cancelación",
         "changeStatus": "Cambiar estado",
         "edit": "Editar turno",

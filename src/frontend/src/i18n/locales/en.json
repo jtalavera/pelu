@@ -1650,6 +1650,7 @@
         "time": "Time",
         "duration": "{{minutes}} min",
         "status": "Status",
+        "reminderSent": "Reminder sent",
         "cancelReason": "Cancellation reason",
         "changeStatus": "Change status",
         "edit": "Edit appointment",

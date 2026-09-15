@@ -29,6 +29,8 @@ export type Appointment = {
   endAt: string;
   status: AppointmentStatus;
   cancelReason: string | null;
+  /** Issue #218 follow-up: null until the ~24h-ahead reminder email was sent for this appointment. */
+  reminderSentAt: string | null;
 };
 
 export type AppointmentCreateRequest = {
