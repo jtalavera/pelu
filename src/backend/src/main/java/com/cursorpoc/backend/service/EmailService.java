@@ -133,6 +133,40 @@ public class EmailService {
   }
 
   /**
+   * Issue #218: generic plain-text send for system-triggered notifications that build their own
+   * subject/body via {@link MessageSource} (e.g. appointment reminders) instead of hard-coding a
+   * dedicated method per notification type — same enabled/disabled dev-log branching as every other
+   * send here.
+   */
+  public void sendPlainTextEmail(String toEmail, String subject, String body) {
+    if (!isEffectivelyEnabled()) {
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
+          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          toEmail,
+          subject,
+          body);
+      return;
+    }
+
+    try {
+      EmailClient client =
+          new EmailClientBuilder().connectionString(connectionString).buildClient();
+      EmailMessage message =
+          new EmailMessage()
+              .setSenderAddress(senderAddress)
+              .setToRecipients(new EmailAddress(toEmail))
+              .setSubject(subject)
+              .setBodyPlainText(body);
+      client.beginSend(message).getFinalResult();
+      log.info("EMAIL SENT from={} to={} subject=\"{}\"", senderAddress, toEmail, subject);
+    } catch (Exception ex) {
+      log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
+  }
+
+  /**
    * SIFEN HU-08 AC-17: sends an email with a single PDF attachment (the KuDE) — same
    * enabled/disabled branching as {@link #sendActivationLink}, logging the would-be send instead of
    * calling Azure Communication Email when {@code app.femme.email.enabled=false} (dev/e2e).

@@ -281,6 +281,60 @@ class AppointmentServiceTest {
     assertThat(res.professionalName()).isEqualTo("Ana Gomez");
   }
 
+  /**
+   * Issue #218: a reschedule (startAt actually changes) must reset {@code reminderSentAt} to {@code
+   * null} so the appointment's new slot gets a fresh reminder — the reminder already sent described
+   * a slot that no longer exists.
+   */
+  @Test
+  void update_changingStartAt_resetsReminderSentAt() {
+    Appointment appointment = buildAppointment(AppointmentStatus.CONFIRMED);
+    appointment.setReminderSentAt(Instant.now().minusSeconds(3600));
+    when(appointmentRepository.findByIdAndTenant_Id(1L, TENANT_ID))
+        .thenReturn(Optional.of(appointment));
+    when(appointmentRepository.countOverlapping(
+            eq(TENANT_ID),
+            eq(PROFESSIONAL_ID),
+            any(),
+            any(),
+            eq(1L),
+            eq(AppointmentStatus.CANCELLED)))
+        .thenReturn(0L);
+
+    String newStartAt = "2099-06-16T10:00:00Z";
+    var req = new AppointmentUpdateRequest(CLIENT_ID, PROFESSIONAL_ID, SERVICE_ID, newStartAt);
+    service.update(TENANT_ID, 1L, req);
+
+    assertThat(appointment.getReminderSentAt()).isNull();
+  }
+
+  /**
+   * Issue #218: editing an appointment WITHOUT changing startAt (e.g. only the professional) must
+   * not clear an already-sent reminder — the slot the client was reminded about is still the same
+   * one, so a second reminder for it would be a duplicate.
+   */
+  @Test
+  void update_keepingSameStartAt_preservesReminderSentAt() {
+    Appointment appointment = buildAppointment(AppointmentStatus.CONFIRMED);
+    Instant remindedAt = Instant.now().minusSeconds(3600);
+    appointment.setReminderSentAt(remindedAt);
+    when(appointmentRepository.findByIdAndTenant_Id(1L, TENANT_ID))
+        .thenReturn(Optional.of(appointment));
+    when(appointmentRepository.countOverlapping(
+            eq(TENANT_ID),
+            eq(PROFESSIONAL_ID),
+            any(),
+            any(),
+            eq(1L),
+            eq(AppointmentStatus.CANCELLED)))
+        .thenReturn(0L);
+
+    var req = new AppointmentUpdateRequest(CLIENT_ID, PROFESSIONAL_ID, SERVICE_ID, START_AT);
+    service.update(TENANT_ID, 1L, req);
+
+    assertThat(appointment.getReminderSentAt()).isEqualTo(remindedAt);
+  }
+
   @Test
   void update_inCompletedStatus_throwsConflict() {
     Appointment appointment = buildAppointment(AppointmentStatus.COMPLETED);
