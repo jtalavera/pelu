@@ -935,6 +935,33 @@ export default function CalendarPage() {
                               </svg>
                             </span>
                           )}
+                          {appt.reminderSentAt && (
+                            <span
+                              data-testid={`reminder-sent-badge-${appt.id}`}
+                              title={t("femme.calendar.detail.reminderSent")}
+                              style={{
+                                position: "absolute",
+                                top: 4,
+                                left: 4,
+                                width: 12,
+                                height: 12,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                opacity: 0.85,
+                              }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path
+                                  d="M8 1.5c-.6 0-1 .45-1 1v.55C4.9 3.5 3.5 5.35 3.5 7.5v2.5L2 12h12l-1.5-2V7.5c0-2.15-1.4-4-3.5-4.45V2.5c0-.55-.45-1-1-1Z"
+                                  stroke="currentColor"
+                                  strokeWidth="1.1"
+                                  strokeLinejoin="round"
+                                />
+                                <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                              </svg>
+                            </span>
+                          )}
                           <p
                             style={{
                               fontWeight: 500,
@@ -1032,6 +1059,13 @@ export default function CalendarPage() {
             <Row label={t("femme.calendar.detail.status")}>
               <StatusBadge status={detailAppt.status} />
             </Row>
+            {detailAppt.reminderSentAt && (
+              <Row label={t("femme.calendar.detail.reminderSent")}>
+                <span data-testid={`reminder-sent-${detailAppt.id}`}>
+                  {formatDateTime(detailAppt.reminderSentAt, locale)}
+                </span>
+              </Row>
+            )}
             {detailAppt.cancelReason && (
               <Row label={t("femme.calendar.detail.cancelReason")}>
                 {detailAppt.cancelReason}

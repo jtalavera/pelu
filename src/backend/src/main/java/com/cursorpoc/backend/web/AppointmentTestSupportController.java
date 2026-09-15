@@ -79,4 +79,29 @@ public class AppointmentTestSupportController {
     appointment.setStatus(AppointmentStatus.COMPLETED);
     appointmentRepository.save(appointment);
   }
+
+  /**
+   * Issue #218 follow-up: marks the appointment as already reminded, the same effect {@link
+   * com.cursorpoc.backend.service.AppointmentReminderScheduler} has in production — but that bean
+   * is disabled under the {@code e2e} profile ({@code app.femme.email.enabled=false}), so a spec
+   * asserting on the "reminder sent" UI indicator needs a way to set this directly.
+   */
+  @PostMapping("/{id}/mark-reminder-sent")
+  @Transactional
+  public void markReminderSent(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable long id) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    long tenantId = principal.getTenantId();
+    log.info(
+        "POST /api/admin/appointment-test-support/{}/mark-reminder-sent tenantId={}", id, tenantId);
+    Appointment appointment =
+        appointmentRepository
+            .findByIdAndTenant_Id(id, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "APPOINTMENT_NOT_FOUND"));
+    appointment.setReminderSentAt(Instant.now());
+    appointmentRepository.save(appointment);
+  }
 }
