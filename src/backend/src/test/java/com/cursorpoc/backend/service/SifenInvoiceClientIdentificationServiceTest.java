@@ -48,6 +48,7 @@ class SifenInvoiceClientIdentificationServiceTest {
   @Mock private SifenInvoiceHeaderService headerService;
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenEventClient eventClient;
+  @Mock private SifenInvoiceEventLogService eventLogService;
 
   private final SifenClientIdentificationEventXmlService eventXmlService =
       new SifenClientIdentificationEventXmlService();
@@ -64,7 +65,8 @@ class SifenInvoiceClientIdentificationServiceTest {
             eventXmlService,
             signingService,
             eventClient,
-            new FemmeTimeProperties());
+            new FemmeTimeProperties(),
+            eventLogService);
 
     invoice = new Invoice();
     invoice.setSifenControlNumber("01011371528001001999990122026072811234567800");

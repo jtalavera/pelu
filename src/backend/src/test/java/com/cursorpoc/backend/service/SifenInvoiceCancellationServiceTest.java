@@ -56,6 +56,7 @@ class SifenInvoiceCancellationServiceTest {
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenEventClient eventClient;
   @Mock private SifenInvoiceNotificationService notificationService;
+  @Mock private SifenInvoiceEventLogService eventLogService;
 
   private final SifenCancellationEventXmlService eventXmlService =
       new SifenCancellationEventXmlService();
@@ -72,7 +73,8 @@ class SifenInvoiceCancellationServiceTest {
             signingService,
             eventClient,
             new FemmeTimeProperties(),
-            notificationService);
+            notificationService,
+            eventLogService);
 
     invoice = new Invoice();
     invoice.setSifenControlNumber("01011371528001001999990122026072811234567800");
