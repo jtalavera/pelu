@@ -102,6 +102,7 @@
       "mainLabel": "Main navigation",
       "dashboard": "Dashboard",
       "calendar": "Calendar",
+      "dashboards": "Dashboards",
       "services": "Services",
       "professionals": "Professionals",
       "clients": "Clients",
@@ -446,6 +447,10 @@
       "topServicesSubtitle": "Top services by revenue over the last {{days}} days (excludes custom line items not linked to a catalog service)",
       "topServicesEmpty": "No invoiced services in this period yet",
       "inactiveClientsViewAll": "View all"
+    },
+    "dashboardsPage": {
+      "pageTitle": "Dashboards",
+      "pageSubtitle": "Business charts and trends at a glance."
     },
     "inactiveClients": {
       "pageTitle": "Inactive clients",

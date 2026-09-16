@@ -5,6 +5,7 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PlatformAdminRoute } from "./auth/PlatformAdminRoute";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
+import DashboardsPage from "./pages/DashboardsPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
@@ -47,6 +48,7 @@ export function AppRoutes() {
       >
         <Route path="/app" element={<DashboardPage />} />
         <Route path="/app/calendar" element={<CalendarPage />} />
+        <Route path="/app/dashboards" element={<DashboardsPage />} />
         <Route path="/app/services" element={<ServicesPage />} />
         <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/service-records" element={<ServiceRecordsPage />} />
