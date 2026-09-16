@@ -5,7 +5,7 @@ import { ChartCard } from "./ChartCard";
 import {
   CHART_GRID_COLOR,
   chartAxisTickStyle,
-  chartSeriesColor,
+  chartSeriesColorPastel,
   chartTooltipContentStyle,
   chartTooltipLabelStyle,
 } from "./chartTheme";
@@ -69,7 +69,7 @@ export function TopServicesChart({ data, days }: { data: TopServicePoint[]; days
           />
           <Bar dataKey="revenue" radius={[0, 4, 4, 0]} isAnimationActive={false}>
             {points.map((p, i) => (
-              <Cell key={p.serviceName} fill={chartSeriesColor(i)} />
+              <Cell key={p.serviceName} fill={chartSeriesColorPastel(i)} />
             ))}
           </Bar>
         </BarChart>

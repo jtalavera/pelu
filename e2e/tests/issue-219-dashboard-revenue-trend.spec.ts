@@ -85,6 +85,9 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
     await seedInvoiceOnDay(request, token, seed, client.id, client.fullName, 75_000, 21);
 
     await loginAsDemo(page);
+    // Issue #220 follow-up "Dashboards": the revenue-trend chart moved off the main dashboard onto
+    // its own screen, reached via the "Dashboards" nav item.
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-revenue-trend");
     await expect(chart).toBeVisible({ timeout: 20_000 });
@@ -129,6 +132,7 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
 
     await page.setViewportSize({ width: 400, height: 800 });
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-revenue-trend");
     await expect(chart).toBeVisible({ timeout: 20_000 });
