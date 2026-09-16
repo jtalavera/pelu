@@ -15,6 +15,7 @@ import com.cursorpoc.backend.web.dto.SifenNumberVoidingEventResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -64,6 +65,15 @@ public class SifenNumberVoidingService {
 
   static final String AUTO_TRIGGER_REASON_PLACEHOLDER =
       "Factura rechazada por SIFEN; la numeración no será reutilizada.";
+
+  /** "Genuinely dead" per Manual Técnico V150 — SIFEN accepted the inutilización. */
+  private static final List<SifenNumberVoidingStatus> APPROVED_STATUSES =
+      List.of(
+          SifenNumberVoidingStatus.APPROVED, SifenNumberVoidingStatus.APPROVED_WITH_OBSERVATION);
+
+  /** Statuses that still require admin action / count as "pending to resolve". */
+  private static final List<SifenNumberVoidingStatus> ACTIONABLE_STATUSES =
+      List.of(SifenNumberVoidingStatus.PENDING, SifenNumberVoidingStatus.REJECTED);
 
   private final SifenNumberVoidingEventRepository repository;
   private final InvoiceRepository invoiceRepository;
@@ -184,6 +194,65 @@ public class SifenNumberVoidingService {
             });
   }
 
+  /**
+   * Issue #205 AC-1: an approved inutilización means those numbers are permanently unusable —
+   * {@code InvoiceService.issueInvoice} calls this to skip the whole covering range (and any
+   * further adjacent ones) instead of assigning a dead number. No-op (returns {@code
+   * candidateNumber} unchanged) when nothing covers it.
+   */
+  @Transactional(readOnly = true)
+  public int skipApprovedVoidedNumbers(long tenantId, long fiscalStampId, int candidateNumber) {
+    int number = candidateNumber;
+    Optional<SifenNumberVoidingEvent> covering;
+    while ((covering = highestCoveringEvent(tenantId, fiscalStampId, APPROVED_STATUSES, number))
+        .isPresent()) {
+      number = covering.get().getRangeTo() + 1;
+    }
+    return number;
+  }
+
+  /**
+   * Issue #205 AC-4: a {@code PENDING}/{@code REJECTED} event is "superseded" once a separate
+   * (different id) {@code APPROVED}/{@code APPROVED_WITH_OBSERVATION} event's range already covers
+   * it entirely — e.g. the auto-recorded voiding for a rejected invoice whose number range a
+   * broader manual voiding was later approved for. Superseded events are effectively resolved:
+   * nothing left to submit, no deadline to track.
+   */
+  private boolean isSuperseded(SifenNumberVoidingEvent event) {
+    if (!ACTIONABLE_STATUSES.contains(event.getStatus())
+        || event.getTenantId() == null
+        || event.getFiscalStamp() == null
+        || event.getFiscalStamp().getId() == null) {
+      return false;
+    }
+    return highestCoveringEvent(
+            event.getTenantId(),
+            event.getFiscalStamp().getId(),
+            APPROVED_STATUSES,
+            event.getRangeFrom(),
+            event.getRangeTo())
+        .filter(e -> !e.getId().equals(event.getId()))
+        .isPresent();
+  }
+
+  private Optional<SifenNumberVoidingEvent> highestCoveringEvent(
+      long tenantId, long fiscalStampId, List<SifenNumberVoidingStatus> statuses, int number) {
+    return highestCoveringEvent(tenantId, fiscalStampId, statuses, number, number);
+  }
+
+  private Optional<SifenNumberVoidingEvent> highestCoveringEvent(
+      long tenantId,
+      long fiscalStampId,
+      List<SifenNumberVoidingStatus> statuses,
+      int rangeFrom,
+      int rangeTo) {
+    return repository
+        .findByTenantIdAndFiscalStamp_IdAndDocumentTypeAndStatusInAndRangeFromLessThanEqualAndRangeToGreaterThanEqual(
+            tenantId, fiscalStampId, SifenDocumentType.FACTURA, statuses, rangeFrom, rangeTo)
+        .stream()
+        .max(Comparator.comparingInt(SifenNumberVoidingEvent::getRangeTo));
+  }
+
   /** Manual Técnico V150 sección 11.6.2: first 15 natural days of the month following the event. */
   static LocalDate computeDeadline(LocalDate eventDate) {
     return eventDate.plusMonths(1).withDayOfMonth(1).plusDays(14);
@@ -226,7 +295,9 @@ public class SifenNumberVoidingService {
   @Transactional(readOnly = true)
   public Optional<PendingVoidingSummary> pendingSummary(long tenantId) {
     List<SifenNumberVoidingEvent> pending =
-        repository.findByTenantIdAndStatus(tenantId, SifenNumberVoidingStatus.PENDING);
+        repository.findByTenantIdAndStatus(tenantId, SifenNumberVoidingStatus.PENDING).stream()
+            .filter(e -> !isSuperseded(e))
+            .toList();
     if (pending.isEmpty()) {
       return Optional.empty();
     }
@@ -469,7 +540,8 @@ public class SifenNumberVoidingService {
         event.getResultCode(),
         event.getMessage(),
         event.getProtocolNumber(),
-        event.getInvoiceId());
+        event.getInvoiceId(),
+        isSuperseded(event));
   }
 
   private record SubmitPreparation(

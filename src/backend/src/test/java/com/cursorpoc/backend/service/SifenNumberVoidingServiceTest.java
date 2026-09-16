@@ -497,6 +497,84 @@ class SifenNumberVoidingServiceTest {
     assertThat(service.pendingSummary(TENANT_ID)).isEmpty();
   }
 
+  // ── Issue #205 AC-1: skip approved voided numbers at emission time ───────────────────────────
+
+  @Test
+  void skipApprovedVoidedNumbers_skipsPastAnApprovedCoveringRange() {
+    SifenNumberVoidingEvent approved = new SifenNumberVoidingEvent();
+    approved.setId(1L);
+    approved.setStatus(SifenNumberVoidingStatus.APPROVED);
+    approved.setRangeFrom(1);
+    approved.setRangeTo(3);
+
+    when(repository
+            .findByTenantIdAndFiscalStamp_IdAndDocumentTypeAndStatusInAndRangeFromLessThanEqualAndRangeToGreaterThanEqual(
+                eq(TENANT_ID), eq(9L), eq(SifenDocumentType.FACTURA), any(), eq(1), eq(1)))
+        .thenReturn(List.of(approved));
+    when(repository
+            .findByTenantIdAndFiscalStamp_IdAndDocumentTypeAndStatusInAndRangeFromLessThanEqualAndRangeToGreaterThanEqual(
+                eq(TENANT_ID), eq(9L), eq(SifenDocumentType.FACTURA), any(), eq(4), eq(4)))
+        .thenReturn(List.of());
+
+    assertThat(service.skipApprovedVoidedNumbers(TENANT_ID, 9L, 1)).isEqualTo(4);
+  }
+
+  @Test
+  void skipApprovedVoidedNumbers_noOpWhenNothingCovers() {
+    when(repository
+            .findByTenantIdAndFiscalStamp_IdAndDocumentTypeAndStatusInAndRangeFromLessThanEqualAndRangeToGreaterThanEqual(
+                eq(TENANT_ID), eq(9L), eq(SifenDocumentType.FACTURA), any(), eq(1), eq(1)))
+        .thenReturn(List.of());
+
+    assertThat(service.skipApprovedVoidedNumbers(TENANT_ID, 9L, 1)).isEqualTo(1);
+  }
+
+  // ── Issue #205 AC-4: superseded (redundant) pending/rejected events ──────────────────────────
+
+  /**
+   * Reproduces the "comprobante 1060" bug report: an auto-recorded {@code PENDING} voiding for one
+   * invoice number, plus a separate manual voiding whose already-{@code APPROVED} range also covers
+   * it. The redundant pending event must not count toward {@code pendingSummary}, and the paged
+   * list must flag it {@code supersededByApproved}.
+   */
+  @Test
+  void listForTenant_flagsASupersededPendingEvent_andExcludesItFromThePendingSummary() {
+    SifenNumberVoidingEvent pending = new SifenNumberVoidingEvent();
+    pending.setId(10L);
+    pending.setTenantId(TENANT_ID);
+    pending.setFiscalStamp(stamp());
+    pending.setDocumentType(SifenDocumentType.FACTURA);
+    pending.setStatus(SifenNumberVoidingStatus.PENDING);
+    pending.setRangeFrom(1060);
+    pending.setRangeTo(1060);
+    pending.setReason("Factura rechazada por SIFEN; la numeración no será reutilizada.");
+    pending.setDeadlineDate(LocalDate.of(2026, 10, 15));
+    pending.setCreatedAt(LocalDateTime.of(2026, 9, 1, 10, 0));
+
+    SifenNumberVoidingEvent approved = new SifenNumberVoidingEvent();
+    approved.setId(11L);
+    approved.setStatus(SifenNumberVoidingStatus.APPROVED);
+    approved.setRangeFrom(1055);
+    approved.setRangeTo(1070);
+
+    when(repository.findByTenantId(
+            eq(TENANT_ID), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(pending)));
+    when(repository.findByTenantIdAndStatus(TENANT_ID, SifenNumberVoidingStatus.PENDING))
+        .thenReturn(List.of(pending));
+    when(repository
+            .findByTenantIdAndFiscalStamp_IdAndDocumentTypeAndStatusInAndRangeFromLessThanEqualAndRangeToGreaterThanEqual(
+                eq(TENANT_ID), eq(9L), eq(SifenDocumentType.FACTURA), any(), eq(1060), eq(1060)))
+        .thenReturn(List.of(approved));
+
+    var out = service.listForTenant(TENANT_ID, 0, 10);
+
+    assertThat(out.content()).hasSize(1);
+    assertThat(out.content().get(0).supersededByApproved()).isTrue();
+    assertThat(out.pendingCount()).isZero();
+    assertThat(out.soonestPendingDeadline()).isNull();
+  }
+
   private static Document newDocument() {
     try {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();

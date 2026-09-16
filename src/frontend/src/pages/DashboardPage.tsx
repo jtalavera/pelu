@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Spinner, Text } from "@design-system";
+import { Alert, Button, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
@@ -35,17 +35,18 @@ type DashboardResponse = {
   clientsThisMonth: number;
   fiscalAlerts: Array<{ severity: string; messageKey: string; message: string }>;
   /**
-   * Issue #216 · "Panel de clientes inactivos" — active clients with no `COMPLETED` appointment in
-   * the last `inactiveClientsThresholdDays` days (or none ever), ordered by days of inactivity
-   * descending, capped server-side (see `DashboardService.INACTIVE_CLIENTS_LIMIT`).
-   * `daysSinceLastVisit`/`lastVisitAt` are both null when the client never had a completed visit.
+   * Issue #216 · "Panel de clientes inactivos" — active clients with at least one `COMPLETED`
+   * appointment whose most recent one is `inactiveClientsThresholdDays`+ days old (clients who
+   * never had a completed visit are excluded entirely — issue #216 follow-up), ordered by days of
+   * inactivity descending, capped to the top N (see `DashboardService.INACTIVE_CLIENTS_LIMIT`) —
+   * "Ver todas" links to the full paginated list.
    */
   inactiveClients: Array<{
     clientId: number;
     fullName: string;
     phone: string | null;
-    daysSinceLastVisit: number | null;
-    lastVisitAt: string | null;
+    daysSinceLastVisit: number;
+    lastVisitAt: string;
   }>;
   /** `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — returned so the frontend never hardcodes it. */
   inactiveClientsThresholdDays: number;
@@ -1038,12 +1039,35 @@ export default function DashboardPage() {
 
       {/* ── 6. INACTIVE CLIENTS ── */}
       <div data-testid="dashboard-inactive-clients" style={{ ...cardStyle, marginTop: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-          {t("femme.dashboard.inactiveClientsTitle")}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+              {t("femme.dashboard.inactiveClientsTitle")}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
+              {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
+            </div>
+          </div>
+          {inactiveClients.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="dashboard-inactive-clients-view-all"
+              onClick={() => navigate("/app/inactive-clients")}
+            >
+              {t("femme.dashboard.inactiveClientsViewAll")}
+            </Button>
+          )}
         </div>
-        <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2, marginBottom: 12 }}>
-          {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
-        </div>
+        <div style={{ marginBottom: 12 }} />
 
         {inactiveClients.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
@@ -1089,11 +1113,9 @@ export default function DashboardPage() {
                       <td style={inactiveClientsTdStyle}>{c.fullName}</td>
                       <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
                       <td style={inactiveClientsTdStyle}>
-                        {c.daysSinceLastVisit == null
-                          ? t("femme.dashboard.inactiveClientsNeverVisited")
-                          : t("femme.dashboard.inactiveClientsDaysValue", {
-                              days: c.daysSinceLastVisit,
-                            })}
+                        {t("femme.dashboard.inactiveClientsDaysValue", {
+                          days: c.daysSinceLastVisit,
+                        })}
                       </td>
                     </tr>
                   );

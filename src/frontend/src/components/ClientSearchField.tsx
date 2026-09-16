@@ -70,6 +70,15 @@ export function ClientSearchField({
     }
   }, [value, t]);
 
+  // Without this, a debounce timer started right before unmount still fires afterwards and calls
+  // setSearching/setResults on an unmounted component (surfaces as an unhandled rejection in tests
+  // if a later test's environment has already been torn down by then).
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   // Close dropdown when clicking outside (both the container and the floating panel).
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

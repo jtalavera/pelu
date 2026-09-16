@@ -45,6 +45,15 @@ export function TenantSearchField({ value, onChange, id, label, placeholder }: P
     }
   }, [value]);
 
+  // Without this, a debounce timer started right before unmount still fires afterwards and calls
+  // setSearching/setResults on an unmounted component (surfaced in CI as an unhandled rejection —
+  // "window is not defined" — once a later test's jsdom environment had already been torn down).
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as Node;

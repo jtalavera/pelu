@@ -43,6 +43,10 @@ type SifenNumberVoidingRow = {
   deadlineDate: string;
   message: string | null;
   invoiceId: number | null;
+  // Issue #205 AC-4: true when a PENDING/REJECTED event's range is already fully covered by a
+  // separate, approved voiding — nothing left to resolve even though its own status looks
+  // actionable.
+  supersededByApproved: boolean;
 };
 
 // Issue #194: the "Numeración inutilizada" tab paginates this list server-side, like the invoice
@@ -280,8 +284,11 @@ export default function SifenCertificatesPage() {
     void loadVoiding(voidingPageNum, voidingPageSize);
   }, [loadVoiding, voidingPageNum, voidingPageSize]);
 
-  async function submitVoiding(id: number) {
-    const reason = (voidingReasons[id] ?? "").trim();
+  async function submitVoiding(id: number, fallbackReason: string) {
+    // The textarea displays voidingReasons[id] ?? row.reason ?? "" (a pre-filled reason from
+    // creation counts as valid input even if the admin never touched the field) — validation here
+    // must fall back the same way, or a pre-filled reason wrongly triggers "too short".
+    const reason = (voidingReasons[id] ?? fallbackReason ?? "").trim();
     setVoidingSubmitErrors((prev) => ({ ...prev, [id]: "" }));
     if (reason.length < 5) {
       setVoidingSubmitErrors((prev) => ({
@@ -859,9 +866,18 @@ export default function SifenCertificatesPage() {
                   </thead>
                   <tbody>
                     {voidingRows.map((row) => {
-                      const cancelled = row.status === "CANCELLED";
+                      // Issue #205 AC-3: once SIFEN has resolved this event (approved, or
+                      // superseded by a separately-approved covering range) there's no deadline
+                      // left to track — same treatment as CANCELLED.
+                      const resolved =
+                        row.status === "CANCELLED" ||
+                        row.status === "APPROVED" ||
+                        row.status === "APPROVED_WITH_OBSERVATION" ||
+                        row.supersededByApproved;
                       const deadline = deadlineLabel(row.deadlineDate);
-                      const submittable = row.status === "PENDING" || row.status === "REJECTED";
+                      const submittable =
+                        (row.status === "PENDING" || row.status === "REJECTED") &&
+                        !row.supersededByApproved;
                       return (
                         <tr key={row.id} data-testid="sifen-number-voiding-row">
                           <td style={tdStyle}>
@@ -871,12 +887,12 @@ export default function SifenCertificatesPage() {
                           <td
                             style={{
                               ...tdStyle,
-                              ...(!cancelled && deadline.overdue
+                              ...(!resolved && deadline.overdue
                                 ? { color: "var(--color-danger)" }
                                 : {}),
                             }}
                           >
-                            {cancelled ? "—" : deadline.text}
+                            {resolved ? "—" : deadline.text}
                           </td>
                           <td style={tdStyle}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -884,6 +900,11 @@ export default function SifenCertificatesPage() {
                               {row.invoiceId != null ? (
                                 <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
                                   {t("femme.sifenNumberVoiding.automaticBadge")}
+                                </span>
+                              ) : null}
+                              {row.supersededByApproved ? (
+                                <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
+                                  {t("femme.sifenNumberVoiding.supersededBadge")}
                                 </span>
                               ) : null}
                             </span>
@@ -942,7 +963,7 @@ export default function SifenCertificatesPage() {
                                     variant="secondary"
                                     className="min-h-11"
                                     disabled={voidingSubmitting === row.id}
-                                    onClick={() => void submitVoiding(row.id)}
+                                    onClick={() => void submitVoiding(row.id, row.reason ?? "")}
                                   >
                                     {voidingSubmitting === row.id
                                       ? t("femme.sifenNumberVoiding.submitting")
