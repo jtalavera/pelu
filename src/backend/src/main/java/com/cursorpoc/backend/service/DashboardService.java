@@ -272,11 +272,11 @@ public class DashboardService {
    * Issue #216: active clients whose last {@code COMPLETED} appointment is {@value
    * #INACTIVE_CLIENT_THRESHOLD_DAYS}+ days old (or who never had one), ordered by days of
    * inactivity descending (never-visited clients sort first), capped to {@value
-   * #INACTIVE_CLIENTS_LIMIT}.
-   * Issue #216: active clients with at least one {@code COMPLETED} appointment whose most recent
-   * one is {@value #INACTIVE_CLIENT_THRESHOLD_DAYS}+ days old — clients who never had a completed
-   * visit are excluded (issue #216 follow-up: not visiting is "inactive", never having been a
-   * client at all is not). Ordered by days of inactivity descending.
+   * #INACTIVE_CLIENTS_LIMIT}. Issue #216: active clients with at least one {@code COMPLETED}
+   * appointment whose most recent one is {@value #INACTIVE_CLIENT_THRESHOLD_DAYS}+ days old —
+   * clients who never had a completed visit are excluded (issue #216 follow-up: not visiting is
+   * "inactive", never having been a client at all is not). Ordered by days of inactivity
+   * descending.
    */
   private List<InactiveCandidate> computeInactiveCandidates(
       long tenantId, ZoneId zone, LocalDate today) {

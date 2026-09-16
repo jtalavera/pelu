@@ -444,7 +444,7 @@
       "revenueTrendEmpty": "No invoiced revenue in this period yet",
       "topServicesTitle": "Top services",
       "topServicesSubtitle": "Top services by revenue over the last {{days}} days (excludes custom line items not linked to a catalog service)",
-      "topServicesEmpty": "No invoiced services in this period yet"
+      "topServicesEmpty": "No invoiced services in this period yet",
       "inactiveClientsViewAll": "View all"
     },
     "inactiveClients": {
