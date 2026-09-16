@@ -12,7 +12,8 @@ public record DashboardResponse(
     List<InactiveClient> inactiveClients,
     int inactiveClientsThresholdDays,
     List<RevenueTrendPoint> revenueTrend,
-    int revenueTrendDays) {
+    int revenueTrendDays,
+    List<TopService> topServices) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}
@@ -41,4 +42,13 @@ public record DashboardResponse(
    * are expected to reuse.
    */
   public record RevenueTrendPoint(String date, BigDecimal invoiced) {}
+
+  /**
+   * Issue #220 — "Dashboard: gráfico de servicios más vendidos". Top services by invoiced revenue
+   * over the same trailing {@code revenueTrendDays}-day window as {@link #revenueTrend} (no
+   * separate "days" field — both charts share the exact same window, see {@code
+   * DashboardService#buildTopServices}), ordered by {@code revenue} descending, capped server-side
+   * to {@code DashboardService#TOP_SERVICES_LIMIT}.
+   */
+  public record TopService(String serviceName, BigDecimal revenue) {}
 }

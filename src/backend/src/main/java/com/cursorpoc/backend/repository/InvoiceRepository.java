@@ -202,6 +202,43 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
           @Param("from") Instant from,
           @Param("to") Instant to);
 
+  /**
+   * Issue #220 — "Dashboard: gráfico de servicios más vendidos": revenue per linked {@code
+   * SalonService}, same "invoiced" filters as {@link #sumTotalByTenantAndStatusAndIssuedBetween}
+   * (ISSUED + non-REJECTED SIFEN outcome), summed over the given window and ordered by revenue
+   * descending. Lines with no linked service (a free-text/custom line — {@code serviceId} is
+   * optional on {@code InvoiceLineRequest}) are excluded since they can't be attributed to a named
+   * service. Grouped by {@code salonService.id} (not just {@code name} — same reasoning as {@code
+   * ClientRepository} grouping by {@code c.id, c.fullName, c.phone} rather than name alone: {@code
+   * services.name} has no unique constraint, so two distinct services that happen to share a name —
+   * a renamed-and-recreated service, a typo duplicate — would otherwise get silently merged into
+   * one bar with combined revenue). {@code name} is a tie-break sort key, not a grouping key.
+   * Ordered by revenue descending, then service name ascending — a deterministic tie-break so which
+   * services survive the top-N cutoff on an exact-revenue tie doesn't depend on the DB engine's (H2
+   * vs. SQL Server) unspecified tie ordering. Grouping/summing/ordering is done in SQL (unlike the
+   * revenue-trend's day-bucketing, this doesn't need the tenant's business timezone) — {@code
+   * DashboardService#buildTopServices} caps the result to the top N.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.ServiceRevenueRow(
+          l.salonService.id, l.salonService.name, SUM(l.lineTotal))
+      FROM InvoiceLine l
+      JOIN l.invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
+      AND i.issuedAt >= :from AND i.issuedAt < :to
+      AND l.salonService IS NOT NULL
+      GROUP BY l.salonService.id, l.salonService.name
+      ORDER BY SUM(l.lineTotal) DESC, l.salonService.name ASC
+      """)
+  List<com.cursorpoc.backend.service.ServiceRevenueRow>
+      findServiceRevenueByTenantAndStatusAndIssuedBetween(
+          @Param("tenantId") Long tenantId,
+          @Param("status") InvoiceStatus status,
+          @Param("from") Instant from,
+          @Param("to") Instant to);
+
   @Query(
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
