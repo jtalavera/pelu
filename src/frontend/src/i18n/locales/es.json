@@ -438,6 +438,10 @@
       "inactiveClientsColPhone": "Teléfono",
       "inactiveClientsColInactivity": "Días de inactividad",
       "inactiveClientsDaysValue": "{{days}} días",
+      "inactiveClientsNeverVisited": "Nunca visitó",
+      "revenueTrendTitle": "Tendencia de facturación",
+      "revenueTrendSubtitle": "Facturación de los últimos {{days}} días",
+      "revenueTrendEmpty": "Todavía no hay facturación en este período",
       "inactiveClientsViewAll": "Ver todas"
     },
     "inactiveClients": {

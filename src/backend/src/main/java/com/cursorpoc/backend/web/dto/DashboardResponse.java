@@ -10,7 +10,9 @@ public record DashboardResponse(
     long clientsThisMonth,
     List<FiscalAlert> fiscalAlerts,
     List<InactiveClient> inactiveClients,
-    int inactiveClientsThresholdDays) {
+    int inactiveClientsThresholdDays,
+    List<RevenueTrendPoint> revenueTrend,
+    int revenueTrendDays) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}
@@ -26,5 +28,17 @@ public record DashboardResponse(
    * present.
    */
   public record InactiveClient(
-      long clientId, String fullName, String phone, long daysSinceLastVisit, String lastVisitAt) {}
+      long clientId, String fullName, String phone, Long daysSinceLastVisit, String lastVisitAt) {}
+
+  /**
+   * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación". One calendar day
+   * (business timezone) of the trailing {@code revenueTrendDays}-day window, ordered oldest first.
+   * {@code date} is an ISO-8601 {@code yyyy-MM-dd} string (not an {@code Instant} — a chart x-axis
+   * has no use for a time-of-day component here). {@code invoiced} is {@code ZERO}, never omitted,
+   * for a day with no {@code ISSUED} invoices, so every point in the series lines up on a
+   * fixed-length, gap-free x-axis. This same shape (day-bucketed points over a fixed trailing
+   * window, one numeric field per series) is the pattern later dashboard charts (issues #220-#223)
+   * are expected to reuse.
+   */
+  public record RevenueTrendPoint(String date, BigDecimal invoiced) {}
 }

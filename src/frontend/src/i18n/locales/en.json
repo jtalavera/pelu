@@ -438,6 +438,10 @@
       "inactiveClientsColPhone": "Phone",
       "inactiveClientsColInactivity": "Days inactive",
       "inactiveClientsDaysValue": "{{days}} days",
+      "inactiveClientsNeverVisited": "Never visited",
+      "revenueTrendTitle": "Revenue trend",
+      "revenueTrendSubtitle": "Invoiced revenue over the last {{days}} days",
+      "revenueTrendEmpty": "No invoiced revenue in this period yet",
       "inactiveClientsViewAll": "View all"
     },
     "inactiveClients": {
