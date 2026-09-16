@@ -266,6 +266,25 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
               <tbody>
                 {groups.map((group) => (
                   <Fragment key={group.total.professionalId}>
+                    {showSubtotals && (
+                      <tr key={`${group.total.professionalId}-header`}>
+                        <td
+                          colSpan={4}
+                          style={{
+                            padding: "6px 12px",
+                            fontSize: 10,
+                            fontWeight: 500,
+                            letterSpacing: "0.06em",
+                            textTransform: "uppercase",
+                            color: "var(--color-ink-3)",
+                            background: "var(--color-stone)",
+                            borderTop: "var(--border-default)",
+                          }}
+                        >
+                          {group.total.professionalName}
+                        </td>
+                      </tr>
+                    )}
                     {group.rows.map((row, idx) => (
                       <tr key={`${group.total.professionalId}-${idx}`} style={{ borderTop: "var(--border-default)" }}>
                         <td style={{ padding: "10px 12px" }}>{row.professionalName}</td>

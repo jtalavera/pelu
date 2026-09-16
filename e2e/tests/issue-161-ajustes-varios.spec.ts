@@ -212,17 +212,23 @@ test.describe("Issue #161 · Ajustes varios", () => {
     const statusHeader = page.getByTestId("sifen-tab-status").locator("summary");
     const revalidateHeader = page.getByTestId("sifen-tab-revalidate").locator("summary");
 
-    // "Estado en SIFEN" is open by default — its header must already be beige.
+    // Issue #205 AC-5: every accordion section — including "Estado en SIFEN" — now starts
+    // closed, so neither header is beige until clicked.
     await expect(statusHeader).toBeVisible();
+    const statusClosedColor = await statusHeader.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(statusClosedColor).not.toBe(navHoverColor);
+    const revalidateClosedColor = await revalidateHeader.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(revalidateClosedColor).not.toBe(navHoverColor);
+
+    // Opening either one must turn its header beige — the body content style is unaffected.
+    await statusHeader.click();
     await expect
       .poll(() => statusHeader.evaluate((el) => getComputedStyle(el).backgroundColor))
       .toBe(navHoverColor);
-
-    // "Revalidar en SIFEN" starts closed — its header must NOT be beige yet.
-    const closedColor = await revalidateHeader.evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(closedColor).not.toBe(navHoverColor);
-
-    // Opening it must turn its header beige too — the body content style is unaffected.
     await revalidateHeader.click();
     await expect
       .poll(() => revalidateHeader.evaluate((el) => getComputedStyle(el).backgroundColor))

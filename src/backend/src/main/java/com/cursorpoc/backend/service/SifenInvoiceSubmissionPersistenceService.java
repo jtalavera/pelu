@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.enums.SifenInvoiceEventType;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import java.time.Duration;
@@ -61,11 +62,15 @@ class SifenInvoiceSubmissionPersistenceService {
 
   private final InvoiceRepository invoiceRepository;
   private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceEventLogService eventLogService;
 
   SifenInvoiceSubmissionPersistenceService(
-      InvoiceRepository invoiceRepository, FemmeTimeProperties timeProperties) {
+      InvoiceRepository invoiceRepository,
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceEventLogService eventLogService) {
     this.invoiceRepository = invoiceRepository;
     this.timeProperties = timeProperties;
+    this.eventLogService = eventLogService;
   }
 
   /**
@@ -202,6 +207,12 @@ class SifenInvoiceSubmissionPersistenceService {
     if (documentContent != null) {
       invoice.setSifenQueryDocumentContent(documentContent);
     }
+    eventLogService.record(
+        tenantId,
+        invoiceId,
+        SifenInvoiceEventType.SUBMISSION,
+        result.resultCode(),
+        result.message());
   }
 
   @Transactional(readOnly = true)

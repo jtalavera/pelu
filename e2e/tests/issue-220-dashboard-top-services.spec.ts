@@ -101,6 +101,9 @@ test.describe("Issue #220 · Dashboard top services chart", () => {
     );
 
     await loginAsDemo(page);
+    // Issue #220 follow-up "Dashboards": the top-services chart moved off the main dashboard onto
+    // its own screen, reached via the "Dashboards" nav item.
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-top-services");
     await expect(chart).toBeVisible({ timeout: 20_000 });
@@ -171,6 +174,7 @@ test.describe("Issue #220 · Dashboard top services chart", () => {
 
     await page.setViewportSize({ width: 400, height: 800 });
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-top-services");
     await expect(chart).toBeVisible({ timeout: 20_000 });

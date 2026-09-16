@@ -10,8 +10,9 @@ terraform {
 
   required_providers {
     azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+      source = "hashicorp/azurerm"
+      # >= 4.35 for azurerm_email_communication_service_domain_sender_username (custom email domain).
+      version = "~> 4.35"
     }
     azuread = {
       source  = "hashicorp/azuread"
@@ -20,6 +21,11 @@ terraform {
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
+    }
+    azapi = {
+      source = "Azure/azapi"
+      # Only used to trigger ACS Email's initiateVerification action (no azurerm resource for it).
+      version = "~> 2.0"
     }
   }
 }

@@ -193,7 +193,9 @@ Then boot with:
 FEMME_KEYVAULT_URI=https://femme-kv-b10via.vault.azure.net/ \
 FEMME_SERVICEBUS_NAMESPACE=femme-sb-b10via.servicebus.windows.net \
 ACS_CONNECTION_STRING=<value from az communication list-key> \
-ACS_SENDER_ADDRESS=DoNotReply@3fd72f16-072d-4971-9593-05a576dc06da.azurecomm.net \
+ACS_SENDER_ADDRESS_REMINDERS=DoNotReply@3fd72f16-072d-4971-9593-05a576dc06da.azurecomm.net \
+ACS_SENDER_ADDRESS_INVOICES=DoNotReply@3fd72f16-072d-4971-9593-05a576dc06da.azurecomm.net \
+ACS_SENDER_ADDRESS_GENERIC=DoNotReply@3fd72f16-072d-4971-9593-05a576dc06da.azurecomm.net \
 APPLICATIONINSIGHTS_CONNECTION_STRING=<value from az monitor app-insights component show> \
 APP_FEMME_PLATFORM_ADMIN_EMAIL=<email> APP_FEMME_PLATFORM_ADMIN_PASSWORD=<password> \
 ./gradlew bootRun --no-daemon
@@ -201,4 +203,4 @@ APP_FEMME_PLATFORM_ADMIN_EMAIL=<email> APP_FEMME_PLATFORM_ADMIN_PASSWORD=<passwo
 
 Do not set `FEMME_KEYVAULT_ENABLED=false`, `APP_FEMME_JWT_SECRET`, or any `SPRING_DATASOURCE_*` override — leaving those unset is what keeps Key Vault real and the database local. Caveat: this hits real shared dev resources — ACS actually sends email, and the Service Bus queue is the same one the deployed dev backend consumes from.
 
-**Shortcut script**: `src/backend/run-local-azure-dev.sh` sets `FEMME_KEYVAULT_URI`, `FEMME_SERVICEBUS_NAMESPACE`, `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS`, and `APPLICATIONINSIGHTS_CONNECTION_STRING`, then execs `./gradlew bootRun --no-daemon`. It embeds a live ACS connection string, so it's gitignored — never commit it. Still requires `docker compose up -d` and `az login` first. It does not set `APP_FEMME_PLATFORM_ADMIN_EMAIL`/`APP_FEMME_PLATFORM_ADMIN_PASSWORD` — export those separately if you need platform-admin login.
+**Shortcut script**: `src/backend/run-local-azure-dev.sh` sets `FEMME_KEYVAULT_URI`, `FEMME_SERVICEBUS_NAMESPACE`, `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS_REMINDERS`/`ACS_SENDER_ADDRESS_INVOICES`/`ACS_SENDER_ADDRESS_GENERIC`, and `APPLICATIONINSIGHTS_CONNECTION_STRING`, then execs `./gradlew bootRun --no-daemon`. It embeds a live ACS connection string, so it's gitignored — never commit it. Still requires `docker compose up -d` and `az login` first. It does not set `APP_FEMME_PLATFORM_ADMIN_EMAIL`/`APP_FEMME_PLATFORM_ADMIN_PASSWORD` — export those separately if you need platform-admin login.

@@ -260,12 +260,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       const user = userEvent.setup();
       renderPage();
 
-      await waitFor(() => {
-        const haircut = screen.queryAllByText(/haircut/i);
-        expect(haircut.length).toBeGreaterThan(0);
-      });
-
-      const apptBtn = screen.getAllByText(/haircut/i)[0];
+      const apptBtn = await screen.findByRole("button", { name: /haircut/i });
       await user.click(apptBtn);
 
       await waitFor(() => {
@@ -274,25 +269,26 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("does not show edit button for COMPLETED appointments", async () => {
-      const completedAppt = { ...MOCK_APPOINTMENT, status: "COMPLETED" };
+    // COMPLETED appointments are excluded from the week grid entirely since HU-19
+    // (see CALENDAR_GRID_STATUSES / the "does not show non-grid statuses" test above), so they
+    // can no longer be opened from here to exercise this restriction. IN_PROGRESS is still
+    // grid-visible but outside EDITABLE_STATUSES, so it covers the same "not editable" intent.
+    it("does not show edit button for IN_PROGRESS appointments", async () => {
+      const inProgressAppt = { ...MOCK_APPOINTMENT, status: "IN_PROGRESS" };
       femmeJsonMock.mockImplementation((url: string) => {
         if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
         if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
         if (url.includes("/api/clients")) return Promise.resolve([]);
-        if (url.includes("/api/appointments")) return Promise.resolve([completedAppt]);
+        if (url.includes("/api/appointments")) return Promise.resolve([inProgressAppt]);
         return Promise.resolve([]);
       });
 
       const user = userEvent.setup();
       renderPage();
 
-      await waitFor(() => {
-        const haircut = screen.queryAllByText(/haircut/i);
-        expect(haircut.length).toBeGreaterThan(0);
-      });
-
-      const apptBtn = screen.getAllByText(/haircut/i)[0];
+      // getByRole excludes the ThemeProvider's hidden duplicate tree (unlike getAllByText,
+      // which would match it too and could click a copy that never opens an accessible dialog).
+      const apptBtn = await screen.findByRole("button", { name: /haircut/i });
       await user.click(apptBtn);
 
       await waitFor(() => {

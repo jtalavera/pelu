@@ -102,6 +102,7 @@
       "mainLabel": "Navegación principal",
       "dashboard": "Panel",
       "calendar": "Calendario",
+      "dashboards": "Dashboards",
       "services": "Servicios",
       "professionals": "Profesionales",
       "clients": "Clientes",
@@ -448,6 +449,24 @@
       "paymentMethodMixTitle": "Mezcla de medios de pago",
       "paymentMethodMixSubtitle": "Facturación por medio de pago en los últimos {{days}} días",
       "paymentMethodMixEmpty": "Todavía no hay pagos registrados en este período"
+      "inactiveClientsViewAll": "Ver todas"
+    },
+    "dashboardsPage": {
+      "pageTitle": "Dashboards",
+      "pageSubtitle": "Gráficos y tendencias del negocio de un vistazo."
+    },
+    "inactiveClients": {
+      "pageTitle": "Clientes inactivos",
+      "pageSubtitle": "Clientes activos que no tuvieron un turno completado recientemente, ordenados por más días sin visitar.",
+      "backToDashboard": "Volver al Panel",
+      "loading": "Cargando…",
+      "errorTitle": "Error",
+      "empty": "No hay clientes inactivos.",
+      "colClient": "Cliente",
+      "colPhone": "Teléfono",
+      "colLastVisit": "Última visita",
+      "colInactivity": "Días de inactividad",
+      "daysValue": "{{days}} días"
     },
     "status": {
       "PENDING": "Pendiente",
@@ -525,6 +544,7 @@
       "statusRejected": "Rechazada",
       "statusCancelled": "Cancelada",
       "automaticBadge": "Automática",
+      "supersededBadge": "Cubierta por otra anulación",
       "deadlineDaysLeft_one": "Queda {{count}} día",
       "deadlineDaysLeft_other": "Quedan {{count}} días",
       "deadlineOverdue": "Fecha límite vencida",
@@ -967,6 +987,15 @@
             "checkingStatus": "Verificando…",
             "checkStatusStillPending": "SIFEN todavía no respondió. La factura sigue pendiente de verificación.",
             "checkStatusResolved": "SIFEN respondió: se actualizó el estado.",
+            "historyButton": "Ver historial de mensajes SIFEN",
+            "historyTitle": "Historial de mensajes SIFEN",
+            "historyLoading": "Cargando historial…",
+            "historyEmpty": "Todavía no hay mensajes de SIFEN registrados para este comprobante.",
+            "historyEventType": {
+              "SUBMISSION": "Envío",
+              "CANCELLATION": "Cancelación",
+              "CLIENT_IDENTIFICATION": "Identificación de cliente"
+            },
             "documentContent": "Contenido completo del documento",
             "kudeDownloadButton": "Descargar KuDE (PDF)",
             "kudeDownloading": "Descargando…",
@@ -974,7 +1003,7 @@
             "kudeSampleDownloadButton": "Descargar muestra (estilo producción)",
             "kudeSampleDownloading": "Generando muestra…",
             "kudeSampleHint": "Genera un KuDE con la razón social real, como se verá en producción. Es una muestra para revisión: la factura sigue emitida en el ambiente de prueba y el archivo se descarga como MUESTRA-…",
-            "kudeEmailLabel": "Enviar por correo electrónico",
+            "kudeShareLabel": "Compartir KuDE por mail o WhatsApp",
             "kudeEmailFieldLabel": "Correo electrónico",
             "kudeEmailPlaceholder": "cliente@ejemplo.com (dejar vacío para usar el correo del cliente)",
             "kudeEmailButton": "Enviar",
@@ -984,8 +1013,6 @@
             "kudeWhatsappSending": "Preparando…",
             "kudeWhatsappMessage": "Hola {{client}}, aquí tienes tu factura N.º {{number}} por {{amount}}.",
             "kudeWhatsappGenericClient": "Cliente",
-            "kudeWhatsappSuccessShared": "KuDE compartido por WhatsApp.",
-            "kudeWhatsappSuccessFallback": "KuDE descargado y WhatsApp abierto con un mensaje prellenado — adjuntá el PDF descargado en el chat manualmente.",
             "revalidateButton": "Revalidar en SIFEN",
             "revalidateExplanation": "Verificá este comprobante directamente en el sitio oficial de la SET, para tener una confirmación independiente de su validez. Útil si el estado en el sistema no se actualiza, o si necesitás mostrarle a un cliente o auditor una prueba oficial.",
             "revalidateHint": "Se abre en una pestaña nueva — el resultado lo muestra esa página, no este sistema.",
@@ -1648,6 +1675,7 @@
         "time": "Hora",
         "duration": "{{minutes}} min",
         "status": "Estado",
+        "reminderSent": "Recordatorio enviado",
         "cancelReason": "Motivo de cancelación",
         "changeStatus": "Cambiar estado",
         "edit": "Editar turno",

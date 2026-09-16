@@ -35,12 +35,38 @@ export function chartSeriesColor(index: number): string {
   return CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
 }
 
+/**
+ * Softer "-md" tier of the same categorical hues (same order/hue as `CHART_SERIES_COLORS`, e.g.
+ * `--color-rose-md`) — for charts where a pastel look reads better than the full-saturation accent,
+ * such as `TopServicesChart`'s bars.
+ */
+export const CHART_SERIES_COLORS_PASTEL = [
+  "var(--color-rose-md)",
+  "var(--color-mauve-md)",
+  "var(--color-coral-md)",
+  "var(--color-fuchsia-md)",
+  "var(--color-violet-md)",
+  "var(--color-indigo-md)",
+  "var(--color-sky-md)",
+  "var(--color-teal-md)",
+  "var(--color-lime-md)",
+  "var(--color-amber-md)",
+] as const;
+
+/** Picks a stable pastel categorical color by series index, wrapping around the palette. */
+export function chartSeriesColorPastel(index: number): string {
+  return CHART_SERIES_COLORS_PASTEL[index % CHART_SERIES_COLORS_PASTEL.length];
+}
+
 /** Primary accent for a single-series chart (matches the "revenue" metric cards elsewhere). */
 export const CHART_PRIMARY_COLOR = "var(--color-rose)";
 export const CHART_PRIMARY_COLOR_LIGHT = "var(--color-rose-lt)";
 
 /** Gridlines, axes and tooltip chrome — neutral tokens shared by every chart. */
 export const CHART_GRID_COLOR = "var(--color-stone-md)";
+/** Weekend-day background band on a date-axis chart (e.g. revenue trend) — a neutral tint distinct
+ * from `CHART_GRID_COLOR` so it doesn't read as an extra gridline. */
+export const CHART_WEEKEND_BG = "var(--color-stone)";
 export const CHART_AXIS_TEXT_COLOR = "var(--color-ink-3)";
 export const CHART_TOOLTIP_BACKGROUND = "var(--color-white)";
 export const CHART_TOOLTIP_BORDER_COLOR = "var(--color-stone-md)";

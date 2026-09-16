@@ -16,6 +16,9 @@ public record InvoiceResponse(
     // or that client has no email; the backend already falls back to it server-side regardless (see
     // SifenKudeEmailService#resolveRecipientEmail), this is purely so the field isn't left blank.
     String clientEmail,
+    // Issue #215 follow-up: the linked client's own phone on file, if any — lets the frontend open
+    // the WhatsApp KuDE send directly against that contact instead of the generic wa.me composer.
+    String clientPhone,
     // Issue #173: the email captured on the comprobante form for this specific document (what the
     // KuDE / cancellation notice is actually sent to). May differ from clientEmail for an
     // occasional
