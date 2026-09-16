@@ -98,6 +98,16 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
 
     // Y-axis ticks are money labels — must use the dot-thousands / no-decimals Gs. format.
     await expect(chart.getByText(/^Gs\. \d{1,3}(\.\d{3})*$/).first()).toBeVisible();
+
+    // X-axis ticks include the weekday abbreviation (e.g. "Mon 14/09"), so a revenue dip on a
+    // Saturday/Sunday reads as an expected weekend, not an unexplained anomaly.
+    await expect(chart.getByText(/^[A-Za-z]{3} \d{2}\/\d{2}$/).first()).toBeVisible();
+
+    // The trailing 30-day window always spans several weekends regardless of which days have
+    // invoices, so the shaded weekend bands render unconditionally once the chart has data.
+    await expect(
+      chart.locator('[data-testid="dashboard-revenue-trend-weekend-band"]').first(),
+    ).toBeAttached();
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
