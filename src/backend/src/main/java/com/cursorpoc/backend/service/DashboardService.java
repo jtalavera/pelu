@@ -185,6 +185,9 @@ public class DashboardService {
 
     List<DashboardResponse.TopService> topServices = buildTopServices(tenantId, zone, today);
 
+    List<DashboardResponse.PaymentMethodMix> paymentMethodMix =
+        buildPaymentMethodMix(tenantId, zone, today);
+
     return new DashboardResponse(
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
         new DashboardResponse.RevenueSummary(invoicedDay, collectedDay),
@@ -195,7 +198,8 @@ public class DashboardService {
         INACTIVE_CLIENT_THRESHOLD_DAYS,
         revenueTrend,
         REVENUE_TREND_DAYS,
-        topServices);
+        topServices,
+        paymentMethodMix);
   }
 
   /**
@@ -265,6 +269,31 @@ public class DashboardService {
         .stream()
         .limit(TOP_SERVICES_LIMIT)
         .map(row -> new DashboardResponse.TopService(row.serviceName(), nz(row.totalRevenue())))
+        .toList();
+  }
+
+  /**
+   * Issue #221 — "Dashboard: gráfico de mezcla de medios de pago": invoiced revenue by {@code
+   * PaymentMethod} over the same trailing window as {@link #buildRevenueTrend}/{@link
+   * #buildTopServices} ("invoiced" filters: {@code ISSUED} + non-REJECTED SIFEN outcome).
+   * Aggregation (grouping/summing/ordering, amount descending then method ascending for a
+   * deterministic tie-break) happens entirely in SQL ({@code
+   * InvoiceRepository#findPaymentMethodRevenueByTenantAndStatusAndIssuedBetween}) — unlike {@link
+   * #buildTopServices}, no top-N cap is applied: {@code PaymentMethod} is a small fixed enum, and
+   * the AC calls for every method actually present in the period to show up, never a hardcoded
+   * subset.
+   */
+  private List<DashboardResponse.PaymentMethodMix> buildPaymentMethodMix(
+      long tenantId, ZoneId zone, LocalDate today) {
+    RevenueWindow window = revenueWindow(zone, today);
+
+    return invoiceRepository
+        .findPaymentMethodRevenueByTenantAndStatusAndIssuedBetween(
+            tenantId, InvoiceStatus.ISSUED, window.start(), window.end())
+        .stream()
+        .map(
+            row ->
+                new DashboardResponse.PaymentMethodMix(row.method().name(), nz(row.totalAmount())))
         .toList();
   }
 

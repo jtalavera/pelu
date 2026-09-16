@@ -446,6 +446,9 @@
       "topServicesTitle": "Top services",
       "topServicesSubtitle": "Top services by revenue over the last {{days}} days (excludes custom line items not linked to a catalog service)",
       "topServicesEmpty": "No invoiced services in this period yet",
+      "paymentMethodMixTitle": "Payment method mix",
+      "paymentMethodMixSubtitle": "Invoiced revenue by payment method over the last {{days}} days",
+      "paymentMethodMixEmpty": "No invoiced payments in this period yet",
       "inactiveClientsViewAll": "View all"
     },
     "dashboardsPage": {

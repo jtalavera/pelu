@@ -239,6 +239,35 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
           @Param("from") Instant from,
           @Param("to") Instant to);
 
+  /**
+   * Issue #221 — "Dashboard: gráfico de mezcla de medios de pago": revenue per {@code
+   * PaymentMethod}, same "invoiced" filters/window as {@link
+   * #sumPaymentsByTenantAndStatusAndIssuedBetween} (ISSUED + non-REJECTED SIFEN outcome, joined to
+   * {@code Invoice.issuedAt} — {@code InvoicePaymentAllocation} has no timestamp of its own, so it
+   * can only inherit its parent invoice's issuance window, same as the existing payments-sum
+   * query). {@code PaymentMethod} is a fixed enum, not a mutable/duplicable label like a service
+   * name, so grouping directly on it carries none of the id-vs-name risk {@code
+   * findServiceRevenueByTenantAndStatusAndIssuedBetween} has to work around. Ordered by amount
+   * descending, then method ascending — a deterministic tie-break, same reasoning as that query.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.PaymentMethodRevenueRow(p.method, SUM(p.amount))
+      FROM InvoicePaymentAllocation p
+      JOIN p.invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
+      AND i.issuedAt >= :from AND i.issuedAt < :to
+      GROUP BY p.method
+      ORDER BY SUM(p.amount) DESC, p.method ASC
+      """)
+  List<com.cursorpoc.backend.service.PaymentMethodRevenueRow>
+      findPaymentMethodRevenueByTenantAndStatusAndIssuedBetween(
+          @Param("tenantId") Long tenantId,
+          @Param("status") InvoiceStatus status,
+          @Param("from") Instant from,
+          @Param("to") Instant to);
+
   @Query(
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i

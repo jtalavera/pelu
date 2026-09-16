@@ -13,7 +13,8 @@ public record DashboardResponse(
     int inactiveClientsThresholdDays,
     List<RevenueTrendPoint> revenueTrend,
     int revenueTrendDays,
-    List<TopService> topServices) {
+    List<TopService> topServices,
+    List<PaymentMethodMix> paymentMethodMix) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}
@@ -51,4 +52,16 @@ public record DashboardResponse(
    * to {@code DashboardService#TOP_SERVICES_LIMIT}.
    */
   public record TopService(String serviceName, BigDecimal revenue) {}
+
+  /**
+   * Issue #221 — "Dashboard: gráfico de mezcla de medios de pago". Invoiced revenue by {@code
+   * PaymentMethod} over the same trailing {@code revenueTrendDays}-day window as {@link
+   * #revenueTrend}/{@link #topServices} (no separate "days" field, same reasoning as {@link
+   * TopService}), ordered by {@code amount} descending then method ascending, with no server-side
+   * cap — every {@code PaymentMethod} value actually present in the window shows up, never a fixed
+   * hardcoded subset. {@code method} is the enum's {@code name()} (e.g. {@code "DEBIT_CARD"}); the
+   * frontend renders it through the same {@code femme.billing.invoice.paymentMethod*} i18n keys
+   * already used for payment-method labels in the billing UI, rather than a duplicate mapping.
+   */
+  public record PaymentMethodMix(String method, BigDecimal amount) {}
 }
