@@ -57,3 +57,18 @@ export function formatParaguayPhone(raw: string): string {
 export function isCompleteParaguayPhone(raw: string): boolean {
   return digitsOnly(raw).length === TOTAL_LOCAL_DIGITS;
 }
+
+const COUNTRY_CODE = "595";
+
+/**
+ * Converts a complete local Paraguay number to the digits-only `<countrycode><number>` shape
+ * WhatsApp's `wa.me/<phone>` links require (e.g. "(0981) 123-456" -> "595981123456"). Returns
+ * null when the input isn't a complete local number, so callers can fall back to the generic
+ * `wa.me/?text=` composer.
+ */
+export function toWhatsAppPhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const d = digitsOnly(raw);
+  if (!isCompleteParaguayPhone(d)) return null;
+  return `${COUNTRY_CODE}${d.slice(1)}`;
+}

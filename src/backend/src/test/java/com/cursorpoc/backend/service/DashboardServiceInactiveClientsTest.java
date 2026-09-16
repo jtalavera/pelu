@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -73,8 +74,12 @@ class DashboardServiceInactiveClientsTest {
             fiscalStampRepository,
             businessProfileService,
             sifenNumberVoidingService);
-    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
-    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L)).thenReturn(Optional.empty());
+    // lenient: the new buildInactiveClientsPage(...) tests don't go through build(), so these
+    // fiscal-alert-only stubs would otherwise be flagged as unused by strict stubbing.
+    lenient().when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
+    lenient()
+        .when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.empty());
   }
 
   private Instant daysAgo(long days) {
@@ -141,8 +146,11 @@ class DashboardServiceInactiveClientsTest {
         .isGreaterThanOrEqualTo((long) DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS);
   }
 
+  /**
+   * Issue #216 follow-up: a client who never had a completed visit is not "inactive" — excluded.
+   */
   @Test
-  void neverVisitedClientIsIncludedWithNullDaysAndSortsFirst() {
+  void neverVisitedClientIsExcluded() {
     when(clientRepository.findActiveClientsWithLastCompletedVisit(
             eq(1L), eq(AppointmentStatus.COMPLETED)))
         .thenReturn(
@@ -152,10 +160,8 @@ class DashboardServiceInactiveClientsTest {
 
     DashboardResponse d = dashboardService.build(1L);
 
-    assertThat(d.inactiveClients()).hasSize(2);
-    assertThat(d.inactiveClients().get(0).fullName()).isEqualTo("Never Visited");
-    assertThat(d.inactiveClients().get(0).daysSinceLastVisit()).isNull();
-    assertThat(d.inactiveClients().get(1).fullName()).isEqualTo("Long Inactive");
+    assertThat(d.inactiveClients()).hasSize(1);
+    assertThat(d.inactiveClients().get(0).fullName()).isEqualTo("Long Inactive");
   }
 
   @Test
@@ -166,13 +172,13 @@ class DashboardServiceInactiveClientsTest {
             List.of(
                 new Row(1L, "Ninety Days", "0981000001", daysAgo(90)),
                 new Row(2L, "Three Hundred Days", "0981000002", daysAgo(300)),
-                new Row(3L, "Sixty Days", "0981000003", daysAgo(60))));
+                new Row(3L, "Hundred Fifty Days", "0981000003", daysAgo(150))));
 
     DashboardResponse d = dashboardService.build(1L);
 
     assertThat(d.inactiveClients())
         .extracting(DashboardResponse.InactiveClient::fullName)
-        .containsExactly("Three Hundred Days", "Ninety Days", "Sixty Days");
+        .containsExactly("Three Hundred Days", "Hundred Fifty Days", "Ninety Days");
   }
 
   @Test
@@ -195,5 +201,32 @@ class DashboardServiceInactiveClientsTest {
     DashboardResponse d = dashboardService.build(1L);
 
     assertThat(d.inactiveClients()).hasSize(DashboardService.INACTIVE_CLIENTS_LIMIT);
+  }
+
+  /** Issue #216 follow-up: "Ver todas" full paginated list — unlike the widget, not capped to N. */
+  @Test
+  void pagedListExcludesNeverVisitedAndReturnsEveryoneAcrossPages() {
+    List<ClientRepository.InactiveClientRow> rows =
+        java.util.stream.IntStream.rangeClosed(1, 21)
+            .mapToObj(
+                i ->
+                    (ClientRepository.InactiveClientRow)
+                        new Row((long) i, "Client " + i, "098100" + i, daysAgo(1000 + i)))
+            .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+    rows.add(new Row(99L, "Never Visited", "0981099999", null));
+    when(clientRepository.findActiveClientsWithLastCompletedVisit(
+            eq(1L), eq(AppointmentStatus.COMPLETED)))
+        .thenReturn(rows);
+
+    var page0 = dashboardService.buildInactiveClientsPage(1L, 0, 10);
+    assertThat(page0.content()).hasSize(10);
+    assertThat(page0.totalElements()).isEqualTo(21);
+    assertThat(page0.totalPages()).isEqualTo(3);
+    // Most inactive (Client 21, 1021 days ago) sorts first.
+    assertThat(page0.content().get(0).fullName()).isEqualTo("Client 21");
+
+    var page2 = dashboardService.buildInactiveClientsPage(1L, 2, 10);
+    assertThat(page2.content()).hasSize(1);
+    assertThat(page2.content().get(0).fullName()).isEqualTo("Client 1");
   }
 }

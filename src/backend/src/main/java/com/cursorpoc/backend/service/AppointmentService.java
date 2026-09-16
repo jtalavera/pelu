@@ -270,6 +270,7 @@ public class AppointmentService {
         a.getStartAt().toString(),
         a.getEndAt().toString(),
         a.getStatus().name(),
-        a.getCancelReason());
+        a.getCancelReason(),
+        a.getReminderSentAt() != null ? a.getReminderSentAt().toString() : null);
   }
 }

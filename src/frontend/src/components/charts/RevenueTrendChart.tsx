@@ -1,15 +1,31 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ReferenceArea,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { ChartCard } from "./ChartCard";
 import {
   CHART_GRID_COLOR,
   CHART_PRIMARY_COLOR,
   CHART_PRIMARY_COLOR_LIGHT,
+  CHART_WEEKEND_BG,
   chartAxisTickStyle,
   chartTooltipContentStyle,
   chartTooltipLabelStyle,
 } from "./chartTheme";
+
+function isWeekendDate(dateStr: string): boolean {
+  const day = new Date(`${dateStr}T00:00:00`).getDay();
+  return day === 0 || day === 6;
+}
 
 export type RevenueTrendPoint = { date: string; invoiced: string | number };
 
@@ -37,8 +53,27 @@ export function RevenueTrendChart({
   const tickFormatter = (value: string) => {
     const d = new Date(`${value}T00:00:00`);
     if (Number.isNaN(d.getTime())) return value;
-    return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(d);
+    const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
+    const dayMonth = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(d);
+    return `${weekday} ${dayMonth}`;
   };
+
+  // Bands consecutive Saturdays/Sundays into one shaded region each, so a weekend dip in
+  // invoicing reads at a glance as expected rather than as an anomaly in the trend.
+  const weekendBands = useMemo(() => {
+    const bands: Array<{ start: string; end: string }> = [];
+    points.forEach((p, i) => {
+      if (!isWeekendDate(p.date)) return;
+      const prevPoint = points[i - 1];
+      const lastBand = bands[bands.length - 1];
+      if (lastBand && prevPoint && prevPoint.date === lastBand.end) {
+        lastBand.end = p.date;
+      } else {
+        bands.push({ start: p.date, end: p.date });
+      }
+    });
+    return bands;
+  }, [points]);
 
   return (
     <ChartCard
@@ -58,6 +93,18 @@ export function RevenueTrendChart({
             </linearGradient>
           </defs>
           <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
+          {weekendBands.map((band) => (
+            <ReferenceArea
+              key={`${band.start}-${band.end}`}
+              data-testid="dashboard-revenue-trend-weekend-band"
+              x1={band.start}
+              x2={band.end}
+              fill={CHART_WEEKEND_BG}
+              fillOpacity={1}
+              stroke="none"
+              ifOverflow="visible"
+            />
+          ))}
           <XAxis
             dataKey="date"
             tickFormatter={tickFormatter}

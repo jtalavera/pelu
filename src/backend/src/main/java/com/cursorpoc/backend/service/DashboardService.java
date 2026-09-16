@@ -9,6 +9,7 @@ import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.web.dto.DashboardResponse;
+import com.cursorpoc.backend.web.dto.PageResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -29,15 +30,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class DashboardService {
 
   /**
-   * Issue #216 — "Panel de clientes inactivos": an active client whose most recent {@code
-   * COMPLETED} appointment is at least this many days in the past (or who never had one) is
-   * considered inactive. Kept as a single named constant rather than a literal repeated in the
-   * query/filter/sort/i18n copy.
+   * Issue #216 — "Panel de clientes inactivos": an active client with at least one {@code
+   * COMPLETED} appointment, whose most recent one is at least this many days in the past, is
+   * considered inactive. Clients who never had a completed visit are not "inactive" — they're
+   * excluded entirely (issue #216 follow-up). Kept as a single named constant rather than a literal
+   * repeated in the query/filter/sort/i18n copy.
    */
-  public static final int INACTIVE_CLIENT_THRESHOLD_DAYS = 60;
+  public static final int INACTIVE_CLIENT_THRESHOLD_DAYS = 90;
 
-  /** Caps the dashboard widget so a large, long-neglected client base doesn't overload it. */
-  public static final int INACTIVE_CLIENTS_LIMIT = 20;
+  /** Caps the dashboard widget to its top-N most-inactive clients; see "Ver todas" for the rest. */
+  public static final int INACTIVE_CLIENTS_LIMIT = 10;
 
   /**
    * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": trailing window
@@ -242,6 +244,9 @@ public class DashboardService {
     return points;
   }
 
+  private record InactiveCandidate(
+      ClientRepository.InactiveClientRow row, long daysSinceLastVisit) {}
+
   /**
    * Issue #220 — "Dashboard: gráfico de servicios más vendidos": top {@link #TOP_SERVICES_LIMIT}
    * salon services by invoiced revenue (same window/filters as {@link #buildRevenueTrend} — {@code
@@ -268,48 +273,71 @@ public class DashboardService {
    * #INACTIVE_CLIENT_THRESHOLD_DAYS}+ days old (or who never had one), ordered by days of
    * inactivity descending (never-visited clients sort first), capped to {@value
    * #INACTIVE_CLIENTS_LIMIT}.
+   * Issue #216: active clients with at least one {@code COMPLETED} appointment whose most recent
+   * one is {@value #INACTIVE_CLIENT_THRESHOLD_DAYS}+ days old — clients who never had a completed
+   * visit are excluded (issue #216 follow-up: not visiting is "inactive", never having been a
+   * client at all is not). Ordered by days of inactivity descending.
    */
-  private List<DashboardResponse.InactiveClient> buildInactiveClients(
+  private List<InactiveCandidate> computeInactiveCandidates(
       long tenantId, ZoneId zone, LocalDate today) {
-    record Candidate(ClientRepository.InactiveClientRow row, Long daysSinceLastVisit) {}
-
-    List<Candidate> candidates = new ArrayList<>();
+    List<InactiveCandidate> candidates = new ArrayList<>();
     for (ClientRepository.InactiveClientRow row :
         clientRepository.findActiveClientsWithLastCompletedVisit(
             tenantId, AppointmentStatus.COMPLETED)) {
       Instant lastVisit = row.getLastCompletedVisit();
       if (lastVisit == null) {
-        candidates.add(new Candidate(row, null));
         continue;
       }
       long daysSinceLastVisit =
           ChronoUnit.DAYS.between(lastVisit.atZone(zone).toLocalDate(), today);
       if (daysSinceLastVisit >= INACTIVE_CLIENT_THRESHOLD_DAYS) {
-        candidates.add(new Candidate(row, daysSinceLastVisit));
+        candidates.add(new InactiveCandidate(row, daysSinceLastVisit));
       }
     }
+    candidates.sort(Comparator.comparingLong(InactiveCandidate::daysSinceLastVisit).reversed());
+    return candidates;
+  }
 
-    // Never-visited clients (null) sort first, then descending by days of inactivity.
-    Comparator<Candidate> byInactivityDesc =
-        Comparator.comparing(
-            (Candidate c) ->
-                c.daysSinceLastVisit() == null ? Long.MAX_VALUE : c.daysSinceLastVisit(),
-            Comparator.reverseOrder());
-    candidates.sort(byInactivityDesc);
+  private static DashboardResponse.InactiveClient toInactiveClient(InactiveCandidate c) {
+    return new DashboardResponse.InactiveClient(
+        c.row().getClientId(),
+        c.row().getFullName(),
+        c.row().getPhone(),
+        c.daysSinceLastVisit(),
+        c.row().getLastCompletedVisit().toString());
+  }
 
-    return candidates.stream()
+  /** Dashboard widget: top {@value #INACTIVE_CLIENTS_LIMIT} most-inactive clients. */
+  private List<DashboardResponse.InactiveClient> buildInactiveClients(
+      long tenantId, ZoneId zone, LocalDate today) {
+    return computeInactiveCandidates(tenantId, zone, today).stream()
         .limit(INACTIVE_CLIENTS_LIMIT)
-        .map(
-            c ->
-                new DashboardResponse.InactiveClient(
-                    c.row().getClientId(),
-                    c.row().getFullName(),
-                    c.row().getPhone(),
-                    c.daysSinceLastVisit(),
-                    c.row().getLastCompletedVisit() != null
-                        ? c.row().getLastCompletedVisit().toString()
-                        : null))
+        .map(DashboardService::toInactiveClient)
         .toList();
+  }
+
+  /**
+   * Issue #216 follow-up: the full "Ver todas" list backing a dedicated page, paginated in memory —
+   * the day-of-inactivity filter depends on the tenant's timezone ("today"), which can't be pushed
+   * into the JPQL query, and a salon's client base is small enough that loading it all and paging
+   * in Java is simpler than a DB-level page query here.
+   */
+  @Transactional(readOnly = true)
+  public PageResponse<DashboardResponse.InactiveClient> buildInactiveClientsPage(
+      long tenantId, int page, int size) {
+    var zone = timeProperties.zoneId();
+    LocalDate today = ZonedDateTime.now(zone).toLocalDate();
+    List<InactiveCandidate> all = computeInactiveCandidates(tenantId, zone, today);
+
+    int boundedSize = Math.max(1, Math.min(size, 200));
+    int totalElements = all.size();
+    int totalPages = (int) Math.ceil(totalElements / (double) boundedSize);
+    int from = Math.min(Math.max(page, 0) * boundedSize, totalElements);
+    int to = Math.min(from + boundedSize, totalElements);
+
+    List<DashboardResponse.InactiveClient> content =
+        all.subList(from, to).stream().map(DashboardService::toInactiveClient).toList();
+    return new PageResponse<>(content, page, boundedSize, totalElements, totalPages);
   }
 
   private static void addFiscalAlerts(

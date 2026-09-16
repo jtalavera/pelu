@@ -41,6 +41,9 @@ export const CHART_PRIMARY_COLOR_LIGHT = "var(--color-rose-lt)";
 
 /** Gridlines, axes and tooltip chrome — neutral tokens shared by every chart. */
 export const CHART_GRID_COLOR = "var(--color-stone-md)";
+/** Weekend-day background band on a date-axis chart (e.g. revenue trend) — a neutral tint distinct
+ * from `CHART_GRID_COLOR` so it doesn't read as an extra gridline. */
+export const CHART_WEEKEND_BG = "var(--color-stone)";
 export const CHART_AXIS_TEXT_COLOR = "var(--color-ink-3)";
 export const CHART_TOOLTIP_BACKGROUND = "var(--color-white)";
 export const CHART_TOOLTIP_BORDER_COLOR = "var(--color-stone-md)";

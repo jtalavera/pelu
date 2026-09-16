@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import {
+  API_BASE,
   apiPostJson,
+  authHeaders,
   createAppointmentApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
@@ -96,5 +98,53 @@ test.describe("HU-06 · Calendario de turnos", () => {
     await expect(
       page.getByRole("dialog", { name: "Appointment detail" }).getByText(client.fullName, { exact: true }),
     ).toBeVisible();
+  });
+
+  test("HU-06 · 6 turno con recordatorio ya enviado muestra el indicador en la tarjeta y en el detalle", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+
+    // Reminded appointment — AppointmentReminderScheduler is disabled under the e2e profile
+    // (app.femme.email.enabled=false), so mark-reminder-sent stands in for it here.
+    const remindedClient = await seedClient(request, token, `E2E Rem ${Date.now()}`);
+    const remindedAppt = await createAppointmentApi(request, token, {
+      clientId: remindedClient.id,
+      professionalId: seed.professionalId,
+      serviceId: seed.serviceId,
+      startAt: calendarVisibleWeekSlotIso(9, 0),
+    });
+    const markRes = await request.post(
+      `${API_BASE}/api/admin/appointment-test-support/${remindedAppt.id}/mark-reminder-sent`,
+      { headers: authHeaders(token) },
+    );
+    expect(markRes.ok(), await markRes.text()).toBeTruthy();
+
+    // Control: a second appointment that was never reminded must show no indicator.
+    const plainClient = await seedClient(request, token, `E2E NoRem ${Date.now()}`);
+    await createAppointmentApi(request, token, {
+      clientId: plainClient.id,
+      professionalId: seed.professionalId,
+      serviceId: seed.serviceId,
+      startAt: calendarVisibleWeekSlotIso(15, 0),
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/calendar");
+
+    await ensureCalendarShowsClientCard(page, remindedClient.fullName);
+    const remindedButton = page.getByRole("button", { name: remindedClient.fullName, exact: false });
+    await expect(remindedButton.getByTestId(`reminder-sent-badge-${remindedAppt.id}`)).toBeVisible();
+
+    await ensureCalendarShowsClientCard(page, plainClient.fullName);
+    const plainButton = page.getByRole("button", { name: plainClient.fullName, exact: false });
+    await expect(plainButton.locator('[data-testid^="reminder-sent-badge-"]')).toHaveCount(0);
+
+    await remindedButton.click();
+    await expect(page.getByRole("heading", { name: "Appointment detail" })).toBeVisible();
+    await expect(page.getByText("Reminder sent", { exact: true })).toBeVisible();
+    await expect(page.getByTestId(`reminder-sent-${remindedAppt.id}`)).toBeVisible();
   });
 });
