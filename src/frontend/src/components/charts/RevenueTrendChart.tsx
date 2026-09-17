@@ -30,27 +30,6 @@ function isWeekendDate(dateStr: string): boolean {
   return day === 0 || day === 6;
 }
 
-/**
- * Least-squares linear regression of `values` against their index (0, 1, 2, …) — the standard
- * straight "trend line" overlay, e.g. Excel/Sheets' trendline. Returns one fitted point per input
- * value; a single point (or a flat/degenerate window where every point shares the same index,
- * which can't happen here but is guarded anyway) falls back to the series' own average so the
- * line never divides by zero.
- */
-function computeLinearTrend(values: number[]): number[] {
-  const n = values.length;
-  if (n === 0) return [];
-  const xs = values.map((_, i) => i);
-  const meanX = xs.reduce((sum, x) => sum + x, 0) / n;
-  const meanY = values.reduce((sum, y) => sum + y, 0) / n;
-  const denominator = xs.reduce((sum, x) => sum + (x - meanX) ** 2, 0);
-  if (denominator === 0) return values.map(() => meanY);
-  const slope =
-    xs.reduce((sum, x, i) => sum + (x - meanX) * (values[i] - meanY), 0) / denominator;
-  const intercept = meanY - slope * meanX;
-  return xs.map((x) => slope * x + intercept);
-}
-
 export type RevenueTrendPoint = { date: string; invoiced: string | number };
 
 /**
@@ -71,13 +50,7 @@ export function RevenueTrendChart({
 }) {
   const { t } = useTranslation();
 
-  const invoicedValues = data.map((p) => Number(p.invoiced) || 0);
-  const trendValues = useMemo(() => computeLinearTrend(invoicedValues), [invoicedValues]);
-  const points = data.map((p, i) => ({
-    date: p.date,
-    invoiced: invoicedValues[i],
-    trend: trendValues[i],
-  }));
+  const points = data.map((p) => ({ date: p.date, invoiced: Number(p.invoiced) || 0 }));
   const hasRevenue = points.some((p) => p.invoiced > 0);
 
   const tickFormatter = (value: string) => {
@@ -149,10 +122,15 @@ export function RevenueTrendChart({
             contentStyle={chartTooltipContentStyle}
             labelStyle={chartTooltipLabelStyle}
             labelFormatter={(value) => tickFormatter(String(value ?? ""))}
-            formatter={(value, name) => [
-              formatGuaraniesGs(Number(value) || 0),
-              name === "trend" ? t("femme.dashboard.revenueTrendLine") : t("femme.dashboard.invoiced"),
-            ]}
+            // The trend curve traces the same `invoiced` values as the bar (just interpolated
+            // smoothly), so its tooltip entry would only ever duplicate the bar's — returning
+            // `null` (not a [value, name] tuple) drops that row instead of showing the same
+            // amount twice under two different labels (see recharts' `DefaultTooltipContent`).
+            formatter={(value, name) =>
+              name === "trend"
+                ? null
+                : [formatGuaraniesGs(Number(value) || 0), t("femme.dashboard.invoiced")]
+            }
           />
           <Legend
             verticalAlign="bottom"
@@ -170,9 +148,9 @@ export function RevenueTrendChart({
             isAnimationActive={false}
           />
           <Line
-            dataKey="trend"
+            dataKey="invoiced"
             name="trend"
-            type="linear"
+            type="monotone"
             stroke={CHART_TREND_LINE_COLOR}
             strokeWidth={2}
             dot={false}
