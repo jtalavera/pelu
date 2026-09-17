@@ -204,26 +204,32 @@ export default function DashboardsPage() {
           {error}
         </Alert>
       ) : (
-        <>
+        <div className="flex min-w-0 flex-col gap-4">
           <RevenueTrendChart
             data={Array.isArray(data.revenueTrend) ? data.revenueTrend : []}
             days={data.revenueTrendDays ?? 30}
             locale={locale}
           />
-          <TopServicesChart
-            data={Array.isArray(data.topServices) ? data.topServices : []}
-            days={data.revenueTrendDays ?? 30}
-          />
-          <PaymentMethodMixChart
-            data={Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : []}
-            days={data.revenueTrendDays ?? 30}
-          />
-          <AppointmentsByDayOfWeekChart
-            data={Array.isArray(data.appointmentsByDayOfWeek) ? data.appointmentsByDayOfWeek : []}
-            days={data.revenueTrendDays ?? 30}
-          />
-          <TipsByProfessionalChart data={tipsByProfessional} days={data.revenueTrendDays ?? 30} />
-        </>
+
+          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2">
+            <PaymentMethodMixChart
+              data={Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : []}
+              days={data.revenueTrendDays ?? 30}
+            />
+            <AppointmentsByDayOfWeekChart
+              data={Array.isArray(data.appointmentsByDayOfWeek) ? data.appointmentsByDayOfWeek : []}
+              days={data.revenueTrendDays ?? 30}
+            />
+          </div>
+
+          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2">
+            <TopServicesChart
+              data={Array.isArray(data.topServices) ? data.topServices : []}
+              days={data.revenueTrendDays ?? 30}
+            />
+            <TipsByProfessionalChart data={tipsByProfessional} days={data.revenueTrendDays ?? 30} />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -14,20 +14,18 @@ import type { CSSProperties } from "react";
 
 /**
  * Categorical palette for multi-series charts (e.g. a pie/bar chart with one slice per payment
- * method or per professional) — the "Acentos de categoría" tokens, in a stable order. Single-series
- * charts (like the revenue-trend area chart below) use `CHART_PRIMARY_COLOR` instead.
+ * method or per professional). Restricted to the muted teal (green) and dusty-rose tokens rather
+ * than the full "Acentos de categoría" set — a deliberate toning-down so dashboard charts read as
+ * calm/analytical rather than a rainbow of bright accents. Alternates hue (green/rose) at each step
+ * for adjacent-category contrast; 5 entries covers every current use (max 5 `PaymentMethod` values).
+ * Single-series charts (like the revenue-trend bar chart below) use `CHART_PRIMARY_COLOR` instead.
  */
 export const CHART_SERIES_COLORS = [
-  "var(--color-rose)",
-  "var(--color-mauve)",
-  "var(--color-coral)",
-  "var(--color-fuchsia)",
-  "var(--color-violet)",
-  "var(--color-indigo)",
-  "var(--color-sky)",
   "var(--color-teal)",
-  "var(--color-lime)",
-  "var(--color-amber)",
+  "var(--color-rose)",
+  "var(--color-teal-md)",
+  "var(--color-rose-md)",
+  "var(--color-rose-dk)",
 ] as const;
 
 /** Picks a stable categorical color by series index, wrapping around the palette. */
@@ -36,31 +34,20 @@ export function chartSeriesColor(index: number): string {
 }
 
 /**
- * Softer "-md" tier of the same categorical hues (same order/hue as `CHART_SERIES_COLORS`, e.g.
- * `--color-rose-md`) — for charts where a pastel look reads better than the full-saturation accent,
- * such as `TopServicesChart`'s bars.
+ * Lighter, softer tier of the same muted green/rose hues — for charts where a pastel look reads
+ * better than `CHART_SERIES_COLORS`, such as `TopServicesChart`'s bars (no color-matched legend, so
+ * fewer distinct tones is fine).
  */
-export const CHART_SERIES_COLORS_PASTEL = [
-  "var(--color-rose-md)",
-  "var(--color-mauve-md)",
-  "var(--color-coral-md)",
-  "var(--color-fuchsia-md)",
-  "var(--color-violet-md)",
-  "var(--color-indigo-md)",
-  "var(--color-sky-md)",
-  "var(--color-teal-md)",
-  "var(--color-lime-md)",
-  "var(--color-amber-md)",
-] as const;
+export const CHART_SERIES_COLORS_PASTEL = ["var(--color-rose-md)", "var(--color-teal-md)"] as const;
 
 /** Picks a stable pastel categorical color by series index, wrapping around the palette. */
 export function chartSeriesColorPastel(index: number): string {
   return CHART_SERIES_COLORS_PASTEL[index % CHART_SERIES_COLORS_PASTEL.length];
 }
 
-/** Primary accent for a single-series chart (matches the "revenue" metric cards elsewhere). */
-export const CHART_PRIMARY_COLOR = "var(--color-rose)";
-export const CHART_PRIMARY_COLOR_LIGHT = "var(--color-rose-lt)";
+/** Primary accent for a single-series chart (muted green — calmer than the bold brand pink). */
+export const CHART_PRIMARY_COLOR = "var(--color-teal)";
+export const CHART_PRIMARY_COLOR_LIGHT = "var(--color-teal-lt)";
 
 /** Gridlines, axes and tooltip chrome — neutral tokens shared by every chart. */
 export const CHART_GRID_COLOR = "var(--color-stone-md)";
