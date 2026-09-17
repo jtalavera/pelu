@@ -2,10 +2,10 @@ import { expect, test } from "@playwright/test";
 import { loginAsDemo } from "../fixtures/auth";
 
 /**
- * "Dashboards" screen — the revenue-trend, top-services, payment-method-mix and
- * appointments-by-day-of-week charts moved off the main dashboard (`/app`) onto their own screen
- * (`/app/dashboards`), reached via a "Dashboards" nav item placed right below "Calendar" in the
- * sidebar.
+ * "Dashboards" screen — the revenue-trend, top-services, payment-method-mix,
+ * appointments-by-day-of-week and tips-by-professional charts moved off the main dashboard
+ * (`/app`) onto their own screen (`/app/dashboards`), reached via a "Dashboards" nav item placed
+ * right below "Calendar" in the sidebar.
  */
 test.describe("Dashboards screen", () => {
   test("the Dashboards nav item sits right below Calendar and opens the charts screen", async ({
@@ -39,9 +39,12 @@ test.describe("Dashboards screen", () => {
     await expect(page.getByTestId("dashboard-appointments-by-day-of-week")).toBeVisible({
       timeout: 20_000,
     });
+    await expect(page.getByTestId("dashboard-tips-by-professional")).toBeVisible({
+      timeout: 20_000,
+    });
   });
 
-  test("the main dashboard no longer renders the revenue-trend, top-services, payment-method-mix or appointments-by-day-of-week charts", async ({
+  test("the main dashboard no longer renders the revenue-trend, top-services, payment-method-mix, appointments-by-day-of-week or tips-by-professional charts", async ({
     page,
   }) => {
     await loginAsDemo(page);
@@ -50,5 +53,6 @@ test.describe("Dashboards screen", () => {
     await expect(page.getByTestId("dashboard-top-services")).toHaveCount(0);
     await expect(page.getByTestId("dashboard-payment-method-mix")).toHaveCount(0);
     await expect(page.getByTestId("dashboard-appointments-by-day-of-week")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-tips-by-professional")).toHaveCount(0);
   });
 });
