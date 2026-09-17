@@ -49,6 +49,11 @@ export function chartSeriesColorPastel(index: number): string {
 export const CHART_PRIMARY_COLOR = "var(--color-teal)";
 export const CHART_PRIMARY_COLOR_LIGHT = "var(--color-teal-lt)";
 
+/** Trend-line overlay accent (dusty rose) — the fixed second step of `CHART_SERIES_COLORS`, kept
+ * distinct from `CHART_PRIMARY_COLOR` so a trend line reads clearly over a bar series using it
+ * (e.g. `RevenueTrendChart`'s billing trend line). */
+export const CHART_TREND_LINE_COLOR = "var(--color-rose)";
+
 /** Gridlines, axes and tooltip chrome — neutral tokens shared by every chart. */
 export const CHART_GRID_COLOR = "var(--color-stone-md)";
 /** Weekend-day background band on a date-axis chart (e.g. revenue trend) — a neutral tint distinct

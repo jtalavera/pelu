@@ -111,6 +111,12 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
     await expect(
       chart.locator('[data-testid="dashboard-revenue-trend-weekend-band"]').first(),
     ).toBeAttached();
+
+    // Chart-layout follow-up: a linear-regression trend line overlays the bars in a distinct
+    // color, with a legend distinguishing "Invoiced" (bars) from "Trend" (line).
+    await expect(chart.locator(".recharts-line-curve")).toBeAttached();
+    await expect(chart.getByText("Invoiced", { exact: true })).toBeVisible();
+    await expect(chart.getByText("Trend", { exact: true })).toBeVisible();
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
