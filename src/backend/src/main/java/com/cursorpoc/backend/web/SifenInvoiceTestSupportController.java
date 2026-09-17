@@ -7,6 +7,7 @@ import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.SifenNumberVoidingEvent;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenInvoiceEventType;
 import com.cursorpoc.backend.domain.enums.SifenNumberVoidingStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
@@ -18,8 +19,10 @@ import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.service.SifenCertificateSecretStore;
 import com.cursorpoc.backend.service.SifenCertificateService;
+import com.cursorpoc.backend.service.SifenDocumentType;
 import com.cursorpoc.backend.service.SifenInvoiceDetail;
 import com.cursorpoc.backend.service.SifenInvoiceDetailService;
+import com.cursorpoc.backend.service.SifenInvoiceEventLogService;
 import com.cursorpoc.backend.service.SifenInvoiceHeader;
 import com.cursorpoc.backend.service.SifenInvoiceHeaderService;
 import com.cursorpoc.backend.service.SifenInvoiceNotificationService;
@@ -103,6 +106,7 @@ public class SifenInvoiceTestSupportController {
   private final SifenNumberVoidingEventRepository numberVoidingEventRepository;
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceNotificationService notificationService;
+  private final SifenInvoiceEventLogService eventLogService;
 
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
@@ -118,7 +122,8 @@ public class SifenInvoiceTestSupportController {
       SifenNumberVoidingService numberVoidingService,
       SifenNumberVoidingEventRepository numberVoidingEventRepository,
       FemmeTimeProperties timeProperties,
-      SifenInvoiceNotificationService notificationService) {
+      SifenInvoiceNotificationService notificationService,
+      SifenInvoiceEventLogService eventLogService) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
@@ -133,6 +138,7 @@ public class SifenInvoiceTestSupportController {
     this.numberVoidingEventRepository = numberVoidingEventRepository;
     this.timeProperties = timeProperties;
     this.notificationService = notificationService;
+    this.eventLogService = eventLogService;
   }
 
   /**
@@ -448,6 +454,74 @@ public class SifenInvoiceTestSupportController {
       event.setMessage("Rango de numeración inconsistente");
       event.setStatus(SifenNumberVoidingStatus.REJECTED);
     }
+  }
+
+  /**
+   * Issue #205 AC-4: reproduces the "comprobante 1060" bug report directly — a rejected invoice's
+   * auto-recorded {@code PENDING} voiding whose number range a <b>separate</b>, already-{@code
+   * APPROVED} manual voiding also covers. The real overlap guard on {@link
+   * SifenNumberVoidingService#createManual} makes this state unreachable through the normal admin
+   * UI/API once a {@code PENDING} record already exists for the same number — but it's exactly how
+   * the state arose in production, once {@code InvoiceService.issueInvoice} started skipping
+   * approved voided ranges (Issue #205 AC-1): before that fix, an invoice could be issued into an
+   * already-approved manual range, then get rejected and gain its own redundant {@code PENDING}
+   * record. This endpoint writes that second event directly so Playwright can assert the read-time
+   * "superseded" reconciliation ({@code SifenNumberVoidingService.isSuperseded}) without needing to
+   * first resurrect the now-fixed race.
+   */
+  @PostMapping("/invoices/{id}/fabricate-superseding-manual-voiding")
+  @Transactional
+  public void fabricateSupersedingManualVoiding(@PathVariable long id) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/fabricate-superseding-manual-voiding", id);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    LocalDateTime now = LocalDateTime.now(timeProperties.zoneId());
+    SifenNumberVoidingEvent event = new SifenNumberVoidingEvent();
+    event.setTenantId(invoice.getTenant().getId());
+    event.setFiscalStamp(invoice.getFiscalStamp());
+    event.setInvoiceId(null);
+    event.setDocumentType(SifenDocumentType.FACTURA);
+    event.setRangeFrom(invoice.getInvoiceNumber());
+    event.setRangeTo(invoice.getInvoiceNumber());
+    event.setReason("E2E: rango manual que ya cubre esta numeración");
+    event.setStatus(SifenNumberVoidingStatus.APPROVED);
+    event.setDeadlineDate(now.toLocalDate().plusMonths(1).withDayOfMonth(1).plusDays(14));
+    event.setCreatedAt(now);
+    event.setSubmittedAt(now);
+    event.setResultCode("0600");
+    event.setMessage("Evento registrado correctamente");
+    event.setProtocolNumber("246813579");
+    numberVoidingEventRepository.save(event);
+  }
+
+  /**
+   * Issue #205 AC-2: the real "ver historial de mensajes SIFEN" popup only ever accumulates entries
+   * through {@code SifenInvoiceEventLogService.record}, called from the real submission ({@code
+   * checkPendingStatus}) / cancellation / client-identification persistence paths — but {@code
+   * checkPendingStatus} itself never calls it when SIFEN gives no answer at all (the permanent e2e
+   * case, per its own javadoc), and every other fabrication endpoint in this controller writes
+   * straight to the {@code Invoice} row's scalar fields, bypassing that service entirely. This
+   * calls the real {@link SifenInvoiceEventLogService#record} directly, twice, so Playwright can
+   * exercise the popup's "more than one entry" rendering without a live SIFEN round-trip.
+   */
+  @PostMapping("/invoices/{id}/fabricate-sifen-event-log-entries")
+  public void fabricateSifenEventLogEntries(@PathVariable long id) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/fabricate-sifen-event-log-entries", id);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    long tenantId = invoice.getTenant().getId();
+    eventLogService.record(
+        tenantId, id, SifenInvoiceEventType.SUBMISSION, "0422", "XML mal formado");
+    eventLogService.record(
+        tenantId, id, SifenInvoiceEventType.SUBMISSION, "0600", "Evento registrado correctamente");
   }
 
   private void prepareWithQrAndStatus(long id, SifenSubmissionStatus status) {

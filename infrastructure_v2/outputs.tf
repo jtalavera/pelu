@@ -49,9 +49,24 @@ output "frontend_origin_for_cors" {
   value       = local.frontend_allowed_origins
 }
 
-output "acs_sender_address" {
-  description = "Email sender address from the Azure Communication Services managed domain."
-  value       = local.acs_sender_address
+output "acs_sender_address_reminders" {
+  description = "Sender address for appointment-reminder emails."
+  value       = local.acs_sender_address_reminders
+}
+
+output "acs_sender_address_invoices" {
+  description = "Sender address for SIFEN invoice/KuDE emails."
+  value       = local.acs_sender_address_invoices
+}
+
+output "acs_sender_address_generic" {
+  description = "Sender address for every other email (account activation, password reset)."
+  value       = local.acs_sender_address_generic
+}
+
+output "email_domain_verification_records" {
+  description = "DNS records to add at var.email_custom_domain's DNS provider before setting email_domain_verification_enabled=true. Null until email_custom_domain is set."
+  value       = local.email_domain_ready ? azurerm_email_communication_service_domain.custom[0].verification_records : null
 }
 
 output "log_analytics_workspace_id" {

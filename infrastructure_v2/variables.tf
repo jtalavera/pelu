@@ -148,6 +148,36 @@ variable "frontend_custom_domains" {
   default     = []
 }
 
+variable "email_custom_domain" {
+  description = "Verified custom domain for ACS Email (e.g. \"flowbit.tech\"). Empty (default) keeps every sender address on the AzureManaged domain (*.azurecomm.net) — set this only once the domain's DNS records (see output email_domain_verification_records) have been added at its DNS provider."
+  type        = string
+  default     = ""
+}
+
+variable "email_sender_username_reminders" {
+  description = "Mailbox username (under var.email_custom_domain) used to send appointment-reminder emails."
+  type        = string
+  default     = "turnos"
+}
+
+variable "email_sender_username_invoices" {
+  description = "Mailbox username (under var.email_custom_domain) used to send SIFEN invoice/KuDE emails."
+  type        = string
+  default     = "factura"
+}
+
+variable "email_sender_username_generic" {
+  description = "Mailbox username (under var.email_custom_domain) used for every other email (account activation, password reset)."
+  type        = string
+  default     = "no-reply"
+}
+
+variable "email_domain_verification_enabled" {
+  description = "Set to true only after the DNS records from output email_domain_verification_records have been added at var.email_custom_domain's DNS provider and had time to propagate. Triggers ACS's initiateVerification call for the Domain/SPF/DKIM/DKIM2 records. If verification still fails (DNS not yet visible), retry with `terraform apply -replace=azapi_resource_action.verify_custom_email_domain[\"Domain\"]` (etc.) once propagation completes."
+  type        = bool
+  default     = false
+}
+
 variable "key_vault_soft_delete_retention_days" {
   description = "RT-12 (Hardening_SIFEN.md): soft-delete retention for the Key Vault holding SIFEN certificate secrets and the JWT secret. Azure allows 7-90 days."
   type        = number

@@ -35,6 +35,7 @@ import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
+import { toWhatsAppPhone } from "../lib/paraguayPhone";
 
 export type InvoiceLine = {
   id: number;
@@ -54,6 +55,14 @@ export type InvoicePayment = {
   cardBrandOtherDescription?: string | null;
 };
 
+/** Issue #205 AC-2: one row of GET /api/invoices/{id}/sifen/history. */
+type SifenEventLogEntry = {
+  eventType: "SUBMISSION" | "CANCELLATION" | "CLIENT_IDENTIFICATION";
+  occurredAt: string;
+  resultCode: string | null;
+  message: string | null;
+};
+
 export type InvoiceDetail = {
   id: number;
   invoiceNumber: number;
@@ -63,6 +72,8 @@ export type InvoiceDetail = {
   clientDisplayName: string;
   /** Issue #167: the linked client's own email on file, if any — used to prefill the KuDE-by-email field. */
   clientEmail?: string | null;
+  /** Issue #215 follow-up: the linked client's own phone on file, if any — used to open the WhatsApp send directly against that contact. */
+  clientPhone?: string | null;
   /** Issue #173: the email captured on the comprobante form for this document. */
   recipientEmail?: string | null;
   clientRucOverride: string | null;
@@ -251,11 +262,9 @@ export function InvoiceDetailModal({
   const [kudeEmailSending, setKudeEmailSending] = useState(false);
   const [kudeEmailError, setKudeEmailError] = useState<string | null>(null);
   const [kudeEmailSuccess, setKudeEmailSuccess] = useState(false);
-  // Issue #215: "Enviar por WhatsApp" — shares the already-downloaded KuDE via the Web Share API
-  // when the browser supports sharing files, or falls back to a prefilled wa.me link otherwise.
+  // Issue #215: "Enviar por WhatsApp" — downloads the KuDE and opens a prefilled wa.me chat.
   const [kudeWhatsappSending, setKudeWhatsappSending] = useState(false);
   const [kudeWhatsappError, setKudeWhatsappError] = useState<string | null>(null);
-  const [kudeWhatsappSuccess, setKudeWhatsappSuccess] = useState<"share" | "fallback" | null>(null);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
@@ -274,6 +283,11 @@ export function InvoiceDetailModal({
   const [identifyFieldErrors, setIdentifyFieldErrors] = useState<Record<string, string>>({});
   const [identifying, setIdentifying] = useState(false);
   const [identifyError, setIdentifyError] = useState<string | null>(null);
+  // Issue #205 AC-2: "ver historial de mensajes SIFEN" popup.
+  const [showSifenHistory, setShowSifenHistory] = useState(false);
+  const [sifenHistoryLoading, setSifenHistoryLoading] = useState(false);
+  const [sifenHistoryError, setSifenHistoryError] = useState<string | null>(null);
+  const [sifenHistory, setSifenHistory] = useState<SifenEventLogEntry[] | null>(null);
 
   // SIFEN HU-10 AC-02: ticks the deadline countdown without a full page refresh.
   useEffect(() => {
@@ -352,6 +366,23 @@ export function InvoiceDetailModal({
     }
   }
 
+  /** Issue #205 AC-2: opens the "historial de mensajes SIFEN" popup, fetching on first open. */
+  async function handleOpenSifenHistory() {
+    setShowSifenHistory(true);
+    setSifenHistoryError(null);
+    setSifenHistoryLoading(true);
+    try {
+      const history = await femmeJson<SifenEventLogEntry[]>(
+        `/api/invoices/${invoiceId}/sifen/history`,
+      );
+      setSifenHistory(history);
+    } catch (err) {
+      setSifenHistoryError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setSifenHistoryLoading(false);
+    }
+  }
+
   /** SIFEN HU-08 AC-16: downloads the KuDE PDF for an approved invoice. */
   async function handleDownloadKude() {
     setKudeError(null);
@@ -400,28 +431,17 @@ export function InvoiceDetailModal({
 
   /**
    * Issue #215: "Enviar por WhatsApp". Downloads the KuDE PDF (same fetch the email/download flow
-   * already uses) and either:
-   *  - shares it via the OS share sheet (Web Share API, `navigator.share({ files })`) when the
-   *    browser supports sharing files — WhatsApp shows up there as one of the targets; or
-   *  - falls back to opening a `wa.me` link with a prefilled text message, inviting the user to
-   *    manually attach the file that was just downloaded (desktop browsers, or any browser without
-   *    file-sharing support).
+   * already uses), then opens a `wa.me` chat with a prefilled text message, inviting the user to
+   * manually attach the file that was just downloaded. When the linked client has a phone number
+   * on file, the chat opens directly against that contact; otherwise it opens the generic wa.me
+   * composer with no contact preselected.
    * A `wa.me` link alone can never carry the PDF: `GET /sifen/kude` requires Bearer auth, so the
    * end client can't fetch it directly from a link — the file always has to move through this
    * browser first.
-   *
-   * Known limitation (code review, not fixed here): some mobile browsers — notably iOS Safari —
-   * only allow `navigator.share()` when called synchronously inside a user-activation event. The
-   * `await fetchSifenKudeBlob(...)` above means `navigator.share` actually runs after that
-   * activation window may have already expired, which could make the Web Share branch silently
-   * fall through to `NotAllowedError` on some iOS versions. Restructuring this to share before the
-   * fetch isn't possible (there's nothing to share yet), and validating the real behavior needs a
-   * physical iOS device rather than a safe speculative fix — left as-is intentionally.
    */
   async function handleSendKudeWhatsapp() {
     if (!invoice) return;
     setKudeWhatsappError(null);
-    setKudeWhatsappSuccess(null);
     setKudeWhatsappSending(true);
     try {
       const { blob, filename } = await fetchSifenKudeBlob(invoiceId);
@@ -433,44 +453,15 @@ export function InvoiceDetailModal({
         number: invoice.invoiceNumberFormatted,
         amount: formatGuaraniesGs(invoice.total),
       });
+      const whatsappPhone = toWhatsAppPhone(invoice.clientPhone);
 
-      // Feature-detect at runtime — the DOM types declare `canShare`/`share` unconditionally, but
-      // most desktop browsers (and Playwright's headless Chromium) don't actually implement them.
-      const hasShareApi =
-        typeof navigator.canShare === "function" && typeof navigator.share === "function";
-      let file: File | null = null;
-      try {
-        file = new File([blob], filename, { type: blob.type || "application/pdf" });
-      } catch {
-        file = null;
-      }
-      let canShareFile = false;
-      if (file && hasShareApi) {
-        try {
-          canShareFile = navigator.canShare({ files: [file] });
-        } catch {
-          // Some browsers throw instead of returning false for an unsupported file type/size —
-          // treat that the same as "can't share" and fall back to the wa.me path below.
-          canShareFile = false;
-        }
-      }
-
-      if (canShareFile && file) {
-        await navigator.share({ files: [file], text: message });
-        setKudeWhatsappSuccess("share");
-      } else {
-        // Desktop / unsupported browsers: download the PDF locally first — the user attaches it
-        // manually in WhatsApp — then open a prefilled wa.me chat.
-        triggerBrowserDownload(blob, filename);
-        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
-        setKudeWhatsappSuccess("fallback");
-      }
+      triggerBrowserDownload(blob, filename);
+      window.open(
+        `https://wa.me/${whatsappPhone ?? ""}?text=${encodeURIComponent(message)}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
     } catch (err) {
-      // Web Share API throws AbortError when the user simply dismisses the OS share sheet — that's
-      // not a failure worth surfacing.
-      if (err instanceof DOMException && err.name === "AbortError") {
-        return;
-      }
       setKudeWhatsappError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setKudeWhatsappSending(false);
@@ -644,6 +635,7 @@ export function InvoiceDetailModal({
   }
 
   return (
+    <>
     <Modal
       open
       onClose={onClose}
@@ -905,7 +897,6 @@ export function InvoiceDetailModal({
                           <SifenStatusBadge status={invoice.sifenSubmissionStatus} />
                         </span>
                       }
-                      defaultOpen
                       data-testid="sifen-tab-status"
                     >
                       <div className="flex flex-col gap-2">
@@ -974,6 +965,16 @@ export function InvoiceDetailModal({
                             </Button>
                           </div>
                         )}
+                        <div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="sifen-history-button"
+                            onClick={() => void handleOpenSifenHistory()}
+                          >
+                            {t("femme.billing.history.detail.sifen.historyButton")}
+                          </Button>
+                        </div>
                       </div>
                     </AccordionItem>
 
@@ -1174,7 +1175,7 @@ export function InvoiceDetailModal({
 
                     {kudeEligible && (
                       <AccordionItem
-                        title={t("femme.billing.history.detail.sifen.kudeEmailLabel")}
+                        title={t("femme.billing.history.detail.sifen.kudeShareLabel")}
                         data-testid="sifen-tab-email"
                       >
                         <div className="flex flex-col gap-2">
@@ -1246,24 +1247,6 @@ export function InvoiceDetailModal({
                               data-testid="sifen-kude-whatsapp-error"
                             >
                               {kudeWhatsappError}
-                            </Alert>
-                          )}
-                          {kudeWhatsappSuccess === "fallback" && !kudeWhatsappError && (
-                            <Alert
-                              variant="success"
-                              title={t("femme.billing.history.detail.sifen.kudeWhatsappSuccessFallback")}
-                              data-testid="sifen-kude-whatsapp-success"
-                            >
-                              {t("femme.billing.history.detail.sifen.kudeWhatsappSuccessFallback")}
-                            </Alert>
-                          )}
-                          {kudeWhatsappSuccess === "share" && !kudeWhatsappError && (
-                            <Alert
-                              variant="success"
-                              title={t("femme.billing.history.detail.sifen.kudeWhatsappSuccessShared")}
-                              data-testid="sifen-kude-whatsapp-success"
-                            >
-                              {t("femme.billing.history.detail.sifen.kudeWhatsappSuccessShared")}
                             </Alert>
                           )}
                         </div>
@@ -1811,5 +1794,48 @@ export function InvoiceDetailModal({
         )}
       </div>
     </Modal>
+    {showSifenHistory && (
+      <Modal
+        open
+        onClose={() => setShowSifenHistory(false)}
+        title={t("femme.billing.history.detail.sifen.historyTitle")}
+      >
+        <div className="flex flex-col gap-3" data-testid="sifen-history-list">
+          {sifenHistoryLoading && (
+            <div className="flex items-center gap-2">
+              <Spinner size="sm" />
+              <Text>{t("femme.billing.history.detail.sifen.historyLoading")}</Text>
+            </div>
+          )}
+          {sifenHistoryError && (
+            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+              {sifenHistoryError}
+            </Alert>
+          )}
+          {!sifenHistoryLoading && !sifenHistoryError && sifenHistory?.length === 0 && (
+            <Text variant="muted">{t("femme.billing.history.detail.sifen.historyEmpty")}</Text>
+          )}
+          {!sifenHistoryLoading &&
+            sifenHistory?.map((entry, idx) => (
+              <div
+                key={idx}
+                className="rounded border border-[rgb(var(--color-border))] p-2"
+                data-testid="sifen-history-entry"
+              >
+                <Text variant="small" className="font-medium">
+                  {formatParaguayDateTime(entry.occurredAt, dateLocale)} ·{" "}
+                  {t(`femme.billing.history.detail.sifen.historyEventType.${entry.eventType}`)}
+                </Text>
+                {entry.message && (
+                  <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
+                    {entry.message}
+                  </Text>
+                )}
+              </div>
+            ))}
+        </div>
+      </Modal>
+    )}
+    </>
   );
 }

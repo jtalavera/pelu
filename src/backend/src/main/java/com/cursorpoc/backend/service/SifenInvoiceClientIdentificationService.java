@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.SifenClientIdentificationType;
+import com.cursorpoc.backend.domain.enums.SifenInvoiceEventType;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
@@ -74,6 +75,7 @@ public class SifenInvoiceClientIdentificationService {
   private final SifenDocumentSigningService signingService;
   private final SifenEventClient eventClient;
   private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceEventLogService eventLogService;
 
   /**
    * Self-injected proxy — required so {@link #identifyClient}'s calls to {@link
@@ -99,13 +101,15 @@ public class SifenInvoiceClientIdentificationService {
       SifenClientIdentificationEventXmlService eventXmlService,
       SifenDocumentSigningService signingService,
       SifenEventClient eventClient,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceEventLogService eventLogService) {
     this.invoiceRepository = invoiceRepository;
     this.headerService = headerService;
     this.eventXmlService = eventXmlService;
     this.signingService = signingService;
     this.eventClient = eventClient;
     this.timeProperties = timeProperties;
+    this.eventLogService = eventLogService;
   }
 
   private SifenInvoiceClientIdentificationService self() {
@@ -204,6 +208,12 @@ public class SifenInvoiceClientIdentificationService {
       invoice.setClientIdentityDocumentOverride(
           invoice.getSifenClientIdentificationIdentityDocument());
     }
+    eventLogService.record(
+        tenantId,
+        invoiceId,
+        SifenInvoiceEventType.CLIENT_IDENTIFICATION,
+        result.resultCode(),
+        result.message());
   }
 
   /** AC-01: only an eligible invoice — approved, issued without client data, not yet identified. */

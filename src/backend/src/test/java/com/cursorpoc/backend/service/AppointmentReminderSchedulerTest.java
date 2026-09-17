@@ -94,10 +94,11 @@ class AppointmentReminderSchedulerTest {
     Instant from = fromCaptor.getValue();
     Instant to = toCaptor.getValue();
 
-    // from ~= now + 23h, to ~= now + 25h, computed at call time.
-    assertThat(from).isBetween(before.plus(Duration.ofHours(23)), after.plus(Duration.ofHours(23)));
+    // from ~= now (no lower bound beyond "hasn't started yet" — issue #218 follow-up), to ~= now +
+    // 25h, both computed at call time.
+    assertThat(from).isBetween(before, after);
     assertThat(to).isBetween(before.plus(Duration.ofHours(25)), after.plus(Duration.ofHours(25)));
-    assertThat(Duration.between(from, to)).isEqualTo(Duration.ofHours(2));
+    assertThat(Duration.between(from, to)).isEqualTo(Duration.ofHours(25));
   }
 
   @Test

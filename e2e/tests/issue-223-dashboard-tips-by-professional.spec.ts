@@ -17,6 +17,15 @@ import { loginAsDemo } from "../fixtures/auth";
  * `PropinasPage.tsx`) with a client-computed date range equivalent to the same trailing 30-day
  * window the sibling dashboard charts (issues #219-#222) share (see `DashboardPage.tsx`'s
  * `tipsWindowRangeIso`).
+ * totals by professional. This issue adds *no* new backend aggregation: the chart is fed by
+ * calling the already-existing `GET /api/propinas/report` endpoint (`TipsController`/
+ * `TipsService`, already used by `PropinasPage.tsx`) with a client-computed date range equivalent
+ * to the same trailing 30-day window the sibling dashboard charts (issues #219-#222) share (see
+ * `DashboardsPage.tsx`'s `tipsWindowRangeIso`).
+ *
+ * Issue #220 follow-up "Dashboards": this chart lives on the dedicated `/app/dashboards` screen
+ * (reached via the "Dashboards" nav item), not the main dashboard — same as the sibling issue
+ * #219-#222 charts — so every assertion below navigates there first.
  *
  * Each seeded professional here is a brand-new entity (unique name per run), so its tip total in
  * the report is exactly what this test seeds — no before/after diffing needed against whatever
@@ -128,6 +137,7 @@ test.describe("Issue #223 · Dashboard tips-by-professional chart", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-tips-by-professional");
     await expect(chart).toBeVisible({ timeout: 20_000 });
@@ -201,6 +211,7 @@ test.describe("Issue #223 · Dashboard tips-by-professional chart", () => {
 
     await page.setViewportSize({ width: 400, height: 800 });
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-tips-by-professional");
     await expect(chart).toBeVisible({ timeout: 20_000 });

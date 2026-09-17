@@ -12,4 +12,7 @@ public record AppointmentResponse(
     String startAt,
     String endAt,
     String status,
-    String cancelReason) {}
+    String cancelReason,
+    // Issue #218 follow-up: null until the ~24h-ahead reminder email has actually been sent for
+    // this appointment's current startAt slot (AppointmentReminderScheduler).
+    String reminderSentAt) {}

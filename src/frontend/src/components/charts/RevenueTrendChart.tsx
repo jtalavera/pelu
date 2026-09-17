@@ -1,20 +1,39 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ReferenceArea,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { ChartCard } from "./ChartCard";
 import {
+  CHART_AXIS_TEXT_COLOR,
   CHART_GRID_COLOR,
   CHART_PRIMARY_COLOR,
-  CHART_PRIMARY_COLOR_LIGHT,
+  CHART_TREND_LINE_COLOR,
+  CHART_WEEKEND_BG,
   chartAxisTickStyle,
   chartTooltipContentStyle,
   chartTooltipLabelStyle,
 } from "./chartTheme";
 
+function isWeekendDate(dateStr: string): boolean {
+  const day = new Date(`${dateStr}T00:00:00`).getDay();
+  return day === 0 || day === 6;
+}
+
 export type RevenueTrendPoint = { date: string; invoiced: string | number };
 
 /**
- * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": area chart of
+ * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": bar chart of
  * daily invoiced revenue (`ISSUED` invoices) over the trailing `days`-day window the backend
  * returns (`DashboardResponse.revenueTrend`/`revenueTrendDays`, see `DashboardService`). Every
  * point in `data` is expected to already be gap-free (backend fills zero-revenue days), so this
@@ -37,8 +56,27 @@ export function RevenueTrendChart({
   const tickFormatter = (value: string) => {
     const d = new Date(`${value}T00:00:00`);
     if (Number.isNaN(d.getTime())) return value;
-    return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(d);
+    const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
+    const dayMonth = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(d);
+    return `${weekday} ${dayMonth}`;
   };
+
+  // Bands consecutive Saturdays/Sundays into one shaded region each, so a weekend dip in
+  // invoicing reads at a glance as expected rather than as an anomaly in the trend.
+  const weekendBands = useMemo(() => {
+    const bands: Array<{ start: string; end: string }> = [];
+    points.forEach((p, i) => {
+      if (!isWeekendDate(p.date)) return;
+      const prevPoint = points[i - 1];
+      const lastBand = bands[bands.length - 1];
+      if (lastBand && prevPoint && prevPoint.date === lastBand.end) {
+        lastBand.end = p.date;
+      } else {
+        bands.push({ start: p.date, end: p.date });
+      }
+    });
+    return bands;
+  }, [points]);
 
   return (
     <ChartCard
@@ -47,17 +85,23 @@ export function RevenueTrendChart({
       subtitle={t("femme.dashboard.revenueTrendSubtitle", { days })}
       isEmpty={!hasRevenue}
       emptyMessage={t("femme.dashboard.revenueTrendEmpty")}
-      height={220}
+      height={250}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id="revenueTrendFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={CHART_PRIMARY_COLOR} stopOpacity={0.35} />
-              <stop offset="95%" stopColor={CHART_PRIMARY_COLOR_LIGHT} stopOpacity={0.05} />
-            </linearGradient>
-          </defs>
+        <ComposedChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
+          {weekendBands.map((band) => (
+            <ReferenceArea
+              key={`${band.start}-${band.end}`}
+              data-testid="dashboard-revenue-trend-weekend-band"
+              x1={band.start}
+              x2={band.end}
+              fill={CHART_WEEKEND_BG}
+              fillOpacity={1}
+              stroke="none"
+              ifOverflow="visible"
+            />
+          ))}
           <XAxis
             dataKey="date"
             tickFormatter={tickFormatter}
@@ -78,17 +122,42 @@ export function RevenueTrendChart({
             contentStyle={chartTooltipContentStyle}
             labelStyle={chartTooltipLabelStyle}
             labelFormatter={(value) => tickFormatter(String(value ?? ""))}
-            formatter={(value) => [formatGuaraniesGs(Number(value) || 0), t("femme.dashboard.invoiced")]}
+            // The trend curve traces the same `invoiced` values as the bar (just interpolated
+            // smoothly), so its tooltip entry would only ever duplicate the bar's — returning
+            // `null` (not a [value, name] tuple) drops that row instead of showing the same
+            // amount twice under two different labels (see recharts' `DefaultTooltipContent`).
+            formatter={(value, name) =>
+              name === "trend"
+                ? null
+                : [formatGuaraniesGs(Number(value) || 0), t("femme.dashboard.invoiced")]
+            }
           />
-          <Area
-            type="monotone"
+          <Legend
+            verticalAlign="bottom"
+            height={28}
+            wrapperStyle={{ fontSize: 11, color: CHART_AXIS_TEXT_COLOR }}
+            formatter={(value) =>
+              value === "trend" ? t("femme.dashboard.revenueTrendLine") : t("femme.dashboard.invoiced")
+            }
+          />
+          <Bar
             dataKey="invoiced"
-            stroke={CHART_PRIMARY_COLOR}
-            strokeWidth={2}
-            fill="url(#revenueTrendFill)"
+            name="invoiced"
+            fill={CHART_PRIMARY_COLOR}
+            radius={[4, 4, 0, 0]}
             isAnimationActive={false}
           />
-        </AreaChart>
+          <Line
+            dataKey="invoiced"
+            name="trend"
+            type="monotone"
+            stroke={CHART_TREND_LINE_COLOR}
+            strokeWidth={2}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </ChartCard>
   );

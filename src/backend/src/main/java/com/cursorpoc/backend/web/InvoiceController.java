@@ -8,6 +8,7 @@ import com.cursorpoc.backend.service.InvoiceService;
 import com.cursorpoc.backend.service.SifenCertificateService;
 import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
 import com.cursorpoc.backend.service.SifenInvoiceClientIdentificationService;
+import com.cursorpoc.backend.service.SifenInvoiceEventLogService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenSubmissionQueue;
@@ -18,6 +19,7 @@ import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
+import com.cursorpoc.backend.web.dto.SifenInvoiceEventLogResponse;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingSubmitRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
@@ -64,6 +66,7 @@ public class InvoiceController {
   private final SifenCertificateService sifenCertificateService;
   private final SifenSubmissionQueue sifenSubmissionQueue;
   private final SifenNumberVoidingService sifenNumberVoidingService;
+  private final SifenInvoiceEventLogService sifenInvoiceEventLogService;
 
   public InvoiceController(
       InvoiceService invoiceService,
@@ -74,7 +77,8 @@ public class InvoiceController {
       FeatureFlagService featureFlagService,
       SifenCertificateService sifenCertificateService,
       SifenSubmissionQueue sifenSubmissionQueue,
-      SifenNumberVoidingService sifenNumberVoidingService) {
+      SifenNumberVoidingService sifenNumberVoidingService,
+      SifenInvoiceEventLogService sifenInvoiceEventLogService) {
     this.invoiceService = invoiceService;
     this.invoiceHistoryReportService = invoiceHistoryReportService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
@@ -84,6 +88,7 @@ public class InvoiceController {
     this.sifenCertificateService = sifenCertificateService;
     this.sifenSubmissionQueue = sifenSubmissionQueue;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
+    this.sifenInvoiceEventLogService = sifenInvoiceEventLogService;
   }
 
   /**
@@ -214,6 +219,23 @@ public class InvoiceController {
     log.info("GET /api/invoices/{} tenantId={}", id, principal.getTenantId());
     InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
     log.info("GET /api/invoices/{} tenantId={} status=200", id, principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Issue #205 AC-2: full history of SIFEN interactions (submission, cancellation, client
+   * identification attempts) for one invoice, newest first — powers the "ver historial de mensajes
+   * SIFEN" popup in the "Estado en SIFEN" accordion.
+   */
+  @GetMapping("/{id}/sifen/history")
+  public ResponseEntity<List<SifenInvoiceEventLogResponse>> sifenHistory(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable Long id) {
+    requirePrincipal(principal);
+    log.info("GET /api/invoices/{}/sifen/history tenantId={}", id, principal.getTenantId());
+    List<SifenInvoiceEventLogResponse> response =
+        sifenInvoiceEventLogService.history(principal.getTenantId(), id);
+    log.info(
+        "GET /api/invoices/{}/sifen/history tenantId={} status=200", id, principal.getTenantId());
     return ResponseEntity.ok(response);
   }
 

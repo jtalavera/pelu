@@ -44,6 +44,7 @@ class SifenInvoiceSubmissionServiceTest {
   @Mock private SifenDocumentSigningService signingService;
   @Mock private SifenDocumentReceptionClient receptionClient;
   @Mock private SifenDocumentQueryClient queryClient;
+  @Mock private SifenInvoiceEventLogService eventLogService;
 
   private SifenInvoiceSubmissionService service;
   private Invoice invoice;
@@ -51,7 +52,8 @@ class SifenInvoiceSubmissionServiceTest {
   @BeforeEach
   void setUp() {
     SifenInvoiceSubmissionPersistenceService persistence =
-        new SifenInvoiceSubmissionPersistenceService(invoiceRepository, new FemmeTimeProperties());
+        new SifenInvoiceSubmissionPersistenceService(
+            invoiceRepository, new FemmeTimeProperties(), eventLogService);
     service =
         new SifenInvoiceSubmissionService(
             persistence, signingService, receptionClient, queryClient, new FemmeTimeProperties());

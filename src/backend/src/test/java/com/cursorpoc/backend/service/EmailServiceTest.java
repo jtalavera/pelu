@@ -32,7 +32,9 @@ class EmailServiceTest {
     EmailService service = new EmailService(messageSource);
     ReflectionTestUtils.setField(service, "enabled", enabled);
     ReflectionTestUtils.setField(service, "connectionString", connectionString);
-    ReflectionTestUtils.setField(service, "senderAddress", "no-reply@example.com");
+    ReflectionTestUtils.setField(service, "senderAddressReminders", "turnos@example.com");
+    ReflectionTestUtils.setField(service, "senderAddressInvoices", "factura@example.com");
+    ReflectionTestUtils.setField(service, "senderAddressGeneric", "no-reply@example.com");
     return service;
   }
 
@@ -132,7 +134,7 @@ class EmailServiceTest {
     EmailService service = new EmailService(messageSource);
     ReflectionTestUtils.setField(service, "enabled", false);
     ReflectionTestUtils.setField(service, "connectionString", "");
-    ReflectionTestUtils.setField(service, "senderAddress", "no-reply@example.com");
+    ReflectionTestUtils.setField(service, "senderAddressGeneric", "no-reply@example.com");
 
     assertThatCode(
             () ->

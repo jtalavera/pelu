@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenInvoiceEventType;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import java.time.Duration;
@@ -89,6 +90,7 @@ public class SifenInvoiceCancellationService {
   private final SifenEventClient eventClient;
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceNotificationService notificationService;
+  private final SifenInvoiceEventLogService eventLogService;
 
   /**
    * Real bug, confirmed live: {@code cancel()}'s calls to {@code prepareForCancellation}/{@code
@@ -113,13 +115,15 @@ public class SifenInvoiceCancellationService {
       SifenDocumentSigningService signingService,
       SifenEventClient eventClient,
       FemmeTimeProperties timeProperties,
-      SifenInvoiceNotificationService notificationService) {
+      SifenInvoiceNotificationService notificationService,
+      SifenInvoiceEventLogService eventLogService) {
     this.invoiceRepository = invoiceRepository;
     this.eventXmlService = eventXmlService;
     this.signingService = signingService;
     this.eventClient = eventClient;
     this.timeProperties = timeProperties;
     this.notificationService = notificationService;
+    this.eventLogService = eventLogService;
   }
 
   private SifenInvoiceCancellationService self() {
@@ -226,6 +230,12 @@ public class SifenInvoiceCancellationService {
       invoice.setStatus(InvoiceStatus.VOIDED);
       invoice.setVoidReason(invoice.getSifenCancellationReason());
     }
+    eventLogService.record(
+        tenantId,
+        invoiceId,
+        SifenInvoiceEventType.CANCELLATION,
+        result.resultCode(),
+        result.message());
   }
 
   /**

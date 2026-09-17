@@ -27,3 +27,10 @@ log_analytics_daily_quota_gb = 0.5
 # RT-12 (Hardening_SIFEN.md): cheap-to-tear-down settings for test — no purge protection.
 key_vault_soft_delete_retention_days = 7
 key_vault_purge_protection_enabled   = false
+
+# Per-type ACS Email sender addresses (turnos@/factura@/no-reply@flowbit.tech). Step 1 of the
+# rollout: this alone only creates the domain resource + computes verification_records (see
+# `terraform output email_domain_verification_records`) — add those at flowbit.tech's DNS
+# provider, then set email_domain_verification_enabled=true here once they've propagated.
+email_custom_domain               = "flowbit.tech"
+email_domain_verification_enabled = true

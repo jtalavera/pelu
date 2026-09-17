@@ -26,6 +26,10 @@ export type TipsByProfessionalPoint = {
  * `GET /api/propinas/report` endpoint (`TipsController`/`TipsService`, already used by
  * `PropinasPage.tsx`'s own report tab) with a client-computed equivalent of the same trailing
  * window (see `DashboardPage.tsx`'s `tipsWindowRangeIso`). `data` is
+ * does not add any new backend aggregation. `DashboardsPage.tsx` instead calls the already-existing
+ * `GET /api/propinas/report` endpoint (`TipsController`/`TipsService`, already used by
+ * `PropinasPage.tsx`'s own report tab) with a client-computed equivalent of the same trailing
+ * window (see `DashboardsPage.tsx`'s `tipsWindowRangeIso`). `data` is
  * `TipReportResponse.professionalTotals` as-is — already ordered by professional full name
  * ascending (`ServiceRecordTipRepository.findForReport`'s deterministic `ORDER BY p.fullName ASC`)
  * — this component only maps/renders, same division of responsibility as `TopServicesChart`

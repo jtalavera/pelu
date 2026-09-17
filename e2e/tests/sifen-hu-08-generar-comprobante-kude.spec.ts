@@ -212,6 +212,8 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     const section = page.getByTestId("sifen-status-section");
     await expect(section).toBeVisible();
     await expect(section.getByText("Queued", { exact: true })).toBeVisible();
+    // Issue #205 AC-5: "Estado en SIFEN" now starts closed — open it to reach its body content.
+    await page.getByTestId("sifen-tab-status").locator("summary").click();
     await expect(page.getByTestId("sifen-submission-in-progress-note")).toBeVisible();
     await expect(page.getByTestId("sifen-check-status-button")).toHaveCount(0);
 
@@ -328,7 +330,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(page.getByTestId("sifen-kude-email-success")).toBeVisible({ timeout: 15_000 });
   });
 
-  test("Issue #215 · el botón «Enviar por WhatsApp» aparece junto al de email y usa el fallback wa.me sin Web Share API", async ({
+  test("Issue #215 · el botón «Enviar por WhatsApp» aparece junto al de email dentro de «Compartir KuDE por mail o WhatsApp» y abre wa.me sin contacto preseleccionado cuando el cliente no tiene celular", async ({
     page,
     request,
   }) => {
@@ -363,14 +365,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     );
     expect(prep.ok(), await prep.text()).toBeTruthy();
 
-    // NOTE (Issue #215 AC): the real Web Share API branch — `navigator.share({ files })` handing
-    // the KuDE straight to an OS share sheet where WhatsApp appears as a target — cannot be driven
-    // from Playwright: headless Chromium doesn't implement `navigator.share`/`canShare` for files,
-    // and there is no way to script the native share sheet from a browser-automation test even on
-    // real hardware. This test therefore only covers (a) the button's presence next to the email
-    // action and (b) the text-only `wa.me` fallback that fires when the Share API is unavailable
-    // — which is already headless Chromium's real behavior, no stubbing of navigator needed. We do
-    // stub `window.open` so the test asserts the exact `wa.me` URL/text instead of actually
+    // Stub `window.open` so the test asserts the exact `wa.me` URL/text instead of actually
     // navigating to an external site.
     await page.addInitScript(() => {
       (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls = [];
@@ -393,13 +388,17 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 
     // Same solapa as the email action — the WhatsApp button sits right next to "Send" there.
-    await page.getByTestId("sifen-tab-email").click();
+    // Playwright runs the app in English (see playwright.config.ts `locale: "en-US"`).
+    const shareTab = page.getByTestId("sifen-tab-email");
+    await expect(shareTab).toContainText("Share KuDE by email or WhatsApp");
+    await shareTab.click();
     await expect(page.getByTestId("sifen-kude-send-email-button")).toBeVisible();
     const whatsappButton = page.getByTestId("sifen-kude-send-whatsapp-button");
     await expect(whatsappButton).toBeVisible();
 
-    // No Web Share API in headless Chromium → falls back to downloading the KuDE (same PDF the
-    // email/download flow already fetches) and opening a prefilled wa.me link.
+    // Downloads the KuDE (same PDF the email/download flow already fetches) and opens a
+    // prefilled wa.me link. No success box is shown afterwards (removed — the download and the
+    // WhatsApp tab opening are themselves the confirmation).
     const [download, kudeResponse] = await Promise.all([
       page.waitForEvent("download"),
       page.waitForResponse(
@@ -409,10 +408,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     ]);
     expect(kudeResponse.ok(), await kudeResponse.text()).toBeTruthy();
     expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
-
-    // The wa.me fallback also surfaces a success confirmation nudging the user to attach the
-    // PDF that was just downloaded (code review follow-up — mirrors the email flow's success Alert).
-    await expect(page.getByTestId("sifen-kude-whatsapp-success")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("sifen-kude-whatsapp-success")).toHaveCount(0);
 
     await expect
       .poll(() =>
@@ -431,6 +427,89 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(decodedMessage).toContain(invoice.invoiceNumberFormatted);
     // Money-format convention: dot-separator, no decimals (e.g. "Gs. 45.000"), never "45,000.00".
     expect(decodedMessage).toMatch(/Gs\.\s?45\.000\b/);
+  });
+
+  test("Issue #215 follow-up · con celular cargado en el cliente, «Enviar por WhatsApp» abre el chat de ese contacto (wa.me/595…)", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(
+      request,
+      token,
+      `E2E HU08whatsappTel ${Date.now()}`,
+      "0981123456",
+    );
+
+    const invoice = await apiPostJson<{ id: number; invoiceNumberFormatted: string }>(
+      request,
+      token,
+      "/api/invoices",
+      {
+        clientId: client.id,
+        clientDisplayName: client.fullName,
+        clientRucOverride: null,
+        clientIdentityDocumentOverride: null,
+        lines: [
+          {
+            serviceId: seed.serviceId,
+            description: seed.serviceFullName,
+            quantity: 1,
+            unitPrice: 45000,
+          },
+        ],
+        payments: [{ method: "CASH", amount: 45000 }],
+      },
+    );
+
+    const prep = await request.post(
+      `${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:8080"}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`,
+    );
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await page.addInitScript(() => {
+      (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls = [];
+      window.open = ((url?: string | URL) => {
+        (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls.push(
+          String(url ?? ""),
+        );
+        return null;
+      }) as typeof window.open;
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    await page.getByTestId("sifen-tab-email").click();
+    const whatsappButton = page.getByTestId("sifen-kude-send-whatsapp-button");
+    await expect(whatsappButton).toBeVisible();
+
+    await Promise.all([
+      page.waitForEvent("download"),
+      page.waitForResponse((r) => r.url().includes("/sifen/kude") && r.request().method() === "GET"),
+      whatsappButton.click(),
+    ]);
+
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls.length,
+        ),
+      )
+      .toBeGreaterThan(0);
+
+    const openCalls = await page.evaluate(
+      () => (window as unknown as { __whatsappOpenCalls: string[] }).__whatsappOpenCalls,
+    );
+    // "0981123456" (local, leading 0) -> "595981123456" (country code 595, no leading 0).
+    expect(openCalls[0]).toContain("https://wa.me/595981123456?text=");
   });
 
   test("Issue #167 · AC1 el campo de correo se precarga con el email del cliente si está cargado", async ({

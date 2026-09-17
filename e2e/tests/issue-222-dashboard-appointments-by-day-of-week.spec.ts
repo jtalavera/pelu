@@ -39,6 +39,10 @@ import { loginAsDemo } from "../fixtures/auth";
  * the CANCELLED/NO_SHOW exclusion end-to-end against the real DB, not just at the
  * repository-query-construction level (already covered by
  * `DashboardServiceAppointmentsByDayOfWeekTest`).
+ *
+ * Issue #220 follow-up "Dashboards": this chart moved off the main dashboard onto its own screen
+ * (`/app/dashboards`, reached via the "Dashboards" nav item), same as the sibling issue #219-#221
+ * charts — so every `page`-driven assertion below navigates there first.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -136,6 +140,7 @@ test.describe("Issue #222 · Dashboard appointments by day of week chart", () =>
     expect(changedBuckets).toBe(3);
 
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-appointments-by-day-of-week");
     await expect(chart).toBeVisible({ timeout: 20_000 });
@@ -226,6 +231,7 @@ test.describe("Issue #222 · Dashboard appointments by day of week chart", () =>
 
     await page.setViewportSize({ width: 400, height: 800 });
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-appointments-by-day-of-week");
     await expect(chart).toBeVisible({ timeout: 20_000 });
