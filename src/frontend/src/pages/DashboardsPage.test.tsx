@@ -132,3 +132,56 @@ describe("DashboardsPage top services chart (issue #220)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("DashboardsPage payment method mix chart (issue #221)", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    femmeJson.mockReset();
+  });
+
+  function baseDashboard(
+    paymentMethodMix: Array<{ method: string; amount: string | number }>,
+    revenueTrendDays = 30,
+  ) {
+    return {
+      revenueTrend: [],
+      revenueTrendDays,
+      topServices: [],
+      paymentMethodMix,
+    };
+  }
+
+  it("shows the empty state when there are no payment allocations in range", async () => {
+    femmeJson.mockResolvedValue(baseDashboard([]));
+    renderPage();
+    expect(await screen.findByText("No invoiced payments in this period yet")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-payment-method-mix-empty")).toBeTruthy();
+  });
+
+  it("renders the chart section (no empty state) with more than one payment method present, using the shared billing-UI labels", async () => {
+    femmeJson.mockResolvedValue(
+      baseDashboard([
+        { method: "CASH", amount: "500000" },
+        { method: "DEBIT_CARD", amount: "300000" },
+        { method: "TRANSFER", amount: "150000" },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByTestId("dashboard-payment-method-mix")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-payment-method-mix-empty")).toBeNull();
+  });
+
+  it("still shows the empty state gracefully when paymentMethodMix is missing entirely (stale build)", async () => {
+    femmeJson.mockResolvedValue({ revenueTrend: [], revenueTrendDays: 30, topServices: [] });
+    renderPage();
+    expect(await screen.findByText("No invoiced payments in this period yet")).toBeTruthy();
+  });
+
+  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
+    femmeJson.mockResolvedValue(baseDashboard([{ method: "CASH", amount: "500000" }], 45));
+    renderPage();
+    expect(
+      await screen.findByText("Invoiced revenue by payment method over the last 45 days"),
+    ).toBeTruthy();
+  });
+});

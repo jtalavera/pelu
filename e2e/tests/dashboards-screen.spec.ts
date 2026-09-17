@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 import { loginAsDemo } from "../fixtures/auth";
 
 /**
- * "Dashboards" screen — the revenue-trend and top-services charts moved off the main dashboard
- * (`/app`) onto their own screen (`/app/dashboards`), reached via a "Dashboards" nav item placed
- * right below "Calendar" in the sidebar.
+ * "Dashboards" screen — the revenue-trend, top-services and payment-method-mix charts moved off
+ * the main dashboard (`/app`) onto their own screen (`/app/dashboards`), reached via a
+ * "Dashboards" nav item placed right below "Calendar" in the sidebar.
  */
 test.describe("Dashboards screen", () => {
   test("the Dashboards nav item sits right below Calendar and opens the charts screen", async ({
@@ -32,14 +32,18 @@ test.describe("Dashboards screen", () => {
 
     await expect(page.getByTestId("dashboard-revenue-trend")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("dashboard-top-services")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("dashboard-payment-method-mix")).toBeVisible({
+      timeout: 20_000,
+    });
   });
 
-  test("the main dashboard no longer renders the revenue-trend or top-services charts", async ({
+  test("the main dashboard no longer renders the revenue-trend, top-services or payment-method-mix charts", async ({
     page,
   }) => {
     await loginAsDemo(page);
 
     await expect(page.getByTestId("dashboard-revenue-trend")).toHaveCount(0);
     await expect(page.getByTestId("dashboard-top-services")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-payment-method-mix")).toHaveCount(0);
   });
 });

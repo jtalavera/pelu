@@ -4,19 +4,22 @@ import { Alert, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
 import { TopServicesChart } from "../components/charts/TopServicesChart";
+import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
 import { getDateLocale } from "../i18n/dateLocale";
 
 type DashboardsResponse = {
   revenueTrend: Array<{ date: string; invoiced: string | number }>;
   revenueTrendDays: number;
   topServices: Array<{ serviceName: string; revenue: string | number }>;
+  paymentMethodMix: Array<{ method: string; amount: string | number }>;
 };
 
 /**
- * Issue #220 follow-up — "Dashboards": dedicated screen for the dashboard's charts (revenue trend +
- * top services), split out of `DashboardPage.tsx` so the main panel stays focused on today's
- * operational snapshot. Reuses the same `/api/dashboard` aggregate the main dashboard fetches — the
- * chart data (`revenueTrend`/`revenueTrendDays`/`topServices`) already lives there.
+ * Issue #220 follow-up — "Dashboards": dedicated screen for the dashboard's charts (revenue trend,
+ * top services, payment method mix), split out of `DashboardPage.tsx` so the main panel stays
+ * focused on today's operational snapshot. Reuses the same `/api/dashboard` aggregate the main
+ * dashboard fetches — the chart data (`revenueTrend`/`revenueTrendDays`/`topServices`/
+ * `paymentMethodMix`) already lives there.
  */
 export default function DashboardsPage() {
   const { t, i18n } = useTranslation();
@@ -83,6 +86,10 @@ export default function DashboardsPage() {
           />
           <TopServicesChart
             data={Array.isArray(data.topServices) ? data.topServices : []}
+            days={data.revenueTrendDays ?? 30}
+          />
+          <PaymentMethodMixChart
+            data={Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : []}
             days={data.revenueTrendDays ?? 30}
           />
         </>

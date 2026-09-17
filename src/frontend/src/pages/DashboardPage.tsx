@@ -6,9 +6,6 @@ import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
-import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
-import { TopServicesChart } from "../components/charts/TopServicesChart";
-import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
 import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
@@ -52,29 +49,8 @@ type DashboardResponse = {
   }>;
   /** `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — returned so the frontend never hardcodes it. */
   inactiveClientsThresholdDays: number;
-  /**
-   * Issue #219 · "Dashboard: fundamentos de gráficos + tendencia de facturación" — daily invoiced
-   * (`ISSUED`) revenue over the trailing `revenueTrendDays`-day window, oldest first, one point per
-   * calendar day (business timezone) with no gaps (a day with no invoices is `0`, not omitted).
-   */
-  revenueTrend: Array<{ date: string; invoiced: string | number }>;
-  /** `DashboardService.REVENUE_TREND_DAYS` — returned so the frontend never hardcodes it. */
-  revenueTrendDays: number;
-  /**
-   * Issue #220 · "Dashboard: gráfico de servicios más vendidos" — top services by invoiced
-   * (`ISSUED`) revenue over the same trailing `revenueTrendDays`-day window as `revenueTrend`,
-   * ordered by revenue descending, capped server-side (see `DashboardService.TOP_SERVICES_LIMIT`).
-   */
-  topServices: Array<{ serviceName: string; revenue: string | number }>;
-  /**
-   * Issue #221 · "Dashboard: gráfico de mezcla de medios de pago" — invoiced (`ISSUED`) revenue by
-   * `PaymentMethod` over the same trailing `revenueTrendDays`-day window as `revenueTrend`/
-   * `topServices`, ordered by amount descending, including every payment method actually present
-   * in the window (no fixed/hardcoded subset, capped server-side to nothing).
-   */
-  paymentMethodMix: Array<{ method: string; amount: string | number }>;
-  // `revenueTrend`/`revenueTrendDays`/`topServices` are also part of this `/api/dashboard`
-  // response, but only consumed by `DashboardsPage.tsx` now (see its own response type there).
+  // `revenueTrend`/`revenueTrendDays`/`topServices`/`paymentMethodMix` are also part of this
+  // `/api/dashboard` response, but only consumed by `DashboardsPage.tsx` now.
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -464,10 +440,6 @@ export default function DashboardPage() {
   // (see auto-reload-on-stale-build) — the real value always comes from the server response,
   // never hardcoded as the source of truth.
   const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
-  const revenueTrend = Array.isArray(data.revenueTrend) ? data.revenueTrend : [];
-  const revenueTrendDays = data.revenueTrendDays ?? 30;
-  const topServices = Array.isArray(data.topServices) ? data.topServices : [];
-  const paymentMethodMix = Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : [];
 
   return (
     <div>
@@ -593,15 +565,6 @@ export default function DashboardPage() {
           label={t("femme.dashboard.metricClientsMonth")}
         />
       </div>
-
-      {/* ── 3b. REVENUE TREND CHART ── */}
-      <RevenueTrendChart data={revenueTrend} days={revenueTrendDays} locale={locale} />
-
-      {/* ── 3c. TOP SERVICES CHART ── */}
-      <TopServicesChart data={topServices} days={revenueTrendDays} />
-
-      {/* ── 3d. PAYMENT METHOD MIX CHART ── */}
-      <PaymentMethodMixChart data={paymentMethodMix} days={revenueTrendDays} />
 
       {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
