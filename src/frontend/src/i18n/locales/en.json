@@ -449,6 +449,10 @@
       "paymentMethodMixTitle": "Payment method mix",
       "paymentMethodMixSubtitle": "Invoiced revenue by payment method over the last {{days}} days",
       "paymentMethodMixEmpty": "No invoiced payments in this period yet",
+      "appointmentsByDayOfWeekTitle": "Appointments by day of week",
+      "appointmentsByDayOfWeekSubtitle": "Appointment count by day of week over the last {{days}} days",
+      "appointmentsByDayOfWeekEmpty": "No appointments in this period yet",
+      "appointmentsByDayOfWeekCountLabel": "Appointments",
       "inactiveClientsViewAll": "View all"
     },
     "dashboardsPage": {

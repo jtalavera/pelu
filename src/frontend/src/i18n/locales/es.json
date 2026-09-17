@@ -449,6 +449,10 @@
       "paymentMethodMixTitle": "Mezcla de medios de pago",
       "paymentMethodMixSubtitle": "Facturación por medio de pago en los últimos {{days}} días",
       "paymentMethodMixEmpty": "Todavía no hay pagos registrados en este período",
+      "appointmentsByDayOfWeekTitle": "Turnos por día de semana",
+      "appointmentsByDayOfWeekSubtitle": "Cantidad de turnos por día de semana en los últimos {{days}} días",
+      "appointmentsByDayOfWeekEmpty": "Todavía no hay turnos en este período",
+      "appointmentsByDayOfWeekCountLabel": "Turnos",
       "inactiveClientsViewAll": "Ver todas"
     },
     "dashboardsPage": {

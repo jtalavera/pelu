@@ -5,6 +5,7 @@ import { femmeJson } from "../api/femmeClient";
 import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
 import { TopServicesChart } from "../components/charts/TopServicesChart";
 import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
+import { AppointmentsByDayOfWeekChart } from "../components/charts/AppointmentsByDayOfWeekChart";
 import { getDateLocale } from "../i18n/dateLocale";
 
 type DashboardsResponse = {
@@ -12,14 +13,16 @@ type DashboardsResponse = {
   revenueTrendDays: number;
   topServices: Array<{ serviceName: string; revenue: string | number }>;
   paymentMethodMix: Array<{ method: string; amount: string | number }>;
+  appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>;
 };
 
 /**
  * Issue #220 follow-up — "Dashboards": dedicated screen for the dashboard's charts (revenue trend,
- * top services, payment method mix), split out of `DashboardPage.tsx` so the main panel stays
- * focused on today's operational snapshot. Reuses the same `/api/dashboard` aggregate the main
- * dashboard fetches — the chart data (`revenueTrend`/`revenueTrendDays`/`topServices`/
- * `paymentMethodMix`) already lives there.
+ * top services, payment method mix, appointments by day of week), split out of `DashboardPage.tsx`
+ * so the main panel stays focused on today's operational snapshot. Reuses the same
+ * `/api/dashboard` aggregate the main dashboard fetches — the chart data (`revenueTrend`/
+ * `revenueTrendDays`/`topServices`/`paymentMethodMix`/`appointmentsByDayOfWeek`) already lives
+ * there.
  */
 export default function DashboardsPage() {
   const { t, i18n } = useTranslation();
@@ -90,6 +93,10 @@ export default function DashboardsPage() {
           />
           <PaymentMethodMixChart
             data={Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : []}
+            days={data.revenueTrendDays ?? 30}
+          />
+          <AppointmentsByDayOfWeekChart
+            data={Array.isArray(data.appointmentsByDayOfWeek) ? data.appointmentsByDayOfWeek : []}
             days={data.revenueTrendDays ?? 30}
           />
         </>
