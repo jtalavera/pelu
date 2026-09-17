@@ -443,6 +443,7 @@
       "revenueTrendTitle": "Tendencia de facturación",
       "revenueTrendSubtitle": "Facturación de los últimos {{days}} días",
       "revenueTrendEmpty": "Todavía no hay facturación en este período",
+      "revenueTrendLine": "Tendencia",
       "topServicesTitle": "Servicios más vendidos",
       "topServicesSubtitle": "Servicios con mayor facturación en los últimos {{days}} días (no incluye ítems personalizados sin un servicio de catálogo vinculado)",
       "topServicesEmpty": "Todavía no hay servicios facturados en este período",
