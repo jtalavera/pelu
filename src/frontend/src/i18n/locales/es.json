@@ -457,7 +457,9 @@
       "tipsByProfessionalSubtitle": "Total de propinas por profesional en los últimos {{days}} días (solo fichas cerradas)",
       "tipsByProfessionalEmpty": "Todavía no hay propinas registradas en este período",
       "tipsByProfessionalValueLabel": "Propinas",
-      "inactiveClientsViewAll": "Ver todas"
+      "inactiveClientsViewAll": "Ver todas",
+      "collapseChart": "Colapsar gráfico de {{title}}",
+      "expandChart": "Expandir gráfico de {{title}}"
     },
     "dashboardsPage": {
       "pageTitle": "Dashboards",
