@@ -12,6 +12,7 @@ import com.cursorpoc.backend.web.dto.DashboardResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -58,6 +59,22 @@ public class DashboardService {
    * shows fewer bars.
    */
   public static final int TOP_SERVICES_LIMIT = 10;
+
+  /**
+   * Issue #222 — "Dashboard: gráfico de turnos por día de semana": which appointment statuses count
+   * as real appointment activity for the day-of-week distribution. Same criterion as {@link
+   * AppointmentRepository#countDistinctClientsWithAppointmentsBetween} (used for {@code
+   * clientsThisMonth} above) — deliberately narrower than {@code appointmentsToday.total} (see
+   * {@code countByTenantIdAndDay}, which counts every status including {@code CANCELLED}: that
+   * metric answers "how many slots were booked today", this chart answers "which days/times is the
+   * salon actually busy", so a cancelled or no-show slot shouldn't count toward either).
+   */
+  private static final List<AppointmentStatus> COUNTABLE_APPOINTMENT_STATUSES =
+      List.of(
+          AppointmentStatus.PENDING,
+          AppointmentStatus.CONFIRMED,
+          AppointmentStatus.IN_PROGRESS,
+          AppointmentStatus.COMPLETED);
 
   private final FemmeTimeProperties timeProperties;
   private final AppointmentRepository appointmentRepository;
@@ -188,6 +205,9 @@ public class DashboardService {
     List<DashboardResponse.PaymentMethodMix> paymentMethodMix =
         buildPaymentMethodMix(tenantId, zone, today);
 
+    List<DashboardResponse.AppointmentsByDayOfWeek> appointmentsByDayOfWeek =
+        buildAppointmentsByDayOfWeek(tenantId, zone, today);
+
     return new DashboardResponse(
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
         new DashboardResponse.RevenueSummary(invoicedDay, collectedDay),
@@ -199,7 +219,8 @@ public class DashboardService {
         revenueTrend,
         REVENUE_TREND_DAYS,
         topServices,
-        paymentMethodMix);
+        paymentMethodMix,
+        appointmentsByDayOfWeek);
   }
 
   /**
@@ -295,6 +316,60 @@ public class DashboardService {
             row ->
                 new DashboardResponse.PaymentMethodMix(row.method().name(), nz(row.totalAmount())))
         .toList();
+  }
+
+  /**
+   * Issue #222 — "Dashboard: gráfico de turnos por día de semana": appointment counts by day of
+   * week (business timezone) over the same trailing window as {@link #buildRevenueTrend}/{@link
+   * #buildTopServices}/{@link #buildPaymentMethodMix} — only the countable statuses (see {@link
+   * #COUNTABLE_APPOINTMENT_STATUSES}). Aggregation happens here in Java rather than in SQL: {@link
+   * AppointmentRepository#findStartAtsByTenantAndStatusInAndStartAtBetween} projects just the raw
+   * {@code startAt} instants (salon-scale volume, so no performance concern), and bucketing them by
+   * day-of-week needs the same {@code ZoneId}-aware conversion used everywhere else in this class —
+   * a DB-side {@code GROUP BY} would have to reimplement that per-database (SQL Server vs. H2),
+   * which is more fragile than doing it once here. Always returns exactly 7 points, Monday first,
+   * zero-filled for a day with no countable appointments (gap-free, same as {@link
+   * #buildRevenueTrend}).
+   */
+  private List<DashboardResponse.AppointmentsByDayOfWeek> buildAppointmentsByDayOfWeek(
+      long tenantId, ZoneId zone, LocalDate today) {
+    RevenueWindow window = revenueWindow(zone, today);
+
+    Map<DayOfWeek, Long> countsByDay = new HashMap<>();
+    for (Instant startAt :
+        appointmentRepository.findStartAtsByTenantAndStatusInAndStartAtBetween(
+            tenantId, COUNTABLE_APPOINTMENT_STATUSES, window.start(), window.end())) {
+      DayOfWeek day = startAt.atZone(zone).getDayOfWeek();
+      countsByDay.merge(day, 1L, Long::sum);
+    }
+
+    // DayOfWeek.values() is already declared Monday..Sunday.
+    List<DashboardResponse.AppointmentsByDayOfWeek> points =
+        new ArrayList<>(DayOfWeek.values().length);
+    for (DayOfWeek day : DayOfWeek.values()) {
+      points.add(
+          new DashboardResponse.AppointmentsByDayOfWeek(
+              dayOfWeekKey(day), countsByDay.getOrDefault(day, 0L)));
+    }
+    return points;
+  }
+
+  /**
+   * Maps a {@link DayOfWeek} to the short key used by the existing {@code
+   * femme.calendar.days.*}/{@code femme.professionals.days.*} i18n entries (see
+   * `ProfessionalsPage.tsx`'s {@code DAYS} array), so the frontend can translate this chart's
+   * labels through those same keys instead of a duplicate mapping.
+   */
+  private static String dayOfWeekKey(DayOfWeek day) {
+    return switch (day) {
+      case MONDAY -> "mon";
+      case TUESDAY -> "tue";
+      case WEDNESDAY -> "wed";
+      case THURSDAY -> "thu";
+      case FRIDAY -> "fri";
+      case SATURDAY -> "sat";
+      case SUNDAY -> "sun";
+    };
   }
 
   /**
