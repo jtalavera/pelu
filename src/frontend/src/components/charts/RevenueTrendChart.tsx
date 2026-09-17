@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Area,
-  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   ReferenceArea,
   ResponsiveContainer,
@@ -15,7 +15,6 @@ import { ChartCard } from "./ChartCard";
 import {
   CHART_GRID_COLOR,
   CHART_PRIMARY_COLOR,
-  CHART_PRIMARY_COLOR_LIGHT,
   CHART_WEEKEND_BG,
   chartAxisTickStyle,
   chartTooltipContentStyle,
@@ -30,7 +29,7 @@ function isWeekendDate(dateStr: string): boolean {
 export type RevenueTrendPoint = { date: string; invoiced: string | number };
 
 /**
- * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": area chart of
+ * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": bar chart of
  * daily invoiced revenue (`ISSUED` invoices) over the trailing `days`-day window the backend
  * returns (`DashboardResponse.revenueTrend`/`revenueTrendDays`, see `DashboardService`). Every
  * point in `data` is expected to already be gap-free (backend fills zero-revenue days), so this
@@ -85,13 +84,7 @@ export function RevenueTrendChart({
       height={220}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id="revenueTrendFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={CHART_PRIMARY_COLOR} stopOpacity={0.35} />
-              <stop offset="95%" stopColor={CHART_PRIMARY_COLOR_LIGHT} stopOpacity={0.05} />
-            </linearGradient>
-          </defs>
+        <BarChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
           {weekendBands.map((band) => (
             <ReferenceArea
@@ -127,15 +120,13 @@ export function RevenueTrendChart({
             labelFormatter={(value) => tickFormatter(String(value ?? ""))}
             formatter={(value) => [formatGuaraniesGs(Number(value) || 0), t("femme.dashboard.invoiced")]}
           />
-          <Area
-            type="monotone"
+          <Bar
             dataKey="invoiced"
-            stroke={CHART_PRIMARY_COLOR}
-            strokeWidth={2}
-            fill="url(#revenueTrendFill)"
+            fill={CHART_PRIMARY_COLOR}
+            radius={[4, 4, 0, 0]}
             isAnimationActive={false}
           />
-        </AreaChart>
+        </BarChart>
       </ResponsiveContainer>
     </ChartCard>
   );
