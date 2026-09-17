@@ -84,12 +84,14 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     // A RUC avoids SIFEN_CLIENT_IDENTIFICATION_REQUIRED (invoices at/above Gs. 7,000,000 require
     // client identification) — kept below that threshold anyway, but a real RUC removes any doubt.
+    // Derived from `suffix` (not the "80000005-6" literal other dashboard specs use) so it never
+    // collides with CLIENT_RUC_DUPLICATE when this suite's specs share one backend/H2 instance.
     const client = await seedClient(
       request,
       token,
       `E2E221 PaymentMix ${suffix}`,
       undefined,
-      "80000005-6",
+      `${suffix}-1`,
     );
 
     const before = await fetchPaymentMethodMix(request, token);
@@ -128,6 +130,7 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
     expect(transferDelta).toBe(transferAmount);
 
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-payment-method-mix");
     await expect(chart).toBeVisible({ timeout: 20_000 });
@@ -188,6 +191,7 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
 
     await page.setViewportSize({ width: 400, height: 800 });
     await loginAsDemo(page);
+    await page.goto("/app/dashboards");
 
     const chart = page.getByTestId("dashboard-payment-method-mix");
     await expect(chart).toBeVisible({ timeout: 20_000 });
