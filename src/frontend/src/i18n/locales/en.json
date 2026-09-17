@@ -453,6 +453,10 @@
       "appointmentsByDayOfWeekSubtitle": "Appointment count by day of week over the last {{days}} days",
       "appointmentsByDayOfWeekEmpty": "No appointments in this period yet",
       "appointmentsByDayOfWeekCountLabel": "Appointments",
+      "tipsByProfessionalTitle": "Tips by professional",
+      "tipsByProfessionalSubtitle": "Tip totals by professional over the last {{days}} days (closed service records only)",
+      "tipsByProfessionalEmpty": "No tips recorded in this period yet",
+      "tipsByProfessionalValueLabel": "Tips",
       "inactiveClientsViewAll": "View all"
     },
     "dashboardsPage": {
