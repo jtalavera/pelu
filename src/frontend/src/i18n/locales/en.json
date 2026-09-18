@@ -814,7 +814,7 @@
         "session": "Cash Register",
         "invoice": "New Invoice",
         "history": "History",
-        "cashHistory": "Cash Register History"
+        "cashHistory": "Cash Sessions Log"
       },
       "invoice": {
         "title": "Issue Invoice",
@@ -1163,13 +1163,13 @@
         "colAmount": "Amount",
         "colReason": "Reason",
         "colCreatedBy": "Recorded by",
-        "typeManualIn": "Manual ingreso",
-        "typeManualOut": "Manual egreso",
+        "typeManualIn": "Manual cash in",
+        "typeManualOut": "Manual cash out",
         "typeTipWithdrawal": "Tip withdrawal",
         "form": {
           "title": "Register a cash movement",
-          "typeIngreso": "Ingreso",
-          "typeEgreso": "Egreso",
+          "typeIngreso": "Cash in",
+          "typeEgreso": "Cash out",
           "amountLabel": "Amount",
           "amountHint": "Enter the movement amount (e.g. 20000).",
           "amountInvalid": "Enter a valid amount greater than 0.",
