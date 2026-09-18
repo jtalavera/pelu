@@ -11,6 +11,12 @@ import { loginAsDemo } from "../fixtures/auth";
 
 /**
  * Issue #223 · "Dashboard: gráfico de propinas por profesional" — horizontal bar chart of tip
+ * totals by professional, added to the main Dashboard (`DashboardPage.tsx`). This issue adds *no*
+ * new backend aggregation: the chart is fed by calling the already-existing
+ * `GET /api/propinas/report` endpoint (`TipsController`/`TipsService`, already used by
+ * `PropinasPage.tsx`) with a client-computed date range equivalent to the same trailing 30-day
+ * window the sibling dashboard charts (issues #219-#222) share (see `DashboardPage.tsx`'s
+ * `tipsWindowRangeIso`).
  * totals by professional. This issue adds *no* new backend aggregation: the chart is fed by
  * calling the already-existing `GET /api/propinas/report` endpoint (`TipsController`/
  * `TipsService`, already used by `PropinasPage.tsx`) with a client-computed date range equivalent

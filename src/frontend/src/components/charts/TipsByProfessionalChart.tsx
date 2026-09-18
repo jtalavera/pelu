@@ -22,6 +22,10 @@ export type TipsByProfessionalPoint = {
  * (issues #219-#222).
  *
  * Unlike those charts, this data does NOT come from `GET /api/dashboard` — this issue explicitly
+ * does not add any new backend aggregation. `DashboardPage.tsx` instead calls the already-existing
+ * `GET /api/propinas/report` endpoint (`TipsController`/`TipsService`, already used by
+ * `PropinasPage.tsx`'s own report tab) with a client-computed equivalent of the same trailing
+ * window (see `DashboardPage.tsx`'s `tipsWindowRangeIso`). `data` is
  * does not add any new backend aggregation. `DashboardsPage.tsx` instead calls the already-existing
  * `GET /api/propinas/report` endpoint (`TipsController`/`TipsService`, already used by
  * `PropinasPage.tsx`'s own report tab) with a client-computed equivalent of the same trailing

@@ -73,6 +73,11 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/admin/sifen-test-support/**")
                     .permitAll()
+                    // Issue #224: Meta calls this directly (webhook verification + delivery-status
+                    // callbacks) with no JWT to present; the GET verification challenge is instead
+                    // gated by its own hub.verify_token check inside WhatsAppWebhookController.
+                    .requestMatchers("/api/whatsapp/webhook")
+                    .permitAll()
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
