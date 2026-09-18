@@ -474,8 +474,8 @@ resource "azurerm_container_app" "backend" {
     container {
       name   = "backend"
       image  = var.backend_container_image
-      cpu    = 0.25
-      memory = "0.5Gi"
+      cpu    = 0.5
+      memory = "1Gi"
 
       # Passwordless SQL via managed identity.
       # The MSSQL JDBC driver rejects any non-empty password when
@@ -551,6 +551,11 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "FEMME_SERVICEBUS_QUEUE"
         value = azurerm_servicebus_queue.sifen_submission.name
+      }
+
+      env {
+        name  = "FEMME_REPORT_WARMUP_ENABLED"
+        value = tostring(var.backend_report_warmup_enabled)
       }
 
       # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on
