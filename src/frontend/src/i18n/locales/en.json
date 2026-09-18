@@ -457,7 +457,6 @@
       "tipsByProfessionalTitle": "Tips by professional",
       "tipsByProfessionalSubtitle": "Tip totals by professional over the last {{days}} days (closed service records only)",
       "tipsByProfessionalEmpty": "No tips recorded in this period yet",
-      "tipsByProfessionalValueLabel": "Tips"
       "tipsByProfessionalValueLabel": "Tips",
       "inactiveClientsViewAll": "View all",
       "collapseChart": "Collapse {{title}} chart",
