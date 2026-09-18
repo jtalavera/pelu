@@ -474,8 +474,8 @@ resource "azurerm_container_app" "backend" {
     container {
       name   = "backend"
       image  = var.backend_container_image
-      cpu    = 0.25
-      memory = "0.5Gi"
+      cpu    = 0.5
+      memory = "1Gi"
 
       # Passwordless SQL via managed identity.
       # The MSSQL JDBC driver rejects any non-empty password when
