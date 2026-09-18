@@ -19,6 +19,21 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
+import {
+  getCurrentSession as fetchCurrentSession,
+  openSession as openSessionApi,
+  closeSession as closeSessionApi,
+  createMovement as createMovementApi,
+  getSessionDetail,
+  listCashSessionsPaged,
+  type CashSession,
+  type CashSessionDetail,
+  type CashMovementType,
+  type CashSessionListItem,
+} from "../api/cashSessions";
+import type { PageResponse } from "../api/pagination";
+import { CashSessionSummaryCard } from "../components/CashSessionSummaryCard";
+import { CashSessionDetailModal } from "../components/CashSessionDetailModal";
 import { downloadInvoiceHistoryReport } from "../api/downloadInvoiceHistoryReport";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
@@ -46,31 +61,6 @@ import { billingSteps, registerBillingTabSwitcher } from "../tour/steps/billing"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type CashSession = {
-  id: number;
-  tenantId: number;
-  openedByUserId: number;
-  openedByEmail: string;
-  openedAt: string;
-  openingCashAmount: string;
-  isOpen: boolean;
-};
-
-type CashSessionCloseResponse = {
-  id: number;
-  tenantId: number;
-  openedAt: string;
-  closedAt: string;
-  closedByEmail: string;
-  openingCashAmount: string;
-  countedCashAmount: string;
-  expectedCashAmount: string;
-  cashDifference: string;
-  totalInvoiced: string;
-  invoiceCount: number;
-  paymentSummary: Array<{ method: string; total: string }>;
-};
-
 type InvoiceLineForm = {
   serviceId: string;
   description: string;
@@ -90,17 +80,6 @@ type PaymentForm = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmt(isoString: string, locale: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(isoString));
-  } catch {
-    return isoString;
-  }
-}
 
 function todayRangeIso(): { from: string; to: string } {
   const start = new Date();
@@ -2235,7 +2214,74 @@ function CashSessionTab({
   const [countedCashError, setCountedCashError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
-  const [closeResult, setCloseResult] = useState<CashSessionCloseResponse | null>(null);
+  const [closeResult, setCloseResult] = useState<CashSessionDetail | null>(null);
+
+  // Live detail (movements + running expected cash) for the currently open session.
+  const [liveDetail, setLiveDetail] = useState<CashSessionDetail | null>(null);
+  const [liveDetailError, setLiveDetailError] = useState<string | null>(null);
+  const [movementType, setMovementType] = useState<Extract<CashMovementType, "MANUAL_IN" | "MANUAL_OUT">>(
+    "MANUAL_IN",
+  );
+  const [movementAmount, setMovementAmount] = useState("");
+  const [movementAmountError, setMovementAmountError] = useState<string | null>(null);
+  const [movementReason, setMovementReason] = useState("");
+  const [movementReasonError, setMovementReasonError] = useState<string | null>(null);
+  const [movementSubmitting, setMovementSubmitting] = useState(false);
+  const [movementSubmitError, setMovementSubmitError] = useState<string | null>(null);
+
+  const loadLiveDetail = useCallback(async () => {
+    if (!currentSession) {
+      setLiveDetail(null);
+      return;
+    }
+    try {
+      const data = await getSessionDetail(currentSession.id);
+      setLiveDetail(data);
+      setLiveDetailError(null);
+    } catch (err) {
+      setLiveDetailError(translateApiError(err, t, "femme.billing.cashHistory.loadError"));
+    }
+  }, [currentSession, t]);
+
+  useEffect(() => {
+    void loadLiveDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadLiveDetail, refreshTrigger]);
+
+  async function handleCreateMovement(e: React.FormEvent) {
+    e.preventDefault();
+    setMovementSubmitError(null);
+    let hasError = false;
+    if (moneyDigitsOnly(movementAmount) === "" || parseMaskedMoney(movementAmount) <= 0) {
+      setMovementAmountError(t("femme.billing.movements.form.amountInvalid"));
+      hasError = true;
+    } else {
+      setMovementAmountError(null);
+    }
+    if (movementReason.trim() === "") {
+      setMovementReasonError(t("femme.billing.movements.form.reasonRequired"));
+      hasError = true;
+    } else {
+      setMovementReasonError(null);
+    }
+    if (hasError) return;
+
+    setMovementSubmitting(true);
+    try {
+      await createMovementApi({
+        type: movementType,
+        amount: parseMaskedMoney(movementAmount),
+        reason: movementReason.trim(),
+      });
+      setMovementAmount("");
+      setMovementReason("");
+      await loadLiveDetail();
+    } catch (err) {
+      setMovementSubmitError(translateApiError(err, t, "femme.billing.movements.form.submitError"));
+    } finally {
+      setMovementSubmitting(false);
+    }
+  }
 
   const [todayPage, setTodayPage] = useState<PagedInvoicesResponse | null>(null);
   const [todayLoading, setTodayLoading] = useState(false);
@@ -2308,9 +2354,7 @@ function CashSessionTab({
     setAmountError(null);
     setSubmitting(true);
     try {
-      await femmePostJson("/api/cash-sessions/open", {
-        openingCashAmount: parseMaskedMoney(openingAmount),
-      });
+      await openSessionApi(parseMaskedMoney(openingAmount));
       setOpeningAmount("");
       setOpenSuccess(true);
       onSessionChanged();
@@ -2331,10 +2375,7 @@ function CashSessionTab({
     setCountedCashError(null);
     setClosing(true);
     try {
-      const result = await femmePostJson<CashSessionCloseResponse>(
-        "/api/cash-sessions/close",
-        { countedCashAmount: parseMaskedMoney(countedCash) },
-      );
+      const result = await closeSessionApi(parseMaskedMoney(countedCash));
       setCloseResult(result);
       setShowCloseForm(false);
       onSessionChanged();
@@ -2344,8 +2385,6 @@ function CashSessionTab({
       setClosing(false);
     }
   }
-
-  const diff = closeResult ? parseFloat(closeResult.cashDifference) : null;
 
   const primaryBtn: React.CSSProperties = {
     background: "var(--color-rose)",
@@ -2429,57 +2468,14 @@ function CashSessionTab({
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <span>
               <span className="font-medium">{t("femme.billing.close.closedAt")}: </span>
-              {fmt(closeResult.closedAt, dateLocale)}
+              {formatParaguayDateTime(closeResult.closedAt as string, dateLocale)}
             </span>
             <span>
               <span className="font-medium">{t("femme.billing.close.closedBy")}: </span>
               {closeResult.closedByEmail}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm max-w-sm">
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.totalInvoiced")}
-            </span>
-            <span className="text-right">{formatAmountDecimal(closeResult.totalInvoiced)}</span>
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.invoiceCount")}
-            </span>
-            <span className="text-right">{closeResult.invoiceCount}</span>
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.expectedCash")}
-            </span>
-            <span className="text-right">{formatAmountDecimal(closeResult.expectedCashAmount)}</span>
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.countedCash")}
-            </span>
-            <span className="text-right">{formatAmountDecimal(closeResult.countedCashAmount)}</span>
-            <span
-              className={`font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
-            >
-              {t("femme.billing.close.difference")}
-            </span>
-            <span
-              className={`text-right font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
-            >
-              {diff !== null && diff >= 0 ? "+" : ""}
-              {formatAmountDecimal(closeResult.cashDifference)}
-            </span>
-          </div>
-          {(closeResult.paymentSummary ?? []).length > 0 && (
-            <div className="mt-2">
-              <Text className="font-medium text-sm mb-1">
-                {t("femme.billing.close.paymentBreakdown")}
-              </Text>
-              <div className="flex flex-col gap-1">
-                {(closeResult.paymentSummary ?? []).map((ps, i) => (
-                  <div key={i} className="flex justify-between text-sm max-w-xs">
-                    <span>{t(`femme.billing.invoice.paymentMethod${capitalize(ps.method)}`)}</span>
-                    <span>{formatAmountDecimal(ps.total)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <CashSessionSummaryCard detail={closeResult} />
         </div>
       )}
 
@@ -2543,7 +2539,7 @@ function CashSessionTab({
                   {t("femme.billing.session.metricOpenedAt")}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-                  {fmt(currentSession.openedAt, dateLocale)}
+                  {formatParaguayDateTime(currentSession.openedAt, dateLocale)}
                 </div>
               </div>
               <div
@@ -2660,6 +2656,119 @@ function CashSessionTab({
           )
         )}
       </div>
+
+      {currentSession && (
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            padding: 16,
+            marginBottom: 14,
+          }}
+        >
+          <Heading as="h2" className="text-lg mb-3">
+            {t("femme.billing.movements.form.title")}
+          </Heading>
+
+          {liveDetailError && (
+            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+              {liveDetailError}
+            </Alert>
+          )}
+
+          {liveDetail && <CashSessionSummaryCard detail={liveDetail} />}
+
+          {movementSubmitError && (
+            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+              {movementSubmitError}
+            </Alert>
+          )}
+
+          <form
+            onSubmit={(e) => void handleCreateMovement(e)}
+            noValidate
+            className="mt-4 flex flex-col gap-3"
+          >
+            <div className="flex gap-2">
+              <button
+                type="button"
+                style={movementType === "MANUAL_IN" ? primaryBtn : destructiveSoft}
+                onClick={() => setMovementType("MANUAL_IN")}
+                aria-pressed={movementType === "MANUAL_IN"}
+              >
+                {t("femme.billing.movements.form.typeIngreso")}
+              </button>
+              <button
+                type="button"
+                style={movementType === "MANUAL_OUT" ? primaryBtn : destructiveSoft}
+                onClick={() => setMovementType("MANUAL_OUT")}
+                aria-pressed={movementType === "MANUAL_OUT"}
+              >
+                {t("femme.billing.movements.form.typeEgreso")}
+              </button>
+            </div>
+            <div>
+              <Label htmlFor="movement-amount">{t("femme.billing.movements.form.amountLabel")}</Label>
+              <Input
+                id="movement-amount"
+                inputMode="numeric"
+                value={movementAmount}
+                onChange={(e) => {
+                  setMovementAmount(maskMoneyInput(e.target.value));
+                  setMovementAmountError(null);
+                }}
+                className="mt-1 w-full sm:max-w-xs"
+                placeholder="0"
+                aria-invalid={!!movementAmountError}
+                aria-describedby={movementAmountError ? "movement-amount-err" : "movement-amount-hint"}
+              />
+              <FieldValidationError id="movement-amount-err">
+                {movementAmountError}
+              </FieldValidationError>
+              <Text
+                variant="small"
+                id="movement-amount-hint"
+                className="mt-1 text-[rgb(var(--color-muted-foreground))]"
+              >
+                {t("femme.billing.movements.form.amountHint")}
+              </Text>
+            </div>
+            <div>
+              <Label htmlFor="movement-reason">{t("femme.billing.movements.form.reasonLabel")}</Label>
+              <Input
+                id="movement-reason"
+                value={movementReason}
+                onChange={(e) => {
+                  setMovementReason(e.target.value);
+                  setMovementReasonError(null);
+                }}
+                className="mt-1 w-full"
+                maxLength={500}
+                aria-invalid={!!movementReasonError}
+                aria-describedby={movementReasonError ? "movement-reason-err" : "movement-reason-hint"}
+              />
+              <FieldValidationError id="movement-reason-err">
+                {movementReasonError}
+              </FieldValidationError>
+              <Text
+                variant="small"
+                id="movement-reason-hint"
+                className="mt-1 text-[rgb(var(--color-muted-foreground))]"
+              >
+                {t("femme.billing.movements.form.reasonHint")}
+              </Text>
+            </div>
+            <div>
+              <Button type="submit" variant="primary" className="min-h-11" disabled={movementSubmitting}>
+                {movementSubmitting
+                  ? t("femme.billing.movements.form.submitting")
+                  : t("femme.billing.movements.form.submit")}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {showCloseForm && currentSession && (
         <div
@@ -2931,6 +3040,239 @@ function CashSessionTab({
   );
 }
 
+// ─── CashSessionHistoryTab ─────────────────────────────────────────────────────
+
+function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
+  const { t } = useTranslation();
+  const dateLocale = useDateLocale();
+  const [sessionPage, setSessionPage] = useState<PageResponse<CashSessionListItem> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pageNum, setPageNum] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
+
+  const loadSessions = useCallback(
+    async (page: number, size: number) => {
+      loadAbortRef.current?.abort();
+      const controller = new AbortController();
+      loadAbortRef.current = controller;
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const data = await listCashSessionsPaged({ page, size }, controller.signal);
+        if (controller.signal.aborted) return;
+        setSessionPage(data);
+      } catch (err) {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+          return;
+        }
+        setLoadError(translateApiError(err, t, "femme.billing.cashHistory.loadError"));
+      } finally {
+        if (loadAbortRef.current === controller) {
+          setLoading(false);
+          loadAbortRef.current = null;
+        }
+      }
+    },
+    [t],
+  );
+
+  useEffect(() => () => loadAbortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    filterDebounceRef.current = setTimeout(() => {
+      void loadSessions(pageNum, pageSize);
+    }, 350);
+    return () => {
+      if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    };
+  }, [pageNum, pageSize, loadSessions]);
+
+  const isFirstRefreshRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRefreshRef.current) {
+      isFirstRefreshRef.current = false;
+      return;
+    }
+    void loadSessions(pageNum, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
+
+  const sessions = sessionPage?.content ?? [];
+  const totalElements = sessionPage?.totalElements ?? 0;
+  const totalPages = sessionPage?.totalPages ?? 0;
+  const showingFrom = totalElements === 0 ? 0 : pageNum * pageSize + 1;
+  const showingTo = Math.min((pageNum + 1) * pageSize, totalElements);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Heading as="h2" className="text-lg">
+        {t("femme.billing.cashHistory.title")}
+      </Heading>
+
+      {loadError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {loadError}
+        </Alert>
+      )}
+
+      {loading ? (
+        <div className="flex items-center gap-2">
+          <Spinner size="sm" />
+          <Text>{t("femme.billing.cashHistory.loading")}</Text>
+        </div>
+      ) : sessions.length === 0 ? (
+        <Text variant="muted">{t("femme.billing.cashHistory.emptyState")}</Text>
+      ) : (
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            overflow: "hidden",
+          }}
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm" style={{ tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "17%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {[
+                    { key: "colOpenedAt", align: "left" },
+                    { key: "colClosedAt", align: "left" },
+                    { key: "colOpenedBy", align: "left" },
+                    { key: "colClosedBy", align: "left" },
+                    { key: "colExpectedCash", align: "right" },
+                    { key: "colDifference", align: "right" },
+                  ].map(({ key, align }) => (
+                    <th
+                      key={key}
+                      style={{
+                        padding: "9px 12px",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--color-ink-3)",
+                        background: "var(--color-stone)",
+                        textAlign: align as "left" | "right",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t(`femme.billing.cashHistory.${key}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((s) => {
+                  const diff = s.cashDifference !== null ? parseFloat(s.cashDifference) : null;
+                  return (
+                    <tr
+                      key={s.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedSessionId(s.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedSessionId(s.id);
+                        }
+                      }}
+                      style={{ borderTop: "var(--border-default)", cursor: "pointer" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLTableRowElement).style.background =
+                          "var(--color-rose-lt)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLTableRowElement).style.background = "";
+                      }}
+                    >
+                      <td style={{ padding: "10px 12px" }}>
+                        {formatParaguayDateTime(s.openedAt, dateLocale)}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        {s.closedAt ? (
+                          formatParaguayDateTime(s.closedAt, dateLocale)
+                        ) : (
+                          <Badge variant="success">
+                            {t("femme.billing.cashHistory.statusOpenBadge")}
+                          </Badge>
+                        )}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>{s.openedByEmail}</td>
+                      <td style={{ padding: "10px 12px" }}>{s.closedByEmail ?? "—"}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                        {formatAmountDecimal(s.expectedCashAmount)}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 12px",
+                          textAlign: "right",
+                          fontWeight: 500,
+                          color:
+                            diff !== null
+                              ? diff < 0
+                                ? "var(--color-danger)"
+                                : "var(--color-success)"
+                              : undefined,
+                        }}
+                      >
+                        {s.cashDifference !== null ? formatAmountDecimal(s.cashDifference) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div
+            data-testid="cash-history-pagination"
+            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-default)]"
+          >
+            <PageSizeSelect
+              value={pageSize}
+              onChange={(s) => {
+                setPageSize(s);
+                setPageNum(0);
+              }}
+              label={t("femme.pagination.rowsPerPage")}
+            />
+            <Text variant="small" className="text-[var(--color-ink-3)]">
+              {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: totalElements })}
+            </Text>
+            <Pagination
+              page={pageNum + 1}
+              pageCount={totalPages}
+              onPageChange={(p) => setPageNum(p - 1)}
+              previousLabel={t("femme.pagination.previous")}
+              nextLabel={t("femme.pagination.next")}
+            />
+          </div>
+        </div>
+      )}
+
+      {selectedSessionId !== null && (
+        <CashSessionDetailModal
+          sessionId={selectedSessionId}
+          onClose={() => setSelectedSessionId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── BillingPage ─────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
@@ -2941,7 +3283,7 @@ export default function BillingPage() {
   const navigate = useNavigate();
   const navState = location.state as
     | {
-        activeTab?: "session" | "invoice" | "history";
+        activeTab?: "session" | "invoice" | "history" | "cashHistory";
         selectedClient?: InitialClientForBilling;
         prefillServiceRecord?: PrefillServiceRecord;
       }
@@ -2949,11 +3291,12 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history">(
+  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history" | "cashHistory">(
     navState?.activeTab ?? "session",
   );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [cashHistoryRefresh, setCashHistoryRefresh] = useState(0);
   const [invoiceFormResetKey, setInvoiceFormResetKey] = useState(0);
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
@@ -2977,7 +3320,7 @@ export default function BillingPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await femmeJson<CashSession | undefined>("/api/cash-sessions/current");
+      const data = await fetchCurrentSession();
       setCurrentSession(data ?? null);
     } catch {
       setLoadError(t("femme.billing.loadError"));
@@ -3045,7 +3388,7 @@ export default function BillingPage() {
       )}
 
       <div data-tour="billing-session" style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.billing.title")}>
-        {(["session", "history"] as const).map((tabKey) => (
+        {(["session", "history", "cashHistory"] as const).map((tabKey) => (
           <button
             key={tabKey}
             type="button"
@@ -3055,6 +3398,7 @@ export default function BillingPage() {
             onClick={() => {
               setActiveTab(tabKey);
               if (tabKey === "history") setHistoryRefresh((k) => k + 1);
+              if (tabKey === "cashHistory") setCashHistoryRefresh((k) => k + 1);
             }}
           >
             {t(`femme.billing.tabs.${tabKey}`)}
@@ -3093,6 +3437,10 @@ export default function BillingPage() {
 
       <div hidden={activeTab !== "history"}>
         <InvoiceHistoryTab refreshTrigger={historyRefresh} />
+      </div>
+
+      <div hidden={activeTab !== "cashHistory"}>
+        <CashSessionHistoryTab refreshTrigger={cashHistoryRefresh} />
       </div>
     </div>
   );

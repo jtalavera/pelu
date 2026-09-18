@@ -789,7 +789,8 @@
         "statusVoided": "Anulado",
         "newInvoiceButton": "+ Nuevo comprobante",
         "loadingToday": "Cargando…",
-        "emptyToday": "Todavía no hay comprobantes hoy."
+        "emptyToday": "Todavía no hay comprobantes hoy.",
+        "liveExpectedCash": "Efectivo esperado (en vivo)"
       },
       "loading": "Cargando…",
       "loadError": "No se pudo cargar el estado de la caja.",
@@ -812,7 +813,8 @@
       "tabs": {
         "session": "Caja",
         "invoice": "Nuevo comprobante",
-        "history": "Historial"
+        "history": "Historial",
+        "cashHistory": "Historial de cajas"
       },
       "invoice": {
         "title": "Emitir comprobante",
@@ -1138,6 +1140,46 @@
         "closedTitle": "Cerrada",
         "closedAt": "Cerrada el",
         "closedBy": "Cerrada por"
+      },
+      "cashHistory": {
+        "title": "Historial de cajas",
+        "loading": "Cargando…",
+        "loadError": "No se pudo cargar el historial de cajas.",
+        "emptyState": "Todavía no hay cajas registradas.",
+        "colOpenedAt": "Abierta el",
+        "colClosedAt": "Cerrada el",
+        "colOpenedBy": "Abierta por",
+        "colClosedBy": "Cerrada por",
+        "colExpectedCash": "Efectivo esperado",
+        "colDifference": "Diferencia",
+        "statusOpenBadge": "Abierta",
+        "detailTitle": "Detalle de caja"
+      },
+      "movements": {
+        "title": "Movimientos de caja",
+        "emptyToday": "Todavía no hay movimientos registrados.",
+        "colTime": "Hora",
+        "colType": "Tipo",
+        "colAmount": "Monto",
+        "colReason": "Motivo",
+        "colCreatedBy": "Registrado por",
+        "typeManualIn": "Ingreso manual",
+        "typeManualOut": "Egreso manual",
+        "typeTipWithdrawal": "Retiro de propina",
+        "form": {
+          "title": "Registrar movimiento de caja",
+          "typeIngreso": "Ingreso",
+          "typeEgreso": "Egreso",
+          "amountLabel": "Monto",
+          "amountHint": "Ingresá el monto del movimiento (ej.: 20000).",
+          "amountInvalid": "Ingresá un monto válido mayor a 0.",
+          "reasonLabel": "Motivo",
+          "reasonHint": "Explicá brevemente el motivo del movimiento (máx. 500 caracteres).",
+          "reasonRequired": "Ingresá un motivo para este movimiento.",
+          "submit": "Agregar movimiento",
+          "submitting": "Agregando…",
+          "submitError": "No se pudo agregar el movimiento. Revisá los datos e intentá de nuevo."
+        }
       }
     },
     "clients": {
@@ -1400,6 +1442,10 @@
       "SIFEN_NUMBER_ALREADY_VOIDED": "La numeración de esta factura ya fue inutilizada ante SIFEN y no puede reutilizarse.",
       "SIFEN_KUDE_SAMPLE_ONLY_IN_TEST": "La muestra del KuDE estilo producción solo está disponible mientras la conexión con SIFEN usa el ambiente de prueba.",
       "CASH_SESSION_CLOSED_CANNOT_VOID": "No se puede anular un comprobante después del cierre de caja.",
+      "CASH_MOVEMENT_AMOUNT_INVALID": "Ingresá un monto válido mayor a 0.",
+      "CASH_MOVEMENT_REASON_REQUIRED": "Ingresá un motivo para este movimiento.",
+      "CASH_MOVEMENT_TYPE_INVALID": "Tipo de movimiento inválido.",
+      "CASH_SESSION_NOT_FOUND": "No se encontró la caja.",
       "APPOINTMENT_NOT_FOUND": "Turno no encontrado.",
       "APPOINTMENT_OVERLAP": "Este horario ya está ocupado para la profesional seleccionada. Por favor elija un horario diferente.",
       "APPOINTMENT_START_IN_PAST": "No se puede agendar un turno en el pasado. Elegí una fecha y hora futuras (ej.: mañana 09:00).",
