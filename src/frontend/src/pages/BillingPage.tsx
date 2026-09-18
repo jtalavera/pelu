@@ -3237,7 +3237,10 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
               </tbody>
             </table>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-default)]">
+          <div
+            data-testid="cash-history-pagination"
+            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-default)]"
+          >
             <PageSizeSelect
               value={pageSize}
               onChange={(s) => {

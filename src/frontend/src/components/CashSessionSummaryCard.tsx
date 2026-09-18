@@ -51,7 +51,9 @@ export function CashSessionSummaryCard({ detail }: { detail: CashSessionDetail }
               : "femme.billing.close.expectedCash",
           )}
         </span>
-        <span className="text-right">{formatAmountDecimal(detail.expectedCashAmount)}</span>
+        <span className="text-right" data-testid="cash-summary-expected-cash">
+          {formatAmountDecimal(detail.expectedCashAmount)}
+        </span>
         {detail.countedCashAmount !== null && (
           <>
             <span className="text-[rgb(var(--color-muted-foreground))]">
