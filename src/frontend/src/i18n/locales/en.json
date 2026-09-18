@@ -789,7 +789,8 @@
         "statusVoided": "Voided",
         "newInvoiceButton": "+ New invoice",
         "loadingToday": "Loading…",
-        "emptyToday": "No invoices yet today."
+        "emptyToday": "No invoices yet today.",
+        "liveExpectedCash": "Expected cash (live)"
       },
       "loading": "Loading…",
       "loadError": "Could not load cash register status.",
@@ -812,7 +813,8 @@
       "tabs": {
         "session": "Cash Register",
         "invoice": "New Invoice",
-        "history": "History"
+        "history": "History",
+        "cashHistory": "Cash Register History"
       },
       "invoice": {
         "title": "Issue Invoice",
@@ -1138,6 +1140,46 @@
         "closedTitle": "Closed",
         "closedAt": "Closed at",
         "closedBy": "Closed by"
+      },
+      "cashHistory": {
+        "title": "Cash register history",
+        "loading": "Loading…",
+        "loadError": "Could not load the cash register history.",
+        "emptyState": "No cash register sessions yet.",
+        "colOpenedAt": "Opened at",
+        "colClosedAt": "Closed at",
+        "colOpenedBy": "Opened by",
+        "colClosedBy": "Closed by",
+        "colExpectedCash": "Expected cash",
+        "colDifference": "Difference",
+        "statusOpenBadge": "Open",
+        "detailTitle": "Cash register detail"
+      },
+      "movements": {
+        "title": "Cash movements",
+        "emptyToday": "No cash movements recorded yet.",
+        "colTime": "Time",
+        "colType": "Type",
+        "colAmount": "Amount",
+        "colReason": "Reason",
+        "colCreatedBy": "Recorded by",
+        "typeManualIn": "Manual ingreso",
+        "typeManualOut": "Manual egreso",
+        "typeTipWithdrawal": "Tip withdrawal",
+        "form": {
+          "title": "Register a cash movement",
+          "typeIngreso": "Ingreso",
+          "typeEgreso": "Egreso",
+          "amountLabel": "Amount",
+          "amountHint": "Enter the movement amount (e.g. 20000).",
+          "amountInvalid": "Enter a valid amount greater than 0.",
+          "reasonLabel": "Reason",
+          "reasonHint": "Briefly explain the reason for this movement (max 500 characters).",
+          "reasonRequired": "Enter a reason for this movement.",
+          "submit": "Add movement",
+          "submitting": "Adding…",
+          "submitError": "Could not add the movement. Check your data and try again."
+        }
       }
     },
     "clients": {
@@ -1398,6 +1440,10 @@
       "SIFEN_NUMBER_ALREADY_VOIDED": "This invoice's number was already voided with SIFEN and can no longer be reused.",
       "SIFEN_KUDE_SAMPLE_ONLY_IN_TEST": "The production-style sample KuDE is only available while connected to SIFEN's test environment.",
       "CASH_SESSION_CLOSED_CANNOT_VOID": "Cannot void an invoice after the cash session is closed.",
+      "CASH_MOVEMENT_AMOUNT_INVALID": "Enter a valid amount greater than 0.",
+      "CASH_MOVEMENT_REASON_REQUIRED": "Enter a reason for this movement.",
+      "CASH_MOVEMENT_TYPE_INVALID": "Invalid movement type.",
+      "CASH_SESSION_NOT_FOUND": "Cash register session not found.",
       "PIN_ALREADY_IN_USE": "This PIN is already assigned to another professional in your business.",
       "INVALID_PIN_FORMAT": "PIN must be between 4 and 7 numeric digits.",
       "APPOINTMENT_NOT_FOUND": "Appointment not found.",
