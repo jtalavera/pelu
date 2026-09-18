@@ -553,6 +553,11 @@ resource "azurerm_container_app" "backend" {
         value = azurerm_servicebus_queue.sifen_submission.name
       }
 
+      env {
+        name  = "FEMME_REPORT_WARMUP_ENABLED"
+        value = tostring(var.backend_report_warmup_enabled)
+      }
+
       # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on
       # /health were previously used here, but Container Apps counts HTTP probe
       # traffic as container activity, which prevented scale-to-zero — the backend

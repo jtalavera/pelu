@@ -90,6 +90,12 @@ variable "backend_wake_schedule_enabled" {
   default     = false
 }
 
+variable "backend_report_warmup_enabled" {
+  description = "Whether the invoice-history report engine warms up (renders a throwaway xlsx/pdf) on startup. Disable on CPU-constrained, scale-to-zero environments to avoid the warmup thread starving the triggering cold-start request for CPU."
+  type        = bool
+  default     = true
+}
+
 variable "backend_wake_schedule_timezone" {
   description = "IANA timezone for the wake schedule cron expressions (e.g. 'America/Asuncion')."
   type        = string

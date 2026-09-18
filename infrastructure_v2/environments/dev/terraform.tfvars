@@ -19,6 +19,11 @@ entra_sql_admin_object_id = "53c652ae-0159-4a39-9a38-b7444c89156e"
 backend_min_replicas = 0
 backend_max_replicas = 1
 
+# Scale-to-zero + 0.25 vCPU means cold starts are triggered by the first real request; the
+# report-engine warmup thread would otherwise monopolize the single core and starve that
+# request for ~27s (observed in test — see InvoiceHistoryReportWarmup).
+backend_report_warmup_enabled = false
+
 # No redundancy for test — cheapest option; restore from PITR if needed.
 sql_backup_storage_redundancy = "Local"
 
