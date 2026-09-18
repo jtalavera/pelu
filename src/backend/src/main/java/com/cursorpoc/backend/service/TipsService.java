@@ -1,12 +1,16 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.AppUser;
+import com.cursorpoc.backend.domain.CashMovement;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecordTip;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TipWithdrawal;
+import com.cursorpoc.backend.domain.enums.CashMovementType;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.CashMovementRepository;
+import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ServiceRecordTipRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -40,18 +44,24 @@ public class TipsService {
   private final ProfessionalRepository professionalRepository;
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
+  private final CashSessionRepository cashSessionRepository;
+  private final CashMovementRepository cashMovementRepository;
 
   public TipsService(
       ServiceRecordTipRepository serviceRecordTipRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
       ProfessionalRepository professionalRepository,
       TenantRepository tenantRepository,
-      AppUserRepository appUserRepository) {
+      AppUserRepository appUserRepository,
+      CashSessionRepository cashSessionRepository,
+      CashMovementRepository cashMovementRepository) {
     this.serviceRecordTipRepository = serviceRecordTipRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
     this.professionalRepository = professionalRepository;
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
+    this.cashSessionRepository = cashSessionRepository;
+    this.cashMovementRepository = cashMovementRepository;
   }
 
   @Transactional(readOnly = true)
@@ -165,6 +175,21 @@ public class TipsService {
     withdrawal.setWithdrawnAt(Instant.now());
     withdrawal.setCreatedBy(createdBy);
     tipWithdrawalRepository.save(withdrawal);
+
+    cashSessionRepository
+        .findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(tenantId)
+        .ifPresent(
+            openSession -> {
+              CashMovement movement = new CashMovement();
+              movement.setTenant(tenant);
+              movement.setCashSession(openSession);
+              movement.setType(CashMovementType.TIP_WITHDRAWAL_OUT);
+              movement.setAmount(amount);
+              movement.setTipWithdrawalId(withdrawal.getId());
+              movement.setCreatedByUser(createdBy);
+              movement.setCreatedAt(Instant.now());
+              cashMovementRepository.save(movement);
+            });
 
     BigDecimal newBalance = balance.subtract(amount);
     return new CreateTipWithdrawalResponse(

@@ -2,11 +2,13 @@ package com.cursorpoc.backend.web.dto;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
-public record CashSessionCloseResponse(
+public record CashSessionDetailResponse(
     Long id,
     Long tenantId,
     Instant openedAt,
+    String openedByEmail,
     Instant closedAt,
     String closedByEmail,
     BigDecimal openingCashAmount,
@@ -15,7 +17,9 @@ public record CashSessionCloseResponse(
     BigDecimal cashDifference,
     BigDecimal totalInvoiced,
     int invoiceCount,
-    java.util.List<PaymentMethodSummary> paymentSummary) {
+    List<PaymentMethodSummary> paymentSummary,
+    List<CashMovementResponse> movements,
+    boolean isOpen) {
 
   public record PaymentMethodSummary(String method, BigDecimal total) {}
 }
