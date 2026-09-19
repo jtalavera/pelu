@@ -130,6 +130,10 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       timeout: 15_000,
     });
 
+    await page.getByRole("button", { name: "Register movement", exact: true }).click();
+    const movementDialog = page.getByRole("dialog", { name: "Register a cash movement" });
+    await expect(movementDialog).toBeVisible();
+
     const ingresoReason = `E2E ingreso ${Date.now()}`;
     await page.getByRole("button", { name: "Cash in", exact: true }).click();
     await setControlledInputValue(page.locator("#movement-amount"), "20000");
@@ -182,6 +186,8 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "Cash Register" }).click();
     await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Register movement", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Register a cash movement" })).toBeVisible();
 
     // AC6: blank amount is rejected client-side, no request is sent.
     await page.locator("#movement-reason").fill("Motivo válido");
@@ -207,7 +213,8 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     await page.getByRole("tab", { name: "Cash Register" }).click();
     await expect(page.getByText(/^Cash register is closed$/)).toBeVisible({ timeout: 15_000 });
 
-    // AC8: the manual-movement form isn't rendered when there is no open session.
+    // AC8: there's no way to open the manual-movement form when there is no open session.
+    await expect(page.getByRole("button", { name: "Register movement", exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Register a cash movement" })).toHaveCount(0);
 
     // AC9: a direct API call is rejected the same way close-session already is.
@@ -352,7 +359,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Sessions Log" }).click();
+    await page.getByRole("button", { name: "Cash Sessions Log", exact: true }).click();
 
     // AC1: the just-closed session is the most recent row (sorted newest-opened-first).
     const table = page.locator("table").filter({ hasText: "Opened at" });
@@ -375,7 +382,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Sessions Log" }).click();
+    await page.getByRole("button", { name: "Cash Sessions Log", exact: true }).click();
     await expect(page.getByText("Cash register history")).toBeVisible({ timeout: 15_000 });
 
     const pageSizeSelect = page.getByTestId("cash-history-pagination").getByLabel("Rows per page:");

@@ -790,7 +790,8 @@
         "newInvoiceButton": "+ Nuevo comprobante",
         "loadingToday": "Cargando…",
         "emptyToday": "Todavía no hay comprobantes hoy.",
-        "liveExpectedCash": "Efectivo esperado (en vivo)"
+        "liveExpectedCash": "Efectivo esperado (en vivo)",
+        "detailAccordionTitle": "Detalle de caja abierta"
       },
       "loading": "Cargando…",
       "loadError": "No se pudo cargar el estado de la caja.",
@@ -1168,6 +1169,7 @@
         "typeTipWithdrawal": "Retiro de propina",
         "form": {
           "title": "Registrar movimiento de caja",
+          "openButton": "Registrar movimiento",
           "typeIngreso": "Ingreso",
           "typeEgreso": "Egreso",
           "amountLabel": "Monto",

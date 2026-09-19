@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Accordion,
+  AccordionItem,
   Alert,
   Badge,
   Button,
@@ -11,6 +13,7 @@ import {
   Heading,
   Input,
   Label,
+  Modal,
   PageSizeSelect,
   Pagination,
   Select,
@@ -2228,6 +2231,7 @@ function CashSessionTab({
   const [movementReasonError, setMovementReasonError] = useState<string | null>(null);
   const [movementSubmitting, setMovementSubmitting] = useState(false);
   const [movementSubmitError, setMovementSubmitError] = useState<string | null>(null);
+  const [showMovementModal, setShowMovementModal] = useState(false);
 
   const loadLiveDetail = useCallback(async () => {
     if (!currentSession) {
@@ -2398,6 +2402,18 @@ function CashSessionTab({
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
+    whiteSpace: "nowrap",
+  };
+
+  const secondaryBtn: React.CSSProperties = {
+    background: "var(--color-stone)",
+    color: "var(--color-ink)",
+    border: "var(--border-default)",
+    borderRadius: "var(--radius-md)",
+    padding: "8px 16px",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
     whiteSpace: "nowrap",
   };
 
@@ -2588,6 +2604,17 @@ function CashSessionTab({
               </div>
             </div>
 
+            <Accordion style={{ marginBottom: 14 }}>
+              <AccordionItem title={t("femme.billing.session.detailAccordionTitle")} defaultOpen>
+                {liveDetailError && (
+                  <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                    {liveDetailError}
+                  </Alert>
+                )}
+                {liveDetail && <CashSessionSummaryCard detail={liveDetail} />}
+              </AccordionItem>
+            </Accordion>
+
             {!showCloseForm && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
@@ -2597,6 +2624,9 @@ function CashSessionTab({
                   onClick={onNewInvoice}
                 >
                   {t("femme.billing.session.newInvoiceButton")}
+                </button>
+                <button type="button" style={secondaryBtn} onClick={() => setShowMovementModal(true)}>
+                  {t("femme.billing.movements.form.openButton")}
                 </button>
                 <button type="button" style={destructiveSoft} onClick={() => setShowCloseForm(true)}>
                   {t("femme.billing.close.title")}
@@ -2658,27 +2688,11 @@ function CashSessionTab({
       </div>
 
       {currentSession && (
-        <div
-          style={{
-            background: "var(--color-white)",
-            borderRadius: "var(--radius-xl)",
-            border: "var(--border-default)",
-            padding: 16,
-            marginBottom: 14,
-          }}
+        <Modal
+          open={showMovementModal}
+          onClose={() => setShowMovementModal(false)}
+          title={t("femme.billing.movements.form.title")}
         >
-          <Heading as="h2" className="text-lg mb-3">
-            {t("femme.billing.movements.form.title")}
-          </Heading>
-
-          {liveDetailError && (
-            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-              {liveDetailError}
-            </Alert>
-          )}
-
-          {liveDetail && <CashSessionSummaryCard detail={liveDetail} />}
-
           {movementSubmitError && (
             <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
               {movementSubmitError}
@@ -2688,7 +2702,7 @@ function CashSessionTab({
           <form
             onSubmit={(e) => void handleCreateMovement(e)}
             noValidate
-            className="mt-4 flex flex-col gap-3"
+            className="flex flex-col gap-3"
           >
             <div className="flex gap-2">
               <button
@@ -2767,7 +2781,7 @@ function CashSessionTab({
               </Button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
 
       {showCloseForm && currentSession && (
@@ -3283,7 +3297,7 @@ export default function BillingPage() {
   const navigate = useNavigate();
   const navState = location.state as
     | {
-        activeTab?: "session" | "invoice" | "history" | "cashHistory";
+        activeTab?: "session" | "invoice" | "history";
         selectedClient?: InitialClientForBilling;
         prefillServiceRecord?: PrefillServiceRecord;
       }
@@ -3291,12 +3305,13 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history" | "cashHistory">(
+  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history">(
     navState?.activeTab ?? "session",
   );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [cashHistoryRefresh, setCashHistoryRefresh] = useState(0);
+  const [showCashHistoryModal, setShowCashHistoryModal] = useState(false);
   const [invoiceFormResetKey, setInvoiceFormResetKey] = useState(0);
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
@@ -3388,7 +3403,7 @@ export default function BillingPage() {
       )}
 
       <div data-tour="billing-session" style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.billing.title")}>
-        {(["session", "history", "cashHistory"] as const).map((tabKey) => (
+        {(["session", "history"] as const).map((tabKey) => (
           <button
             key={tabKey}
             type="button"
@@ -3398,7 +3413,6 @@ export default function BillingPage() {
             onClick={() => {
               setActiveTab(tabKey);
               if (tabKey === "history") setHistoryRefresh((k) => k + 1);
-              if (tabKey === "cashHistory") setCashHistoryRefresh((k) => k + 1);
             }}
           >
             {t(`femme.billing.tabs.${tabKey}`)}
@@ -3407,6 +3421,28 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "session"}>
+        <button
+          type="button"
+          onClick={() => {
+            setCashHistoryRefresh((k) => k + 1);
+            setShowCashHistoryModal(true);
+          }}
+          style={{
+            display: "inline-block",
+            background: "none",
+            border: "none",
+            padding: 0,
+            marginBottom: 14,
+            fontSize: 13,
+            fontWeight: 500,
+            color: "var(--color-rose-dk)",
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          {t("femme.billing.tabs.cashHistory")}
+        </button>
+
         <CashSessionTab
           currentSession={currentSession}
           onSessionChanged={() => void loadCurrentSession()}
@@ -3416,6 +3452,14 @@ export default function BillingPage() {
           }}
           refreshTrigger={invoiceListRefresh}
         />
+
+        <Modal
+          open={showCashHistoryModal}
+          onClose={() => setShowCashHistoryModal(false)}
+          className="max-w-4xl"
+        >
+          <CashSessionHistoryTab refreshTrigger={cashHistoryRefresh} />
+        </Modal>
       </div>
 
       <div hidden={activeTab !== "invoice"}>
@@ -3437,10 +3481,6 @@ export default function BillingPage() {
 
       <div hidden={activeTab !== "history"}>
         <InvoiceHistoryTab refreshTrigger={historyRefresh} />
-      </div>
-
-      <div hidden={activeTab !== "cashHistory"}>
-        <CashSessionHistoryTab refreshTrigger={cashHistoryRefresh} />
       </div>
     </div>
   );
