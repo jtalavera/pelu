@@ -9,6 +9,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
@@ -29,7 +30,17 @@ async function openNewInvoiceForm(page: Page) {
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 test.describe("Issue #181 · form hints + report", () => {
+  test.afterEach(async ({ request }) => {
+    // The issue-date legend and the client-email hint are SIFEN-only copy (see the SIFEN-off
+    // hiding spec) — restore the demo tenant's baseline (SIFEN off) so sibling specs aren't
+    // polluted.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+  });
+
   test("item 1 · form helper comments match the muted look & feel and carry the new copy", async ({
     page,
     request,
@@ -38,6 +49,8 @@ test.describe("Issue #181 · form hints + report", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // The issue-date legend and the client-email hint only render when SIFEN is enabled.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);

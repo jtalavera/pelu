@@ -111,6 +111,8 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // The email field only renders when SIFEN is enabled.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
 
     const stamp = Date.now();
     const nameWithEmail = `E2E 173 CON CORREO ${stamp}`;
@@ -145,6 +147,8 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // The email field only renders when SIFEN is enabled.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
     const seed = await seedCategoryServiceProfessional(request, token);
     const stamp = Date.now();
     const name = `E2E 173 WRITEBACK ${stamp}`;

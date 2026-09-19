@@ -22,6 +22,11 @@ vi.mock("../api/authHeaders", () => ({
   authHeaders: () => ({ Authorization: "Bearer test" }),
 }));
 
+let sifenEnabledFlag = true;
+vi.mock("../hooks/useFeatureFlags", () => ({
+  useFeatureFlag: (key: string) => (key === "SIFEN_ELECTRONIC_INVOICING" ? sifenEnabledFlag : false),
+}));
+
 function renderPage() {
   return render(
     <I18nextProvider i18n={i18n}>
@@ -49,6 +54,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
     void i18n.changeLanguage("en");
     femmeJson.mockReset();
     femmePostJson.mockReset();
+    sifenEnabledFlag = true;
   });
 
   describe("Cash register closed state", () => {
@@ -203,6 +209,20 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       const emailInput = document.querySelector("#billing-client-email");
       expect(emailInput).not.toBeNull();
       expect(emailInput?.getAttribute("type")).toBe("email");
+    });
+
+    it("hides the recipient email field and the issue-date legend when the SIFEN flag is off", async () => {
+      sifenEnabledFlag = false;
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      expect(document.querySelector("#billing-client-email")).toBeNull();
+      expect(document.querySelector("#billing-client-email-hint")).toBeNull();
+      expect(
+        screen.queryByText(
+          "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
+        ),
+      ).toBeNull();
     });
   });
 
