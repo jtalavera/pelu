@@ -2734,7 +2734,7 @@ function CashSessionTab({
           title={t("femme.billing.movements.form.title")}
         >
           {movementSubmitSuccess && (
-            <Alert variant="success" title={t("femme.billing.movements.form.submitSuccess")}>
+            <Alert variant="success" title={t("femme.billing.movements.form.submitSuccessTitle")}>
               {t("femme.billing.movements.form.submitSuccess")}
             </Alert>
           )}
@@ -2831,7 +2831,7 @@ function CashSessionTab({
                 className="min-h-11"
                 onClick={() => setShowMovementModal(false)}
               >
-                {t("femme.billing.history.detail.voidCancel")}
+                {t("femme.billing.movements.form.closeButton")}
               </Button>
             </div>
           </form>
@@ -3116,6 +3116,11 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const [sessionPage, setSessionPage] = useState<PageResponse<CashSessionListItem> | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null);
+  const [filterFrom, setFilterFrom] = useState(() => getDefaultInvoiceHistoryDateRange().from);
+  const [filterTo, setFilterTo] = useState(() => getDefaultInvoiceHistoryDateRange().to);
+  const [filterStatus, setFilterStatus] = useState<"" | "OPEN" | "CLOSED">("");
+  const [listTextQuery, setListTextQuery] = useState("");
   const [pageNum, setPageNum] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
@@ -3123,16 +3128,49 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadSessions = useCallback(
-    async (page: number, size: number) => {
+    async (
+      from: string,
+      to: string,
+      status: "" | "OPEN" | "CLOSED",
+      q: string,
+      page: number,
+      size: number,
+    ) => {
+      setLoadError(null);
+      setDateRangeError(null);
+      const rangeErr = invoiceHistoryRangeErrorKey(from, to);
+      if (rangeErr) {
+        setDateRangeError(
+          t(
+            `femme.billing.cashHistory.rangeError${rangeErr.charAt(0).toUpperCase()}${rangeErr.slice(1)}`,
+          ),
+        );
+        loadAbortRef.current?.abort();
+        loadAbortRef.current = null;
+        setSessionPage(null);
+        return;
+      }
       loadAbortRef.current?.abort();
       const controller = new AbortController();
       loadAbortRef.current = controller;
       setLoading(true);
-      setLoadError(null);
       try {
-        const data = await listCashSessionsPaged({ page, size }, controller.signal);
+        const data = await listCashSessionsPaged(
+          {
+            from: localDateYmdToIsoStart(from),
+            to: localDateYmdToIsoEnd(to),
+            status: status || undefined,
+            q: q || undefined,
+            page,
+            size,
+          },
+          controller.signal,
+        );
         if (controller.signal.aborted) return;
         setSessionPage(data);
+        if (data.totalPages > 0 && page > data.totalPages - 1) {
+          setPageNum(data.totalPages - 1);
+        }
       } catch (err) {
         if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
           return;
@@ -3153,12 +3191,12 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   useEffect(() => {
     if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     filterDebounceRef.current = setTimeout(() => {
-      void loadSessions(pageNum, pageSize);
+      void loadSessions(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
     }, 350);
     return () => {
       if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     };
-  }, [pageNum, pageSize, loadSessions]);
+  }, [filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, loadSessions]);
 
   const isFirstRefreshRef = useRef(true);
   useEffect(() => {
@@ -3166,9 +3204,26 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
       isFirstRefreshRef.current = false;
       return;
     }
-    void loadSessions(pageNum, pageSize);
+    void loadSessions(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]);
+
+  function handleClear() {
+    const d = getDefaultInvoiceHistoryDateRange();
+    setFilterFrom(d.from);
+    setFilterTo(d.to);
+    setFilterStatus("");
+    setListTextQuery("");
+    setDateRangeError(null);
+    setPageNum(0);
+  }
+
+  function handleFilterChange<T>(setter: (v: T) => void) {
+    return (v: T) => {
+      setter(v);
+      setPageNum(0);
+    };
+  }
 
   const sessions = sessionPage?.content ?? [];
   const totalElements = sessionPage?.totalElements ?? 0;
@@ -3182,6 +3237,71 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
         {t("femme.billing.cashHistory.title")}
       </Heading>
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <ListSearchField
+          id="cash-history-text-filter"
+          value={listTextQuery}
+          onChange={handleFilterChange(setListTextQuery)}
+          label={t("femme.listFilter.label")}
+          placeholder={t("femme.listFilter.placeholder")}
+          className="w-full min-w-0 sm:max-w-[min(100%,280px)]"
+        />
+        <form onSubmit={(e) => e.preventDefault()} className="flex flex-wrap gap-3 items-end" noValidate>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="cash-history-filter-from">{t("femme.billing.history.filterFrom")}</Label>
+            <Input
+              id="cash-history-filter-from"
+              type="date"
+              value={filterFrom}
+              onChange={(e) => handleFilterChange(setFilterFrom)(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="cash-history-filter-to">{t("femme.billing.history.filterTo")}</Label>
+            <Input
+              id="cash-history-filter-to"
+              type="date"
+              value={filterTo}
+              onChange={(e) => handleFilterChange(setFilterTo)(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="cash-history-filter-status">{t("femme.billing.history.filterStatus")}</Label>
+            <Select
+              id="cash-history-filter-status"
+              value={filterStatus}
+              onChange={(e) =>
+                handleFilterChange(setFilterStatus)(e.target.value as "" | "OPEN" | "CLOSED")
+              }
+            >
+              <option value="">{t("femme.billing.history.filterStatusAll")}</option>
+              <option value="OPEN">{t("femme.billing.cashHistory.filterStatusOpen")}</option>
+              <option value="CLOSED">{t("femme.billing.cashHistory.filterStatusClosed")}</option>
+            </Select>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={handleClear}>
+            {t("femme.billing.history.clearFilters")}
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() =>
+              void loadSessions(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize)
+            }
+            disabled={loading}
+          >
+            {t("femme.billing.history.refresh")}
+          </Button>
+        </form>
+      </div>
+
+      {dateRangeError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {dateRangeError}
+        </Alert>
+      )}
+
       {loadError && (
         <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
           {loadError}
@@ -3193,7 +3313,7 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
           <Spinner size="sm" />
           <Text>{t("femme.billing.cashHistory.loading")}</Text>
         </div>
-      ) : sessions.length === 0 ? (
+      ) : loadError || dateRangeError ? null : sessions.length === 0 ? (
         <Text variant="muted">{t("femme.billing.cashHistory.emptyState")}</Text>
       ) : (
         <div
@@ -3359,13 +3479,12 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history">(
+  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history" | "cashHistory">(
     navState?.activeTab ?? "session",
   );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [cashHistoryRefresh, setCashHistoryRefresh] = useState(0);
-  const [showCashHistoryModal, setShowCashHistoryModal] = useState(false);
   const [invoiceFormResetKey, setInvoiceFormResetKey] = useState(0);
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
@@ -3484,18 +3603,10 @@ export default function BillingPage() {
           }}
           onOpenCashHistory={() => {
             setCashHistoryRefresh((k) => k + 1);
-            setShowCashHistoryModal(true);
+            setActiveTab("cashHistory");
           }}
           refreshTrigger={invoiceListRefresh}
         />
-
-        <Modal
-          open={showCashHistoryModal}
-          onClose={() => setShowCashHistoryModal(false)}
-          className="max-w-4xl"
-        >
-          <CashSessionHistoryTab refreshTrigger={cashHistoryRefresh} />
-        </Modal>
       </div>
 
       <div hidden={activeTab !== "invoice"}>
@@ -3517,6 +3628,10 @@ export default function BillingPage() {
 
       <div hidden={activeTab !== "history"}>
         <InvoiceHistoryTab refreshTrigger={historyRefresh} />
+      </div>
+
+      <div hidden={activeTab !== "cashHistory"}>
+        <CashSessionHistoryTab refreshTrigger={cashHistoryRefresh} />
       </div>
     </div>
   );

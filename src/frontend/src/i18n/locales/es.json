@@ -1154,7 +1154,13 @@
         "colExpectedCash": "Efectivo esperado",
         "colDifference": "Diferencia",
         "statusOpenBadge": "Abierta",
-        "detailTitle": "Detalle de caja"
+        "statusClosedBadge": "Cerrada",
+        "detailTitle": "Detalle de caja",
+        "filterStatusOpen": "Abierta",
+        "filterStatusClosed": "Cerrada",
+        "rangeErrorIncomplete": "Elegí fecha desde y hasta.",
+        "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
+        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses."
       },
       "movements": {
         "title": "Movimientos de caja",
@@ -1170,6 +1176,7 @@
         "form": {
           "title": "Registrar movimiento de caja",
           "openButton": "Registrar movimiento",
+          "closeButton": "Cerrar",
           "typeIngreso": "Ingreso",
           "typeEgreso": "Egreso",
           "amountLabel": "Monto",
@@ -1181,6 +1188,7 @@
           "submit": "Agregar movimiento",
           "submitting": "Agregando…",
           "submitError": "No se pudo agregar el movimiento. Revisá los datos e intentá de nuevo.",
+          "submitSuccessTitle": "Listo",
           "submitSuccess": "Movimiento agregado correctamente."
         }
       }

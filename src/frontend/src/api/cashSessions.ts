@@ -86,6 +86,10 @@ export function getSessionDetail(sessionId: number): Promise<CashSessionDetail> 
 }
 
 export type ListCashSessionsParams = {
+  from?: string;
+  to?: string;
+  status?: "OPEN" | "CLOSED";
+  q?: string;
   page?: number;
   size?: number;
 };
@@ -95,6 +99,10 @@ export function listCashSessionsPaged(
   signal?: AbortSignal,
 ): Promise<PageResponse<CashSessionListItem>> {
   const qs = new URLSearchParams();
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  if (params.status) qs.set("status", params.status);
+  if (params.q) qs.set("q", params.q);
   if (params.page != null) qs.set("page", String(params.page));
   if (params.size != null) qs.set("size", String(params.size));
   return femmeJson<PageResponse<CashSessionListItem>>(`/api/cash-sessions?${qs.toString()}`, {

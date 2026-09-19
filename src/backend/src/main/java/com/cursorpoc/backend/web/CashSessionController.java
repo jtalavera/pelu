@@ -10,6 +10,7 @@ import com.cursorpoc.backend.web.dto.CashSessionOpenRequest;
 import com.cursorpoc.backend.web.dto.CashSessionResponse;
 import com.cursorpoc.backend.web.dto.PagedCashSessionsResponse;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -155,14 +156,21 @@ public class CashSessionController {
   @GetMapping
   public PagedCashSessionsResponse list(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(required = false) String from,
+      @RequestParam(required = false) String to,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String q,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size) {
     requirePrincipal(principal);
     log.info(
         "GET /api/cash-sessions tenantId={} page={} size={}", principal.getTenantId(), page, size);
+    Instant fromInstant = from != null ? Instant.parse(from) : null;
+    Instant toInstant = to != null ? Instant.parse(to) : null;
     try {
       PagedCashSessionsResponse response =
-          cashSessionService.listSessions(principal.getTenantId(), page, size);
+          cashSessionService.listSessions(
+              principal.getTenantId(), fromInstant, toInstant, status, q, page, size);
       log.info("GET /api/cash-sessions tenantId={} status=200", principal.getTenantId());
       return response;
     } catch (ResponseStatusException ex) {

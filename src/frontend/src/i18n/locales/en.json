@@ -1154,7 +1154,13 @@
         "colExpectedCash": "Expected cash",
         "colDifference": "Difference",
         "statusOpenBadge": "Open",
-        "detailTitle": "Cash register detail"
+        "statusClosedBadge": "Closed",
+        "detailTitle": "Cash register detail",
+        "filterStatusOpen": "Open",
+        "filterStatusClosed": "Closed",
+        "rangeErrorIncomplete": "Select both a start and end date.",
+        "rangeErrorInvalidOrder": "The start date must be before the end date.",
+        "rangeErrorTooOld": "The start date cannot be more than 6 months in the past."
       },
       "movements": {
         "title": "Cash movements",
@@ -1170,6 +1176,7 @@
         "form": {
           "title": "Register a cash movement",
           "openButton": "Register movement",
+          "closeButton": "Close",
           "typeIngreso": "Cash in",
           "typeEgreso": "Cash out",
           "amountLabel": "Amount",
@@ -1181,6 +1188,7 @@
           "submit": "Add movement",
           "submitting": "Adding…",
           "submitError": "Could not add the movement. Check your data and try again.",
+          "submitSuccessTitle": "Done",
           "submitSuccess": "Movement added successfully."
         }
       }
