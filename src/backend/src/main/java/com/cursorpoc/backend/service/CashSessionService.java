@@ -27,7 +27,6 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -164,11 +163,7 @@ public class CashSessionService {
 
   @Transactional(readOnly = true)
   public PagedCashSessionsResponse listSessions(long tenantId, int page, int size) {
-    Pageable pageable =
-        PageRequest.of(
-            Math.max(0, page),
-            Math.max(1, Math.min(size, 200)),
-            Sort.by(Sort.Order.desc("openedAt")));
+    Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 200)));
     Page<CashSession> result =
         cashSessionRepository.findByTenant_IdOrderByOpenedAtDesc(tenantId, pageable);
 
