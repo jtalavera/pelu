@@ -142,6 +142,8 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // The email field only renders when SIFEN is enabled.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
@@ -152,7 +154,6 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await page.getByLabel("Client name / business name").fill("MISION DIPLOMATICA");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("55000");
-    // Robust to a parallel sibling flipping SIFEN on (which makes the email mandatory).
     await page.locator("#billing-client-email").fill("e2e174-ac1@example.com");
 
     // No note while it's a normal receiver.
@@ -179,6 +180,8 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // The email field only renders when SIFEN is enabled.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
@@ -212,6 +215,8 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // The issue-date legend and the email field only render when SIFEN is enabled.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);

@@ -1651,9 +1651,11 @@ function NewInvoiceTab({
             </label>
           </div>
           <FieldValidationError id="billing-issue-date-err">{issueDateError}</FieldValidationError>
-          <Text variant="muted" className="mt-1 text-sm">
-            {t("femme.billing.invoice.issueDateLegend")}
-          </Text>
+          {sifenEnabled && (
+            <Text variant="muted" className="mt-1 text-sm">
+              {t("femme.billing.invoice.issueDateLegend")}
+            </Text>
+          )}
         </Card>
 
         {/* Client section */}
@@ -1680,37 +1682,39 @@ function NewInvoiceTab({
             label={t("femme.billing.invoice.clientSearchLabel")}
             placeholder={t("femme.billing.invoice.clientPlaceholder")}
           />
-          <div>
-            <Label htmlFor="billing-client-email">
-              {t("femme.billing.invoice.clientEmailLabel")}
-            </Label>
-            <Input
-              id="billing-client-email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={clientEmail}
-              onChange={(e) => {
-                setClientEmail(e.target.value);
-                setClientEmailError(null);
-              }}
-              placeholder={t("femme.billing.invoice.clientEmailPlaceholder")}
-              aria-invalid={clientEmailError ? true : undefined}
-              aria-describedby={
-                clientEmailError ? "billing-client-email-err" : "billing-client-email-hint"
-              }
-              className="mt-1 w-full"
-            />
-            {clientEmailError ? (
-              <FieldValidationError id="billing-client-email-err">
-                {clientEmailError}
-              </FieldValidationError>
-            ) : (
-              <Text id="billing-client-email-hint" variant="muted" className="mt-1 text-sm">
-                {t("femme.billing.invoice.clientEmailHint")}
-              </Text>
-            )}
-          </div>
+          {sifenEnabled && (
+            <div>
+              <Label htmlFor="billing-client-email">
+                {t("femme.billing.invoice.clientEmailLabel")}
+              </Label>
+              <Input
+                id="billing-client-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={clientEmail}
+                onChange={(e) => {
+                  setClientEmail(e.target.value);
+                  setClientEmailError(null);
+                }}
+                placeholder={t("femme.billing.invoice.clientEmailPlaceholder")}
+                aria-invalid={clientEmailError ? true : undefined}
+                aria-describedby={
+                  clientEmailError ? "billing-client-email-err" : "billing-client-email-hint"
+                }
+                className="mt-1 w-full"
+              />
+              {clientEmailError ? (
+                <FieldValidationError id="billing-client-email-err">
+                  {clientEmailError}
+                </FieldValidationError>
+              ) : (
+                <Text id="billing-client-email-hint" variant="muted" className="mt-1 text-sm">
+                  {t("femme.billing.invoice.clientEmailHint")}
+                </Text>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-4 border-t border-[rgb(var(--color-border))] pt-4">
             <label
               htmlFor="client-unnamed-invoice"
