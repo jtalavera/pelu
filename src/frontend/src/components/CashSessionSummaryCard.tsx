@@ -80,7 +80,7 @@ export function CashSessionSummaryCard({ detail }: { detail: CashSessionDetail }
       </div>
 
       {(detail.paymentSummary ?? []).length > 0 && (
-        <div>
+        <div className="pt-3" style={{ borderTop: "var(--border-default)" }}>
           <Text className="font-medium text-sm mb-1">
             {t("femme.billing.close.paymentBreakdown")}
           </Text>
@@ -95,7 +95,7 @@ export function CashSessionSummaryCard({ detail }: { detail: CashSessionDetail }
         </div>
       )}
 
-      <div>
+      <div className="pt-3" style={{ borderTop: "var(--border-default)" }}>
         <Text className="font-medium text-sm mb-1">{t("femme.billing.movements.title")}</Text>
         {(detail.movements ?? []).length === 0 ? (
           <Text variant="muted" className="text-sm">

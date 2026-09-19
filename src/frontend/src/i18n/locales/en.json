@@ -1155,6 +1155,7 @@
         "colDifference": "Difference",
         "statusOpenBadge": "Open",
         "statusClosedBadge": "Closed",
+        "backToCaja": "Back to Cash Register",
         "detailTitle": "Cash register detail",
         "filterStatusOpen": "Open",
         "filterStatusClosed": "Closed",
