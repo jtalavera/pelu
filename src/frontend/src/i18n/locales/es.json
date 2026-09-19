@@ -1189,7 +1189,6 @@
           "submit": "Agregar movimiento",
           "submitting": "Agregando…",
           "submitError": "No se pudo agregar el movimiento. Revisá los datos e intentá de nuevo.",
-          "submitSuccessTitle": "Listo",
           "submitSuccess": "Movimiento agregado correctamente."
         }
       }
