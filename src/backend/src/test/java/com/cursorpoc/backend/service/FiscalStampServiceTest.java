@@ -135,6 +135,94 @@ class FiscalStampServiceTest {
   }
 
   @Test
+  void update_allowsChangingEstablishmentWhenNoInvoices() {
+    FiscalStamp s = new FiscalStamp();
+    s.setId(3L);
+    s.setTenant(tenant);
+    s.setStampNumber("1");
+    s.setValidFrom(LocalDate.of(2025, 1, 1));
+    s.setValidUntil(LocalDate.of(2027, 1, 1));
+    s.setRangeFrom(1);
+    s.setRangeTo(100);
+    s.setNextEmissionNumber(5);
+    when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(1L, 3L)).thenReturn(false);
+
+    var req =
+        new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 5, 2, 3);
+    var dto = service.update(1L, 3L, req);
+
+    assertThat(dto.establishment()).isEqualTo(2);
+    assertThat(dto.expeditionPoint()).isEqualTo(3);
+  }
+
+  @Test
+  void update_rejectsChangingEstablishmentWhenInvoicesExist() {
+    FiscalStamp s = new FiscalStamp();
+    s.setId(3L);
+    s.setTenant(tenant);
+    s.setStampNumber("1");
+    s.setValidFrom(LocalDate.of(2025, 1, 1));
+    s.setValidUntil(LocalDate.of(2027, 1, 1));
+    s.setRangeFrom(1);
+    s.setRangeTo(100);
+    s.setNextEmissionNumber(5);
+    s.setEstablishment(1);
+    s.setExpeditionPoint(1);
+    when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(1L, 3L)).thenReturn(true);
+
+    var req =
+        new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 5, 2, 1);
+    assertThatThrownBy(() -> service.update(1L, 3L, req))
+        .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void update_allowsSameEstablishmentValueEvenWhenInvoicesExist() {
+    FiscalStamp s = new FiscalStamp();
+    s.setId(3L);
+    s.setTenant(tenant);
+    s.setStampNumber("1");
+    s.setValidFrom(LocalDate.of(2025, 1, 1));
+    s.setValidUntil(LocalDate.of(2027, 1, 1));
+    s.setRangeFrom(1);
+    s.setRangeTo(100);
+    s.setNextEmissionNumber(5);
+    s.setEstablishment(2);
+    s.setExpeditionPoint(3);
+    when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
+    when(invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(1L, 3L)).thenReturn(true);
+
+    var req =
+        new FiscalStampUpdateRequest(LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 5, 2, 3);
+    var dto = service.update(1L, 3L, req);
+
+    assertThat(dto.establishment()).isEqualTo(2);
+    assertThat(dto.expeditionPoint()).isEqualTo(3);
+  }
+
+  @Test
+  void update_rejectsExpeditionPointOutOfRange() {
+    FiscalStamp s = new FiscalStamp();
+    s.setId(3L);
+    s.setTenant(tenant);
+    s.setStampNumber("1");
+    s.setValidFrom(LocalDate.of(2025, 1, 1));
+    s.setValidUntil(LocalDate.of(2027, 1, 1));
+    s.setRangeFrom(1);
+    s.setRangeTo(100);
+    s.setNextEmissionNumber(5);
+    when(fiscalStampRepository.findById(3L)).thenReturn(Optional.of(s));
+
+    var req =
+        new FiscalStampUpdateRequest(
+            LocalDate.of(2025, 1, 1), LocalDate.of(2027, 1, 1), 5, 1, 1000);
+    assertThatThrownBy(() -> service.update(1L, 3L, req))
+        .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
   void activate_setsOnlyOneActive() {
     FiscalStamp a = stamp(1L, false);
     FiscalStamp b = stamp(2L, false);

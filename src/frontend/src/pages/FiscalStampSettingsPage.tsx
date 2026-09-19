@@ -23,6 +23,8 @@ type FiscalStampRow = {
   nextEmissionNumber: number;
   active: boolean;
   lockedAfterInvoice: boolean;
+  establishment: number;
+  expeditionPoint: number;
   hasInvoices: boolean;
 };
 
@@ -31,6 +33,13 @@ function parsePositiveInt(raw: string): number | null {
   if (!/^\d+$/.test(t)) return null;
   const n = Number(t);
   if (!Number.isSafeInteger(n) || n < 0) return null;
+  return n;
+}
+
+/** SIFEN establecimiento/punto de expedición occupy 3 digits in the CDC (0-999). */
+function parseSifenField(raw: string): number | null {
+  const n = parsePositiveInt(raw);
+  if (n === null || n > 999) return null;
   return n;
 }
 
@@ -123,6 +132,8 @@ export default function FiscalStampSettingsPage() {
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [initialEmission, setInitialEmission] = useState("");
+  const [establishment, setEstablishment] = useState("");
+  const [expeditionPoint, setExpeditionPoint] = useState("");
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
   const [focusField, setFocusField] = useState<string | null>(null);
@@ -131,6 +142,8 @@ export default function FiscalStampSettingsPage() {
   const [editValidFrom, setEditValidFrom] = useState("");
   const [editValidUntil, setEditValidUntil] = useState("");
   const [editStartingEmission, setEditStartingEmission] = useState("");
+  const [editEstablishment, setEditEstablishment] = useState("");
+  const [editExpeditionPoint, setEditExpeditionPoint] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [stampListQuery, setStampListQuery] = useState("");
 
@@ -184,6 +197,12 @@ export default function FiscalStampSettingsPage() {
         });
       }
     }
+    if (establishment.trim() !== "" && parseSifenField(establishment) === null) {
+      err.establishment = t("femme.fiscalStamp.sifenFieldInvalid");
+    }
+    if (expeditionPoint.trim() !== "" && parseSifenField(expeditionPoint) === null) {
+      err.expeditionPoint = t("femme.fiscalStamp.sifenFieldInvalid");
+    }
     return err;
   }
 
@@ -197,6 +216,8 @@ export default function FiscalStampSettingsPage() {
     const rf = parsePositiveInt(rangeFrom)!;
     const rt = parsePositiveInt(rangeTo)!;
     const ie = parsePositiveInt(initialEmission)!;
+    const est = establishment.trim() === "" ? undefined : parseSifenField(establishment)!;
+    const exp = expeditionPoint.trim() === "" ? undefined : parseSifenField(expeditionPoint)!;
 
     setCreating(true);
     setSaveError(null);
@@ -208,6 +229,8 @@ export default function FiscalStampSettingsPage() {
         rangeFrom: rf,
         rangeTo: rt,
         initialEmissionNumber: ie,
+        establishment: est,
+        expeditionPoint: exp,
       });
       setSuccessMessage(t("femme.fiscalStamp.savedBody"));
       setStampNumber("");
@@ -216,6 +239,8 @@ export default function FiscalStampSettingsPage() {
       setRangeFrom("");
       setRangeTo("");
       setInitialEmission("");
+      setEstablishment("");
+      setExpeditionPoint("");
       await load();
     } catch (err) {
       setSaveError(translateApiError(err, t, "femme.fiscalStamp.saveError"));
@@ -271,10 +296,14 @@ export default function FiscalStampSettingsPage() {
     setEditValidFrom(row.validFrom);
     setEditValidUntil(row.validUntil);
     setEditStartingEmission(String(row.nextEmissionNumber));
+    setEditEstablishment(String(row.establishment));
+    setEditExpeditionPoint(String(row.expeditionPoint));
     setSaveError(null);
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next.editStartingEmission;
+      delete next.editEstablishment;
+      delete next.editExpeditionPoint;
       return next;
     });
   }
@@ -300,6 +329,15 @@ export default function FiscalStampSettingsPage() {
     } else if (row && row.lockedAfterInvoice && nextN < row.nextEmissionNumber) {
       err.editStartingEmission = t("femme.fiscalStamp.cannotMoveBackwardLocked");
     }
+    const canEditEstablishment = !!row && !row.hasInvoices;
+    const est = canEditEstablishment ? parseSifenField(editEstablishment) : row!.establishment;
+    const exp = canEditEstablishment ? parseSifenField(editExpeditionPoint) : row!.expeditionPoint;
+    if (canEditEstablishment && est === null) {
+      err.editEstablishment = t("femme.fiscalStamp.sifenFieldInvalid");
+    }
+    if (canEditEstablishment && exp === null) {
+      err.editExpeditionPoint = t("femme.fiscalStamp.sifenFieldInvalid");
+    }
     setFieldErrors((prev) => ({ ...prev, ...err }));
     if (Object.keys(err).length > 0) return;
 
@@ -310,6 +348,8 @@ export default function FiscalStampSettingsPage() {
         validFrom: editValidFrom,
         validUntil: editValidUntil,
         nextEmissionNumber: nextN!,
+        establishment: est,
+        expeditionPoint: exp,
       });
       setSuccessMessage(t("femme.fiscalStamp.savedBody"));
       closeEdit();
@@ -432,6 +472,8 @@ export default function FiscalStampSettingsPage() {
                     <th style={thStyle}>{t("femme.fiscalStamp.tableRangeFrom")}</th>
                     <th style={thStyle}>{t("femme.fiscalStamp.tableRangeTo")}</th>
                     <th style={thStyle}>{t("femme.fiscalStamp.tableNextEmission")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableEstablishment")}</th>
+                    <th style={thStyle}>{t("femme.fiscalStamp.tableExpeditionPoint")}</th>
                     <th style={thStyle}>{t("femme.fiscalStamp.tableActions")}</th>
                   </tr>
                 </thead>
@@ -439,7 +481,7 @@ export default function FiscalStampSettingsPage() {
                   {filteredRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={10}
                         style={{ padding: "24px 12px", textAlign: "center", fontSize: 12, color: "var(--color-ink-3)" }}
                       >
                         {t("femme.listFilter.noMatches")}
@@ -465,6 +507,8 @@ export default function FiscalStampSettingsPage() {
                           <td style={tdStyle}>{row.rangeFrom}</td>
                           <td style={tdStyle}>{row.rangeTo}</td>
                           <td style={tdStyle}>{row.nextEmissionNumber}</td>
+                          <td style={tdStyle}>{String(row.establishment).padStart(3, "0")}</td>
+                          <td style={tdStyle}>{String(row.expeditionPoint).padStart(3, "0")}</td>
                           <td style={tdStyle}>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                               <Button
@@ -657,6 +701,54 @@ export default function FiscalStampSettingsPage() {
             {t("femme.fiscalStamp.initialEmissionHintLegacy")}
           </p>
         </div>
+        <div>
+          <label htmlFor="fs-est" style={labelStyle}>
+            {t("femme.fiscalStamp.establishment")}
+          </label>
+          <input
+            id="fs-est"
+            inputMode="numeric"
+            value={establishment}
+            onChange={(e) => {
+              setEstablishment(e.target.value);
+              clearCreateErrors();
+            }}
+            placeholder="1"
+            aria-invalid={!!fieldErrors.establishment}
+            aria-describedby={fieldErrors.establishment ? "fs-est-err" : "fs-est-hint"}
+            onFocus={() => setFocusField("fs-est")}
+            onBlur={() => setFocusField(null)}
+            style={buildInputStyle(!!fieldErrors.establishment, focusField === "fs-est")}
+          />
+          <FieldValidationError id="fs-est-err">{fieldErrors.establishment}</FieldValidationError>
+          <p id="fs-est-hint" style={hintStyle}>
+            {t("femme.fiscalStamp.establishmentHint")}
+          </p>
+        </div>
+        <div>
+          <label htmlFor="fs-exp" style={labelStyle}>
+            {t("femme.fiscalStamp.expeditionPoint")}
+          </label>
+          <input
+            id="fs-exp"
+            inputMode="numeric"
+            value={expeditionPoint}
+            onChange={(e) => {
+              setExpeditionPoint(e.target.value);
+              clearCreateErrors();
+            }}
+            placeholder="1"
+            aria-invalid={!!fieldErrors.expeditionPoint}
+            aria-describedby={fieldErrors.expeditionPoint ? "fs-exp-err" : "fs-exp-hint"}
+            onFocus={() => setFocusField("fs-exp")}
+            onBlur={() => setFocusField(null)}
+            style={buildInputStyle(!!fieldErrors.expeditionPoint, focusField === "fs-exp")}
+          />
+          <FieldValidationError id="fs-exp-err">{fieldErrors.expeditionPoint}</FieldValidationError>
+          <p id="fs-exp-hint" style={hintStyle}>
+            {t("femme.fiscalStamp.expeditionPointHint")}
+          </p>
+        </div>
         <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
           <button type="submit" style={primaryBtn} disabled={creating}>
             {creating ? t("femme.fiscalStamp.saving") : t("femme.fiscalStamp.add")}
@@ -707,6 +799,60 @@ export default function FiscalStampSettingsPage() {
                     {editingRow?.lockedAfterInvoice
                       ? t("femme.fiscalStamp.initialEmissionHintLocked")
                       : t("femme.fiscalStamp.initialEmissionHint")}
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <Label htmlFor="edit-establishment">{t("femme.fiscalStamp.establishment")}</Label>
+                <Input
+                  id="edit-establishment"
+                  inputMode="numeric"
+                  value={editEstablishment}
+                  onChange={(e) => setEditEstablishment(e.target.value)}
+                  disabled={!!editingRow?.hasInvoices}
+                  className="mt-1 w-full"
+                  aria-invalid={!!fieldErrors.editEstablishment}
+                  aria-describedby={
+                    fieldErrors.editEstablishment ? "edit-establishment-err" : "edit-establishment-hint"
+                  }
+                />
+                <FieldValidationError id="edit-establishment-err">
+                  {fieldErrors.editEstablishment}
+                </FieldValidationError>
+                {!fieldErrors.editEstablishment ? (
+                  <p id="edit-establishment-hint" style={hintStyle}>
+                    {editingRow?.hasInvoices
+                      ? t("femme.fiscalStamp.establishmentEditLockedHint")
+                      : t("femme.fiscalStamp.establishmentHint")}
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <Label htmlFor="edit-expedition-point">
+                  {t("femme.fiscalStamp.expeditionPoint")}
+                </Label>
+                <Input
+                  id="edit-expedition-point"
+                  inputMode="numeric"
+                  value={editExpeditionPoint}
+                  onChange={(e) => setEditExpeditionPoint(e.target.value)}
+                  disabled={!!editingRow?.hasInvoices}
+                  className="mt-1 w-full"
+                  aria-invalid={!!fieldErrors.editExpeditionPoint}
+                  aria-describedby={
+                    fieldErrors.editExpeditionPoint
+                      ? "edit-expedition-point-err"
+                      : "edit-expedition-point-hint"
+                  }
+                />
+                <FieldValidationError id="edit-expedition-point-err">
+                  {fieldErrors.editExpeditionPoint}
+                </FieldValidationError>
+                {!fieldErrors.editExpeditionPoint ? (
+                  <p id="edit-expedition-point-hint" style={hintStyle}>
+                    {editingRow?.hasInvoices
+                      ? t("femme.fiscalStamp.establishmentEditLockedHint")
+                      : t("femme.fiscalStamp.expeditionPointHint")}
                   </p>
                 ) : null}
               </div>

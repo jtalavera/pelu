@@ -97,10 +97,27 @@ public class FiscalStampService {
         && request.nextEmissionNumber() < stamp.getNextEmissionNumber()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
     }
+    int establishment = validateSifenCdcField(request.establishment(), "INVALID_ESTABLISHMENT");
+    int expeditionPoint =
+        validateSifenCdcField(request.expeditionPoint(), "INVALID_EXPEDITION_POINT");
+    // The CDC (SIFEN control code) of an already-issued invoice is generated once and frozen, but
+    // the KuDE/XML re-read establishment/expeditionPoint live off this stamp every time they're
+    // rendered. Changing either value once an invoice exists would make that invoice's printed
+    // dEst/dPunExp diverge from what's already baked into its own CDC — so, like delete(), this is
+    // only allowed while the stamp has never been used to issue an invoice.
+    boolean hasInvoices = hasInvoices(tenantId, id);
+    if (hasInvoices
+        && (establishment != stamp.getEstablishment()
+            || expeditionPoint != stamp.getExpeditionPoint())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "FISCAL_STAMP_ESTABLISHMENT_LOCKED");
+    }
     stamp.setValidFrom(request.validFrom());
     stamp.setValidUntil(request.validUntil());
     stamp.setNextEmissionNumber(request.nextEmissionNumber());
-    return toDto(stamp, hasInvoices(tenantId, id));
+    stamp.setEstablishment(establishment);
+    stamp.setExpeditionPoint(expeditionPoint);
+    return toDto(stamp, hasInvoices);
   }
 
   @Transactional

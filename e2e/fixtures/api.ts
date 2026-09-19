@@ -306,6 +306,9 @@ export type FiscalStampDto = {
   nextEmissionNumber: number;
   active: boolean;
   lockedAfterInvoice: boolean;
+  establishment: number;
+  expeditionPoint: number;
+  hasInvoices: boolean;
 };
 
 export async function listFiscalStamps(
