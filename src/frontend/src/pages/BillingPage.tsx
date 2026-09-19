@@ -810,6 +810,7 @@ type PrefillServiceRecord = {
 
 function NewInvoiceTab({
   onIssued,
+  onBack,
   initialClient,
   onInitialClientConsumed,
   initialPrefillServiceRecord,
@@ -817,6 +818,7 @@ function NewInvoiceTab({
   resetKey,
 }: {
   onIssued: () => void;
+  onBack: () => void;
   initialClient?: InitialClientForBilling | null;
   onInitialClientConsumed?: () => void;
   initialPrefillServiceRecord?: PrefillServiceRecord | null;
@@ -1553,6 +1555,10 @@ function NewInvoiceTab({
 
   return (
     <div className="flex flex-col gap-6">
+      <Button type="button" variant="ghost" onClick={onBack} className="self-start">
+        ← {t("femme.billing.cashHistory.backToCaja")}
+      </Button>
+
       <Heading as="h2" className="text-lg">
         {t("femme.billing.invoice.title")}
       </Heading>
@@ -3625,6 +3631,7 @@ export default function BillingPage() {
             onIssued={() => {
               setInvoiceListRefresh((k) => k + 1);
             }}
+            onBack={() => setActiveTab("session")}
             initialClient={pendingInitialClient}
             onInitialClientConsumed={() => setPendingInitialClient(null)}
             initialPrefillServiceRecord={pendingPrefillServiceRecord}
