@@ -1180,7 +1180,8 @@
           "reasonRequired": "Ingresá un motivo para este movimiento.",
           "submit": "Agregar movimiento",
           "submitting": "Agregando…",
-          "submitError": "No se pudo agregar el movimiento. Revisá los datos e intentá de nuevo."
+          "submitError": "No se pudo agregar el movimiento. Revisá los datos e intentá de nuevo.",
+          "submitSuccess": "Movimiento agregado correctamente."
         }
       }
     },
