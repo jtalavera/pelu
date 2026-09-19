@@ -1189,7 +1189,6 @@
           "submit": "Add movement",
           "submitting": "Adding…",
           "submitError": "Could not add the movement. Check your data and try again.",
-          "submitSuccessTitle": "Done",
           "submitSuccess": "Movement added successfully."
         }
       }

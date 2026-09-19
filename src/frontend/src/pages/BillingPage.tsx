@@ -2734,7 +2734,7 @@ function CashSessionTab({
           title={t("femme.billing.movements.form.title")}
         >
           {movementSubmitSuccess && (
-            <Alert variant="success" title={t("femme.billing.movements.form.submitSuccessTitle")}>
+            <Alert variant="success" className="mb-3 py-2">
               {t("femme.billing.movements.form.submitSuccess")}
             </Alert>
           )}
