@@ -27,6 +27,32 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await expect(page.getByLabel("Number from", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Number to", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Starting invoice number", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Establishment", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Expedition point", { exact: true })).toBeVisible();
+  });
+
+  test("HU-02b · 10 crear timbrado con establecimiento/punto de expedición custom", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/settings/fiscal-stamp");
+    const stampNumber = `2${Date.now().toString().slice(-7)}`;
+    await page.getByLabel("Stamp number", { exact: true }).fill(stampNumber);
+    const today = new Date();
+    const nextYear = new Date(today);
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
+    await page.getByLabel("Validity start", { exact: true }).fill(isoDateLocal(today));
+    await page.getByLabel("Validity end", { exact: true }).fill(isoDateLocal(nextYear));
+    await page.getByLabel("Number from", { exact: true }).fill("8000000");
+    await page.getByLabel("Number to", { exact: true }).fill("8000100");
+    await page.getByLabel("Starting invoice number", { exact: true }).fill("8000000");
+    await page.getByLabel("Establishment", { exact: true }).fill("2");
+    await page.getByLabel("Expedition point", { exact: true }).fill("3");
+    await page.getByRole("button", { name: "Add stamp" }).click();
+    await expect(page.getByText(stampNumber).first()).toBeVisible();
+    const tableRow = page.locator("tr", { hasText: stampNumber });
+    await expect(tableRow.getByText("002", { exact: true })).toBeVisible();
+    await expect(tableRow.getByText("003", { exact: true })).toBeVisible();
   });
 
   test("HU-02b · 3 número inicial fuera del rango muestra error", async ({ page }) => {
@@ -128,7 +154,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     ).toBeVisible();
   });
 
-  test("HU-02b · 8 botón Edit stamp solo permite cambiar Starting invoice number", async ({
+  test("HU-02b · 8 botón Edit stamp: sin facturas se puede cambiar Starting invoice number, establecimiento y punto de expedición", async ({
     page,
     request,
   }) => {
@@ -152,6 +178,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     expect(row).toBeTruthy();
     expect(row!.active).toBe(true);
     expect(row!.lockedAfterInvoice).toBe(false);
+    expect(row!.hasInvoices).toBe(false);
 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
@@ -167,6 +194,20 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await expect(dlg.getByLabel(/Validity start|Inicio de vigencia/)).toHaveCount(0);
     await expect(dlg.getByLabel(/Validity end|Fin de vigencia/)).toHaveCount(0);
     await expect(dlg.getByLabel(/Stamp number|Número de timbrado/)).toHaveCount(0);
+
+    const establishmentInput = dlg.getByLabel(/^Establishment$|^Establecimiento$/);
+    const expeditionInput = dlg.getByLabel(/Expedition point|Punto de expedición/);
+    await expect(establishmentInput).toBeEditable();
+    await expect(expeditionInput).toBeEditable();
+    await establishmentInput.fill("5");
+    await expeditionInput.fill("6");
+    await dlg.getByRole("button", { name: /^(Save|Guardar)$/ }).click();
+    await expect(dlg).toHaveCount(0);
+
+    const afterEdit = await listFiscalStamps(request, token);
+    const editedRow = afterEdit.find((s) => s.stampNumber === stampNumber);
+    expect(editedRow!.establishment).toBe(5);
+    expect(editedRow!.expeditionPoint).toBe(6);
   });
 
   test("HU-02b · 9 timbrado bloqueado: se puede avanzar el número de inicio, pero no retrocederlo", async ({
@@ -214,6 +255,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     const lockedRow = afterInvoice.find((s) => s.stampNumber === stampNumber);
     expect(lockedRow).toBeTruthy();
     expect(lockedRow!.lockedAfterInvoice).toBe(true);
+    expect(lockedRow!.hasInvoices).toBe(true);
 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
@@ -226,6 +268,13 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     const dlg = page.getByRole("dialog");
     const startInput = dlg.getByLabel(/Starting invoice number|Número de inicio de emisión/);
     await expect(startInput).toBeVisible();
+
+    // Establishment/expedition point are frozen once the stamp has been used on an invoice — see
+    // FiscalStampService.update() (FISCAL_STAMP_ESTABLISHMENT_LOCKED).
+    const establishmentInput = dlg.getByLabel(/^Establishment$|^Establecimiento$/);
+    const expeditionInput = dlg.getByLabel(/Expedition point|Punto de expedición/);
+    await expect(establishmentInput).toBeDisabled();
+    await expect(expeditionInput).toBeDisabled();
 
     // Backward move is rejected client-side, without a round trip to the backend.
     await startInput.fill(String(lockedRow!.nextEmissionNumber - 1));
