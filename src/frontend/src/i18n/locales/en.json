@@ -1180,7 +1180,8 @@
           "reasonRequired": "Enter a reason for this movement.",
           "submit": "Add movement",
           "submitting": "Adding…",
-          "submitError": "Could not add the movement. Check your data and try again."
+          "submitError": "Could not add the movement. Check your data and try again.",
+          "submitSuccess": "Movement added successfully."
         }
       }
     },

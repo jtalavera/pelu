@@ -2196,11 +2196,13 @@ function CashSessionTab({
   currentSession,
   onSessionChanged,
   onNewInvoice,
+  onOpenCashHistory,
   refreshTrigger,
 }: {
   currentSession: CashSession | null;
   onSessionChanged: () => void;
   onNewInvoice: () => void;
+  onOpenCashHistory: () => void;
   refreshTrigger: number;
 }) {
   const { t } = useTranslation();
@@ -2231,6 +2233,7 @@ function CashSessionTab({
   const [movementReasonError, setMovementReasonError] = useState<string | null>(null);
   const [movementSubmitting, setMovementSubmitting] = useState(false);
   const [movementSubmitError, setMovementSubmitError] = useState<string | null>(null);
+  const [movementSubmitSuccess, setMovementSubmitSuccess] = useState(false);
   const [showMovementModal, setShowMovementModal] = useState(false);
 
   const loadLiveDetail = useCallback(async () => {
@@ -2255,6 +2258,7 @@ function CashSessionTab({
   async function handleCreateMovement(e: React.FormEvent) {
     e.preventDefault();
     setMovementSubmitError(null);
+    setMovementSubmitSuccess(false);
     let hasError = false;
     if (moneyDigitsOnly(movementAmount) === "" || parseMaskedMoney(movementAmount) <= 0) {
       setMovementAmountError(t("femme.billing.movements.form.amountInvalid"));
@@ -2279,6 +2283,7 @@ function CashSessionTab({
       });
       setMovementAmount("");
       setMovementReason("");
+      setMovementSubmitSuccess(true);
       await loadLiveDetail();
     } catch (err) {
       setMovementSubmitError(translateApiError(err, t, "femme.billing.movements.form.submitError"));
@@ -2505,25 +2510,52 @@ function CashSessionTab({
           marginBottom: 14,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-          <span
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            marginBottom: 14,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: currentSession ? "var(--color-success)" : "var(--color-ink-3)",
+              }}
+              aria-hidden
+            />
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: currentSession ? "var(--color-success)" : "var(--color-ink-2)",
+              }}
+            >
+              {currentSession ? t("femme.billing.sessionOpen") : t("femme.billing.sessionClosed")}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenCashHistory}
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: currentSession ? "var(--color-success)" : "var(--color-ink-3)",
-            }}
-            aria-hidden
-          />
-          <span
-            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
               fontSize: 13,
               fontWeight: 500,
-              color: currentSession ? "var(--color-success)" : "var(--color-ink-2)",
+              color: "var(--color-rose-dk)",
+              textDecoration: "underline",
+              cursor: "pointer",
             }}
           >
-            {currentSession ? t("femme.billing.sessionOpen") : t("femme.billing.sessionClosed")}
-          </span>
+            {t("femme.billing.tabs.cashHistory")}
+          </button>
         </div>
 
         {currentSession ? (
@@ -2625,7 +2657,15 @@ function CashSessionTab({
                 >
                   {t("femme.billing.session.newInvoiceButton")}
                 </button>
-                <button type="button" style={secondaryBtn} onClick={() => setShowMovementModal(true)}>
+                <button
+                  type="button"
+                  style={secondaryBtn}
+                  onClick={() => {
+                    setMovementSubmitError(null);
+                    setMovementSubmitSuccess(false);
+                    setShowMovementModal(true);
+                  }}
+                >
                   {t("femme.billing.movements.form.openButton")}
                 </button>
                 <button type="button" style={destructiveSoft} onClick={() => setShowCloseForm(true)}>
@@ -2693,6 +2733,12 @@ function CashSessionTab({
           onClose={() => setShowMovementModal(false)}
           title={t("femme.billing.movements.form.title")}
         >
+          {movementSubmitSuccess && (
+            <Alert variant="success" title={t("femme.billing.movements.form.submitSuccess")}>
+              {t("femme.billing.movements.form.submitSuccess")}
+            </Alert>
+          )}
+
           {movementSubmitError && (
             <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
               {movementSubmitError}
@@ -2773,11 +2819,19 @@ function CashSessionTab({
                 {t("femme.billing.movements.form.reasonHint")}
               </Text>
             </div>
-            <div>
+            <div className="flex gap-3">
               <Button type="submit" variant="primary" className="min-h-11" disabled={movementSubmitting}>
                 {movementSubmitting
                   ? t("femme.billing.movements.form.submitting")
                   : t("femme.billing.movements.form.submit")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                onClick={() => setShowMovementModal(false)}
+              >
+                {t("femme.billing.history.detail.voidCancel")}
               </Button>
             </div>
           </form>
@@ -3421,34 +3475,16 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "session"}>
-        <button
-          type="button"
-          onClick={() => {
-            setCashHistoryRefresh((k) => k + 1);
-            setShowCashHistoryModal(true);
-          }}
-          style={{
-            display: "inline-block",
-            background: "none",
-            border: "none",
-            padding: 0,
-            marginBottom: 14,
-            fontSize: 13,
-            fontWeight: 500,
-            color: "var(--color-rose-dk)",
-            textDecoration: "underline",
-            cursor: "pointer",
-          }}
-        >
-          {t("femme.billing.tabs.cashHistory")}
-        </button>
-
         <CashSessionTab
           currentSession={currentSession}
           onSessionChanged={() => void loadCurrentSession()}
           onNewInvoice={() => {
             setInvoiceFormResetKey((k) => k + 1);
             setActiveTab("invoice");
+          }}
+          onOpenCashHistory={() => {
+            setCashHistoryRefresh((k) => k + 1);
+            setShowCashHistoryModal(true);
           }}
           refreshTrigger={invoiceListRefresh}
         />
