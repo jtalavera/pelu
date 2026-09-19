@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Modal, Spinner, Text } from "@design-system";
+import { Alert, Badge, Button, Modal, Spinner, Text } from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { getSessionDetail, type CashSessionDetail } from "../api/cashSessions";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatGuaraniesGs } from "../lib/formatMoney";
 import { CashSessionSummaryCard } from "./CashSessionSummaryCard";
+
+function MetaField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-[var(--color-ink-3)]">{label}</div>
+      <div className="text-sm font-medium text-[var(--color-ink)]">{value}</div>
+    </div>
+  );
+}
 
 export function CashSessionDetailModal({
   sessionId,
@@ -40,7 +50,17 @@ export function CashSessionDetailModal({
   }, [sessionId, t]);
 
   return (
-    <Modal open onClose={onClose} title={t("femme.billing.cashHistory.detailTitle")} className="max-w-2xl">
+    <Modal
+      open
+      onClose={onClose}
+      title={t("femme.billing.cashHistory.detailTitle")}
+      className="max-w-2xl"
+      footer={
+        <Button variant="secondary" onClick={onClose}>
+          {t("femme.billing.movements.form.closeButton")}
+        </Button>
+      }
+    >
       <div className="flex flex-col gap-4">
         {loading && (
           <div className="flex items-center gap-2">
@@ -49,42 +69,58 @@ export function CashSessionDetailModal({
           </div>
         )}
         {loadError && (
-          <>
-            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-              {loadError}
-            </Alert>
-            <div className="flex flex-wrap gap-3">
-              <Button variant="secondary" size="sm" onClick={onClose}>
-                {t("femme.serviceRecords.close")}
-              </Button>
-            </div>
-          </>
+          <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+            {loadError}
+          </Alert>
         )}
         {detail && (
           <>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-              <span>
-                <span className="font-medium">{t("femme.billing.session.metricOpenedAt")}: </span>
-                {formatParaguayDateTime(detail.openedAt, dateLocale)}
-              </span>
-              <span>
-                <span className="font-medium">{t("femme.billing.session.metricOpenedBy")}: </span>
-                {detail.openedByEmail}
-              </span>
+            <div>
+              <Badge variant={detail.isOpen ? "success" : "secondary"}>
+                {t(
+                  detail.isOpen
+                    ? "femme.billing.cashHistory.statusOpenBadge"
+                    : "femme.billing.cashHistory.statusClosedBadge",
+                )}
+              </Badge>
+            </div>
+
+            <div
+              className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-[var(--radius-md)] p-3 text-sm sm:grid-cols-2"
+              style={{ background: "var(--color-stone)" }}
+            >
+              <MetaField
+                label={t("femme.billing.session.metricOpenedAt")}
+                value={formatParaguayDateTime(detail.openedAt, dateLocale)}
+              />
+              <MetaField
+                label={t("femme.billing.session.metricOpenedBy")}
+                value={detail.openedByEmail}
+              />
+              <MetaField
+                label={t("femme.billing.session.metricOpeningAmount")}
+                value={formatGuaraniesGs(detail.openingCashAmount)}
+              />
               {detail.closedAt && (
                 <>
-                  <span>
-                    <span className="font-medium">{t("femme.billing.close.closedAt")}: </span>
-                    {formatParaguayDateTime(detail.closedAt, dateLocale)}
-                  </span>
-                  <span>
-                    <span className="font-medium">{t("femme.billing.close.closedBy")}: </span>
-                    {detail.closedByEmail}
-                  </span>
+                  <MetaField
+                    label={t("femme.billing.close.closedAt")}
+                    value={formatParaguayDateTime(detail.closedAt, dateLocale)}
+                  />
+                  <MetaField
+                    label={t("femme.billing.close.closedBy")}
+                    value={detail.closedByEmail ?? "—"}
+                  />
                 </>
               )}
             </div>
-            <CashSessionSummaryCard detail={detail} />
+
+            <div
+              className="rounded-[var(--radius-md)] p-3"
+              style={{ background: "var(--color-white)", border: "var(--border-default)" }}
+            >
+              <CashSessionSummaryCard detail={detail} />
+            </div>
           </>
         )}
       </div>

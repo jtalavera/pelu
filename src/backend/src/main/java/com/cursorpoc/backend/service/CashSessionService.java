@@ -162,10 +162,20 @@ public class CashSessionService {
   }
 
   @Transactional(readOnly = true)
-  public PagedCashSessionsResponse listSessions(long tenantId, int page, int size) {
+  public PagedCashSessionsResponse listSessions(
+      long tenantId,
+      Instant fromDate,
+      Instant toDate,
+      String status,
+      String q,
+      int page,
+      int size) {
     Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 200)));
+    String statusTrimmed = status != null && !status.isBlank() ? status.trim() : null;
+    String qTrimmed = q != null && !q.isBlank() ? q.trim() : null;
     Page<CashSession> result =
-        cashSessionRepository.findByTenant_IdOrderByOpenedAtDesc(tenantId, pageable);
+        cashSessionRepository.findByTenantWithFiltersPaged(
+            tenantId, fromDate, toDate, statusTrimmed, qTrimmed, pageable);
 
     List<CashSessionListItemResponse> content =
         result.getContent().stream().map(this::toListItem).toList();
