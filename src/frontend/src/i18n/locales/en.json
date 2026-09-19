@@ -790,7 +790,8 @@
         "newInvoiceButton": "+ New invoice",
         "loadingToday": "Loading…",
         "emptyToday": "No invoices yet today.",
-        "liveExpectedCash": "Expected cash (live)"
+        "liveExpectedCash": "Expected cash (live)",
+        "detailAccordionTitle": "Open cash register details"
       },
       "loading": "Loading…",
       "loadError": "Could not load cash register status.",
@@ -1168,6 +1169,7 @@
         "typeTipWithdrawal": "Tip withdrawal",
         "form": {
           "title": "Register a cash movement",
+          "openButton": "Register movement",
           "typeIngreso": "Cash in",
           "typeEgreso": "Cash out",
           "amountLabel": "Amount",
