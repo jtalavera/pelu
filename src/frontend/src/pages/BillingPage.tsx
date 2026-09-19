@@ -3110,7 +3110,13 @@ function CashSessionTab({
 
 // ─── CashSessionHistoryTab ─────────────────────────────────────────────────────
 
-function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
+function CashSessionHistoryTab({
+  refreshTrigger,
+  onBack,
+}: {
+  refreshTrigger: number;
+  onBack: () => void;
+}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [sessionPage, setSessionPage] = useState<PageResponse<CashSessionListItem> | null>(null);
@@ -3233,6 +3239,10 @@ function CashSessionHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <Button type="button" variant="ghost" onClick={onBack} className="self-start">
+        ← {t("femme.billing.cashHistory.backToCaja")}
+      </Button>
+
       <Heading as="h2" className="text-lg">
         {t("femme.billing.cashHistory.title")}
       </Heading>
@@ -3631,7 +3641,10 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "cashHistory"}>
-        <CashSessionHistoryTab refreshTrigger={cashHistoryRefresh} />
+        <CashSessionHistoryTab
+          refreshTrigger={cashHistoryRefresh}
+          onBack={() => setActiveTab("session")}
+        />
       </div>
     </div>
   );

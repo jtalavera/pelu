@@ -1155,6 +1155,7 @@
         "colDifference": "Diferencia",
         "statusOpenBadge": "Abierta",
         "statusClosedBadge": "Cerrada",
+        "backToCaja": "Volver a Caja",
         "detailTitle": "Detalle de caja",
         "filterStatusOpen": "Abierta",
         "filterStatusClosed": "Cerrada",
