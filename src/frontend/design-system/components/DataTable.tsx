@@ -263,6 +263,10 @@ export function DataTable<T>({
   );
 
   useEffect(() => {
+    // Re-derive column order/visibility whenever the caller passes a different
+    // column set (columnIdsKey); not a render-time derivation since order is
+    // also mutated later by user drag-reordering.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setColumnOrder(columns.map((c) => c.id));
     setVisibility(
       Object.fromEntries(

@@ -86,6 +86,8 @@ export function KebabMenu({
   // floating menu.
   useLayoutEffect(() => {
     if (!open) {
+      // Clear stale position so a closed menu never renders anchored to a stale rect.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPosition(null);
       return;
     }

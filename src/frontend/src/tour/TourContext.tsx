@@ -35,7 +35,9 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [tourKey, setTourKey] = useState("");
   const [seenVersion, setSeenVersion] = useState(0);
   const tourKeyRef = useRef(tourKey);
-  tourKeyRef.current = tourKey;
+  useEffect(() => {
+    tourKeyRef.current = tourKey;
+  }, [tourKey]);
 
   const startTour = useCallback(() => setRun(true), []);
   const stopTour = useCallback(() => setRun(false), []);
@@ -88,6 +90,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 
   // Sync from backend once on provider mount (fires after login when app re-renders)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     syncFromBackend();
     // Only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps

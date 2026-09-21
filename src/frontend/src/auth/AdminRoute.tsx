@@ -17,6 +17,8 @@ export function AdminRoute({ children }: Props) {
   useEffect(() => {
     const token = sessionStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
     if (!token) {
+      // Guard clause: no token means no async /api/me check is needed.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setState("noSession");
       return;
     }

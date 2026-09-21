@@ -2337,6 +2337,7 @@ function CashSessionTab({
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadTodayInvoices, refreshTrigger, currentSession?.id, sessionListQuery, todayPageNum, todayPageSize]);
@@ -3538,6 +3539,7 @@ export default function BillingPage() {
   }, [t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadCurrentSession();
   }, [loadCurrentSession]);
 

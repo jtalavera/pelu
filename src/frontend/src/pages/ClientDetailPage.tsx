@@ -224,10 +224,13 @@ export default function ClientDetailPage() {
   }, [id, t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
   useEffect(() => {
+    // Reset paginated/history state when navigating to a different client.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUpcomingAppointments(null);
     setPastApptPage(null);
     setPastApptPageNum(0);
@@ -283,6 +286,7 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (tab !== "history" || !id || Number.isNaN(clientIdNum) || pastApptPage === null) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPastApptLoading(true);
     void listClientAppointmentHistory(clientIdNum, pastApptPageNum, pastApptPageSize).then(
       (p) => { if (!cancelled) { setPastApptPage(p); setPastApptLoading(false); } },
@@ -296,6 +300,7 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (tab !== "history" || !id || Number.isNaN(clientIdNum) || invoicesPage === null) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInvoicesLoading(true);
     void listInvoicesPaged({ clientId: clientIdNum, page: invoicePageNum, size: invoicePageSize }).then(
       (p) => { if (!cancelled) { setInvoicesPage(p); setInvoicesLoading(false); } },
