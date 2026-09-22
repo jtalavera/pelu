@@ -117,6 +117,44 @@ export async function apiPutJson<T>(
   return res.json() as Promise<T>;
 }
 
+/**
+ * Must match SifenInvoiceTestSupportController#FIXTURE_CERTIFICATE_RUC — the RUC embedded in the
+ * fixture .p12 certificate `ensure-valid-certificate`/test-support helpers install.
+ */
+export const SIFEN_FIXTURE_CERT_RUC = "12345678-9";
+
+/**
+ * Fills in every field SifenInvoiceHeaderService#requireIssuerDataComplete checks before a SIFEN
+ * invoice can be signed (address/taxpayer type/economic activity/contact info/department+city),
+ * on top of a RUC matching the fixture certificate. Specs that create SIFEN invoices (with the
+ * tenant flag already on) must call this themselves rather than relying on some other spec having
+ * left the shared demo tenant's business profile in a complete state — many other specs
+ * (traditional-invoicing ones especially) legitimately PUT /api/business-profile with address/
+ * phone/contactEmail explicitly null, which would otherwise wipe this out for whoever runs next.
+ */
+export async function ensureValidSifenIssuerProfile(
+  request: APIRequestContext,
+  token: string,
+): Promise<void> {
+  await apiPutJson(request, token, "/api/business-profile", {
+    businessName: "Peluqueria E2E SIFEN",
+    ruc: SIFEN_FIXTURE_CERT_RUC,
+    address: "Avda. Mcal. Lopez 1234",
+    phone: "0981123456",
+    contactEmail: "contacto@e2e-sifen.test",
+    logoDataUrl: null,
+    taxpayerType: "INDIVIDUAL",
+    economicActivityCode: "96020",
+    economicActivityDescription: "Peluqueria y otros tratamientos de belleza",
+    sifenDepartmentCode: "12",
+    sifenDepartmentName: "CENTRAL",
+    sifenCityCode: "5044",
+    sifenCityName: "FERNANDO DE LA MORA",
+    sifenFantasyName: null,
+    kudeFooterMessage: null,
+  });
+}
+
 export async function apiPostJsonStatus(
   request: APIRequestContext,
   token: string,

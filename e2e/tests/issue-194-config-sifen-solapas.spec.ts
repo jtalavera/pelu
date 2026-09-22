@@ -3,8 +3,12 @@ import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
   loginAsDemoApi,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // Issue #194 — "Ajustes Configuración → SIFEN":
 //   1. The screen is split into tabs (same pattern as Facturación's "Caja" / "Historial"):
@@ -28,6 +32,15 @@ async function seedManualVoidings(request: APIRequestContext, token: string, how
 }
 
 test.describe("Issue #194 · Configuración → SIFEN por solapas", () => {
+  // Configuración → SIFEN is itself gated on this tenant flag — self-contained rather than
+  // relying on some earlier spec having left it on.
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
+  });
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+  });
+
   test("AC1 · la pantalla se organiza en las solapas 'Certificado' y 'Numeración inutilizada'", async ({
     page,
   }) => {

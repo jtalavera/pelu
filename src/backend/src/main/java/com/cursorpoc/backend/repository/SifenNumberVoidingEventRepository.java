@@ -22,6 +22,8 @@ public interface SifenNumberVoidingEventRepository
 
   Optional<SifenNumberVoidingEvent> findByIdAndTenantId(long id, long tenantId);
 
+  long deleteByTenantId(long tenantId);
+
   List<SifenNumberVoidingEvent> findByTenantIdAndStatus(
       long tenantId, SifenNumberVoidingStatus status);
 

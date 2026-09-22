@@ -7,8 +7,12 @@ import {
   ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // Issue #190 — "Ajustes varios 2-09-2026":
 //   1. "Historial de comprobantes": the "Fecha" column header becomes "Fecha factura".
@@ -208,25 +212,32 @@ test.describe("Issue #190 · Ajustes varios", () => {
     const clientName = `E2E190 SIFEN ${Date.now()}`;
     await issueRejectedInvoice(request, token, seed.serviceId, seed.serviceFullName, clientName);
 
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
+    // Configuración → SIFEN is itself gated on this tenant flag — self-contained rather than
+    // relying on some earlier spec having left it on.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
+    try {
+      await loginAsDemo(page);
+      await page.goto("/app/settings/sifen");
 
-    // Certificates table (issue #194: now under the "Certificate" tab, the default one).
-    const certSection = page.getByTestId("sifen-certificate-list-section");
-    await expect(certSection.getByRole("table")).toBeVisible();
-    await expect(certSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
-    await expect(certSection.getByRole("columnheader", { name: "Status" })).toBeVisible();
-    await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
+      // Certificates table (issue #194: now under the "Certificate" tab, the default one).
+      const certSection = page.getByTestId("sifen-certificate-list-section");
+      await expect(certSection.getByRole("table")).toBeVisible();
+      await expect(certSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
+      await expect(certSection.getByRole("columnheader", { name: "Status" })).toBeVisible();
+      await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
 
-    // Voided-numbers table, with a per-row action column + the submit button in the row.
-    await page.getByRole("tab", { name: "Voided numbering" }).click();
-    const voidingSection = page.getByTestId("sifen-number-voiding-section");
-    await expect(voidingSection.getByRole("table")).toBeVisible();
-    await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();
-    await expect(voidingSection.getByRole("columnheader", { name: "Action" })).toBeVisible();
-    const row = page.getByTestId("sifen-number-voiding-row").first();
-    await expect(row).toBeVisible();
-    await expect(row.getByLabel("Reason")).toBeVisible();
-    await expect(row.getByRole("button", { name: "Submit to SIFEN" })).toBeVisible();
+      // Voided-numbers table, with a per-row action column + the submit button in the row.
+      await page.getByRole("tab", { name: "Voided numbering" }).click();
+      const voidingSection = page.getByTestId("sifen-number-voiding-section");
+      await expect(voidingSection.getByRole("table")).toBeVisible();
+      await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();
+      await expect(voidingSection.getByRole("columnheader", { name: "Action" })).toBeVisible();
+      const row = page.getByTestId("sifen-number-voiding-row").first();
+      await expect(row).toBeVisible();
+      await expect(row.getByLabel("Reason")).toBeVisible();
+      await expect(row.getByRole("button", { name: "Submit to SIFEN" })).toBeVisible();
+    } finally {
+      await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+    }
   });
 });

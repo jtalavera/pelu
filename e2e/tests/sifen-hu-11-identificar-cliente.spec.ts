@@ -7,6 +7,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -22,11 +23,24 @@ import { loginAsDemo } from "../fixtures/auth";
 // endpoint) — in the `e2e` profile that endpoint is unreachable by design, so this exercises the
 // genuine "SIFEN did not respond" error path, same precedent as HU-07/HU-10's own coverage.
 
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // Every state this file exercises is fabricated directly via /api/admin/sifen-test-support
+    // (which sets up its own certificate/issuer data — see prepareWithQrAndStatus's
+    // ensureFullIssuerData) — invoice creation below must stay a plain, non-SIFEN issuance (flag
+    // off), not a real signed submission: with the flag on (inherited ambiently from earlier
+    // specs in this alphabetical block) POST /api/invoices enqueues a genuine async transmit
+    // attempt that races the fabrication calls and can flip sifenSubmissionStatus out from under
+    // a test. The real end-to-end identification test below still needs a real certificate for
+    // its own signing attempt, independent of the tenant flag — ensure one regardless.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+    await request.post(`${apiBaseUrl()}/api/admin/sifen-test-support/ensure-valid-certificate`);
   });
 
   /** An invoice issued for a client without RUC/identity document — SIFEN's "sin datos" case. */
@@ -54,12 +68,16 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
   /** An invoice issued for a client that already has a RUC — not eligible for AC-01. */
   async function createInvoiceWithClientRuc(request: APIRequestContext, token: string) {
     const seed = await seedCategoryServiceProfessional(request, token);
+    // A unique-per-run RUC (ParaguayRucValidator only checks the digits-hyphen-digits shape, no
+    // checksum) — the shared literal "80000005-6" is also seeded as a client RUC by other spec
+    // files (client-identity-document-type, issue-220), and collides with CLIENT_RUC_DUPLICATE
+    // when the whole suite shares one tenant across a single run.
     const client = await seedClient(
       request,
       token,
       `E2E HU11 conRuc ${Date.now()}-${Math.random()}`,
       undefined,
-      "80000005-6",
+      `${Date.now()}-6`,
     );
     const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
       clientId: client.id,

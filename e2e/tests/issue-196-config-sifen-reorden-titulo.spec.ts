@@ -3,8 +3,12 @@ import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
   loginAsDemoApi,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // Issue #196 — "Ajustes Configuración → SIFEN":
 //   In Configuración → SIFEN → "Numeración inutilizada", the section title
@@ -22,6 +26,15 @@ async function seedManualVoiding(request: APIRequestContext, token: string) {
 }
 
 test.describe("Issue #196 · Configuración → SIFEN, reorden del título", () => {
+  // Configuración → SIFEN is itself gated on this tenant flag — self-contained rather than
+  // relying on some earlier spec having left it on.
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
+  });
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+  });
+
   test("el título 'Numeración inutilizada' va debajo del alta manual y encima de la tabla", async ({
     page,
     request,

@@ -9,6 +9,7 @@ import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppUserTourStateRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
@@ -20,6 +21,8 @@ import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.repository.SifenCertificateRepository;
+import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TipWithdrawalRepository;
@@ -61,9 +64,12 @@ public class SeedResetService {
   private final InvoiceRepository invoiceRepository;
   private final ServiceRecordRepository serviceRecordRepository;
   private final CashSessionRepository cashSessionRepository;
+  private final CashMovementRepository cashMovementRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final AppUserTourStateRepository appUserTourStateRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
+  private final SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
+  private final SifenCertificateRepository sifenCertificateRepository;
   private final FemmeDataInitializer femmeDataInitializer;
 
   public SeedResetService(
@@ -83,9 +89,12 @@ public class SeedResetService {
       InvoiceRepository invoiceRepository,
       ServiceRecordRepository serviceRecordRepository,
       CashSessionRepository cashSessionRepository,
+      CashMovementRepository cashMovementRepository,
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
+      SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository,
+      SifenCertificateRepository sifenCertificateRepository,
       FemmeDataInitializer femmeDataInitializer) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
@@ -103,9 +112,12 @@ public class SeedResetService {
     this.invoiceRepository = invoiceRepository;
     this.serviceRecordRepository = serviceRecordRepository;
     this.cashSessionRepository = cashSessionRepository;
+    this.cashMovementRepository = cashMovementRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.appUserTourStateRepository = appUserTourStateRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
+    this.sifenNumberVoidingEventRepository = sifenNumberVoidingEventRepository;
+    this.sifenCertificateRepository = sifenCertificateRepository;
     this.femmeDataInitializer = femmeDataInitializer;
   }
 
@@ -140,6 +152,10 @@ public class SeedResetService {
     // lines/tips, cascaded at the DB level) reference all three and would otherwise trip their FKs.
     long deletedServiceRecords = serviceRecordRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} service_records (with lines and tips)", deletedServiceRecords);
+
+    // Must run before deleting cash_sessions below: cash_movements has a non-nullable FK to it.
+    long deletedCashMovements = cashMovementRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} cash_movements", deletedCashMovements);
 
     long deletedCashSessions = cashSessionRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} cash_sessions", deletedCashSessions);
@@ -177,6 +193,12 @@ public class SeedResetService {
     long deletedTenantFlags = tenantFeatureFlagRepository.deleteByTenantId(DEMO_TENANT_ID);
     log.info("Deleted {} tenant_feature_flags", deletedTenantFlags);
 
+    // Must run before deleting fiscal_stamps below: sifen_number_voiding_events has a real FK to
+    // fiscal_stamps (unlike its plain, unenforced invoice_id column), and a stamp can carry
+    // voiding rows without ever having been invoiced against (e.g. RT-25's manual-voiding tests).
+    long deletedVoidingEvents = sifenNumberVoidingEventRepository.deleteByTenantId(DEMO_TENANT_ID);
+    log.info("Deleted {} sifen_number_voiding_events", deletedVoidingEvents);
+
     // Only unlocked (never-invoiced) stamps are reseedable placeholders. A stamp already
     // referenced by a real invoice (lockedAfterInvoice=true, e.g. tenant 1's real SIFEN timbrado)
     // must survive a reset — deleting it would let FemmeDataInitializer recreate the fake
@@ -198,6 +220,10 @@ public class SeedResetService {
     long deletedAppUserActivationTokens =
         appUserActivationTokenRepository.deleteByAppUser_Tenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_user_activation_tokens", deletedAppUserActivationTokens);
+
+    // Must also run before deleting app_users — sifen_certificates has a FK to the uploader.
+    long deletedCertificates = sifenCertificateRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} sifen_certificates", deletedCertificates);
 
     long deletedUsers = appUserRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_users", deletedUsers);
