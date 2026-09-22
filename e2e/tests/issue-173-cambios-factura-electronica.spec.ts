@@ -147,8 +147,10 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
-    // The email field only renders when SIFEN is enabled.
-    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
+    // This test actually issues an invoice through the real SIFEN pipeline (unlike the prefill
+    // check above), so it needs the full setup — certificate + complete issuer profile, not just
+    // the flag — same as its sibling tests below.
+    await enableSifen(request, token);
     const seed = await seedCategoryServiceProfessional(request, token);
     const stamp = Date.now();
     const name = `E2E 173 WRITEBACK ${stamp}`;

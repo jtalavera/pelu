@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
+  API_BASE,
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
@@ -107,6 +108,14 @@ test.describe("Issue #223 · Dashboard tips-by-professional chart", () => {
     request,
   }) => {
     test.setTimeout(90_000);
+    // Clean slate: the Y-axis only fits so many category ticks before recharts starts hiding
+    // some to avoid overlap (the chart's height is capped — see TipsByProfessionalChart.tsx), so
+    // this test's own two professionals must not have to compete with however many other
+    // professionals' tips the rest of the suite has already contributed to the shared demo
+    // tenant — same rationale as issue #216 AC3's own reset.
+    const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
+    expect(resetRes.ok(), await resetRes.text()).toBeTruthy();
+
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);

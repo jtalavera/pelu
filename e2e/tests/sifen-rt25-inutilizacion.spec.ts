@@ -3,9 +3,9 @@ import {
   apiBaseUrl,
   apiGetJson,
   apiPostJson,
-  apiPutJson,
   ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
+  ensureValidSifenIssuerProfile,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
@@ -15,8 +15,6 @@ import { loginAsDemo } from "../fixtures/auth";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
-/** Must match SifenInvoiceTestSupportController#FIXTURE_CERTIFICATE_RUC. */
-const FIXTURE_CERT_RUC = "12345678-9";
 
 // RT-25 (Hardening_SIFEN.md): "Inutilización de numeración" governance. SifenNumberVoidingService
 // automatically records a PENDING voiding entry the moment a real transmit attempt resolves
@@ -82,14 +80,26 @@ async function rejectAndGetVoidingRow(page: Page, request: APIRequestContext, to
 }
 
 test.describe("RT-25 · Inutilización de numeración", () => {
+  // Every test here either creates a SIFEN invoice (signs synchronously once the tenant flag is
+  // on) or views Configuración → SIFEN (itself gated on that same flag) — self-contained rather
+  // than relying on some other spec having left the flag/profile/certificate ready.
+  test.beforeEach(async ({ request }) => {
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
+    await ensureValidSifenIssuerProfile(request, token);
+    await request.post(`${apiBaseUrl()}/api/admin/sifen-test-support/ensure-valid-certificate`);
+  });
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+  });
+
   test("RT-25 · una factura rechazada por SIFEN registra automáticamente una inutilización pendiente", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    await ensureCashSessionOpenApi(request, token);
-
     const row = await rejectAndGetVoidingRow(page, request, token);
 
     await expect(row).toBeVisible();
@@ -102,9 +112,6 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    await ensureCashSessionOpenApi(request, token);
-
     const row = await rejectAndGetVoidingRow(page, request, token);
     await row.getByLabel("Reason").fill("ab");
     await row.getByRole("button", { name: "Submit to SIFEN" }).click();
@@ -117,13 +124,6 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    await ensureCashSessionOpenApi(request, token);
-    // SifenNumberVoidingService.submit signs with the tenant's real active certificate (unlike the
-    // fabricated REJECTED outcome above) — needs a real one installed first, same precondition
-    // sifen-hu-22's own real-signing test documents.
-    await request.post(`${apiBaseUrl()}/api/admin/sifen-test-support/ensure-valid-certificate`);
-
     const row = await rejectAndGetVoidingRow(page, request, token);
     await row.getByLabel("Reason").fill("Factura rechazada, numeración inutilizada por prueba e2e");
     await row.getByRole("button", { name: "Submit to SIFEN" }).click();
@@ -142,8 +142,6 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     page,
     request,
   }) => {
-    const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
     // A range well above any issued number, unique per run, inside the stamp's 1–9,999,999 range.
     const from = 9_500_000 + (Date.now() % 400_000);
     const to = from + 4;
@@ -176,67 +174,35 @@ test.describe("RT-25 · Inutilización de numeración", () => {
    */
   test("RT-25 · enviar a SIFEN sin tocar el motivo precargado de una inutilización manual no muestra 'motivo muy corto'", async ({
     page,
-    request,
   }) => {
-    const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    // SifenConnectionService rejects the attempt with SIFEN_CERT_RUC_MISMATCH unless the business
-    // profile's own RUC matches the fixture certificate's embedded RUC.
-    await apiPutJson(request, token, "/api/business-profile", {
-      businessName: "Peluqueria E2E RT25",
-      ruc: FIXTURE_CERT_RUC,
-      address: "Avda. Mcal. Lopez 1234",
-      phone: "0981123456",
-      contactEmail: "contacto@e2e-rt25.test",
-      logoDataUrl: null,
-      taxpayerType: "INDIVIDUAL",
-      economicActivityCode: "96020",
-      economicActivityDescription: "Peluqueria y otros tratamientos de belleza",
-      sifenDepartmentCode: "12",
-      sifenDepartmentName: "CENTRAL",
-      sifenCityCode: "5044",
-      sifenCityName: "FERNANDO DE LA MORA",
-      sifenFantasyName: null,
-      kudeFooterMessage: null,
-    });
-    await request.post(`${apiBaseUrl()}/api/admin/sifen-test-support/ensure-valid-certificate`);
-    // Configuración → SIFEN is itself gated on this tenant flag (independent of the
-    // number-voiding backend endpoints, which aren't) — this file's other tests rely on it
-    // already being on from another spec run earlier in the same suite; make this one
-    // self-contained instead, since it's the one actually asserting on that page.
-    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
-    try {
-      const from = 9_500_000 + (Date.now() % 400_000) + 1000;
-      const to = from + 2;
+    const from = 9_500_000 + (Date.now() % 400_000) + 1000;
+    const to = from + 2;
 
-      await loginAsDemo(page);
-      await openVoidingTab(page);
-      const form = page.getByTestId("sifen-number-voiding-manual-form");
-      await form.locator("#manual-range-from").fill(String(from));
-      await form.locator("#manual-range-to").fill(String(to));
-      await form.getByLabel("Reason").fill("Numeración saltada por un error del sistema");
-      await form.getByRole("button", { name: "Register" }).click();
-      await expect(page.getByTestId("sifen-number-voiding-manual-success")).toBeVisible();
+    await loginAsDemo(page);
+    await openVoidingTab(page);
+    const form = page.getByTestId("sifen-number-voiding-manual-form");
+    await form.locator("#manual-range-from").fill(String(from));
+    await form.locator("#manual-range-to").fill(String(to));
+    await form.getByLabel("Reason").fill("Numeración saltada por un error del sistema");
+    await form.getByRole("button", { name: "Register" }).click();
+    await expect(page.getByTestId("sifen-number-voiding-manual-success")).toBeVisible();
 
-      const row = page
-        .getByTestId("sifen-number-voiding-row")
-        .filter({ hasText: `FACTURA ${from}` });
-      await expect(row).toBeVisible();
-      // The textarea already shows the creation reason — submit without editing it at all.
-      await expect(row.getByLabel("Reason")).toHaveValue(
-        "Numeración saltada por un error del sistema",
-      );
-      await row.getByRole("button", { name: "Submit to SIFEN" }).click();
+    const row = page
+      .getByTestId("sifen-number-voiding-row")
+      .filter({ hasText: `FACTURA ${from}` });
+    await expect(row).toBeVisible();
+    // The textarea already shows the creation reason — submit without editing it at all.
+    await expect(row.getByLabel("Reason")).toHaveValue(
+      "Numeración saltada por un error del sistema",
+    );
+    await row.getByRole("button", { name: "Submit to SIFEN" }).click();
 
-      await expect(row.getByText("Enter a reason of at least 5 characters.")).toHaveCount(0);
-      // Reaches the real (unreachable-in-e2e) submission attempt instead — same outcome the
-      // existing "motivo válido" test above expects once past validation.
-      await expect(
-        row.getByText("SIFEN did not respond to the voiding request. Try again shortly."),
-      ).toBeVisible();
-    } finally {
-      await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
-    }
+    await expect(row.getByText("Enter a reason of at least 5 characters.")).toHaveCount(0);
+    // Reaches the real (unreachable-in-e2e) submission attempt instead — same outcome the
+    // existing "motivo válido" test above expects once past validation.
+    await expect(
+      row.getByText("SIFEN did not respond to the voiding request. Try again shortly."),
+    ).toBeVisible();
   });
 
   test("RT-25 · rechaza inutilizar manualmente un rango que incluye un número ya emitido", async ({
@@ -244,8 +210,6 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    await ensureCashSessionOpenApi(request, token);
     const invoice = await createInvoice(request, token);
     const detail = await apiGetJson<{ invoiceNumber: number }>(
       request,
@@ -271,8 +235,6 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    await ensureCashSessionOpenApi(request, token);
     const invoice = await createInvoice(request, token);
     const rej = await request.post(
       `${apiBaseUrl()}/api/admin/sifen-test-support/invoices/${invoice.id}/simulate-sifen-rejection`,
@@ -291,15 +253,15 @@ test.describe("RT-25 · Inutilización de numeración", () => {
     await loginAsDemo(page);
     await openVoidingTab(page);
     await expect(page.getByTestId("sifen-number-voiding-summary")).toBeVisible();
-    await expect(page.getByTestId("sifen-number-voiding-summary")).toContainText("pending submission");
+    await expect(page.getByTestId("sifen-number-voiding-summary")).toContainText(
+      "pending submission",
+    );
   });
 
   test("Follow-up: una factura rechazada por SIFEN sale del total facturado", async ({
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await ensureActiveFiscalStampForInvoices(request, token);
-    await ensureCashSessionOpenApi(request, token);
     const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E RT25 revenue ${Date.now()}`);
     const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {

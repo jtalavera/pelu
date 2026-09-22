@@ -1,8 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import { API_BASE } from "../fixtures/api";
+import { API_BASE, setTenantFeatureFlag } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
 //
@@ -28,6 +31,15 @@ async function upload(page: import("@playwright/test").Page, filePath: string) {
 }
 
 test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tenant", () => {
+  // Configuración → SIFEN is itself gated on this tenant flag — self-contained rather than
+  // relying on some earlier spec having left it on.
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
+  });
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+  });
+
   test("HU-19 · 1 el listado se muestra en Configuración → SIFEN, en la misma sección que la carga (AC-01)", async ({
     page,
   }) => {

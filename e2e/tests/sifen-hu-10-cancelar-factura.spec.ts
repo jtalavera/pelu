@@ -7,6 +7,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -22,11 +23,24 @@ import { loginAsDemo } from "../fixtures/auth";
 // application-e2e.properties), so this exercises the genuine "SIFEN did not respond" error path,
 // same precedent as HU-07's own Playwright coverage of its "no answer" branch.
 
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // Every state this file exercises is fabricated directly via /api/admin/sifen-test-support
+    // (which sets up its own certificate/issuer data — see prepareWithQrAndStatus's
+    // ensureFullIssuerData) — invoice creation below must stay a plain, non-SIFEN issuance (flag
+    // off), not a real signed submission: with the flag on (inherited ambiently from earlier
+    // specs in this alphabetical block) POST /api/invoices enqueues a genuine async transmit
+    // attempt that races the fabrication calls and can flip sifenSubmissionStatus out from under
+    // a test. The real end-to-end cancellation test below still needs a real certificate for its
+    // own signing attempt, independent of the tenant flag — ensure one regardless.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+    await request.post(`${apiBaseUrl()}/api/admin/sifen-test-support/ensure-valid-certificate`);
   });
 
   async function createInvoice(request: APIRequestContext, token: string) {

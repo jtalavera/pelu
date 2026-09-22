@@ -113,10 +113,13 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
     ).toBeAttached();
 
     // Chart-layout follow-up: a linear-regression trend line overlays the bars in a distinct
-    // color, with a legend distinguishing "Invoiced" (bars) from "Trend" (line).
+    // color, with a legend distinguishing "Invoiced" (bars) from "Trend" (line). Scoped to the
+    // legend specifically — recharts also keeps a (hidden until hover) tooltip entry with the
+    // same series names in the DOM, which would otherwise match too and violate strict mode.
     await expect(chart.locator(".recharts-line-curve")).toBeAttached();
-    await expect(chart.getByText("Invoiced", { exact: true })).toBeVisible();
-    await expect(chart.getByText("Trend", { exact: true })).toBeVisible();
+    const legend = chart.locator(".recharts-legend-wrapper");
+    await expect(legend.getByText("Invoiced", { exact: true })).toBeVisible();
+    await expect(legend.getByText("Trend", { exact: true })).toBeVisible();
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document

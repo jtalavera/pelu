@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SifenCertificateRepository extends JpaRepository<SifenCertificate, Long> {
 
   List<SifenCertificate> findByTenant_IdOrderByUploadedAtDesc(Long tenantId);
+
+  long deleteByTenant_Id(long tenantId);
 }

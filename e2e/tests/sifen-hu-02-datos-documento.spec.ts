@@ -10,6 +10,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
@@ -29,11 +30,21 @@ import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/
 
 test.describe.configure({ mode: "serial" });
 
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor/receptor", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // AC-05 (the Gs. 7.000.000 client-identification threshold) is InvoiceService's own universal
+    // rule, not SIFEN-specific — see its javadoc. Keep the tenant's SIFEN flag off explicitly
+    // (rather than depending on whatever earlier specs in this alphabetical block left it as):
+    // with it on, POST /api/invoices additionally requires a certificate/complete issuer profile
+    // and, once a receiver is identified, a recipient email none of these tests' UI flows set —
+    // none of which this file is testing.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
   test("HU-02 · AC-05 factura de Gs. 7.000.000 sin identificar al cliente es rechazada (API)", async ({
@@ -73,6 +84,10 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
       clientDisplayName: "Cliente Ocasional",
       clientRucOverride: null,
       clientIdentityDocumentOverride: "4123456",
+      // Issue #173: a receiver identified via RUC or identity document requires a recipient
+      // email (the KuDE is auto-emailed once SIFEN approves) — this test's receiver is
+      // identified via the identity-document override above.
+      email: "hu02-ac05@example.com",
       lines: [
         {
           serviceId: seed.serviceId,

@@ -201,7 +201,6 @@ export default function ActivatePage() {
                       autoComplete="name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      required
                       className={inputClassName}
                       aria-invalid={
                         formError === t("femme.activate.errorFullNameRequired") ? true : undefined

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  API_BASE,
   apiPostJson,
   createAppointmentApi,
   instantToOffsetIso,
@@ -161,6 +162,14 @@ test.describe("Issue #155 · Cambios varios", () => {
     page,
     request,
   }) => {
+    // Clean slate: the dashboard's "today's appointments" panel is unpaginated and renders every
+    // appointment in the day's range — by the time this runs deep in the full suite, however many
+    // other specs' own same-day appointments have accumulated can make the freshly-created row
+    // slow enough to find that it exceeds this test's own timeout. Same rationale as issue #216
+    // AC3 / issue #223's own resets.
+    const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
+    expect(resetRes.ok(), await resetRes.text()).toBeTruthy();
+
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E155 Dash ${Date.now()}`);

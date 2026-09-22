@@ -13,6 +13,7 @@ import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppUserTourStateRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
@@ -24,6 +25,8 @@ import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.repository.SifenCertificateRepository;
+import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TipWithdrawalRepository;
@@ -62,9 +65,12 @@ class SeedResetServiceTest {
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
   @Mock private CashSessionRepository cashSessionRepository;
+  @Mock private CashMovementRepository cashMovementRepository;
   @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
   @Mock private AppUserTourStateRepository appUserTourStateRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
+  @Mock private SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
+  @Mock private SifenCertificateRepository sifenCertificateRepository;
   @Mock private FemmeDataInitializer femmeDataInitializer;
 
   private SeedResetService service;
@@ -89,9 +95,12 @@ class SeedResetServiceTest {
             invoiceRepository,
             serviceRecordRepository,
             cashSessionRepository,
+            cashMovementRepository,
             passwordResetTokenRepository,
             appUserTourStateRepository,
             tipWithdrawalRepository,
+            sifenNumberVoidingEventRepository,
+            sifenCertificateRepository,
             femmeDataInitializer);
 
     Tenant tenant = new Tenant();

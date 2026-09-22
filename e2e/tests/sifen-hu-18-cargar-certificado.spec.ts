@@ -1,7 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import { setTenantFeatureFlag } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // SIFEN spec HU numbering (requirements/sifen/Especificacion_SIFEN_Peluqueria.md) is a
 // separate document from the product's original HU-01..HU-30 backlog and its own e2e specs
@@ -13,6 +17,15 @@ const VALID_P12 = path.join(__dirname, "../fixtures/sifen/test-cert.p12");
 const VALID_PASSWORD = "TestPass123!";
 
 test.describe("SIFEN HU-18 · Cargar un nuevo certificado y clave para un tenant", () => {
+  // Configuración → SIFEN is itself gated on this tenant flag — self-contained rather than
+  // relying on some earlier spec having left it on.
+  test.beforeEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
+  });
+  test.afterEach(async ({ request }) => {
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
+  });
+
   test("HU-18 · 1 admin ve la opción dentro de Configuración → SIFEN con el formulario esperado (AC-01, AC-02)", async ({
     page,
   }) => {

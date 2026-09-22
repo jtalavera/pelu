@@ -6,6 +6,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
+  setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -30,11 +31,22 @@ import { loginAsDemo } from "../fixtures/auth";
 // exercises the real controller -> service -> query-client -> mTLS-connection code path end to
 // end, failing fast locally instead of depending on a live call to SIFEN's real test environment.
 
+const DEMO_TENANT_ID = 1;
+const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
 test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendiente", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
+    // Every state this file exercises (pending-verification, the CDC, the certificate/RUC) is
+    // fabricated directly via /api/admin/sifen-test-support — createInvoice below must stay a
+    // plain, non-SIFEN issuance (flag off), not a real signed submission: with the flag on
+    // (inherited ambiently from earlier specs in this alphabetical block) POST /api/invoices
+    // enqueues a genuine async transmit attempt that races the fabrication calls below and can
+    // flip sifenSubmissionStatus out from under a test — see prepareForStatusCheck's own
+    // ensureBusinessRuc/ensureValidCertificate for why no issuer setup is needed here either.
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
   test("HU-07 · AC-04 el botón de verificar estado aparece solo para una factura pendiente de verificación y la consulta real deja la factura pendiente (SIFEN no contesta)", async ({

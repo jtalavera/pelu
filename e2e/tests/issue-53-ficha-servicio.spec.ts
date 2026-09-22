@@ -90,7 +90,10 @@ async function findHistoryRow(page: Page, query: string) {
  */
 async function revealAllTodayRecords(page: Page): Promise<void> {
   const moreButton = page.getByTestId("dashboard-service-records-more");
-  for (let i = 0; i < 10 && (await moreButton.isVisible().catch(() => false)); i++) {
+  // Each click reveals 12 more (DASHBOARD_SERVICE_RECORDS_CAP) — a generous cap so this keeps
+  // working as the full suite (and its own same-day fichas) grows well past what 10 clicks (132
+  // records) could ever reveal.
+  for (let i = 0; i < 200 && (await moreButton.isVisible().catch(() => false)); i++) {
     await moreButton.click();
   }
 }
