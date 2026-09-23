@@ -30,20 +30,28 @@ html, html.light {
   /* Acentos de categoría */
   --color-coral:       #F05035;
   --color-coral-lt:    #FEF0ED;
+  --color-coral-md:    #F8B0A4;
   --color-fuchsia:     #D946EF;
   --color-fuchsia-lt:  #FDF4FF;
+  --color-fuchsia-md:  #EEACF8;
   --color-violet:      #7C3AED;
   --color-violet-lt:   #EDE9FE;
+  --color-violet-md:   #C4A6F7;
   --color-indigo:      #4338CA;
   --color-indigo-lt:   #EEF2FF;
+  --color-indigo-md:   #AAA5E7;
   --color-sky:         #0284C7;
   --color-sky-lt:      #E0F2FE;
+  --color-sky-md:      #8DC8E6;
   --color-teal:        #0D9488;
   --color-teal-lt:     #CCFBF1;
+  --color-teal-md:     #92CFC9;
   --color-lime:        #65A30D;
   --color-lime-lt:     #ECFCCB;
+  --color-lime-md:     #BAD692;
   --color-amber:       #D97706;
   --color-amber-lt:    #FEF3C7;
+  --color-amber-md:    #EEC28F;
 
   /* Tipografía */
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -95,20 +103,28 @@ html, html.light {
   /* Acentos de categoría */
   --color-coral:       #F05035;
   --color-coral-lt:    #FEF0ED;
+  --color-coral-md:    #F8B0A4;
   --color-fuchsia:     #D946EF;
   --color-fuchsia-lt:  #FDF4FF;
+  --color-fuchsia-md:  #EEACF8;
   --color-violet:      #7C3AED;
   --color-violet-lt:   #EDE9FE;
+  --color-violet-md:   #C4A6F7;
   --color-indigo:      #4338CA;
   --color-indigo-lt:   #EEF2FF;
+  --color-indigo-md:   #AAA5E7;
   --color-sky:         #0284C7;
   --color-sky-lt:      #E0F2FE;
+  --color-sky-md:      #8DC8E6;
   --color-teal:        #0D9488;
   --color-teal-lt:     #CCFBF1;
+  --color-teal-md:     #92CFC9;
   --color-lime:        #65A30D;
   --color-lime-lt:     #ECFCCB;
+  --color-lime-md:     #BAD692;
   --color-amber:       #D97706;
   --color-amber-lt:    #FEF3C7;
+  --color-amber-md:    #EEC28F;
 
   /* Tipografía */
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -292,33 +308,6 @@ html.light {
     rgba(160, 150, 143, 0.06) 4px,
     rgba(160, 150, 143, 0.06) 8px
   );
-}
-
-.card-inactive {
-  background: var(--color-stone) !important;
-  border-color: transparent !important;
-}
-
-.card-inactive .card-icon {
-  opacity: 0.3;
-}
-
-.card-inactive .card-name {
-  color: var(--color-ink-3);
-  text-decoration: line-through;
-  text-decoration-color: var(--color-ink-3);
-  text-decoration-thickness: 1px;
-  font-weight: 400;
-}
-
-.card-inactive .card-meta {
-  color: var(--color-ink-3);
-  opacity: 0.6;
-}
-
-.card-inactive .card-price {
-  color: var(--color-ink-3);
-  opacity: 0.5;
 }
 
 /* Botones de fila/card (Servicios / Categorías) */

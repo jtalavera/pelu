@@ -64,6 +64,15 @@ export function ServiceSearchField({
     }
   }, [value]);
 
+  // Without this, a debounce timer started right before unmount still fires afterwards and calls
+  // setSearching/setResults on an unmounted component (surfaces as an unhandled rejection in tests
+  // if a later test's environment has already been torn down by then).
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as Node;

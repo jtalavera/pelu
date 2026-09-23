@@ -1,0 +1,5 @@
+# Real digital certificates and their passwords must never be committed. HU-18/HU-05 only ever
+# need these for local manual verification against SIFEN's real test environment — see
+# PROGRESS.md's "Verificación real contra SIFEN" section for how they're used.
+*.p12
+.secrets/

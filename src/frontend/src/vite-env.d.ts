@@ -9,3 +9,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Build identifier baked in via Vite `define` — see vite.config.ts's version-marker plugin. */
+declare const __APP_VERSION__: string;

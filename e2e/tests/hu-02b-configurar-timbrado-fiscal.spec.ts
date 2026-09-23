@@ -3,9 +3,13 @@ import {
   API_BASE,
   apiPostJson,
   apiPutJson,
+  ensureActiveFiscalStampForInvoices,
+  ensureCashSessionOpenApi,
   isoDateLocal,
   listFiscalStamps,
   loginAsDemoApi,
+  seedClient,
+  seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
@@ -23,6 +27,32 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await expect(page.getByLabel("Number from", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Number to", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Starting invoice number", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Establishment", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Expedition point", { exact: true })).toBeVisible();
+  });
+
+  test("HU-02b · 10 crear timbrado con establecimiento/punto de expedición custom", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/settings/fiscal-stamp");
+    const stampNumber = `2${Date.now().toString().slice(-7)}`;
+    await page.getByLabel("Stamp number", { exact: true }).fill(stampNumber);
+    const today = new Date();
+    const nextYear = new Date(today);
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
+    await page.getByLabel("Validity start", { exact: true }).fill(isoDateLocal(today));
+    await page.getByLabel("Validity end", { exact: true }).fill(isoDateLocal(nextYear));
+    await page.getByLabel("Number from", { exact: true }).fill("8000000");
+    await page.getByLabel("Number to", { exact: true }).fill("8000100");
+    await page.getByLabel("Starting invoice number", { exact: true }).fill("8000000");
+    await page.getByLabel("Establishment", { exact: true }).fill("2");
+    await page.getByLabel("Expedition point", { exact: true }).fill("3");
+    await page.getByRole("button", { name: "Add stamp" }).click();
+    await expect(page.getByText(stampNumber).first()).toBeVisible();
+    const tableRow = page.locator("tr", { hasText: stampNumber });
+    await expect(tableRow.getByText("002", { exact: true })).toBeVisible();
+    await expect(tableRow.getByText("003", { exact: true })).toBeVisible();
   });
 
   test("HU-02b · 3 número inicial fuera del rango muestra error", async ({ page }) => {
@@ -62,6 +92,8 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
+    // Guarantee a healthy active stamp exists regardless of which specs ran before this one.
+    await ensureActiveFiscalStampForInvoices(request, token);
     const stamps = await listFiscalStamps(request, token);
     const active = stamps.find((s) => s.active);
     expect(active).toBeTruthy();
@@ -77,8 +109,10 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
-    await expect(page.getByText("Inactive", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Valid", { exact: true }).first()).toBeVisible();
+    const previousRow = page.getByTestId(`fiscal-stamp-row-${active!.id}`);
+    const newRow = page.getByTestId(`fiscal-stamp-row-${newStamp.id}`);
+    await expect(newRow.getByText("Active", { exact: true })).toBeVisible();
+    await expect(previousRow.getByText("Inactive", { exact: true })).toBeVisible();
   });
 
   test("HU-02b · 6 alerta de vencimiento en menos de 30 días en el dashboard", async ({
@@ -120,7 +154,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     ).toBeVisible();
   });
 
-  test("HU-02b · 8 botón Edit stamp solo permite cambiar Starting invoice number", async ({
+  test("HU-02b · 8 botón Edit stamp: sin facturas se puede cambiar Starting invoice number, establecimiento y punto de expedición", async ({
     page,
     request,
   }) => {
@@ -144,16 +178,14 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     expect(row).toBeTruthy();
     expect(row!.active).toBe(true);
     expect(row!.lockedAfterInvoice).toBe(false);
+    expect(row!.hasInvoices).toBe(false);
 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
-    const stampLbl = page.getByText(stampNumber, { exact: true });
-    await expect(stampLbl).toBeVisible({ timeout: 30_000 });
-    await stampLbl.scrollIntoViewIfNeeded();
-    await page
-      .locator('[data-tour="fiscal-stamp-header"]')
-      .getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ })
-      .click();
+    const stampRow = page.getByTestId(`fiscal-stamp-row-${created.id}`);
+    await expect(stampRow).toBeVisible({ timeout: 30_000 });
+    await stampRow.scrollIntoViewIfNeeded();
+    await stampRow.getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ }).click();
     const dlg = page.getByRole("dialog");
     await expect(
       dlg.getByRole("heading", { name: /^(Edit stamp|Editar timbrado)$/ }),
@@ -162,6 +194,107 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await expect(dlg.getByLabel(/Validity start|Inicio de vigencia/)).toHaveCount(0);
     await expect(dlg.getByLabel(/Validity end|Fin de vigencia/)).toHaveCount(0);
     await expect(dlg.getByLabel(/Stamp number|Número de timbrado/)).toHaveCount(0);
+
+    const establishmentInput = dlg.getByLabel(/^Establishment$|^Establecimiento$/);
+    const expeditionInput = dlg.getByLabel(/Expedition point|Punto de expedición/);
+    await expect(establishmentInput).toBeEditable();
+    await expect(expeditionInput).toBeEditable();
+    await establishmentInput.fill("5");
+    await expeditionInput.fill("6");
+    await dlg.getByRole("button", { name: /^(Save|Guardar)$/ }).click();
+    await expect(dlg).toHaveCount(0);
+
+    const afterEdit = await listFiscalStamps(request, token);
+    const editedRow = afterEdit.find((s) => s.stampNumber === stampNumber);
+    expect(editedRow!.establishment).toBe(5);
+    expect(editedRow!.expeditionPoint).toBe(6);
+  });
+
+  test("HU-02b · 9 timbrado bloqueado: se puede avanzar el número de inicio, pero no retrocederlo", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const todayStr = isoDateLocal(new Date());
+    const until = new Date();
+    until.setFullYear(until.getFullYear() + 1);
+    const stampNumber = `6${Date.now().toString().slice(-7)}`;
+    const created = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
+      stampNumber,
+      validFrom: todayStr,
+      validUntil: isoDateLocal(until),
+      rangeFrom: 6_500_100,
+      rangeTo: 6_500_199,
+      initialEmissionNumber: 6_500_110,
+    });
+    await apiPostJson(request, token, `/api/fiscal-stamps/${created.id}/activate`, {});
+
+    // Issuing one invoice against the stamp sets lockedAfterInvoice=true (InvoiceService), the
+    // same state a real SIFEN dCodRes=1002 "Documento electrónico duplicado" recovery needs to
+    // work from — see FiscalStampService.update().
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU02b9 ${Date.now()}`);
+    await apiPostJson(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          description: seed.serviceFullName,
+          quantity: 1,
+          unitPrice: 55000,
+        },
+      ],
+      payments: [{ method: "CASH", amount: 55000 }],
+    });
+
+    const afterInvoice = await listFiscalStamps(request, token);
+    const lockedRow = afterInvoice.find((s) => s.stampNumber === stampNumber);
+    expect(lockedRow).toBeTruthy();
+    expect(lockedRow!.lockedAfterInvoice).toBe(true);
+    expect(lockedRow!.hasInvoices).toBe(true);
+
+    await loginAsDemo(page);
+    await page.goto("/app/settings/fiscal-stamp");
+    const stampRow = page.getByTestId(`fiscal-stamp-row-${created.id}`);
+    await expect(stampRow).toBeVisible({ timeout: 30_000 });
+    const editButton = stampRow.getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ });
+    await expect(editButton).toBeVisible();
+    await editButton.click();
+
+    const dlg = page.getByRole("dialog");
+    const startInput = dlg.getByLabel(/Starting invoice number|Número de inicio de emisión/);
+    await expect(startInput).toBeVisible();
+
+    // Establishment/expedition point are frozen once the stamp has been used on an invoice — see
+    // FiscalStampService.update() (FISCAL_STAMP_ESTABLISHMENT_LOCKED).
+    const establishmentInput = dlg.getByLabel(/^Establishment$|^Establecimiento$/);
+    const expeditionInput = dlg.getByLabel(/Expedition point|Punto de expedición/);
+    await expect(establishmentInput).toBeDisabled();
+    await expect(expeditionInput).toBeDisabled();
+
+    // Backward move is rejected client-side, without a round trip to the backend.
+    await startInput.fill(String(lockedRow!.nextEmissionNumber - 1));
+    await dlg.getByRole("button", { name: /^(Save|Guardar)$/ }).click();
+    await expect(
+      dlg.getByText(
+        /can only move forward, not backward|solo puede avanzar, no retroceder/,
+      ),
+    ).toBeVisible();
+    await expect(dlg).toBeVisible();
+
+    // Forward move (skipping the number SIFEN already rejected) is accepted.
+    const advancedTo = lockedRow!.nextEmissionNumber + 5;
+    await startInput.fill(String(advancedTo));
+    await dlg.getByRole("button", { name: /^(Save|Guardar)$/ }).click();
+    await expect(dlg).toHaveCount(0);
+
+    const afterEdit = await listFiscalStamps(request, token);
+    const editedRow = afterEdit.find((s) => s.stampNumber === stampNumber);
+    expect(editedRow!.nextEmissionNumber).toBe(advancedTo);
   });
 
   test("HU-02b · 7 alerta de rango de numeración bajo 10%", async ({ page, request }) => {
@@ -174,18 +307,22 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
       contactEmail: null,
       logoDataUrl: null,
     });
-    const stamps = await listFiscalStamps(request, token);
-    const target =
-      stamps.find((s) => s.active) ?? stamps.sort((a, b) => a.id - b.id)[stamps.length - 1];
-    expect(target).toBeTruthy();
+    // Use a dedicated stamp driven to <10% remaining rather than mutating whatever stamp happens
+    // to be active — the backend is shared across the whole suite, and leaving a near-exhausted
+    // stamp active would make every later spec's invoice issuance 409 with
+    // FISCAL_STAMP_RANGE_EXHAUSTED.
     const from = new Date();
     const untilFar = new Date();
     untilFar.setDate(untilFar.getDate() + 400);
-    await apiPutJson(request, token, `/api/fiscal-stamps/${target!.id}`, {
+    const nearlyExhausted = await apiPostJson<{ id: number }>(request, token, "/api/fiscal-stamps", {
+      stampNumber: `4${Date.now().toString().slice(-7)}`,
       validFrom: isoDateLocal(from),
       validUntil: isoDateLocal(untilFar),
-      nextEmissionNumber: target!.rangeTo - 8,
+      rangeFrom: 4_000_000,
+      rangeTo: 4_000_100,
+      initialEmissionNumber: 4_000_093, // 7 of 101 numbers left → under 10%
     });
+    await apiPostJson(request, token, `/api/fiscal-stamps/${nearlyExhausted.id}/activate`, {});
 
     await loginAsDemo(page);
     await page.goto("/app");
@@ -194,5 +331,11 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
         exact: true,
       }),
     ).toBeVisible();
+
+    // Restore a healthy active stamp for the rest of the suite.
+    await request.post(`${API_BASE}/api/fiscal-stamps/${nearlyExhausted.id}/deactivate`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    await ensureActiveFiscalStampForInvoices(request, token);
   });
 });

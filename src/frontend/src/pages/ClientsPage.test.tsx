@@ -100,7 +100,8 @@ describe("ClientsPage", () => {
     expect(form.getByLabelText(/full name/i)).toBeTruthy();
     expect(form.getByLabelText(/^phone$/i)).toBeTruthy();
     expect(form.getByLabelText(/^email$/i)).toBeTruthy();
-    expect(form.getByLabelText(/^ruc$/i)).toBeTruthy();
+    expect(form.getByLabelText(/document type/i)).toBeTruthy();
+    expect(form.getByLabelText(/document number/i)).toBeTruthy();
   });
 
   it("validates required full name field", async () => {
@@ -123,7 +124,7 @@ describe("ClientsPage", () => {
     const form = within(dialog);
     await form.findByLabelText(/full name/i);
     await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
-    await userEvent.type(form.getByLabelText(/^ruc$/i), "invalid-ruc");
+    await userEvent.type(form.getByLabelText(/document number/i), "invalid-ruc");
     await userEvent.click(form.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/invalid ruc/i)).toBeTruthy();
   });

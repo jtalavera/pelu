@@ -37,7 +37,8 @@ async function seedClientBatch(
   }
   const targetName = `${tag} Z Target`;
   await seedClient(request, token, targetName);
-  return { firstId, targetName };
+  // Names are stored in UPPERCASE (issue #155 AC3) — return what the UI actually displays.
+  return { firstId, targetName: targetName.toUpperCase() };
 }
 
 async function gotoClients(page: Page): Promise<void> {
@@ -242,10 +243,10 @@ test.describe("Issue #77 · Services and billing history searches are global", (
     const clientName = `${tag} Cliente Factura`;
     const client = await seedClient(request, token, clientName);
 
-    const issueInvoice = (clientId: number | null) =>
+    const issueInvoice = (clientId: number | null, clientDisplayName: string | null) =>
       apiPostJson(request, token, "/api/invoices", {
         clientId,
-        clientDisplayName: clientId === null ? "CONSUMIDOR FINAL" : null,
+        clientDisplayName,
         clientRucOverride: null,
         discountType: null,
         discountValue: null,
@@ -263,21 +264,25 @@ test.describe("Issue #77 · Services and billing history searches are global", (
       });
 
     // Target invoice first, then 11 newer ones → target lands beyond page 1
-    // (history is ordered by issue date, newest first).
-    await issueInvoice(client.id);
+    // (history is ordered by issue date, newest first). The history text search matches against
+    // clientDisplayName (Issue #96: a selected client's display name is never auto-filled from
+    // their profile), so it must be set explicitly here for the by-name search to find it.
+    await issueInvoice(client.id, clientName);
     for (let i = 0; i < 11; i++) {
-      await issueInvoice(null);
+      await issueInvoice(null, "CONSUMIDOR FINAL");
     }
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
     await page.waitForTimeout(600);
-    await expect(page.getByText(clientName, { exact: true })).toHaveCount(0);
+    // The history row displays the linked client's stored (UPPERCASE, issue #155 AC3) name,
+    // not the raw clientDisplayName text sent above — see issue-139 AC8.
+    await expect(page.getByText(clientName.toUpperCase(), { exact: true })).toHaveCount(0);
 
     await page.locator("#invoice-history-text-filter").fill(clientName);
     await page.waitForTimeout(600);
-    await expect(page.getByText(clientName, { exact: true }).first()).toBeVisible({
+    await expect(page.getByText(clientName.toUpperCase(), { exact: true }).first()).toBeVisible({
       timeout: 10_000,
     });
   });

@@ -33,7 +33,8 @@ test.describe("HU-17 · Anular comprobante", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
@@ -44,7 +45,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     await clickIssueInvoiceAndExpectSuccess(page);
 
     await page.getByRole("tab", { name: "History" }).click();
-    await page.getByRole("button", { name: "View" }).first().click();
+    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
     await page.getByRole("button", { name: "Void invoice" }).click();
     await expect(page.locator("#void-reason")).toBeVisible();
     await page.getByRole("button", { name: "Confirm void" }).click();
@@ -79,7 +80,8 @@ test.describe("HU-17 · Anular comprobante", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill("E2E Vo2");
     await page.getByRole("button", { name: clientName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
@@ -93,11 +95,11 @@ test.describe("HU-17 · Anular comprobante", () => {
     await page.getByRole("tab", { name: "History" }).click();
     // Filter by unique client name to isolate this invoice from previous test runs
     await page.locator("#invoice-history-text-filter").fill(clientName);
-    const clientRow = page.locator("tbody").getByRole("row").first();
+    const clientRow = page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first();
     await expect(clientRow).toBeVisible({ timeout: 15_000 });
     // Total in history table must use dot separator, no decimals
     await expect(clientRow).toContainText("3.000");
-    await clientRow.getByRole("button", { name: "View" }).click();
+    await clientRow.click();
     await page.getByRole("button", { name: "Void invoice" }).click();
     await page.locator("#void-reason").fill("Wrong amount");
     const [voidRes2] = await Promise.all([
@@ -113,7 +115,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     expect(voidRes2.ok(), await voidRes2.text()).toBeTruthy();
     // After void the detail closes; verify the row now shows Voided status
     await expect(
-      page.locator("tbody").getByRole("row").filter({ hasText: "Voided" }).first(),
+      page.locator("tbody tr[role=\"button\"]").filter({ hasText: "Voided" }).filter({ visible: true }).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 });

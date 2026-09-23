@@ -52,7 +52,9 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
     const seed = await seedCategoryServiceProfessional(request, token);
 
     // Client has a real profile name + RUC — both must NOT leak into the PDF once cleared.
-    const clientRuc = "80000005-6";
+    // RUC must be unique per run: the Client entity enforces per-tenant RUC uniqueness, and this
+    // spec can run alongside others (e.g. issue-53) that also create a client with a RUC.
+    const clientRuc = `800${Date.now()}-6`;
     const client = await apiPostJson<{ id: number; fullName: string }>(
       request,
       token,
@@ -67,15 +69,16 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
 
     // Selecting the client auto-fills both fields — clear them to test the blank scenario.
     await expect(page.locator("#client-display-name")).toHaveValue(client.fullName);
-    await expect(page.locator("#client-ruc")).toHaveValue(clientRuc);
+    await expect(page.locator("#client-identity-document-number")).toHaveValue(clientRuc);
     await page.locator("#client-display-name").fill("");
-    await page.locator("#client-ruc").fill("");
+    await page.locator("#client-identity-document-number").fill("");
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");

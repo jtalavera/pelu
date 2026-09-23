@@ -3,13 +3,17 @@ package com.cursorpoc.backend.service;
 import com.azure.communication.email.EmailClient;
 import com.azure.communication.email.EmailClientBuilder;
 import com.azure.communication.email.models.EmailAddress;
+import com.azure.communication.email.models.EmailAttachment;
 import com.azure.communication.email.models.EmailMessage;
+import com.azure.core.util.BinaryData;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class EmailService {
@@ -22,8 +26,14 @@ public class EmailService {
   @Value("${app.femme.email.connection-string:}")
   private String connectionString;
 
-  @Value("${app.femme.email.sender-address:}")
-  private String senderAddress;
+  @Value("${app.femme.email.sender-address.reminders:}")
+  private String senderAddressReminders;
+
+  @Value("${app.femme.email.sender-address.invoices:}")
+  private String senderAddressInvoices;
+
+  @Value("${app.femme.email.sender-address.generic:}")
+  private String senderAddressGeneric;
 
   private final MessageSource messageSource;
 
@@ -31,34 +41,187 @@ public class EmailService {
     this.messageSource = messageSource;
   }
 
-  public void sendActivationLink(String toEmail, String activationUrl, Locale locale) {
-    String subject = messageSource.getMessage("email.activation.subject", null, locale);
-    String body =
-        messageSource.getMessage("email.activation.body", new Object[] {activationUrl}, locale);
+  /**
+   * {@code enabled} alone isn't enough: a blank connection string (the local/dev default when
+   * {@code ACS_CONNECTION_STRING} isn't set) previously reached {@link EmailClientBuilder} anyway,
+   * which throws an unmapped Azure SDK exception that {@code GlobalExceptionHandler} can't
+   * translate to a proper error code — surfacing as HU-33 AC-02's "generic error". Treating a blank
+   * connection string the same as disabled keeps that misconfiguration silent (dev-log fallback)
+   * instead of a confusing crash.
+   */
+  private boolean isEffectivelyEnabled() {
+    return enabled && !connectionString.isBlank();
+  }
 
-    if (!enabled) {
+  public void sendActivationLink(
+      String toEmail, String activationUrl, String tenantName, Locale locale) {
+    String subject =
+        messageSource.getMessage("email.activation.subject", new Object[] {tenantName}, locale);
+    String body =
+        messageSource.getMessage(
+            "email.activation.body", new Object[] {activationUrl, tenantName}, locale);
+
+    if (!isEffectivelyEnabled()) {
       log.info(
           "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
-          senderAddress.isBlank() ? "no-sender-configured" : senderAddress,
+          senderAddressGeneric.isBlank() ? "no-sender-configured" : senderAddressGeneric,
           toEmail,
           subject,
           body);
       return;
     }
 
-    EmailClient client = new EmailClientBuilder().connectionString(connectionString).buildClient();
-    EmailMessage message =
-        new EmailMessage()
-            .setSenderAddress(senderAddress)
-            .setToRecipients(new EmailAddress(toEmail))
-            .setSubject(subject)
-            .setBodyPlainText(body);
-    client.beginSend(message).getFinalResult();
-    log.info(
-        "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
-        senderAddress,
-        toEmail,
-        subject,
-        locale.getLanguage());
+    try {
+      EmailClient client =
+          new EmailClientBuilder().connectionString(connectionString).buildClient();
+      EmailMessage message =
+          new EmailMessage()
+              .setSenderAddress(senderAddressGeneric)
+              .setToRecipients(new EmailAddress(toEmail))
+              .setSubject(subject)
+              .setBodyPlainText(body);
+      client.beginSend(message).getFinalResult();
+      log.info(
+          "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
+          senderAddressGeneric,
+          toEmail,
+          subject,
+          locale.getLanguage());
+    } catch (Exception ex) {
+      log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
+  }
+
+  /**
+   * HU-44 AC-2/AC-4: sends the password-reset link — same shape and dev/e2e logging fallback as
+   * {@link #sendActivationLink} — used both by the self-service "forgot password" flow and by a
+   * Platform-Admin-triggered reset for a tenant user who already activated their account.
+   */
+  public void sendPasswordResetLink(
+      String toEmail, String resetUrl, String tenantName, Locale locale) {
+    String subject =
+        messageSource.getMessage("email.passwordReset.subject", new Object[] {tenantName}, locale);
+    String body =
+        messageSource.getMessage(
+            "email.passwordReset.body", new Object[] {resetUrl, tenantName}, locale);
+
+    if (!isEffectivelyEnabled()) {
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
+          senderAddressGeneric.isBlank() ? "no-sender-configured" : senderAddressGeneric,
+          toEmail,
+          subject,
+          body);
+      return;
+    }
+
+    try {
+      EmailClient client =
+          new EmailClientBuilder().connectionString(connectionString).buildClient();
+      EmailMessage message =
+          new EmailMessage()
+              .setSenderAddress(senderAddressGeneric)
+              .setToRecipients(new EmailAddress(toEmail))
+              .setSubject(subject)
+              .setBodyPlainText(body);
+      client.beginSend(message).getFinalResult();
+      log.info(
+          "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
+          senderAddressGeneric,
+          toEmail,
+          subject,
+          locale.getLanguage());
+    } catch (Exception ex) {
+      log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
+  }
+
+  /**
+   * Issue #218: generic plain-text send for system-triggered notifications that build their own
+   * subject/body via {@link MessageSource} (e.g. appointment reminders) instead of hard-coding a
+   * dedicated method per notification type — same enabled/disabled dev-log branching as every other
+   * send here.
+   */
+  public void sendPlainTextEmail(String toEmail, String subject, String body) {
+    if (!isEffectivelyEnabled()) {
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" body=\"{}\"",
+          senderAddressReminders.isBlank() ? "no-sender-configured" : senderAddressReminders,
+          toEmail,
+          subject,
+          body);
+      return;
+    }
+
+    try {
+      EmailClient client =
+          new EmailClientBuilder().connectionString(connectionString).buildClient();
+      EmailMessage message =
+          new EmailMessage()
+              .setSenderAddress(senderAddressReminders)
+              .setToRecipients(new EmailAddress(toEmail))
+              .setSubject(subject)
+              .setBodyPlainText(body);
+      client.beginSend(message).getFinalResult();
+      log.info("EMAIL SENT from={} to={} subject=\"{}\"", senderAddressReminders, toEmail, subject);
+    } catch (Exception ex) {
+      log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
+  }
+
+  /**
+   * SIFEN HU-08 AC-17: sends an email with a single PDF attachment (the KuDE) — same
+   * enabled/disabled branching as {@link #sendActivationLink}, logging the would-be send instead of
+   * calling Azure Communication Email when {@code app.femme.email.enabled=false} (dev/e2e).
+   */
+  public void sendPdfAttachment(
+      String toEmail,
+      String subject,
+      String body,
+      String attachmentFilename,
+      byte[] attachmentBytes) {
+    if (!isEffectivelyEnabled()) {
+      log.info(
+          "EMAIL (dev) from={} to={} subject=\"{}\" attachment={} bytes={}",
+          senderAddressInvoices.isBlank() ? "no-sender-configured" : senderAddressInvoices,
+          toEmail,
+          subject,
+          attachmentFilename,
+          attachmentBytes.length);
+      return;
+    }
+
+    try {
+      EmailClient client =
+          new EmailClientBuilder().connectionString(connectionString).buildClient();
+      EmailAttachment attachment =
+          new EmailAttachment(
+              attachmentFilename, "application/pdf", BinaryData.fromBytes(attachmentBytes));
+      EmailMessage message =
+          new EmailMessage()
+              .setSenderAddress(senderAddressInvoices)
+              .setToRecipients(new EmailAddress(toEmail))
+              .setSubject(subject)
+              .setBodyPlainText(body)
+              .setAttachments(attachment);
+      client.beginSend(message).getFinalResult();
+      log.info(
+          "EMAIL SENT (with attachment) from={} to={} subject=\"{}\" attachment={}",
+          senderAddressInvoices,
+          toEmail,
+          subject,
+          attachmentFilename);
+    } catch (Exception ex) {
+      log.error(
+          "EMAIL send (with attachment) failed to={} subject=\"{}\" attachment={}",
+          toEmail,
+          subject,
+          attachmentFilename,
+          ex);
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
   }
 }

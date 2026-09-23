@@ -8,12 +8,15 @@ import static org.mockito.Mockito.when;
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
+import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.web.dto.DashboardResponse;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,9 +30,11 @@ class DashboardServiceFiscalAlertsTest {
   private static final ZoneId ZONE = ZoneId.of("America/Asuncion");
 
   @Mock private AppointmentRepository appointmentRepository;
+  @Mock private ClientRepository clientRepository;
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private FiscalStampRepository fiscalStampRepository;
   @Mock private BusinessProfileService businessProfileService;
+  @Mock private SifenNumberVoidingService sifenNumberVoidingService;
 
   private DashboardService dashboardService;
 
@@ -41,9 +46,14 @@ class DashboardServiceFiscalAlertsTest {
         new DashboardService(
             time,
             appointmentRepository,
+            clientRepository,
             invoiceRepository,
             fiscalStampRepository,
-            businessProfileService);
+            businessProfileService,
+            sifenNumberVoidingService);
+    when(clientRepository.findActiveClientsWithLastCompletedVisit(
+            eq(1L), eq(AppointmentStatus.COMPLETED)))
+        .thenReturn(List.of());
   }
 
   @Test
@@ -95,6 +105,39 @@ class DashboardServiceFiscalAlertsTest {
     DashboardResponse d = dashboardService.build(1L);
 
     assertThat(d.fiscalAlerts()).anyMatch(a -> "fiscalExpiringSoon".equals(a.messageKey()));
+  }
+
+  @Test
+  void warningWhenNumberVoidingsPending() {
+    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp()));
+    when(sifenNumberVoidingService.pendingSummary(1L))
+        .thenReturn(
+            Optional.of(
+                new SifenNumberVoidingService.PendingVoidingSummary(
+                    2, LocalDate.now(ZONE).plusDays(10))));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.fiscalAlerts()).anyMatch(a -> "sifenVoidingPending".equals(a.messageKey()));
+  }
+
+  @Test
+  void warningWhenNumberVoidingsOverdue() {
+    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp()));
+    when(sifenNumberVoidingService.pendingSummary(1L))
+        .thenReturn(
+            Optional.of(
+                new SifenNumberVoidingService.PendingVoidingSummary(
+                    1, LocalDate.now(ZONE).minusDays(1))));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.fiscalAlerts()).anyMatch(a -> "sifenVoidingOverdue".equals(a.messageKey()));
+    assertThat(d.fiscalAlerts()).noneMatch(a -> "sifenVoidingPending".equals(a.messageKey()));
   }
 
   private static FiscalStamp activeStamp() {

@@ -11,7 +11,25 @@ public record InvoiceResponse(
     String fiscalStampNumber,
     Long clientId,
     String clientDisplayName,
+    // Issue #167: the linked client's own email on file, if any — lets the frontend prefill the
+    // KuDE-by-email field without a separate client lookup. Null whenever there's no linked client
+    // or that client has no email; the backend already falls back to it server-side regardless (see
+    // SifenKudeEmailService#resolveRecipientEmail), this is purely so the field isn't left blank.
+    String clientEmail,
+    // Issue #215 follow-up: the linked client's own phone on file, if any — lets the frontend open
+    // the WhatsApp KuDE send directly against that contact instead of the generic wa.me composer.
+    String clientPhone,
+    // Issue #173: the email captured on the comprobante form for this specific document (what the
+    // KuDE / cancellation notice is actually sent to). May differ from clientEmail for an
+    // occasional
+    // client or when the operator typed a one-off address.
+    String recipientEmail,
     String clientRucOverride,
+    String clientIdentityDocumentOverride,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
+    String clientIdentityDocumentTypeOverride,
+    /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
+    String clientTaxpayerTypeOverride,
     String businessRuc,
     String status,
     BigDecimal subtotal,
@@ -21,5 +39,66 @@ public record InvoiceResponse(
     Instant issuedAt,
     Long cashSessionId,
     String voidReason,
+    BigDecimal tipsAmount,
+    Long serviceRecordId,
     List<InvoiceLineResponse> lines,
-    List<InvoicePaymentAllocationResponse> payments) {}
+    List<InvoicePaymentAllocationResponse> payments,
+    String sifenControlNumber,
+    String sifenSubmissionStatus,
+    String sifenSubmissionProtocolNumber,
+    String sifenSubmissionResultCode,
+    String sifenSubmissionMessage,
+    String sifenQueryDocumentContent,
+    String sifenVerificationUrl,
+    // SIFEN HU-10 AC-02: the deadline (48h after sifenSubmittedAt) up to which cancellation is
+    // still possible — null whenever the invoice isn't currently eligible (never approved, or
+    // already cancelled) so the frontend doesn't need to reimplement that eligibility logic.
+    Instant sifenCancellationDeadlineAt,
+    // Issue #145: the instant (sifenSubmittedAt + MINIMUM_CANCELLATION_DELAY) from which
+    // cancellation is actually accepted — same null-guard as sifenCancellationDeadlineAt, so the
+    // frontend can disable the cancel button and show a short cooldown message instead of letting
+    // the user hit SIFEN's own "extemporáneo" rejection for a just-approved invoice.
+    Instant sifenCancellationAvailableAt,
+    // AC-05: historical record of the last cancellation attempt, whichever outcome it had.
+    Instant sifenCancellationRequestedAt,
+    String sifenCancellationRequestedByEmail,
+    String sifenCancellationReason,
+    String sifenCancellationResultCode,
+    String sifenCancellationMessage,
+    // SIFEN HU-11 AC-01: true only while this invoice is currently eligible for "identify client" —
+    // approved, issued without client data, not yet identified — so the frontend doesn't need to
+    // reimplement that eligibility logic (SifenInvoiceClientIdentificationService.requireEligible
+    // is still the authoritative check the endpoint itself re-validates).
+    boolean sifenClientIdentificationEligible,
+    boolean sifenClientIdentified,
+    // AC-05/AC-06: historical record of the last client-identification attempt, either outcome.
+    Instant sifenClientIdentificationRequestedAt,
+    String sifenClientIdentificationRequestedByEmail,
+    String sifenClientIdentificationClientType,
+    String sifenClientIdentificationName,
+    String sifenClientIdentificationRuc,
+    String sifenClientIdentificationIdentityDocument,
+    String sifenClientIdentificationAddress,
+    String sifenClientIdentificationCountryCode,
+    String sifenClientIdentificationResultCode,
+    String sifenClientIdentificationMessage,
+    // Issue #173: set once the KuDE for this document was auto-emailed after a successful SIFEN
+    // result; null until then (and while SIFEN hasn't approved it).
+    Instant sifenKudeEmailedAt,
+    // Issue #173: set once the client was emailed a cancellation notice for this document; null
+    // until then (and while the document hasn't been cancelled with SIFEN).
+    Instant sifenCancellationNotifiedAt,
+    // Current "inutilización de numeración" state for this invoice's number
+    // (SifenNumberVoidingStatus name), or null if none was ever recorded. Once APPROVED /
+    // APPROVED_WITH_OBSERVATION the number is dead — the frontend hides "Corregir y reenviar".
+    String sifenNumberVoidingStatus,
+    // Issue #190: the instant up to which correcting & resending this rejected DE still falls
+    // inside
+    // SIFEN's transmission window. SIFEN requires the XML to be transmitted within 72h of the
+    // digital signature ("Manual Técnico: hasta 72 horas posteriores a la firma digital"); past
+    // that
+    // a resend is transmitted extemporaneously and SIFEN is very likely to reject it. Anchored on
+    // the invoice's emission instant (issuedAt) + 72h. Non-null only while the invoice is actually
+    // in the "resolve rejected" flow (REJECTED, not voided, number not inutilizado); the frontend
+    // shows a non-blocking warning once now is past it — the resend itself is never blocked.
+    Instant sifenCorrectResendDeadlineAt) {}

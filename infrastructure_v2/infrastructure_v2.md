@@ -9,7 +9,7 @@ Browser
   ├── Azure Static Web App (Free) ─────────────── React SPA
   └── Azure Container App (Consumption)  ──────── Spring Boot :8080
         │  system-assigned managed identity
-        ├── Azure SQL Database (serverless, auto-pause)
+        ├── Azure SQL Database (Basic tier)
         ├── Azure Communication Services (email)
         └── Application Insights / Log Analytics
 ```
@@ -33,12 +33,12 @@ code (`infrastructure/`, `ci.yml`) have been retired.
 |---|---|---|
 | Static Web App (Free) | $0 | $0 |
 | Container App (min 0, 0.25 vCPU / 0.5 GiB) | $0–2 | $0–2 |
-| Azure SQL (serverless GP_S_Gen5_1, auto-pause) | $0–5 | $5–15 |
+| Azure SQL (Basic tier, 5 DTU / 2 GB, no auto-pause) | ≈ $5 | ≈ $5 |
 | SQL backup storage (Local / Zone) | $0–1 | $1–3 |
 | Log Analytics (0.5 GB/day cap) | $0–3 | $0–3 |
 | Application Insights (workspace-based) | $0–2 | $0–2 |
 | Communication Services (email) | $0–1 | $0–1 |
-| **Total** | **≈ $0–10** | **≈ $5–25** |
+| **Total** | **≈ $5–11** | **≈ $9–14** |
 
 ## Applying per environment
 
@@ -131,6 +131,67 @@ sqlcmd -S "$SERVER_FQDN" -d "$DB_NAME" \
 ```
 
 `db_ddladmin` is required so Flyway can run migrations on startup.
+
+## Post-apply: seed the Key Vault JWT secret (RT-12/RT-18)
+
+After the first `terraform apply` that includes the Key Vault, the backend expects
+`app-femme-jwt-secret` to already exist — it fetches this at boot
+(`KeyVaultSecretsEnvironmentPostProcessor`) and **fails to start if it's missing**. Seed it
+**before** deploying a backend image built from this story, using the *current* effective JWT
+secret value (whatever `FEMME_JWT_SECRET` was set to previously, or the hardcoded dev default if
+it was never overridden) — this migrates the value verbatim and rotates nothing, so no active
+session is invalidated. Any *later* rotation (a genuinely new value) does invalidate every active
+session — expected, not a bug.
+
+```bash
+KEY_VAULT_NAME="<terraform output -raw key_vault_name>"
+az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name app-femme-jwt-secret \
+  --value "<the current JWT secret value>"
+```
+
+Requires the "Key Vault Secrets Officer" role on the vault — already granted by Terraform to
+`entra_sql_admin_object_id` (see `azurerm_role_assignment.deployer_kv_secrets_officer`).
+
+**Expect the first revision after a fresh apply to crash-loop for a few minutes** while the
+Container App's "Key Vault Secrets Officer" role assignment propagates through Entra RBAC — this
+is normal, not a sign anything is misconfigured.
+
+**RT-17 — every tenant with a SIFEN certificate must re-upload it.** The migration that moves
+certificate storage to Key Vault (`V34__sifen_certificates_keyvault_refs.sql`) deletes existing
+`sifen_certificates` rows — there is deliberately no automated migration script (see the
+migration's own header comment and RT-17 in `Hardening_SIFEN.md` for why). **Coordinate with every
+tenant that has a certificate uploaded before applying this migration in an environment with real
+tenant data** — after it runs, `SIFEN_ELECTRONIC_INVOICING` tenants cannot issue an invoice until
+they re-upload via the existing certificate screen (`InvoiceController.issue` blocks on
+`SIFEN_NO_VALID_CERTIFICATE` otherwise). Check the blast radius first:
+
+```sql
+SELECT tenant_id, COUNT(*) FROM sifen_certificates GROUP BY tenant_id;
+```
+
+## Operational notes: Service Bus (RT-20)
+
+- **Scale-to-zero and the queue consumer.** `SifenSubmissionQueueListener` (the Service Bus
+  consumer) runs *inside* the backend Container App. Both environments keep
+  `backend_min_replicas = 0` — a deliberate decision, not an oversight — so while the container is
+  scaled to zero, queued invoices are not transmitted until an unrelated HTTP request wakes it, or
+  until prod's wake schedule (07:00–20:00 Mon–Sat, `backend_wake_schedule_enabled`) brings it up.
+  `SifenSubmissionReconciler` (the retry/safety-net job) only runs while the app is alive, same as
+  everything else in the JVM — it does not itself keep the container awake. Outside those hours,
+  transmission latency for a queued invoice is bounded only by the next request that happens to
+  arrive. If this latency becomes a real problem, the fix is `backend_min_replicas = 1` for
+  SIFEN-enabled environments (an always-on cost) or a KEDA `azure-servicebus` scale rule — neither
+  is wired up here.
+- **Dead-letter queue.** A message lands in the DLQ (`sifen-submission/$deadletterqueue`) either
+  because the consumer classified the failure as terminal (see `SifenSubmissionQueueListener`'s
+  `Outcome.DEAD_LETTERED`) or because `max_delivery_count` (6) was exceeded. Per RT-20: an invoice
+  in the DLQ is a fiscal document the app has given up on resolving by itself — it needs a human to
+  look at it. No automated alert is wired up in this Terraform (there's no existing action
+  group/alerting pipeline in this stack to hook into yet); until one exists, check manually:
+  ```bash
+  az servicebus queue show --resource-group <rg> --namespace-name <namespace-from-service_bus_namespace-output> \
+    --name sifen-submission --query countDetails.deadLetterMessageCount
+  ```
 
 ## SQL free-limit grant (not enabled — known limitation)
 

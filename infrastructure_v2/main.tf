@@ -5,6 +5,10 @@ resource "random_string" "suffix" {
   upper   = false
 }
 
+# RT-12/RT-18 (Hardening_SIFEN.md): the tenant this deployment's credentials belong to, needed to
+# create the Key Vault (Entra tenant ID, not this app's own multi-tenant "tenant" concept).
+data "azurerm_client_config" "current" {}
+
 # ---------------------------------------------------------------------------
 # Locals
 # ---------------------------------------------------------------------------
@@ -31,7 +35,15 @@ locals {
     ["https://${azurerm_static_web_app.frontend.default_host_name}"],
     [for d in var.frontend_custom_domains : "https://${d}"]
   ))
-  acs_sender_address = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
+  # Per-type sender addresses: once var.email_custom_domain is set (and verified — see the
+  # "Azure Communication Services — email" section below), each sends from its own mailbox on
+  # that domain; until then every one falls back to the single AzureManaged address, unchanged
+  # from before this was split.
+  email_domain_ready               = var.email_custom_domain != ""
+  acs_azure_managed_sender_address = "DoNotReply@${azurerm_email_communication_service_domain.main.from_sender_domain}"
+  acs_sender_address_reminders     = local.email_domain_ready ? "${var.email_sender_username_reminders}@${var.email_custom_domain}" : local.acs_azure_managed_sender_address
+  acs_sender_address_invoices      = local.email_domain_ready ? "${var.email_sender_username_invoices}@${var.email_custom_domain}" : local.acs_azure_managed_sender_address
+  acs_sender_address_generic       = local.email_domain_ready ? "${var.email_sender_username_generic}@${var.email_custom_domain}" : local.acs_azure_managed_sender_address
 
   # Tags applied to every resource. Additional tags can be passed via var.tags.
   tags = merge({
@@ -146,11 +158,12 @@ resource "azurerm_mssql_database" "app" {
   server_id = azurerm_mssql_server.main.id
   collation = "SQL_Latin1_General_CP1_CI_AS"
 
-  # Serverless General Purpose, Gen5, 1 vCore max / 0.5 vCore min.
-  # Auto-pauses after 60 min of inactivity to minimise cost.
-  sku_name                    = "GP_S_Gen5_1"
-  min_capacity                = 0.5
-  auto_pause_delay_in_minutes = 60
+  # Basic tier: fixed 5 DTU, 2 GB max size, no auto-pause. Matches what's
+  # actually deployed — set manually in the Portal in both environments as a
+  # cost-mitigation stopgap during the useSessionRefresh 401 retry-loop
+  # incident, and kept afterward. Terraform now reflects reality rather than
+  # reverting the live databases back to serverless.
+  sku_name = "Basic"
 
   # test: Local (cheapest). prod: Zone (zone-resilient PITR backups).
   storage_account_type = var.sql_backup_storage_redundancy
@@ -198,6 +211,204 @@ resource "azurerm_communication_service" "main" {
 resource "azurerm_communication_service_email_domain_association" "main" {
   communication_service_id = azurerm_communication_service.main.id
   email_service_domain_id  = azurerm_email_communication_service_domain.main.id
+}
+
+# Custom domain for per-type sender addresses (turnos@/factura@/no-reply@<var.email_custom_domain>).
+# Gated by var.email_custom_domain so this whole module keeps working (on the AzureManaged
+# domain) before the domain is provisioned. Rollout is necessarily two-step because Azure can't
+# verify DNS records that don't exist yet:
+#   1. apply with only email_custom_domain set — creates this resource and computes
+#      verification_records (see output email_domain_verification_records); add those at the
+#      domain's DNS provider (not managed by this Terraform config) and wait for propagation.
+#   2. apply again with email_domain_verification_enabled=true — fires initiateVerification for
+#      each record type. Azure verifies asynchronously; check status in the Portal or via
+#      `az communication email domain show`, and re-run with `-replace` on the relevant
+#      azapi_resource_action if a record wasn't visible yet on the first attempt.
+resource "azurerm_email_communication_service_domain" "custom" {
+  count             = local.email_domain_ready ? 1 : 0
+  name              = var.email_custom_domain
+  email_service_id  = azurerm_email_communication_service.main.id
+  domain_management = "CustomerManaged"
+  tags              = local.tags
+}
+
+resource "azurerm_communication_service_email_domain_association" "custom" {
+  count                    = local.email_domain_ready ? 1 : 0
+  communication_service_id = azurerm_communication_service.main.id
+  email_service_domain_id  = azurerm_email_communication_service_domain.custom[0].id
+}
+
+resource "azurerm_email_communication_service_domain_sender_username" "senders" {
+  for_each = local.email_domain_ready ? {
+    reminders = var.email_sender_username_reminders
+    invoices  = var.email_sender_username_invoices
+    generic   = var.email_sender_username_generic
+  } : {}
+
+  name                    = each.value
+  email_service_domain_id = azurerm_email_communication_service_domain.custom[0].id
+}
+
+resource "azapi_resource_action" "verify_custom_email_domain" {
+  for_each = local.email_domain_ready && var.email_domain_verification_enabled ? toset(
+    ["Domain", "SPF", "DKIM", "DKIM2"]
+  ) : toset([])
+
+  type        = "Microsoft.Communication/emailServices/domains@2023-03-31"
+  resource_id = azurerm_email_communication_service_domain.custom[0].id
+  action      = "initiateVerification"
+  method      = "POST"
+  body        = { verificationType = each.value }
+}
+
+# ---------------------------------------------------------------------------
+# Key Vault — RT-12/RT-13/RT-18 (Hardening_SIFEN.md): per-tenant SIFEN certificate secrets
+# (.p12 + password, one pair per tenant, see KeyVaultSifenCertificateSecretStore) and the
+# app-wide JWT signing secret (see KeyVaultSecretsEnvironmentPostProcessor). RBAC authorization
+# only — no access policies, no SAS/connection-string auth. Write-only in this PR: apply per
+# environment when ready (see infrastructure_v2.md post-apply steps for what has to happen
+# immediately after, including a manual re-upload of every tenant's SIFEN certificate — RT-17).
+# ---------------------------------------------------------------------------
+
+# purge_protection_enabled below is deliberately environment-conditional
+# (environments/dev|prod/terraform.tfvars): dev runs with it off so the vault is cheap to tear
+# down, prod always sets it true. Semgrep can't evaluate the variable statically, so it flags this
+# every time regardless of which environment applies — suppressed with justification below.
+#
+# network_acls default_action is "Allow" rather than "Deny": Container Apps is not on Key
+# Vault's trusted-services bypass list, and this app runs outside a VNet, so a "Deny" default
+# would block the backend's own data-plane calls regardless of its RBAC grant. Access control
+# here is RBAC + Managed Identity by design, not network isolation — also suppressed below.
+resource "azurerm_key_vault" "main" { # nosemgrep: terraform.azure.security.keyvault.keyvault-purge-enabled.keyvault-purge-enabled, terraform.azure.security.keyvault.keyvault-specify-network-acl.keyvault-specify-network-acl
+  name                = "${var.name_prefix}-kv-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+
+  rbac_authorization_enabled = true
+
+  # test: 7 days + no purge protection, cheap to tear down. prod: 90 days + purge protection is
+  # IRREVERSIBLE once applied (a vault holding fiscal signing keys should not be purgeable).
+  soft_delete_retention_days = var.key_vault_soft_delete_retention_days
+  purge_protection_enabled   = var.key_vault_purge_protection_enabled
+
+  # Container Apps here run outside a VNet (same reason azurerm_mssql_firewall_rule.allow_azure_services
+  # allows 0.0.0.0/0) — access control is RBAC + Managed Identity, not network isolation.
+  # default_action must be "Allow": Container Apps is NOT on Key Vault's trusted-services
+  # bypass list, so a "Deny" default blocks the backend's own data-plane calls (and any
+  # operator running `az keyvault secret set` from outside Azure) regardless of RBAC grants.
+  public_network_access_enabled = true
+
+  network_acls {
+    default_action = "Allow"
+    bypass         = "AzureServices"
+  }
+
+  tags = local.tags
+}
+
+# The app CREATES secrets on certificate upload (SifenCertificateService.upload), so read-only
+# "Key Vault Secrets User" is not enough — it needs "Secrets Officer".
+resource "azurerm_role_assignment" "backend_kv_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+# So an operator can seed app-femme-jwt-secret post-apply (see infrastructure_v2.md) — its value
+# must never enter Terraform state, so it's set out-of-band via `az keyvault secret set`.
+resource "azurerm_role_assignment" "deployer_kv_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "key_vault" {
+  name                       = "kv-diag"
+  target_resource_id         = azurerm_key_vault.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "AuditEvent"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Service Bus — RT-20 (Hardening_SIFEN.md): asynchronous SIFEN transmission. The issue request
+# never calls SIFEN synchronously; it signs the document and enqueues a transmit attempt here
+# instead. Basic tier: queues + scheduled messages only — no topics, no sessions, no duplicate
+# detection, no transactions. Deployed in BOTH environments (dev/testing also needs to process
+# against SIFEN's TEST environment asynchronously, not just prod). Write-only in this PR: apply
+# per environment when ready.
+# ---------------------------------------------------------------------------
+
+resource "azurerm_servicebus_namespace" "main" {
+  name                = "${var.name_prefix}-sb-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "Basic"
+  # Managed Identity only — no SAS keys to leak (same posture as SQL's Entra-only auth).
+  local_auth_enabled = false
+  tags               = local.tags
+
+  # Basic-tier constraints — Premium-only attributes that MUST NOT be set here:
+  #   capacity, premium_messaging_partitions, zone_redundant, customer_managed_key, network_rule_set
+}
+
+resource "azurerm_servicebus_queue" "sifen_submission" {
+  name         = "sifen-submission"
+  namespace_id = azurerm_servicebus_namespace.main.id
+
+  # Matches SifenSubmissionQueueListener.MAX_ATTEMPTS (initial attempt + 5 backoff retries).
+  max_delivery_count = 6
+  # Longer than the ~30s SIFEN timeout; Basic tier's maximum.
+  lock_duration = "PT5M"
+  # Basic tier's maximum (14 days) is not needed — the 72h signature transmission window is the
+  # real bound on how long a message can usefully stay queued.
+  default_message_ttl                  = "P7D"
+  dead_lettering_on_message_expiration = true
+
+  # Basic-tier constraints — setting any of these fails the apply:
+  #   requires_session, requires_duplicate_detection, forward_to,
+  #   forward_dead_lettered_messages_to, max_message_size_in_kilobytes (Premium only)
+}
+
+# Two narrow roles rather than one "Azure Service Bus Data Owner".
+resource "azurerm_role_assignment" "backend_sb_sender" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Sender"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "backend_sb_receiver" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Receiver"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+# Same group granted Key Vault access via deployer_kv_secrets_officer above — lets developers run
+# the backend locally against the real dev Service Bus queue instead of the in-process fallback.
+resource "azurerm_role_assignment" "deployer_sb_sender" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Sender"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_role_assignment" "deployer_sb_receiver" {
+  scope                = azurerm_servicebus_queue.sifen_submission.id
+  role_definition_name = "Azure Service Bus Data Receiver"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "service_bus" {
+  name                       = "sb-diag"
+  target_resource_id         = azurerm_servicebus_namespace.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "OperationalLogs"
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -263,8 +474,8 @@ resource "azurerm_container_app" "backend" {
     container {
       name   = "backend"
       image  = var.backend_container_image
-      cpu    = 0.25
-      memory = "0.5Gi"
+      cpu    = 0.5
+      memory = "1Gi"
 
       # Passwordless SQL via managed identity.
       # The MSSQL JDBC driver rejects any non-empty password when
@@ -296,13 +507,55 @@ resource "azurerm_container_app" "backend" {
       }
 
       env {
-        name  = "ACS_SENDER_ADDRESS"
-        value = local.acs_sender_address
+        name  = "ACS_SENDER_ADDRESS_REMINDERS"
+        value = local.acs_sender_address_reminders
+      }
+
+      env {
+        name  = "ACS_SENDER_ADDRESS_INVOICES"
+        value = local.acs_sender_address_invoices
+      }
+
+      env {
+        name  = "ACS_SENDER_ADDRESS_GENERIC"
+        value = local.acs_sender_address_generic
       }
 
       env {
         name        = "APPLICATIONINSIGHTS_CONNECTION_STRING"
         secret_name = "appinsights-connection-string"
+      }
+
+      env {
+        name  = "FEMME_KEYVAULT_ENABLED"
+        value = "true"
+      }
+
+      env {
+        name  = "FEMME_KEYVAULT_URI"
+        value = azurerm_key_vault.main.vault_uri
+      }
+
+      env {
+        name  = "FEMME_SERVICEBUS_ENABLED"
+        value = "true"
+      }
+
+      env {
+        # ServiceBusClientBuilder.fullyQualifiedNamespace() wants the FQDN, not
+        # azurerm_servicebus_namespace.main.endpoint (an https://…:443/ URL).
+        name  = "FEMME_SERVICEBUS_NAMESPACE"
+        value = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
+      }
+
+      env {
+        name  = "FEMME_SERVICEBUS_QUEUE"
+        value = azurerm_servicebus_queue.sifen_submission.name
+      }
+
+      env {
+        name  = "FEMME_REPORT_WARMUP_ENABLED"
+        value = tostring(var.backend_report_warmup_enabled)
       }
 
       # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on

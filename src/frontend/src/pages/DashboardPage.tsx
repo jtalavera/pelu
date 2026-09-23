@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Spinner, Text } from "@design-system";
+import { Alert, Button, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
+import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
+import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
-import { formatGuaraniesGs } from "../lib/formatMoney";
+import { formatGuaraniesGs, formatAmountDecimal } from "../lib/formatMoney";
+import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useTour } from "../tour/useTour";
 import { dashboardSteps } from "../tour/steps/dashboard";
@@ -29,6 +33,53 @@ type DashboardResponse = {
   /** Distinct registered clients with ≥1 completed-type appointment in the current calendar month (tenant TZ). */
   clientsThisMonth: number;
   fiscalAlerts: Array<{ severity: string; messageKey: string; message: string }>;
+  /**
+   * Issue #216 · "Panel de clientes inactivos" — active clients with at least one `COMPLETED`
+   * appointment whose most recent one is `inactiveClientsThresholdDays`+ days old (clients who
+   * never had a completed visit are excluded entirely — issue #216 follow-up), ordered by days of
+   * inactivity descending, capped to the top N (see `DashboardService.INACTIVE_CLIENTS_LIMIT`) —
+   * "Ver todas" links to the full paginated list.
+   */
+  inactiveClients: Array<{
+    clientId: number;
+    fullName: string;
+    phone: string | null;
+    daysSinceLastVisit: number;
+    lastVisitAt: string;
+  }>;
+  /** `DashboardService.INACTIVE_CLIENT_THRESHOLD_DAYS` — returned so the frontend never hardcodes it. */
+  inactiveClientsThresholdDays: number;
+  /**
+   * Issue #219 · "Dashboard: fundamentos de gráficos + tendencia de facturación" — daily invoiced
+   * (`ISSUED`) revenue over the trailing `revenueTrendDays`-day window, oldest first, one point per
+   * calendar day (business timezone) with no gaps (a day with no invoices is `0`, not omitted).
+   */
+  revenueTrend: Array<{ date: string; invoiced: string | number }>;
+  /** `DashboardService.REVENUE_TREND_DAYS` — returned so the frontend never hardcodes it. */
+  revenueTrendDays: number;
+  /**
+   * Issue #220 · "Dashboard: gráfico de servicios más vendidos" — top services by invoiced
+   * (`ISSUED`) revenue over the same trailing `revenueTrendDays`-day window as `revenueTrend`,
+   * ordered by revenue descending, capped server-side (see `DashboardService.TOP_SERVICES_LIMIT`).
+   */
+  topServices: Array<{ serviceName: string; revenue: string | number }>;
+  /**
+   * Issue #221 · "Dashboard: gráfico de mezcla de medios de pago" — invoiced (`ISSUED`) revenue by
+   * `PaymentMethod` over the same trailing `revenueTrendDays`-day window as `revenueTrend`/
+   * `topServices`, ordered by amount descending, including every payment method actually present
+   * in the window (no fixed/hardcoded subset, capped server-side to nothing).
+   */
+  paymentMethodMix: Array<{ method: string; amount: string | number }>;
+  /**
+   * Issue #222 · "Dashboard: gráfico de turnos por día de semana" — appointment counts by day of
+   * week (business timezone) over the same trailing `revenueTrendDays`-day window as the sibling
+   * charts, counting only `PENDING`/`CONFIRMED`/`IN_PROGRESS`/`COMPLETED` appointments (excludes
+   * `CANCELLED`/`NO_SHOW` — see `DashboardService.buildAppointmentsByDayOfWeek`). Always exactly 7
+   * entries, Monday first, zero-filled for a day with no countable appointments.
+   */
+  appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>;
+  // `revenueTrend`/`revenueTrendDays`/`topServices`/`paymentMethodMix` are also part of this
+  // `/api/dashboard` response, but only consumed by `DashboardsPage.tsx` now.
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,12 +137,22 @@ function buildCalGrid(year: number, month: number): { day: number; current: bool
 const POLL_MS = 60_000;
 
 // ─── Shared card style ────────────────────────────────────────────────────────
+// `cardStyle` itself now lives in `components/charts/chartTheme.ts` (single source of truth,
+// also used by `ChartCard` — see issue #219 code review) — imported below, not redefined here.
 
-const cardStyle: React.CSSProperties = {
-  background: "var(--color-white)",
-  borderRadius: "var(--radius-xl)",
-  border: "var(--border-default)",
-  padding: 16,
+const inactiveClientsThStyle: React.CSSProperties = {
+  textAlign: "left",
+  fontSize: 10,
+  fontWeight: 500,
+  color: "var(--color-ink-3)",
+  padding: "0 8px 8px 0",
+  borderBottom: "0.5px solid var(--color-stone)",
+};
+
+const inactiveClientsTdStyle: React.CSSProperties = {
+  padding: "8px 8px 8px 0",
+  color: "var(--color-ink)",
+  whiteSpace: "nowrap",
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -213,6 +274,8 @@ export default function DashboardPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [todayAppts, setTodayAppts]   = useState<Appointment[]>([]);
+  const [todayServiceRecords, setTodayServiceRecords] = useState<ServiceRecordListItem[]>([]);
+  const [selectedServiceRecordId, setSelectedServiceRecordId] = useState<number | null>(null);
   const [calMonth, setCalMonth]       = useState(() => new Date());
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
@@ -260,6 +323,43 @@ export default function DashboardPage() {
       .then(setTodayAppts)
       .catch(() => setTodayAppts([]));
   }, [todayRangeIso.from, todayRangeIso.to]);
+
+  // ── Today's fichas de servicio (any status), newest first ─────────────────
+  const loadTodayServiceRecords = useCallback(() => {
+    listServiceRecordsPaged({ from: todayRangeIso.from, to: todayRangeIso.to, size: 100 })
+      .then((page) => setTodayServiceRecords(Array.isArray(page?.content) ? page.content : []))
+      .catch(() => setTodayServiceRecords([]));
+  }, [todayRangeIso.from, todayRangeIso.to]);
+
+  useEffect(() => {
+    loadTodayServiceRecords();
+    const id = window.setInterval(loadTodayServiceRecords, POLL_MS);
+    return () => window.clearInterval(id);
+  }, [loadTodayServiceRecords]);
+
+  // Grouped by status (Open, Closed, Voided), newest first within each group, shown in a grid
+  // capped at 12 with a "Más" button that reveals more of the already-fetched records in place.
+  const SERVICE_RECORD_STATUS_RANK: Record<string, number> = { OPEN: 0, CLOSED: 1, VOIDED: 2 };
+  const DASHBOARD_SERVICE_RECORDS_CAP = 12;
+  const [visibleServiceRecordCount, setVisibleServiceRecordCount] = useState(
+    DASHBOARD_SERVICE_RECORDS_CAP,
+  );
+  useEffect(() => {
+    setVisibleServiceRecordCount(DASHBOARD_SERVICE_RECORDS_CAP);
+  }, [todayRangeIso.from]);
+  const sortedTodayServiceRecords = useMemo(() => {
+    return [...todayServiceRecords].sort((a, b) => {
+      const rankDiff =
+        (SERVICE_RECORD_STATUS_RANK[a.status] ?? 99) - (SERVICE_RECORD_STATUS_RANK[b.status] ?? 99);
+      if (rankDiff !== 0) return rankDiff;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [todayServiceRecords]);
+  const visibleTodayServiceRecords = sortedTodayServiceRecords.slice(
+    0,
+    visibleServiceRecordCount,
+  );
+  const hasMoreTodayServiceRecords = sortedTodayServiceRecords.length > visibleServiceRecordCount;
 
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
@@ -320,7 +420,7 @@ export default function DashboardPage() {
   const hour = now.getHours();
   const greetingKey =
     hour < 12 ? "greetingMorning" : hour < 19 ? "greetingAfternoon" : "greetingEvening";
-  const userName = me?.email.split("@")[0] ?? "";
+  const userName = me?.fullName?.trim() || (me?.email.split("@")[0] ?? "");
 
   const dateLabel = new Intl.DateTimeFormat(locale, {
     weekday: "long",
@@ -365,6 +465,11 @@ export default function DashboardPage() {
   }
 
   const a = data.appointmentsToday;
+  const inactiveClients = Array.isArray(data.inactiveClients) ? data.inactiveClients : [];
+  // Defensive fallback only for a stale frontend build talking to a newer/older backend
+  // (see auto-reload-on-stale-build) — the real value always comes from the server response,
+  // never hardcoded as the source of truth.
+  const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
 
   return (
     <div>
@@ -537,15 +642,35 @@ export default function DashboardPage() {
             visibleTodayAppts.map((appt, idx) => {
               const ac = avatarColor(appt.professionalName);
               const isLast = idx === visibleTodayAppts.length - 1;
+              const goToApptDetail = () =>
+                navigate("/app/calendar", {
+                  state: {
+                    selectedDate: toLocalDateStr(new Date(appt.startAt)),
+                    openAppointmentId: appt.id,
+                  },
+                });
               return (
                 <div
                   key={appt.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t("femme.dashboard.openAppointmentDetail", {
+                    client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
+                  })}
+                  onClick={goToApptDetail}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      goToApptDetail();
+                    }
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
                     padding: "8px 0",
                     borderBottom: isLast ? "none" : "0.5px solid var(--color-stone)",
+                    cursor: "pointer",
                   }}
                 >
                   <span
@@ -836,6 +961,196 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── 5. TODAY'S SERVICE RECORDS ── */}
+      <div style={{ ...cardStyle, marginTop: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+            {t("femme.serviceRecords.dashboard.title")}
+          </span>
+          <Link
+            to="/app/service-records"
+            state={{ activeTab: "history" }}
+            style={{ fontSize: 11, color: "var(--color-rose)", textDecoration: "none" }}
+          >
+            {t("femme.serviceRecords.dashboard.viewHistory")}
+          </Link>
+        </div>
+
+        {todayServiceRecords.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
+            {t("femme.serviceRecords.dashboard.empty")}
+          </div>
+        ) : (
+          <div
+            data-testid="dashboard-service-records-grid"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
+          >
+            {visibleTodayServiceRecords.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                data-testid="dashboard-service-record-card"
+                onClick={() => setSelectedServiceRecordId(r.id)}
+                style={{
+                  textAlign: "left",
+                  background: "var(--color-stone)",
+                  border: "var(--border-default)",
+                  borderRadius: "var(--radius-md)",
+                  padding: 10,
+                  cursor: "pointer",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: "var(--color-ink)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    marginBottom: 4,
+                  }}
+                >
+                  {r.clientFullName}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--color-ink-3)", marginBottom: 6 }}>
+                  {formatParaguayDateTime(r.createdAt, locale)} · {formatAmountDecimal(r.totalAmount)}
+                </div>
+                <StatusBadge status={r.status} />
+              </button>
+            ))}
+            {hasMoreTodayServiceRecords && (
+              <button
+                type="button"
+                data-testid="dashboard-service-records-more"
+                onClick={() =>
+                  setVisibleServiceRecordCount((c) => c + DASHBOARD_SERVICE_RECORDS_CAP)
+                }
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "var(--color-stone)",
+                  border: "var(--border-default)",
+                  borderRadius: "var(--radius-md)",
+                  padding: 10,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--color-rose)",
+                }}
+              >
+                {t("femme.serviceRecords.dashboard.showMore")}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── 6. INACTIVE CLIENTS ── */}
+      <div data-testid="dashboard-inactive-clients" style={{ ...cardStyle, marginTop: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+              {t("femme.dashboard.inactiveClientsTitle")}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
+              {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
+            </div>
+          </div>
+          {inactiveClients.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="dashboard-inactive-clients-view-all"
+              onClick={() => navigate("/app/inactive-clients")}
+            >
+              {t("femme.dashboard.inactiveClientsViewAll")}
+            </Button>
+          )}
+        </div>
+        <div style={{ marginBottom: 12 }} />
+
+        {inactiveClients.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
+            {t("femme.dashboard.inactiveClientsEmpty")}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColClient")}
+                  </th>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColPhone")}
+                  </th>
+                  <th style={inactiveClientsThStyle}>
+                    {t("femme.dashboard.inactiveClientsColInactivity")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {inactiveClients.map((c) => {
+                  const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
+                  return (
+                    <tr
+                      key={c.clientId}
+                      data-testid="dashboard-inactive-client-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={goToClientDetail}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          goToClientDetail();
+                        }
+                      }}
+                      style={{
+                        cursor: "pointer",
+                        borderBottom: "0.5px solid var(--color-stone)",
+                      }}
+                    >
+                      <td style={inactiveClientsTdStyle}>{c.fullName}</td>
+                      <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
+                      <td style={inactiveClientsTdStyle}>
+                        {t("femme.dashboard.inactiveClientsDaysValue", {
+                          days: c.daysSinceLastVisit,
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {selectedServiceRecordId !== null && (
+        <ServiceRecordDetailModal
+          serviceRecordId={selectedServiceRecordId}
+          onClose={() => setSelectedServiceRecordId(null)}
+          onChanged={loadTodayServiceRecords}
+        />
+      )}
     </div>
   );
 }

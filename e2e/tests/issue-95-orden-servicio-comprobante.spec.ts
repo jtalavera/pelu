@@ -41,7 +41,8 @@ test.describe("Issue #95 · Orden de servicio en formulario de comprobantes", ()
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     const input = page.locator("#billing-line-svc-0");
     const listbox = page.locator("#billing-line-svc-0-listbox");

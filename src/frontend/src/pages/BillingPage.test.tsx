@@ -22,6 +22,11 @@ vi.mock("../api/authHeaders", () => ({
   authHeaders: () => ({ Authorization: "Bearer test" }),
 }));
 
+let sifenEnabledFlag = true;
+vi.mock("../hooks/useFeatureFlags", () => ({
+  useFeatureFlag: (key: string) => (key === "SIFEN_ELECTRONIC_INVOICING" ? sifenEnabledFlag : false),
+}));
+
 function renderPage() {
   return render(
     <I18nextProvider i18n={i18n}>
@@ -49,6 +54,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
     void i18n.changeLanguage("en");
     femmeJson.mockReset();
     femmePostJson.mockReset();
+    sifenEnabledFlag = true;
   });
 
   describe("Cash register closed state", () => {
@@ -116,16 +122,17 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(screen.getByText(/admin@demo\.com/i)).toBeTruthy();
     });
 
-    it("renders invoice tab triggers (HU-14, HU-15)", async () => {
+    it("renders the New Invoice button inside the Cash Register tab (HU-14, HU-15, issue #153)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
-      // The invoice tab trigger should exist (may appear multiple times in responsive layout)
-      const invoiceTabs = screen.getAllByRole("tab", { name: /new invoice/i });
-      expect(invoiceTabs.length).toBeGreaterThan(0);
-      // At least one tab should not be disabled when session is open
-      const anyEnabled = invoiceTabs.some(
-        (t) => t.getAttribute("disabled") === null,
+      // Issue #153 AC1: the invoice trigger lives only inside the Cash Register tab as a
+      // button now — there is no separate "New Invoice" tab in the tab bar.
+      expect(screen.queryAllByRole("tab", { name: /new invoice/i }).length).toBe(0);
+      const invoiceButtons = screen.getAllByRole("button", { name: /new invoice/i });
+      expect(invoiceButtons.length).toBeGreaterThan(0);
+      const anyEnabled = invoiceButtons.some(
+        (b) => b.getAttribute("disabled") === null,
       );
       expect(anyEnabled).toBe(true);
     });
@@ -193,6 +200,29 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       // Payment method select should exist
       const paymentSelects = document.querySelectorAll("select");
       expect(paymentSelects.length).toBeGreaterThan(0);
+    });
+
+    it("renders the recipient email field below the client search (issue #173)", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      const emailInput = document.querySelector("#billing-client-email");
+      expect(emailInput).not.toBeNull();
+      expect(emailInput?.getAttribute("type")).toBe("email");
+    });
+
+    it("hides the recipient email field and the issue-date legend when the SIFEN flag is off", async () => {
+      sifenEnabledFlag = false;
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      expect(document.querySelector("#billing-client-email")).toBeNull();
+      expect(document.querySelector("#billing-client-email-hint")).toBeNull();
+      expect(
+        screen.queryByText(
+          "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
+        ),
+      ).toBeNull();
     });
   });
 

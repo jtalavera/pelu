@@ -59,15 +59,16 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await ensureActiveFiscalStampForInvoices(request, token);
   });
 
-  test("#59-T4-1 · Historial shows 6-month default date range", async ({ page }) => {
+  // Issue #174 AC-06: the default is one month back (not six). The date fields use the same native
+  // <input type="date"> as the Propinas report (YYYY-MM-DD value).
+  test("#59-T4-1 · Historial shows a one-month default date range", async ({ page }) => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    // from date should be ~6 months ago, to date = today
     const today = new Date();
-    const fromExpected = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+    const fromExpected = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
@@ -109,9 +110,13 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    // Wait for invoice row to appear
-    const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    // Wait for invoice row to appear. History rows are <tr role="button"> (issue #163
+    // AC10), so their a11y role is "button", not "row" — match by tag instead.
+    // Billing keeps all tabs mounted (hidden via the `hidden` attribute) and the Caja
+    // tab's today-invoices rows now also carry role="button" (issue #198), so restrict
+    // to the visible (History) tab's rows.
+    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // PageSizeSelect should be present. Billing keeps all tabs mounted (hidden via
     // the `hidden` attribute), so scope to the visible (History) tab's control.
@@ -137,8 +142,8 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Range text should be present (e.g. "1–1 of 1" or "1–10 of N"). Scope to the
     // visible tab since billing keeps all tabs mounted (hidden via `hidden`).
@@ -162,11 +167,11 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
 
-    const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Should show exactly 10 rows on first page
-    await expect(tbody.getByRole("row")).toHaveCount(10);
+    await expect(historyRows).toHaveCount(10);
 
     // Next button should be enabled
     const nextBtn = page.getByRole("button", { name: /next/i });
@@ -174,7 +179,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     // Click next to get page 2
     await nextBtn.click();
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(historyRows.first()).toBeVisible({ timeout: 15_000 });
 
     // Prev button should now be enabled
     const prevBtn = page.getByRole("button", { name: /previous/i });
@@ -208,17 +213,21 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
     // Wait for session card to show (session is already open)
     await expect(page.getByText(/cash register is open/i)).toBeVisible({ timeout: 30_000 });
 
-    // Wait for today's invoice table
-    const tbody = page.locator("table tbody").last();
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
+    // Wait for a row in the "Comprobantes de hoy" table (Caja is the default tab).
+    await expect(
+      page.locator('[data-testid^="billing-today-row-"]').first(),
+    ).toBeVisible({ timeout: 30_000 });
 
-    // PageSizeSelect should be present
-    const select = page.getByLabel("Rows per page:").last();
+    // PageSizeSelect should be present. Billing keeps every tab mounted (hidden via the
+    // `hidden` attribute), so scope to the visible (Caja) tab's control.
+    const select = page.getByLabel("Rows per page:").filter({ visible: true });
     await expect(select).toBeVisible();
     await expect(select).toHaveValue("10");
 
     // Showing range text (e.g. "1–1 of 1")
-    await expect(page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/)).toBeVisible();
+    await expect(
+      page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/).filter({ visible: true }).first(),
+    ).toBeVisible();
   });
 
   test("#59-T3-2 · Total del día reflects all ISSUED invoices (issuedTotal from backend)", async ({

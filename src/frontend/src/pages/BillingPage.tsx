@@ -2,13 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Accordion,
+  AccordionItem,
   Alert,
   Badge,
   Button,
   Card,
+  Checkbox,
+  FloatingDropdown,
   Heading,
   Input,
   Label,
+  Modal,
   PageSizeSelect,
   Pagination,
   Select,
@@ -17,11 +22,31 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
+import {
+  getCurrentSession as fetchCurrentSession,
+  openSession as openSessionApi,
+  closeSession as closeSessionApi,
+  createMovement as createMovementApi,
+  getSessionDetail,
+  listCashSessionsPaged,
+  type CashSession,
+  type CashSessionDetail,
+  type CashMovementType,
+  type CashSessionListItem,
+} from "../api/cashSessions";
+import type { PageResponse } from "../api/pagination";
+import { CashSessionSummaryCard } from "../components/CashSessionSummaryCard";
+import { CashSessionDetailModal } from "../components/CashSessionDetailModal";
+import { downloadInvoiceHistoryReport } from "../api/downloadInvoiceHistoryReport";
 import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { InvoiceCorrectionForm } from "../components/InvoiceCorrectionForm";
+import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
+import { downloadSifenKude } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
+import { isValidEmail } from "../lib/validateEmail";
 import { ClientSearchField, type ClientSelection } from "../components/ClientSearchField";
 import {
   ServiceSearchField,
@@ -39,31 +64,6 @@ import { billingSteps, registerBillingTabSwitcher } from "../tour/steps/billing"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type CashSession = {
-  id: number;
-  tenantId: number;
-  openedByUserId: number;
-  openedByEmail: string;
-  openedAt: string;
-  openingCashAmount: string;
-  isOpen: boolean;
-};
-
-type CashSessionCloseResponse = {
-  id: number;
-  tenantId: number;
-  openedAt: string;
-  closedAt: string;
-  closedByEmail: string;
-  openingCashAmount: string;
-  countedCashAmount: string;
-  expectedCashAmount: string;
-  cashDifference: string;
-  totalInvoiced: string;
-  invoiceCount: number;
-  paymentSummary: Array<{ method: string; total: string }>;
-};
-
 type InvoiceLineForm = {
   serviceId: string;
   description: string;
@@ -78,20 +78,11 @@ type InvoiceLineForm = {
 type PaymentForm = {
   method: string;
   amount: string;
+  cardBrand: string;
+  cardBrandOtherDescription: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmt(isoString: string, locale: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(isoString));
-  } catch {
-    return isoString;
-  }
-}
 
 function todayRangeIso(): { from: string; to: string } {
   const start = new Date();
@@ -133,11 +124,28 @@ function InvoiceStatusBadge({ status }: { status: string }) {
   );
 }
 
+/** SIFEN HU-02 AC-05: Gs. 7.000.000+ requires identifying the client (RUC or identity document). */
+const SIFEN_CLIENT_IDENTIFICATION_THRESHOLD = 7_000_000;
+
 const PAYMENT_METHODS = [
   "CASH",
   "DEBIT_CARD",
   "CREDIT_CARD",
   "TRANSFER",
+  "OTHER",
+] as const;
+
+const CARD_PAYMENT_METHODS = new Set(["DEBIT_CARD", "CREDIT_CARD"]);
+
+// SIFEN Manual Técnico V150, E7.1.1/gPagTarCD — mandatory card brand when paying with
+// Tarjeta de crédito/débito (issue #170).
+const CARD_BRANDS = [
+  "VISA",
+  "MASTERCARD",
+  "AMEX",
+  "MAESTRO",
+  "PANAL",
+  "CABAL",
   "OTHER",
 ] as const;
 
@@ -162,14 +170,39 @@ function paymentMethodsLabel(
     .join(" + ");
 }
 
-/** Local calendar dates: 6 months ago through today. */
+/** Local calendar date as `YYYY-MM-DD`. */
+function localTodayYmd(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Issue #174 AC-04: SIFEN's technical limits for a DE's emission date — backdated up to 720h
+ * (30 days), future-dated up to 120h (5 days) from "now". Compared at day granularity here; the
+ * backend re-checks it to the hour.
+ */
+function issueDateOutOfRange(ymd: string): boolean {
+  const parts = ymd.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return true;
+  const [y, m, d] = parts;
+  const picked = new Date(y, m - 1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const min = new Date(today);
+  min.setDate(min.getDate() - 30);
+  const max = new Date(today);
+  max.setDate(max.getDate() + 5);
+  return picked < min || picked > max;
+}
+
+/** Issue #174 AC-06: default filter is one month back through today (was six months). */
 function getDefaultInvoiceHistoryDateRange(): { from: string; to: string } {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
   const fmtYmd = (dt: Date) =>
     `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  return { from: fmtYmd(sixMonthsAgo), to: fmtYmd(today) };
+  return { from: fmtYmd(oneMonthAgo), to: fmtYmd(today) };
 }
 
 function isFromOlderThan6Months(fromYmd: string): boolean {
@@ -207,7 +240,7 @@ function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
 
 // ─── InvoiceHistoryTab ────────────────────────────────────────────────────────
 
-function InvoiceHistoryTab() {
+function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
@@ -221,7 +254,72 @@ function InvoiceHistoryTab() {
   const [pageNum, setPageNum] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  // Issue #175: "Corregir y reenviar" opened directly from a Rechazado row.
+  const [correctionInvoiceId, setCorrectionInvoiceId] = useState<number | null>(null);
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Issue #174 AC-05: "Descargar reporte" dropdown (Excel / PDF) next to "Actualizar".
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
+  const [reportDownloading, setReportDownloading] = useState<"pdf" | "xlsx" | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const reportAnchorRef = useRef<HTMLDivElement>(null);
+  const reportPanelRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadReport = useCallback(
+    async (format: "pdf" | "xlsx") => {
+      setReportMenuOpen(false);
+      setReportError(null);
+      if (invoiceHistoryRangeErrorKey(filterFrom, filterTo)) {
+        setReportError(t("femme.billing.history.report.rangeInvalid"));
+        return;
+      }
+      setReportDownloading(format);
+      try {
+        await downloadInvoiceHistoryReport(
+          {
+            from: localDateYmdToIsoStart(filterFrom),
+            to: localDateYmdToIsoEnd(filterTo),
+            status: filterStatus || undefined,
+            q: listTextQuery || undefined,
+          },
+          format,
+        );
+      } catch (err) {
+        setReportError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+      } finally {
+        setReportDownloading(null);
+      }
+    },
+    [filterFrom, filterTo, filterStatus, listTextQuery, t],
+  );
+
+  useEffect(() => {
+    if (!reportMenuOpen) return;
+    function onDocMouseDown(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        reportAnchorRef.current?.contains(target) ||
+        reportPanelRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setReportMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setReportMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [reportMenuOpen]);
+
+  // Issue #190: one in-flight list request at a time. Rapidly paging (especially bouncing off the
+  // last page) used to stack overlapping requests with no cancellation; on a constrained DB that
+  // could saturate it and leave the whole app stuck on "Cargando…". Every new load aborts the
+  // previous one.
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadInvoices = useCallback(
     async (from: string, to: string, status: string, q: string, page: number, size: number) => {
@@ -236,28 +334,50 @@ function InvoiceHistoryTab() {
             `femme.billing.history.rangeError${rangeErr.charAt(0).toUpperCase()}${rangeErr.slice(1)}`,
           ),
         );
+        loadAbortRef.current?.abort();
+        loadAbortRef.current = null;
         setInvoicePage(null);
         return;
       }
+      loadAbortRef.current?.abort();
+      const controller = new AbortController();
+      loadAbortRef.current = controller;
       setLoading(true);
       try {
-        const data = await listInvoicesPaged({
-          from: localDateYmdToIsoStart(from),
-          to: localDateYmdToIsoEnd(to),
-          status: status || undefined,
-          q: q || undefined,
-          page,
-          size,
-        });
+        const data = await listInvoicesPaged(
+          {
+            from: localDateYmdToIsoStart(from),
+            to: localDateYmdToIsoEnd(to),
+            status: status || undefined,
+            q: q || undefined,
+            page,
+            size,
+          },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
         setInvoicePage(data);
+        // Stranded past the last page (row count shrank, or a stale page number): snap back to the
+        // last real page instead of showing a dead, control-less empty view.
+        if (data.totalPages > 0 && page > data.totalPages - 1) {
+          setPageNum(data.totalPages - 1);
+        }
       } catch (err) {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+          return;
+        }
         setLoadError(translateApiError(err, t, "femme.billing.history.loadError"));
       } finally {
-        setLoading(false);
+        if (loadAbortRef.current === controller) {
+          setLoading(false);
+          loadAbortRef.current = null;
+        }
       }
     },
     [t],
   );
+
+  useEffect(() => () => loadAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
@@ -268,6 +388,19 @@ function InvoiceHistoryTab() {
       if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     };
   }, [filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, loadInvoices]);
+
+  // Every click on the History tab bumps refreshTrigger (see BillingPage), so the list is always
+  // fresh when the tab is opened, even if the filters/paging haven't changed since the last visit.
+  // Skips the initial mount: the effect above already fetches once with the default filters.
+  const isFirstRefreshRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRefreshRef.current) {
+      isFirstRefreshRef.current = false;
+      return;
+    }
+    void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   function handleClear() {
     const d = getDefaultInvoiceHistoryDateRange();
@@ -352,8 +485,59 @@ function InvoiceHistoryTab() {
           >
             {t("femme.billing.history.refresh")}
           </Button>
+          <div ref={reportAnchorRef} className="relative">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              data-testid="invoice-history-report-button"
+              aria-haspopup="menu"
+              aria-expanded={reportMenuOpen}
+              disabled={reportDownloading !== null}
+              onClick={() => setReportMenuOpen((o) => !o)}
+            >
+              {reportDownloading !== null
+                ? t("femme.billing.history.report.downloading")
+                : t("femme.billing.history.report.button")}
+            </Button>
+            <FloatingDropdown anchorRef={reportAnchorRef} open={reportMenuOpen} ref={reportPanelRef}>
+              <ul
+                role="menu"
+                className="rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] py-1 shadow-lg"
+              >
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="invoice-history-report-xlsx"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    onClick={() => void handleDownloadReport("xlsx")}
+                  >
+                    {t("femme.billing.history.report.excel")}
+                  </button>
+                </li>
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="invoice-history-report-pdf"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    onClick={() => void handleDownloadReport("pdf")}
+                  >
+                    {t("femme.billing.history.report.pdf")}
+                  </button>
+                </li>
+              </ul>
+            </FloatingDropdown>
+          </div>
         </form>
       </div>
+
+      {reportError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {reportError}
+        </Alert>
+      )}
 
       {dateRangeError && (
         <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
@@ -374,7 +558,19 @@ function InvoiceHistoryTab() {
           <Text>{t("femme.billing.history.loading")}</Text>
         </div>
       ) : dateRangeError ? null : invoices.length === 0 ? (
-        <Text variant="muted">{t("femme.billing.history.empty")}</Text>
+        <div className="flex flex-col gap-3">
+          <Text variant="muted">{t("femme.billing.history.empty")}</Text>
+          {pageNum > 0 && (
+            // Safety net: never strand the user on an empty page with no way back (issue #190).
+            <Pagination
+              page={pageNum + 1}
+              pageCount={Math.max(totalPages, pageNum + 1)}
+              onPageChange={(p) => setPageNum(p - 1)}
+              previousLabel={t("femme.pagination.previous")}
+              nextLabel={t("femme.pagination.next")}
+            />
+          )}
+        </div>
       ) : (
         <div
           style={{
@@ -390,11 +586,13 @@ function InvoiceHistoryTab() {
               style={{ tableLayout: "fixed" }}
             >
               <colgroup>
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "30%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "16%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
                 <col style={{ width: "10%" }} />
               </colgroup>
               <thead>
@@ -402,10 +600,12 @@ function InvoiceHistoryTab() {
                   {[
                     { key: "colNumber", align: "left" },
                     { key: "colDate", align: "left" },
+                    { key: "colSifenSentAt", align: "left" },
                     { key: "colClient", align: "left" },
                     { key: "colTotal", align: "right" },
                     { key: "colStatus", align: "center" },
-                    { key: "", align: "right" },
+                    { key: "colSifenStatus", align: "center" },
+                    { key: "", align: "center" },
                   ].map(({ key, align }, i) => (
                     <th
                       key={i}
@@ -430,9 +630,21 @@ function InvoiceHistoryTab() {
                 {invoices.map((inv) => (
                   <tr
                     key={inv.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t("femme.billing.history.openDetail", {
+                      invoiceNumber: inv.invoiceNumberFormatted,
+                    })}
+                    onClick={() => setSelectedInvoiceId(inv.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedInvoiceId(inv.id);
+                      }
+                    }}
                     style={{
                       borderTop: "var(--border-default)",
-                      cursor: "default",
+                      cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
                       (e.currentTarget as HTMLTableRowElement).style.background =
@@ -448,6 +660,11 @@ function InvoiceHistoryTab() {
                     <td style={{ padding: "10px 12px" }}>
                       {formatParaguayDateTime(inv.issuedAt, dateLocale)}
                     </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {inv.sifenSubmittedAt
+                        ? formatParaguayDateTime(inv.sifenSubmittedAt, dateLocale)
+                        : "—"}
+                    </td>
                     <td style={{ padding: "10px 12px" }}>{inv.clientDisplayName ?? "—"}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>
                       {formatAmountDecimal(inv.total)}
@@ -459,17 +676,23 @@ function InvoiceHistoryTab() {
                           : t("femme.billing.history.statusVoided")}
                       </Badge>
                     </td>
-                    <td
-                      style={{ padding: "10px 12px", textAlign: "right" }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedInvoiceId(inv.id)}
-                      >
-                        {t("femme.billing.history.viewDetail")}
-                      </Button>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      <SifenStatusBadge status={inv.sifenSubmissionStatus} />
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                      {inv.sifenSubmissionStatus === "REJECTED" && inv.status === "ISSUED" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`invoice-row-correct-resend-${inv.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCorrectionInvoiceId(inv.id);
+                          }}
+                        >
+                          {t("femme.billing.history.detail.sifen.correctResendButton")}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -505,6 +728,21 @@ function InvoiceHistoryTab() {
             setSelectedInvoiceId(null);
             void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
           }}
+          onCorrected={() => {
+            setSelectedInvoiceId(null);
+            void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+          }}
+        />
+      )}
+
+      {correctionInvoiceId !== null && (
+        <InvoiceCorrectionForm
+          invoiceId={correctionInvoiceId}
+          onClose={() => setCorrectionInvoiceId(null)}
+          onResent={() => {
+            setCorrectionInvoiceId(null);
+            void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+          }}
         />
       )}
     </div>
@@ -519,28 +757,92 @@ type InitialClientForBilling = {
   phone: string | null;
   email: string | null;
   ruc: string | null;
+  identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
+  taxpayerType?: string | null;
+};
+
+/**
+ * Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve): an explicit type
+ * wins, otherwise RUC if present, else Cédula paraguaya if a document number is present, else RUC
+ * as the default empty state — so pre-existing clients without a stored type still preselect the
+ * option that matches what they already have on file.
+ */
+function resolveIdentityDocumentTypeAndNumber(
+  client:
+    | { ruc?: string | null; identityDocumentNumber?: string | null; identityDocumentType?: string | null }
+    | null
+    | undefined,
+): { type: string; number: string } {
+  if (!client) return { type: "RUC", number: "" };
+  if (client.identityDocumentType) {
+    const number =
+      client.identityDocumentType === "RUC"
+        ? (client.ruc ?? "")
+        : (client.identityDocumentNumber ?? "");
+    return { type: client.identityDocumentType, number };
+  }
+  if (client.ruc) return { type: "RUC", number: client.ruc };
+  if (client.identityDocumentNumber) {
+    return { type: "CEDULA_PARAGUAYA", number: client.identityDocumentNumber };
+  }
+  return { type: "RUC", number: "" };
+}
+
+const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
+  { value: "RUC", labelKey: "femme.clients.identityDocumentTypeRuc" },
+  { value: "CEDULA_PARAGUAYA", labelKey: "femme.clients.identityDocumentTypeCedulaParaguaya" },
+  { value: "PASAPORTE", labelKey: "femme.clients.identityDocumentTypePasaporte" },
+  { value: "CEDULA_EXTRANJERA", labelKey: "femme.clients.identityDocumentTypeCedulaExtranjera" },
+  { value: "CARNET_RESIDENCIA", labelKey: "femme.clients.identityDocumentTypeCarnetResidencia" },
+  { value: "TARJETA_DIPLOMATICA", labelKey: "femme.clients.identityDocumentTypeTarjetaDiplomatica" },
+  { value: "OTRO", labelKey: "femme.clients.identityDocumentTypeOtro" },
+  { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
+] as const;
+
+type PrefillServiceRecordLine = { serviceId: number; description: string; unitPrice: string };
+type PrefillServiceRecord = {
+  serviceRecordId: number;
+  client: InitialClientForBilling;
+  lines: PrefillServiceRecordLine[];
+  tipsAmount: string | number;
 };
 
 function NewInvoiceTab({
   onIssued,
+  onBack,
   initialClient,
   onInitialClientConsumed,
+  initialPrefillServiceRecord,
+  onInitialPrefillConsumed,
+  resetKey,
 }: {
   onIssued: () => void;
+  onBack: () => void;
   initialClient?: InitialClientForBilling | null;
   onInitialClientConsumed?: () => void;
+  initialPrefillServiceRecord?: PrefillServiceRecord | null;
+  onInitialPrefillConsumed?: () => void;
+  /** Bumped by the parent each time "Nuevo comprobante" is clicked, to clear messages left over from a previous invoice. */
+  resetKey?: number;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const initialSelection: ClientSelection = initialClient
+  /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
+  const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
+  const effectiveInitialClient = initialClient ?? initialPrefillServiceRecord?.client ?? null;
+  const initialSelection: ClientSelection = effectiveInitialClient
     ? {
         type: "client",
         client: {
-          id: initialClient.id,
-          fullName: initialClient.fullName,
-          phone: initialClient.phone,
-          email: initialClient.email,
-          ruc: initialClient.ruc,
+          id: effectiveInitialClient.id,
+          fullName: effectiveInitialClient.fullName,
+          phone: effectiveInitialClient.phone,
+          email: effectiveInitialClient.email,
+          ruc: effectiveInitialClient.ruc,
+          identityDocumentNumber: effectiveInitialClient.identityDocumentNumber,
+          identityDocumentType: effectiveInitialClient.identityDocumentType,
+          taxpayerType: effectiveInitialClient.taxpayerType,
         },
       }
     : null;
@@ -548,35 +850,84 @@ function NewInvoiceTab({
   const [clientSearchKey, setClientSearchKey] = useState(0);
   const [linesKey, setLinesKey] = useState(0);
   const [clientDisplayName, setClientDisplayName] = useState(
-    initialClient?.fullName ?? "",
+    effectiveInitialClient?.fullName ?? "",
   );
-  const [clientRucOverride, setClientRucOverride] = useState(
-    initialClient?.ruc ?? "",
+  const initialDocTypeAndNumber = resolveIdentityDocumentTypeAndNumber(effectiveInitialClient);
+  const [clientIdentityDocumentType, setClientIdentityDocumentType] = useState(
+    initialDocTypeAndNumber.type,
+  );
+  const [clientIdentityDocumentNumber, setClientIdentityDocumentNumber] = useState(
+    initialDocTypeAndNumber.number,
+  );
+  const [clientTaxpayerType, setClientTaxpayerType] = useState(
+    effectiveInitialClient?.taxpayerType ?? "PERSONA_FISICA",
+  );
+  // Issue #173: recipient email for this comprobante. Pre-filled from the selected client's
+  // profile, editable; a new value is written back to the client on issue.
+  const [clientEmail, setClientEmail] = useState(effectiveInitialClient?.email ?? "");
+  const [clientEmailError, setClientEmailError] = useState<string | null>(null);
+  // Issue #174 AC-04: emission date. Read-only (and "now") unless the user explicitly ticks the
+  // checkbox to edit it, in which case it must stay inside SIFEN's -720h/+120h window.
+  const [issueDateEditable, setIssueDateEditable] = useState(false);
+  const [issueDate, setIssueDate] = useState(localTodayYmd());
+  const [issueDateError, setIssueDateError] = useState<string | null>(null);
+  const [serviceRecordId, setServiceRecordId] = useState<number | null>(
+    initialPrefillServiceRecord?.serviceRecordId ?? null,
+  );
+  const [tipsAmount, setTipsAmount] = useState(
+    initialPrefillServiceRecord?.tipsAmount
+      ? maskMoneyInput(String(Math.round(Number(initialPrefillServiceRecord.tipsAmount))))
+      : "",
   );
 
   useEffect(() => {
     if (initialClient && onInitialClientConsumed) {
       onInitialClientConsumed();
     }
+    if (initialPrefillServiceRecord && onInitialPrefillConsumed) {
+      onInitialPrefillConsumed();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
   const [discountValueError, setDiscountValueError] = useState<string | null>(null);
-  const [lines, setLines] = useState<InvoiceLineForm[]>([
-    {
-      serviceId: "",
-      description: "",
-      quantity: "1",
-      unitPrice: "",
-      pickedService: null,
-      discountEnabled: false,
-      discountType: "PERCENT",
-      discountValue: "",
-    },
-  ]);
+  const [lines, setLines] = useState<InvoiceLineForm[]>(() =>
+    initialPrefillServiceRecord && initialPrefillServiceRecord.lines.length > 0
+      ? initialPrefillServiceRecord.lines.map((l) => ({
+          serviceId: String(l.serviceId),
+          description: l.description,
+          quantity: "1",
+          unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
+          pickedService: {
+            id: l.serviceId,
+            categoryId: 0,
+            categoryName: "",
+            categoryAccentKey: "",
+            name: l.description,
+            priceMinor: l.unitPrice,
+            durationMinutes: 0,
+            active: true,
+          },
+          discountEnabled: false,
+          discountType: "PERCENT",
+          discountValue: "",
+        }))
+      : [
+          {
+            serviceId: "",
+            description: "",
+            quantity: "1",
+            unitPrice: "",
+            pickedService: null,
+            discountEnabled: false,
+            discountType: "PERCENT",
+            discountValue: "",
+          },
+        ],
+  );
   const [payments, setPayments] = useState<PaymentForm[]>([
-    { method: "CASH", amount: "" },
+    { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -587,6 +938,19 @@ function NewInvoiceTab({
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [rucValidForInvoicing, setRucValidForInvoicing] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    setSuccessInvoiceNumber(null);
+    setLastInvoiceId(null);
+    setSubmitError(null);
+    setPdfError(null);
+    setGlobalErrors([]);
+    setIssueDateEditable(false);
+    setIssueDate(localTodayYmd());
+    setIssueDateError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
 
   useEffect(() => {
     void (async () => {
@@ -601,14 +965,45 @@ function NewInvoiceTab({
     })();
   }, []);
 
+  /**
+   * Loads the display name + document type/number from a selected client's profile.
+   * A client profile itself stored as "Sin identificar" (INNOMINADO) would otherwise make the
+   * "Comprobante sin nominar" checkbox appear stuck checked when re-loaded here, so that case
+   * falls back to RUC with a blank number — same default as no client selected.
+   */
+  function loadClientIdentity(client: {
+    fullName: string;
+    email?: string | null;
+    ruc?: string | null;
+    identityDocumentNumber?: string | null;
+    identityDocumentType?: string | null;
+    taxpayerType?: string | null;
+  }) {
+    setClientDisplayName(client.fullName);
+    setClientEmail(client.email ?? "");
+    setClientEmailError(null);
+    const resolved = resolveIdentityDocumentTypeAndNumber(client);
+    if (resolved.type === "INNOMINADO") {
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
+    } else {
+      setClientIdentityDocumentType(resolved.type);
+      setClientIdentityDocumentNumber(resolved.number);
+    }
+    setClientTaxpayerType(client.taxpayerType ?? "PERSONA_FISICA");
+  }
+
   function handleClientSelectionChange(sel: ClientSelection) {
     setClientSelection(sel);
     if (sel?.type === "client") {
-      setClientDisplayName(sel.client.fullName);
-      setClientRucOverride(sel.client.ruc ?? "");
+      loadClientIdentity(sel.client);
     } else if (sel?.type === "occasional") {
       setClientDisplayName("");
-      setClientRucOverride("");
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
+      setClientTaxpayerType("PERSONA_FISICA");
+      setClientEmail("");
+      setClientEmailError(null);
     }
   }
 
@@ -616,8 +1011,16 @@ function NewInvoiceTab({
   // the displayed Total equals the value payments must sum to:
   //   gross line totals → per-item discounts → net subtotal → global discount.
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  // Issue #174 AC-01: a "Tarjeta Diplomática de exoneración fiscal" receiver makes the sale
+  // IVA-exonerada — every item and the totals are shown net of the included 10% IVA. Must mirror
+  // InvoiceService.issueInvoice exactly: unitPrice / 1.10 rounded to whole guaraníes.
+  const taxExemptReceiver = clientIdentityDocumentType === "TARJETA_DIPLOMATICA";
+  const effectiveUnitPrice = (l: InvoiceLineForm) => {
+    const raw = parseMaskedMoney(l.unitPrice);
+    return taxExemptReceiver ? Math.round(raw / 1.1) : raw;
+  };
   const lineGross = (l: InvoiceLineForm) =>
-    (parseFloat(l.quantity) || 0) * parseMaskedMoney(l.unitPrice);
+    (parseFloat(l.quantity) || 0) * effectiveUnitPrice(l);
   const lineDiscountAmount = (l: InvoiceLineForm) => {
     if (!l.discountEnabled || !l.discountValue) return 0;
     const gross = lineGross(l);
@@ -643,32 +1046,37 @@ function NewInvoiceTab({
   }
   const discountAmount = perItemDiscountTotal + globalDiscount;
   const total = Math.max(0, subtotal - discountAmount);
+  // Tips are collected alongside the invoice but never affect subtotal/discount/total
+  // (fiscal fields), the printed comprobante, the amount to collect, or the default
+  // cash payment fill — they're shown separately and settled outside the invoice math.
+  const tipsAmountNum = parseMaskedMoney(tipsAmount);
+  const showTips = serviceRecordId != null || tipsAmount !== "";
+  const amountToCollect = total;
 
   const assignedPayments = payments.reduce(
     (acc, p) => acc + parseMaskedMoney(p.amount),
     0,
   );
-  const remaining = total - assignedPayments;
+  const remaining = amountToCollect - assignedPayments;
 
-  // When the invoice total changes (due to service/discount edits), auto-fill
-  // any CASH payment row with the amount needed to cover the remaining balance.
-  // Watching `total` (not `remaining`) avoids a circular dependency: setting
-  // the CASH amount would change `remaining`, re-firing the effect forever.
+  // Issue #174 AC-02: whenever Total changes, the first payment row's "Monto" follows it
+  // (covering the remaining balance after the other rows) — regardless of the first row's payment
+  // method, where the old behaviour only kept a CASH first row in sync. The user can still edit it
+  // afterwards for a partial payment; watching `amountToCollect` alone (not the assigned sum)
+  // keeps that manual edit from being overwritten and avoids a feedback loop.
   useEffect(() => {
-    if (total <= 0) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (amountToCollect <= 0) return;
     setPayments((prev) => {
-      const nonCashTotal = prev
-        .filter((p) => p.method !== "CASH")
+      if (prev.length === 0) return prev;
+      const othersTotal = prev
+        .slice(1)
         .reduce((acc, p) => acc + parseMaskedMoney(p.amount), 0);
-      const cashFill = Math.max(0, total - nonCashTotal);
-      return prev.map((p) =>
-        p.method === "CASH"
-          ? { ...p, amount: cashFill > 0 ? maskMoneyInput(cashFill.toFixed(0)) : "" }
-          : p,
-      );
+      const firstFill = Math.max(0, amountToCollect - othersTotal);
+      const nextAmount = firstFill > 0 ? maskMoneyInput(firstFill.toFixed(0)) : "";
+      if (prev[0].amount === nextAmount) return prev;
+      return prev.map((p, i) => (i === 0 ? { ...p, amount: nextAmount } : p));
     });
-  }, [total]);
+  }, [amountToCollect]);
 
   /**
    * Whether all mandatory fields are filled to enable the "Emit" button:
@@ -791,7 +1199,15 @@ function NewInvoiceTab({
   }
 
   function addPayment() {
-    setPayments((prev) => [...prev, { method: "CASH", amount: "" }]);
+    setPayments((prev) => {
+      const used = new Set(prev.map((p) => p.method));
+      const next = PAYMENT_METHODS.find((m) => !used.has(m));
+      if (!next) return prev;
+      return [
+        ...prev,
+        { method: next, amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+      ];
+    });
   }
 
   function removePayment(idx: number) {
@@ -806,7 +1222,20 @@ function NewInvoiceTab({
   function updatePayment(idx: number, field: keyof PaymentForm, value: string) {
     const next = field === "amount" ? maskMoneyInput(value) : value;
     setPayments((prev) =>
-      prev.map((p, i) => (i === idx ? { ...p, [field]: next } : p)),
+      prev.map((p, i) => {
+        if (i !== idx) return p;
+        const updated = { ...p, [field]: next };
+        // Issue #170: clear the card fields when they no longer apply, so a stale brand/
+        // description never rides along after switching payment method or brand.
+        if (field === "method" && !CARD_PAYMENT_METHODS.has(next)) {
+          updated.cardBrand = "";
+          updated.cardBrandOtherDescription = "";
+        }
+        if (field === "cardBrand" && next !== "OTHER") {
+          updated.cardBrandOtherDescription = "";
+        }
+        return updated;
+      }),
     );
     if (paymentErrors[idx]) {
       setPaymentErrors((prev) => {
@@ -875,20 +1304,68 @@ function NewInvoiceTab({
       const amount = parseMaskedMoney(p.amount);
       if (!Number.isFinite(amount) || amount <= 0) {
         newPaymentErrors[i] = t("femme.billing.invoice.paymentAmountInvalid");
+        return;
+      }
+      // Issue #170: SIFEN rejects card payments missing the mandatory card brand group.
+      if (CARD_PAYMENT_METHODS.has(p.method) && !p.cardBrand.trim()) {
+        newPaymentErrors[i] = t("femme.billing.invoice.cardBrandRequired");
+      } else if (
+        CARD_PAYMENT_METHODS.has(p.method) &&
+        p.cardBrand === "OTHER" &&
+        !p.cardBrandOtherDescription.trim()
+      ) {
+        newPaymentErrors[i] = t("femme.billing.invoice.cardBrandOtherDescriptionRequired");
       }
     });
 
     {
-      const rucTrim = clientRucOverride.trim();
-      if (rucTrim && !validateRuc(rucTrim)) {
+      const isRucType = clientIdentityDocumentType === "RUC";
+      const isInnominado = clientIdentityDocumentType === "INNOMINADO";
+      const numberTrim = isInnominado ? "" : clientIdentityDocumentNumber.trim();
+      if (isRucType && numberTrim && !validateRuc(numberTrim)) {
         errors.push(t("femme.clients.rucInvalid"));
       }
       // Issue #101: name is required only when a RUC is provided; a blank RUC allows a blank
       // name too (Issue #96: the PDF then prints "Sin nombre" for a selected client).
-      if (rucTrim && !clientDisplayName.trim()) {
+      if (isRucType && numberTrim && !clientDisplayName.trim()) {
         errors.push(t("femme.billing.invoice.clientDisplayNameRequiredWithRuc"));
       }
+      // SIFEN HU-02 AC-05: Gs. 7.000.000+ requires identifying the client, sin excepción.
+      if (total >= SIFEN_CLIENT_IDENTIFICATION_THRESHOLD && (isInnominado || !numberTrim)) {
+        errors.push(t("femme.billing.invoice.clientIdentificationRequiredThreshold"));
+      }
+      // Issue #174 AC-01: a diplomatic-exoneration receiver must carry its card number, so the
+      // exoneration the form is already applying to the amounts also reaches SIFEN.
+      if (taxExemptReceiver && !numberTrim) {
+        errors.push(t("femme.billing.invoice.diplomaticCardNumberRequired"));
+      }
     }
+
+    // Issue #173: with SIFEN e-invoicing enabled the KuDE is auto-emailed after approval, so a
+    // recipient email is mandatory — except for a "Sin identificar" (INNOMINADO) comprobante.
+    let newClientEmailError: string | null = null;
+    {
+      const emailTrim = clientEmail.trim();
+      const emailRequired =
+        sifenEnabled && clientIdentityDocumentType !== "INNOMINADO";
+      if (emailRequired && !emailTrim) {
+        newClientEmailError = t("femme.billing.invoice.clientEmailRequired");
+      } else if (emailTrim && !isValidEmail(emailTrim)) {
+        newClientEmailError = t("femme.clients.emailInvalid");
+      }
+    }
+    setClientEmailError(newClientEmailError);
+
+    // Issue #174 AC-04: only validated when the user chose to edit the emission date.
+    let newIssueDateError: string | null = null;
+    if (issueDateEditable) {
+      if (!issueDate) {
+        newIssueDateError = t("femme.billing.invoice.issueDateRequired");
+      } else if (issueDateOutOfRange(issueDate)) {
+        newIssueDateError = t("femme.billing.invoice.issueDateOutOfRange");
+      }
+    }
+    setIssueDateError(newIssueDateError);
 
     setLineErrors(newLineErrors);
     setPaymentErrors(newPaymentErrors);
@@ -898,6 +1375,8 @@ function NewInvoiceTab({
       Object.keys(newLineErrors).length === 0 &&
       Object.keys(newPaymentErrors).length === 0 &&
       newDiscountValueError === null &&
+      newClientEmailError === null &&
+      newIssueDateError === null &&
       errors.length === 0;
     return { ok, lineErrors: newLineErrors, paymentErrors: newPaymentErrors, globalErrors: errors };
   }
@@ -912,9 +1391,22 @@ function NewInvoiceTab({
       // Build an ordered list of candidate field IDs and focus the first with an error
       const firstErrorId = (() => {
         {
-          const rucTrim = clientRucOverride.trim();
-          if (rucTrim && !validateRuc(rucTrim)) return "client-ruc";
-          if (rucTrim && !clientDisplayName.trim()) return "client-display-name";
+          const isRucType = clientIdentityDocumentType === "RUC";
+          const numberTrim = clientIdentityDocumentNumber.trim();
+          if (isRucType && numberTrim && !validateRuc(numberTrim)) {
+            return "client-identity-document-number";
+          }
+          if (isRucType && numberTrim && !clientDisplayName.trim()) return "client-display-name";
+        }
+        {
+          const emailTrim = clientEmail.trim();
+          const emailRequired = sifenEnabled && clientIdentityDocumentType !== "INNOMINADO";
+          if (
+            (emailRequired && !emailTrim) ||
+            (emailTrim && !isValidEmail(emailTrim))
+          ) {
+            return "billing-client-email";
+          }
         }
         for (let i = 0; i < lines.length; i++) {
           if (validationResult.lineErrors[i]?.service) return `billing-line-svc-${i}`;
@@ -939,10 +1431,23 @@ function NewInvoiceTab({
       return;
     }
 
+    const isInnominado = clientIdentityDocumentType === "INNOMINADO";
+    const numberTrim = isInnominado ? "" : clientIdentityDocumentNumber.trim();
+    const isRucType = clientIdentityDocumentType === "RUC";
     const payload = {
       clientId: clientSelection?.type === "client" ? clientSelection.client.id : null,
       clientDisplayName: clientDisplayName.trim() || null,
-      clientRucOverride: clientRucOverride.trim() || null,
+      clientRucOverride: isRucType ? numberTrim || null : null,
+      clientIdentityDocumentOverride: !isRucType && !isInnominado ? numberTrim || null : null,
+      clientIdentityDocumentTypeOverride: numberTrim ? clientIdentityDocumentType : null,
+      clientTaxpayerTypeOverride: isRucType && numberTrim ? clientTaxpayerType : null,
+      email: clientEmail.trim() || null,
+      // Issue #174 AC-04: only sent when the user opted to edit the emission date — noon local
+      // time on the picked day, well inside SIFEN's hour-granular window.
+      issuedAt:
+        issueDateEditable && issueDate
+          ? new Date(`${issueDate}T12:00:00`).toISOString()
+          : null,
       discountType: discountType !== "NONE" ? discountType : null,
       discountValue:
         discountType !== "NONE" && discountValue
@@ -966,7 +1471,14 @@ function NewInvoiceTab({
       payments: payments.map((p) => ({
         method: p.method,
         amount: parseMaskedMoney(p.amount),
+        cardBrand: CARD_PAYMENT_METHODS.has(p.method) ? p.cardBrand : null,
+        cardBrandOtherDescription:
+          CARD_PAYMENT_METHODS.has(p.method) && p.cardBrand === "OTHER"
+            ? p.cardBrandOtherDescription
+            : null,
       })),
+      serviceRecordId: serviceRecordId,
+      tipsAmount: tipsAmount.trim() !== "" ? tipsAmountNum : null,
     };
 
     setSubmitting(true);
@@ -983,7 +1495,13 @@ function NewInvoiceTab({
       setClientSearchKey((k) => k + 1);
       setLinesKey((k) => k + 1);
       setClientDisplayName("");
-      setClientRucOverride("");
+      setClientIdentityDocumentType("RUC");
+      setClientIdentityDocumentNumber("");
+      setClientEmail("");
+      setClientEmailError(null);
+      setIssueDateEditable(false);
+      setIssueDate(localTodayYmd());
+      setIssueDateError(null);
       setDiscountType("NONE");
       setDiscountValue("");
       setDiscountValueError(null);
@@ -999,13 +1517,23 @@ function NewInvoiceTab({
           discountValue: "",
         },
       ]);
-      setPayments([{ method: "CASH", amount: "" }]);
+      setPayments([
+        { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+      ]);
+      setTipsAmount("");
+      setServiceRecordId(null);
       setLineErrors({});
       setPaymentErrors({});
       setGlobalErrors([]);
       onIssued();
     } catch (err) {
       setSubmitError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+      // Use setTimeout to allow React to commit the state update before we scroll
+      setTimeout(() => {
+        document
+          .getElementById("invoice-submit-error")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
     } finally {
       setSubmitting(false);
     }
@@ -1015,7 +1543,11 @@ function NewInvoiceTab({
     if (!lastInvoiceId) return;
     setPdfError(null);
     try {
-      await downloadInvoicePdf(lastInvoiceId);
+      if (sifenEnabled) {
+        await downloadSifenKude(lastInvoiceId);
+      } else {
+        await downloadInvoicePdf(lastInvoiceId);
+      }
     } catch (err) {
       setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     }
@@ -1023,6 +1555,10 @@ function NewInvoiceTab({
 
   return (
     <div className="flex flex-col gap-6">
+      <Button type="button" variant="ghost" onClick={onBack} className="self-start">
+        ← {t("femme.billing.cashHistory.backToCaja")}
+      </Button>
+
       <Heading as="h2" className="text-lg">
         {t("femme.billing.invoice.title")}
       </Heading>
@@ -1033,7 +1569,11 @@ function NewInvoiceTab({
         </Alert>
       ))}
       {submitError && (
-        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+        <Alert
+          id="invoice-submit-error"
+          variant="destructive"
+          title={t("femme.billing.errorTitle")}
+        >
           {submitError}
         </Alert>
       )}
@@ -1069,6 +1609,55 @@ function NewInvoiceTab({
       {!rucValidForInvoicing && <FiscalRucWarning />}
 
       <form onSubmit={(e) => void handleSubmit(e)} noValidate className="flex flex-col gap-6">
+        {/* Issue #174 AC-04: emission date — read-only unless explicitly unlocked. */}
+        <Card className="p-4 sm:p-6 flex flex-col gap-3">
+          <Heading as="h3" className="text-base">
+            {t("femme.billing.invoice.issueDateSection")}
+          </Heading>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-[160px]">
+              <Label htmlFor="billing-issue-date">
+                {t("femme.billing.invoice.issueDateLabel")}
+              </Label>
+              <Input
+                id="billing-issue-date"
+                type="date"
+                value={issueDate}
+                onChange={(e) => {
+                  setIssueDate(e.target.value);
+                  setIssueDateError(null);
+                }}
+                disabled={!issueDateEditable}
+                aria-invalid={issueDateError ? true : undefined}
+                aria-describedby={issueDateError ? "billing-issue-date-err" : undefined}
+                className="mt-1 w-full"
+              />
+            </div>
+            <label
+              htmlFor="billing-issue-date-editable"
+              className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
+            >
+              <Checkbox
+                id="billing-issue-date-editable"
+                checked={issueDateEditable}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setIssueDateEditable(on);
+                  setIssueDateError(null);
+                  if (!on) setIssueDate(localTodayYmd());
+                }}
+              />
+              {t("femme.billing.invoice.issueDateEditableToggle")}
+            </label>
+          </div>
+          <FieldValidationError id="billing-issue-date-err">{issueDateError}</FieldValidationError>
+          {sifenEnabled && (
+            <Text variant="muted" className="mt-1 text-sm">
+              {t("femme.billing.invoice.issueDateLegend")}
+            </Text>
+          )}
+        </Card>
+
         {/* Client section */}
         <Card className="p-4 sm:p-6 flex flex-col gap-4">
           <Heading as="h3" className="text-base">
@@ -1079,6 +1668,7 @@ function NewInvoiceTab({
             id="billing-client-search"
             value={clientSelection}
             onChange={handleClientSelectionChange}
+            activeOnly
             onCreateNew={(q) =>
               navigate("/app/clients", {
                 state: {
@@ -1092,28 +1682,126 @@ function NewInvoiceTab({
             label={t("femme.billing.invoice.clientSearchLabel")}
             placeholder={t("femme.billing.invoice.clientPlaceholder")}
           />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {sifenEnabled && (
             <div>
-              <Label htmlFor="client-display-name">
-                {t("femme.billing.invoice.clientDisplayName")}
+              <Label htmlFor="billing-client-email">
+                {t("femme.billing.invoice.clientEmailLabel")}
               </Label>
               <Input
-                id="client-display-name"
-                value={clientDisplayName}
-                onChange={(e) => setClientDisplayName(e.target.value)}
-                placeholder={t("femme.billing.invoice.clientDisplayNamePlaceholder")}
+                id="billing-client-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={clientEmail}
+                onChange={(e) => {
+                  setClientEmail(e.target.value);
+                  setClientEmailError(null);
+                }}
+                placeholder={t("femme.billing.invoice.clientEmailPlaceholder")}
+                aria-invalid={clientEmailError ? true : undefined}
+                aria-describedby={
+                  clientEmailError ? "billing-client-email-err" : "billing-client-email-hint"
+                }
                 className="mt-1 w-full"
               />
+              {clientEmailError ? (
+                <FieldValidationError id="billing-client-email-err">
+                  {clientEmailError}
+                </FieldValidationError>
+              ) : (
+                <Text id="billing-client-email-hint" variant="muted" className="mt-1 text-sm">
+                  {t("femme.billing.invoice.clientEmailHint")}
+                </Text>
+              )}
             </div>
-            <div>
-              <Label htmlFor="client-ruc">{t("femme.billing.invoice.clientRucOverride")}</Label>
-              <Input
-                id="client-ruc"
-                value={clientRucOverride}
-                onChange={(e) => setClientRucOverride(e.target.value)}
-                placeholder={t("femme.billing.invoice.clientRucOverridePlaceholder")}
-                className="mt-1 w-full"
+          )}
+          <div className="flex flex-col gap-4 border-t border-[rgb(var(--color-border))] pt-4">
+            <label
+              htmlFor="client-unnamed-invoice"
+              className="flex cursor-pointer items-center gap-2 text-sm font-medium"
+            >
+              <Checkbox
+                id="client-unnamed-invoice"
+                checked={clientIdentityDocumentType === "INNOMINADO"}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setClientIdentityDocumentType("INNOMINADO");
+                    setClientDisplayName("");
+                    setClientIdentityDocumentNumber("");
+                  } else if (clientSelection?.type === "client") {
+                    loadClientIdentity(clientSelection.client);
+                  } else {
+                    setClientIdentityDocumentType("RUC");
+                    setClientDisplayName("");
+                    setClientIdentityDocumentNumber("");
+                  }
+                }}
               />
+              {t("femme.billing.invoice.unnamedInvoice")}
+            </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="client-display-name">
+                  {t("femme.billing.invoice.clientDisplayName")}
+                </Label>
+                <Input
+                  id="client-display-name"
+                  value={clientDisplayName}
+                  onChange={(e) => setClientDisplayName(e.target.value)}
+                  placeholder={t("femme.billing.invoice.clientDisplayNamePlaceholder")}
+                  disabled={clientIdentityDocumentType === "INNOMINADO"}
+                  className="mt-1 w-full"
+                />
+              </div>
+              <div>
+                <Label htmlFor="client-identity-document-type">
+                  {t("femme.clients.identityDocumentType")}
+                </Label>
+                <Select
+                  id="client-identity-document-type"
+                  value={clientIdentityDocumentType}
+                  onChange={(e) => setClientIdentityDocumentType(e.target.value)}
+                  disabled={clientIdentityDocumentType === "INNOMINADO"}
+                  className="mt-1 w-full"
+                >
+                  {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {t(opt.labelKey)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="client-identity-document-number">
+                  {t("femme.clients.identityDocumentNumber")}
+                </Label>
+                <Input
+                  id="client-identity-document-number"
+                  value={clientIdentityDocumentNumber}
+                  onChange={(e) => setClientIdentityDocumentNumber(e.target.value)}
+                  placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                  disabled={clientIdentityDocumentType === "INNOMINADO"}
+                  className="mt-1 w-full"
+                />
+              </div>
+              {clientIdentityDocumentType === "RUC" && (
+                <div>
+                  <Label htmlFor="client-taxpayer-type">{t("femme.clients.taxpayerType")}</Label>
+                  <Select
+                    id="client-taxpayer-type"
+                    value={clientTaxpayerType}
+                    onChange={(e) => setClientTaxpayerType(e.target.value)}
+                    className="mt-1 w-full"
+                  >
+                    <option value="PERSONA_FISICA">
+                      {t("femme.clients.taxpayerTypePersonaFisica")}
+                    </option>
+                    <option value="PERSONA_JURIDICA">
+                      {t("femme.clients.taxpayerTypePersonaJuridica")}
+                    </option>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -1317,6 +2005,15 @@ function NewInvoiceTab({
 
           {/* Summary */}
           <div className="flex flex-col gap-1 text-sm">
+            {taxExemptReceiver && (
+              <Text
+                data-testid="billing-tax-exempt-note"
+                variant="muted"
+                className="mb-1 text-sm"
+              >
+                {t("femme.billing.invoice.taxExemptNote")}
+              </Text>
+            )}
             <div className="flex justify-between">
               <span className="text-[rgb(var(--color-muted-foreground))]">
                 {t("femme.billing.invoice.subtotal")}
@@ -1335,6 +2032,14 @@ function NewInvoiceTab({
               <span>{t("femme.billing.invoice.total")}</span>
               <span>{formatAmountDecimal(total.toFixed(2))}</span>
             </div>
+            {showTips && (
+              <div className="flex justify-between">
+                <span className="text-red-600 dark:text-red-400">
+                  {t("femme.billing.invoice.tips")}
+                </span>
+                <span id="billing-tips-amount">{formatAmountDecimal(tipsAmountNum.toFixed(2))}</span>
+              </div>
+            )}
             <div
               className={`flex justify-between ${Math.abs(remaining) > 0.01 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
             >
@@ -1344,7 +2049,14 @@ function NewInvoiceTab({
           </div>
 
           <div className="flex flex-col gap-3">
-            {payments.map((payment, idx) => (
+            {payments.map((payment, idx) => {
+              const paymentAmountNum = parseMaskedMoney(payment.amount);
+              const amountIsInvalid =
+                !Number.isFinite(paymentAmountNum) || paymentAmountNum <= 0;
+              const isCardPayment = CARD_PAYMENT_METHODS.has(payment.method);
+              const cardError =
+                !amountIsInvalid && paymentErrors[idx] ? paymentErrors[idx] : undefined;
+              return (
               <div key={idx} className="flex flex-wrap gap-2 items-start">
                 <div className="flex-1 min-w-[160px]">
                   <Label htmlFor={`pay-method-${idx}`}>
@@ -1357,7 +2069,11 @@ function NewInvoiceTab({
                     className="mt-1 w-full"
                   >
                     {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>
+                      <option
+                        key={m}
+                        value={m}
+                        disabled={payments.some((p, i) => i !== idx && p.method === m)}
+                      >
                         {t(`femme.billing.invoice.paymentMethod${capitalize(m)}`)}
                       </option>
                     ))}
@@ -1374,15 +2090,70 @@ function NewInvoiceTab({
                     onChange={(e) => updatePayment(idx, "amount", e.target.value)}
                     placeholder={t("femme.billing.invoice.paymentAmountPlaceholder")}
                     className="mt-1 w-full"
-                    aria-invalid={!!paymentErrors[idx]}
+                    aria-invalid={amountIsInvalid && !!paymentErrors[idx]}
                     aria-describedby={
-                      paymentErrors[idx] ? `pay-amount-err-${idx}` : undefined
+                      idx === 0
+                        ? "pay-amount-0-hint"
+                        : amountIsInvalid && paymentErrors[idx]
+                          ? `pay-amount-err-${idx}`
+                          : undefined
                     }
                   />
-                  <FieldValidationError id={`pay-amount-err-${idx}`}>
-                    {paymentErrors[idx]}
-                  </FieldValidationError>
+                  {idx === 0 ? (
+                    <Text id="pay-amount-0-hint" variant="muted" className="mt-1 text-sm">
+                      {t("femme.billing.invoice.paymentAmountFirstRowHint")}
+                    </Text>
+                  ) : (
+                    <FieldValidationError id={`pay-amount-err-${idx}`}>
+                      {amountIsInvalid ? paymentErrors[idx] : undefined}
+                    </FieldValidationError>
+                  )}
                 </div>
+                {isCardPayment && (
+                  <div className="flex-1 min-w-[160px]">
+                    <Label htmlFor={`pay-card-brand-${idx}`}>
+                      {t("femme.billing.invoice.cardBrandLabel")}
+                    </Label>
+                    <Select
+                      id={`pay-card-brand-${idx}`}
+                      value={payment.cardBrand}
+                      onChange={(e) => updatePayment(idx, "cardBrand", e.target.value)}
+                      className="mt-1 w-full"
+                      aria-invalid={!!cardError}
+                      aria-describedby={cardError ? `pay-card-brand-err-${idx}` : undefined}
+                    >
+                      <option value="" disabled>
+                        {t("femme.billing.invoice.cardBrandPlaceholder")}
+                      </option>
+                      {CARD_BRANDS.map((brand) => (
+                        <option key={brand} value={brand}>
+                          {t(`femme.billing.invoice.cardBrand${capitalize(brand)}`)}
+                        </option>
+                      ))}
+                    </Select>
+                    <FieldValidationError id={`pay-card-brand-err-${idx}`}>
+                      {cardError}
+                    </FieldValidationError>
+                  </div>
+                )}
+                {isCardPayment && payment.cardBrand === "OTHER" && (
+                  <div className="flex-1 min-w-[160px]">
+                    <Label htmlFor={`pay-card-brand-other-${idx}`}>
+                      {t("femme.billing.invoice.cardBrandOtherDescriptionLabel")}
+                    </Label>
+                    <Input
+                      id={`pay-card-brand-other-${idx}`}
+                      value={payment.cardBrandOtherDescription}
+                      onChange={(e) =>
+                        updatePayment(idx, "cardBrandOtherDescription", e.target.value)
+                      }
+                      placeholder={t(
+                        "femme.billing.invoice.cardBrandOtherDescriptionPlaceholder",
+                      )}
+                      className="mt-1 w-full"
+                    />
+                  </div>
+                )}
                 {payments.length > 1 && (
                   <div className="flex items-end pb-1">
                     <Button
@@ -1397,7 +2168,8 @@ function NewInvoiceTab({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <Button
@@ -1406,6 +2178,7 @@ function NewInvoiceTab({
             size="sm"
             className="w-fit"
             onClick={addPayment}
+            disabled={payments.length >= PAYMENT_METHODS.length}
           >
             {t("femme.billing.invoice.addPayment")}
           </Button>
@@ -1433,11 +2206,13 @@ function CashSessionTab({
   currentSession,
   onSessionChanged,
   onNewInvoice,
+  onOpenCashHistory,
   refreshTrigger,
 }: {
   currentSession: CashSession | null;
   onSessionChanged: () => void;
   onNewInvoice: () => void;
+  onOpenCashHistory: () => void;
   refreshTrigger: number;
 }) {
   const { t } = useTranslation();
@@ -1454,7 +2229,78 @@ function CashSessionTab({
   const [countedCashError, setCountedCashError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
-  const [closeResult, setCloseResult] = useState<CashSessionCloseResponse | null>(null);
+  const [closeResult, setCloseResult] = useState<CashSessionDetail | null>(null);
+
+  // Live detail (movements + running expected cash) for the currently open session.
+  const [liveDetail, setLiveDetail] = useState<CashSessionDetail | null>(null);
+  const [liveDetailError, setLiveDetailError] = useState<string | null>(null);
+  const [movementType, setMovementType] = useState<Extract<CashMovementType, "MANUAL_IN" | "MANUAL_OUT">>(
+    "MANUAL_IN",
+  );
+  const [movementAmount, setMovementAmount] = useState("");
+  const [movementAmountError, setMovementAmountError] = useState<string | null>(null);
+  const [movementReason, setMovementReason] = useState("");
+  const [movementReasonError, setMovementReasonError] = useState<string | null>(null);
+  const [movementSubmitting, setMovementSubmitting] = useState(false);
+  const [movementSubmitError, setMovementSubmitError] = useState<string | null>(null);
+  const [movementSubmitSuccess, setMovementSubmitSuccess] = useState(false);
+  const [showMovementModal, setShowMovementModal] = useState(false);
+
+  const loadLiveDetail = useCallback(async () => {
+    if (!currentSession) {
+      setLiveDetail(null);
+      return;
+    }
+    try {
+      const data = await getSessionDetail(currentSession.id);
+      setLiveDetail(data);
+      setLiveDetailError(null);
+    } catch (err) {
+      setLiveDetailError(translateApiError(err, t, "femme.billing.cashHistory.loadError"));
+    }
+  }, [currentSession, t]);
+
+  useEffect(() => {
+    void loadLiveDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadLiveDetail, refreshTrigger]);
+
+  async function handleCreateMovement(e: React.FormEvent) {
+    e.preventDefault();
+    setMovementSubmitError(null);
+    setMovementSubmitSuccess(false);
+    let hasError = false;
+    if (moneyDigitsOnly(movementAmount) === "" || parseMaskedMoney(movementAmount) <= 0) {
+      setMovementAmountError(t("femme.billing.movements.form.amountInvalid"));
+      hasError = true;
+    } else {
+      setMovementAmountError(null);
+    }
+    if (movementReason.trim() === "") {
+      setMovementReasonError(t("femme.billing.movements.form.reasonRequired"));
+      hasError = true;
+    } else {
+      setMovementReasonError(null);
+    }
+    if (hasError) return;
+
+    setMovementSubmitting(true);
+    try {
+      await createMovementApi({
+        type: movementType,
+        amount: parseMaskedMoney(movementAmount),
+        reason: movementReason.trim(),
+      });
+      setMovementAmount("");
+      setMovementReason("");
+      setMovementSubmitSuccess(true);
+      await loadLiveDetail();
+    } catch (err) {
+      setMovementSubmitError(translateApiError(err, t, "femme.billing.movements.form.submitError"));
+    } finally {
+      setMovementSubmitting(false);
+    }
+  }
 
   const [todayPage, setTodayPage] = useState<PagedInvoicesResponse | null>(null);
   const [todayLoading, setTodayLoading] = useState(false);
@@ -1465,12 +2311,12 @@ function CashSessionTab({
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const loadTodayInvoices = useCallback(
-    async (q: string, page: number, size: number) => {
+    async (q: string, page: number, size: number, silent = false) => {
       if (!currentSession) {
         setTodayPage(null);
         return;
       }
-      setTodayLoading(true);
+      if (!silent) setTodayLoading(true);
       try {
         const { from, to } = todayRangeIso();
         const data = await listInvoicesPaged({
@@ -1482,9 +2328,9 @@ function CashSessionTab({
         });
         setTodayPage(data);
       } catch {
-        setTodayPage(null);
+        if (!silent) setTodayPage(null);
       } finally {
-        setTodayLoading(false);
+        if (!silent) setTodayLoading(false);
       }
     },
     [currentSession],
@@ -1497,6 +2343,20 @@ function CashSessionTab({
   }, [loadTodayInvoices, refreshTrigger, currentSession?.id, sessionListQuery, todayPageNum, todayPageSize]);
 
   const visibleTodayInvoices = todayPage?.content ?? [];
+  const hasQueuedTodayInvoice = visibleTodayInvoices.some(
+    (inv) => inv.sifenSubmissionStatus === "QUEUED",
+  );
+
+  // RT-20: SIFEN submission is async — an invoice sitting at "En Cola" (QUEUED) can flip to its
+  // final status (transmitted, rejected, etc.) within seconds without any user action, so poll
+  // silently (no loading spinner) while at least one row on this page is still queued.
+  useEffect(() => {
+    if (!hasQueuedTodayInvoice) return;
+    const id = window.setInterval(() => {
+      void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize, true);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [hasQueuedTodayInvoice, loadTodayInvoices, sessionListQuery, todayPageNum, todayPageSize]);
   const dayTotalIssued = todayPage?.issuedTotal ?? 0;
   const todayTotalElements = todayPage?.totalElements ?? 0;
   const todayTotalPages = todayPage?.totalPages ?? 0;
@@ -1514,9 +2374,7 @@ function CashSessionTab({
     setAmountError(null);
     setSubmitting(true);
     try {
-      await femmePostJson("/api/cash-sessions/open", {
-        openingCashAmount: parseMaskedMoney(openingAmount),
-      });
+      await openSessionApi(parseMaskedMoney(openingAmount));
       setOpeningAmount("");
       setOpenSuccess(true);
       onSessionChanged();
@@ -1537,10 +2395,7 @@ function CashSessionTab({
     setCountedCashError(null);
     setClosing(true);
     try {
-      const result = await femmePostJson<CashSessionCloseResponse>(
-        "/api/cash-sessions/close",
-        { countedCashAmount: parseMaskedMoney(countedCash) },
-      );
+      const result = await closeSessionApi(parseMaskedMoney(countedCash));
       setCloseResult(result);
       setShowCloseForm(false);
       onSessionChanged();
@@ -1550,8 +2405,6 @@ function CashSessionTab({
       setClosing(false);
     }
   }
-
-  const diff = closeResult ? parseFloat(closeResult.cashDifference) : null;
 
   const primaryBtn: React.CSSProperties = {
     background: "var(--color-rose)",
@@ -1565,6 +2418,18 @@ function CashSessionTab({
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
+    whiteSpace: "nowrap",
+  };
+
+  const secondaryBtn: React.CSSProperties = {
+    background: "var(--color-stone)",
+    color: "var(--color-ink)",
+    border: "var(--border-default)",
+    borderRadius: "var(--radius-md)",
+    padding: "8px 16px",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
     whiteSpace: "nowrap",
   };
 
@@ -1635,57 +2500,14 @@ function CashSessionTab({
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <span>
               <span className="font-medium">{t("femme.billing.close.closedAt")}: </span>
-              {fmt(closeResult.closedAt, dateLocale)}
+              {formatParaguayDateTime(closeResult.closedAt as string, dateLocale)}
             </span>
             <span>
               <span className="font-medium">{t("femme.billing.close.closedBy")}: </span>
               {closeResult.closedByEmail}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm max-w-sm">
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.totalInvoiced")}
-            </span>
-            <span className="text-right">{formatAmountDecimal(closeResult.totalInvoiced)}</span>
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.invoiceCount")}
-            </span>
-            <span className="text-right">{closeResult.invoiceCount}</span>
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.expectedCash")}
-            </span>
-            <span className="text-right">{formatAmountDecimal(closeResult.expectedCashAmount)}</span>
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.countedCash")}
-            </span>
-            <span className="text-right">{formatAmountDecimal(closeResult.countedCashAmount)}</span>
-            <span
-              className={`font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
-            >
-              {t("femme.billing.close.difference")}
-            </span>
-            <span
-              className={`text-right font-semibold ${diff !== null && diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
-            >
-              {diff !== null && diff >= 0 ? "+" : ""}
-              {formatAmountDecimal(closeResult.cashDifference)}
-            </span>
-          </div>
-          {(closeResult.paymentSummary ?? []).length > 0 && (
-            <div className="mt-2">
-              <Text className="font-medium text-sm mb-1">
-                {t("femme.billing.close.paymentBreakdown")}
-              </Text>
-              <div className="flex flex-col gap-1">
-                {(closeResult.paymentSummary ?? []).map((ps, i) => (
-                  <div key={i} className="flex justify-between text-sm max-w-xs">
-                    <span>{t(`femme.billing.invoice.paymentMethod${capitalize(ps.method)}`)}</span>
-                    <span>{formatAmountDecimal(ps.total)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <CashSessionSummaryCard detail={closeResult} />
         </div>
       )}
 
@@ -1699,25 +2521,52 @@ function CashSessionTab({
           marginBottom: 14,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-          <span
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            marginBottom: 14,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: currentSession ? "var(--color-success)" : "var(--color-ink-3)",
+              }}
+              aria-hidden
+            />
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: currentSession ? "var(--color-success)" : "var(--color-ink-2)",
+              }}
+            >
+              {currentSession ? t("femme.billing.sessionOpen") : t("femme.billing.sessionClosed")}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenCashHistory}
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: currentSession ? "var(--color-success)" : "var(--color-ink-3)",
-            }}
-            aria-hidden
-          />
-          <span
-            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
               fontSize: 13,
               fontWeight: 500,
-              color: currentSession ? "var(--color-success)" : "var(--color-ink-2)",
+              color: "var(--color-rose-dk)",
+              textDecoration: "underline",
+              cursor: "pointer",
             }}
           >
-            {currentSession ? t("femme.billing.sessionOpen") : t("femme.billing.sessionClosed")}
-          </span>
+            {t("femme.billing.tabs.cashHistory")}
+          </button>
         </div>
 
         {currentSession ? (
@@ -1749,7 +2598,7 @@ function CashSessionTab({
                   {t("femme.billing.session.metricOpenedAt")}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-                  {fmt(currentSession.openedAt, dateLocale)}
+                  {formatParaguayDateTime(currentSession.openedAt, dateLocale)}
                 </div>
               </div>
               <div
@@ -1798,10 +2647,37 @@ function CashSessionTab({
               </div>
             </div>
 
+            <Accordion style={{ marginBottom: 14 }}>
+              <AccordionItem title={t("femme.billing.session.detailAccordionTitle")} defaultOpen>
+                {liveDetailError && (
+                  <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                    {liveDetailError}
+                  </Alert>
+                )}
+                {liveDetail && <CashSessionSummaryCard detail={liveDetail} />}
+              </AccordionItem>
+            </Accordion>
+
             {!showCloseForm && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button type="button" style={primaryBtn} onClick={onNewInvoice}>
+                <button
+                  type="button"
+                  data-tour="billing-new-invoice"
+                  style={primaryBtn}
+                  onClick={onNewInvoice}
+                >
                   {t("femme.billing.session.newInvoiceButton")}
+                </button>
+                <button
+                  type="button"
+                  style={secondaryBtn}
+                  onClick={() => {
+                    setMovementSubmitError(null);
+                    setMovementSubmitSuccess(false);
+                    setShowMovementModal(true);
+                  }}
+                >
+                  {t("femme.billing.movements.form.openButton")}
                 </button>
                 <button type="button" style={destructiveSoft} onClick={() => setShowCloseForm(true)}>
                   {t("femme.billing.close.title")}
@@ -1861,6 +2737,117 @@ function CashSessionTab({
           )
         )}
       </div>
+
+      {currentSession && (
+        <Modal
+          open={showMovementModal}
+          onClose={() => setShowMovementModal(false)}
+          title={t("femme.billing.movements.form.title")}
+        >
+          {movementSubmitSuccess && (
+            <Alert variant="success" className="mb-3 py-2">
+              {t("femme.billing.movements.form.submitSuccess")}
+            </Alert>
+          )}
+
+          {movementSubmitError && (
+            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+              {movementSubmitError}
+            </Alert>
+          )}
+
+          <form
+            onSubmit={(e) => void handleCreateMovement(e)}
+            noValidate
+            className="flex flex-col gap-3"
+          >
+            <div className="flex gap-2">
+              <button
+                type="button"
+                style={movementType === "MANUAL_IN" ? primaryBtn : destructiveSoft}
+                onClick={() => setMovementType("MANUAL_IN")}
+                aria-pressed={movementType === "MANUAL_IN"}
+              >
+                {t("femme.billing.movements.form.typeIngreso")}
+              </button>
+              <button
+                type="button"
+                style={movementType === "MANUAL_OUT" ? primaryBtn : destructiveSoft}
+                onClick={() => setMovementType("MANUAL_OUT")}
+                aria-pressed={movementType === "MANUAL_OUT"}
+              >
+                {t("femme.billing.movements.form.typeEgreso")}
+              </button>
+            </div>
+            <div>
+              <Label htmlFor="movement-amount">{t("femme.billing.movements.form.amountLabel")}</Label>
+              <Input
+                id="movement-amount"
+                inputMode="numeric"
+                value={movementAmount}
+                onChange={(e) => {
+                  setMovementAmount(maskMoneyInput(e.target.value));
+                  setMovementAmountError(null);
+                }}
+                className="mt-1 w-full sm:max-w-xs"
+                placeholder="0"
+                aria-invalid={!!movementAmountError}
+                aria-describedby={movementAmountError ? "movement-amount-err" : "movement-amount-hint"}
+              />
+              <FieldValidationError id="movement-amount-err">
+                {movementAmountError}
+              </FieldValidationError>
+              <Text
+                variant="small"
+                id="movement-amount-hint"
+                className="mt-1 text-[rgb(var(--color-muted-foreground))]"
+              >
+                {t("femme.billing.movements.form.amountHint")}
+              </Text>
+            </div>
+            <div>
+              <Label htmlFor="movement-reason">{t("femme.billing.movements.form.reasonLabel")}</Label>
+              <Input
+                id="movement-reason"
+                value={movementReason}
+                onChange={(e) => {
+                  setMovementReason(e.target.value);
+                  setMovementReasonError(null);
+                }}
+                className="mt-1 w-full"
+                maxLength={500}
+                aria-invalid={!!movementReasonError}
+                aria-describedby={movementReasonError ? "movement-reason-err" : "movement-reason-hint"}
+              />
+              <FieldValidationError id="movement-reason-err">
+                {movementReasonError}
+              </FieldValidationError>
+              <Text
+                variant="small"
+                id="movement-reason-hint"
+                className="mt-1 text-[rgb(var(--color-muted-foreground))]"
+              >
+                {t("femme.billing.movements.form.reasonHint")}
+              </Text>
+            </div>
+            <div className="flex gap-3">
+              <Button type="submit" variant="primary" className="min-h-11" disabled={movementSubmitting}>
+                {movementSubmitting
+                  ? t("femme.billing.movements.form.submitting")
+                  : t("femme.billing.movements.form.submit")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                onClick={() => setShowMovementModal(false)}
+              >
+                {t("femme.billing.movements.form.closeButton")}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {showCloseForm && currentSession && (
         <div
@@ -1957,6 +2944,12 @@ function CashSessionTab({
             </span>
           </div>
 
+          {visibleTodayInvoices.some((inv) => inv.sifenSubmissionStatus === "REJECTED") ? (
+            <Text variant="small" className="text-[var(--color-ink-3)]" style={{ marginBottom: 12 }}>
+              {t("femme.billing.session.todayTotalExcludesRejected")}
+            </Text>
+          ) : null}
+
           <div style={{ marginBottom: 12 }}>
             <ListSearchField
               id="billing-session-today-filter"
@@ -1987,12 +2980,12 @@ function CashSessionTab({
               >
                 <colgroup>
                   <col style={{ width: "13%" }} />
-                  <col style={{ width: "22%" }} />
-                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "24%" }} />
+                  <col style={{ width: "17%" }} />
                   <col style={{ width: "13%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "11%" }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -2014,7 +3007,9 @@ function CashSessionTab({
                     <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
                       {t("femme.billing.history.colStatus")}
                     </th>
-                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }} />
+                    <th style={{ ...thStyle, borderBottom: "var(--border-default)" }}>
+                      {t("femme.billing.history.colSifenStatus")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2032,6 +3027,20 @@ function CashSessionTab({
                     return (
                       <tr
                         key={inv.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={t("femme.billing.history.openDetail", {
+                          invoiceNumber: inv.invoiceNumberFormatted,
+                        })}
+                        data-testid={`billing-today-row-${inv.id}`}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setSelectedInvoiceId(inv.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedInvoiceId(inv.id);
+                          }
+                        }}
                         onMouseEnter={() => setHoveredRowId(inv.id)}
                         onMouseLeave={() => setHoveredRowId(null)}
                       >
@@ -2064,15 +3073,8 @@ function CashSessionTab({
                         <td style={cell}>
                           <InvoiceStatusBadge status={inv.status} />
                         </td>
-                        <td style={{ ...cell, textAlign: "right" }}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            data-testid={`billing-today-view-${inv.id}`}
-                            onClick={() => setSelectedInvoiceId(inv.id)}
-                          >
-                            {t("femme.billing.history.viewDetail")}
-                          </Button>
+                        <td style={cell}>
+                          <SifenStatusBadge status={inv.sifenSubmissionStatus} />
                         </td>
                       </tr>
                     );
@@ -2117,6 +3119,369 @@ function CashSessionTab({
   );
 }
 
+// ─── CashSessionHistoryTab ─────────────────────────────────────────────────────
+
+function CashSessionHistoryTab({
+  refreshTrigger,
+  onBack,
+}: {
+  refreshTrigger: number;
+  onBack: () => void;
+}) {
+  const { t } = useTranslation();
+  const dateLocale = useDateLocale();
+  const [sessionPage, setSessionPage] = useState<PageResponse<CashSessionListItem> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null);
+  const [filterFrom, setFilterFrom] = useState(() => getDefaultInvoiceHistoryDateRange().from);
+  const [filterTo, setFilterTo] = useState(() => getDefaultInvoiceHistoryDateRange().to);
+  const [filterStatus, setFilterStatus] = useState<"" | "OPEN" | "CLOSED">("");
+  const [listTextQuery, setListTextQuery] = useState("");
+  const [pageNum, setPageNum] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
+
+  const loadSessions = useCallback(
+    async (
+      from: string,
+      to: string,
+      status: "" | "OPEN" | "CLOSED",
+      q: string,
+      page: number,
+      size: number,
+    ) => {
+      setLoadError(null);
+      setDateRangeError(null);
+      const rangeErr = invoiceHistoryRangeErrorKey(from, to);
+      if (rangeErr) {
+        setDateRangeError(
+          t(
+            `femme.billing.cashHistory.rangeError${rangeErr.charAt(0).toUpperCase()}${rangeErr.slice(1)}`,
+          ),
+        );
+        loadAbortRef.current?.abort();
+        loadAbortRef.current = null;
+        setSessionPage(null);
+        return;
+      }
+      loadAbortRef.current?.abort();
+      const controller = new AbortController();
+      loadAbortRef.current = controller;
+      setLoading(true);
+      try {
+        const data = await listCashSessionsPaged(
+          {
+            from: localDateYmdToIsoStart(from),
+            to: localDateYmdToIsoEnd(to),
+            status: status || undefined,
+            q: q || undefined,
+            page,
+            size,
+          },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        setSessionPage(data);
+        if (data.totalPages > 0 && page > data.totalPages - 1) {
+          setPageNum(data.totalPages - 1);
+        }
+      } catch (err) {
+        if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+          return;
+        }
+        setLoadError(translateApiError(err, t, "femme.billing.cashHistory.loadError"));
+      } finally {
+        if (loadAbortRef.current === controller) {
+          setLoading(false);
+          loadAbortRef.current = null;
+        }
+      }
+    },
+    [t],
+  );
+
+  useEffect(() => () => loadAbortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    filterDebounceRef.current = setTimeout(() => {
+      void loadSessions(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+    }, 350);
+    return () => {
+      if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    };
+  }, [filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, loadSessions]);
+
+  const isFirstRefreshRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRefreshRef.current) {
+      isFirstRefreshRef.current = false;
+      return;
+    }
+    void loadSessions(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
+
+  function handleClear() {
+    const d = getDefaultInvoiceHistoryDateRange();
+    setFilterFrom(d.from);
+    setFilterTo(d.to);
+    setFilterStatus("");
+    setListTextQuery("");
+    setDateRangeError(null);
+    setPageNum(0);
+  }
+
+  function handleFilterChange<T>(setter: (v: T) => void) {
+    return (v: T) => {
+      setter(v);
+      setPageNum(0);
+    };
+  }
+
+  const sessions = sessionPage?.content ?? [];
+  const totalElements = sessionPage?.totalElements ?? 0;
+  const totalPages = sessionPage?.totalPages ?? 0;
+  const showingFrom = totalElements === 0 ? 0 : pageNum * pageSize + 1;
+  const showingTo = Math.min((pageNum + 1) * pageSize, totalElements);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Button type="button" variant="ghost" onClick={onBack} className="self-start">
+        ← {t("femme.billing.cashHistory.backToCaja")}
+      </Button>
+
+      <Heading as="h2" className="text-lg">
+        {t("femme.billing.cashHistory.title")}
+      </Heading>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <ListSearchField
+          id="cash-history-text-filter"
+          value={listTextQuery}
+          onChange={handleFilterChange(setListTextQuery)}
+          label={t("femme.listFilter.label")}
+          placeholder={t("femme.listFilter.placeholder")}
+          className="w-full min-w-0 sm:max-w-[min(100%,280px)]"
+        />
+        <form onSubmit={(e) => e.preventDefault()} className="flex flex-wrap gap-3 items-end" noValidate>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="cash-history-filter-from">{t("femme.billing.history.filterFrom")}</Label>
+            <Input
+              id="cash-history-filter-from"
+              type="date"
+              value={filterFrom}
+              onChange={(e) => handleFilterChange(setFilterFrom)(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="cash-history-filter-to">{t("femme.billing.history.filterTo")}</Label>
+            <Input
+              id="cash-history-filter-to"
+              type="date"
+              value={filterTo}
+              onChange={(e) => handleFilterChange(setFilterTo)(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <Label htmlFor="cash-history-filter-status">{t("femme.billing.history.filterStatus")}</Label>
+            <Select
+              id="cash-history-filter-status"
+              value={filterStatus}
+              onChange={(e) =>
+                handleFilterChange(setFilterStatus)(e.target.value as "" | "OPEN" | "CLOSED")
+              }
+            >
+              <option value="">{t("femme.billing.history.filterStatusAll")}</option>
+              <option value="OPEN">{t("femme.billing.cashHistory.filterStatusOpen")}</option>
+              <option value="CLOSED">{t("femme.billing.cashHistory.filterStatusClosed")}</option>
+            </Select>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={handleClear}>
+            {t("femme.billing.history.clearFilters")}
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() =>
+              void loadSessions(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize)
+            }
+            disabled={loading}
+          >
+            {t("femme.billing.history.refresh")}
+          </Button>
+        </form>
+      </div>
+
+      {dateRangeError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {dateRangeError}
+        </Alert>
+      )}
+
+      {loadError && (
+        <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+          {loadError}
+        </Alert>
+      )}
+
+      {loading ? (
+        <div className="flex items-center gap-2">
+          <Spinner size="sm" />
+          <Text>{t("femme.billing.cashHistory.loading")}</Text>
+        </div>
+      ) : loadError || dateRangeError ? null : sessions.length === 0 ? (
+        <Text variant="muted">{t("femme.billing.cashHistory.emptyState")}</Text>
+      ) : (
+        <div
+          style={{
+            background: "var(--color-white)",
+            borderRadius: "var(--radius-xl)",
+            border: "var(--border-default)",
+            overflow: "hidden",
+          }}
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm" style={{ tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "17%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {[
+                    { key: "colOpenedAt", align: "left" },
+                    { key: "colClosedAt", align: "left" },
+                    { key: "colOpenedBy", align: "left" },
+                    { key: "colClosedBy", align: "left" },
+                    { key: "colExpectedCash", align: "right" },
+                    { key: "colDifference", align: "right" },
+                  ].map(({ key, align }) => (
+                    <th
+                      key={key}
+                      style={{
+                        padding: "9px 12px",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--color-ink-3)",
+                        background: "var(--color-stone)",
+                        textAlign: align as "left" | "right",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t(`femme.billing.cashHistory.${key}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((s) => {
+                  const diff = s.cashDifference !== null ? parseFloat(s.cashDifference) : null;
+                  return (
+                    <tr
+                      key={s.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedSessionId(s.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedSessionId(s.id);
+                        }
+                      }}
+                      style={{ borderTop: "var(--border-default)", cursor: "pointer" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLTableRowElement).style.background =
+                          "var(--color-rose-lt)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLTableRowElement).style.background = "";
+                      }}
+                    >
+                      <td style={{ padding: "10px 12px" }}>
+                        {formatParaguayDateTime(s.openedAt, dateLocale)}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        {s.closedAt ? (
+                          formatParaguayDateTime(s.closedAt, dateLocale)
+                        ) : (
+                          <Badge variant="success">
+                            {t("femme.billing.cashHistory.statusOpenBadge")}
+                          </Badge>
+                        )}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>{s.openedByEmail}</td>
+                      <td style={{ padding: "10px 12px" }}>{s.closedByEmail ?? "—"}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                        {formatAmountDecimal(s.expectedCashAmount)}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 12px",
+                          textAlign: "right",
+                          fontWeight: 500,
+                          color:
+                            diff !== null
+                              ? diff < 0
+                                ? "var(--color-danger)"
+                                : "var(--color-success)"
+                              : undefined,
+                        }}
+                      >
+                        {s.cashDifference !== null ? formatAmountDecimal(s.cashDifference) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div
+            data-testid="cash-history-pagination"
+            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-default)]"
+          >
+            <PageSizeSelect
+              value={pageSize}
+              onChange={(s) => {
+                setPageSize(s);
+                setPageNum(0);
+              }}
+              label={t("femme.pagination.rowsPerPage")}
+            />
+            <Text variant="small" className="text-[var(--color-ink-3)]">
+              {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: totalElements })}
+            </Text>
+            <Pagination
+              page={pageNum + 1}
+              pageCount={totalPages}
+              onPageChange={(p) => setPageNum(p - 1)}
+              previousLabel={t("femme.pagination.previous")}
+              nextLabel={t("femme.pagination.next")}
+            />
+          </div>
+        </div>
+      )}
+
+      {selectedSessionId !== null && (
+        <CashSessionDetailModal
+          sessionId={selectedSessionId}
+          onClose={() => setSelectedSessionId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── BillingPage ─────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
@@ -2129,21 +3494,27 @@ export default function BillingPage() {
     | {
         activeTab?: "session" | "invoice" | "history";
         selectedClient?: InitialClientForBilling;
+        prefillServiceRecord?: PrefillServiceRecord;
       }
     | null;
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history">(
+  const [activeTab, setActiveTab] = useState<"session" | "invoice" | "history" | "cashHistory">(
     navState?.activeTab ?? "session",
   );
   const [invoiceListRefresh, setInvoiceListRefresh] = useState(0);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [cashHistoryRefresh, setCashHistoryRefresh] = useState(0);
+  const [invoiceFormResetKey, setInvoiceFormResetKey] = useState(0);
   const [pendingInitialClient, setPendingInitialClient] = useState<
     InitialClientForBilling | null
   >(navState?.selectedClient ?? null);
+  const [pendingPrefillServiceRecord, setPendingPrefillServiceRecord] =
+    useState<PrefillServiceRecord | null>(navState?.prefillServiceRecord ?? null);
 
   useEffect(() => {
-    if (navState && (navState.activeTab || navState.selectedClient)) {
+    if (navState && (navState.activeTab || navState.selectedClient || navState.prefillServiceRecord)) {
       navigate(location.pathname, { replace: true, state: {} });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2158,7 +3529,7 @@ export default function BillingPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await femmeJson<CashSession | undefined>("/api/cash-sessions/current");
+      const data = await fetchCurrentSession();
       setCurrentSession(data ?? null);
     } catch {
       setLoadError(t("femme.billing.loadError"));
@@ -2227,48 +3598,35 @@ export default function BillingPage() {
       )}
 
       <div data-tour="billing-session" style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.billing.title")}>
-        {(["session", "invoice", "history"] as const).map((tabKey) => {
-          const disabled = tabKey === "invoice" && !currentSession;
-          if (disabled) {
-            return (
-              <button
-                key={tabKey}
-                data-tour={tabKey === "invoice" ? "billing-new-invoice" : undefined}
-                type="button"
-                role="tab"
-                aria-selected={false}
-                disabled
-                style={{
-                  ...tabBase,
-                  opacity: 0.45,
-                  cursor: "not-allowed",
-                }}
-              >
-                {t(`femme.billing.tabs.${tabKey}`)}
-              </button>
-            );
-          }
-          return (
-            <button
-              key={tabKey}
-              data-tour={tabKey === "invoice" ? "billing-new-invoice" : undefined}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tabKey}
-              style={activeTab === tabKey ? tabActive : tabBase}
-              onClick={() => setActiveTab(tabKey)}
-            >
-              {t(`femme.billing.tabs.${tabKey}`)}
-            </button>
-          );
-        })}
+        {(["session", "history"] as const).map((tabKey) => (
+          <button
+            key={tabKey}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tabKey}
+            style={activeTab === tabKey ? tabActive : tabBase}
+            onClick={() => {
+              setActiveTab(tabKey);
+              if (tabKey === "history") setHistoryRefresh((k) => k + 1);
+            }}
+          >
+            {t(`femme.billing.tabs.${tabKey}`)}
+          </button>
+        ))}
       </div>
 
       <div hidden={activeTab !== "session"}>
         <CashSessionTab
           currentSession={currentSession}
           onSessionChanged={() => void loadCurrentSession()}
-          onNewInvoice={() => setActiveTab("invoice")}
+          onNewInvoice={() => {
+            setInvoiceFormResetKey((k) => k + 1);
+            setActiveTab("invoice");
+          }}
+          onOpenCashHistory={() => {
+            setCashHistoryRefresh((k) => k + 1);
+            setActiveTab("cashHistory");
+          }}
           refreshTrigger={invoiceListRefresh}
         />
       </div>
@@ -2279,8 +3637,12 @@ export default function BillingPage() {
             onIssued={() => {
               setInvoiceListRefresh((k) => k + 1);
             }}
+            onBack={() => setActiveTab("session")}
             initialClient={pendingInitialClient}
             onInitialClientConsumed={() => setPendingInitialClient(null)}
+            initialPrefillServiceRecord={pendingPrefillServiceRecord}
+            onInitialPrefillConsumed={() => setPendingPrefillServiceRecord(null)}
+            resetKey={invoiceFormResetKey}
           />
         ) : (
           <Text variant="muted">{t("femme.billing.noOpenSession")}</Text>
@@ -2288,7 +3650,14 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "history"}>
-        <InvoiceHistoryTab />
+        <InvoiceHistoryTab refreshTrigger={historyRefresh} />
+      </div>
+
+      <div hidden={activeTab !== "cashHistory"}>
+        <CashSessionHistoryTab
+          refreshTrigger={cashHistoryRefresh}
+          onBack={() => setActiveTab("session")}
+        />
       </div>
     </div>
   );

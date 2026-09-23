@@ -49,9 +49,24 @@ output "frontend_origin_for_cors" {
   value       = local.frontend_allowed_origins
 }
 
-output "acs_sender_address" {
-  description = "Email sender address from the Azure Communication Services managed domain."
-  value       = local.acs_sender_address
+output "acs_sender_address_reminders" {
+  description = "Sender address for appointment-reminder emails."
+  value       = local.acs_sender_address_reminders
+}
+
+output "acs_sender_address_invoices" {
+  description = "Sender address for SIFEN invoice/KuDE emails."
+  value       = local.acs_sender_address_invoices
+}
+
+output "acs_sender_address_generic" {
+  description = "Sender address for every other email (account activation, password reset)."
+  value       = local.acs_sender_address_generic
+}
+
+output "email_domain_verification_records" {
+  description = "DNS records to add at var.email_custom_domain's DNS provider before setting email_domain_verification_enabled=true. Null until email_custom_domain is set."
+  value       = local.email_domain_ready ? azurerm_email_communication_service_domain.custom[0].verification_records : null
 }
 
 output "log_analytics_workspace_id" {
@@ -68,4 +83,24 @@ output "application_insights_connection_string" {
 output "application_insights_app_id" {
   description = "Application Insights application ID."
   value       = azurerm_application_insights.main.app_id
+}
+
+output "key_vault_uri" {
+  description = "Vault URI for the Key Vault holding SIFEN certificate secrets and the JWT secret (RT-12/RT-18). Use with `az keyvault secret set --vault-name <name-from-key_vault_name-output> --name app-femme-jwt-secret --value ...` post-apply."
+  value       = azurerm_key_vault.main.vault_uri
+}
+
+output "key_vault_name" {
+  description = "Name of the Key Vault (for az keyvault CLI commands)."
+  value       = azurerm_key_vault.main.name
+}
+
+output "service_bus_namespace" {
+  description = "Fully qualified Service Bus namespace (RT-20) — matches FEMME_SERVICEBUS_NAMESPACE on the backend."
+  value       = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"
+}
+
+output "service_bus_queue_name" {
+  description = "Name of the SIFEN submission queue (for az servicebus CLI commands, e.g. checking the dead-letter queue depth)."
+  value       = azurerm_servicebus_queue.sifen_submission.name
 }

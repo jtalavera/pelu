@@ -2,13 +2,17 @@ package com.cursorpoc.backend.repository;
 
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,7 +20,40 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
   Optional<Invoice> findByIdAndTenant_Id(Long id, Long tenantId);
 
+  /**
+   * RT-20: same pessimistic-row-lock pattern as {@code FiscalStampRepository.lockByIdAndTenantId} —
+   * used by {@code SifenInvoiceSubmissionPersistenceService#claimForSubmission} so two concurrent
+   * claims for the same invoice can never both see "unclaimed" (a plain read-then-write would race;
+   * the second transaction blocks here until the first commits).
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT i FROM Invoice i WHERE i.id = :id AND i.tenant.id = :tenantId")
+  Optional<Invoice> lockByIdAndTenantId(@Param("id") Long id, @Param("tenantId") Long tenantId);
+
+  /**
+   * RT-20: drives {@code SifenSubmissionReconciler} — covers both invoices never enqueued at all
+   * (QUEUED, sifenNextAttemptAt still null) and invoices due for a backoff retry
+   * (PENDING_VERIFICATION, sifenNextAttemptAt elapsed), skipping anything another instance
+   * currently holds the lease on.
+   */
+  @Query(
+      """
+      SELECT i FROM Invoice i
+      WHERE i.sifenSubmissionStatus IN :statuses
+      AND (i.sifenNextAttemptAt IS NULL OR i.sifenNextAttemptAt <= :now)
+      AND (i.sifenProcessingStartedAt IS NULL OR i.sifenProcessingStartedAt < :leaseExpiry)
+      AND i.sifenAttemptCount < :maxAttempts
+      """)
+  List<Invoice> findDueForSifenRetry(
+      @Param("statuses") List<SifenSubmissionStatus> statuses,
+      @Param("now") LocalDateTime now,
+      @Param("leaseExpiry") LocalDateTime leaseExpiry,
+      @Param("maxAttempts") int maxAttempts);
+
   boolean existsByTenant_IdAndFiscalStamp_Id(Long tenantId, Long fiscalStampId);
+
+  boolean existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
+      Long tenantId, Long fiscalStampId, int rangeFrom, int rangeTo);
 
   List<Invoice> findByTenant_IdAndIssuedAtBetweenOrderByIssuedAtDesc(
       Long tenantId, Instant from, Instant to);
@@ -45,11 +82,51 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("qInvoiceNumber") Integer qInvoiceNumber,
       Pageable pageable);
 
+  /**
+   * Issue #181: header-only projection for the "Historial de comprobantes" Excel/PDF report. Same
+   * filters and ordering as {@link #findByTenantWithFiltersPaged}, but a single query with no lazy
+   * {@code lines}/{@code paymentAllocations}/{@code client} loading per row (the report shows only
+   * cabecera data) — {@code LEFT JOIN i.client c} + {@code COALESCE} resolves the display name the
+   * same way {@code InvoiceService.toListItemDto} does.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.InvoiceReportRow(
+          i.invoiceNumber,
+          COALESCE(c.fullName, i.clientDisplayName),
+          i.status,
+          i.total,
+          i.issuedAt,
+          i.sifenSubmissionStatus)
+      FROM Invoice i
+      LEFT JOIN i.client c
+      WHERE i.tenant.id = :tenantId
+      AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
+      AND (:toDate IS NULL OR i.issuedAt <= :toDate)
+      AND (:clientId IS NULL OR i.client.id = :clientId)
+      AND (:status IS NULL OR i.status = :status)
+      AND (:q IS NULL
+           OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
+           OR (:qInvoiceNumber IS NOT NULL AND i.invoiceNumber = :qInvoiceNumber))
+      ORDER BY i.issuedAt DESC
+      """)
+  List<com.cursorpoc.backend.service.InvoiceReportRow> findReportRows(
+      @Param("tenantId") Long tenantId,
+      @Param("fromDate") Instant fromDate,
+      @Param("toDate") Instant toDate,
+      @Param("clientId") Long clientId,
+      @Param("status") InvoiceStatus status,
+      @Param("q") String q,
+      @Param("qInvoiceNumber") Integer qInvoiceNumber,
+      Pageable pageable);
+
   @Query(
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
       WHERE i.tenant.id = :tenantId
       AND i.status = 'ISSUED'
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
       AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
@@ -80,6 +157,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       """
       SELECT COALESCE(SUM(i.total), 0) FROM Invoice i
       WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
       AND i.issuedAt >= :from AND i.issuedAt < :to
       """)
   BigDecimal sumTotalByTenantAndStatusAndIssuedBetween(
@@ -93,6 +171,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       SELECT COALESCE(SUM(p.amount), 0) FROM InvoicePaymentAllocation p
       JOIN p.invoice i
       WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
       AND i.issuedAt >= :from AND i.issuedAt < :to
       """)
   BigDecimal sumPaymentsByTenantAndStatusAndIssuedBetween(
@@ -100,6 +179,94 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("status") InvoiceStatus status,
       @Param("from") Instant from,
       @Param("to") Instant to);
+
+  /**
+   * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": lightweight
+   * {@code issuedAt}/{@code total} projection for the revenue-trend chart, same "invoiced" filters
+   * as {@link #sumTotalByTenantAndStatusAndIssuedBetween} (a non-REJECTED SIFEN outcome), bucketed
+   * into calendar days by {@code DashboardService#buildRevenueTrend} — not done as a SQL {@code
+   * GROUP BY} so bucketing can use the tenant's business timezone (same reasoning as {@code
+   * DashboardService#buildInactiveClients}), not the DB server's.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.InvoiceRevenueRow(i.issuedAt, i.total) FROM Invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
+      AND i.issuedAt >= :from AND i.issuedAt < :to
+      """)
+  List<com.cursorpoc.backend.service.InvoiceRevenueRow>
+      findRevenueRowsByTenantAndStatusAndIssuedBetween(
+          @Param("tenantId") Long tenantId,
+          @Param("status") InvoiceStatus status,
+          @Param("from") Instant from,
+          @Param("to") Instant to);
+
+  /**
+   * Issue #220 — "Dashboard: gráfico de servicios más vendidos": revenue per linked {@code
+   * SalonService}, same "invoiced" filters as {@link #sumTotalByTenantAndStatusAndIssuedBetween}
+   * (ISSUED + non-REJECTED SIFEN outcome), summed over the given window and ordered by revenue
+   * descending. Lines with no linked service (a free-text/custom line — {@code serviceId} is
+   * optional on {@code InvoiceLineRequest}) are excluded since they can't be attributed to a named
+   * service. Grouped by {@code salonService.id} (not just {@code name} — same reasoning as {@code
+   * ClientRepository} grouping by {@code c.id, c.fullName, c.phone} rather than name alone: {@code
+   * services.name} has no unique constraint, so two distinct services that happen to share a name —
+   * a renamed-and-recreated service, a typo duplicate — would otherwise get silently merged into
+   * one bar with combined revenue). {@code name} is a tie-break sort key, not a grouping key.
+   * Ordered by revenue descending, then service name ascending — a deterministic tie-break so which
+   * services survive the top-N cutoff on an exact-revenue tie doesn't depend on the DB engine's (H2
+   * vs. SQL Server) unspecified tie ordering. Grouping/summing/ordering is done in SQL (unlike the
+   * revenue-trend's day-bucketing, this doesn't need the tenant's business timezone) — {@code
+   * DashboardService#buildTopServices} caps the result to the top N.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.ServiceRevenueRow(
+          l.salonService.id, l.salonService.name, SUM(l.lineTotal))
+      FROM InvoiceLine l
+      JOIN l.invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
+      AND i.issuedAt >= :from AND i.issuedAt < :to
+      AND l.salonService IS NOT NULL
+      GROUP BY l.salonService.id, l.salonService.name
+      ORDER BY SUM(l.lineTotal) DESC, l.salonService.name ASC
+      """)
+  List<com.cursorpoc.backend.service.ServiceRevenueRow>
+      findServiceRevenueByTenantAndStatusAndIssuedBetween(
+          @Param("tenantId") Long tenantId,
+          @Param("status") InvoiceStatus status,
+          @Param("from") Instant from,
+          @Param("to") Instant to);
+
+  /**
+   * Issue #221 — "Dashboard: gráfico de mezcla de medios de pago": revenue per {@code
+   * PaymentMethod}, same "invoiced" filters/window as {@link
+   * #sumPaymentsByTenantAndStatusAndIssuedBetween} (ISSUED + non-REJECTED SIFEN outcome, joined to
+   * {@code Invoice.issuedAt} — {@code InvoicePaymentAllocation} has no timestamp of its own, so it
+   * can only inherit its parent invoice's issuance window, same as the existing payments-sum
+   * query). {@code PaymentMethod} is a fixed enum, not a mutable/duplicable label like a service
+   * name, so grouping directly on it carries none of the id-vs-name risk {@code
+   * findServiceRevenueByTenantAndStatusAndIssuedBetween} has to work around. Ordered by amount
+   * descending, then method ascending — a deterministic tie-break, same reasoning as that query.
+   */
+  @Query(
+      """
+      SELECT new com.cursorpoc.backend.service.PaymentMethodRevenueRow(p.method, SUM(p.amount))
+      FROM InvoicePaymentAllocation p
+      JOIN p.invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND (i.sifenSubmissionStatus IS NULL OR i.sifenSubmissionStatus <> 'REJECTED')
+      AND i.issuedAt >= :from AND i.issuedAt < :to
+      GROUP BY p.method
+      ORDER BY SUM(p.amount) DESC, p.method ASC
+      """)
+  List<com.cursorpoc.backend.service.PaymentMethodRevenueRow>
+      findPaymentMethodRevenueByTenantAndStatusAndIssuedBetween(
+          @Param("tenantId") Long tenantId,
+          @Param("status") InvoiceStatus status,
+          @Param("from") Instant from,
+          @Param("to") Instant to);
 
   @Query(
       """
@@ -122,4 +289,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
   List<Invoice> findAllByClient_Tenant_Id(Long tenantId);
 
   boolean existsByClient_Id(Long clientId);
+
+  boolean existsByServiceRecord_Id(Long serviceRecordId);
+
+  Optional<Invoice> findByServiceRecord_Id(Long serviceRecordId);
 }

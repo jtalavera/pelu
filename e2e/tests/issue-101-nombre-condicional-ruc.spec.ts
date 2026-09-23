@@ -11,12 +11,13 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
 
     // Name left blank, RUC filled — must block submission.
-    await page.locator("#client-ruc").fill("80000005-6");
+    await page.locator("#client-identity-document-number").fill("80000005-6");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
@@ -26,7 +27,7 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
       page.getByRole("alert").filter({ hasText: /required when a RUC is provided/i }),
     ).toBeVisible();
     // The form must still show the unsent invoice (no reset/navigation on failed validation).
-    await expect(page.locator("#client-ruc")).toHaveValue("80000005-6");
+    await expect(page.locator("#client-identity-document-number")).toHaveValue("80000005-6");
   });
 
   test("cliente ocasional con nombre y RUC en blanco no requiere nombre", async ({
@@ -38,13 +39,14 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
 
     // Both left blank — must be allowed to submit.
     await expect(page.locator("#client-display-name")).toHaveValue("");
-    await expect(page.locator("#client-ruc")).toHaveValue("");
+    await expect(page.locator("#client-identity-document-number")).toHaveValue("");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");

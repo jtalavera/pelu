@@ -3,8 +3,10 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +35,7 @@ class ClientServiceTest {
 
   @Mock private ClientRepository clientRepository;
   @Mock private TenantRepository tenantRepository;
+  @Mock private DuplicateClientEmailPolicy duplicateClientEmailPolicy;
 
   @InjectMocks private ClientService clientService;
 
@@ -46,6 +49,10 @@ class ClientServiceTest {
     tenant.setName("Demo");
 
     lenient().when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+
+    // Default: the client-email uniqueness check is enforced (production behaviour). Individual
+    // tests override this to false to exercise the ALLOW_DUPLICATE_CLIENT_EMAIL path.
+    lenient().when(duplicateClientEmailPolicy.isUniquenessEnforced(anyLong())).thenReturn(true);
 
     lenient()
         .when(clientRepository.save(any(Client.class)))
@@ -70,7 +77,7 @@ class ClientServiceTest {
 
     var response = clientService.create(1L, new ClientRequest("Ana García", null, null, null));
 
-    assertThat(response.fullName()).isEqualTo("Ana García");
+    assertThat(response.fullName()).isEqualTo("ANA GARCÍA");
     assertThat(response.active()).isTrue();
     assertThat(response.visitCount()).isZero();
     assertThat(response.phone()).isNull();
@@ -89,7 +96,7 @@ class ClientServiceTest {
 
     var response = clientService.create(1L, new ClientRequest("  Ana  ", null, null, null));
 
-    assertThat(response.fullName()).isEqualTo("Ana");
+    assertThat(response.fullName()).isEqualTo("ANA");
   }
 
   @Test
@@ -111,6 +118,169 @@ class ClientServiceTest {
   void create_withInvalidRuc_throwsBadRequest() {
     assertThatThrownBy(
             () -> clientService.create(1L, new ClientRequest("Ana", null, null, "12345")))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
+  void create_withCedulaParaguayaType_skipsRucFormatCheck() {
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Ana García",
+                null,
+                null,
+                null,
+                "4123456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "CEDULA_PARAGUAYA"));
+
+    assertThat(response.identityDocumentType()).isEqualTo("CEDULA_PARAGUAYA");
+    assertThat(response.identityDocumentNumber()).isEqualTo("4123456");
+    assertThat(response.ruc()).isNull();
+  }
+
+  /** SIFEN D205/iTiContRec: a client explicitly marked Persona Jurídica persists that value. */
+  @Test
+  void create_withRucAndPersonaJuridica_persistsTaxpayerType() {
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Empresa Demo",
+                null,
+                null,
+                "80000005-6",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "RUC",
+                "PERSONA_JURIDICA"));
+
+    assertThat(response.taxpayerType()).isEqualTo("PERSONA_JURIDICA");
+  }
+
+  @Test
+  void create_withInvalidTaxpayerType_throwsBadRequest() {
+    assertThatThrownBy(
+            () ->
+                clientService.create(
+                    1L,
+                    new ClientRequest(
+                        "Ana",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "NOT_A_REAL_TYPE")))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
+  void create_withExplicitRucType_stillValidatesFormat() {
+    assertThatThrownBy(
+            () ->
+                clientService.create(
+                    1L,
+                    new ClientRequest(
+                        "Ana", null, null, "12345", null, null, null, null, null, null, "RUC")))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(
+            ex ->
+                assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
+  void create_withNonRucTypeAndRucAlsoSent_clearsRucKeepsDocumentNumber() {
+    lenient()
+        .when(clientRepository.findByTenantIdAndEmail(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Ana",
+                null,
+                null,
+                "80000005-6",
+                "AB123456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "PASAPORTE"));
+
+    assertThat(response.identityDocumentType()).isEqualTo("PASAPORTE");
+    assertThat(response.identityDocumentNumber()).isEqualTo("AB123456");
+    assertThat(response.ruc()).isNull();
+  }
+
+  @Test
+  void create_withInnominadoType_clearsBothRucAndDocumentNumber() {
+    var response =
+        clientService.create(
+            1L,
+            new ClientRequest(
+                "Ana",
+                null,
+                null,
+                "80000005-6",
+                "AB123456",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "INNOMINADO"));
+
+    assertThat(response.identityDocumentType()).isEqualTo("INNOMINADO");
+    assertThat(response.identityDocumentNumber()).isNull();
+    assertThat(response.ruc()).isNull();
+  }
+
+  @Test
+  void create_withInvalidIdentityDocumentType_throwsBadRequest() {
+    assertThatThrownBy(
+            () ->
+                clientService.create(
+                    1L,
+                    new ClientRequest(
+                        "Ana", null, null, null, null, null, null, null, null, null, "NOT_A_TYPE")))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(
             ex ->
@@ -160,6 +330,38 @@ class ClientServiceTest {
             ex ->
                 assertThat(((ResponseStatusException) ex).getStatusCode())
                     .isEqualTo(HttpStatus.CONFLICT));
+  }
+
+  @Test
+  void create_duplicateEmail_allowed_whenPolicyLiftsUniqueness_succeeds() {
+    // SIFEN test environment + ALLOW_DUPLICATE_CLIENT_EMAIL on → the email lookup is skipped.
+    when(duplicateClientEmailPolicy.isUniquenessEnforced(1L)).thenReturn(false);
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+
+    var response = clientService.create(1L, new ClientRequest("New", null, "a@b.com", null));
+
+    assertThat(response.email()).isEqualTo("a@b.com");
+    verify(clientRepository).save(any(Client.class));
+    verify(clientRepository, never()).findByTenantIdAndEmail(anyLong(), any());
+  }
+
+  @Test
+  void update_duplicateEmail_allowed_whenPolicyLiftsUniqueness_succeeds() {
+    Client c = buildClient(5L, "Ana", null, "old@b.com", null);
+    lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c));
+    lenient()
+        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
+        .thenReturn(Optional.empty());
+    when(duplicateClientEmailPolicy.isUniquenessEnforced(1L)).thenReturn(false);
+
+    var response =
+        clientService.update(1L, 5L, new ClientRequest("Ana", null, "taken@b.com", null));
+
+    assertThat(response.email()).isEqualTo("taken@b.com");
+    verify(clientRepository, never()).findByTenantIdAndEmail(anyLong(), any());
   }
 
   @Test
@@ -298,7 +500,7 @@ class ClientServiceTest {
 
     var response =
         clientService.update(1L, 5L, new ClientRequest("New Name", "0981999999", null, null));
-    assertThat(response.fullName()).isEqualTo("New Name");
+    assertThat(response.fullName()).isEqualTo("NEW NAME");
     assertThat(response.phone()).isEqualTo("0981999999");
   }
 

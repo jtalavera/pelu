@@ -112,7 +112,8 @@ public class ProfessionalDirectoryService {
   }
 
   private void applyUpsert(Professional p, ProfessionalUpsertRequest request, long tenantId) {
-    String name = request.fullName() == null ? "" : request.fullName().trim();
+    String name =
+        request.fullName() == null ? "" : request.fullName().trim().toUpperCase(Locale.ROOT);
     if (name.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_NAME_REQUIRED");
     }

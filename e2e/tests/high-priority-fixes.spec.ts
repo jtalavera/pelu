@@ -192,7 +192,8 @@ test("Issue #37 · warning RUC faltante en Nuevo comprobante (sin RUC)", async (
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The warning text must be visible on the new-invoice tab
   await expect(
@@ -210,7 +211,8 @@ test("Issue #37 · sin warning RUC cuando el salon tiene RUC configurado", async
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   await expect(
     page.getByText(/agregá un ruc de negocio válido|add a valid business ruc/i),
@@ -232,7 +234,8 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Select the client
   await page.getByLabel("Search or select client").fill(originalName.slice(0, 8));
@@ -241,7 +244,7 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
   // Override the name and RUC for THIS invoice only
   const altName = `Otra Razon Social ${Date.now()}`;
   await page.locator("#client-display-name").fill(altName);
-  await page.locator("#client-ruc").fill("80000005-6");
+  await page.locator("#client-identity-document-number").fill("80000005-6");
 
   await pickServiceLine(page, seed.serviceFullName, 0);
   await page.locator("#line-price-0").fill("50000");
@@ -277,7 +280,8 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   await page.getByLabel("Search or select client").fill(clientName43.slice(0, 8));
   await page.getByRole("button", { name: clientName43, exact: false }).click();
@@ -342,8 +346,13 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
   await editDialog.getByRole("button", { name: /sky/i }).click();
   await editDialog.getByRole("button", { name: "Save" }).click();
 
-  // Dialog should close on success (no error alert)
-  await expect(editDialog).not.toBeVisible({ timeout: 10_000 });
+  // On edit, the dialog stays open and shows an inline success message instead of
+  // closing (issue-157) — no error alert appears.
+  await expect(editDialog.getByText("Changes saved successfully.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await editDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(editDialog).not.toBeVisible();
 
   // Category should still appear in the list
   await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
@@ -456,14 +465,36 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
 
 // ─── Issue #39 ────────────────────────────────────────────────────────────────
 
-test("Issue #39 · profesionales semilla tienen horario Lun-Sáb 09:00-19:00 tras reset", async ({
+test("Issue #39 · profesional creado manualmente admite horario Lun-Sáb 09:00-19:00", async ({
   request,
 }) => {
-  // Reset seed to get a fresh state
+  // HU-56 removed the fixed professional roster (`FemmeSalonCatalogBootstrapData.PROFESSIONALS`)
+  // that this test used to rely on `/api/admin/seed/reset` seeding automatically — a seed reset
+  // no longer creates any professional for the tenant (see DemoTenantCatalogSeedService). This
+  // now exercises the same Mon-Sat 09:00-19:00 schedule shape via manual professional creation,
+  // the only way to get a professional after HU-56.
   const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
   expect(resetRes.ok()).toBeTruthy();
 
   const token = await loginAsDemoApi(request);
+
+  const createRes = await request.post(`${API_BASE}/api/professionals`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    data: { fullName: `Issue 39 Professional ${Date.now()}` },
+  });
+  expect(createRes.ok(), await createRes.text()).toBeTruthy();
+  const created = (await createRes.json()) as { id: number };
+
+  const schedules = [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+    dayOfWeek,
+    startTime: "09:00:00",
+    endTime: "19:00:00",
+  }));
+  const scheduleRes = await request.put(`${API_BASE}/api/professionals/${created.id}/schedules`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    data: schedules,
+  });
+  expect(scheduleRes.ok(), await scheduleRes.text()).toBeTruthy();
 
   // Fetch all professionals. The list endpoint already returns each professional's
   // schedules (there is no GET /api/professionals/{id} endpoint — only the list and /page).
@@ -480,16 +511,16 @@ test("Issue #39 · profesionales semilla tienen horario Lun-Sáb 09:00-19:00 tra
 
   // Each active professional must have 6 schedule rows (Mon=1 to Sat=6, 09:00-19:00)
   for (const prof of activeProfessionals) {
-    const schedules = prof.schedules ?? [];
+    const profSchedules = prof.schedules ?? [];
     expect(
-      schedules.length,
+      profSchedules.length,
       `${prof.fullName} should have 6 schedule rows`,
     ).toBe(6);
 
-    const days = schedules.map((s) => s.dayOfWeek).sort();
+    const days = profSchedules.map((s) => s.dayOfWeek).sort();
     expect(days).toEqual([1, 2, 3, 4, 5, 6]); // Mon-Sat
 
-    for (const s of schedules) {
+    for (const s of profSchedules) {
       expect(s.startTime, `${prof.fullName} day ${s.dayOfWeek} startTime`).toBe("09:00:00");
       expect(s.endTime, `${prof.fullName} day ${s.dayOfWeek} endTime`).toBe("19:00:00");
     }
@@ -552,8 +583,9 @@ test("Issue #40 · guardar horario con cero días seleccionados no lanza error",
   const resp = await scheduleResp;
   expect(resp.ok(), await resp.text()).toBeTruthy();
 
-  // Dialog should close (no error left it open)
-  await expect(dlg).not.toBeVisible({ timeout: 10_000 });
+  // On edit, the dialog stays open and shows an inline success message instead of
+  // closing (issue-157) — no error alert appears.
+  await expect(dlg.getByText("Changes saved successfully.")).toBeVisible({ timeout: 10_000 });
 });
 
 // ─── Issue #51 ────────────────────────────────────────────────────────────────
@@ -567,7 +599,8 @@ test("Issue #51 · dropdown de clientes en formulario de factura flota sobre el 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Trigger the client search dropdown
   const clientInput = page.getByLabel("Search or select client");
@@ -697,7 +730,16 @@ test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (port
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
+
+  // The Service combobox is only partially in the viewport at this scroll position — scroll it
+  // into view up front so the actionability check behind `.click()` below doesn't auto-scroll the
+  // page (and shift every other element, including the submit button) between the two bounding-box
+  // measurements this test compares.
+  const serviceInput = page.getByRole("combobox", { name: "Service" }).first();
+  await expect(serviceInput).toBeVisible({ timeout: 10_000 });
+  await serviceInput.scrollIntoViewIfNeeded();
 
   // Capture position of a stable button below the service field before opening dropdown
   const submitBtn = page.getByRole("button", { name: "Issue invoice" });
@@ -706,8 +748,6 @@ test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (port
   expect(boxBefore).not.toBeNull();
 
   // Open the service search dropdown (combobox aria-label="Service")
-  const serviceInput = page.getByRole("combobox", { name: "Service" }).first();
-  await expect(serviceInput).toBeVisible({ timeout: 10_000 });
   await serviceInput.click();
 
   // The listbox renders in a portal — query from page root
@@ -828,7 +868,8 @@ test("Issue #63 · al ingresar un servicio al comprobante, el monto Efectivo se 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The CASH amount field starts empty
   const amountField = page.locator("#pay-amount-0");
@@ -854,7 +895,8 @@ test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Fill in a service so the CASH amount auto-populates
   await pickServiceLine(page, seed.serviceFullName, 0);
@@ -884,7 +926,8 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "New Invoice" }).click();
+  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await page.getByRole("button", { name: "New Invoice" }).click();
 
   const issueBtn = page.getByRole("button", { name: "Issue invoice" });
   await expect(issueBtn).toBeDisabled({ timeout: 10_000 });

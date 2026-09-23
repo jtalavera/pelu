@@ -47,7 +47,8 @@ test.describe("HU-29 · Fixes varios", () => {
     await setBusinessRuc(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     await setControlledInputValue(page.locator("#line-price-0"), "10000");
     // No discount yet → field hidden
@@ -68,7 +69,8 @@ test.describe("HU-29 · Fixes varios", () => {
     await setBusinessRuc(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     await setControlledInputValue(page.locator("#line-price-0"), "10000");
     await page.locator("#line-disc-toggle-0").check();
@@ -89,7 +91,8 @@ test.describe("HU-29 · Fixes varios", () => {
     const client = await seedClient(request, token, `E2E HU29 ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -185,8 +188,9 @@ test.describe("HU-29 · Fixes varios", () => {
     await expect(page.getByTestId("fiscal-stamp-create-section")).toBeVisible();
   });
 
-  // AC10 — "Ver" button in Comprobantes de hoy opens the same detail popup as History.
-  test("HU-29 · 10 botón Ver en Comprobantes de hoy abre el detalle", async ({ page, request }) => {
+  // AC10 — a row in Comprobantes de hoy opens the same detail popup as History
+  // (issue 198: the "Ver" button was removed; the whole row is now clickable).
+  test("HU-29 · 10 fila en Comprobantes de hoy abre el detalle", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await setBusinessRuc(request, token);
     await ensureActiveFiscalStampForInvoices(request, token);
@@ -217,9 +221,10 @@ test.describe("HU-29 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "Cash Register" }).click();
-    const viewBtn = page.getByTestId(`billing-today-view-${inv.id}`);
-    await expect(viewBtn).toBeVisible({ timeout: 20_000 });
-    await viewBtn.click();
+    const row = page.getByTestId(`billing-today-row-${inv.id}`);
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId(`billing-today-view-${inv.id}`)).toHaveCount(0);
+    await row.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("dialog")).toContainText(inv.invoiceNumberFormatted);
   });

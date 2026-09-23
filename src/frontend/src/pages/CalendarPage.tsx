@@ -35,7 +35,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -155,6 +155,7 @@ export default function CalendarPage() {
   useTour("calendar", calendarSteps, tourRole, guidedTourEnabled);
 
   const location = useLocation();
+  const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const selectedDate = (location.state as { selectedDate?: string } | null)?.selectedDate;
     if (selectedDate) {
@@ -163,6 +164,9 @@ export default function CalendarPage() {
     }
     return startOfWeek(new Date());
   });
+  const [pendingOpenApptId, setPendingOpenApptId] = useState<number | null>(
+    () => (location.state as { openAppointmentId?: number } | null)?.openAppointmentId ?? null,
+  );
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -284,10 +288,23 @@ export default function CalendarPage() {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Load clients when form opens
+  // Deep-link support: open a specific appointment's detail modal when navigated here
+  // (e.g. from the Panel principal's today's-turnos list) once it's loaded for the week.
+  useEffect(() => {
+    if (pendingOpenApptId == null) return;
+    const appt = appointments.find((a) => a.id === pendingOpenApptId);
+    if (appt) {
+      setDetailAppt(appt);
+      setDetailError(null);
+      setPendingOpenApptId(null);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [appointments, pendingOpenApptId, navigate, location.pathname]);
+
+  // Load clients when form opens (active only — inactive clients must not be assignable to new turnos)
   useEffect(() => {
     if (formOpen && clients.length === 0) {
-      femmeJson<Client[]>("/api/clients?q=")
+      femmeJson<Client[]>("/api/clients?q=&active=true")
         .then((c) => setClients(c))
         .catch(() => {});
     }
@@ -898,25 +915,59 @@ export default function CalendarPage() {
                           }}
                           aria-label={`${appt.clientName ?? t("femme.calendar.detail.occasionalClient")} – ${appt.serviceName}`}
                         >
-                          {appt.status === "CONFIRMED" && (
+                          {(appt.status === "CONFIRMED" || appt.reminderSentAt) && (
                             <span
-                              aria-hidden="true"
-                              data-testid={`confirmed-check-${appt.id}`}
                               style={{
                                 position: "absolute",
                                 top: 4,
                                 right: 4,
-                                width: 12,
-                                height: 12,
                                 display: "flex",
                                 alignItems: "center",
-                                justifyContent: "center",
-                                opacity: 0.85,
+                                gap: 3,
                               }}
                             >
-                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                                <path d="M2 6l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
+                              {appt.reminderSentAt && (
+                                <span
+                                  data-testid={`reminder-sent-badge-${appt.id}`}
+                                  title={t("femme.calendar.detail.reminderSent")}
+                                  style={{
+                                    width: 12,
+                                    height: 12,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    opacity: 0.85,
+                                  }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                    <path
+                                      d="M8 1.5c-.6 0-1 .45-1 1v.55C4.9 3.5 3.5 5.35 3.5 7.5v2.5L2 12h12l-1.5-2V7.5c0-2.15-1.4-4-3.5-4.45V2.5c0-.55-.45-1-1-1Z"
+                                      stroke="currentColor"
+                                      strokeWidth="1.1"
+                                      strokeLinejoin="round"
+                                    />
+                                    <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                                  </svg>
+                                </span>
+                              )}
+                              {appt.status === "CONFIRMED" && (
+                                <span
+                                  aria-hidden="true"
+                                  data-testid={`confirmed-check-${appt.id}`}
+                                  style={{
+                                    width: 12,
+                                    height: 12,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    opacity: 0.85,
+                                  }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                                    <path d="M2 6l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </span>
+                              )}
                             </span>
                           )}
                           <p
@@ -1016,6 +1067,13 @@ export default function CalendarPage() {
             <Row label={t("femme.calendar.detail.status")}>
               <StatusBadge status={detailAppt.status} />
             </Row>
+            {detailAppt.reminderSentAt && (
+              <Row label={t("femme.calendar.detail.reminderSent")}>
+                <span data-testid={`reminder-sent-${detailAppt.id}`}>
+                  {formatDateTime(detailAppt.reminderSentAt, locale)}
+                </span>
+              </Row>
+            )}
             {detailAppt.cancelReason && (
               <Row label={t("femme.calendar.detail.cancelReason")}>
                 {detailAppt.cancelReason}

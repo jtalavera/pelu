@@ -141,21 +141,35 @@ public class InvoicePdfService {
   static final float R_X_TOTAL_IVA = 541.42f;
   static final float R_Y_IVA = 48.18f;
 
+  /**
+   * HU-33 AC-01/AC-03: once a tenant's electronic invoicing is active, the traditional PDF format
+   * is retired entirely — every download must go through the KuDE ({@link SifenKudePdfService})
+   * instead. Same flag key as {@code InvoiceController#SIFEN_ELECTRONIC_INVOICING_FLAG_KEY}
+   * (duplicated here rather than referenced: that field is package-private in a different package).
+   */
+  private static final String SIFEN_ELECTRONIC_INVOICING_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
+
   private final InvoiceRepository invoiceRepository;
   private final BusinessProfileService businessProfileService;
   private final FemmeTimeProperties timeProperties;
+  private final FeatureFlagService featureFlagService;
 
   public InvoicePdfService(
       InvoiceRepository invoiceRepository,
       BusinessProfileService businessProfileService,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      FeatureFlagService featureFlagService) {
     this.invoiceRepository = invoiceRepository;
     this.businessProfileService = businessProfileService;
     this.timeProperties = timeProperties;
+    this.featureFlagService = featureFlagService;
   }
 
   @Transactional(readOnly = true)
   public InvoicePdfResult buildInvoicePdf(long invoiceId, long tenantId) {
+    if (featureFlagService.isEnabled(SIFEN_ELECTRONIC_INVOICING_FLAG_KEY, tenantId)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_LEGACY_PDF_DISABLED");
+    }
     if (!businessProfileService.isRucReadyForInvoicing(tenantId)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "BUSINESS_RUC_REQUIRED_FOR_PDF");
     }

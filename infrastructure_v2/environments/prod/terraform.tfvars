@@ -33,3 +33,10 @@ log_analytics_daily_quota_gb = 0.5
 # Custom domains already registered on the Static Web App via the Azure Portal
 # (not managed by Terraform); added as allowed CORS origins on the backend.
 frontend_custom_domains = ["flowbit.tech", "www.flowbit.tech"]
+
+# RT-12 (Hardening_SIFEN.md): the vault holds fiscal signing keys — 90-day retention and
+# purge_protection_enabled=true are correct here. NOTE: purge_protection_enabled is IRREVERSIBLE
+# once applied; the vault can never be purged before the retention window elapses, even by an
+# owner. Confirm this is genuinely wanted before the first apply in prod.
+key_vault_soft_delete_retention_days = 90
+key_vault_purge_protection_enabled   = true

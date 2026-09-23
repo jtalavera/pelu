@@ -18,7 +18,11 @@ export default tseslint.config(
       "react-refresh": reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      // eslint-plugin-react-hooks v7's `recommended` preset bundles ~14 new
+      // React Compiler rules beyond the two below; keeping only what was
+      // active pre-upgrade (v5) to avoid unrelated codebase-wide lint churn.
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {

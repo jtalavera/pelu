@@ -12,4 +12,6 @@ public record InvoiceListItemResponse(
     BigDecimal total,
     Instant issuedAt,
     String servicesSummary,
-    String paymentMethodsSummary) {}
+    String paymentMethodsSummary,
+    String sifenSubmissionStatus,
+    Instant sifenSubmittedAt) {}

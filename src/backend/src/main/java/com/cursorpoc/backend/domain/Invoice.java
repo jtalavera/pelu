@@ -1,7 +1,10 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.domain.enums.DiscountType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,6 +20,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -51,8 +55,213 @@ public class Invoice {
   @Column(name = "client_ruc_override", length = 32)
   private String clientRucOverride;
 
+  /** Cédula u otro documento de identidad para un cliente ocasional — SIFEN HU-02 AC-05. */
+  @Column(name = "client_identity_document_override", length = 32)
+  private String clientIdentityDocumentOverride;
+
+  /**
+   * Tipo explícito de identificación del override (RUC, cédula, pasaporte, ...). Nullable: facturas
+   * legadas sin tipo se resuelven por la misma detección implícita al armar el XML.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "client_identity_document_type_override", length = 20)
+  private ClientIdentityDocumentType clientIdentityDocumentTypeOverride;
+
+  /**
+   * SIFEN D205/iTiContRec — solo aplica si esta factura declara RUC (propio o del cliente
+   * vinculado). Nullable: sin valor, se usa el del cliente vinculado y si tampoco existe, {@link
+   * ClientTaxpayerType#PERSONA_FISICA} por defecto — ver {@code
+   * SifenInvoiceHeaderService#buildReceiverData}.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "client_taxpayer_type_override", length = 20)
+  private ClientTaxpayerType clientTaxpayerTypeOverride;
+
+  /** Número de control (CDC), generado una sola vez y reutilizado — SIFEN HU-01 AC-06. */
+  @Column(name = "sifen_control_number", length = 44)
+  private String sifenControlNumber;
+
+  /** Código de seguridad (dCodSeg) que compone el CDC — persistido para la misma razón. */
+  @Column(name = "sifen_security_code", length = 9)
+  private String sifenSecurityCode;
+
+  /**
+   * Primera fecha/hora de firma (A004/dFecFirma) de esta factura — persistida una sola vez y
+   * reutilizada en reintentos, para que HU-06 AC-07 mida siempre contra el mismo instante, no
+   * contra un "ahora" nuevo en cada intento.
+   */
+  @Column(name = "sifen_signed_at")
+  private LocalDateTime sifenSignedAt;
+
+  /** Resultado de SIFEN para el último intento de envío — SIFEN HU-06. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "sifen_submission_status", length = 32)
+  private SifenSubmissionStatus sifenSubmissionStatus;
+
+  /** dProtAut — número de trámite que devuelve SIFEN (Aprobado/Aprobado con observación). */
+  @Column(name = "sifen_submission_protocol_number", length = 10)
+  private String sifenSubmissionProtocolNumber;
+
+  /** dCodRes del primer resultado devuelto por SIFEN. */
+  @Column(name = "sifen_submission_result_code", length = 10)
+  private String sifenSubmissionResultCode;
+
+  /** dMsgRes de todos los resultados devueltos por SIFEN, unidos con "; ". */
+  @Column(name = "sifen_submission_message", length = 2000)
+  private String sifenSubmissionMessage;
+
+  /**
+   * Momento en que se recibió una respuesta real de SIFEN — permanece {@code null} mientras el
+   * estado sea {@code PENDING_VERIFICATION} (AC-05: nunca se recibió respuesta).
+   */
+  @Column(name = "sifen_submitted_at")
+  private LocalDateTime sifenSubmittedAt;
+
+  /**
+   * RT-20 (Hardening_SIFEN.md): how many transmit attempts {@code SifenSubmissionQueueListener} has
+   * made — incremented by {@code SifenInvoiceSubmissionPersistenceService#claimForSubmission} on
+   * every claim, drives both the backoff schedule and the {@code max_delivery_count}-equivalent
+   * give-up threshold.
+   */
+  @Column(name = "sifen_attempt_count", nullable = false)
+  private int sifenAttemptCount;
+
+  /**
+   * RT-20: when the next transmit attempt is due — set by the queue listener after a retriable
+   * outcome (still {@code PENDING_VERIFICATION}), read by {@code SifenSubmissionReconciler} to
+   * re-enqueue. {@code null} means either never attempted or already resolved.
+   */
+  @Column(name = "sifen_next_attempt_at")
+  private LocalDateTime sifenNextAttemptAt;
+
+  /**
+   * RT-20: a lease, not a lock — Basic-tier Service Bus has no sessions, so PeekLock alone can't
+   * guarantee only one consumer processes this invoice at a time. {@code
+   * SifenInvoiceSubmissionPersistenceService#claimForSubmission} claims this under a pessimistic
+   * row lock before any SIFEN call; {@code null} or older than the lease TTL means unclaimed.
+   */
+  @Column(name = "sifen_processing_started_at")
+  private LocalDateTime sifenProcessingStartedAt;
+
+  /**
+   * SIFEN HU-07 AC-03: full document content ({@code xContenDE}) SIFEN returns from the consulta
+   * (query) service when the CDC is found — only ever populated once a query resolves to APPROVED,
+   * never by the reception service (HU-06), which doesn't return this.
+   */
+  @Column(name = "sifen_query_document_content", columnDefinition = "NVARCHAR(MAX)")
+  private String sifenQueryDocumentContent;
+
+  /**
+   * SIFEN HU-08: {@code gCamFuFD/dCarQR} exactly as computed and embedded in the signed document
+   * this system actually transmitted (persisted once, at submission time — HU-06's {@code
+   * SifenInvoiceSubmissionService}) — so the KuDE PDF (AC-13/AC-14) and the revalidation button
+   * (HU-09) never need to re-sign the document just to recover this URL, and can't drift from what
+   * was really sent.
+   */
+  @Column(name = "sifen_qr_url", length = 1000)
+  private String sifenQrUrl;
+
+  /**
+   * SIFEN HU-08 AC-10/AC-15: the public consultation site for the environment used to sign/send.
+   */
+  @Column(name = "sifen_public_consultation_url", length = 200)
+  private String sifenPublicConsultationUrl;
+
+  /**
+   * SIFEN HU-10 AC-05: historical record of the last cancellation attempt — date/time, user,
+   * reason, and SIFEN's own result. Overwritten on each attempt (same "single last result" pattern
+   * as {@code sifenSubmissionResultCode}/{@code sifenSubmissionMessage}, not a separate audit-log
+   * table). {@code sifenSubmissionStatus} only actually becomes {@code CANCELLED} once SIFEN
+   * approves the event (AC-03); these fields are populated either way, including a rejection
+   * (AC-04), which leaves {@code sifenSubmissionStatus} untouched.
+   */
+  @Column(name = "sifen_cancellation_requested_at")
+  private LocalDateTime sifenCancellationRequestedAt;
+
+  @Column(name = "sifen_cancellation_requested_by_user_id")
+  private Long sifenCancellationRequestedByUserId;
+
+  @Column(name = "sifen_cancellation_requested_by_email", length = 320)
+  private String sifenCancellationRequestedByEmail;
+
+  /** GEC003/mOtEve — the free-text reason the user provided for the cancellation. */
+  @Column(name = "sifen_cancellation_reason", length = 500)
+  private String sifenCancellationReason;
+
+  @Column(name = "sifen_cancellation_result_code", length = 10)
+  private String sifenCancellationResultCode;
+
+  @Column(name = "sifen_cancellation_message", length = 2000)
+  private String sifenCancellationMessage;
+
+  /** dProtAut of the cancellation event itself (only present when SIFEN approves it). */
+  @Column(name = "sifen_cancellation_protocol_number", length = 10)
+  private String sifenCancellationProtocolNumber;
+
+  /**
+   * SIFEN HU-11 AC-01: true only once SIFEN itself approves a client-identification event ("Evento
+   * de Nominación", {@code rGEveNom}) for this invoice — never set locally without a real SIFEN
+   * approval. Unlike HU-10's {@code CANCELLED} transition, a rejected attempt (AC-06) leaves this
+   * {@code false}, so the option remains offered for another attempt.
+   */
+  @Column(name = "sifen_client_identified", nullable = false)
+  private boolean sifenClientIdentified;
+
+  @Column(name = "sifen_client_identification_requested_at")
+  private LocalDateTime sifenClientIdentificationRequestedAt;
+
+  @Column(name = "sifen_client_identification_requested_by_user_id")
+  private Long sifenClientIdentificationRequestedByUserId;
+
+  @Column(name = "sifen_client_identification_requested_by_email", length = 320)
+  private String sifenClientIdentificationRequestedByEmail;
+
+  /** AC-02: which of the three choices (empresa/persona/exterior) the last attempt used. */
+  @Column(name = "sifen_client_identification_client_type", length = 20)
+  private String sifenClientIdentificationClientType;
+
+  @Column(name = "sifen_client_identification_ruc", length = 20)
+  private String sifenClientIdentificationRuc;
+
+  @Column(name = "sifen_client_identification_identity_document", length = 20)
+  private String sifenClientIdentificationIdentityDocument;
+
+  @Column(name = "sifen_client_identification_name", length = 255)
+  private String sifenClientIdentificationName;
+
+  /** AC-04: only ever populated for a foreign client. */
+  @Column(name = "sifen_client_identification_address", length = 255)
+  private String sifenClientIdentificationAddress;
+
+  @Column(name = "sifen_client_identification_country_code", length = 3)
+  private String sifenClientIdentificationCountryCode;
+
+  @Column(name = "sifen_client_identification_result_code", length = 10)
+  private String sifenClientIdentificationResultCode;
+
+  @Column(name = "sifen_client_identification_message", length = 2000)
+  private String sifenClientIdentificationMessage;
+
+  @Column(name = "sifen_client_identification_protocol_number", length = 10)
+  private String sifenClientIdentificationProtocolNumber;
+
   @Column(name = "business_ruc", length = 32)
   private String businessRuc;
+
+  /**
+   * Issue #173: the email address the KuDE / cancellation notice for this document is sent to,
+   * captured on the comprobante form. Takes priority over the linked client's own email on file.
+   */
+  @Column(name = "recipient_email", length = 320)
+  private String recipientEmail;
+
+  /** Issue #173: when this invoice's KuDE was auto-emailed after a successful SIFEN result. */
+  @Column(name = "sifen_kude_emailed_at")
+  private LocalDateTime sifenKudeEmailedAt;
+
+  /** Issue #173: when the client was emailed a notice for this document's SIFEN cancellation. */
+  @Column(name = "sifen_cancellation_notified_at")
+  private LocalDateTime sifenCancellationNotifiedAt;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
@@ -81,6 +290,13 @@ public class Invoice {
 
   @Column(name = "void_reason", length = 500)
   private String voidReason;
+
+  @Column(name = "tips_amount", nullable = false, precision = 19, scale = 2)
+  private BigDecimal tipsAmount = BigDecimal.ZERO;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "service_record_id")
+  private ServiceRecord serviceRecord;
 
   @OneToMany(
       mappedBy = "invoice",
@@ -150,6 +366,332 @@ public class Invoice {
 
   public void setClientRucOverride(String clientRucOverride) {
     this.clientRucOverride = clientRucOverride;
+  }
+
+  public String getClientIdentityDocumentOverride() {
+    return clientIdentityDocumentOverride;
+  }
+
+  public void setClientIdentityDocumentOverride(String clientIdentityDocumentOverride) {
+    this.clientIdentityDocumentOverride = clientIdentityDocumentOverride;
+  }
+
+  public ClientIdentityDocumentType getClientIdentityDocumentTypeOverride() {
+    return clientIdentityDocumentTypeOverride;
+  }
+
+  public void setClientIdentityDocumentTypeOverride(
+      ClientIdentityDocumentType clientIdentityDocumentTypeOverride) {
+    this.clientIdentityDocumentTypeOverride = clientIdentityDocumentTypeOverride;
+  }
+
+  public ClientTaxpayerType getClientTaxpayerTypeOverride() {
+    return clientTaxpayerTypeOverride;
+  }
+
+  public void setClientTaxpayerTypeOverride(ClientTaxpayerType clientTaxpayerTypeOverride) {
+    this.clientTaxpayerTypeOverride = clientTaxpayerTypeOverride;
+  }
+
+  public String getSifenControlNumber() {
+    return sifenControlNumber;
+  }
+
+  public void setSifenControlNumber(String sifenControlNumber) {
+    this.sifenControlNumber = sifenControlNumber;
+  }
+
+  public String getSifenSecurityCode() {
+    return sifenSecurityCode;
+  }
+
+  public void setSifenSecurityCode(String sifenSecurityCode) {
+    this.sifenSecurityCode = sifenSecurityCode;
+  }
+
+  public LocalDateTime getSifenSignedAt() {
+    return sifenSignedAt;
+  }
+
+  public void setSifenSignedAt(LocalDateTime sifenSignedAt) {
+    this.sifenSignedAt = sifenSignedAt;
+  }
+
+  public SifenSubmissionStatus getSifenSubmissionStatus() {
+    return sifenSubmissionStatus;
+  }
+
+  public void setSifenSubmissionStatus(SifenSubmissionStatus sifenSubmissionStatus) {
+    this.sifenSubmissionStatus = sifenSubmissionStatus;
+  }
+
+  public String getSifenSubmissionProtocolNumber() {
+    return sifenSubmissionProtocolNumber;
+  }
+
+  public void setSifenSubmissionProtocolNumber(String sifenSubmissionProtocolNumber) {
+    this.sifenSubmissionProtocolNumber = sifenSubmissionProtocolNumber;
+  }
+
+  public String getSifenSubmissionResultCode() {
+    return sifenSubmissionResultCode;
+  }
+
+  public void setSifenSubmissionResultCode(String sifenSubmissionResultCode) {
+    this.sifenSubmissionResultCode = sifenSubmissionResultCode;
+  }
+
+  public String getSifenSubmissionMessage() {
+    return sifenSubmissionMessage;
+  }
+
+  public void setSifenSubmissionMessage(String sifenSubmissionMessage) {
+    this.sifenSubmissionMessage = sifenSubmissionMessage;
+  }
+
+  public LocalDateTime getSifenSubmittedAt() {
+    return sifenSubmittedAt;
+  }
+
+  public void setSifenSubmittedAt(LocalDateTime sifenSubmittedAt) {
+    this.sifenSubmittedAt = sifenSubmittedAt;
+  }
+
+  public int getSifenAttemptCount() {
+    return sifenAttemptCount;
+  }
+
+  public void setSifenAttemptCount(int sifenAttemptCount) {
+    this.sifenAttemptCount = sifenAttemptCount;
+  }
+
+  public LocalDateTime getSifenNextAttemptAt() {
+    return sifenNextAttemptAt;
+  }
+
+  public void setSifenNextAttemptAt(LocalDateTime sifenNextAttemptAt) {
+    this.sifenNextAttemptAt = sifenNextAttemptAt;
+  }
+
+  public LocalDateTime getSifenProcessingStartedAt() {
+    return sifenProcessingStartedAt;
+  }
+
+  public void setSifenProcessingStartedAt(LocalDateTime sifenProcessingStartedAt) {
+    this.sifenProcessingStartedAt = sifenProcessingStartedAt;
+  }
+
+  public String getSifenQueryDocumentContent() {
+    return sifenQueryDocumentContent;
+  }
+
+  public void setSifenQueryDocumentContent(String sifenQueryDocumentContent) {
+    this.sifenQueryDocumentContent = sifenQueryDocumentContent;
+  }
+
+  public String getSifenQrUrl() {
+    return sifenQrUrl;
+  }
+
+  public void setSifenQrUrl(String sifenQrUrl) {
+    this.sifenQrUrl = sifenQrUrl;
+  }
+
+  public String getSifenPublicConsultationUrl() {
+    return sifenPublicConsultationUrl;
+  }
+
+  public void setSifenPublicConsultationUrl(String sifenPublicConsultationUrl) {
+    this.sifenPublicConsultationUrl = sifenPublicConsultationUrl;
+  }
+
+  public LocalDateTime getSifenCancellationRequestedAt() {
+    return sifenCancellationRequestedAt;
+  }
+
+  public void setSifenCancellationRequestedAt(LocalDateTime sifenCancellationRequestedAt) {
+    this.sifenCancellationRequestedAt = sifenCancellationRequestedAt;
+  }
+
+  public Long getSifenCancellationRequestedByUserId() {
+    return sifenCancellationRequestedByUserId;
+  }
+
+  public void setSifenCancellationRequestedByUserId(Long sifenCancellationRequestedByUserId) {
+    this.sifenCancellationRequestedByUserId = sifenCancellationRequestedByUserId;
+  }
+
+  public String getSifenCancellationRequestedByEmail() {
+    return sifenCancellationRequestedByEmail;
+  }
+
+  public void setSifenCancellationRequestedByEmail(String sifenCancellationRequestedByEmail) {
+    this.sifenCancellationRequestedByEmail = sifenCancellationRequestedByEmail;
+  }
+
+  public String getSifenCancellationReason() {
+    return sifenCancellationReason;
+  }
+
+  public void setSifenCancellationReason(String sifenCancellationReason) {
+    this.sifenCancellationReason = sifenCancellationReason;
+  }
+
+  public String getSifenCancellationResultCode() {
+    return sifenCancellationResultCode;
+  }
+
+  public void setSifenCancellationResultCode(String sifenCancellationResultCode) {
+    this.sifenCancellationResultCode = sifenCancellationResultCode;
+  }
+
+  public String getSifenCancellationMessage() {
+    return sifenCancellationMessage;
+  }
+
+  public void setSifenCancellationMessage(String sifenCancellationMessage) {
+    this.sifenCancellationMessage = sifenCancellationMessage;
+  }
+
+  public String getSifenCancellationProtocolNumber() {
+    return sifenCancellationProtocolNumber;
+  }
+
+  public void setSifenCancellationProtocolNumber(String sifenCancellationProtocolNumber) {
+    this.sifenCancellationProtocolNumber = sifenCancellationProtocolNumber;
+  }
+
+  public String getRecipientEmail() {
+    return recipientEmail;
+  }
+
+  public void setRecipientEmail(String recipientEmail) {
+    this.recipientEmail = recipientEmail;
+  }
+
+  public LocalDateTime getSifenKudeEmailedAt() {
+    return sifenKudeEmailedAt;
+  }
+
+  public void setSifenKudeEmailedAt(LocalDateTime sifenKudeEmailedAt) {
+    this.sifenKudeEmailedAt = sifenKudeEmailedAt;
+  }
+
+  public LocalDateTime getSifenCancellationNotifiedAt() {
+    return sifenCancellationNotifiedAt;
+  }
+
+  public void setSifenCancellationNotifiedAt(LocalDateTime sifenCancellationNotifiedAt) {
+    this.sifenCancellationNotifiedAt = sifenCancellationNotifiedAt;
+  }
+
+  public boolean isSifenClientIdentified() {
+    return sifenClientIdentified;
+  }
+
+  public void setSifenClientIdentified(boolean sifenClientIdentified) {
+    this.sifenClientIdentified = sifenClientIdentified;
+  }
+
+  public LocalDateTime getSifenClientIdentificationRequestedAt() {
+    return sifenClientIdentificationRequestedAt;
+  }
+
+  public void setSifenClientIdentificationRequestedAt(
+      LocalDateTime sifenClientIdentificationRequestedAt) {
+    this.sifenClientIdentificationRequestedAt = sifenClientIdentificationRequestedAt;
+  }
+
+  public Long getSifenClientIdentificationRequestedByUserId() {
+    return sifenClientIdentificationRequestedByUserId;
+  }
+
+  public void setSifenClientIdentificationRequestedByUserId(
+      Long sifenClientIdentificationRequestedByUserId) {
+    this.sifenClientIdentificationRequestedByUserId = sifenClientIdentificationRequestedByUserId;
+  }
+
+  public String getSifenClientIdentificationRequestedByEmail() {
+    return sifenClientIdentificationRequestedByEmail;
+  }
+
+  public void setSifenClientIdentificationRequestedByEmail(
+      String sifenClientIdentificationRequestedByEmail) {
+    this.sifenClientIdentificationRequestedByEmail = sifenClientIdentificationRequestedByEmail;
+  }
+
+  public String getSifenClientIdentificationClientType() {
+    return sifenClientIdentificationClientType;
+  }
+
+  public void setSifenClientIdentificationClientType(String sifenClientIdentificationClientType) {
+    this.sifenClientIdentificationClientType = sifenClientIdentificationClientType;
+  }
+
+  public String getSifenClientIdentificationRuc() {
+    return sifenClientIdentificationRuc;
+  }
+
+  public void setSifenClientIdentificationRuc(String sifenClientIdentificationRuc) {
+    this.sifenClientIdentificationRuc = sifenClientIdentificationRuc;
+  }
+
+  public String getSifenClientIdentificationIdentityDocument() {
+    return sifenClientIdentificationIdentityDocument;
+  }
+
+  public void setSifenClientIdentificationIdentityDocument(
+      String sifenClientIdentificationIdentityDocument) {
+    this.sifenClientIdentificationIdentityDocument = sifenClientIdentificationIdentityDocument;
+  }
+
+  public String getSifenClientIdentificationName() {
+    return sifenClientIdentificationName;
+  }
+
+  public void setSifenClientIdentificationName(String sifenClientIdentificationName) {
+    this.sifenClientIdentificationName = sifenClientIdentificationName;
+  }
+
+  public String getSifenClientIdentificationAddress() {
+    return sifenClientIdentificationAddress;
+  }
+
+  public void setSifenClientIdentificationAddress(String sifenClientIdentificationAddress) {
+    this.sifenClientIdentificationAddress = sifenClientIdentificationAddress;
+  }
+
+  public String getSifenClientIdentificationCountryCode() {
+    return sifenClientIdentificationCountryCode;
+  }
+
+  public void setSifenClientIdentificationCountryCode(String sifenClientIdentificationCountryCode) {
+    this.sifenClientIdentificationCountryCode = sifenClientIdentificationCountryCode;
+  }
+
+  public String getSifenClientIdentificationResultCode() {
+    return sifenClientIdentificationResultCode;
+  }
+
+  public void setSifenClientIdentificationResultCode(String sifenClientIdentificationResultCode) {
+    this.sifenClientIdentificationResultCode = sifenClientIdentificationResultCode;
+  }
+
+  public String getSifenClientIdentificationMessage() {
+    return sifenClientIdentificationMessage;
+  }
+
+  public void setSifenClientIdentificationMessage(String sifenClientIdentificationMessage) {
+    this.sifenClientIdentificationMessage = sifenClientIdentificationMessage;
+  }
+
+  public String getSifenClientIdentificationProtocolNumber() {
+    return sifenClientIdentificationProtocolNumber;
+  }
+
+  public void setSifenClientIdentificationProtocolNumber(
+      String sifenClientIdentificationProtocolNumber) {
+    this.sifenClientIdentificationProtocolNumber = sifenClientIdentificationProtocolNumber;
   }
 
   public String getBusinessRuc() {
@@ -238,5 +780,21 @@ public class Invoice {
 
   public void setPaymentAllocations(List<InvoicePaymentAllocation> paymentAllocations) {
     this.paymentAllocations = paymentAllocations;
+  }
+
+  public BigDecimal getTipsAmount() {
+    return tipsAmount;
+  }
+
+  public void setTipsAmount(BigDecimal tipsAmount) {
+    this.tipsAmount = tipsAmount;
+  }
+
+  public ServiceRecord getServiceRecord() {
+    return serviceRecord;
+  }
+
+  public void setServiceRecord(ServiceRecord serviceRecord) {
+    this.serviceRecord = serviceRecord;
   }
 }

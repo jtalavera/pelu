@@ -1,0 +1,265 @@
+package com.cursorpoc.backend.service;
+
+import com.cursorpoc.backend.domain.AppUser;
+import com.cursorpoc.backend.domain.CashMovement;
+import com.cursorpoc.backend.domain.Professional;
+import com.cursorpoc.backend.domain.ServiceRecordTip;
+import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.TipWithdrawal;
+import com.cursorpoc.backend.domain.enums.CashMovementType;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
+import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.CashMovementRepository;
+import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.ServiceRecordTipRepository;
+import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TipWithdrawalRepository;
+import com.cursorpoc.backend.web.dto.CreateTipWithdrawalResponse;
+import com.cursorpoc.backend.web.dto.PagedTipWithdrawalsResponse;
+import com.cursorpoc.backend.web.dto.ProfessionalTipBalanceResponse;
+import com.cursorpoc.backend.web.dto.TipReportProfessionalTotalResponse;
+import com.cursorpoc.backend.web.dto.TipReportResponse;
+import com.cursorpoc.backend.web.dto.TipReportRowResponse;
+import com.cursorpoc.backend.web.dto.TipWithdrawalHistoryItemResponse;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class TipsService {
+
+  private final ServiceRecordTipRepository serviceRecordTipRepository;
+  private final TipWithdrawalRepository tipWithdrawalRepository;
+  private final ProfessionalRepository professionalRepository;
+  private final TenantRepository tenantRepository;
+  private final AppUserRepository appUserRepository;
+  private final CashSessionRepository cashSessionRepository;
+  private final CashMovementRepository cashMovementRepository;
+
+  public TipsService(
+      ServiceRecordTipRepository serviceRecordTipRepository,
+      TipWithdrawalRepository tipWithdrawalRepository,
+      ProfessionalRepository professionalRepository,
+      TenantRepository tenantRepository,
+      AppUserRepository appUserRepository,
+      CashSessionRepository cashSessionRepository,
+      CashMovementRepository cashMovementRepository) {
+    this.serviceRecordTipRepository = serviceRecordTipRepository;
+    this.tipWithdrawalRepository = tipWithdrawalRepository;
+    this.professionalRepository = professionalRepository;
+    this.tenantRepository = tenantRepository;
+    this.appUserRepository = appUserRepository;
+    this.cashSessionRepository = cashSessionRepository;
+    this.cashMovementRepository = cashMovementRepository;
+  }
+
+  @Transactional(readOnly = true)
+  public TipReportResponse getReport(
+      long tenantId, Instant fromDate, Instant toDate, List<Long> professionalIds) {
+    List<Long> resolvedProfessionalIds = resolveProfessionalIds(tenantId, professionalIds);
+    if (resolvedProfessionalIds.isEmpty()) {
+      return new TipReportResponse(
+          List.of(), List.of(), BigDecimal.ZERO, BigDecimal.ZERO, List.of());
+    }
+    List<ServiceRecordTip> tips =
+        serviceRecordTipRepository.findForReport(
+            tenantId, ServiceRecordStatus.CLOSED, fromDate, toDate, resolvedProfessionalIds);
+
+    List<TipReportRowResponse> rows =
+        tips.stream()
+            .map(
+                t ->
+                    new TipReportRowResponse(
+                        t.getProfessional().getId(),
+                        t.getProfessional().getFullName(),
+                        t.getAmount(),
+                        t.getServiceRecord().getClient().getFullName(),
+                        t.getServiceRecord().getClosedAt()))
+            .toList();
+
+    Map<Long, TipReportProfessionalTotalResponse> totalsByProfessional = new LinkedHashMap<>();
+    BigDecimal grandTotal = BigDecimal.ZERO;
+    for (TipReportRowResponse row : rows) {
+      TipReportProfessionalTotalResponse existing = totalsByProfessional.get(row.professionalId());
+      BigDecimal newTotal =
+          (existing != null ? existing.total() : BigDecimal.ZERO).add(row.amount());
+      totalsByProfessional.put(
+          row.professionalId(),
+          new TipReportProfessionalTotalResponse(
+              row.professionalId(), row.professionalName(), newTotal));
+      grandTotal = grandTotal.add(row.amount());
+    }
+
+    // Withdrawals made within the same window must reduce the totals they were drawn from, or a
+    // professional's report subtotal never reflects money they already took out.
+    List<TipWithdrawal> withdrawalsInRange =
+        tipWithdrawalRepository.findForReport(tenantId, fromDate, toDate, resolvedProfessionalIds);
+    Map<Long, TipReportProfessionalTotalResponse> withdrawalsByProfessional = new LinkedHashMap<>();
+    for (TipWithdrawal withdrawal : withdrawalsInRange) {
+      Long professionalId = withdrawal.getProfessional().getId();
+      TipReportProfessionalTotalResponse existing = withdrawalsByProfessional.get(professionalId);
+      BigDecimal newTotal =
+          (existing != null ? existing.total() : BigDecimal.ZERO).add(withdrawal.getAmount());
+      withdrawalsByProfessional.put(
+          professionalId,
+          new TipReportProfessionalTotalResponse(
+              professionalId, withdrawal.getProfessional().getFullName(), newTotal));
+    }
+    BigDecimal withdrawalsTotal = BigDecimal.ZERO;
+    for (TipReportProfessionalTotalResponse withdrawalTotal : withdrawalsByProfessional.values()) {
+      withdrawalsTotal = withdrawalsTotal.add(withdrawalTotal.total());
+      TipReportProfessionalTotalResponse existing =
+          totalsByProfessional.get(withdrawalTotal.professionalId());
+      // A professional can withdraw within the window without having any tip rows in it (e.g. the
+      // tip was earned earlier) — still surface them as their own group with a negative subtotal,
+      // rather than silently dropping their withdrawal from the report.
+      BigDecimal baseTotal = existing != null ? existing.total() : BigDecimal.ZERO;
+      totalsByProfessional.put(
+          withdrawalTotal.professionalId(),
+          new TipReportProfessionalTotalResponse(
+              withdrawalTotal.professionalId(),
+              withdrawalTotal.professionalName(),
+              baseTotal.subtract(withdrawalTotal.total())));
+      grandTotal = grandTotal.subtract(withdrawalTotal.total());
+    }
+
+    return new TipReportResponse(
+        rows,
+        List.copyOf(totalsByProfessional.values()),
+        grandTotal,
+        withdrawalsTotal,
+        List.copyOf(withdrawalsByProfessional.values()));
+  }
+
+  @Transactional(readOnly = true)
+  public ProfessionalTipBalanceResponse getBalance(long tenantId, long professionalId) {
+    Professional professional = requireProfessional(tenantId, professionalId);
+    return new ProfessionalTipBalanceResponse(
+        professional.getId(), professional.getFullName(), computeBalance(tenantId, professionalId));
+  }
+
+  @Transactional
+  public CreateTipWithdrawalResponse createWithdrawal(
+      long tenantId, long userId, long professionalId, BigDecimal amount) {
+    Professional professional = requireProfessional(tenantId, professionalId);
+    if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TIP_WITHDRAWAL_AMOUNT_INVALID");
+    }
+    BigDecimal balance = computeBalance(tenantId, professionalId);
+    if (amount.compareTo(balance) > 0) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "TIP_WITHDRAWAL_EXCEEDS_BALANCE");
+    }
+
+    Tenant tenant =
+        tenantRepository
+            .findById(tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+    AppUser createdBy = appUserRepository.findById(userId).orElse(null);
+
+    TipWithdrawal withdrawal = new TipWithdrawal();
+    withdrawal.setTenant(tenant);
+    withdrawal.setProfessional(professional);
+    withdrawal.setAmount(amount);
+    withdrawal.setWithdrawnAt(Instant.now());
+    withdrawal.setCreatedBy(createdBy);
+    tipWithdrawalRepository.save(withdrawal);
+
+    cashSessionRepository
+        .findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(tenantId)
+        .ifPresent(
+            openSession -> {
+              CashMovement movement = new CashMovement();
+              movement.setTenant(tenant);
+              movement.setCashSession(openSession);
+              movement.setType(CashMovementType.TIP_WITHDRAWAL_OUT);
+              movement.setAmount(amount);
+              movement.setTipWithdrawalId(withdrawal.getId());
+              movement.setCreatedByUser(createdBy);
+              movement.setCreatedAt(Instant.now());
+              cashMovementRepository.save(movement);
+            });
+
+    BigDecimal newBalance = balance.subtract(amount);
+    return new CreateTipWithdrawalResponse(
+        new TipWithdrawalHistoryItemResponse(
+            withdrawal.getId(),
+            professional.getFullName(),
+            withdrawal.getAmount(),
+            withdrawal.getWithdrawnAt()),
+        newBalance);
+  }
+
+  /**
+   * {@code professionalId} is optional: when omitted, returns the tenant-wide withdrawal history
+   * (every professional) for the last 3 months — the always-visible default view in the Retiro de
+   * propinas screen. When given, returns that professional's full all-time history, unchanged from
+   * before this became optional.
+   */
+  @Transactional(readOnly = true)
+  public PagedTipWithdrawalsResponse listWithdrawals(
+      long tenantId, Long professionalId, int page, int size) {
+    Page<TipWithdrawal> result;
+    if (professionalId != null) {
+      requireProfessional(tenantId, professionalId);
+      result =
+          tipWithdrawalRepository.findByTenant_IdAndProfessional_IdOrderByWithdrawnAtDesc(
+              tenantId, professionalId, PageRequest.of(page, size));
+    } else {
+      Instant threeMonthsAgo = ZonedDateTime.now(ZoneOffset.UTC).minusMonths(3).toInstant();
+      result =
+          tipWithdrawalRepository.findByTenantSince(
+              tenantId, threeMonthsAgo, PageRequest.of(page, size));
+    }
+    List<TipWithdrawalHistoryItemResponse> content =
+        result.getContent().stream()
+            .map(
+                w ->
+                    new TipWithdrawalHistoryItemResponse(
+                        w.getId(),
+                        w.getProfessional().getFullName(),
+                        w.getAmount(),
+                        w.getWithdrawnAt()))
+            .toList();
+    return new PagedTipWithdrawalsResponse(
+        content, page, size, result.getTotalElements(), result.getTotalPages());
+  }
+
+  private BigDecimal computeBalance(long tenantId, long professionalId) {
+    BigDecimal tipsTotal =
+        serviceRecordTipRepository.sumForProfessional(
+            tenantId, professionalId, ServiceRecordStatus.CLOSED);
+    BigDecimal withdrawalsTotal =
+        tipWithdrawalRepository.sumForProfessional(tenantId, professionalId);
+    return tipsTotal.subtract(withdrawalsTotal);
+  }
+
+  private Professional requireProfessional(long tenantId, long professionalId) {
+    return professionalRepository
+        .findByIdAndTenant_Id(professionalId, tenantId)
+        .orElseThrow(
+            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+  }
+
+  /** Empty/null filter resolves to every active professional in the tenant. */
+  private List<Long> resolveProfessionalIds(long tenantId, List<Long> professionalIds) {
+    if (professionalIds != null && !professionalIds.isEmpty()) {
+      return professionalIds;
+    }
+    return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
+        .filter(Professional::isActive)
+        .map(Professional::getId)
+        .toList();
+  }
+}

@@ -9,6 +9,9 @@ type Client = {
   phone: string | null;
   email: string | null;
   ruc: string | null;
+  identityDocumentNumber?: string | null;
+  identityDocumentType?: string | null;
+  taxpayerType?: string | null;
   active?: boolean;
 };
 
@@ -26,6 +29,10 @@ type Props = {
   label?: string;
   /** Defaults to femme.clients.inlineSearch.placeholder */
   placeholder?: string;
+  /** Hides the "occasional client" option — for flows that require a real client record. */
+  hideOccasional?: boolean;
+  /** Restricts search results to active clients only (e.g. invoice issuance). */
+  activeOnly?: boolean;
 };
 
 const DEBOUNCE_MS = 300;
@@ -37,6 +44,8 @@ export function ClientSearchField({
   id,
   label,
   placeholder,
+  hideOccasional,
+  activeOnly,
 }: Props) {
   const { t } = useTranslation();
   const inputId = id ?? "client-search-field";
@@ -61,6 +70,15 @@ export function ClientSearchField({
       setQuery(t("femme.clients.inlineSearch.occasional"));
     }
   }, [value, t]);
+
+  // Without this, a debounce timer started right before unmount still fires afterwards and calls
+  // setSearching/setResults on an unmounted component (surfaces as an unhandled rejection in tests
+  // if a later test's environment has already been torn down by then).
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   // Close dropdown when clicking outside (both the container and the floating panel).
   useEffect(() => {
@@ -94,10 +112,11 @@ export function ClientSearchField({
   async function doSearch(q: string) {
     setSearching(true);
     try {
-      const url =
-        q.length > 0
-          ? `/api/clients?q=${encodeURIComponent(q)}`
-          : "/api/clients";
+      const params = new URLSearchParams();
+      if (q.length > 0) params.set("q", q);
+      if (activeOnly) params.set("active", "true");
+      const qs = params.toString();
+      const url = qs.length > 0 ? `/api/clients?${qs}` : "/api/clients";
       const data = await femmeJson<Client[]>(url);
       setResults(Array.isArray(data) ? data : []);
       setOpen(true);
@@ -190,16 +209,18 @@ export function ClientSearchField({
               </Button>
             </li>
           ) : null}
-          <li className="border-b border-[rgb(var(--color-border))]">
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full justify-start rounded-none px-3 py-2 text-sm"
-              onClick={selectOccasional}
-            >
-              {t("femme.clients.inlineSearch.occasional")}
-            </Button>
-          </li>
+          {!hideOccasional ? (
+            <li className="border-b border-[rgb(var(--color-border))]">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start rounded-none px-3 py-2 text-sm"
+                onClick={selectOccasional}
+              >
+                {t("femme.clients.inlineSearch.occasional")}
+              </Button>
+            </li>
+          ) : null}
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">
               <Text variant="muted" className="text-sm">

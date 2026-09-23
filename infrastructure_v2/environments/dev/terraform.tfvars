@@ -19,7 +19,23 @@ entra_sql_admin_object_id = "53c652ae-0159-4a39-9a38-b7444c89156e"
 backend_min_replicas = 0
 backend_max_replicas = 1
 
+# Scale-to-zero + 0.25 vCPU means cold starts are triggered by the first real request; the
+# report-engine warmup thread would otherwise monopolize the single core and starve that
+# request for ~27s (observed in test — see InvoiceHistoryReportWarmup).
+backend_report_warmup_enabled = false
+
 # No redundancy for test — cheapest option; restore from PITR if needed.
 sql_backup_storage_redundancy = "Local"
 
 log_analytics_daily_quota_gb = 0.5
+
+# RT-12 (Hardening_SIFEN.md): cheap-to-tear-down settings for test — no purge protection.
+key_vault_soft_delete_retention_days = 7
+key_vault_purge_protection_enabled   = false
+
+# Per-type ACS Email sender addresses (turnos@/factura@/no-reply@flowbit.tech). Step 1 of the
+# rollout: this alone only creates the domain resource + computes verification_records (see
+# `terraform output email_domain_verification_records`) — add those at flowbit.tech's DNS
+# provider, then set email_domain_verification_enabled=true here once they've propagated.
+email_custom_domain               = "flowbit.tech"
+email_domain_verification_enabled = true

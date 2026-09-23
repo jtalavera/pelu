@@ -54,6 +54,11 @@ export {
   type KebabMenuProps,
 } from "./components/KebabMenu";
 export { Label, type LabelProps } from "./components/Label";
+export {
+  LocalityCombobox,
+  type Locality,
+  type LocalityComboboxProps,
+} from "./components/LocalityCombobox";
 export { List, ListItem, type ListProps, type ListItemProps } from "./components/List";
 export { Modal, type ModalProps } from "./components/Modal";
 export {
@@ -62,6 +67,11 @@ export {
   type NavbarProps,
   type NavbarLinkProps,
 } from "./components/Navbar";
+export {
+  MultiSelect,
+  type MultiSelectOption,
+  type MultiSelectProps,
+} from "./components/MultiSelect";
 export { PageSizeSelect, type PageSizeSelectProps } from "./components/PageSizeSelect";
 export { Pagination, type PaginationProps } from "./components/Pagination";
 export { Progress, type ProgressProps } from "./components/Progress";

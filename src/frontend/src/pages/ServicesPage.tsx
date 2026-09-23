@@ -16,6 +16,7 @@ import {
   Spinner,
   Text,
 } from "@design-system";
+import { downloadPriceListPdf } from "../api/downloadPriceListPdf";
 import { femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { listServicesPaged } from "../api/services";
@@ -109,8 +110,15 @@ export default function ServicesPage() {
   const [serviceReactivating, setServiceReactivating] = useState(false);
   const [activatingCategoryId, setActivatingCategoryId] = useState<number | null>(null);
 
+  const [priceListDownloading, setPriceListDownloading] = useState(false);
+  const [priceListError, setPriceListError] = useState<string | null>(null);
+
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
-  const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState(false);
+  const [serviceStatusSuccess, setServiceStatusSuccess] = useState<"activated" | "deactivated" | null>(
+    null,
+  );
 
   // ── Server-side pagination for services tab ──────────────────────────────
   type SvcPage = { content: SalonService[]; page: number; size: number; totalElements: number; totalPages: number };
@@ -121,6 +129,7 @@ export default function ServicesPage() {
   const [svcReloadTick, setSvcReloadTick] = useState(0);
   const svcDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState("");
+  const [hoveredServiceId, setHoveredServiceId] = useState<number | null>(null);
   // ─────────────────────────────────────────────────────────────────────────
 
   const activeCategories = useMemo(() => categories.filter((c) => c.active), [categories]);
@@ -140,7 +149,8 @@ export default function ServicesPage() {
   }, [taxes, serviceEditing]);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Only the initial mount shows the full-page spinner (loading starts true); subsequent
+    // calls (e.g. after a category action) refresh categories/taxes quietly in the background.
     setError(null);
     try {
       const [cats, svcs, txs] = await Promise.all([
@@ -229,6 +239,7 @@ export default function ServicesPage() {
     setCategoryAccentKey("stone");
     setCategoryNameError(null);
     setCategorySaveError(null);
+    setEditSuccess(false);
     setCategoryModalOpen(true);
   }
 
@@ -242,6 +253,7 @@ export default function ServicesPage() {
     setCategorySaving(true);
     try {
       const payload = { name: categoryName.trim(), accentKey: categoryAccentKey };
+      const wasEdit = categoryEditing !== null;
       if (categoryEditing) {
         await femmePutJson<ServiceCategory>(
           `/api/service-categories/${categoryEditing.id}`,
@@ -250,7 +262,13 @@ export default function ServicesPage() {
       } else {
         await femmePostJson<ServiceCategory>("/api/service-categories", payload);
       }
-      setCategoryModalOpen(false);
+      if (wasEdit) {
+        // Keep the modal open so the success message shows in the edit form itself,
+        // not on the main table page behind it.
+        setEditSuccess(true);
+      } else {
+        setCategoryModalOpen(false);
+      }
       await load();
       setSvcReloadTick((n) => n + 1);
     } catch (e) {
@@ -289,12 +307,33 @@ export default function ServicesPage() {
     setServiceDuration("");
     setServiceFieldError(null);
     setServiceSaveError(null);
+    setEditSuccess(false);
+    dismissServicePageSuccess();
     setServiceModalOpen(true);
+  }
+
+  function dismissServicePageSuccess() {
+    setCreateSuccess(false);
+    setServiceStatusSuccess(null);
+  }
+
+  /** Issue #217: "Descargar lista de precios" — active services + fantasy name, as a PDF. */
+  async function handleDownloadPriceList() {
+    setPriceListError(null);
+    setPriceListDownloading(true);
+    try {
+      await downloadPriceListPdf();
+    } catch (e) {
+      setPriceListError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setPriceListDownloading(false);
+    }
   }
 
   async function saveService() {
     setServiceFieldError(null);
     setServiceSaveError(null);
+    dismissServicePageSuccess();
     const nameTrim = serviceName.trim();
     const categoryId = serviceCategoryId.trim();
     const price = moneyDigitsOnly(servicePrice) ? parseMaskedMoney(servicePrice) : null;
@@ -318,13 +357,22 @@ export default function ServicesPage() {
         durationMinutes: duration,
         taxId: serviceTaxId ? Number(serviceTaxId) : null,
       };
+      const wasEdit = serviceEditing !== null;
       if (serviceEditing) {
         await femmePutJson<SalonService>(`/api/services/${serviceEditing.id}`, payload);
       } else {
         await femmePostJson<SalonService>("/api/services", payload);
       }
-      setServiceModalOpen(false);
-      await load();
+      if (wasEdit) {
+        // Keep the modal open so the success message shows in the edit form itself,
+        // not on the main table page behind it.
+        setEditSuccess(true);
+      } else {
+        setServiceModalOpen(false);
+        setCreateSuccess(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
@@ -339,10 +387,13 @@ export default function ServicesPage() {
 
   async function activateSalonServiceFromList(s: SalonService) {
     setError(null);
+    setCreateSuccess(false);
     try {
       await femmePostJson(`/api/services/${s.id}/activate`, {});
-      await load();
+      // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
+      setServiceStatusSuccess("activated");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
     }
@@ -358,7 +409,7 @@ export default function ServicesPage() {
         {},
       );
       setServiceEditing(updated);
-      await load();
+      // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
     } catch (e) {
       setServiceSaveError(translateApiError(e, t, "femme.services.saveError"));
@@ -371,17 +422,23 @@ export default function ServicesPage() {
     const target = deactivateTarget;
     if (!target) return;
     setDeactivateTarget(null);
+    setCreateSuccess(false);
     try {
       if (target.kind === "category") {
         await femmePostJson<ServiceCategory>(
           `/api/service-categories/${target.item.id}/deactivate`,
           {},
         );
+        // Categories affect the service form's category list — refresh it.
+        await load();
       } else {
         await femmePostJson<SalonService>(`/api/services/${target.item.id}/deactivate`, {});
       }
-      await load();
       setSvcReloadTick((n) => n + 1);
+      if (target.kind === "service") {
+        setServiceStatusSuccess("deactivated");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } catch (e) {
       setError(translateApiError(e, t, "femme.services.saveError"));
     }
@@ -433,6 +490,7 @@ export default function ServicesPage() {
     );
     setCategoryNameError(null);
     setCategorySaveError(null);
+    setEditSuccess(false);
     setCategoryModalOpen(true);
   }
 
@@ -449,10 +507,12 @@ export default function ServicesPage() {
     setServiceDuration(String(s.durationMinutes));
     setServiceFieldError(null);
     setServiceSaveError(null);
+    setEditSuccess(false);
+    dismissServicePageSuccess();
     setServiceModalOpen(true);
   }
 
-  const onRowKeyOpenService = (s: SalonService) => (e: KeyboardEvent<HTMLDivElement>) => {
+  const onRowKeyOpenService = (s: SalonService) => (e: KeyboardEvent<HTMLTableRowElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       openEditService(s);
@@ -485,6 +545,10 @@ export default function ServicesPage() {
   }
 
   // ── Shared style constants ────────────────────────────────────────────────
+  // Matches the search input's text size (SearchInput.tsx) so the page-header message
+  // boxes read as a smaller, secondary element instead of competing with the table.
+  const pageAlertStyle: React.CSSProperties = { fontSize: 12, padding: "8px 12px" };
+
   const primaryBtn: React.CSSProperties = {
     background: "var(--color-rose)",
     color: "var(--color-on-primary)",
@@ -537,6 +601,18 @@ export default function ServicesPage() {
     fontWeight: 500,
   };
 
+  const thStyle: React.CSSProperties = {
+    padding: "9px 12px",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--color-ink-3)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    textAlign: "left",
+    background: "var(--color-stone)",
+    whiteSpace: "nowrap",
+  };
+
   return (
     <div>
       {/* ── Page header ── */}
@@ -557,22 +633,63 @@ export default function ServicesPage() {
             {t("femme.services.lead")}
           </div>
         </div>
-        {tab === "services" ? (
-          <button type="button" style={primaryBtn} onClick={openNewService}>
-            {t("femme.services.services.addNew")}
-          </button>
-        ) : (
-          <button data-tour="services-add-category" type="button" style={primaryBtn} onClick={openNewCategory}>
-            {t("femme.services.categories.addNew")}
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11"
+            disabled={priceListDownloading}
+            data-testid="download-price-list-button"
+            onClick={() => void handleDownloadPriceList()}
+          >
+            {priceListDownloading
+              ? t("femme.services.priceList.downloading")
+              : t("femme.services.priceList.downloadButton")}
+          </Button>
+          {tab === "services" ? (
+            <button type="button" style={primaryBtn} onClick={openNewService}>
+              {t("femme.services.services.addNew")}
+            </button>
+          ) : (
+            <button data-tour="services-add-category" type="button" style={primaryBtn} onClick={openNewCategory}>
+              {t("femme.services.categories.addNew")}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ── Error ── */}
-      {error && (
-        <Alert variant="destructive" title={t("femme.services.errorTitle")}>
-          {error}
-        </Alert>
+      {/* ── Success / Error ── */}
+      {(createSuccess || serviceStatusSuccess || error || priceListError) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {createSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {t("femme.services.createSuccess")}
+            </Alert>
+          )}
+          {serviceStatusSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {serviceStatusSuccess === "activated"
+                ? t("femme.services.activateSuccess")
+                : t("femme.services.deactivateSuccess")}
+            </Alert>
+          )}
+          {error && (
+            <Alert variant="destructive" title={t("femme.services.errorTitle")} style={pageAlertStyle}>
+              {error}
+            </Alert>
+          )}
+          {priceListError && (
+            <Alert
+              variant="destructive"
+              title={t("femme.services.errorTitle")}
+              style={pageAlertStyle}
+              data-testid="price-list-error"
+            >
+              {priceListError}
+            </Alert>
+          )}
+        </div>
       )}
 
       {/* ── Custom tabs ── */}
@@ -656,226 +773,220 @@ export default function ServicesPage() {
             </div>
           </div>
 
-          {/* Service cards */}
-          {svcPageLoading && !svcPageData && (
+          {/* Services table */}
+          {svcPageLoading && !svcPageData ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "20px 0" }}>
               <Spinner size="sm" />
               <Text>{t("femme.services.loading")}</Text>
             </div>
-          )}
-          {!svcPageLoading && svcTotalElements === 0 && services.length === 0 && (
+          ) : (
             <div
+              data-tour="services-list"
               style={{
-                padding: "20px 0",
-                textAlign: "center",
-                fontSize: 12,
-                color: "var(--color-ink-3)",
+                background: "var(--color-white)",
+                borderRadius: "var(--radius-xl)",
+                border: "var(--border-default)",
+                overflow: "hidden",
               }}
             >
-              {t("femme.services.services.emptyBody")}
-            </div>
-          )}
-          {!svcPageLoading && svcTotalElements === 0 && services.length > 0 && (
-            <div
-              style={{
-                padding: "20px 0",
-                textAlign: "center",
-                fontSize: 12,
-                color: "var(--color-ink-3)",
-              }}
-            >
-              {t("femme.listFilter.noMatches")}
-            </div>
-          )}
-          {svcContent.map((s, index) => {
-            const ic = categoryAccentStyle(s.categoryAccentKey);
-            const hk = `svc-${s.id}`;
-            const isHov = hoveredCardKey === hk;
-            const anterior = svcContent[index - 1];
-            const hayCambioDeEstado =
-              index > 0 &&
-              anterior.active === true &&
-              s.active === false;
-            return (
-              <Fragment key={s.id}>
-                {hayCambioDeEstado ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      margin: "16px 0 10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "0.5px",
-                        background: "var(--color-stone-md)",
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 500,
-                        letterSpacing: "0.07em",
-                        textTransform: "uppercase",
-                        color: "var(--color-ink-3)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t("femme.services.services.separatorInactive")}
-                    </span>
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "0.5px",
-                        background: "var(--color-stone-md)",
-                      }}
-                    />
-                  </div>
-                ) : null}
-                {(
-                  <div
-                    className={`svc-card ${!s.active ? "card-inactive" : ""}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={t("femme.services.services.openEdit", { name: s.name })}
-                    data-testid={`svc-row-${s.id}`}
-                    onMouseEnter={() => setHoveredCardKey(hk)}
-                    onMouseLeave={() => setHoveredCardKey(null)}
-                    onClick={() => openEditService(s)}
-                    onKeyDown={onRowKeyOpenService(s)}
-                    style={
-                      s.active
-                        ? {
-                            background: "var(--color-white)",
-                            border: isHov
-                              ? "0.5px solid var(--color-rose-md)"
-                              : "var(--border-default)",
-                            borderRadius: "var(--radius-lg)",
-                            padding: "14px 16px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            marginBottom: 8,
-                            cursor: "pointer",
-                            transition: "border-color 0.15s",
-                          }
-                        : {
-                            borderRadius: "var(--radius-lg)",
-                            padding: "14px 16px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            marginBottom: 8,
-                            cursor: "pointer",
-                          }
-                    }
-                  >
-                    <div
-                      className="cat-ic card-icon"
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "var(--radius-md)",
-                        background: s.active ? ic.bg : "var(--color-stone-md)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <div
+              <div style={{ overflowX: "auto" }}>
+              <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
+                <colgroup>
+                  <col style={{ width: "34%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "6%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>{t("femme.services.colService")}</th>
+                    <th style={thStyle}>{t("femme.services.colCategory")}</th>
+                    <th style={thStyle}>{t("femme.services.colDuration")}</th>
+                    <th style={thStyle}>{t("femme.services.colPrice")}</th>
+                    <th style={thStyle}>{t("femme.services.colStatus")}</th>
+                    <th style={thStyle} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {svcTotalElements === 0 && services.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
                         style={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: 3,
-                          background: s.active ? ic.color : "var(--color-stone-md)",
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        className="card-name"
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: "var(--color-ink)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
+                          padding: "20px 12px",
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: "var(--color-ink-3)",
                         }}
                       >
-                        {s.name}
-                      </div>
-                      <div
-                        className="card-meta"
-                        style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 1 }}
+                        {t("femme.services.services.emptyBody")}
+                      </td>
+                    </tr>
+                  ) : svcTotalElements === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{
+                          padding: "20px 12px",
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: "var(--color-ink-3)",
+                        }}
                       >
-                        {s.categoryName} · {s.durationMinutes} min
-                      </div>
-                    </div>
-
-                    <div
-                      className="card-price"
-                      style={{
-                        marginLeft: "auto",
-                        marginRight: 16,
-                        fontSize: 14,
-                        fontWeight: 500,
+                        {t("femme.listFilter.noMatches")}
+                      </td>
+                    </tr>
+                  ) : (
+                    svcContent.map((s, index) => {
+                      const ic = categoryAccentStyle(s.categoryAccentKey);
+                      const anterior = svcContent[index - 1];
+                      const hayCambioDeEstado =
+                        index > 0 &&
+                        anterior.active === true &&
+                        s.active === false;
+                      const isHov = hoveredServiceId === s.id;
+                      const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
+                      const tdStyle: React.CSSProperties = {
+                        padding: "10px 12px",
+                        fontSize: 12,
                         color: "var(--color-ink)",
-                        whiteSpace: "nowrap",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {formatGuaraniesGs(s.priceMinor)}
-                    </div>
-
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      role="presentation"
-                    >
-                      <KebabMenu
-                        id={`services-row-${s.id}`}
-                        triggerAriaLabel={t("femme.rowActions.trigger")}
-                        items={
-                          s.active
-                            ? [
-                                {
-                                  id: "edit-details",
-                                  label: t("femme.rowActions.services.editDetails"),
-                                  onSelect: () => openEditService(s),
-                                },
-                                {
-                                  id: "deactivate",
-                                  label: t("femme.rowActions.services.deactivate"),
-                                  destructive: true,
-                                  onSelect: () => requestDeactivateService(s),
-                                },
-                              ]
-                            : [
-                                {
-                                  id: "edit-details",
-                                  label: t("femme.rowActions.services.editDetails"),
-                                  onSelect: () => openEditService(s),
-                                },
-                                {
-                                  id: "activate",
-                                  label: t("femme.rowActions.services.activate"),
-                                  onSelect: () => void activateSalonServiceFromList(s),
-                                },
-                              ]
-                        }
-                      />
-                    </div>
-                  </div>
-                )}
-              </Fragment>
-            );
-          })}
+                        verticalAlign: "middle",
+                        borderBottom: "0.5px solid var(--color-stone)",
+                        background: tdBg,
+                      };
+                      return (
+                        <Fragment key={s.id}>
+                          {hayCambioDeEstado ? (
+                            <tr>
+                              <td
+                                colSpan={6}
+                                style={{
+                                  padding: "6px 14px",
+                                  fontSize: 10,
+                                  fontWeight: 500,
+                                  letterSpacing: "0.06em",
+                                  textTransform: "uppercase",
+                                  color: "var(--color-ink-3)",
+                                  background: "var(--color-stone)",
+                                  borderBottom: "0.5px solid var(--color-stone-md)",
+                                }}
+                              >
+                                {t("femme.services.services.separatorInactive")}
+                              </td>
+                            </tr>
+                          ) : null}
+                          <tr
+                            role="button"
+                            tabIndex={0}
+                            aria-label={t("femme.services.services.openEdit", { name: s.name })}
+                            data-testid={`svc-row-${s.id}`}
+                            onClick={() => openEditService(s)}
+                            onKeyDown={onRowKeyOpenService(s)}
+                            onMouseEnter={() => setHoveredServiceId(s.id)}
+                            onMouseLeave={() => setHoveredServiceId(null)}
+                            style={{ cursor: "pointer" }}
+                          >
+                            <td style={tdStyle}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div
+                                  className="cat-ic cell-icon"
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: "var(--radius-md)",
+                                    background: ic.bg,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: 14,
+                                      height: 14,
+                                      borderRadius: 3,
+                                      background: ic.color,
+                                    }}
+                                  />
+                                </div>
+                                <div
+                                  className="cell-name"
+                                  style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}
+                                >
+                                  {s.name}
+                                </div>
+                              </div>
+                            </td>
+                            <td style={tdStyle}>
+                              {s.categoryName}
+                            </td>
+                            <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                              {s.durationMinutes} min
+                            </td>
+                            <td
+                              style={{
+                                ...tdStyle,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {formatGuaraniesGs(s.priceMinor)}
+                            </td>
+                            <td style={tdStyle}>
+                              <StatusBadge status={s.active ? "ACTIVE" : "INACTIVE"} />
+                            </td>
+                            <td
+                              style={{ ...tdStyle, textAlign: "right" }}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <KebabMenu
+                                id={`services-row-${s.id}`}
+                                triggerAriaLabel={t("femme.rowActions.trigger")}
+                                items={
+                                  s.active
+                                    ? [
+                                        {
+                                          id: "edit-details",
+                                          label: t("femme.rowActions.services.editDetails"),
+                                          onSelect: () => openEditService(s),
+                                        },
+                                        {
+                                          id: "deactivate",
+                                          label: t("femme.rowActions.services.deactivate"),
+                                          destructive: true,
+                                          onSelect: () => requestDeactivateService(s),
+                                        },
+                                      ]
+                                    : [
+                                        {
+                                          id: "edit-details",
+                                          label: t("femme.rowActions.services.editDetails"),
+                                          onSelect: () => openEditService(s),
+                                        },
+                                        {
+                                          id: "activate",
+                                          label: t("femme.rowActions.services.activate"),
+                                          onSelect: () => void activateSalonServiceFromList(s),
+                                        },
+                                      ]
+                                }
+                              />
+                            </td>
+                          </tr>
+                        </Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            </div>
+          )}
         </div>
         {/* ── Pagination footer ── */}
         <div
@@ -1133,6 +1244,9 @@ export default function ServicesPage() {
         }
       >
         <div className="flex flex-col gap-4">
+          {editSuccess ? (
+            <Alert variant="success">{t("femme.services.editSuccess")}</Alert>
+          ) : null}
           {categorySaveError ? (
             <Alert variant="destructive" title={t("femme.services.errorTitle")}>
               {categorySaveError}
@@ -1212,6 +1326,9 @@ export default function ServicesPage() {
         }
       >
         <div className="flex flex-col gap-4">
+          {editSuccess ? (
+            <Alert variant="success">{t("femme.services.editSuccess")}</Alert>
+          ) : null}
           {serviceSaveError ? (
             <Alert variant="destructive" title={t("femme.services.errorTitle")}>
               {serviceSaveError}

@@ -29,12 +29,32 @@ dependencies {
     implementation("com.microsoft.sqlserver:mssql-jdbc")
     implementation("com.microsoft.azure:msal4j:1.17.2")
     implementation("com.azure:azure-identity:1.15.4")
+    // RT-12/RT-18 (Hardening_SIFEN.md): per-tenant SIFEN certificate secrets + the app JWT secret
+    // live in Azure Key Vault outside the e2e profile, resolved via the DefaultAzureCredential
+    // (Managed Identity) already pulled in by azure-identity above.
+    implementation("com.azure:azure-security-keyvault-secrets:4.10.4")
+    // RT-20 (Hardening_SIFEN.md): asynchronous SIFEN transmission via Azure Service Bus (Basic
+    // tier) — see SifenSubmissionQueueListener/ServiceBusSifenSubmissionQueue.
+    implementation("com.azure:azure-messaging-servicebus:7.17.19")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // RT-21: per-operation SIFEN metrics exported to the Application Insights resource Terraform
+    // already provisions (APPLICATIONINSIGHTS_CONNECTION_STRING) — see SifenCallMetrics.
+    implementation("io.micrometer:micrometer-registry-azure-monitor:1.17.0")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2")
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
     implementation("com.github.librepdf:openpdf:1.3.30")
     implementation("com.azure:azure-communication-email:1.0.16")
+    // SIFEN HU-08: QR code generation for the KuDE (AC-13). No QR library existed in this repo
+    // before; zxing:core alone is enough (no javase/awt-integration submodule needed — the raster
+    // is built by hand from its BitMatrix, see SifenQrImageService).
+    implementation("com.google.zxing:core:3.5.3")
+    // HU-50 (Épica E — Importación de datos vía Excel): reads .xlsx header rows to validate them
+    // against the standard column template per entity. poi-ooxml pulls in poi (binary .xls) too,
+    // which we deliberately do NOT accept (see ExcelHeaderValidationService — only XSSFWorkbook).
+    // Issue #174 AC-05: .xlsx export of the invoice-history report (header data only).
+    implementation("org.apache.poi:poi-ooxml:5.3.0")
 
     runtimeOnly("com.h2database:h2")
     testImplementation("org.springframework.boot:spring-boot-starter-test")

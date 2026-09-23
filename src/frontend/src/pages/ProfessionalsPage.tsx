@@ -182,6 +182,12 @@ export default function ProfessionalsPage() {
   const [deactivateTarget, setDeactivateTarget] = useState<Professional | null>(null);
   const [activateTarget, setActivateTarget] = useState<Professional | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [editSuccess, setEditSuccess] = useState(false);
+  const [editingExistingId, setEditingExistingId] = useState<number | null>(null);
+  const [createSuccess, setCreateSuccess] = useState(false);
+  const [statusChangeSuccess, setStatusChangeSuccess] = useState<"activated" | "deactivated" | null>(
+    null,
+  );
 
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -256,11 +262,19 @@ export default function ProfessionalsPage() {
     setScheduleSaveError(null);
   }
 
+  function dismissProfessionalsPageSuccess() {
+    setCreateSuccess(false);
+    setStatusChangeSuccess(null);
+  }
+
   function openNew() {
     setSavedProfessional(null);
     setTab("details");
     resetDetailForm(null);
     resetScheduleForm(null);
+    setEditingExistingId(null);
+    setEditSuccess(false);
+    dismissProfessionalsPageSuccess();
     setModalOpen(true);
   }
 
@@ -269,6 +283,9 @@ export default function ProfessionalsPage() {
     setTab("details");
     resetDetailForm(p);
     resetScheduleForm(p);
+    setEditingExistingId(p.id);
+    setEditSuccess(false);
+    dismissProfessionalsPageSuccess();
     setModalOpen(true);
   }
 
@@ -277,6 +294,9 @@ export default function ProfessionalsPage() {
     resetDetailForm(p);
     resetScheduleForm(p);
     setTab("schedule");
+    setEditingExistingId(p.id);
+    setEditSuccess(false);
+    dismissProfessionalsPageSuccess();
     setModalOpen(true);
   }
 
@@ -426,7 +446,15 @@ export default function ProfessionalsPage() {
       );
       setSavedProfessional(saved);
       setProfReloadTick((n) => n + 1);
-      closeModal();
+      if (editingExistingId !== null) {
+        // Keep the modal open so the success message shows in the edit form itself,
+        // not on the main table page behind it.
+        setEditSuccess(true);
+      } else {
+        closeModal();
+        setCreateSuccess(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } catch (e) {
       setScheduleSaveError(translateApiError(e, t, "femme.professionals.saveError"));
     } finally {
@@ -493,9 +521,12 @@ export default function ProfessionalsPage() {
     const p = deactivateTarget;
     if (!p) return;
     setDeactivateTarget(null);
+    setCreateSuccess(false);
     try {
       await femmePostJson<Professional>(`/api/professionals/${p.id}/deactivate`, {});
       setProfReloadTick((n) => n + 1);
+      setStatusChangeSuccess("deactivated");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setPageError(translateApiError(e, t, "femme.professionals.saveError"));
     }
@@ -509,9 +540,12 @@ export default function ProfessionalsPage() {
     const p = activateTarget;
     if (!p) return;
     setActivateTarget(null);
+    setCreateSuccess(false);
     try {
       await femmePostJson<Professional>(`/api/professionals/${p.id}/activate`, {});
       setProfReloadTick((n) => n + 1);
+      setStatusChangeSuccess("activated");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setPageError(translateApiError(e, t, "femme.professionals.saveError"));
     }
@@ -533,6 +567,10 @@ export default function ProfessionalsPage() {
       </div>
     );
   }
+
+  // Matches the search input's text size (SearchInput.tsx) so the page-header message
+  // boxes read as a smaller, secondary element instead of competing with the table.
+  const pageAlertStyle: React.CSSProperties = { fontSize: 12, padding: "8px 12px" };
 
   const primaryBtn: React.CSSProperties = {
     background: "var(--color-rose)",
@@ -593,13 +631,28 @@ export default function ProfessionalsPage() {
         </button>
       </div>
 
-      {/* ── Error ── */}
-      {pageError && (
-        <Alert variant="destructive" title={t("femme.professionals.errorTitle")}>
-          {pageError}
-        </Alert>
+      {/* ── Success / Error ── */}
+      {(createSuccess || statusChangeSuccess || pageError) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {createSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {t("femme.professionals.createSuccess")}
+            </Alert>
+          )}
+          {statusChangeSuccess && (
+            <Alert variant="success" style={pageAlertStyle}>
+              {statusChangeSuccess === "activated"
+                ? t("femme.professionals.activateSuccess")
+                : t("femme.professionals.deactivateSuccess")}
+            </Alert>
+          )}
+          {pageError && (
+            <Alert variant="destructive" title={t("femme.professionals.errorTitle")} style={pageAlertStyle}>
+              {pageError}
+            </Alert>
+          )}
+        </div>
       )}
-
       <div data-tour="professionals-search" style={{ marginBottom: 12 }}>
         <SearchInput
           id="professionals-inline-search"
@@ -1098,6 +1151,9 @@ export default function ProfessionalsPage() {
           {/* ── Schedule tab ─────────────────────────────────────── */}
           <TabsContent value="schedule">
             <div className="flex flex-col gap-4">
+              {editSuccess ? (
+                <Alert variant="success">{t("femme.professionals.editSuccess")}</Alert>
+              ) : null}
               {scheduleSaveError ? (
                 <Alert variant="destructive" title={t("femme.professionals.errorTitle")}>
                   {scheduleSaveError}
@@ -1106,7 +1162,7 @@ export default function ProfessionalsPage() {
 
               <Text variant="muted">{t("femme.professionals.form.scheduleLead")}</Text>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
                 {DAYS.map((d) => {
                   const row = schedules.find((s) => s.dayOfWeek === d.value) ?? {
                     dayOfWeek: d.value,
@@ -1119,78 +1175,67 @@ export default function ProfessionalsPage() {
                   return (
                     <div
                       key={d.value}
+                      className="flex flex-wrap items-center gap-3"
+                      data-testid={`prof-day-${d.key}-row`}
                       style={{
-                        padding: 12,
+                        padding: "6px 12px",
                         border: "var(--border-default)",
                         borderRadius: "var(--radius-md)",
                         background: "var(--color-white)",
                       }}
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <label
-                          htmlFor={checkboxId}
-                          className="flex w-28 shrink-0 cursor-pointer items-center gap-2"
-                        >
-                          <input
-                            id={checkboxId}
-                            type="checkbox"
-                            checked={row.active}
-                            onChange={(e) => toggleScheduleDay(d.value, e.target.checked)}
-                            aria-label={`${dayLabel} — ${t("femme.professionals.form.scheduleDayActive")}`}
-                            data-testid={`prof-day-${d.key}-active`}
-                            style={{ width: 16, height: 16, cursor: "pointer" }}
+                      <label
+                        htmlFor={checkboxId}
+                        className="flex w-24 shrink-0 cursor-pointer items-center gap-2"
+                      >
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          checked={row.active}
+                          onChange={(e) => toggleScheduleDay(d.value, e.target.checked)}
+                          aria-label={`${dayLabel} — ${t("femme.professionals.form.scheduleDayActive")}`}
+                          data-testid={`prof-day-${d.key}-active`}
+                          style={{ width: 16, height: 16, cursor: "pointer" }}
+                        />
+                        <span className="text-sm font-medium">{dayLabel}</span>
+                      </label>
+                      {row.active ? (
+                        <div className="flex flex-1 min-w-[180px] items-center gap-2">
+                          <TimeCombobox
+                            id={`prof-${d.value}-start`}
+                            value={row.startTime}
+                            onChange={(next) => setScheduleTime(d.value, { startTime: next })}
+                            placeholder={t("femme.professionals.form.timePlaceholderStart")}
+                            invalid={!!scheduleErrors?.schedules}
+                            aria-invalid={!!scheduleErrors?.schedules}
+                            aria-label={`${dayLabel} — ${t("femme.professionals.form.start")}`}
+                            data-testid={`prof-day-${d.key}-start`}
+                            className="w-24 sm:w-28"
                           />
-                          <span className="font-medium">{dayLabel}</span>
-                        </label>
-                        {row.active ? (
-                          <div className="grid flex-1 grid-cols-2 gap-3">
-                            <div>
-                              <Label
-                                htmlFor={`prof-${d.value}-start`}
-                                className="text-xs"
-                              >
-                                {t("femme.professionals.form.start")}
-                              </Label>
-                              <TimeCombobox
-                                id={`prof-${d.value}-start`}
-                                value={row.startTime}
-                                onChange={(next) =>
-                                  setScheduleTime(d.value, { startTime: next })
-                                }
-                                placeholder={t("femme.professionals.form.timePlaceholderStart")}
-                                invalid={!!scheduleErrors?.schedules}
-                                aria-invalid={!!scheduleErrors?.schedules}
-                                aria-label={`${dayLabel} — ${t("femme.professionals.form.start")}`}
-                                data-testid={`prof-day-${d.key}-start`}
-                              />
-                            </div>
-                            <div>
-                              <Label
-                                htmlFor={`prof-${d.value}-end`}
-                                className="text-xs"
-                              >
-                                {t("femme.professionals.form.end")}
-                              </Label>
-                              <TimeCombobox
-                                id={`prof-${d.value}-end`}
-                                value={row.endTime}
-                                onChange={(next) =>
-                                  setScheduleTime(d.value, { endTime: next })
-                                }
-                                placeholder={t("femme.professionals.form.timePlaceholderEnd")}
-                                invalid={!!scheduleErrors?.schedules}
-                                aria-invalid={!!scheduleErrors?.schedules}
-                                aria-label={`${dayLabel} — ${t("femme.professionals.form.end")}`}
-                                data-testid={`prof-day-${d.key}-end`}
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <Text variant="muted" className="flex-1 text-xs">
-                            {t("femme.professionals.dayOff")}
+                          <Text
+                            variant="muted"
+                            aria-hidden="true"
+                            className="shrink-0 text-sm"
+                          >
+                            –
                           </Text>
-                        )}
-                      </div>
+                          <TimeCombobox
+                            id={`prof-${d.value}-end`}
+                            value={row.endTime}
+                            onChange={(next) => setScheduleTime(d.value, { endTime: next })}
+                            placeholder={t("femme.professionals.form.timePlaceholderEnd")}
+                            invalid={!!scheduleErrors?.schedules}
+                            aria-invalid={!!scheduleErrors?.schedules}
+                            aria-label={`${dayLabel} — ${t("femme.professionals.form.end")}`}
+                            data-testid={`prof-day-${d.key}-end`}
+                            className="w-24 sm:w-28"
+                          />
+                        </div>
+                      ) : (
+                        <Text variant="muted" className="flex-1 text-xs">
+                          {t("femme.professionals.dayOff")}
+                        </Text>
+                      )}
                     </div>
                   );
                 })}

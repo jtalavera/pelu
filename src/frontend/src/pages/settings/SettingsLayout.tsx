@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router-dom";
 import { useMe } from "../../hooks/useMe";
+import { useFeatureFlag } from "../../hooks/useFeatureFlags";
 
 export default function SettingsLayout() {
   const { t } = useTranslation();
   const { me } = useMe();
-  const isSystemAdmin = me?.role === "SYSTEM_ADMIN";
+  const isTenantAdmin = me?.role === "ADMIN";
+  const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -51,18 +53,20 @@ export default function SettingsLayout() {
           className="max-md:border-r-0 max-md:border-b max-md:border-[var(--color-stone-md)]"
           aria-label={t("femme.settings.sectionTitle")}
         >
-          <NavLink to="/app/settings/business" className={navClass} end>
-            {t("femme.settings.tabBusiness")}
-          </NavLink>
+          {isTenantAdmin ? (
+            <NavLink to="/app/settings/business" className={navClass} end>
+              {t("femme.settings.tabBusiness")}
+            </NavLink>
+          ) : null}
           <NavLink to="/app/settings/fiscal-stamp" className={navClass}>
             {t("femme.settings.tabFiscalStamp")}
           </NavLink>
           <NavLink to="/app/settings/taxes" className={navClass}>
             {t("femme.settings.tabTaxes")}
           </NavLink>
-          {isSystemAdmin ? (
-            <NavLink to="/app/settings/feature-flags" className={navClass}>
-              {t("femme.settings.tabFeatureFlags")}
+          {isTenantAdmin && sifenEnabled ? (
+            <NavLink to="/app/settings/sifen" className={navClass}>
+              {t("femme.settings.tabSifen")}
             </NavLink>
           ) : null}
         </nav>

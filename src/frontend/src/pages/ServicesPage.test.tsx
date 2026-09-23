@@ -9,6 +9,7 @@ import ServicesPage from "./ServicesPage";
 const femmeJson = vi.fn();
 const femmePostJson = vi.fn();
 const listServicesPaged = vi.fn();
+const downloadPriceListPdf = vi.fn();
 
 vi.mock("../api/femmeClient", () => ({
   femmeJson: (...args: unknown[]) => femmeJson(...args),
@@ -18,6 +19,10 @@ vi.mock("../api/femmeClient", () => ({
 
 vi.mock("../api/services", () => ({
   listServicesPaged: (...args: unknown[]) => listServicesPaged(...args),
+}));
+
+vi.mock("../api/downloadPriceListPdf", () => ({
+  downloadPriceListPdf: (...args: unknown[]) => downloadPriceListPdf(...args),
 }));
 
 function renderPage() {
@@ -67,17 +72,20 @@ describe("ServicesPage", () => {
     femmeJson.mockReset();
     femmePostJson.mockReset();
     listServicesPaged.mockReset();
+    downloadPriceListPdf.mockReset();
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it("applies inactive card styling to inactive services", async () => {
+  it("shows an inactive status badge for inactive services instead of strikethrough", async () => {
     mockLoad([sampleCategory], [inactiveService]);
     const { container } = renderPage();
     expect(await screen.findByText("Basic cut")).toBeTruthy();
-    expect(container.querySelector(".card-inactive")).toBeTruthy();
+    const row = screen.getByTestId(`svc-row-${inactiveService.id}`);
+    expect(row.textContent).toMatch(/inactive/i);
+    expect(container.querySelector(".card-inactive")).toBeNull();
   });
 
   it("calls activate endpoint when Reactivate is clicked in the kebab menu", async () => {
@@ -151,6 +159,35 @@ describe("ServicesPage", () => {
     const names = screen.getAllByText(/Zeta active|Basic cut/);
     expect(names[0].textContent).toContain("Zeta active");
     expect(names[1].textContent).toContain("Basic cut");
+  });
+
+  it("issue #217: clicking 'Download price list' calls the price-list PDF download API", async () => {
+    mockLoad([sampleCategory], [inactiveService]);
+    downloadPriceListPdf.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByText("Basic cut");
+
+    const button = screen.getByTestId("download-price-list-button");
+    expect(button).toBeTruthy();
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      expect(downloadPriceListPdf).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByTestId("price-list-error")).toBeNull();
+  });
+
+  it("issue #217: shows an error alert when the price-list PDF download fails", async () => {
+    mockLoad([sampleCategory], [inactiveService]);
+    downloadPriceListPdf.mockRejectedValue(new Error("boom"));
+    renderPage();
+    await screen.findByText("Basic cut");
+
+    await userEvent.click(screen.getByTestId("download-price-list-button"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("price-list-error")).toBeTruthy();
+    });
   });
 
   it("filters to inactive-only services when the inactive quick filter is selected", async () => {

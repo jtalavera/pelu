@@ -1,16 +1,38 @@
 package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.FeatureFlagService;
+import com.cursorpoc.backend.service.InvoiceHistoryReportService;
+import com.cursorpoc.backend.service.InvoiceReportRow;
 import com.cursorpoc.backend.service.InvoiceService;
+import com.cursorpoc.backend.service.SifenCertificateService;
+import com.cursorpoc.backend.service.SifenInvoiceCancellationService;
+import com.cursorpoc.backend.service.SifenInvoiceClientIdentificationService;
+import com.cursorpoc.backend.service.SifenInvoiceEventLogService;
+import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
+import com.cursorpoc.backend.service.SifenNumberVoidingService;
+import com.cursorpoc.backend.service.SifenSubmissionQueue;
+import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
+import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
+import com.cursorpoc.backend.web.dto.InvoiceCorrectionRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
+import com.cursorpoc.backend.web.dto.SifenInvoiceEventLogResponse;
+import com.cursorpoc.backend.web.dto.SifenNumberVoidingSubmitRequest;
 import jakarta.validation.Valid;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,20 +50,89 @@ public class InvoiceController {
 
   private static final Logger log = LoggerFactory.getLogger(InvoiceController.class);
 
-  private final InvoiceService invoiceService;
+  /**
+   * SIFEN HU-22 (Fase 5): the real per-tenant switch between the SIFEN pipeline and the traditional
+   * generator, wired here since {@code issue()} is the single entry point for both (see
+   * PROGRESS.md).
+   */
+  static final String SIFEN_ELECTRONIC_INVOICING_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
-  public InvoiceController(InvoiceService invoiceService) {
+  private final InvoiceService invoiceService;
+  private final InvoiceHistoryReportService invoiceHistoryReportService;
+  private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
+  private final SifenInvoiceCancellationService sifenInvoiceCancellationService;
+  private final SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService;
+  private final FeatureFlagService featureFlagService;
+  private final SifenCertificateService sifenCertificateService;
+  private final SifenSubmissionQueue sifenSubmissionQueue;
+  private final SifenNumberVoidingService sifenNumberVoidingService;
+  private final SifenInvoiceEventLogService sifenInvoiceEventLogService;
+
+  public InvoiceController(
+      InvoiceService invoiceService,
+      InvoiceHistoryReportService invoiceHistoryReportService,
+      SifenInvoiceSubmissionService sifenInvoiceSubmissionService,
+      SifenInvoiceCancellationService sifenInvoiceCancellationService,
+      SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService,
+      FeatureFlagService featureFlagService,
+      SifenCertificateService sifenCertificateService,
+      SifenSubmissionQueue sifenSubmissionQueue,
+      SifenNumberVoidingService sifenNumberVoidingService,
+      SifenInvoiceEventLogService sifenInvoiceEventLogService) {
     this.invoiceService = invoiceService;
+    this.invoiceHistoryReportService = invoiceHistoryReportService;
+    this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
+    this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
+    this.sifenInvoiceClientIdentificationService = sifenInvoiceClientIdentificationService;
+    this.featureFlagService = featureFlagService;
+    this.sifenCertificateService = sifenCertificateService;
+    this.sifenSubmissionQueue = sifenSubmissionQueue;
+    this.sifenNumberVoidingService = sifenNumberVoidingService;
+    this.sifenInvoiceEventLogService = sifenInvoiceEventLogService;
   }
 
+  /**
+   * SIFEN HU-22 AC-03/AC-04: routes between the traditional generator and the SIFEN pipeline based
+   * on the tenant's {@value #SIFEN_ELECTRONIC_INVOICING_FLAG_KEY} flag. When enabled, a valid
+   * certificate is required *before* the invoice is created (AC-04: blocks issuance entirely,
+   * nothing is persisted, if {@link SifenCertificateService#requireActiveCertificate} throws).
+   *
+   * <p>RT-20 (Hardening_SIFEN.md): the freshly persisted invoice is signed synchronously — {@link
+   * SifenInvoiceSubmissionService#prepareAndSign} mints the CDC/QR and marks it {@code QUEUED},
+   * with zero calls to SIFEN — and a transmit attempt is enqueued for the async consumer to pick
+   * up. This request never waits on SIFEN itself; the response already carries the CDC/QR, which is
+   * what makes the KuDE (RT-28) downloadable the instant this returns, before SIFEN has answered.
+   * When the flag is disabled, the invoice is issued exactly as before this story — the traditional
+   * generator is simply "no SIFEN fields ever get populated" (AC-03), not a separate code path.
+   */
   @PostMapping
   public ResponseEntity<InvoiceResponse> issue(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody InvoiceCreateRequest request) {
     requirePrincipal(principal);
-    log.info("POST /api/invoices tenantId={}", principal.getTenantId());
-    InvoiceResponse response = invoiceService.issueInvoice(principal.getTenantId(), request);
-    log.info("POST /api/invoices tenantId={} status=201", principal.getTenantId());
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/invoices tenantId={}", tenantId);
+    boolean sifenEnabled =
+        featureFlagService.isEnabled(SIFEN_ELECTRONIC_INVOICING_FLAG_KEY, tenantId);
+    if (sifenEnabled) {
+      sifenCertificateService.requireActiveCertificate(tenantId);
+      // Issue #173: with SIFEN enabled the KuDE is auto-emailed after approval, so a recipient
+      // address is mandatory — except for a "Sin identificar" (unidentified) receiver, where no
+      // client data is sent to SIFEN at all.
+      if (receiverWillBeIdentified(request) && isBlank(request.email())) {
+        log.error(
+            "POST /api/invoices tenantId={} status=400 SIFEN_RECIPIENT_EMAIL_REQUIRED", tenantId);
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_RECIPIENT_EMAIL_REQUIRED");
+      }
+    }
+    InvoiceResponse response = invoiceService.issueInvoice(tenantId, request);
+    if (sifenEnabled) {
+      sifenInvoiceSubmissionService.prepareAndSign(tenantId, response.id());
+      String correlationId = UUID.randomUUID().toString();
+      sifenSubmissionQueue.enqueue(tenantId, response.id(), 1, Duration.ZERO, correlationId);
+      response = invoiceService.getInvoice(tenantId, response.id());
+    }
+    log.info("POST /api/invoices tenantId={} status=201", tenantId);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
   }
 
@@ -69,6 +160,58 @@ public class InvoiceController {
     return ResponseEntity.ok(response);
   }
 
+  /**
+   * Issue #174 AC-05: downloads the History tab's currently filtered list as an Excel (.xlsx) or
+   * PDF report — header data only. {@code format} is {@code xlsx} or {@code pdf} (default pdf).
+   */
+  @GetMapping("/report")
+  public ResponseEntity<byte[]> report(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(required = false) String from,
+      @RequestParam(required = false) String to,
+      @RequestParam(required = false) Long clientId,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "pdf") String format) {
+    requirePrincipal(principal);
+    long tenantId = principal.getTenantId();
+    log.info("GET /api/invoices/report tenantId={} format={}", tenantId, format);
+    Instant fromInstant = from != null ? Instant.parse(from) : null;
+    Instant toInstant = to != null ? Instant.parse(to) : null;
+    try {
+      List<InvoiceReportRow> rows =
+          invoiceService.listInvoicesForReport(
+              tenantId, fromInstant, toInstant, clientId, status, q);
+      boolean xlsx = "xlsx".equalsIgnoreCase(format) || "excel".equalsIgnoreCase(format);
+      byte[] body =
+          xlsx
+              ? invoiceHistoryReportService.renderXlsx(rows, fromInstant, toInstant)
+              : invoiceHistoryReportService.renderPdf(rows, fromInstant, toInstant);
+      String filename = reportFilename(fromInstant, toInstant, xlsx ? "xlsx" : "pdf");
+      MediaType contentType =
+          xlsx
+              ? MediaType.parseMediaType(
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+              : MediaType.APPLICATION_PDF;
+      log.info("GET /api/invoices/report tenantId={} status=200 rows={}", tenantId, rows.size());
+      return ResponseEntity.ok()
+          .contentType(contentType)
+          .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+          .body(body);
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/invoices/report tenantId={} status={}", tenantId, ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
+  private static String reportFilename(Instant from, Instant to, String ext) {
+    DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC);
+    String fromLabel = from != null ? fmt.format(from) : "inicio";
+    String toLabel = to != null ? fmt.format(to) : "hoy";
+    return "COMPROBANTES-" + fromLabel + "-" + toLabel + "." + ext;
+  }
+
   @GetMapping("/{id}")
   public ResponseEntity<InvoiceResponse> get(
       @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable Long id) {
@@ -76,6 +219,23 @@ public class InvoiceController {
     log.info("GET /api/invoices/{} tenantId={}", id, principal.getTenantId());
     InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
     log.info("GET /api/invoices/{} tenantId={} status=200", id, principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Issue #205 AC-2: full history of SIFEN interactions (submission, cancellation, client
+   * identification attempts) for one invoice, newest first — powers the "ver historial de mensajes
+   * SIFEN" popup in the "Estado en SIFEN" accordion.
+   */
+  @GetMapping("/{id}/sifen/history")
+  public ResponseEntity<List<SifenInvoiceEventLogResponse>> sifenHistory(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable Long id) {
+    requirePrincipal(principal);
+    log.info("GET /api/invoices/{}/sifen/history tenantId={}", id, principal.getTenantId());
+    List<SifenInvoiceEventLogResponse> response =
+        sifenInvoiceEventLogService.history(principal.getTenantId(), id);
+    log.info(
+        "GET /api/invoices/{}/sifen/history tenantId={} status=200", id, principal.getTenantId());
     return ResponseEntity.ok(response);
   }
 
@@ -91,9 +251,151 @@ public class InvoiceController {
     return ResponseEntity.ok(response);
   }
 
+  /**
+   * SIFEN HU-07 AC-04: manually triggers a status query to SIFEN for an invoice this system marked
+   * 'pendiente de verificación'. Returns the invoice's fresh state either way — if SIFEN still
+   * gives no answer, the invoice stays PENDING_VERIFICATION and the response reflects that.
+   */
+  @PostMapping("/{id}/sifen/check-status")
+  public ResponseEntity<InvoiceResponse> checkSifenStatus(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable Long id) {
+    requirePrincipal(principal);
+    log.info("POST /api/invoices/{}/sifen/check-status tenantId={}", id, principal.getTenantId());
+    sifenInvoiceSubmissionService.checkPendingStatus(principal.getTenantId(), id);
+    InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
+    log.info(
+        "POST /api/invoices/{}/sifen/check-status tenantId={} status=200",
+        id,
+        principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * SIFEN HU-10: registers a cancellation event with SIFEN for an invoice currently Aprobado/
+   * Aprobado con observación (AC-01), within the 48h window since its approval (AC-02). Returns the
+   * invoice's fresh state either way — SIFEN approving moves it to Cancelada (AC-03); SIFEN
+   * rejecting leaves it exactly as it was, with the rejection reason recorded (AC-04). AC-05: who
+   * requested it and when is recorded regardless of the outcome.
+   */
+  @PostMapping("/{id}/sifen/cancel")
+  public ResponseEntity<InvoiceResponse> cancelSifenInvoice(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody InvoiceCancellationRequest request) {
+    requirePrincipal(principal);
+    log.info("POST /api/invoices/{}/sifen/cancel tenantId={}", id, principal.getTenantId());
+    sifenInvoiceCancellationService.cancel(
+        principal.getTenantId(),
+        id,
+        principal.getUserId(),
+        principal.getUsername(),
+        request.reason());
+    InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
+    log.info(
+        "POST /api/invoices/{}/sifen/cancel tenantId={} status=200", id, principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * SIFEN HU-11: registers a client-identification event with SIFEN for an invoice currently
+   * Aprobado/Aprobado con observación that was issued without client data and hasn't been
+   * identified before (AC-01). Returns the invoice's fresh state either way — SIFEN approving marks
+   * it identified and updates its client fields (AC-05); SIFEN rejecting leaves it exactly as it
+   * was, with the rejection reason recorded (AC-06).
+   */
+  @PostMapping("/{id}/sifen/identify-client")
+  public ResponseEntity<InvoiceResponse> identifySifenClient(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody InvoiceClientIdentificationRequest request) {
+    requirePrincipal(principal);
+    log.info(
+        "POST /api/invoices/{}/sifen/identify-client tenantId={}", id, principal.getTenantId());
+    sifenInvoiceClientIdentificationService.identifyClient(
+        principal.getTenantId(), id, principal.getUserId(), principal.getUsername(), request);
+    InvoiceResponse response = invoiceService.getInvoice(principal.getTenantId(), id);
+    log.info(
+        "POST /api/invoices/{}/sifen/identify-client tenantId={} status=200",
+        id,
+        principal.getTenantId());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Issue #175: corrects a {@code REJECTED} SIFEN invoice's client / lines / discount / payments
+   * and re-queues it for transmission under the same CDC (Manual Técnico V150 §6.5 — no CDC field
+   * is user-editable in this domain, so any such correction qualifies). Same {@code prepareAndSign}
+   * + {@code enqueue} pipeline as {@code issue()}. Guards: {@code INVOICE_NOT_REJECTED} (409) if
+   * the invoice isn't currently Rechazado, {@code SIFEN_NUMBER_ALREADY_VOIDED} (409) if SIFEN
+   * already approved the number's inutilización.
+   */
+  @PostMapping("/{id}/sifen/correct-and-resend")
+  public ResponseEntity<InvoiceResponse> correctAndResend(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody InvoiceCorrectionRequest request) {
+    requirePrincipal(principal);
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/invoices/{}/sifen/correct-and-resend tenantId={}", id, tenantId);
+    // A valid certificate is required to re-sign — fail fast before mutating anything (AC-04 of
+    // HU-22's own contract).
+    sifenCertificateService.requireActiveCertificate(tenantId);
+    invoiceService.correctAndResendInvoice(tenantId, id, request);
+    sifenInvoiceSubmissionService.prepareAndSign(tenantId, id);
+    sifenSubmissionQueue.enqueue(tenantId, id, 1, Duration.ZERO, UUID.randomUUID().toString());
+    InvoiceResponse response = invoiceService.getInvoice(tenantId, id);
+    log.info("POST /api/invoices/{}/sifen/correct-and-resend tenantId={} status=200", id, tenantId);
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * "Anular comprobante" for a SIFEN-rejected invoice: submits the (auto-recorded) "inutilización
+   * de numeración" event to SIFEN. On a SIFEN approval the invoice is voided too. Never emits a
+   * cancellation event — a rejected DE was never approved, there is nothing to cancel. Guards
+   * (409): {@code INVOICE_NOT_REJECTED} if it isn't Rechazado, {@code
+   * SIFEN_NUMBER_VOIDING_ALREADY_APPROVED} if the number was already inutilizado.
+   */
+  @PostMapping("/{id}/sifen/nullify-number")
+  public ResponseEntity<InvoiceResponse> nullifyNumber(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @Valid @RequestBody SifenNumberVoidingSubmitRequest request) {
+    requirePrincipal(principal);
+    long tenantId = principal.getTenantId();
+    log.info("POST /api/invoices/{}/sifen/nullify-number tenantId={}", id, tenantId);
+    try {
+      sifenCertificateService.requireActiveCertificate(tenantId);
+      sifenNumberVoidingService.submitForInvoice(tenantId, id, request.reason());
+      InvoiceResponse response = invoiceService.getInvoice(tenantId, id);
+      log.info("POST /api/invoices/{}/sifen/nullify-number tenantId={} status=200", id, tenantId);
+      return ResponseEntity.ok(response);
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/invoices/{}/sifen/nullify-number tenantId={} status={}",
+          id,
+          tenantId,
+          ex.getStatusCode());
+      throw ex;
+    }
+  }
+
   private static void requirePrincipal(FemmeUserPrincipal principal) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
+  }
+
+  /**
+   * Issue #173: mirrors {@code SifenInvoiceHeaderService.isReceiverUnidentified} on the request —
+   * the receiver ends up identified iff a RUC or an identity-document override was sent (a linked
+   * client's own profile data is never used as a fallback, per issue #96).
+   */
+  private static boolean receiverWillBeIdentified(InvoiceCreateRequest request) {
+    return !isBlank(request.clientRucOverride())
+        || !isBlank(request.clientIdentityDocumentOverride());
+  }
+
+  private static boolean isBlank(String value) {
+    return value == null || value.isBlank();
   }
 }

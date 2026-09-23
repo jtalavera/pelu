@@ -18,6 +18,15 @@ function getInitials(email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
+// HU-41 follow-up: prefer the user's real name (invited ADMIN's full name, or a professional's
+// ficha name) for the avatar initials; fall back to the email-derived initials.
+function getInitialsFromName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return "?";
+}
+
 function SectionLabel({ label }: { label: string }) {
   return (
     <span
@@ -98,6 +107,13 @@ const CalendarIcon = () => (
   </svg>
 );
 
+const DashboardsIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+  </svg>
+);
+
 const ServicesIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -120,6 +136,22 @@ const ClientsIcon = () => (
 const BillingIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" />
+  </svg>
+);
+
+const ServiceRecordIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="15" y2="17" />
+  </svg>
+);
+
+const PropinasIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="6" />
+    <path d="M12 5.5v5M10 8.7c0 .7.7 1.3 2 1.3s2-.6 2-1.3-.7-1-2-1.3-2-.6-2-1.3.7-1.3 2-1.3 2 .6 2 1.3" />
+    <path d="M8.5 13.5 4 20l4-1 1.5 3.5 2.5-6M15.5 13.5 20 20l-4-1-1.5 3.5-2.5-6" />
   </svg>
 );
 
@@ -227,8 +259,13 @@ function AppShellInner() {
   }
 
   const email = me?.email ?? "";
-  const initials = email ? getInitials(email) : "?";
-  const displayName = email.split("@")[0];
+  const fullName = me?.fullName?.trim() ?? "";
+  const displayName = fullName || email.split("@")[0];
+  const initials = fullName
+    ? getInitialsFromName(fullName)
+    : email
+      ? getInitials(email)
+      : "?";
   const isProfessional = me?.role === "PROFESSIONAL";
   return (
     <div>
@@ -260,7 +297,7 @@ function AppShellInner() {
             letterSpacing: "-0.01em",
           }}
         >
-          {t("femme.appName")}
+          {me?.tenantName ?? t("femme.appName")}
         </span>
 
 
@@ -622,6 +659,14 @@ function AppShellInner() {
           <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} tourId="nav-dashboard" />
         )}
         <SideNavItem to="/app/calendar" label={t("femme.nav.calendar")} icon={<CalendarIcon />} tourId="nav-calendar" />
+        {!isProfessional && (
+          <SideNavItem
+            to="/app/dashboards"
+            label={t("femme.nav.dashboards")}
+            icon={<DashboardsIcon />}
+            tourId="nav-dashboards"
+          />
+        )}
 
         {!isProfessional && (
           <>
@@ -634,9 +679,21 @@ function AppShellInner() {
               tourId="nav-professionals"
             />
             <SideNavItem to="/app/clients" label={t("femme.nav.clients")} icon={<ClientsIcon />} tourId="nav-clients" />
+            <SideNavItem
+              to="/app/service-records"
+              label={t("femme.nav.serviceRecords")}
+              icon={<ServiceRecordIcon />}
+              tourId="nav-service-records"
+            />
 
             <SectionLabel label={t("femme.nav.sectionFinance")} />
             <SideNavItem to="/app/billing" label={t("femme.nav.billing")} icon={<BillingIcon />} tourId="nav-billing" />
+            <SideNavItem
+              to="/app/propinas"
+              label={t("femme.nav.propinas")}
+              icon={<PropinasIcon />}
+              tourId="nav-propinas"
+            />
           </>
         )}
 

@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
+import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.FiscalStampCreateRequest;
 import com.cursorpoc.backend.web.dto.FiscalStampResponse;
@@ -19,18 +20,26 @@ public class FiscalStampService {
 
   private final TenantRepository tenantRepository;
   private final FiscalStampRepository fiscalStampRepository;
+  private final InvoiceRepository invoiceRepository;
 
   public FiscalStampService(
-      TenantRepository tenantRepository, FiscalStampRepository fiscalStampRepository) {
+      TenantRepository tenantRepository,
+      FiscalStampRepository fiscalStampRepository,
+      InvoiceRepository invoiceRepository) {
     this.tenantRepository = tenantRepository;
     this.fiscalStampRepository = fiscalStampRepository;
+    this.invoiceRepository = invoiceRepository;
   }
 
   @Transactional(readOnly = true)
   public List<FiscalStampResponse> list(long tenantId) {
     return fiscalStampRepository.findByTenant_IdOrderByIdAsc(tenantId).stream()
-        .map(FiscalStampService::toDto)
+        .map(s -> toDto(s, hasInvoices(tenantId, s.getId())))
         .collect(Collectors.toList());
+  }
+
+  private boolean hasInvoices(long tenantId, long fiscalStampId) {
+    return invoiceRepository.existsByTenant_IdAndFiscalStamp_Id(tenantId, fiscalStampId);
   }
 
   @Transactional
@@ -41,6 +50,9 @@ public class FiscalStampService {
     validateRange(request.rangeFrom(), request.rangeTo());
     validateEmissionInRange(
         request.initialEmissionNumber(), request.rangeFrom(), request.rangeTo());
+    int establishment = validateSifenCdcField(request.establishment(), "INVALID_ESTABLISHMENT");
+    int expeditionPoint =
+        validateSifenCdcField(request.expeditionPoint(), "INVALID_EXPEDITION_POINT");
 
     FiscalStamp stamp = new FiscalStamp();
     stamp.setTenant(tenant);
@@ -52,22 +64,60 @@ public class FiscalStampService {
     stamp.setNextEmissionNumber(request.initialEmissionNumber());
     stamp.setActive(false);
     stamp.setLockedAfterInvoice(false);
+    stamp.setEstablishment(establishment);
+    stamp.setExpeditionPoint(expeditionPoint);
     fiscalStampRepository.save(stamp);
-    return toDto(stamp);
+    return toDto(stamp, false);
+  }
+
+  /**
+   * SIFEN HU-02 AC-02: establecimiento/punto de expedición ocupan 3 dígitos en el CDC (000-999).
+   * Null defaults to 1 ("001") so existing callers that predate this field keep working.
+   */
+  private static int validateSifenCdcField(Integer value, String errorCode) {
+    if (value == null) {
+      return 1;
+    }
+    if (value < 0 || value > 999) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorCode);
+    }
+    return value;
   }
 
   @Transactional
   public FiscalStampResponse update(long tenantId, long id, FiscalStampUpdateRequest request) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
-    if (stamp.isLockedAfterInvoice()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
-    }
     validateDateOrder(request.validFrom(), request.validUntil());
     validateEmissionInRange(request.nextEmissionNumber(), stamp.getRangeFrom(), stamp.getRangeTo());
+    // Once an invoice has been issued against this stamp, its number can only ever move forward:
+    // rewinding it would let a later invoice reuse a number an existing one already claimed. A
+    // forward move stays allowed — it's the only way to skip a number SIFEN rejected as a
+    // duplicate (dCodRes=1002) after the stamp was already locked.
+    if (stamp.isLockedAfterInvoice()
+        && request.nextEmissionNumber() < stamp.getNextEmissionNumber()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STAMP_LOCKED_AFTER_INVOICE");
+    }
+    int establishment = validateSifenCdcField(request.establishment(), "INVALID_ESTABLISHMENT");
+    int expeditionPoint =
+        validateSifenCdcField(request.expeditionPoint(), "INVALID_EXPEDITION_POINT");
+    // The CDC (SIFEN control code) of an already-issued invoice is generated once and frozen, but
+    // the KuDE/XML re-read establishment/expeditionPoint live off this stamp every time they're
+    // rendered. Changing either value once an invoice exists would make that invoice's printed
+    // dEst/dPunExp diverge from what's already baked into its own CDC — so, like delete(), this is
+    // only allowed while the stamp has never been used to issue an invoice.
+    boolean hasInvoices = hasInvoices(tenantId, id);
+    if (hasInvoices
+        && (establishment != stamp.getEstablishment()
+            || expeditionPoint != stamp.getExpeditionPoint())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "FISCAL_STAMP_ESTABLISHMENT_LOCKED");
+    }
     stamp.setValidFrom(request.validFrom());
     stamp.setValidUntil(request.validUntil());
     stamp.setNextEmissionNumber(request.nextEmissionNumber());
-    return toDto(stamp);
+    stamp.setEstablishment(establishment);
+    stamp.setExpeditionPoint(expeditionPoint);
+    return toDto(stamp, hasInvoices);
   }
 
   @Transactional
@@ -77,24 +127,34 @@ public class FiscalStampService {
     for (FiscalStamp s : all) {
       s.setActive(s.getId().equals(stamp.getId()));
     }
-    return toDto(stamp);
+    return toDto(stamp, hasInvoices(tenantId, id));
   }
 
   @Transactional
   public FiscalStampResponse deactivate(long tenantId, long id) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
     stamp.setActive(false);
-    return toDto(stamp);
+    return toDto(stamp, hasInvoices(tenantId, id));
   }
 
   /**
-   * Call when an invoice is issued (HU-14) so stamp number and range can no longer be edited.
+   * Call when an invoice is issued (HU-14) so the emission number can no longer move backward.
    * Idempotent.
    */
   @Transactional
   public void markLockedAfterInvoice(long tenantId, long fiscalStampId) {
     FiscalStamp stamp = loadForTenant(tenantId, fiscalStampId);
     stamp.setLockedAfterInvoice(true);
+  }
+
+  /** Only allowed when no invoice has ever been issued against this stamp. */
+  @Transactional
+  public void delete(long tenantId, long id) {
+    FiscalStamp stamp = loadForTenant(tenantId, id);
+    if (hasInvoices(tenantId, id)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "FISCAL_STAMP_HAS_INVOICES");
+    }
+    fiscalStampRepository.delete(stamp);
   }
 
   private FiscalStamp loadForTenant(long tenantId, long id) {
@@ -137,7 +197,7 @@ public class FiscalStampService {
     }
   }
 
-  private static FiscalStampResponse toDto(FiscalStamp s) {
+  private static FiscalStampResponse toDto(FiscalStamp s, boolean hasInvoices) {
     return new FiscalStampResponse(
         s.getId(),
         s.getStampNumber(),
@@ -147,6 +207,9 @@ public class FiscalStampService {
         s.getRangeTo(),
         s.getNextEmissionNumber(),
         s.isActive(),
-        s.isLockedAfterInvoice());
+        s.isLockedAfterInvoice(),
+        s.getEstablishment(),
+        s.getExpeditionPoint(),
+        hasInvoices);
   }
 }

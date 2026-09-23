@@ -3,10 +3,13 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.bootstrap.FemmeDataInitializer;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.TenantFeatureFlag;
+import com.cursorpoc.backend.repository.AppUserActivationTokenRepository;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.AppUserTourStateRepository;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
+import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
@@ -17,8 +20,12 @@ import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.repository.SifenCertificateRepository;
+import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.repository.TipWithdrawalRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,11 +34,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Backs the e2e/dev-only {@code POST /api/admin/seed/reset} endpoint (gated behind {@code
+ * femme.data-init.enabled}, disabled in production). HU-58: this tenant is no longer created by a
+ * hardcoded backend boot seed — the Playwright suite provisions it dynamically via the real
+ * Platform Admin tenant-creation API in {@code e2e/global-setup.ts}, and it becomes id=1 simply by
+ * being the first tenant created in each run's fresh, empty database.
+ */
 @Service
 public class SeedResetService {
 
   private static final Logger log = LoggerFactory.getLogger(SeedResetService.class);
   private static final long DEMO_TENANT_ID = 1L;
+  private static final String SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
@@ -43,12 +58,18 @@ public class SeedResetService {
   private final ProfessionalRepository professionalRepository;
   private final ProfessionalScheduleRepository professionalScheduleRepository;
   private final ProfessionalActivationTokenRepository professionalActivationTokenRepository;
+  private final AppUserActivationTokenRepository appUserActivationTokenRepository;
   private final ClientRepository clientRepository;
   private final AppointmentRepository appointmentRepository;
   private final InvoiceRepository invoiceRepository;
+  private final ServiceRecordRepository serviceRecordRepository;
   private final CashSessionRepository cashSessionRepository;
+  private final CashMovementRepository cashMovementRepository;
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final AppUserTourStateRepository appUserTourStateRepository;
+  private final TipWithdrawalRepository tipWithdrawalRepository;
+  private final SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
+  private final SifenCertificateRepository sifenCertificateRepository;
   private final FemmeDataInitializer femmeDataInitializer;
 
   public SeedResetService(
@@ -62,12 +83,18 @@ public class SeedResetService {
       ProfessionalRepository professionalRepository,
       ProfessionalScheduleRepository professionalScheduleRepository,
       ProfessionalActivationTokenRepository professionalActivationTokenRepository,
+      AppUserActivationTokenRepository appUserActivationTokenRepository,
       ClientRepository clientRepository,
       AppointmentRepository appointmentRepository,
       InvoiceRepository invoiceRepository,
+      ServiceRecordRepository serviceRecordRepository,
       CashSessionRepository cashSessionRepository,
+      CashMovementRepository cashMovementRepository,
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
+      TipWithdrawalRepository tipWithdrawalRepository,
+      SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository,
+      SifenCertificateRepository sifenCertificateRepository,
       FemmeDataInitializer femmeDataInitializer) {
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
@@ -79,12 +106,18 @@ public class SeedResetService {
     this.professionalRepository = professionalRepository;
     this.professionalScheduleRepository = professionalScheduleRepository;
     this.professionalActivationTokenRepository = professionalActivationTokenRepository;
+    this.appUserActivationTokenRepository = appUserActivationTokenRepository;
     this.clientRepository = clientRepository;
     this.appointmentRepository = appointmentRepository;
     this.invoiceRepository = invoiceRepository;
+    this.serviceRecordRepository = serviceRecordRepository;
     this.cashSessionRepository = cashSessionRepository;
+    this.cashMovementRepository = cashMovementRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.appUserTourStateRepository = appUserTourStateRepository;
+    this.tipWithdrawalRepository = tipWithdrawalRepository;
+    this.sifenNumberVoidingEventRepository = sifenNumberVoidingEventRepository;
+    this.sifenCertificateRepository = sifenCertificateRepository;
     this.femmeDataInitializer = femmeDataInitializer;
   }
 
@@ -115,8 +148,21 @@ public class SeedResetService {
     invoiceRepository.deleteAll(invoices);
     log.info("Deleted {} invoices (with lines and payment allocations)", invoices.size());
 
+    // Must run before deleting clients/services/professionals below: service_records (and its
+    // lines/tips, cascaded at the DB level) reference all three and would otherwise trip their FKs.
+    long deletedServiceRecords = serviceRecordRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} service_records (with lines and tips)", deletedServiceRecords);
+
+    // Must run before deleting cash_sessions below: cash_movements has a non-nullable FK to it.
+    long deletedCashMovements = cashMovementRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} cash_movements", deletedCashMovements);
+
     long deletedCashSessions = cashSessionRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} cash_sessions", deletedCashSessions);
+
+    // Must run before deleting professionals below: tip_withdrawals has a FK to professionals.
+    long deletedTipWithdrawals = tipWithdrawalRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} tip_withdrawals", deletedTipWithdrawals);
 
     long deletedSchedules =
         professionalScheduleRepository.deleteByProfessional_Tenant_Id(DEMO_TENANT_ID);
@@ -147,7 +193,19 @@ public class SeedResetService {
     long deletedTenantFlags = tenantFeatureFlagRepository.deleteByTenantId(DEMO_TENANT_ID);
     log.info("Deleted {} tenant_feature_flags", deletedTenantFlags);
 
-    long deletedFiscalStamps = fiscalStampRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    // Must run before deleting fiscal_stamps below: sifen_number_voiding_events has a real FK to
+    // fiscal_stamps (unlike its plain, unenforced invoice_id column), and a stamp can carry
+    // voiding rows without ever having been invoiced against (e.g. RT-25's manual-voiding tests).
+    long deletedVoidingEvents = sifenNumberVoidingEventRepository.deleteByTenantId(DEMO_TENANT_ID);
+    log.info("Deleted {} sifen_number_voiding_events", deletedVoidingEvents);
+
+    // Only unlocked (never-invoiced) stamps are reseedable placeholders. A stamp already
+    // referenced by a real invoice (lockedAfterInvoice=true, e.g. tenant 1's real SIFEN timbrado)
+    // must survive a reset — deleting it would let FemmeDataInitializer recreate the fake
+    // "12345678" placeholder with nextEmissionNumber back at 1, reintroducing SIFEN
+    // dCodRes=1002 "Documento electrónico duplicado" the next time an invoice is submitted.
+    long deletedFiscalStamps =
+        fiscalStampRepository.deleteByTenant_IdAndLockedAfterInvoiceFalse(DEMO_TENANT_ID);
     log.info("Deleted {} fiscal_stamps", deletedFiscalStamps);
 
     businessProfileRepository.deleteById(DEMO_TENANT_ID);
@@ -157,12 +215,38 @@ public class SeedResetService {
     long deletedTourState = appUserTourStateRepository.deleteByUser_Tenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_user_tour_state", deletedTourState);
 
+    // HU-41: must also run before deleting app_users — app_user_activation_tokens has a FK to
+    // app_users too (Platform-Admin-invited tenant ADMIN users).
+    long deletedAppUserActivationTokens =
+        appUserActivationTokenRepository.deleteByAppUser_Tenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} app_user_activation_tokens", deletedAppUserActivationTokens);
+
+    // Must also run before deleting app_users — sifen_certificates has a FK to the uploader.
+    long deletedCertificates = sifenCertificateRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} sifen_certificates", deletedCertificates);
+
     long deletedUsers = appUserRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} app_users", deletedUsers);
 
+    // HU-58: this used to also reconcile the catalog/clients against static seed CSVs (via the
+    // now-removed DemoTenantCatalogSeedService) — that hardcoded a specific tenant's business data,
+    // which the PRD's "Sin seed hardcodeado" forbids. Reset now only restores login capability
+    // (the admin user), leaving the catalog empty; the e2e suite that needs a tenant WITH a
+    // catalog seeds it itself via the real API/Excel-import flows (see e2e/global-setup.ts and
+    // e2e/fixtures/api.ts's seedCategoryServiceProfessional/seedClient helpers).
     femmeDataInitializer.seedDemoTenantData(tenant);
-    femmeDataInitializer.seedCatalogFromCsv(tenant);
-    femmeDataInitializer.seedClientsFromCsv(tenant);
+
+    // Since V53 (conjunctive resolution) the global SIFEN_ELECTRONIC_INVOICING default is ON, so
+    // without a tenant-level OFF the demo tenant would route every invoice through the SIFEN
+    // pipeline. The delete above wiped the baseline that e2e/global-setup.ts sets on first
+    // provision — re-establish it so the demo tenant defaults to traditional invoicing after a
+    // reset (SIFEN specs still flip this to true via /api/admin/feature-flags/tenants/1/...).
+    TenantFeatureFlag sifenBaseline = new TenantFeatureFlag();
+    sifenBaseline.setTenantId(DEMO_TENANT_ID);
+    sifenBaseline.setFlagKey(SIFEN_FLAG_KEY);
+    sifenBaseline.setEnabled(false);
+    tenantFeatureFlagRepository.save(sifenBaseline);
+    log.info("Restored demo tenant {} baseline (SIFEN off)", DEMO_TENANT_ID);
 
     log.info("POST /api/admin/seed/reset tenantId={} — reset complete", DEMO_TENANT_ID);
   }

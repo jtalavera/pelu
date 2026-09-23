@@ -34,7 +34,8 @@ test.describe("HU-30 · Fixes varios", () => {
     const client = await seedClient(request, token, `E2E HU30 Reset ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
 
     // Fill the form
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
@@ -116,7 +117,7 @@ test.describe("HU-30 · Fixes varios", () => {
     );
 
     // Open the Ver modal for this invoice via the history tab
-    await page.getByRole("button", { name: "View" }).first().click();
+    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
 
     // Wait for modal
     const modal = page.getByRole("dialog");
@@ -192,7 +193,7 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(fab).toHaveCount(0);
   });
 
-  // AC-7 — Historial de comprobantes table adopts Clientes look & feel (keeps "Ver" button)
+  // AC-7 — Historial de comprobantes table adopts Clientes look & feel (row opens detail; see issue #163)
   test("HU-30 · 7 tabla historial de comprobantes con estilo Clientes", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await setBusinessRuc(request, token);
@@ -221,8 +222,8 @@ test.describe("HU-30 · Fixes varios", () => {
       timeout: 20_000,
     });
 
-    // The "View" action button should still work (open the detail modal)
-    await page.getByRole("button", { name: "View" }).first().click();
+    // Clicking a row opens the detail modal (issue #163: the standalone "View" button was removed)
+    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press("Escape");
   });

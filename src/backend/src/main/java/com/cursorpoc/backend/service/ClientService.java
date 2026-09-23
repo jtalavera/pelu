@@ -2,6 +2,8 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
+import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
@@ -9,6 +11,7 @@ import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,10 +25,15 @@ public class ClientService {
 
   private final ClientRepository clientRepository;
   private final TenantRepository tenantRepository;
+  private final DuplicateClientEmailPolicy duplicateClientEmailPolicy;
 
-  public ClientService(ClientRepository clientRepository, TenantRepository tenantRepository) {
+  public ClientService(
+      ClientRepository clientRepository,
+      TenantRepository tenantRepository,
+      DuplicateClientEmailPolicy duplicateClientEmailPolicy) {
     this.clientRepository = clientRepository;
     this.tenantRepository = tenantRepository;
+    this.duplicateClientEmailPolicy = duplicateClientEmailPolicy;
   }
 
   public List<ClientResponse> search(
@@ -62,19 +70,26 @@ public class ClientService {
 
   @Transactional
   public ClientResponse create(long tenantId, ClientRequest request) {
-    String fullName = request.fullName().trim();
+    String fullName = request.fullName().trim().toUpperCase(Locale.ROOT);
     String phone = blankToNull(request.phone());
     String email = blankToNull(request.email());
-    String ruc = blankToNull(request.ruc());
+    ClientIdentityDocumentType type = parseDocumentType(request.identityDocumentType());
+    String[] rucAndDocument =
+        applyDocumentTypeInvariant(
+            type, blankToNull(request.ruc()), blankToNull(request.identityDocumentNumber()));
+    String ruc = rucAndDocument[0];
+    String identityDocumentNumber = rucAndDocument[1];
 
-    if (ruc != null && !ParaguayRucValidator.isValid(ruc)) {
+    if (isRucFormatCheckApplicable(type) && ruc != null && !ParaguayRucValidator.isValid(ruc)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
     if (phone != null && phoneDuplicateExists(tenantId, phone, null)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
     }
-    if (email != null && clientRepository.findByTenantIdAndEmail(tenantId, email).isPresent()) {
+    if (email != null
+        && duplicateClientEmailPolicy.isUniquenessEnforced(tenantId)
+        && clientRepository.findByTenantIdAndEmail(tenantId, email).isPresent()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
     }
     if (ruc != null && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
@@ -95,6 +110,14 @@ public class ClientService {
     client.setRuc(ruc);
     client.setActive(true);
     client.setVisitCount(0);
+    client.setIdentityDocumentNumber(identityDocumentNumber);
+    client.setIdentityDocumentType(type);
+    client.setTaxpayerType(parseTaxpayerType(request.taxpayerType()));
+    client.setAddress(blankToNull(request.address()));
+    client.setDepartmentCode(blankToNull(request.departmentCode()));
+    client.setDepartmentName(blankToNull(request.departmentName()));
+    client.setCityCode(blankToNull(request.cityCode()));
+    client.setCityName(blankToNull(request.cityName()));
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -116,12 +139,17 @@ public class ClientService {
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
 
-    String fullName = request.fullName().trim();
+    String fullName = request.fullName().trim().toUpperCase(Locale.ROOT);
     String phone = blankToNull(request.phone());
     String email = blankToNull(request.email());
-    String ruc = blankToNull(request.ruc());
+    ClientIdentityDocumentType type = parseDocumentType(request.identityDocumentType());
+    String[] rucAndDocument =
+        applyDocumentTypeInvariant(
+            type, blankToNull(request.ruc()), blankToNull(request.identityDocumentNumber()));
+    String ruc = rucAndDocument[0];
+    String identityDocumentNumber = rucAndDocument[1];
 
-    if (ruc != null && !ParaguayRucValidator.isValid(ruc)) {
+    if (isRucFormatCheckApplicable(type) && ruc != null && !ParaguayRucValidator.isValid(ruc)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
@@ -132,6 +160,7 @@ public class ClientService {
     }
     if (email != null
         && !email.equalsIgnoreCase(client.getEmail())
+        && duplicateClientEmailPolicy.isUniquenessEnforced(tenantId)
         && clientRepository.findByTenantIdAndEmail(tenantId, email).isPresent()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
     }
@@ -145,6 +174,14 @@ public class ClientService {
     client.setPhone(phone);
     client.setEmail(email);
     client.setRuc(ruc);
+    client.setIdentityDocumentNumber(identityDocumentNumber);
+    client.setIdentityDocumentType(type);
+    client.setTaxpayerType(parseTaxpayerType(request.taxpayerType()));
+    client.setAddress(blankToNull(request.address()));
+    client.setDepartmentCode(blankToNull(request.departmentCode()));
+    client.setDepartmentName(blankToNull(request.departmentName()));
+    client.setCityCode(blankToNull(request.cityCode()));
+    client.setCityName(blankToNull(request.cityName()));
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -178,6 +215,48 @@ public class ClientService {
     return value.trim();
   }
 
+  private static ClientIdentityDocumentType parseDocumentType(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return ClientIdentityDocumentType.valueOf(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
+    }
+  }
+
+  private static ClientTaxpayerType parseTaxpayerType(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return ClientTaxpayerType.valueOf(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TAXPAYER_TYPE");
+    }
+  }
+
+  /**
+   * Enforces that RUC and identity-document-number never coexist once a type is explicit: {@code
+   * RUC} clears the document number, any other concrete type clears the RUC, and {@code INNOMINADO}
+   * clears both. A {@code null} type (legacy caller not sending one) leaves both fields untouched,
+   * preserving pre-existing behavior.
+   */
+  private static String[] applyDocumentTypeInvariant(
+      ClientIdentityDocumentType type, String ruc, String identityDocumentNumber) {
+    if (type == ClientIdentityDocumentType.RUC) {
+      return new String[] {ruc, null};
+    }
+    if (type == ClientIdentityDocumentType.INNOMINADO) {
+      return new String[] {null, null};
+    }
+    if (type != null) {
+      return new String[] {null, identityDocumentNumber};
+    }
+    return new String[] {ruc, identityDocumentNumber};
+  }
+
+  private static boolean isRucFormatCheckApplicable(ClientIdentityDocumentType type) {
+    return type == null || type == ClientIdentityDocumentType.RUC;
+  }
+
   /**
    * Phone duplicate check compares digits only: clients may be created with formatted numbers (e.g.
    * "(0981) 123-456") or raw digits (e.g. via API integrations), and both represent the same phone
@@ -205,6 +284,14 @@ public class ClientService {
         c.getEmail(),
         c.getRuc(),
         c.isActive(),
-        c.getVisitCount());
+        c.getVisitCount(),
+        c.getIdentityDocumentNumber(),
+        c.getAddress(),
+        c.getDepartmentCode(),
+        c.getDepartmentName(),
+        c.getCityCode(),
+        c.getCityName(),
+        c.getIdentityDocumentType() == null ? null : c.getIdentityDocumentType().name(),
+        c.getTaxpayerType() == null ? null : c.getTaxpayerType().name());
   }
 }

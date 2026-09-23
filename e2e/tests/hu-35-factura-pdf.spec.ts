@@ -96,10 +96,11 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     // Issue invoice via UI to get the success alert with "Download PDF" button.
     // A client (here an occasional one) is required for the Issue button to enable.
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("E2E HU35 sin RUC");
+    await page.getByLabel("Client name / business name").fill("E2E HU35 sin RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
@@ -145,9 +146,12 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await page.getByRole("tab", { name: "History" }).click();
 
     // Find the row for this invoice and click "View"
-    const invRow = page.getByRole("row").filter({ hasText: inv.invoiceNumberFormatted });
+    const invRow = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: inv.invoiceNumberFormatted })
+      .filter({ visible: true });
     await expect(invRow).toBeVisible({ timeout: 15_000 });
-    await invRow.getByRole("button", { name: "View" }).click();
+    await invRow.click();
 
     // The detail modal opens
     await expect(
@@ -188,10 +192,11 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await ensureCashSessionOpen(page);
 
     // Issue invoice via UI. A client (occasional) is required to enable the Issue button.
-    await page.getByRole("tab", { name: "New Invoice" }).click();
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
-    await page.getByLabel("Client display name").fill("E2E HU35 con RUC");
+    await page.getByLabel("Client name / business name").fill("E2E HU35 con RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
@@ -243,9 +248,12 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await page.getByRole("tab", { name: "History" }).click();
 
     // Find the row for this invoice and click "View"
-    const invRow = page.getByRole("row").filter({ hasText: inv.invoiceNumberFormatted });
+    const invRow = page
+      .locator("tbody tr[role=\"button\"]")
+      .filter({ hasText: inv.invoiceNumberFormatted })
+      .filter({ visible: true });
     await expect(invRow).toBeVisible({ timeout: 15_000 });
-    await invRow.getByRole("button", { name: "View" }).click();
+    await invRow.click();
 
     // The detail modal opens
     await expect(
