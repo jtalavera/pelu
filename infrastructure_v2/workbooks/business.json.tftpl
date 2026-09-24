@@ -1,0 +1,315 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Femme — Business metrics\nAppointments, invoicing & SIFEN, and tenant/user activity from the backend's `femme.*` custom metrics. Use **Tenant** to drill into one tenant (tenants appear by ID) or keep **All tenants**. Caja/Propinas are not part of v1."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "tenant",
+            "version": "KqlParameterItem/1.0",
+            "name": "Tenant",
+            "label": "Tenant",
+            "type": 2,
+            "isRequired": true,
+            "query": "print tenantId = \"All\"\n| union (\n    customMetrics\n    | where name startswith \"femme.\"\n    | extend tenantId = tostring(customDimensions.tenantId)\n    | where isnotempty(tenantId) and tenantId !in (\"platform\", \"unknown\")\n    | distinct tenantId\n  )\n| project value = tenantId, label = iff(tenantId == \"All\", \"All tenants\", strcat(\"Tenant \", tenantId))",
+            "value": "All",
+            "typeSettings": {
+              "showDefault": false
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.insights/components",
+            "crossComponentResources": [
+              "${app_insights_id}"
+            ]
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Appointments & bookings",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.appointment.created\" or name == \"femme.appointment.cancelled\" or name == \"femme.appointment.no_show\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| summarize Count = sum(valueSum) by Metric = replace_string(name, \"femme.appointment.\", \"\"), bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Created / cancelled / no-show",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "appt-trend",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.appointment.created\" or name == \"femme.appointment.cancelled\" or name == \"femme.appointment.no_show\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| summarize Created = sumif(valueSum, name == \"femme.appointment.created\"),\n    Cancelled = sumif(valueSum, name == \"femme.appointment.cancelled\"),\n    NoShow = sumif(valueSum, name == \"femme.appointment.no_show\")\n| extend ['Cancelled %'] = iff(Created > 0, round(100.0 * Cancelled / Created, 1), real(null)),\n    ['No-show %'] = iff(Created > 0, round(100.0 * NoShow / Created, 1), real(null))",
+              "size": 0,
+              "title": "Totals and cancellation / no-show rates",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "tiles",
+              "tileSettings": {
+                "showBorder": false
+              }
+            },
+            "name": "appt-totals",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.appointment.created\" or name == \"femme.appointment.cancelled\" or name == \"femme.appointment.no_show\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| extend professionalId = tostring(customDimensions.professionalId)\n| summarize Created = sumif(valueSum, name == \"femme.appointment.created\"),\n    Cancelled = sumif(valueSum, name == \"femme.appointment.cancelled\"),\n    NoShow = sumif(valueSum, name == \"femme.appointment.no_show\") by Tenant = tenantId, Professional = professionalId\n| order by Created desc",
+              "size": 0,
+              "title": "By professional",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "appt-by-professional",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.appointment.created\" or name == \"femme.appointment.cancelled\" or name == \"femme.appointment.no_show\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| extend serviceId = tostring(customDimensions.serviceId)\n| summarize Created = sumif(valueSum, name == \"femme.appointment.created\"),\n    Cancelled = sumif(valueSum, name == \"femme.appointment.cancelled\"),\n    NoShow = sumif(valueSum, name == \"femme.appointment.no_show\") by Tenant = tenantId, Service = serviceId\n| order by Created desc",
+              "size": 0,
+              "title": "By service",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "appt-by-service",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "appointments"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Invoicing & SIFEN",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.invoice.issued\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| summarize Invoices = sum(valueCount), ['Amount (Gs.)'] = sum(valueSum) by bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Invoices issued (count) and amount (Gs.)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "inv-trend",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.invoice.issued\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| summarize Invoices = sum(valueCount), ['Amount (Gs.)'] = round(sum(valueSum), 0) by Tenant = tenantId\n| order by ['Amount (Gs.)'] desc",
+              "size": 0,
+              "title": "Invoices by tenant",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "inv-by-tenant",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "union (\ncustomMetrics\n| where name == \"femme.sifen.result\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n    | summarize Count = sum(valueSum) by Outcome = tostring(customDimensions.status), bin(timestamp, {TimeRange:grain})\n), (\ncustomMetrics\n| where name == \"sifen.operation\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n    | where tostring(customDimensions.outcome) == \"no_response\"\n    | summarize Count = sum(valueCount) by Outcome = \"TIMEOUT (no response)\", bin(timestamp, {TimeRange:grain})\n)",
+              "size": 0,
+              "title": "SIFEN verdicts (approved / rejected) and timeouts",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "sifen-verdicts",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.sifen.rejected_unresolved\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| summarize arg_max(timestamp, value) by tenantId\n| project Tenant = tenantId, ['Rejected unresolved'] = toint(value), ['As of'] = timestamp\n| order by ['Rejected unresolved'] desc",
+              "size": 0,
+              "title": "Rejected, not yet resolved (latest)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "sifen-backlog",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "invoicing"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Tenant & user activity",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name startswith \"femme.\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where isnotempty(tenantId) and tenantId !in (\"platform\", \"unknown\")\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| summarize ['Active tenants'] = dcount(tenantId) by bin(timestamp, 1d)",
+              "size": 0,
+              "title": "Active tenants (any femme.* activity)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "act-tenants",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.auth.login\"\n| extend tenantId = tostring(customDimensions.tenantId)\n| where \"{Tenant}\" == \"All\" or tenantId == \"{Tenant}\"\n| summarize Logins = sum(valueSum) by Outcome = tostring(customDimensions.outcome), bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Logins by outcome",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "act-logins",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"femme.tenant.created\"\n| summarize ['New tenants'] = sum(valueSum) by bin(timestamp, 1d)",
+              "size": 0,
+              "title": "New tenants provisioned (platform-wide; not tenant-filtered)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "act-signups",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "activity"
+    }
+  ],
+  "fallbackResourceIds": [
+    "${app_insights_id}"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

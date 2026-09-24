@@ -63,14 +63,17 @@ class SifenInvoiceSubmissionPersistenceService {
   private final InvoiceRepository invoiceRepository;
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceEventLogService eventLogService;
+  private final BusinessMetrics businessMetrics;
 
   SifenInvoiceSubmissionPersistenceService(
       InvoiceRepository invoiceRepository,
       FemmeTimeProperties timeProperties,
-      SifenInvoiceEventLogService eventLogService) {
+      SifenInvoiceEventLogService eventLogService,
+      BusinessMetrics businessMetrics) {
     this.invoiceRepository = invoiceRepository;
     this.timeProperties = timeProperties;
     this.eventLogService = eventLogService;
+    this.businessMetrics = businessMetrics;
   }
 
   /**
@@ -195,6 +198,11 @@ class SifenInvoiceSubmissionPersistenceService {
       boolean responseReceived,
       String documentContent) {
     Invoice invoice = requireInvoice(tenantId, invoiceId);
+    // Issue #268: count a SIFEN verdict once, when the status actually changes (a re-query that
+    // confirms an already-recorded verdict is not a new result).
+    if (invoice.getSifenSubmissionStatus() != result.status()) {
+      businessMetrics.sifenResult(tenantId, result.status());
+    }
     invoice.setSifenSubmissionStatus(result.status());
     invoice.setSifenSubmissionProtocolNumber(result.protocolNumber());
     invoice.setSifenSubmissionResultCode(result.resultCode());

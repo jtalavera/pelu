@@ -27,6 +27,7 @@ import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
 import com.cursorpoc.backend.web.dto.ForgotPasswordRequest;
 import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
+import io.opentelemetry.api.common.Attributes;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -59,6 +60,7 @@ class AuthServiceTest {
 
   private AuthService service;
   private EmailService emailService;
+  private final InMemoryTelemetry telemetry = new InMemoryTelemetry();
 
   @BeforeEach
   void setUp() {
@@ -79,7 +81,8 @@ class AuthServiceTest {
             passwordEncoder,
             jwtService,
             jwtProperties,
-            emailService);
+            emailService,
+            new BusinessMetrics(telemetry.openTelemetry()));
 
     // findAllByEmail (the tenant-independent PLATFORM_ADMIN fast-path, plus the email-based
     // fallback below) defaults to "nobody" unless a test stubs it — Mockito already returns an
@@ -128,6 +131,11 @@ class AuthServiceTest {
     assertThat(suspendedEx.getStatusCode()).isEqualTo(wrongPasswordEx.getStatusCode());
     assertThat(suspendedEx.getReason()).isEqualTo(wrongPasswordEx.getReason());
     assertThat(suspendedEx.getReason()).isEqualTo("INVALID_CREDENTIALS");
+    // Issue #268: the suspended tenant's only candidate attributes the failure to tenant 1; the
+    // unknown email to nobody.
+    assertThat(loginCount(AuthService.LOGIN_INVALID_CREDENTIALS, "1")).isEqualTo(1);
+    assertThat(loginCount(AuthService.LOGIN_INVALID_CREDENTIALS, BusinessMetrics.TENANT_UNKNOWN))
+        .isEqualTo(1);
   }
 
   @Test
@@ -141,6 +149,7 @@ class AuthServiceTest {
         service.login(new LoginRequest("admin@tenant.test", "correct-password"), null);
 
     assertThat(response.accessToken()).isNotBlank();
+    assertThat(loginCount(AuthService.LOGIN_SUCCESS, "1")).isEqualTo(1);
   }
 
   @Test
@@ -197,6 +206,8 @@ class AuthServiceTest {
     ResponseStatusException ex =
         catchLoginException(new LoginRequest("shared@tenant.test", "correct-password"));
 
+    assertThat(loginCount(AuthService.LOGIN_TENANT_AMBIGUOUS, BusinessMetrics.TENANT_UNKNOWN))
+        .isEqualTo(1);
     assertThat(ex.getStatusCode().value()).isEqualTo(401);
     assertThat(ex.getReason()).isEqualTo("TENANT_AMBIGUOUS");
   }
@@ -316,5 +327,11 @@ class AuthServiceTest {
     assertThat(ex.getStatusCode().value()).isEqualTo(400);
     assertThat(ex.getReason()).isEqualTo("FULL_NAME_REQUIRED");
     assertThat(user.isEnabled()).isFalse();
+  }
+
+  private long loginCount(String outcome, String tenant) {
+    return telemetry.counterValue(
+        "femme.auth.login",
+        Attributes.of(BusinessMetrics.OUTCOME, outcome, BusinessMetrics.TENANT_ID, tenant));
   }
 }

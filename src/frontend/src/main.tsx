@@ -20,6 +20,9 @@ async function bootstrap() {
       </I18nextProvider>
     </StrictMode>,
   );
+  // Issue #268: after first render, so the (lazily loaded) SDK never delays the app. No-op
+  // unless VITE_APPINSIGHTS_CONNECTION_STRING was set at build time.
+  void import("./telemetry/appInsights").then(({ initTelemetry }) => initTelemetry());
 }
 
 void bootstrap();

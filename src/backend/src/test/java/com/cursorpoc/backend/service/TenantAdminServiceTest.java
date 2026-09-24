@@ -64,7 +64,8 @@ class TenantAdminServiceTest {
             tenantTierChangeRepository,
             tenantStatusChangeRepository,
             taxRepository,
-            new FemmeTimeProperties());
+            new FemmeTimeProperties(),
+            new BusinessMetrics(io.opentelemetry.api.OpenTelemetry.noop()));
 
     tier = new Tier();
     tier.setId(1L);

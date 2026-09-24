@@ -5,7 +5,9 @@ import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import io.opentelemetry.api.common.Attributes;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -35,6 +37,7 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
   @Mock private SifenInvoiceEventLogService eventLogService;
 
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();
+  private final InMemoryTelemetry telemetry = new InMemoryTelemetry();
   private SifenInvoiceSubmissionPersistenceService persistence;
   private Invoice invoice;
 
@@ -42,7 +45,10 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
   void setUp() {
     persistence =
         new SifenInvoiceSubmissionPersistenceService(
-            invoiceRepository, timeProperties, eventLogService);
+            invoiceRepository,
+            timeProperties,
+            eventLogService,
+            new BusinessMetrics(telemetry.openTelemetry()));
     invoice = new Invoice();
   }
 
@@ -191,5 +197,29 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
             () -> persistence.resetForCorrection(TENANT_ID, INVOICE_ID))
         .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
         .hasMessageContaining("INVOICE_NOT_REJECTED");
+  }
+
+  /** Issue #268: a SIFEN verdict is counted once, when the status changes — not on re-query. */
+  @Test
+  void recordResult_countsTheSifenVerdictOnce_perStatusChange() {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.QUEUED);
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(invoice));
+    SifenSubmissionResult rejected =
+        new SifenSubmissionResult(
+            SifenSubmissionStatus.REJECTED, "1", "0160", "XML mal formado", businessNow());
+
+    persistence.recordResult(TENANT_ID, INVOICE_ID, rejected, true, null);
+    persistence.recordResult(TENANT_ID, INVOICE_ID, rejected, true, null);
+
+    assertThat(
+            telemetry.counterValue(
+                "femme.sifen.result",
+                Attributes.of(
+                    BusinessMetrics.TENANT_ID,
+                    String.valueOf(TENANT_ID),
+                    BusinessMetrics.STATUS,
+                    "REJECTED")))
+        .isEqualTo(1);
   }
 }

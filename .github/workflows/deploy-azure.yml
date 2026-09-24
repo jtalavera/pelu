@@ -162,6 +162,10 @@ jobs:
         working-directory: src/frontend
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          # Issue #268: browser RUM → the env's Application Insights. A GitHub Environment
+          # *variable* (not a secret — it's a public ingestion endpoint), set from
+          # `terraform output -raw app_insights_connection_string`; unset → telemetry stays off.
+          VITE_APPINSIGHTS_CONNECTION_STRING: ${{ vars.VITE_APPINSIGHTS_CONNECTION_STRING }}
         run: npm ci && npm run build
 
       # Avoid Azure/static-web-apps-deploy@v1: it runs as a Docker action FROM

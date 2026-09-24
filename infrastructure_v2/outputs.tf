@@ -104,3 +104,17 @@ output "service_bus_queue_name" {
   description = "Name of the SIFEN submission queue (for az servicebus CLI commands, e.g. checking the dead-letter queue depth)."
   value       = azurerm_servicebus_queue.sifen_submission.name
 }
+
+output "app_insights_connection_string" {
+  description = "Issue #268: App Insights connection string — set as the VITE_APPINSIGHTS_CONNECTION_STRING GitHub Environment variable for the frontend build (browser RUM). An ingestion endpoint, not a credential, but azurerm marks it sensitive."
+  value       = azurerm_application_insights.main.connection_string
+  sensitive   = true
+}
+
+output "workbook_ids" {
+  description = "Issue #268: resource IDs of the infra and business Application Insights workbooks."
+  value = {
+    infra    = azurerm_application_insights_workbook.infra.id
+    business = azurerm_application_insights_workbook.business.id
+  }
+}

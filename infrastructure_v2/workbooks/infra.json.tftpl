@@ -1,0 +1,550 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Femme — Infra & ops health\nAggregate (all tenants) technical view: backend Container App, HTTP traffic, dependencies (SQL, SIFEN, ACS, Service Bus), database, queue, exceptions and frontend performance. Request/dependency counts use `sum(itemCount)` so they stay correct under the Java agent's rate-limited sampling."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Backend Container App",
+        "items": [
+          {
+            "type": 10,
+            "content": {
+              "chartId": "ca-cpu",
+              "version": "MetricsItem/2.0",
+              "size": 0,
+              "chartType": 2,
+              "resourceType": "microsoft.app/containerapps",
+              "metricScope": 0,
+              "resourceIds": [
+                "${container_app_id}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "metrics": [
+                {
+                  "namespace": "microsoft.app/containerapps",
+                  "metric": "microsoft.app/containerapps--UsageNanoCores",
+                  "aggregation": 4
+                }
+              ],
+              "title": "CPU (nanocores, avg)",
+              "gridSettings": {
+                "rowLimit": 10000
+              }
+            },
+            "name": "ca-cpu",
+            "customWidth": "33"
+          },
+          {
+            "type": 10,
+            "content": {
+              "chartId": "ca-memory",
+              "version": "MetricsItem/2.0",
+              "size": 0,
+              "chartType": 2,
+              "resourceType": "microsoft.app/containerapps",
+              "metricScope": 0,
+              "resourceIds": [
+                "${container_app_id}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "metrics": [
+                {
+                  "namespace": "microsoft.app/containerapps",
+                  "metric": "microsoft.app/containerapps--WorkingSetBytes",
+                  "aggregation": 3
+                }
+              ],
+              "title": "Memory working set (bytes, max)",
+              "gridSettings": {
+                "rowLimit": 10000
+              }
+            },
+            "name": "ca-memory",
+            "customWidth": "33"
+          },
+          {
+            "type": 10,
+            "content": {
+              "chartId": "ca-replicas",
+              "version": "MetricsItem/2.0",
+              "size": 0,
+              "chartType": 2,
+              "resourceType": "microsoft.app/containerapps",
+              "metricScope": 0,
+              "resourceIds": [
+                "${container_app_id}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "metrics": [
+                {
+                  "namespace": "microsoft.app/containerapps",
+                  "metric": "microsoft.app/containerapps--Replicas",
+                  "aggregation": 3
+                }
+              ],
+              "title": "Replicas (max)",
+              "gridSettings": {
+                "rowLimit": 10000
+              }
+            },
+            "name": "ca-replicas",
+            "customWidth": "33"
+          }
+        ]
+      },
+      "name": "container-app"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "HTTP requests (backend)",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "requests\n| where cloud_RoleName == \"femme-backend\" and isnotempty(url)\n| summarize Requests = sum(itemCount) by bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Request rate",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "req-rate",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "requests\n| where cloud_RoleName == \"femme-backend\" and isnotempty(url)\n| summarize p50 = percentile(duration, 50), p95 = percentile(duration, 95), p99 = percentile(duration, 99)\n    by bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Latency p50 / p95 / p99 (ms)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "req-latency",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "requests\n| where cloud_RoleName == \"femme-backend\" and isnotempty(url)\n| extend code = toint(resultCode)\n| summarize total = sum(itemCount),\n    c4xx = sumif(itemCount, code between (400 .. 499)),\n    c5xx = sumif(itemCount, code >= 500)\n    by bin(timestamp, {TimeRange:grain})\n| project timestamp, ['4xx %'] = round(100.0 * c4xx / total, 2), ['5xx %'] = round(100.0 * c5xx / total, 2)",
+              "size": 0,
+              "title": "4xx / 5xx rate (%)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "req-errors",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "requests\n| where cloud_RoleName == \"femme-backend\" and isempty(url)\n| summarize Runs = sum(itemCount), Failed = sumif(itemCount, success == false),\n    p95_ms = round(percentile(duration, 95), 0) by Job = name\n| order by Runs desc",
+              "size": 0,
+              "title": "Scheduled jobs (runs, failures, p95)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "jobs",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "requests\n| where cloud_RoleName == \"femme-backend\" and isnotempty(url)\n| summarize Requests = sum(itemCount), p95_ms = round(percentile(duration, 95), 0),\n    Failed = sumif(itemCount, success == false) by Operation = operation_Name\n| top 15 by p95_ms desc",
+              "size": 0,
+              "title": "Slowest operations (p95)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "req-slowest",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "http"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Dependency health (SQL, SIFEN, ACS, Service Bus)",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "dependencies\n| where cloud_RoleName == \"femme-backend\"\n| summarize Calls = sum(itemCount), Failed = sumif(itemCount, success == false),\n    p95_ms = round(percentile(duration, 95), 0) by Type = type, Target = target\n| extend ['Failure %'] = round(100.0 * Failed / Calls, 2)\n| order by Calls desc",
+              "size": 0,
+              "title": "Calls, failure rate and p95 by dependency",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "dep-table",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "dependencies\n| where cloud_RoleName == \"femme-backend\"\n| summarize p95 = percentile(duration, 95) by type, bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Dependency duration p95 by type (ms)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "dep-duration",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "dependencies\n| where cloud_RoleName == \"femme-backend\" and success == false\n| summarize Failures = sum(itemCount) by type, bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Dependency failures by type",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "dep-failures",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where name == \"sifen.operation\"\n| extend outcome = tostring(customDimensions.outcome)\n| summarize Calls = sum(valueCount) by outcome, bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "SIFEN web-service calls by outcome (sifen.operation)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "sifen-ops",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "dependencies"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Database & queue",
+        "items": [
+          {
+            "type": 10,
+            "content": {
+              "chartId": "sql-dtu",
+              "version": "MetricsItem/2.0",
+              "size": 0,
+              "chartType": 2,
+              "resourceType": "microsoft.sql/servers/databases",
+              "metricScope": 0,
+              "resourceIds": [
+                "${sql_database_id}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "metrics": [
+                {
+                  "namespace": "microsoft.sql/servers/databases",
+                  "metric": "microsoft.sql/servers/databases--dtu_consumption_percent",
+                  "aggregation": 4
+                },
+                {
+                  "namespace": "microsoft.sql/servers/databases",
+                  "metric": "microsoft.sql/servers/databases--cpu_percent",
+                  "aggregation": 4
+                },
+                {
+                  "namespace": "microsoft.sql/servers/databases",
+                  "metric": "microsoft.sql/servers/databases--storage_percent",
+                  "aggregation": 3
+                }
+              ],
+              "title": "SQL DTU / CPU / storage (%)",
+              "gridSettings": {
+                "rowLimit": 10000
+              }
+            },
+            "name": "sql-dtu",
+            "customWidth": "50"
+          },
+          {
+            "type": 10,
+            "content": {
+              "chartId": "sb-queue",
+              "version": "MetricsItem/2.0",
+              "size": 0,
+              "chartType": 2,
+              "resourceType": "microsoft.servicebus/namespaces",
+              "metricScope": 0,
+              "resourceIds": [
+                "${servicebus_namespace_id}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "metrics": [
+                {
+                  "namespace": "microsoft.servicebus/namespaces",
+                  "metric": "microsoft.servicebus/namespaces--ActiveMessages",
+                  "aggregation": 4
+                },
+                {
+                  "namespace": "microsoft.servicebus/namespaces",
+                  "metric": "microsoft.servicebus/namespaces--DeadletteredMessages",
+                  "aggregation": 4
+                }
+              ],
+              "title": "Service Bus active / dead-lettered messages",
+              "gridSettings": {
+                "rowLimit": 10000
+              }
+            },
+            "name": "sb-queue",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "data"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Exceptions",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "exceptions\n| summarize Exceptions = sum(itemCount) by cloud_RoleName, bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Exceptions by role",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "exc-trend",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "exceptions\n| summarize Count = sum(itemCount), Last = max(timestamp)\n    by Role = cloud_RoleName, Type = type, Message = substring(outerMessage, 0, 200)\n| top 20 by Count desc",
+              "size": 0,
+              "title": "Top exceptions (backend + frontend)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "exc-top",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "exceptions"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Frontend performance",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "browserTimings\n| where cloud_RoleName == \"femme-frontend\"\n| summarize p50 = percentile(totalDuration, 50), p95 = percentile(totalDuration, 95)\n    by bin(timestamp, {TimeRange:grain})",
+              "size": 0,
+              "title": "Page load time p50 / p95 (ms)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "timechart"
+            },
+            "name": "fe-load",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "customMetrics\n| where cloud_RoleName == \"femme-frontend\" and name startswith \"webvitals.\"\n| summarize p75 = round(percentile(value, 75), 3), Samples = count() by Metric = name",
+              "size": 0,
+              "title": "Core Web Vitals p75 (LCP/INP ms, CLS unitless)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "fe-vitals",
+            "customWidth": "50"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "pageViews\n| where cloud_RoleName == \"femme-frontend\"\n| summarize Views = sum(itemCount), p95_ms = round(percentile(duration, 95), 0) by Page = name\n| top 20 by Views desc",
+              "size": 0,
+              "title": "Page views by route",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.insights/components",
+              "crossComponentResources": [
+                "${app_insights_id}"
+              ],
+              "visualization": "table"
+            },
+            "name": "fe-pages",
+            "customWidth": "50"
+          }
+        ]
+      },
+      "name": "frontend"
+    }
+  ],
+  "fallbackResourceIds": [
+    "${app_insights_id}"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

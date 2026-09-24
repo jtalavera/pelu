@@ -45,6 +45,7 @@ public class TenantAdminService {
   private final TenantStatusChangeRepository tenantStatusChangeRepository;
   private final TaxRepository taxRepository;
   private final FemmeTimeProperties timeProperties;
+  private final BusinessMetrics businessMetrics;
 
   public TenantAdminService(
       TenantRepository tenantRepository,
@@ -52,13 +53,15 @@ public class TenantAdminService {
       TenantTierChangeRepository tenantTierChangeRepository,
       TenantStatusChangeRepository tenantStatusChangeRepository,
       TaxRepository taxRepository,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      BusinessMetrics businessMetrics) {
     this.tenantRepository = tenantRepository;
     this.tierRepository = tierRepository;
     this.tenantTierChangeRepository = tenantTierChangeRepository;
     this.tenantStatusChangeRepository = tenantStatusChangeRepository;
     this.taxRepository = taxRepository;
     this.timeProperties = timeProperties;
+    this.businessMetrics = businessMetrics;
   }
 
   /**
@@ -118,6 +121,7 @@ public class TenantAdminService {
     tenant.setStatus(TenantStatus.ACTIVE);
     tenantRepository.save(tenant);
     seedDefaultTaxes(tenant);
+    businessMetrics.tenantCreated();
     return toResponse(tenant);
   }
 
