@@ -200,3 +200,13 @@ variable "key_vault_purge_protection_enabled" {
   type        = bool
   default     = false
 }
+
+variable "backend_ai_logging_level" {
+  description = "Issue #268: minimum log level the Application Insights Java agent ships to the `traces` table (OFF, ERROR, WARN, INFO, DEBUG, TRACE). Lower it (e.g. WARN) if log ingestion dominates the Log Analytics quota."
+  type        = string
+  default     = "INFO"
+  validation {
+    condition     = contains(["OFF", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"], var.backend_ai_logging_level)
+    error_message = "backend_ai_logging_level must be one of OFF, ERROR, WARN, INFO, DEBUG, TRACE."
+  }
+}

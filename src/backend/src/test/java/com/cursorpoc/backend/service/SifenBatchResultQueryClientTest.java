@@ -11,7 +11,7 @@ import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.testsupport.LogCapture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.opentelemetry.api.OpenTelemetry;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
@@ -250,7 +250,7 @@ class SifenBatchResultQueryClientTest {
   }
 
   private static SifenCallMetrics testMetrics() {
-    return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
+    return new SifenCallMetrics(OpenTelemetry.noop(), new SifenConnectionProperties());
   }
 
   private static SifenRateLimiter testRateLimiter() {

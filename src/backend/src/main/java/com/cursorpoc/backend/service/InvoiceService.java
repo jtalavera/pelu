@@ -115,6 +115,7 @@ public class InvoiceService {
   private final SifenNumberVoidingService sifenNumberVoidingService;
   private final SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
   private final DuplicateClientEmailPolicy duplicateClientEmailPolicy;
+  private final BusinessMetrics businessMetrics;
 
   public InvoiceService(
       InvoiceRepository invoiceRepository,
@@ -129,7 +130,8 @@ public class InvoiceService {
       SifenInvoiceHeaderService sifenInvoiceHeaderService,
       SifenNumberVoidingService sifenNumberVoidingService,
       SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence,
-      DuplicateClientEmailPolicy duplicateClientEmailPolicy) {
+      DuplicateClientEmailPolicy duplicateClientEmailPolicy,
+      BusinessMetrics businessMetrics) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.fiscalStampRepository = fiscalStampRepository;
@@ -143,6 +145,7 @@ public class InvoiceService {
     this.sifenNumberVoidingService = sifenNumberVoidingService;
     this.sifenSubmissionPersistence = sifenSubmissionPersistence;
     this.duplicateClientEmailPolicy = duplicateClientEmailPolicy;
+    this.businessMetrics = businessMetrics;
   }
 
   @Transactional
@@ -252,6 +255,7 @@ public class InvoiceService {
 
     // 9. Save and increment stamp
     invoiceRepository.save(invoice);
+    businessMetrics.invoiceIssued(tenantId, total);
     stamp.setNextEmissionNumber(nextNumber + 1);
     stamp.setLockedAfterInvoice(true);
 

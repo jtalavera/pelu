@@ -223,6 +223,53 @@ Create two environments — **v2-test** and **v2-production** — each with:
 | `GHCR_USERNAME` *(optional)* | GitHub username for private GHCR pulls |
 | `GHCR_READ_PACKAGES_PAT` *(optional)* | PAT with `read:packages` scope |
 
+And one environment **variable** (Settings → Environments → Variables, not a secret):
+
+| Variable | Description |
+|---|---|
+| `VITE_APPINSIGHTS_CONNECTION_STRING` | Browser RUM (issue #268): `terraform output -raw app_insights_connection_string`. Unset → frontend telemetry stays off. |
+
+## Observability (issue #268)
+
+Backend and frontend both report to the env's single Application Insights resource
+(`azurerm_application_insights.main`), told apart by `cloud_RoleName`:
+`femme-backend` / `femme-frontend`.
+
+- **Backend.** The Application Insights Java agent is baked into the image and attached via
+  `-javaagent`. See `src/backend/Dockerfile` and `src/backend/applicationinsights.json`.
+  - It auto-captures requests, JDBC/HTTP/Service Bus dependencies, exceptions and logs.
+  - Custom metrics come from `SifenCallMetrics` (`sifen.operation`) and `BusinessMetrics`
+    (`femme.*`) through the OpenTelemetry API.
+  - Sampling is rate-limited to 5 req/s.
+  - The captured log level is `var.backend_ai_logging_level` (default `INFO`).
+- **Frontend.** `src/frontend/src/telemetry/appInsights.ts` uses W3C `traceparent` correlation,
+  so one `operation_Id` spans browser → API → SQL.
+- **Workbooks.** Terraform-managed, from `workbooks/*.json.tftpl`. In the Portal: Application
+  Insights → Workbooks.
+  - "Femme - Infra (<env>)": ops health, aggregate.
+  - "Femme - Business (<env>)": filterable by tenant ID.
+  - The templates are plain workbook JSON (`Notebook/1.0`) with `${...}` placeholders for resource
+    IDs. Keep KQL free of `${`/`%{` so `templatefile()` doesn't interpret it.
+
+Rollout checklist (per env, dev first):
+
+1. `terraform apply`. This adds the 2 workbooks, the Container App metrics diagnostic setting, and
+   the agent log-level env var.
+2. Set the frontend variable:
+   `gh variable set VITE_APPINSIGHTS_CONNECTION_STRING --env v2-test --body "$(terraform output -raw app_insights_connection_string)"`.
+3. Merge/deploy. The next backend image carries the agent, and the next frontend build carries
+   RUM.
+4. **Memory/CPU headroom.** The agent adds heap, metaspace and startup CPU on a 0.5 vCPU / 1Gi
+   container. Watch `WorkingSetBytes`, restarts and cold-start time on the Infra workbook.
+   Levers:
+   - lower `sampling.requestsPerSecond` in `applicationinsights.json`
+   - lower `backend_ai_logging_level` (e.g. `WARN`)
+   - reduce `-XX:MaxRAMPercentage`
+5. **Ingestion cap.** Leave `log_analytics_daily_quota_gb` as is at first. After ~1 week in dev,
+   read the real volume, then set explicit dev/prod values:
+   `Usage | where TimeGenerated > ago(7d) | summarize GB = sum(Quantity) / 1024 by DataType, bin(TimeGenerated, 1d)`.
+   When the cap is hit, ingestion stops for the rest of the day, so the workbooks go blank.
+
 ## DR runbook (RTO 1h / RPO 10 min)
 
 - **RPO 10 min** — Azure SQL automatic PITR (transaction-log backups every ~5–10 min),

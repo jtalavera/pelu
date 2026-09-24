@@ -15,6 +15,7 @@ import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import io.opentelemetry.api.OpenTelemetry;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -53,7 +54,10 @@ class SifenInvoiceSubmissionServiceTest {
   void setUp() {
     SifenInvoiceSubmissionPersistenceService persistence =
         new SifenInvoiceSubmissionPersistenceService(
-            invoiceRepository, new FemmeTimeProperties(), eventLogService);
+            invoiceRepository,
+            new FemmeTimeProperties(),
+            eventLogService,
+            new BusinessMetrics(OpenTelemetry.noop()));
     service =
         new SifenInvoiceSubmissionService(
             persistence, signingService, receptionClient, queryClient, new FemmeTimeProperties());

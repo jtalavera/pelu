@@ -51,6 +51,11 @@ public class AuthService {
 
   private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
+  // Issue #268: `outcome` values of the femme.auth.login counter (see BusinessMetrics).
+  static final String LOGIN_SUCCESS = "success";
+  static final String LOGIN_INVALID_CREDENTIALS = "invalid_credentials";
+  static final String LOGIN_TENANT_AMBIGUOUS = "tenant_ambiguous";
+
   private static final Pattern PASSWORD_UPPER = Pattern.compile(".*[A-Z].*");
   private static final Pattern PASSWORD_LOWER = Pattern.compile(".*[a-z].*");
   private static final Pattern PASSWORD_DIGIT = Pattern.compile(".*[0-9].*");
@@ -70,6 +75,7 @@ public class AuthService {
   private final JwtService jwtService;
   private final FemmeJwtProperties jwtProperties;
   private final EmailService emailService;
+  private final BusinessMetrics businessMetrics;
 
   public AuthService(
       AppUserRepository appUserRepository,
@@ -81,7 +87,8 @@ public class AuthService {
       PasswordEncoder passwordEncoder,
       JwtService jwtService,
       FemmeJwtProperties jwtProperties,
-      EmailService emailService) {
+      EmailService emailService,
+      BusinessMetrics businessMetrics) {
     this.appUserRepository = appUserRepository;
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.activationTokenRepository = activationTokenRepository;
@@ -92,6 +99,7 @@ public class AuthService {
     this.jwtService = jwtService;
     this.jwtProperties = jwtProperties;
     this.emailService = emailService;
+    this.businessMetrics = businessMetrics;
   }
 
   public TokenResponse login(LoginRequest request, String origin) {
@@ -107,10 +115,9 @@ public class AuthService {
             .findFirst();
     if (platformCandidate.isPresent()) {
       AppUser platformUser = platformCandidate.get();
-      if (!passwordEncoder.matches(request.password(), platformUser.getPasswordHash())) {
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
-      }
-      if (!platformUser.isEnabled()) {
+      if (!passwordEncoder.matches(request.password(), platformUser.getPasswordHash())
+          || !platformUser.isEnabled()) {
+        businessMetrics.login(LOGIN_INVALID_CREDENTIALS, BusinessMetrics.TENANT_PLATFORM);
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
       }
       Instant now = Instant.now();
@@ -122,6 +129,7 @@ public class AuthService {
               platformUser.getRole(),
               null,
               now);
+      businessMetrics.login(LOGIN_SUCCESS, BusinessMetrics.TENANT_PLATFORM);
       return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
     }
 
@@ -140,12 +148,14 @@ public class AuthService {
             .toList();
 
     if (validMatches.isEmpty()) {
+      businessMetrics.login(LOGIN_INVALID_CREDENTIALS, failedLoginTenant(candidates));
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
     }
     if (validMatches.size() > 1) {
       // Only reachable when the exact same password is independently valid for this email in two
       // or more active tenants — i.e. the caller already proved they hold valid credentials for
       // more than one account. Nothing is revealed to anyone who doesn't.
+      businessMetrics.login(LOGIN_TENANT_AMBIGUOUS, BusinessMetrics.TENANT_UNKNOWN);
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "TENANT_AMBIGUOUS");
     }
     AppUser user = validMatches.get(0);
@@ -163,7 +173,20 @@ public class AuthService {
             user.getRole(),
             professionalId,
             now);
+    businessMetrics.login(LOGIN_SUCCESS, String.valueOf(user.getTenant().getId()));
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
+  }
+
+  /**
+   * Issue #268: the tenant a failed login is attributed to in metrics — only when every candidate
+   * account for this email lives in one tenant; otherwise {@link BusinessMetrics#TENANT_UNKNOWN}.
+   * Internal telemetry only; never surfaced to the caller (HU-40 anti-enumeration is unaffected).
+   */
+  private static String failedLoginTenant(List<AppUser> candidates) {
+    List<Long> tenantIds = candidates.stream().map(u -> u.getTenant().getId()).distinct().toList();
+    return tenantIds.size() == 1
+        ? String.valueOf(tenantIds.get(0))
+        : BusinessMetrics.TENANT_UNKNOWN;
   }
 
   /**

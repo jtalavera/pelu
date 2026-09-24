@@ -4,54 +4,41 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cursorpoc.backend.config.SifenConnectionProperties;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.opentelemetry.api.common.Attributes;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-/** RT-21 (Hardening_SIFEN.md). */
+/** RT-21 (Hardening_SIFEN.md), ported to OpenTelemetry in issue #268. */
 class SifenCallMetricsTest {
+
+  private final InMemoryTelemetry telemetry = new InMemoryTelemetry();
+  private final SifenCallMetrics metrics =
+      new SifenCallMetrics(telemetry.openTelemetry(), new SifenConnectionProperties());
 
   @Test
   void record_tagsSuccess_whenTheCallReturnsAPresentOptional() {
-    SimpleMeterRegistry registry = new SimpleMeterRegistry();
-    SifenCallMetrics metrics = new SifenCallMetrics(registry, new SifenConnectionProperties());
-
     Optional<String> result = metrics.record("recepcion", 1L, () -> Optional.of("ok"));
 
     assertThat(result).contains("ok");
     assertThat(
-            registry
-                .find("sifen.operation")
-                .tag("operation", "recepcion")
-                .tag("tenantId", "1")
-                .tag("outcome", "success")
-                .tag("environment", "TEST")
-                .timer())
-        .isNotNull();
+            telemetry.histogramPoints(
+                "sifen.operation", attributes("recepcion", "1", "success", "TEST")))
+        .singleElement()
+        .satisfies(p -> assertThat(p.getCount()).isEqualTo(1));
   }
 
   @Test
   void record_tagsNoResponse_whenTheCallReturnsAnEmptyOptional() {
-    SimpleMeterRegistry registry = new SimpleMeterRegistry();
-    SifenCallMetrics metrics = new SifenCallMetrics(registry, new SifenConnectionProperties());
-
     metrics.record("consulta", 2L, Optional::empty);
 
     assertThat(
-            registry
-                .find("sifen.operation")
-                .tag("operation", "consulta")
-                .tag("tenantId", "2")
-                .tag("outcome", "no_response")
-                .timer())
-        .isNotNull();
+            telemetry.histogramPoints(
+                "sifen.operation", attributes("consulta", "2", "no_response", "TEST")))
+        .hasSize(1);
   }
 
   @Test
   void record_tagsError_andStillPropagatesTheException_whenTheCallThrows() {
-    SimpleMeterRegistry registry = new SimpleMeterRegistry();
-    SifenCallMetrics metrics = new SifenCallMetrics(registry, new SifenConnectionProperties());
-
     assertThatThrownBy(
             () ->
                 metrics.record(
@@ -63,12 +50,21 @@ class SifenCallMetricsTest {
         .isInstanceOf(IllegalStateException.class);
 
     assertThat(
-            registry
-                .find("sifen.operation")
-                .tag("operation", "evento")
-                .tag("tenantId", "3")
-                .tag("outcome", "error")
-                .timer())
-        .isNotNull();
+            telemetry.histogramPoints(
+                "sifen.operation", attributes("evento", "3", "error", "TEST")))
+        .hasSize(1);
+  }
+
+  private static Attributes attributes(
+      String operation, String tenantId, String outcome, String environment) {
+    return Attributes.of(
+        SifenCallMetrics.OPERATION,
+        operation,
+        SifenCallMetrics.TENANT_ID,
+        tenantId,
+        SifenCallMetrics.OUTCOME,
+        outcome,
+        SifenCallMetrics.ENVIRONMENT,
+        environment);
   }
 }

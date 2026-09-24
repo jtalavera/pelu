@@ -23,6 +23,7 @@ import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.AppointmentCreateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentUpdateRequest;
+import io.opentelemetry.api.common.Attributes;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,6 +47,9 @@ class AppointmentServiceTest {
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private ClientRepository clientRepository;
+
+  private final InMemoryTelemetry telemetry = new InMemoryTelemetry();
+  @Spy private BusinessMetrics businessMetrics = new BusinessMetrics(telemetry.openTelemetry());
 
   @InjectMocks private AppointmentService service;
 
@@ -133,6 +138,8 @@ class AppointmentServiceTest {
     assertThat(res.clientId()).isEqualTo(CLIENT_ID);
     assertThat(res.clientName()).isEqualTo("Maria Lopez");
     assertThat(res.professionalName()).isEqualTo("Ana Gomez");
+    assertThat(telemetry.counterValue("femme.appointment.created", appointmentAttributes()))
+        .isEqualTo(1);
     assertThat(res.serviceName()).isEqualTo("Haircut");
     assertThat(res.durationMinutes()).isEqualTo(60);
   }
@@ -234,6 +241,33 @@ class AppointmentServiceTest {
 
     assertThat(res.status()).isEqualTo("CANCELLED");
     assertThat(res.cancelReason()).isEqualTo("Client requested");
+    assertThat(telemetry.counterValue("femme.appointment.cancelled", appointmentAttributes()))
+        .isEqualTo(1);
+  }
+
+  /** Issue #268: only a real transition into NO_SHOW is counted, not a re-save of it. */
+  @Test
+  void updateStatus_toNoShow_countsTheTransitionOnce() {
+    Appointment appointment = buildAppointment(AppointmentStatus.CONFIRMED);
+    when(appointmentRepository.findByIdAndTenant_Id(1L, TENANT_ID))
+        .thenReturn(Optional.of(appointment));
+
+    var req = new AppointmentStatusUpdateRequest("NO_SHOW", null);
+    service.updateStatus(TENANT_ID, 1L, req);
+    service.updateStatus(TENANT_ID, 1L, req);
+
+    assertThat(telemetry.counterValue("femme.appointment.no_show", appointmentAttributes()))
+        .isEqualTo(1);
+  }
+
+  private static Attributes appointmentAttributes() {
+    return Attributes.of(
+        BusinessMetrics.TENANT_ID,
+        String.valueOf(TENANT_ID),
+        BusinessMetrics.PROFESSIONAL_ID,
+        String.valueOf(PROFESSIONAL_ID),
+        BusinessMetrics.SERVICE_ID,
+        String.valueOf(SERVICE_ID));
   }
 
   @Test

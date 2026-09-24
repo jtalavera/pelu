@@ -37,9 +37,12 @@ dependencies {
     // tier) — see SifenSubmissionQueueListener/ServiceBusSifenSubmissionQueue.
     implementation("com.azure:azure-messaging-servicebus:7.17.19")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    // RT-21: per-operation SIFEN metrics exported to the Application Insights resource Terraform
-    // already provisions (APPLICATIONINSIGHTS_CONNECTION_STRING) — see SifenCallMetrics.
-    implementation("io.micrometer:micrometer-registry-azure-monitor:1.17.0")
+    // Issue #268: telemetry (traces, dependencies, logs, custom metrics) is exported by the
+    // Application Insights Java agent attached in the Dockerfile — not by a Gradle dependency.
+    // Only the OpenTelemetry API is compiled in (version managed by the Spring Boot BOM, and must
+    // stay within the range the agent bridges); without the agent it resolves to a no-op. See
+    // OpenTelemetryConfig, SifenCallMetrics and BusinessMetrics.
+    implementation("io.opentelemetry:opentelemetry-api")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2")
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
@@ -58,6 +61,7 @@ dependencies {
 
     runtimeOnly("com.h2database:h2")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("io.opentelemetry:opentelemetry-sdk-testing")
 }
 
 tasks.withType<Test> {
