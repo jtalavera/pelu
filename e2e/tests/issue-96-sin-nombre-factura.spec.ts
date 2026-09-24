@@ -90,4 +90,31 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
     expect(pdfContainsText(pdf, clientRuc)).toBe(false);
     expect(pdfContainsText(pdf, client.fullName)).toBe(false);
   });
+
+  test("marcar 'Comprobante sin nominar' sin elegir cliente habilita 'Issue invoice'", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await setBusinessRuc(request, token);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
+
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("9000");
+    await page.locator("#pay-amount-0").fill("9000");
+
+    // No client picked from the search field at all — button stays disabled until identified.
+    await expect(page.getByRole("button", { name: "Issue invoice" })).toBeDisabled();
+
+    await page.getByLabel("Unnamed invoice (no client identified)").check();
+    await expect(page.getByRole("button", { name: "Issue invoice" })).toBeEnabled();
+    await clickIssueInvoiceAndExpectSuccess(page);
+  });
 });

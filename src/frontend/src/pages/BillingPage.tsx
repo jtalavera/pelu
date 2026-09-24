@@ -1080,13 +1080,19 @@ function NewInvoiceTab({
 
   /**
    * Whether all mandatory fields are filled to enable the "Emit" button:
-   *   1. A client is selected from the directory OR marked as occasional.
+   *   1. A client is selected from the directory, marked as occasional, or the invoice is
+   *      marked "sin nominar".
    *   2. At least one service line with serviceId + valid unit price.
    *   3. At least one payment with method + valid positive amount.
    */
   // Issue #96: a selected client's name/RUC may be left blank on purpose (the PDF then prints
   // "Sin nombre" and a blank RUC) — selecting a client or marking it occasional is enough.
-  const hasClientData = clientSelection?.type === "client" || clientSelection?.type === "occasional";
+  // "Sin nominar" is its own way of skipping client identification entirely, so it also satisfies
+  // this — otherwise the checkbox's whole point (no client lookup needed) can never enable submit.
+  const hasClientData =
+    clientSelection?.type === "client" ||
+    clientSelection?.type === "occasional" ||
+    clientIdentityDocumentType === "INNOMINADO";
   const hasServiceLine = lines.some((l) => {
     const price = parseMaskedMoney(l.unitPrice);
     return l.serviceId.trim() !== "" && Number.isFinite(price) && price > 0;
