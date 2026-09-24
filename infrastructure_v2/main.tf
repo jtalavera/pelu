@@ -471,6 +471,15 @@ resource "azurerm_container_app" "backend" {
       }
     }
 
+    # Keeps a replica alive while real HTTP traffic is arriving, independent of the
+    # wake-schedule window above — without this, the app scales to zero ~5 min after
+    # the cron window closes even under active use, since cron was the only scale
+    # signal. Still scales to zero once traffic stops (same cooldown period).
+    http_scale_rule {
+      name                = "http-traffic"
+      concurrent_requests = "10"
+    }
+
     container {
       name   = "backend"
       image  = var.backend_container_image
