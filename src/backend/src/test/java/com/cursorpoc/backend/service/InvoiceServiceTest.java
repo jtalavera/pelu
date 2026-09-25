@@ -77,6 +77,11 @@ class InvoiceServiceTest {
   // it relies on @InjectMocks for the rest of InvoiceService's dependencies.
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
+  // Issue #268: a real (no-op backed) instance, same @Spy-for-@InjectMocks reason as above.
+  @Spy
+  private BusinessMetrics businessMetrics =
+      new BusinessMetrics(io.opentelemetry.api.OpenTelemetry.noop());
+
   @InjectMocks private InvoiceService invoiceService;
 
   private Tenant tenant;

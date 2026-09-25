@@ -87,6 +87,9 @@ resource "azurerm_log_analytics_workspace" "main" {
   sku                 = "PerGB2018"
   retention_in_days   = 30
   # Daily cap prevents runaway cost; adjust via var.log_analytics_daily_quota_gb.
+  # Issue #268: full OTel tracing (App Insights Java agent + browser RUM) will likely exceed the
+  # historical 0.5GB/day. Measure real ingestion in dev for ~1 week after rollout (Usage table /
+  # "Usage and estimated costs"), then set explicit dev/prod values — don't guess up front.
   daily_quota_gb = var.log_analytics_daily_quota_gb
   tags           = local.tags
 }
@@ -567,6 +570,13 @@ resource "azurerm_container_app" "backend" {
         value = tostring(var.backend_report_warmup_enabled)
       }
 
+      # Issue #268: minimum log level the App Insights Java agent captures into `traces`
+      # (overrides applicationinsights.json) — the per-env ingestion lever for logs.
+      env {
+        name  = "APPLICATIONINSIGHTS_INSTRUMENTATION_LOGGING_LEVEL"
+        value = var.backend_ai_logging_level
+      }
+
       # TCP probes (Azure's own default for ingress-enabled apps). HTTP probes on
       # /health were previously used here, but Container Apps counts HTTP probe
       # traffic as container activity, which prevented scale-to-zero — the backend
@@ -673,4 +683,53 @@ resource "azurerm_monitor_diagnostic_setting" "acs" {
   enabled_log {
     category = "AuthOperational"
   }
+}
+
+# Issue #268: Container App platform metrics (CPU, memory, replicas, requests) → workspace.
+# Console/system logs already flow there via the Container App Environment's workspace binding.
+resource "azurerm_monitor_diagnostic_setting" "backend" {
+  name                       = "backend-diag"
+  target_resource_id         = azurerm_container_app.backend.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Observability workbooks (issue #268) — hand-authored templates under workbooks/, fully
+# Terraform-managed. Infra: ops health, aggregate. Business: tenant-filterable KPIs.
+# ---------------------------------------------------------------------------
+
+locals {
+  workbook_template_vars = {
+    app_insights_id         = azurerm_application_insights.main.id
+    container_app_id        = azurerm_container_app.backend.id
+    sql_database_id         = azurerm_mssql_database.app.id
+    servicebus_namespace_id = azurerm_servicebus_namespace.main.id
+  }
+}
+
+resource "azurerm_application_insights_workbook" "infra" {
+  # Workbook names must be GUIDs; uuidv5 keeps it stable across applies.
+  name                = uuidv5("url", "${var.name_prefix}-${var.environment}-workbook-infra")
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  display_name        = "Femme - Infra (${var.environment})"
+  source_id           = lower(azurerm_application_insights.main.id)
+  category            = "workbook"
+  data_json           = templatefile("${path.module}/workbooks/infra.json.tftpl", local.workbook_template_vars)
+  tags                = local.tags
+}
+
+resource "azurerm_application_insights_workbook" "business" {
+  name                = uuidv5("url", "${var.name_prefix}-${var.environment}-workbook-business")
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  display_name        = "Femme - Business (${var.environment})"
+  source_id           = lower(azurerm_application_insights.main.id)
+  category            = "workbook"
+  data_json           = templatefile("${path.module}/workbooks/business.json.tftpl", local.workbook_template_vars)
+  tags                = local.tags
 }

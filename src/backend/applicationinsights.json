@@ -1,0 +1,16 @@
+{
+  "role": {
+    "name": "femme-backend"
+  },
+  "sampling": {
+    "requestsPerSecond": 5
+  },
+  "instrumentation": {
+    "logging": {
+      "level": "INFO"
+    },
+    "micrometer": {
+      "enabled": false
+    }
+  }
+}

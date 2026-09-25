@@ -2,6 +2,7 @@ package com.cursorpoc.backend.repository;
 
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.SifenNumberVoidingStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
@@ -49,6 +50,28 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("now") LocalDateTime now,
       @Param("leaseExpiry") LocalDateTime leaseExpiry,
       @Param("maxAttempts") int maxAttempts);
+
+  /**
+   * Issue #268: the SIFEN "rejected, not yet resolved" backlog per tenant, for the {@code
+   * femme.sifen.rejected_unresolved} gauge (see {@code SifenRejectedBacklogMetrics}). Same rule as
+   * {@code InvoiceService#sifenCorrectResendDeadline}: REJECTED, not voided, and its number not
+   * already inutilizado (voiding approved) ante SIFEN. Each row is {@code [tenantId, count]}.
+   * Deliberately cross-tenant — a platform-level telemetry job, never exposed via the API.
+   */
+  @Query(
+      """
+      SELECT i.tenant.id, COUNT(i) FROM Invoice i
+      WHERE i.sifenSubmissionStatus = :rejected
+      AND i.status <> :voided
+      AND NOT EXISTS (
+        SELECT v.id FROM SifenNumberVoidingEvent v
+        WHERE v.invoiceId = i.id AND v.status IN :voidingDone)
+      GROUP BY i.tenant.id
+      """)
+  List<Object[]> countSifenRejectedUnresolvedByTenant(
+      @Param("rejected") SifenSubmissionStatus rejected,
+      @Param("voided") InvoiceStatus voided,
+      @Param("voidingDone") List<SifenNumberVoidingStatus> voidingDone);
 
   boolean existsByTenant_IdAndFiscalStamp_Id(Long tenantId, Long fiscalStampId);
 

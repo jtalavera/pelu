@@ -8,7 +8,7 @@ import com.cursorpoc.backend.config.SifenQrProperties;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.domain.enums.SifenTaxAffectation;
 import com.cursorpoc.backend.domain.enums.SifenTaxpayerType;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.opentelemetry.api.OpenTelemetry;
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
@@ -106,7 +106,7 @@ import org.w3c.dom.Document;
 class SifenHomologationInvoiceSubmissionLiveTest {
 
   private static SifenCallMetrics testMetrics() {
-    return new SifenCallMetrics(new SimpleMeterRegistry(), new SifenConnectionProperties());
+    return new SifenCallMetrics(OpenTelemetry.noop(), new SifenConnectionProperties());
   }
 
   private static SifenRateLimiter testRateLimiter() {

@@ -40,18 +40,21 @@ public class AppointmentService {
   private final ProfessionalRepository professionalRepository;
   private final SalonServiceRepository salonServiceRepository;
   private final ClientRepository clientRepository;
+  private final BusinessMetrics businessMetrics;
 
   public AppointmentService(
       AppointmentRepository appointmentRepository,
       TenantRepository tenantRepository,
       ProfessionalRepository professionalRepository,
       SalonServiceRepository salonServiceRepository,
-      ClientRepository clientRepository) {
+      ClientRepository clientRepository,
+      BusinessMetrics businessMetrics) {
     this.appointmentRepository = appointmentRepository;
     this.tenantRepository = tenantRepository;
     this.professionalRepository = professionalRepository;
     this.salonServiceRepository = salonServiceRepository;
     this.clientRepository = clientRepository;
+    this.businessMetrics = businessMetrics;
   }
 
   /** Maximum months of history returned by the client history endpoint. */
@@ -125,6 +128,7 @@ public class AppointmentService {
     appointment.setStatus(AppointmentStatus.PENDING);
 
     appointmentRepository.save(appointment);
+    businessMetrics.appointmentCreated(tenantId, professional.getId(), service.getId());
     return toResponse(appointment);
   }
 
@@ -134,6 +138,7 @@ public class AppointmentService {
     Appointment appointment = loadAppointmentOrThrow(tenantId, appointmentId);
 
     AppointmentStatus newStatus = parseStatus(request.status());
+    AppointmentStatus previousStatus = appointment.getStatus();
 
     if (newStatus == AppointmentStatus.CANCELLED) {
       appointment.setCancelReason(
@@ -142,7 +147,24 @@ public class AppointmentService {
 
     appointment.setStatus(newStatus);
     appointmentRepository.save(appointment);
+    if (newStatus != previousStatus) {
+      recordStatusTransition(tenantId, appointment, newStatus);
+    }
     return toResponse(appointment);
+  }
+
+  /** Issue #268: counts only transitions into CANCELLED / NO_SHOW (re-saving is not counted). */
+  private void recordStatusTransition(
+      long tenantId, Appointment appointment, AppointmentStatus newStatus) {
+    Long professionalId =
+        appointment.getProfessional() != null ? appointment.getProfessional().getId() : null;
+    Long serviceId =
+        appointment.getSalonService() != null ? appointment.getSalonService().getId() : null;
+    if (newStatus == AppointmentStatus.CANCELLED) {
+      businessMetrics.appointmentCancelled(tenantId, professionalId, serviceId);
+    } else if (newStatus == AppointmentStatus.NO_SHOW) {
+      businessMetrics.appointmentNoShow(tenantId, professionalId, serviceId);
+    }
   }
 
   @Transactional
