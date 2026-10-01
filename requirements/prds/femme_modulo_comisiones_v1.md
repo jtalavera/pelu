@@ -1,6 +1,6 @@
 # Femme — Módulo de Comisiones · Requerimientos v1
 
-> **Estado:** Borrador para revisión.
+> **Estado:** Versión final acordada (sin preguntas abiertas).
 > **Alcance:** Cálculo, liquidación y reporte de comisiones de beneficiarios (hoy: profesionales) por ítems vendidos (hoy: servicios y productos).
 > **Diseño:** El núcleo del módulo es **agnóstico del rubro**. La terminología de peluquería ("profesional", "servicio") vive solo en la capa de UI / i18n.
 > **Definiciones transversales:** [PRD Femme MVP v1](./femme_historias_usuario_mvp_v1.md#definiciones-transversales) (multi-tenant, zona horaria del servidor, etc.).
@@ -140,6 +140,7 @@ Con un descuento de 10.000 Gs sobre esa línea (lineNet = 100.000, IVA = 9.090,9
 - [ ] El monto base se calcula según la **base configurada del tenant** en el instante de la emisión (§4), después de descuentos.
 - [ ] La entrada guarda un **snapshot**: % aplicado, origen de la regla (id), `baseTypeApplied`, monto base, monto IVA de la línea, moneda y comisión resultante.
 - [ ] Las **propinas** no generan comisión.
+- [ ] La base parte del **neto ya calculado por línea** (`lineNet`, tras el descuento de esa línea). El sistema solo admite descuentos por línea, por lo que no hay prorrateo de descuentos globales.
 - [ ] El proceso es **idempotente**: reintentar la emisión no duplica entradas (clave única por comprobante + línea).
 - [ ] El redondeo se hace **por entrada** a la unidad mínima de la moneda (Gs sin decimales) con `HALF_UP`.
 - [ ] Una línea sin profesional asignado **no genera comisión** y queda listada en el reporte de "líneas sin beneficiario".
@@ -158,6 +159,7 @@ Con un descuento de 10.000 Gs sobre esa línea (lineNet = 100.000, IVA = 9.090,9
 - [ ] La reversión usa el **snapshot** de la entrada original (misma base, mismo %), no la configuración vigente.
 - [ ] Si el saldo de una liquidación resulta negativo, se **arrastra** el saldo a la siguiente (no se paga negativo).
 - [ ] La anulación es idempotente: anular dos veces no duplica la reversión.
+- [ ] **Notas de crédito (cuando existan):** se comportan igual que la anulación, con reversión **proporcional al monto acreditado**, usando el snapshot original (misma base y mismo %) y ajuste negativo en la próxima liquidación si la comisión ya fue liquidada. El diseño debe soportarlo sin cambios en el modelo de datos (`sourceType = REVERSAL` con `reversesEntryId` y monto parcial); su implementación se planifica junto con el módulo de notas de crédito.
 
 ### HU-COM-06 · Gestionar liquidaciones por periodo
 
@@ -189,7 +191,7 @@ Con un descuento de 10.000 Gs sobre esa línea (lineNet = 100.000, IVA = 9.090,9
 - [ ] Veo mis comisiones devengadas del periodo en curso y mis liquidaciones (estado, periodo, total).
 - [ ] Veo el detalle por línea de mis liquidaciones, en **solo lectura**.
 - [ ] **No** veo comisiones ni liquidaciones de otros profesionales, ni la configuración de reglas de otros (la API devuelve `403`/`404` ante intentos de acceso cruzado).
-- [ ] Veo la base de cálculo usada en cada línea (con IVA / sin IVA).
+- [ ] Veo la base de cálculo usada en cada línea (con IVA / sin IVA) y el monto base, pero **no** el IVA discriminado ni el total de la línea; esos campos no se exponen en la API del profesional.
 - [ ] Si la feature flag no está habilitada, la sección no aparece.
 
 ### HU-COM-08 · Reportes y exportación
@@ -271,12 +273,16 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 - Integración con caja (egreso automático al pagar).
 - Combos / paquetes con prorrateo entre varios profesionales.
 - Devengo al cobrar (V1 devenga solo al emitir).
-- Base de cálculo configurable **por regla o por ítem** (V1 es una sola base por tenant).
+- Base de cálculo configurable **por regla o por ítem** (decidido: la base es solo por tenant, sin plan de cambiarlo).
 - Notificaciones por email al profesional.
 
-## 12. Preguntas abiertas
+## 12. Decisiones sobre preguntas abiertas (cerradas)
 
-1. ¿La base debe poder sobrescribirse también por ítem o por regla en una versión futura? (V1: solo por tenant.)
-2. ¿Se necesita un permiso para que el profesional vea el desglose de IVA, o basta con mostrar la base usada?
-3. ¿Los descuentos globales del comprobante (no por línea) se prorratean entre las líneas para la base? (Hoy la propuesta es usar el `lineNet` ya calculado por línea.)
-4. ¿Las notas de crédito (cuando existan) deben comportarse como la anulación de HU-COM-05?
+| # | Pregunta | Decisión |
+|---|----------|----------|
+| 1 | ¿La base debe poder sobrescribirse por ítem o por regla? | **No.** La base es única por tenant. |
+| 2 | ¿El profesional ve el desglose del IVA? | **No.** Solo ve la base usada, el monto base, el % y la comisión (HU-COM-07). |
+| 3 | ¿Cómo afectan los descuentos globales a la base? | Se usa el **neto ya calculado por línea**; el sistema solo admite descuento por línea, no hay prorrateo (HU-COM-04). |
+| 4 | ¿Las notas de crédito se comportan como la anulación? | **Sí**, con reversión proporcional al monto acreditado; se implementa junto con el módulo de notas de crédito (HU-COM-05). |
+
+No quedan preguntas abiertas.
