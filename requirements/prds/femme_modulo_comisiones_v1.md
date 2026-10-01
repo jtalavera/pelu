@@ -130,7 +130,8 @@ Reglas:
 - [ ] Puedo elegir la **base de cálculo**: *Sin IVA* o *Con IVA* (por defecto *Sin IVA*). Cada opción incluye texto de ayuda con el ejemplo de §4.2.
 - [ ] Al cambiar la base (o el % por defecto) se muestra el diálogo de §4.4 / HU-COM-09, que indica que el cambio **no es retroactivo** y pregunta desde cuándo aplicarlo.
 - [ ] Puedo definir el **% por defecto del negocio** (0–100, hasta 2 decimales; por defecto 0 %).
-- [ ] Puedo elegir la **periodicidad de liquidación**: semanal, quincenal, mensual o manual.
+- [ ] Puedo elegir la **periodicidad de liquidación**: semanal (lunes a domingo), quincenal (días 1–15 y 16–fin de mes), mensual (mes calendario) o manual.
+- [ ] Cambiar la periodicidad **no muestra** la pregunta de HU-COM-09: rige para las liquidaciones que se generen después y no altera liquidaciones existentes ni cambios programados.
 - [ ] Cada cambio de configuración queda en el historial de auditoría (usuario, fecha/hora, valor anterior y nuevo).
 - [ ] Un valor inválido (p. ej. 120 %) muestra un error de campo en rojo con la regla y un ejemplo de formato (p. ej. `Ingresá un porcentaje entre 0 y 100, por ejemplo 40,5`).
 
@@ -352,5 +353,8 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | 1 | ¿La base debe poder sobrescribirse por ítem o por regla? | **No.** La base es única por tenant. |
 | 2 | ¿El profesional ve el desglose del IVA? | **No.** Solo ve la base usada, el monto base, el % y la comisión (HU-COM-07). |
 | 3 | ¿Cómo afectan los descuentos globales a la base? | Se usa el **neto ya calculado por línea**; el sistema solo admite descuento por línea, no hay prorrateo (HU-COM-04). |
+| 4 | ¿Cómo se definen los periodos semanal, quincenal y mensual? | **Calendario fijo**: semanal lunes a domingo, quincenal días 1–15 y 16–fin de mes, mensual mes calendario (§4.4). |
+| 5 | ¿Qué pasa al cambiar la periodicidad a mitad de periodo? | Rige para las **liquidaciones que se generen después**, **sin pregunta**; no toca liquidaciones existentes ni cambios programados (C13). |
+| 6 | ¿El simulador y la matriz de reglas aceptan una fecha? | **Sí, ambos**: muestran el cálculo vigente a esa fecha, incluidos cambios programados (HU-COM-02, HU-COM-03). |
 
 No quedan preguntas abiertas.
