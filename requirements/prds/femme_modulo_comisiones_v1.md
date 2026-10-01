@@ -159,7 +159,6 @@ Con un descuento de 10.000 Gs sobre esa línea (lineNet = 100.000, IVA = 9.090,9
 - [ ] La reversión usa el **snapshot** de la entrada original (misma base, mismo %), no la configuración vigente.
 - [ ] Si el saldo de una liquidación resulta negativo, se **arrastra** el saldo a la siguiente (no se paga negativo).
 - [ ] La anulación es idempotente: anular dos veces no duplica la reversión.
-- [ ] **Notas de crédito (cuando existan):** se comportan igual que la anulación, con reversión **proporcional al monto acreditado**, usando el snapshot original (misma base y mismo %) y ajuste negativo en la próxima liquidación si la comisión ya fue liquidada. El diseño debe soportarlo sin cambios en el modelo de datos (`sourceType = REVERSAL` con `reversesEntryId` y monto parcial); su implementación se planifica junto con el módulo de notas de crédito.
 
 ### HU-COM-06 · Gestionar liquidaciones por periodo
 
@@ -273,6 +272,7 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 - Integración con caja (egreso automático al pagar).
 - Combos / paquetes con prorrateo entre varios profesionales.
 - Devengo al cobrar (V1 devenga solo al emitir).
+- Notas de crédito: su tratamiento se definirá cuando ese módulo esté implementado.
 - Base de cálculo configurable **por regla o por ítem** (decidido: la base es solo por tenant, sin plan de cambiarlo).
 - Notificaciones por email al profesional.
 
@@ -283,6 +283,5 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | 1 | ¿La base debe poder sobrescribirse por ítem o por regla? | **No.** La base es única por tenant. |
 | 2 | ¿El profesional ve el desglose del IVA? | **No.** Solo ve la base usada, el monto base, el % y la comisión (HU-COM-07). |
 | 3 | ¿Cómo afectan los descuentos globales a la base? | Se usa el **neto ya calculado por línea**; el sistema solo admite descuento por línea, no hay prorrateo (HU-COM-04). |
-| 4 | ¿Las notas de crédito se comportan como la anulación? | **Sí**, con reversión proporcional al monto acreditado; se implementa junto con el módulo de notas de crédito (HU-COM-05). |
 
 No quedan preguntas abiertas.
