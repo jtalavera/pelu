@@ -93,7 +93,11 @@ test.describe("HU-64 · Reponer stock al anular o corregir", () => {
     await expect.poll(() => onHand(p.stockToken, p.itemId), { timeout: 30_000 }).toBe(3);
 
     await page.getByRole("tab", { name: "History" }).click();
-    await page.locator('tbody tr[role="button"]').filter({ hasText: inv.invoiceNumberFormatted }).first().click();
+    await page
+      .locator('tbody tr[role="button"]')
+      .filter({ visible: true, hasText: inv.invoiceNumberFormatted })
+      .first()
+      .click();
     await page.getByRole("button", { name: "Void invoice" }).click();
     await page.locator("#void-reason").fill("Cliente devolvió el producto");
     await page.getByRole("button", { name: "Confirm void" }).click();
@@ -129,16 +133,17 @@ test.describe("HU-64 · Reponer stock al anular o corregir", () => {
   test("corregir una factura rechazada por SIFEN revierte la venta anterior y registra la nueva", async () => {
     const world = getStockWorld();
     const platform = await platformToken();
-    const admin = await peluLogin(world.s2.adminEmail, world.s2.adminPassword);
+    // S1 is the e2e backend's tenant id 1, the one ensure-valid-certificate seeds a certificate for.
+    const admin = await peluLogin(world.s1.adminEmail, world.s1.adminPassword);
     const name = `Aceite corrección ${Date.now()}`;
-    const p = await productInStock(world.s2.id, admin, world.s2.categoryId, name, "10");
+    const p = await productInStock(world.s1.id, admin, world.s1.categoryId, name, "10");
     const inv = await issueInvoiceApi(admin, [{ serviceId: p.serviceId, name, quantity: 1 }]);
     await expect.poll(() => onHand(p.stockToken, p.itemId), { timeout: 30_000 }).toBe(9);
 
     // Rejected by SIFEN (fabricated), then corrected with 3 units through the real endpoint.
     await peluOk(`/api/admin/sifen-test-support/invoices/${inv.id}/simulate-sifen-rejection`, { body: {} });
     await peluOk("/api/admin/sifen-test-support/ensure-valid-certificate", { body: {} });
-    await setTenantFlag(platform, world.s2.id, "SIFEN_ELECTRONIC_INVOICING", true);
+    await setTenantFlag(platform, world.s1.id, "SIFEN_ELECTRONIC_INVOICING", true);
     try {
       const corrected = await fetch(`${process.env.PLAYWRIGHT_API_BASE_URL}/api/invoices/${inv.id}/sifen/correct-and-resend`, {
         method: "POST",
@@ -153,10 +158,11 @@ test.describe("HU-64 · Reponer stock al anular o corregir", () => {
           payments: [{ method: "CASH", amount: 150000, cardBrand: null, cardBrandOtherDescription: null }],
         }),
       });
-      // The Stock side happens inside the correction's own transaction, before any re-signing.
-      expect([200, 412, 422, 500]).toContain(corrected.status);
+      // The certificate guard passed (no 412): the correction committed. Re-signing afterwards may
+      // still fail without a full SIFEN issuer profile — irrelevant to Stock.
+      expect(corrected.status, await corrected.text()).not.toBe(412);
     } finally {
-      await setTenantFlag(platform, world.s2.id, "SIFEN_ELECTRONIC_INVOICING", false);
+      await setTenantFlag(platform, world.s1.id, "SIFEN_ELECTRONIC_INVOICING", false);
     }
 
     await expect.poll(() => onHand(p.stockToken, p.itemId), { timeout: 30_000 }).toBe(7);

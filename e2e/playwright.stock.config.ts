@@ -148,6 +148,9 @@ const stockSpa = {
   env: {
     ...process.env,
     VITE_API_BASE_URL: STOCK_API_BASE,
+    // Stock's own e2e switch: no auto-started guided tour over the page (language still comes
+    // from the SSO handoff's ?lang=).
+    VITE_PLAYWRIGHT: "1",
   },
 } as const;
 
@@ -171,6 +174,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: videoMode,
     locale: "en-US",
+    // Optional: reuse a preinstalled Chromium instead of the version-pinned download.
+    launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [proxy, stockBackend, peluBackend, stockSpa, peluSpa],

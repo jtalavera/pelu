@@ -129,7 +129,9 @@ test.describe("HU-59 · Flags de Stock y tipo Producto", () => {
     await page.getByRole("button", { name: "Import" }).click();
     const summary = page.getByTestId("import-run-summary-services");
     await expect(summary).toContainText("2 of 3 rows imported. 1 failed.");
-    await expect(page.getByText("Invalid type: use Servicio or Producto")).toBeVisible();
+    await expect(page.getByTestId("import-run-failed-rows-services")).toContainText(
+      "Invalid type: use Servicio or Producto",
+    );
 
     const token = await peluLogin(world.s3.adminEmail, world.s3.adminPassword);
     const list = (await pelu<Array<{ name: string; kind: string; sku: string | null }>>("/api/services", { token })).body;

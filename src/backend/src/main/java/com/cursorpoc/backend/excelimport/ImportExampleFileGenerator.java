@@ -103,20 +103,11 @@ public class ImportExampleFileGenerator {
                   "tipo", "Servicio",
                   "sku", ""),
               rowOf(
-                  "categoria", "Coloración",
-                  "nombre", "Tinte completo",
-                  "precio", "250000",
-                  "duracion_minutos", "90",
-                  "impuesto", "",
-                  "activo", "SI",
-                  "tipo", "",
-                  "sku", ""),
-              rowOf(
                   "categoria", "Productos",
                   "nombre", "Shampoo reparador 300 ml (ejemplo)",
                   "precio", "95000",
                   "duracion_minutos", "1",
-                  "impuesto", "IVA 10%",
+                  "impuesto", "",
                   "activo", "SI",
                   "tipo", "Producto",
                   "sku", "SH-300"));

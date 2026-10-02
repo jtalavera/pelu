@@ -112,6 +112,8 @@ export default defineConfig({
     locale: "en-US",
     launchOptions: {
       slowMo: slowMoMs,
+      // Optional: reuse a preinstalled Chromium instead of the version-pinned download.
+      ...(process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {}),
     },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
