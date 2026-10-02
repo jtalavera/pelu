@@ -75,7 +75,8 @@ export default defineConfig({
   testDir: "./tests",
   // The mt-isolation suite runs from its own config (playwright.mt-isolation.config.ts)
   // against a second backend on :8081 — exclude it from the main suite's discovery.
-  testIgnore: "mt-isolation/**",
+  // The Stock cross-system suite (playwright.stock.config.ts) needs a real control-stock running.
+  testIgnore: ["mt-isolation/**", "stock/**"],
   // HU-58: provisions the "demo" tenant + admin (DEMO_EMAIL/DEMO_PASSWORD) dynamically via the
   // real Platform Admin API before any test runs, instead of a hardcoded backend boot seed — see
   // global-setup.ts.
