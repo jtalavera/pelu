@@ -54,6 +54,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     this.appUserRepository = appUserRepository;
   }
 
+  /**
+   * Stock integration (HU-61): {@code /api/integration/**} is authenticated only by integration
+   * tokens ({@code IntegrationAuthenticationFilter}) — a Femme user session never applies there.
+   */
+  @Override
+  protected boolean shouldNotFilter(HttpServletRequest request) {
+    return request.getRequestURI().startsWith("/api/integration/");
+  }
+
   @Override
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)

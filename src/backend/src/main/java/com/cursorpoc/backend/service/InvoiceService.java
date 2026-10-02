@@ -25,6 +25,7 @@ import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.stock.InvoiceStockEvent;
 import com.cursorpoc.backend.web.dto.InvoiceCorrectionRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceLineRequest;
@@ -50,6 +51,8 @@ import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -59,7 +62,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-public class InvoiceService {
+public class InvoiceService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-63/HU-64): issue/void/correct publish {@code InvoiceStockEvent}s.
+   * Defaults to a no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
 
@@ -265,6 +279,10 @@ public class InvoiceService {
       serviceRecord.setClosedAt(Instant.now());
     }
 
+    // 11. Stock (HU-63): product lines leave stock — an outbox event in this same transaction,
+    // delivered after the commit. Invoicing never waits on (or fails because of) control-stock.
+    events.publishEvent(InvoiceStockEvent.issued(invoice));
+
     return toDetailDto(invoice);
   }
 
@@ -328,6 +346,9 @@ public class InvoiceService {
     // rejected SIFEN result so the resend runs through the normal pipeline.
     sifenNumberVoidingService.cancelPendingForInvoice(invoiceId);
     sifenSubmissionPersistence.resetForCorrection(tenantId, invoiceId);
+
+    // Stock (HU-64): reverse the previous sale and post the corrected lines (next rev).
+    events.publishEvent(InvoiceStockEvent.corrected(invoice));
 
     Hibernate.initialize(invoice.getLines());
     Hibernate.initialize(invoice.getPaymentAllocations());
@@ -792,6 +813,8 @@ public class InvoiceService {
 
     invoice.setStatus(InvoiceStatus.VOIDED);
     invoice.setVoidReason(request.voidReason().trim());
+    // Stock (HU-64): products come back to stock.
+    events.publishEvent(InvoiceStockEvent.voided(invoice, invoice.getVoidReason()));
 
     Hibernate.initialize(invoice.getLines());
     Hibernate.initialize(invoice.getPaymentAllocations());

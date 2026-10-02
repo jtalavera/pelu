@@ -60,6 +60,9 @@ type SalonService = {
   taxId?: number | null;
   taxName?: string | null;
   taxRate?: number | null;
+  /** HU-59: only PRODUCT items are synchronised to Stock. */
+  kind?: "SERVICE" | "PRODUCT";
+  sku?: string | null;
 };
 
 type ServicesDeactivateTarget =
@@ -83,6 +86,8 @@ export default function ServicesPage() {
   const [categoryFilterId, setCategoryFilterId] = useState<string>("all");
   /** Client-side quick filter: list order is always active first when "all". */
   const [serviceStatusFilter, setServiceStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  /** HU-59: list filter by item type. */
+  const [serviceKindFilter, setServiceKindFilter] = useState<"all" | "SERVICE" | "PRODUCT">("all");
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryEditing, setCategoryEditing] = useState<ServiceCategory | null>(null);
@@ -99,6 +104,8 @@ export default function ServicesPage() {
   const [serviceTaxId, setServiceTaxId] = useState<string>("");
   const [servicePrice, setServicePrice] = useState("");
   const [serviceDuration, setServiceDuration] = useState("");
+  const [serviceKind, setServiceKind] = useState<"SERVICE" | "PRODUCT">("SERVICE");
+  const [serviceSku, setServiceSku] = useState("");
   const [serviceFieldError, setServiceFieldError] = useState<{
     name?: string;
     categoryId?: string;
@@ -188,6 +195,7 @@ export default function ServicesPage() {
     async (
       categoryId: string,
       status: "all" | "active" | "inactive",
+      kind: "all" | "SERVICE" | "PRODUCT",
       q: string,
       page: number,
       size: number,
@@ -197,6 +205,7 @@ export default function ServicesPage() {
         const data = await listServicesPaged<SalonService>({
           categoryId: categoryId !== "all" ? Number(categoryId) : undefined,
           active: status === "all" ? undefined : status === "active",
+          kind: kind === "all" ? undefined : kind,
           q: q.trim() || undefined,
           page,
           size,
@@ -214,13 +223,20 @@ export default function ServicesPage() {
   useEffect(() => {
     if (svcDebounceRef.current) clearTimeout(svcDebounceRef.current);
     svcDebounceRef.current = setTimeout(() => {
-      void loadPagedServices(categoryFilterId, serviceStatusFilter, serviceSearchQuery, svcPage, svcPageSize);
+      void loadPagedServices(
+        categoryFilterId,
+        serviceStatusFilter,
+        serviceKindFilter,
+        serviceSearchQuery,
+        svcPage,
+        svcPageSize,
+      );
     }, 350);
     return () => {
       if (svcDebounceRef.current) clearTimeout(svcDebounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilterId, serviceStatusFilter, serviceSearchQuery, svcPage, svcPageSize, svcReloadTick, loadPagedServices]);
+  }, [categoryFilterId, serviceStatusFilter, serviceKindFilter, serviceSearchQuery, svcPage, svcPageSize, svcReloadTick, loadPagedServices]);
   // ─────────────────────────────────────────────────────────────────────────
 
   function handleCategoryPill(val: string) {
@@ -230,6 +246,11 @@ export default function ServicesPage() {
 
   function handleServiceStatusPill(val: "all" | "active" | "inactive") {
     setServiceStatusFilter(val);
+    setSvcPage(0);
+  }
+
+  function handleServiceKindPill(val: "all" | "SERVICE" | "PRODUCT") {
+    setServiceKindFilter(val);
     setSvcPage(0);
   }
 
@@ -305,6 +326,8 @@ export default function ServicesPage() {
     setServiceTaxId(defaultTax ? String(defaultTax.id) : "");
     setServicePrice("");
     setServiceDuration("");
+    setServiceKind("SERVICE");
+    setServiceSku("");
     setServiceFieldError(null);
     setServiceSaveError(null);
     setEditSuccess(false);
@@ -356,6 +379,8 @@ export default function ServicesPage() {
         priceMinor: price,
         durationMinutes: duration,
         taxId: serviceTaxId ? Number(serviceTaxId) : null,
+        kind: serviceKind,
+        sku: serviceSku.trim() || null,
       };
       const wasEdit = serviceEditing !== null;
       if (serviceEditing) {
@@ -451,6 +476,16 @@ export default function ServicesPage() {
     ];
   }, [activeCategories, t]);
 
+  const kindFilterOptions = useMemo(
+    () =>
+      [
+        { value: "all" as const, label: t("femme.services.filter.kindAll") },
+        { value: "SERVICE" as const, label: t("femme.services.filter.kindService") },
+        { value: "PRODUCT" as const, label: t("femme.services.filter.kindProduct") },
+      ],
+    [t],
+  );
+
   const statusFilterOptions = useMemo(
     () =>
       [
@@ -505,6 +540,8 @@ export default function ServicesPage() {
         : Number(String(s.priceMinor ?? "").trim());
     setServicePrice(Number.isFinite(priceVal) ? maskMoneyInput(String(priceVal)) : "");
     setServiceDuration(String(s.durationMinutes));
+    setServiceKind(s.kind === "PRODUCT" ? "PRODUCT" : "SERVICE");
+    setServiceSku(s.sku ?? "");
     setServiceFieldError(null);
     setServiceSaveError(null);
     setEditSuccess(false);
@@ -770,6 +807,37 @@ export default function ServicesPage() {
                 </button>
               ))}
             </div>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              style={{
+                width: 1,
+                alignSelf: "stretch",
+                minHeight: 28,
+                background: "var(--color-stone-md)",
+                flexShrink: 0,
+                margin: "0 4px",
+              }}
+            />
+            {/* HU-59: filter by item type (Servicio / Producto). */}
+            <div
+              role="group"
+              aria-label={t("femme.services.filter.kindLabel")}
+              data-testid="services-kind-filter"
+              style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}
+            >
+              {kindFilterOptions.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  aria-pressed={serviceKindFilter === o.value}
+                  style={serviceKindFilter === o.value ? pillActive : pillBase}
+                  onClick={() => handleServiceKindPill(o.value)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
             </div>
           </div>
 
@@ -918,6 +986,23 @@ export default function ServicesPage() {
                                 >
                                   {s.name}
                                 </div>
+                                {s.kind === "PRODUCT" ? (
+                                  <span
+                                    data-testid={`svc-kind-product-${s.id}`}
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 500,
+                                      padding: "1px 6px",
+                                      borderRadius: "var(--radius-pill)",
+                                      background: "var(--color-stone)",
+                                      color: "var(--color-ink-2)",
+                                      border: "var(--border-default)",
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {t("femme.services.services.kindProduct")}
+                                  </span>
+                                ) : null}
                               </div>
                             </td>
                             <td style={tdStyle}>
@@ -1374,6 +1459,31 @@ export default function ServicesPage() {
               aria-describedby={serviceFieldError?.name ? "svc-name-err" : undefined}
             />
             <FieldValidationError id="svc-name-err">{serviceFieldError?.name}</FieldValidationError>
+          </div>
+
+          {/* HU-59: Tipo (Servicio / Producto) + optional SKU. Only products go to Stock. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="svc-kind">{t("femme.services.services.kind")}</Label>
+              <Select
+                id="svc-kind"
+                value={serviceKind}
+                onChange={(e) => setServiceKind(e.target.value === "PRODUCT" ? "PRODUCT" : "SERVICE")}
+              >
+                <option value="SERVICE">{t("femme.services.services.kindService")}</option>
+                <option value="PRODUCT">{t("femme.services.services.kindProduct")}</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="svc-sku">{t("femme.services.services.sku")}</Label>
+              <Input
+                id="svc-sku"
+                value={serviceSku}
+                maxLength={64}
+                placeholder={t("femme.services.services.skuPlaceholder")}
+                onChange={(e) => setServiceSku(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>

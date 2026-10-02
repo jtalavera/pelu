@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -60,6 +60,8 @@ import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyI
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
+import { useStockAvailability } from "../stock/useStockAvailability";
+import { StockAvailabilityHint } from "../stock/StockAvailabilityHint";
 import { billingSteps, registerBillingTabSwitcher } from "../tour/steps/billing";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1128,6 +1130,22 @@ function NewInvoiceTab({
     });
   }
 
+  // HU-66: how many of each product are left (informative only, never blocks issuing).
+  const lineServiceIds = useMemo(
+    () => lines.map((l) => Number(l.serviceId)).filter((id) => Number.isFinite(id) && id > 0),
+    [lines],
+  );
+  const stockAvailability = useStockAvailability(lineServiceIds);
+  const requestedByService = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const l of lines) {
+      const id = Number(l.serviceId);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      totals.set(id, (totals.get(id) ?? 0) + (parseInt(l.quantity) || 0));
+    }
+    return totals;
+  }, [lines]);
+
   function handleLineServiceChange(idx: number, service: SalonServiceOption | null) {
     setLines((prev) =>
       prev.map((l, i) => {
@@ -1902,6 +1920,16 @@ function NewInvoiceTab({
                     </Button>
                   )}
                 </div>
+                {/* HU-66: Stock availability for product lines. */}
+                {line.serviceId && stockAvailability.has(Number(line.serviceId)) ? (
+                  <div className="col-span-12">
+                    <StockAvailabilityHint
+                      item={stockAvailability.get(Number(line.serviceId))}
+                      requested={requestedByService.get(Number(line.serviceId)) ?? 0}
+                      testId={`line-stock-${idx}`}
+                    />
+                  </div>
+                ) : null}
                 {/* Per-line discount row */}
                 <div className="col-span-12 flex flex-wrap items-center gap-3">
                   <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[rgb(var(--color-ink-2))]">

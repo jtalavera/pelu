@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import com.azure.messaging.servicebus.ServiceBusProcessorClient;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,26 +24,35 @@ public class ServiceBusProcessorLifecycle implements SmartLifecycle {
 
   private static final Logger log = LoggerFactory.getLogger(ServiceBusProcessorLifecycle.class);
 
-  private final ServiceBusProcessorClient processorClient;
+  private final List<ServiceBusProcessorClient> processorClients;
 
-  public ServiceBusProcessorLifecycle(ServiceBusProcessorClient processorClient) {
-    this.processorClient = processorClient;
+  /**
+   * Every processor client in the context: the SIFEN submission queue and, since HU-60, the {@code
+   * stock-integration} queue.
+   */
+  public ServiceBusProcessorLifecycle(List<ServiceBusProcessorClient> processorClients) {
+    this.processorClients = processorClients;
   }
 
   @Override
   public void start() {
-    log.info("Starting SIFEN submission queue processor");
-    processorClient.start();
+    for (ServiceBusProcessorClient client : processorClients) {
+      log.info("Starting Service Bus queue processor entity={}", client.getQueueName());
+      client.start();
+    }
   }
 
   @Override
   public void stop() {
-    log.info("Stopping SIFEN submission queue processor");
-    processorClient.stop();
+    for (ServiceBusProcessorClient client : processorClients) {
+      log.info("Stopping Service Bus queue processor entity={}", client.getQueueName());
+      client.stop();
+    }
   }
 
   @Override
   public boolean isRunning() {
-    return processorClient.isRunning();
+    return !processorClients.isEmpty()
+        && processorClients.stream().allMatch(ServiceBusProcessorClient::isRunning);
   }
 }

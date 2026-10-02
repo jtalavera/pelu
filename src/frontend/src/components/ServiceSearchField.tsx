@@ -13,6 +13,8 @@ export type SalonServiceOption = {
   priceMinor: string | number;
   durationMinutes: number;
   active: boolean;
+  /** HU-59: only PRODUCT items move stock. */
+  kind?: "SERVICE" | "PRODUCT";
 };
 
 type Props = {

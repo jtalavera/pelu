@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_PLAYWRIGHT?: string;
   /** Issue #268: App Insights connection string (public ingestion endpoint) — enables browser RUM. */
   readonly VITE_APPINSIGHTS_CONNECTION_STRING?: string;
+  /** Stock integration (HU-65): control-stock SPA origin (no trailing slash), per environment. */
+  readonly VITE_STOCK_SPA_URL?: string;
 }
 
 interface ImportMeta {

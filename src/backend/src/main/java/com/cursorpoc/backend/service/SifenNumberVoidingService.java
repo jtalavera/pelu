@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
+import com.cursorpoc.backend.stock.InvoiceStockEvent;
 import com.cursorpoc.backend.web.dto.PagedSifenNumberVoidingResponse;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingEventResponse;
 import java.time.Instant;
@@ -21,6 +22,8 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -59,7 +62,18 @@ import org.w3c.dom.Document;
  * the same invoice.
  */
 @Service
-public class SifenNumberVoidingService {
+public class SifenNumberVoidingService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-64): an approved number inutilización reverses the sale in Stock.
+   * Defaults to a no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private static final Logger log = LoggerFactory.getLogger(SifenNumberVoidingService.class);
 
@@ -492,6 +506,8 @@ public class SifenNumberVoidingService {
                   protocolNumber == null || protocolNumber.isBlank()
                       ? "Numeración inutilizada ante SIFEN"
                       : "Numeración inutilizada ante SIFEN (protocolo " + protocolNumber + ")");
+              // Stock (HU-64): products come back to stock.
+              events.publishEvent(InvoiceStockEvent.voided(inv, inv.getVoidReason()));
               log.info(
                   "Invoice voided after SIFEN-approved number inutilización tenantId={} invoiceId={}",
                   tenantId,
