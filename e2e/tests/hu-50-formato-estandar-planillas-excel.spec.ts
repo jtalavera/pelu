@@ -37,7 +37,7 @@ test.describe("HU-50 · Formato estándar de planillas Excel", () => {
   });
 
   // AC-2: Servicios' exact fixed column set, with the documented required/optional split.
-  test("AC2: Servicios template documents exactly categoria, nombre, precio, duracion_minutos, impuesto, activo", async ({
+  test("AC2: Servicios template documents exactly categoria, nombre, precio, duracion_minutos, impuesto, activo, tipo, sku", async ({
     page,
   }) => {
     await loginAsPlatformAdmin(page);
@@ -48,7 +48,7 @@ test.describe("HU-50 · Formato estándar de planillas Excel", () => {
     await expect(table).toBeVisible();
 
     const required = ["categoria", "nombre", "precio", "duracion_minutos"];
-    const optional = ["impuesto", "activo"];
+    const optional = ["impuesto", "activo", "tipo", "sku"];
     for (const key of required) {
       const row = page.getByTestId(`import-column-row-services-${key}`);
       await expect(row).toBeVisible();
@@ -59,8 +59,8 @@ test.describe("HU-50 · Formato estándar de planillas Excel", () => {
       await expect(row).toBeVisible();
       await expect(row).toContainText("Optional");
     }
-    // No column beyond the six documented above.
-    await expect(table.locator("tbody tr")).toHaveCount(6);
+    // No column beyond the eight documented above (tipo/sku: HU-59, Stock integration).
+    await expect(table.locator("tbody tr")).toHaveCount(8);
   });
 
   // AC-3: Clientes' exact fixed column set — only nombre_completo is required.

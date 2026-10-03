@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.SifenInvoiceEventType;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import com.cursorpoc.backend.stock.InvoiceStockEvent;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -13,6 +14,8 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -48,7 +51,18 @@ import org.w3c.dom.Document;
  * rejection-shaped response for AC-04's error-handling path.
  */
 @Service
-public class SifenInvoiceCancellationService {
+public class SifenInvoiceCancellationService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-64): an approved SIFEN cancellation reverses the sale in Stock. Defaults
+   * to a no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private static final Logger log = LoggerFactory.getLogger(SifenInvoiceCancellationService.class);
 
@@ -227,8 +241,13 @@ public class SifenInvoiceCancellationService {
       // action — a successful SIFEN cancellation also voids the invoice record, deliberately
       // bypassing InvoiceService.voidInvoice's cash-session-closed guard: the fiscal cancellation
       // with SIFEN is irreversible, so the internal record must not be left inconsistent with it.
+      boolean wasVoided = invoice.getStatus() == InvoiceStatus.VOIDED;
       invoice.setStatus(InvoiceStatus.VOIDED);
       invoice.setVoidReason(invoice.getSifenCancellationReason());
+      if (!wasVoided) {
+        // Stock (HU-64): products come back to stock.
+        events.publishEvent(InvoiceStockEvent.voided(invoice, invoice.getVoidReason()));
+      }
     }
     eventLogService.record(
         tenantId,

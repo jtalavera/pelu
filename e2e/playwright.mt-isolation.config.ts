@@ -76,6 +76,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: videoMode,
     locale: "en-US",
+    // Optional: reuse a preinstalled Chromium instead of the version-pinned download.
+    launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [viteServer, backendServer],

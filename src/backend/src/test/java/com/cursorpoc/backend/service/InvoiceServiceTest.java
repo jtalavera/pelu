@@ -28,6 +28,7 @@ import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.stock.InvoiceStockEvent;
 import com.cursorpoc.backend.web.dto.InvoiceCorrectionRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCreateRequest;
 import com.cursorpoc.backend.web.dto.InvoiceLineRequest;
@@ -41,6 +42,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -613,6 +615,63 @@ class InvoiceServiceTest {
 
     assertThat(result.status()).isEqualTo(InvoiceStatus.VOIDED.name());
     assertThat(result.voidReason()).isEqualTo("Error en factura");
+  }
+
+  /** Stock (HU-63): issuing publishes the event the outbox listener turns into a SALE. */
+  @Test
+  void issueInvoice_publishesStockIssuedEvent() {
+    List<Object> published = new ArrayList<>();
+    invoiceService.setApplicationEventPublisher(published::add);
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class)))
+        .thenAnswer(
+            inv -> {
+              Invoice i = inv.getArgument(0);
+              i.setId(100L);
+              return i;
+            });
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+
+    invoiceService.issueInvoice(
+        1L,
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null));
+
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            InvoiceStockEvent.class,
+            e -> {
+              assertThat(e.kind()).isEqualTo(InvoiceStockEvent.Kind.ISSUED);
+              assertThat(e.invoice().getId()).isEqualTo(100L);
+            });
+  }
+
+  /** Stock (HU-64): voiding publishes the event the outbox listener turns into a REVERSE. */
+  @Test
+  void voidInvoice_publishesStockVoidedEvent() {
+    List<Object> published = new ArrayList<>();
+    invoiceService.setApplicationEventPublisher(published::add);
+    Invoice invoice = buildIssuedInvoice();
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+
+    invoiceService.voidInvoice(1L, 100L, new InvoiceVoidRequest("Error en factura"));
+
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            InvoiceStockEvent.class,
+            e -> {
+              assertThat(e.kind()).isEqualTo(InvoiceStockEvent.Kind.VOIDED);
+              assertThat(e.reason()).isEqualTo("Error en factura");
+            });
   }
 
   @Test
@@ -1388,6 +1447,28 @@ class InvoiceServiceTest {
     org.mockito.Mockito.verify(sifenNumberVoidingService).requireVoidingStillPending(100L);
     org.mockito.Mockito.verify(sifenNumberVoidingService).cancelPendingForInvoice(100L);
     org.mockito.Mockito.verify(sifenSubmissionPersistence).resetForCorrection(1L, 100L);
+  }
+
+  /** Stock (HU-64): a correction reverses the old sale and posts the new lines. */
+  @Test
+  void correctAndResendInvoice_publishesStockCorrectedEvent() {
+    List<Object> published = new ArrayList<>();
+    invoiceService.setApplicationEventPublisher(published::add);
+    Invoice invoice = buildRejectedInvoice();
+    when(invoiceRepository.findByIdAndTenant_Id(100L, 1L)).thenReturn(Optional.of(invoice));
+    var line =
+        new InvoiceLineRequest(null, "Corte nuevo", 2, new BigDecimal("30000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
+
+    invoiceService.correctAndResendInvoice(
+        1L, 100L, correctionRequest(List.of(line), List.of(payment)));
+
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            InvoiceStockEvent.class,
+            e -> assertThat(e.kind()).isEqualTo(InvoiceStockEvent.Kind.CORRECTED));
   }
 
   @Test

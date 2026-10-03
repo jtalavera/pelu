@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
  * RT-20 (Hardening_SIFEN.md): the Service Bus sender (used by {@code
@@ -37,6 +38,7 @@ public class ServiceBusConfiguration {
   private static final Logger log = LoggerFactory.getLogger(ServiceBusConfiguration.class);
 
   @Bean(destroyMethod = "close")
+  @Primary
   public ServiceBusSenderClient serviceBusSenderClient(
       @Value("${app.femme.servicebus.namespace}") String namespace,
       @Value("${app.femme.servicebus.queue}") String queue) {
@@ -49,6 +51,7 @@ public class ServiceBusConfiguration {
   }
 
   @Bean
+  @Primary
   public ServiceBusProcessorClient serviceBusProcessorClient(
       @Value("${app.femme.servicebus.namespace}") String namespace,
       @Value("${app.femme.servicebus.queue}") String queue,

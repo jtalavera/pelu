@@ -18,7 +18,7 @@ import { loginAsPlatformAdmin } from "../fixtures/auth";
 const EXPECTED_COLUMNS: Record<string, { required: string[]; optional: string[] }> = {
   services: {
     required: ["categoria", "nombre", "precio", "duracion_minutos"],
-    optional: ["impuesto", "activo"],
+    optional: ["impuesto", "activo", "tipo", "sku"],
   },
   clients: {
     required: ["nombre_completo"],

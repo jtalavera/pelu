@@ -89,7 +89,8 @@
       "errorNetwork": "Network error. Check that the API is running.",
       "forgotPassword": "Forgot password?",
       "sessionExpired": "Your session expired due to inactivity. Please sign in again.",
-      "sessionRefreshExpired": "Your session expired. Please sign in again."
+      "sessionRefreshExpired": "Your session expired. Please sign in again.",
+      "stockLogout": "You signed out of Stock, so your Femme session was closed too."
     },
     "forgot": {
       "title": "Reset password",
@@ -117,7 +118,9 @@
       "professionalRole": "Professional",
       "sectionMain": "Main",
       "sectionManagement": "Management",
-      "sectionFinance": "Finance"
+      "sectionFinance": "Finance",
+      "stock": "Stock",
+      "stockAria": "Open Stock in a new tab"
     },
     "activate": {
       "title": "Set your password",
@@ -173,12 +176,16 @@
         "tiers": "Tiers",
         "globalFeatureFlags": "Global feature flags",
         "featureFlags": "Tenant feature flags",
-        "import": "Data import"
+        "import": "Data import",
+        "stock": "Stock integration"
       },
       "dashboard": {
         "title": "Platform Admin",
         "welcome": "Welcome, {{email}}.",
-        "comingSoon": "Tenant, user, tier, and feature-flag management is coming soon."
+        "comingSoon": "Tenant, user, tier, and feature-flag management is coming soon.",
+        "stockTitle": "Stock integration",
+        "stockFailed": "Failed deliveries to Stock: {{count}}.",
+        "stockLink": "Open the integration panel"
       },
       "tenants": {
         "title": "Tenants",
@@ -265,6 +272,15 @@
           "resendInvitationSuccess": "Activation invite resent to {{email}}.",
           "resendPasswordResetSuccess": "Password reset email sent to {{email}}.",
           "resendError": "Could not resend the invitation."
+        },
+        "stock": {
+          "title": "Stock",
+          "lastCatalogSync": "Last catalog sync: {{date}}",
+          "never": "never",
+          "syncCatalog": "Sync catalog with Stock",
+          "syncing": "Requesting…",
+          "syncRequested": "Catalog sync requested. Products will show up in Stock in a few seconds.",
+          "failedEvents": "{{count}} failed delivery(ies) to Stock — check the integration panel."
         }
       },
       "tiers": {
@@ -356,7 +372,9 @@
           "email": "Email address.",
           "ruc": "RUC (tax ID).",
           "documento_identidad": "Identity document number (e.g. cédula), for clients without a RUC.",
-          "direccion": "Address."
+          "direccion": "Address.",
+          "tipo": "Servicio or Producto. Defaults to Servicio when left empty. Only products are sent to Stock.",
+          "sku": "Optional product code (up to 64 characters), shown in Stock."
         },
         "checkSectionTitle": "Check a file's headers",
         "checkSectionLead": "Verify a candidate file's column headers against this template before using it, without importing any data.",
@@ -389,6 +407,38 @@
         "colReason": "Reason",
         "statusImported": "Imported",
         "statusFailed": "Failed"
+      },
+      "stock": {
+        "title": "Stock integration",
+        "lead": "Deliveries from Femme to Stock that are pending or failed. A failed delivery holds back that salon's later ones until it is retried or discarded.",
+        "filterTenant": "Salon",
+        "filterStatus": "Status",
+        "statusOpen": "Pending or failed",
+        "refresh": "Refresh",
+        "empty": "Nothing pending: every delivery reached Stock.",
+        "colTenant": "Salon",
+        "colType": "Type",
+        "colStatus": "Status",
+        "colAttempts": "Attempts",
+        "colLastError": "Last error",
+        "colCreated": "Created",
+        "retry": "Retry",
+        "discard": "Discard",
+        "status": {
+          "PENDING": "Pending",
+          "PROCESSING": "Processing",
+          "FAILED": "Failed",
+          "DONE": "Delivered",
+          "DISCARDED": "Discarded"
+        },
+        "type": {
+          "TENANT_UPSERT": "Salon data",
+          "FEATURE_FLAGS_SYNC": "Flags",
+          "CATALOG_UPSERT": "Product",
+          "CATALOG_FULL_SYNC": "Full catalog",
+          "SALE": "Sale",
+          "REVERSE": "Reversal"
+        }
       }
     },
     "dashboard": {
@@ -1199,6 +1249,10 @@
           "submitError": "Could not add the movement. Check your data and try again.",
           "submitSuccess": "Movement added successfully."
         }
+      },
+      "stock": {
+        "available": "Available: {{available}}",
+        "willGoNegative": "Available: {{available}} — stock will go negative. You can still issue the invoice."
       }
     },
     "clients": {
@@ -1486,7 +1540,17 @@
       "TIP_PROFESSIONAL_NOT_IN_LINES": "Tips can only be entered for professionals who performed a service on this record.",
       "SERVICE_RECORD_LIST_RANGE_INCOMPLETE": "Both start and end dates are required.",
       "SERVICE_RECORD_LIST_INVALID_RANGE": "The start date must be before the end date.",
-      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "The start date cannot be more than 6 months in the past."
+      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "The start date cannot be more than 6 months in the past.",
+      "STOCK_MODULE_DISABLED": "This salon does not have the Stock module enabled.",
+      "STOCK_NOT_CONFIGURED": "The Stock integration is not configured yet. Contact support.",
+      "STOCK_OUTBOX_EVENT_NOT_FOUND": "That Stock delivery no longer exists.",
+      "STOCK_OUTBOX_EVENT_NOT_FAILED": "Only failed deliveries can be retried or discarded.",
+      "INVALID_CLIENT": "Invalid client credentials.",
+      "INVALID_SCOPE": "The requested scope is not allowed.",
+      "INVALID_SERVICE_KIND": "Type must be Service or Product.",
+      "INVALID_SKU": "The code (SKU) can have at most 64 characters (e.g. SH-300).",
+      "IMPORT_ROW_KIND_INVALID": "Invalid type: use Servicio or Producto (or leave it empty for Servicio).",
+      "IMPORT_ROW_SKU_TOO_LONG": "The SKU can have at most 64 characters (e.g. SH-300)."
     },
     "pagination": {
       "rowsPerPage": "Rows per page:",
@@ -1532,7 +1596,11 @@
         "statusLabel": "Status",
         "statusAll": "All statuses",
         "statusActive": "Active only",
-        "statusInactive": "Inactive only"
+        "statusInactive": "Inactive only",
+        "kindLabel": "Filter by type",
+        "kindAll": "All types",
+        "kindService": "Services",
+        "kindProduct": "Products"
       },
       "cancel": "Cancel",
       "save": "Save",
@@ -1609,7 +1677,12 @@
         "searchInlinePlaceholder": "Search by name or category…",
         "openEdit": "Edit service {{name}}",
         "tax": "Tax type",
-        "taxPlaceholder": "No tax"
+        "taxPlaceholder": "No tax",
+        "kind": "Type",
+        "kindService": "Service",
+        "kindProduct": "Product",
+        "sku": "Code (SKU, optional)",
+        "skuPlaceholder": "e.g. SH-300"
       }
     },
     "professionals": {
@@ -2025,6 +2098,9 @@
         "list": { "title": "Registered stamps", "content": "All registered fiscal stamps, with the active one shown first. Edit, activate, deactivate, or delete any of them from here." },
         "form": { "title": "Register new stamp", "content": "Enter the timbrado number, validity dates, and the invoice number range authorised by SET Paraguay." }
       }
+    },
+    "stock": {
+      "openError": "Stock could not be opened. Try again in a moment."
     }
   },
   "language": {

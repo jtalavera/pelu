@@ -4,6 +4,7 @@ import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
 import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.excelimport.ExcelHeaderValidationService;
 import com.cursorpoc.backend.excelimport.HeaderValidationResult;
 import com.cursorpoc.backend.excelimport.ImportEntityType;
@@ -13,6 +14,7 @@ import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.stock.CatalogStockEvent;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -30,6 +32,8 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,7 +62,18 @@ import org.springframework.web.server.ResponseStatusException;
  * </ul>
  */
 @Service
-public class ServiceImportService {
+public class ServiceImportService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-62): an upload with products publishes one {@code CatalogStockEvent}.
+   * Defaults to a no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private static final Logger log = LoggerFactory.getLogger(ServiceImportService.class);
 
@@ -71,6 +86,8 @@ public class ServiceImportService {
   public static final String ERROR_DURATION_INVALID = "IMPORT_ROW_DURATION_INVALID";
   public static final String ERROR_TAX_NOT_FOUND = "IMPORT_ROW_TAX_NOT_FOUND";
   public static final String ERROR_ROW_FAILED = "IMPORT_ROW_FAILED";
+  public static final String ERROR_KIND_INVALID = "IMPORT_ROW_KIND_INVALID";
+  public static final String ERROR_SKU_TOO_LONG = "IMPORT_ROW_SKU_TOO_LONG";
 
   private static final String COL_CATEGORIA = "categoria";
   private static final String COL_NOMBRE = "nombre";
@@ -78,6 +95,8 @@ public class ServiceImportService {
   private static final String COL_DURACION = "duracion_minutos";
   private static final String COL_IMPUESTO = "impuesto";
   private static final String COL_ACTIVO = "activo";
+  private static final String COL_TIPO = "tipo";
+  private static final String COL_SKU = "sku";
 
   private final TenantRepository tenantRepository;
   private final ServiceCategoryRepository serviceCategoryRepository;
@@ -131,6 +150,7 @@ public class ServiceImportService {
 
       Set<String> seenKeys = new HashSet<>();
       List<ImportRowOutcome> outcomes = new ArrayList<>();
+      int[] productCount = {0};
       DataFormatter formatter = new DataFormatter();
 
       int firstDataRow = sheet.getFirstRowNum() + 1;
@@ -151,7 +171,8 @@ public class ServiceImportService {
                   formatter,
                   categoryByName,
                   taxByName,
-                  seenKeys));
+                  seenKeys,
+                  productCount));
         } catch (Exception ex) {
           log.error(
               "importServices tenantId={} row={} status=REJECTED error={}",
@@ -161,6 +182,12 @@ public class ServiceImportService {
               ex);
           outcomes.add(ImportRowOutcome.rejected(excelRowNumber, ERROR_ROW_FAILED, null));
         }
+      }
+      // Stock (HU-62): one full catalog sync at the end (not one event per row), and only when
+      // the file actually brought products and the tenant has Stock.
+      int productsImported = productCount[0];
+      if (productsImported > 0) {
+        events.publishEvent(CatalogStockEvent.imported(tenantId, productsImported));
       }
       return ImportResult.completed(outcomes);
     } catch (ResponseStatusException ex) {
@@ -179,11 +206,14 @@ public class ServiceImportService {
       DataFormatter formatter,
       Map<String, ServiceCategory> categoryByName,
       Map<String, Tax> taxByName,
-      Set<String> seenKeys) {
+      Set<String> seenKeys,
+      int[] productCount) {
     String categoria = textValue(row, headerIndex.get(COL_CATEGORIA), formatter);
     String nombre = textValue(row, headerIndex.get(COL_NOMBRE), formatter);
     String impuesto = textValue(row, headerIndex.get(COL_IMPUESTO), formatter);
     String activo = textValue(row, headerIndex.get(COL_ACTIVO), formatter);
+    String tipo = textValue(row, headerIndex.get(COL_TIPO), formatter);
+    String sku = textValue(row, headerIndex.get(COL_SKU), formatter);
 
     if (isBlank(nombre)) {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_NAME_REQUIRED, null);
@@ -215,6 +245,14 @@ public class ServiceImportService {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_DURATION_INVALID, nombre.trim());
     }
 
+    ServiceKind kind = parseKind(tipo);
+    if (kind == null) {
+      return ImportRowOutcome.rejected(excelRowNumber, ERROR_KIND_INVALID, nombre.trim());
+    }
+    if (sku != null && sku.trim().length() > 64) {
+      return ImportRowOutcome.rejected(excelRowNumber, ERROR_SKU_TOO_LONG, nombre.trim());
+    }
+
     Tax tax = null;
     if (!isBlank(impuesto)) {
       tax = taxByName.get(normalize(impuesto));
@@ -244,7 +282,12 @@ public class ServiceImportService {
     service.setPriceMinor(priceMinor);
     service.setDurationMinutes(durationMinutes);
     service.setActive(active);
+    service.setKind(kind);
+    service.setSku(isBlank(sku) ? null : sku.trim());
     salonServiceRepository.save(service);
+    if (kind == ServiceKind.PRODUCT) {
+      productCount[0]++;
+    }
 
     return ImportRowOutcome.imported(excelRowNumber, nombre.trim());
   }
@@ -309,6 +352,25 @@ public class ServiceImportService {
       return NumericCellValue.invalid();
     }
     return NumericCellValue.of(new BigDecimal(cleaned));
+  }
+
+  /**
+   * HU-59: {@code tipo} column — blank → SERVICE; "Servicio"/"Service" or "Producto"/"Product"
+   * (case/accent-insensitive, trimmed); anything else → null (row rejected).
+   */
+  static ServiceKind parseKind(String raw) {
+    if (isBlank(raw)) {
+      return ServiceKind.SERVICE;
+    }
+    String v =
+        java.text.Normalizer.normalize(raw.trim(), java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+    return switch (v) {
+      case "servicio", "service" -> ServiceKind.SERVICE;
+      case "producto", "product" -> ServiceKind.PRODUCT;
+      default -> null;
+    };
   }
 
   private static boolean isBlank(String s) {

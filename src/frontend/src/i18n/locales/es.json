@@ -89,7 +89,8 @@
       "errorNetwork": "Error de red. Comprobá que la API esté en ejecución.",
       "forgotPassword": "¿Olvidaste tu contraseña?",
       "sessionExpired": "Tu sesión expiró por inactividad. Iniciá sesión nuevamente.",
-      "sessionRefreshExpired": "Tu sesión expiró. Iniciá sesión nuevamente."
+      "sessionRefreshExpired": "Tu sesión expiró. Iniciá sesión nuevamente.",
+      "stockLogout": "Cerraste sesión en Stock, así que también se cerró tu sesión en Femme."
     },
     "forgot": {
       "title": "Restablecer contraseña",
@@ -117,7 +118,9 @@
       "professionalRole": "Profesional",
       "sectionMain": "Principal",
       "sectionManagement": "Gestión",
-      "sectionFinance": "Finanzas"
+      "sectionFinance": "Finanzas",
+      "stock": "Stock",
+      "stockAria": "Abrir Stock en una pestaña nueva"
     },
     "activate": {
       "title": "Establecer contraseña",
@@ -173,12 +176,16 @@
         "tiers": "Tiers",
         "globalFeatureFlags": "Funcionalidades Globales",
         "featureFlags": "Funcionalidades Tenants",
-        "import": "Importación de datos"
+        "import": "Importación de datos",
+        "stock": "Integración con Stock"
       },
       "dashboard": {
         "title": "Platform Admin",
         "welcome": "Bienvenido, {{email}}.",
-        "comingSoon": "La gestión de tenants, usuarios, tiers y feature flags estará disponible próximamente."
+        "comingSoon": "La gestión de tenants, usuarios, tiers y feature flags estará disponible próximamente.",
+        "stockTitle": "Integración con Stock",
+        "stockFailed": "Envíos a Stock fallidos: {{count}}.",
+        "stockLink": "Abrir el panel de integración"
       },
       "tenants": {
         "title": "Tenants",
@@ -265,6 +272,15 @@
           "resendInvitationSuccess": "Se reenvió la invitación de activación a {{email}}.",
           "resendPasswordResetSuccess": "Se envió un correo de restablecimiento de contraseña a {{email}}.",
           "resendError": "No se pudo reenviar la invitación."
+        },
+        "stock": {
+          "title": "Stock",
+          "lastCatalogSync": "Última sincronización del catálogo: {{date}}",
+          "never": "nunca",
+          "syncCatalog": "Sincronizar catálogo con Stock",
+          "syncing": "Solicitando…",
+          "syncRequested": "Sincronización solicitada. Los productos aparecerán en Stock en unos segundos.",
+          "failedEvents": "{{count}} envío(s) a Stock fallido(s) — revisá el panel de integración."
         }
       },
       "tiers": {
@@ -356,7 +372,9 @@
           "email": "Dirección de correo electrónico.",
           "ruc": "RUC (identificación tributaria).",
           "documento_identidad": "Número de documento de identidad (p. ej. cédula), para clientes sin RUC.",
-          "direccion": "Dirección."
+          "direccion": "Dirección.",
+          "tipo": "Servicio o Producto. Si se deja vacío, es Servicio. Solo los productos se envían a Stock.",
+          "sku": "Código de producto opcional (hasta 64 caracteres), visible en Stock."
         },
         "checkSectionTitle": "Verificar encabezados de un archivo",
         "checkSectionLead": "Verificá los encabezados de columna de un archivo candidato contra esta plantilla antes de usarlo, sin importar ningún dato.",
@@ -389,6 +407,38 @@
         "colReason": "Motivo",
         "statusImported": "Importada",
         "statusFailed": "Fallida"
+      },
+      "stock": {
+        "title": "Integración con Stock",
+        "lead": "Envíos de Femme a Stock pendientes o fallidos. Un envío fallido frena los siguientes de ese salón hasta que se reintente o se descarte.",
+        "filterTenant": "Salón",
+        "filterStatus": "Estado",
+        "statusOpen": "Pendientes o fallidos",
+        "refresh": "Actualizar",
+        "empty": "No hay nada pendiente: todos los envíos llegaron a Stock.",
+        "colTenant": "Salón",
+        "colType": "Tipo",
+        "colStatus": "Estado",
+        "colAttempts": "Intentos",
+        "colLastError": "Último error",
+        "colCreated": "Creado",
+        "retry": "Reintentar",
+        "discard": "Descartar",
+        "status": {
+          "PENDING": "Pendiente",
+          "PROCESSING": "Procesando",
+          "FAILED": "Fallido",
+          "DONE": "Entregado",
+          "DISCARDED": "Descartado"
+        },
+        "type": {
+          "TENANT_UPSERT": "Datos del salón",
+          "FEATURE_FLAGS_SYNC": "Flags",
+          "CATALOG_UPSERT": "Producto",
+          "CATALOG_FULL_SYNC": "Catálogo completo",
+          "SALE": "Venta",
+          "REVERSE": "Reversión"
+        }
       }
     },
     "dashboard": {
@@ -1199,6 +1249,10 @@
           "submitError": "No se pudo agregar el movimiento. Revisá los datos e intentá de nuevo.",
           "submitSuccess": "Movimiento agregado correctamente."
         }
+      },
+      "stock": {
+        "available": "Disponible: {{available}}",
+        "willGoNegative": "Disponible: {{available}} — quedará en negativo. Igual podés emitir el comprobante."
       }
     },
     "clients": {
@@ -1486,7 +1540,17 @@
       "TIP_PROFESSIONAL_NOT_IN_LINES": "Solo se pueden cargar propinas para profesionales que realizaron un servicio en esta ficha.",
       "SERVICE_RECORD_LIST_RANGE_INCOMPLETE": "Elegí fecha desde y hasta.",
       "SERVICE_RECORD_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
-      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 6 meses."
+      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 6 meses.",
+      "STOCK_MODULE_DISABLED": "Este salón no tiene habilitado el módulo Stock.",
+      "STOCK_NOT_CONFIGURED": "La integración con Stock todavía no está configurada. Contactá a soporte.",
+      "STOCK_OUTBOX_EVENT_NOT_FOUND": "Ese envío a Stock ya no existe.",
+      "STOCK_OUTBOX_EVENT_NOT_FAILED": "Solo se pueden reintentar o descartar envíos fallidos.",
+      "INVALID_CLIENT": "Credenciales de cliente inválidas.",
+      "INVALID_SCOPE": "El alcance solicitado no está permitido.",
+      "INVALID_SERVICE_KIND": "El tipo debe ser Servicio o Producto.",
+      "INVALID_SKU": "El código (SKU) puede tener como máximo 64 caracteres (p. ej. SH-300).",
+      "IMPORT_ROW_KIND_INVALID": "Tipo inválido: usá Servicio o Producto (o dejalo vacío para Servicio).",
+      "IMPORT_ROW_SKU_TOO_LONG": "El SKU puede tener como máximo 64 caracteres (p. ej. SH-300)."
     },
     "pagination": {
       "rowsPerPage": "Filas por página:",
@@ -1534,7 +1598,11 @@
         "statusLabel": "Estado",
         "statusAll": "Todos los estados",
         "statusActive": "Solo activos",
-        "statusInactive": "Solo inactivos"
+        "statusInactive": "Solo inactivos",
+        "kindLabel": "Filtrar por tipo",
+        "kindAll": "Todos los tipos",
+        "kindService": "Servicios",
+        "kindProduct": "Productos"
       },
       "categories": {
         "addNew": "+ Nueva categoría",
@@ -1609,7 +1677,12 @@
         "searchInlinePlaceholder": "Buscar por nombre o categoría…",
         "openEdit": "Editar servicio {{name}}",
         "tax": "Tipo de impuesto",
-        "taxPlaceholder": "Sin impuesto"
+        "taxPlaceholder": "Sin impuesto",
+        "kind": "Tipo",
+        "kindService": "Servicio",
+        "kindProduct": "Producto",
+        "sku": "Código (SKU, opcional)",
+        "skuPlaceholder": "p. ej. SH-300"
       }
     },
     "professionals": {
@@ -2025,6 +2098,9 @@
         "list": { "title": "Timbrados registrados", "content": "Todos los timbrados registrados, con el activo en primer lugar. Desde aquí podés editar, activar, desactivar o borrar cualquiera de ellos." },
         "form": { "title": "Registrar nuevo timbrado", "content": "Ingresá el número de timbrado, las fechas de vigencia y el rango de numeración habilitado por la SET." }
       }
+    },
+    "stock": {
+      "openError": "No se pudo abrir Stock. Intentá de nuevo en un momento."
     }
   },
   "language": {

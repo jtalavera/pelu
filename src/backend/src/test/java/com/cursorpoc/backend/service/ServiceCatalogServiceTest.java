@@ -192,6 +192,51 @@ class ServiceCatalogServiceTest {
     assertThat(searched.get(1).name()).isEqualTo("Basic Cut");
   }
 
+  /** HU-59/HU-62: a product keeps its kind + SKU and announces itself to the Stock outbox. */
+  @Test
+  void createService_asProduct_keepsKindAndSkuAndPublishesCatalogEvent() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+
+    var res =
+        service.createService(
+            1L,
+            new ServiceUpsertRequest(
+                "Shampoo", 10L, null, new BigDecimal("95000"), 1, "PRODUCT", "  SH-300 "));
+
+    assertThat(res.kind()).isEqualTo("PRODUCT");
+    assertThat(res.sku()).isEqualTo("SH-300");
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            com.cursorpoc.backend.stock.CatalogStockEvent.class,
+            e -> {
+              assertThat(e.service().isProduct()).isTrue();
+              assertThat(e.wasProduct()).isFalse();
+            });
+  }
+
+  @Test
+  void createService_withoutKind_isAService() {
+    var res =
+        service.createService(
+            1L, new ServiceUpsertRequest("Trim", 10L, null, new BigDecimal("1.00"), 15));
+    assertThat(res.kind()).isEqualTo("SERVICE");
+    assertThat(res.sku()).isNull();
+  }
+
+  @Test
+  void createService_invalidKind_isBadRequest() {
+    assertThatThrownBy(
+            () ->
+                service.createService(
+                    1L,
+                    new ServiceUpsertRequest(
+                        "Trim", 10L, null, new BigDecimal("1.00"), 15, "GADGET", null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVALID_SERVICE_KIND");
+  }
+
   @Test
   void createService_rejectsInactiveCategory() {
     assertThatThrownBy(

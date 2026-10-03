@@ -4,10 +4,12 @@ import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
 import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.stock.CatalogStockEvent;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryUpsertRequest;
@@ -20,6 +22,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -28,7 +32,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-public class ServiceCatalogService {
+public class ServiceCatalogService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-62): product changes publish {@code CatalogStockEvent}s. Defaults to a
+   * no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private static final Set<String> ALLOWED_CATEGORY_ACCENTS =
       Set.of(
@@ -131,11 +146,25 @@ public class ServiceCatalogService {
   @Transactional(readOnly = true)
   public PageResponse<ServiceResponse> listServicesPaged(
       long tenantId, Optional<Long> categoryId, String q, Boolean active, int page, int size) {
+    return listServicesPaged(tenantId, categoryId, q, active, null, page, size);
+  }
+
+  /** HU-59: same as above, optionally filtered by kind (SERVICE / PRODUCT). */
+  @Transactional(readOnly = true)
+  public PageResponse<ServiceResponse> listServicesPaged(
+      long tenantId,
+      Optional<Long> categoryId,
+      String q,
+      Boolean active,
+      String kind,
+      int page,
+      int size) {
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
+    ServiceKind kindFilter = kind == null || kind.isBlank() ? null : parseKind(kind);
     PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<SalonService> result =
         salonServiceRepository.findByTenantFilteredPaged(
-            tenantId, categoryId.orElse(null), active, qTrimmed, pageable);
+            tenantId, categoryId.orElse(null), active, kindFilter, qTrimmed, pageable);
     List<ServiceResponse> content =
         result.getContent().stream()
             .map(ServiceCatalogService::toServiceResponse)
@@ -163,8 +192,11 @@ public class ServiceCatalogService {
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
+    s.setKind(parseKind(request.kind()));
+    s.setSku(normalizeSku(request.sku()));
     s.setActive(true);
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, false));
     return toServiceResponse(s);
   }
 
@@ -182,7 +214,13 @@ public class ServiceCatalogService {
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
+    boolean wasProduct = s.isProduct();
+    if (request.kind() != null) {
+      s.setKind(parseKind(request.kind()));
+    }
+    s.setSku(normalizeSku(request.sku()));
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, wasProduct));
     return toServiceResponse(s);
   }
 
@@ -191,6 +229,7 @@ public class ServiceCatalogService {
     SalonService s = loadServiceOrThrow(tenantId, serviceId);
     s.setActive(false);
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, s.isProduct()));
     return toServiceResponse(s);
   }
 
@@ -203,7 +242,31 @@ public class ServiceCatalogService {
     }
     s.setActive(true);
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, s.isProduct()));
     return toServiceResponse(s);
+  }
+
+  /** HU-59: null/blank → SERVICE; anything but SERVICE/PRODUCT → 400 INVALID_SERVICE_KIND. */
+  static ServiceKind parseKind(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return ServiceKind.SERVICE;
+    }
+    try {
+      return ServiceKind.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_SERVICE_KIND");
+    }
+  }
+
+  private static String normalizeSku(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    String sku = raw.trim();
+    if (sku.length() > 64) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_SKU");
+    }
+    return sku;
   }
 
   private Tenant loadTenantOrThrow(long tenantId) {
@@ -247,7 +310,9 @@ public class ServiceCatalogService {
         s.getName(),
         s.getPriceMinor(),
         s.getDurationMinutes(),
-        s.isActive());
+        s.isActive(),
+        s.getKind() != null ? s.getKind().name() : ServiceKind.SERVICE.name(),
+        s.getSku());
   }
 
   private static String normalizeAccent(String raw) {

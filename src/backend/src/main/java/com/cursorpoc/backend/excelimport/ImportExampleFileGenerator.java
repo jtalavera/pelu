@@ -99,14 +99,18 @@ public class ImportExampleFileGenerator {
                   "precio", "80000",
                   "duracion_minutos", "30",
                   "impuesto", "IVA 10%",
-                  "activo", "SI"),
+                  "activo", "SI",
+                  "tipo", "Servicio",
+                  "sku", ""),
               rowOf(
-                  "categoria", "Coloración",
-                  "nombre", "Tinte completo",
-                  "precio", "250000",
-                  "duracion_minutos", "90",
+                  "categoria", "Productos",
+                  "nombre", "Shampoo reparador 300 ml (ejemplo)",
+                  "precio", "95000",
+                  "duracion_minutos", "1",
                   "impuesto", "",
-                  "activo", "SI"));
+                  "activo", "SI",
+                  "tipo", "Producto",
+                  "sku", "SH-300"));
       case CLIENTS ->
           List.of(
               rowOf(

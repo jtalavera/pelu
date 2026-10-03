@@ -404,6 +404,43 @@ resource "azurerm_role_assignment" "deployer_sb_receiver" {
   principal_id         = var.entra_sql_admin_object_id
 }
 
+# Stock integration (HU-60): wake-up queue for the stock outbox — same parameters and narrow roles
+# as sifen-submission. The message only says "tenant X has pending events"; the outbox table is the
+# source of truth and StockOutboxReconciler re-wakes anything a lost message missed.
+resource "azurerm_servicebus_queue" "stock_integration" {
+  name         = "stock-integration"
+  namespace_id = azurerm_servicebus_namespace.main.id
+
+  max_delivery_count                   = 6
+  lock_duration                        = "PT5M"
+  default_message_ttl                  = "P7D"
+  dead_lettering_on_message_expiration = true
+}
+
+resource "azurerm_role_assignment" "backend_sb_stock_sender" {
+  scope                = azurerm_servicebus_queue.stock_integration.id
+  role_definition_name = "Azure Service Bus Data Sender"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "backend_sb_stock_receiver" {
+  scope                = azurerm_servicebus_queue.stock_integration.id
+  role_definition_name = "Azure Service Bus Data Receiver"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "deployer_sb_stock_sender" {
+  scope                = azurerm_servicebus_queue.stock_integration.id
+  role_definition_name = "Azure Service Bus Data Sender"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_role_assignment" "deployer_sb_stock_receiver" {
+  scope                = azurerm_servicebus_queue.stock_integration.id
+  role_definition_name = "Azure Service Bus Data Receiver"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
 resource "azurerm_monitor_diagnostic_setting" "service_bus" {
   name                       = "sb-diag"
   target_resource_id         = azurerm_servicebus_namespace.main.id
@@ -563,6 +600,28 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "FEMME_SERVICEBUS_QUEUE"
         value = azurerm_servicebus_queue.sifen_submission.name
+      }
+
+      # Stock integration (HU-60..HU-65). Secrets come from Key Vault at boot
+      # (KeyVaultSecretsEnvironmentPostProcessor), not from env vars.
+      env {
+        name  = "FEMME_SERVICEBUS_STOCK_QUEUE"
+        value = azurerm_servicebus_queue.stock_integration.name
+      }
+
+      env {
+        name  = "APP_FEMME_STOCK_ENABLED"
+        value = tostring(var.stock_enabled)
+      }
+
+      env {
+        name  = "APP_FEMME_STOCK_BASE_URL"
+        value = var.stock_api_base_url
+      }
+
+      env {
+        name  = "APP_FEMME_STOCK_CLIENT_ID"
+        value = var.stock_client_id
       }
 
       env {

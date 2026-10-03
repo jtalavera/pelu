@@ -59,6 +59,7 @@ public class SalonServiceController {
       @RequestParam(name = "categoryId", required = false) Long categoryId,
       @RequestParam(name = "q", required = false) String q,
       @RequestParam(name = "active", required = false) Boolean active,
+      @RequestParam(name = "kind", required = false) String kind,
       @RequestParam(name = "page", defaultValue = "0") int page,
       @RequestParam(name = "size", defaultValue = "10") int size) {
     if (principal == null) {
@@ -69,7 +70,13 @@ public class SalonServiceController {
     try {
       PageResponse<ServiceResponse> response =
           serviceCatalogService.listServicesPaged(
-              principal.getTenantId(), Optional.ofNullable(categoryId), q, active, page, size);
+              principal.getTenantId(),
+              Optional.ofNullable(categoryId),
+              q,
+              active,
+              kind,
+              page,
+              size);
       log.info(
           "GET /api/services/page tenantId={} status=200 total={}",
           principal.getTenantId(),

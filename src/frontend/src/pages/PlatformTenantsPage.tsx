@@ -32,6 +32,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
+import { TenantStockSection } from "../components/TenantStockSection";
 
 type FormErrors = {
   name?: string;
@@ -908,6 +909,15 @@ export default function PlatformTenantsPage() {
                 next: t(`femme.status.${editingTenant.lastStatusChange.newStatus}`),
               })}
             </p>
+          ) : null}
+
+          {/* HU-62: Stock — last catalog sync + manual "Sincronizar catálogo con Stock". */}
+          {editingTenant ? (
+            <TenantStockSection
+              key={editingTenant.id}
+              tenantId={editingTenant.id}
+              dateLocale={dateLocale}
+            />
           ) : null}
 
           {/* HU-41 AC-1/AC-2/AC-3/AC-4/AC-6: invite a tenant ADMIN user for this tenant, from its

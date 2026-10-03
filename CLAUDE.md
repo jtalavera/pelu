@@ -63,6 +63,19 @@ Spring Boot (`:8081`) + Vite (`:5174`) and provisions three divergent tenants vi
 `develop`/`main` via `.github/workflows/e2e-mt-isolation.yml`. The main `npm test`
 suite excludes `tests/mt-isolation/**` (`testIgnore` in `playwright.config.ts`).
 
+#### Stock cross-system suite (pelu + real control-stock)
+
+```bash
+npm run test:stock                          # needs a control-stock checkout (../control-stock or CONTROL_STOCK_DIR)
+npm run test:stock -- tests/stock/hu-63-64-descontar-y-reponer.spec.ts
+```
+
+Separate config (`e2e/playwright.stock.config.ts`): pelu backend `:8082` + SPA `:5175`, control-stock
+backend `:8090` + SPA `:5180`, and `fixtures/stock/stock-proxy.mjs` on `:8091` between them (specs take
+Stock "down" or inject errors through it). World provisioned by `global-setup.stock.ts`. Runs in CI via
+`.github/workflows/e2e-stock.yml` when the `CONTROL_STOCK_READ_TOKEN` secret exists. Set
+`PW_CHROMIUM_PATH` to reuse a preinstalled Chromium. Integration design and ops: `docs/stock-integration.md`.
+
 ### Database
 
 ```bash

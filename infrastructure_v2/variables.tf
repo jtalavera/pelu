@@ -210,3 +210,25 @@ variable "backend_ai_logging_level" {
     error_message = "backend_ai_logging_level must be one of OFF, ERROR, WARN, INFO, DEBUG, TRACE."
   }
 }
+
+# Stock integration (HU-59..HU-67). Outbound calls to control-stock stay off until enabled here;
+# the four secrets (app-femme-stock-client-secret, app-femme-stock-sso-secret,
+# app-femme-integration-token-secret, app-femme-integration-client-secret) are created in this
+# environment's Key Vault by an operator — never in Terraform state.
+variable "stock_enabled" {
+  description = "Whether the backend delivers outbox events to control-stock (APP_FEMME_STOCK_ENABLED)."
+  type        = bool
+  default     = false
+}
+
+variable "stock_api_base_url" {
+  description = "control-stock API base URL, e.g. https://stock-api.<femme-domain> (APP_FEMME_STOCK_BASE_URL)."
+  type        = string
+  default     = ""
+}
+
+variable "stock_client_id" {
+  description = "pelu's M2M client id in control-stock (APP_FEMME_STOCK_CLIENT_ID)."
+  type        = string
+  default     = "pelu"
+}

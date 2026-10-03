@@ -30,6 +30,7 @@ import PlatformDashboardPage from "./pages/PlatformDashboardPage";
 import PlatformTenantsPage from "./pages/PlatformTenantsPage";
 import PlatformTiersPage from "./pages/PlatformTiersPage";
 import PlatformImportPage from "./pages/PlatformImportPage";
+import PlatformStockIntegrationPage from "./pages/PlatformStockIntegrationPage";
 
 export function AppRoutes() {
   return (
@@ -81,6 +82,7 @@ export function AppRoutes() {
         />
         <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
         <Route path="/platform/import" element={<PlatformImportPage />} />
+        <Route path="/platform/stock" element={<PlatformStockIntegrationPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>

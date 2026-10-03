@@ -28,6 +28,7 @@ import com.cursorpoc.backend.service.SifenInvoiceHeaderService;
 import com.cursorpoc.backend.service.SifenInvoiceNotificationService;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenQrCodeService;
+import com.cursorpoc.backend.stock.InvoiceStockEvent;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,6 +40,7 @@ import java.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -108,6 +110,9 @@ public class SifenInvoiceTestSupportController {
   private final SifenInvoiceNotificationService notificationService;
   private final SifenInvoiceEventLogService eventLogService;
 
+  /** Stock (HU-64): the fabricated voids announce themselves exactly like the real services. */
+  private final ApplicationEventPublisher events;
+
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
       BusinessProfileRepository businessProfileRepository,
@@ -123,7 +128,9 @@ public class SifenInvoiceTestSupportController {
       SifenNumberVoidingEventRepository numberVoidingEventRepository,
       FemmeTimeProperties timeProperties,
       SifenInvoiceNotificationService notificationService,
-      SifenInvoiceEventLogService eventLogService) {
+      SifenInvoiceEventLogService eventLogService,
+      ApplicationEventPublisher events) {
+    this.events = events;
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
@@ -293,8 +300,12 @@ public class SifenInvoiceTestSupportController {
       invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
       // Issue #145: mirrors SifenInvoiceCancellationService.recordCancellationResult, which also
       // voids the invoice record on a successful SIFEN cancellation.
+      boolean wasVoided = invoice.getStatus() == InvoiceStatus.VOIDED;
       invoice.setStatus(InvoiceStatus.VOIDED);
       invoice.setVoidReason(invoice.getSifenCancellationReason());
+      if (!wasVoided) {
+        events.publishEvent(InvoiceStockEvent.voided(invoice, invoice.getVoidReason()));
+      }
     } else {
       invoice.setSifenCancellationResultCode("4009");
       invoice.setSifenCancellationMessage(
@@ -448,6 +459,7 @@ public class SifenInvoiceTestSupportController {
       if (invoice.getStatus() == InvoiceStatus.ISSUED) {
         invoice.setStatus(InvoiceStatus.VOIDED);
         invoice.setVoidReason("Numeración inutilizada ante SIFEN (protocolo 135791113)");
+        events.publishEvent(InvoiceStockEvent.voided(invoice, invoice.getVoidReason()));
       }
     } else {
       event.setResultCode("4004");

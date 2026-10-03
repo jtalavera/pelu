@@ -1,0 +1,85 @@
+name: E2E · Stock integration
+
+# Cross-system suite (pelu + a real control-stock): e2e/playwright.stock.config.ts.
+# control-stock is a private repository: the checkout needs a token with read access to it in the
+# CONTROL_STOCK_READ_TOKEN secret. Without it the job reports that it was skipped and passes.
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-stock-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  stock:
+    name: Stock cross-system suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HAS_STOCK_TOKEN: ${{ secrets.CONTROL_STOCK_READ_TOKEN != '' }}
+    steps:
+      - name: Checkout pelu
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Skip notice (no access to control-stock)
+        if: env.HAS_STOCK_TOKEN != 'true'
+        run: echo "::notice::CONTROL_STOCK_READ_TOKEN is not configured — Stock cross-system suite skipped."
+
+      - name: Checkout control-stock
+        if: env.HAS_STOCK_TOKEN == 'true'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: jtalavera/control-stock
+          ref: develop
+          path: control-stock
+          token: ${{ secrets.CONTROL_STOCK_READ_TOKEN }}
+
+      - name: Set up Node.js
+        if: env.HAS_STOCK_TOKEN == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+
+      - name: Set up Java
+        if: env.HAS_STOCK_TOKEN == 'true'
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            src/backend/gradle/wrapper/gradle-wrapper.properties
+            src/backend/build.gradle.kts
+
+      - name: Install dependencies
+        if: env.HAS_STOCK_TOKEN == 'true'
+        run: |
+          chmod +x src/backend/gradlew control-stock/src/backend/gradlew
+          (cd src/frontend && npm ci)
+          (cd control-stock/src/frontend && npm ci)
+          (cd e2e && npm ci && npx playwright install --with-deps chromium)
+
+      - name: Run Stock cross-system suite
+        if: env.HAS_STOCK_TOKEN == 'true'
+        working-directory: e2e
+        env:
+          CONTROL_STOCK_DIR: ${{ github.workspace }}/control-stock
+        run: npx playwright test --config playwright.stock.config.ts
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: e2e-stock-report
+          path: |
+            e2e/playwright-report/stock/
+            e2e/test-results/stock/
+          retention-days: 7

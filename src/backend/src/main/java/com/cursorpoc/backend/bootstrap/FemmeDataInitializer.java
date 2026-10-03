@@ -113,6 +113,16 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=true)");
       }
 
+      // Stock integration (HU-59): same flags as V69 (Flyway is disabled for `e2e`). STOCK_MODULE
+      // starts OFF globally; STOCK_HOST_MOVEMENTS_ALLOW_NEGATIVE is deliberately not registered.
+      seedFlag(
+          "STOCK_MODULE",
+          false,
+          "The tenant has the stock module. Off \u2192 user API answers 403"
+              + " STOCK_MODULE_DISABLED.");
+      seedFlag("STOCK_PHYSICAL_COUNT", true, "Physical inventory (counts) available.");
+      seedFlag("STOCK_TOURS", true, "Guided tours in the Stock SPA.");
+
       // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's
       // full tier CRUD hasn't landed yet). V41's Flyway INSERT only reaches dev/prod the same way
       // V28's flag INSERT does above — Flyway is disabled for the `e2e` profile — so this runner
@@ -179,5 +189,16 @@ public class FemmeDataInitializer {
     log.info(
         "Seeded demo admin user isabelzymanscki@gmail.com (password Demo123!) on tenant id={}",
         tenant.getId());
+  }
+
+  private void seedFlag(String key, boolean enabled, String description) {
+    if (featureFlagRepository.findByFlagKey(key).isEmpty()) {
+      FeatureFlag flag = new FeatureFlag();
+      flag.setFlagKey(key);
+      flag.setEnabled(enabled);
+      flag.setDescription(description);
+      featureFlagRepository.save(flag);
+      log.info("Seeded feature flag {} (enabled={})", key, enabled);
+    }
   }
 }
