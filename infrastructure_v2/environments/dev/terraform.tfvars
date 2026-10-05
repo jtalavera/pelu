@@ -39,3 +39,9 @@ key_vault_purge_protection_enabled   = false
 # provider, then set email_domain_verification_enabled=true here once they've propagated.
 email_custom_domain               = "flowbit.tech"
 email_domain_verification_enabled = true
+
+# Stock integration (HU-59..HU-67): the control-stock test API (control-stock-dev-rg / cstock-dev-api).
+# Its four secrets live in this environment's Key Vault, created by an operator — see
+# docs/stock-integration.md.
+stock_enabled      = true
+stock_api_base_url = "https://cstock-dev-api.salmonpebble-ee4220a9.eastus2.azurecontainerapps.io"

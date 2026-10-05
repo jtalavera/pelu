@@ -40,3 +40,9 @@ frontend_custom_domains = ["flowbit.tech", "www.flowbit.tech"]
 # owner. Confirm this is genuinely wanted before the first apply in prod.
 key_vault_soft_delete_retention_days = 90
 key_vault_purge_protection_enabled   = true
+
+# Stock integration (HU-59..HU-67). Off until a production control-stock exists. When it does, set
+# stock_enabled = true and stock_api_base_url = "<Stock prod API URL>", then follow the "Stock
+# integration" runbook in infrastructure_v2/infrastructure_v2.md (Key Vault secrets and the
+# VITE_STOCK_SPA_URL GitHub variable are not managed by Terraform).
+stock_enabled = false

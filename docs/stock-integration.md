@@ -44,6 +44,24 @@ En Stock: `APP_STOCK_PELU_ISSUER=femme`, `APP_STOCK_PELU_HOME_URL=<femme>/app`,
 
 Los secretos faltantes no impiden arrancar: lo que los necesita responde `STOCK_NOT_CONFIGURED`.
 
+## Operación y diagnóstico
+
+- **"Tu negocio todavía no está habilitado en Stock"** (`TENANT_NOT_PROVISIONED` al abrir Stock): el
+  `TENANT_UPSERT` del salón todavía no se entregó. Mirá la cola en Plataforma → Integración con Stock
+  (o la tabla `stock_outbox`).
+- **Eventos `PENDING` que no avanzan** (`stopped: NOT_DUE` en el log): el primer evento no entregado
+  de un salón está en espera de reintento y, como el orden por salón se respeta, bloquea al resto.
+  La espera crece 1m/5m/15m/1h/4h/24h tras cada falla. "Reintentar" en el panel solo aplica a
+  `FAILED`; para adelantar uno en espera:
+  `UPDATE stock_outbox SET next_attempt_at = SYSUTCDATETIME() WHERE id = <n> AND status = 'PENDING'`
+  (el reconciliador lo recoge en ≤ 1 minuto).
+- **`STOCK_NOT_CONFIGURED`** en `last_error`: faltan variables (`APP_FEMME_STOCK_*`) o el secreto
+  `app-femme-stock-client-secret` en el Key Vault al arrancar el backend.
+- **`STOCK_UNREACHABLE HttpTimeoutException`**: casi siempre arranque en frío de Stock (en dev escala
+  a cero, ~60 s). Es transitorio, pero manda el evento al siguiente backoff: adelantalo como arriba.
+- **SSO rechazado**: `APP_STOCK_PELU_ISSUER` en Stock debe ser exactamente `femme`
+  (`app.femme.stock.sso.issuer`) y el secreto HS256 debe ser el mismo en ambos Key Vaults.
+
 ## Pruebas
 
 - Unitarias/integración: `./gradlew test` (paquete `stock`: cliente HTTP contra servidor simulado, outbox
