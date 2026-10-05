@@ -193,6 +193,33 @@ SELECT tenant_id, COUNT(*) FROM sifen_certificates GROUP BY tenant_id;
     --name sifen-submission --query countDetails.deadLetterMessageCount
   ```
 
+## Stock integration (HU-59..HU-67)
+
+Terraform owns the `stock-integration` Service Bus queue, its four role assignments and the
+Container App env vars (`APP_FEMME_STOCK_ENABLED`, `APP_FEMME_STOCK_BASE_URL`,
+`APP_FEMME_STOCK_CLIENT_ID`, `FEMME_SERVICEBUS_STOCK_QUEUE`), driven by the `stock_enabled`,
+`stock_api_base_url` and `stock_client_id` variables in each `environments/<env>/terraform.tfvars`.
+`dev` points at the control-stock test API; `prod` stays `stock_enabled = false` until a
+production control-stock exists. What Terraform does **not** manage, by design, must be done per
+environment, in this order:
+
+1. **control-stock exists** for the environment (its own repo/Terraform). Note its API URL and SPA URL.
+   Its `pelu_issuer` must be `femme` (pelu signs the SSO token with `app.femme.stock.sso.issuer`,
+   default `femme`) and `pelu_home_url` / `pelu_logout_url` must point at this environment's pelu
+   SPA (`<spa>/app`, `<spa>/login?reason=stock_logout`).
+2. **tfvars**: set `stock_enabled = true` and `stock_api_base_url`; `terraform plan` should show
+   only the queue, the four roles and the env vars; apply.
+3. **Key Vault secrets** (values never in Terraform): `app-femme-stock-sso-secret` = Stock's
+   `pelu-handoff-hs256-secret`, and `app-femme-stock-client-secret` = Stock's
+   `pelu-platform-client-secret`. Copy them vault-to-vault so the values are never printed. The
+   Stock→pelu direction (flags reconciler) additionally needs `app-femme-integration-token-secret`
+   and `app-femme-integration-client-secret` — see `docs/stock-integration.md`. Restart the backend
+   revision afterwards: secrets are read at boot.
+4. **GitHub Environment variable** `VITE_STOCK_SPA_URL` (the Stock SPA origin) and a frontend
+   redeploy — without it the "Stock" menu item stays hidden.
+5. Activate `STOCK_MODULE` for a tenant and check `stock_outbox` reaches `DONE` (operational
+   notes in `docs/stock-integration.md`).
+
 ## SQL free-limit grant (not enabled — known limitation)
 
 Azure grants one serverless General Purpose database per subscription up to
@@ -228,6 +255,7 @@ And one environment **variable** (Settings → Environments → Variables, not a
 | Variable | Description |
 |---|---|
 | `VITE_APPINSIGHTS_CONNECTION_STRING` | Browser RUM (issue #268): `terraform output -raw app_insights_connection_string`. Unset → frontend telemetry stays off. |
+| `VITE_STOCK_SPA_URL` | Stock integration (HU-65): origin of the control-stock SPA for this env (no trailing slash), e.g. `https://gray-bay-06ebbd90f.3.azurestaticapps.net` for `v2-test`. Baked in at build time; unset → the "Stock" menu item stays hidden. |
 
 ## Observability (issue #268)
 
