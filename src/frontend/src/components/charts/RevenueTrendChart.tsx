@@ -40,8 +40,9 @@ export const TREND_WINDOW_DAYS = 7;
 
 /**
  * Trailing moving average: the value at day `i` is the mean of days `i-window+1 … i`. Days before
- * the first full window are `null` (the line simply starts one week in) instead of averaging a
- * partial window, which would drag the line's start toward a misleading low/high.
+ * the first full window are `null` instead of averaging a partial window, which would drag the
+ * line's start toward a misleading low/high. The chart avoids that gap by prepending the backend's
+ * `lookback` days (the week before the plotted window) to the series before averaging.
  */
 export function trailingAverage(values: number[], window: number): Array<number | null> {
   return values.map((_, i) => {
@@ -61,10 +62,15 @@ export function trailingAverage(values: number[], window: number): Array<number 
  */
 export function RevenueTrendChart({
   data,
+  lookback = [],
   days,
   locale,
 }: {
   data: RevenueTrendPoint[];
+  /** The days just before `data` (oldest first). Used ONLY to compute the 7-day average of the
+   * first plotted days, so the trend line starts on day 1; they are never drawn as bars. If
+   * missing/short (older backend), the line starts once a full week is available. */
+  lookback?: RevenueTrendPoint[];
   days: number;
   locale: string;
 }) {
@@ -72,12 +78,14 @@ export function RevenueTrendChart({
 
   const points = useMemo(() => {
     const daily = data.map((p) => ({ date: p.date, invoiced: Number(p.invoiced) || 0 }));
+    // Average over lookback + window, then keep only the plotted days' values.
+    const before = lookback.map((p) => Number(p.invoiced) || 0);
     const average = trailingAverage(
-      daily.map((p) => p.invoiced),
+      [...before, ...daily.map((p) => p.invoiced)],
       TREND_WINDOW_DAYS,
-    );
+    ).slice(before.length);
     return daily.map((p, i) => ({ ...p, trend: average[i] }));
-  }, [data]);
+  }, [data, lookback]);
   const hasRevenue = points.some((p) => p.invoiced > 0);
   const lastTrendIndex = points.reduce((last, p, i) => (p.trend != null ? i : last), -1);
   const hasTrend = lastTrendIndex >= 0;

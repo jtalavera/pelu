@@ -44,14 +44,20 @@ describe("RevenueTrendChart rendering", () => {
     invoiced: i === 13 ? 240000 : 100000,
   }));
 
-  function renderChart(points = data) {
+  function renderChart(points = data, lookback: typeof data = []) {
     void i18n.changeLanguage("en");
     return render(
       <I18nextProvider i18n={i18n}>
-        <RevenueTrendChart data={points} days={points.length} locale="en-US" />
+        <RevenueTrendChart data={points} lookback={lookback} days={points.length} locale="en-US" />
       </I18nextProvider>,
     );
   }
+
+  /** The 6 days right before `data` (2026-08-26 … 2026-08-31), 100.000 Gs. each. */
+  const lookback = Array.from({ length: 6 }, (_, i) => ({
+    date: `2026-08-${String(26 + i)}`,
+    invoiced: 100000,
+  }));
 
   it("draws the trend as a 2px line in the full hue over recessive same-hue bars", () => {
     const { container } = renderChart();
@@ -73,6 +79,33 @@ describe("RevenueTrendChart rendering", () => {
     const legend = container.querySelector(".recharts-legend-wrapper");
     expect(legend?.textContent).toContain("Invoiced");
     expect(legend?.textContent).toContain("7-day average");
+  });
+
+  /** X where the trend line starts, and X of the left edge of the first plotted bar. */
+  function lineStartAndFirstBarX(container: HTMLElement) {
+    const lineD = container.querySelector(".recharts-line-curve")?.getAttribute("d") ?? "";
+    const barD = container.querySelector(".recharts-bar-rectangle path")?.getAttribute("d") ?? "";
+    return {
+      lineStartX: Number(/^M\s*([\d.]+)/.exec(lineD)?.[1]),
+      firstBarX: Number(/^M\s*([\d.]+)/.exec(barD)?.[1]),
+    };
+  }
+
+  it("with the backend's lookback days the line starts on the first plotted day (no one-week gap)", () => {
+    const { container } = renderChart(data, lookback);
+    const { lineStartX, firstBarX } = lineStartAndFirstBarX(container);
+    // The first bar is ≤ 24px wide and starts at firstBarX: the line starts over it.
+    expect(lineStartX).toBeGreaterThanOrEqual(firstBarX);
+    expect(lineStartX).toBeLessThanOrEqual(firstBarX + 24);
+    // The lookback days are context only: not drawn as bars (14 bars, not 20).
+    expect(container.querySelectorAll(".recharts-bar-rectangle").length).toBe(data.length);
+  });
+
+  it("without lookback (older backend) the line still starts once a full week is available", () => {
+    const { container } = renderChart(data);
+    const { lineStartX, firstBarX } = lineStartAndFirstBarX(container);
+    // Starts over the 7th bar, far to the right of the first one.
+    expect(lineStartX).toBeGreaterThan(firstBarX + 200);
   });
 
   it("does not draw the line (nor list it in the legend) when the window is shorter than a week", () => {
