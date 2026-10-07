@@ -8,6 +8,7 @@ Lo que pelu implementa para que un salón use Stock. Contrato del otro lado: `co
 |---|---|
 | Flags `STOCK_MODULE` (OFF global), `STOCK_PHYSICAL_COUNT`, `STOCK_TOURS` | `V69`, `FemmeDataInitializer` — misma resolución "Y" que cualquier flag |
 | Tipo Servicio/Producto + SKU en el catálogo y en el upload de plataforma (`tipo`, `sku`) | `V70`, `ServiceCatalogService`, `ServiceImportService` |
+| Catálogo separado: Servicios y Productos con pantallas y categorías propias (`service_categories.kind`) | `V72`, `ServiceCatalogService`, `CatalogItemsPage` — [HU](../requirements/user_stories/catalogo-separado-servicios-productos.md) |
 | Outbox transaccional (`stock_outbox`) + estado por salón (`stock_tenant_link`) | `V71`, paquete `com.cursorpoc.backend.stock` |
 | Despertador: cola `stock-integration` (Service Bus) o cola local en proceso | `StockServiceBusConfiguration`, `ServiceBusStockOutboxQueue`, `LocalAsyncStockOutboxQueue` |
 | Worker por salón, en orden, con lease de 5 min y reintentos 1m/5m/15m/1h/4h/24h → `FAILED` | `StockOutboxProcessor`, `StockOutboxPersistenceService` |

@@ -1,3 +1,4 @@
 package com.cursorpoc.backend.web.dto;
 
-public record ServiceCategoryResponse(long id, String name, boolean active, String accentKey) {}
+public record ServiceCategoryResponse(
+    long id, String name, boolean active, String accentKey, String kind) {}

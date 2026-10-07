@@ -45,12 +45,13 @@ public class SalonServiceController {
   public List<ServiceResponse> list(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @RequestParam(name = "categoryId", required = false) Long categoryId,
-      @RequestParam(name = "q", required = false) String q) {
+      @RequestParam(name = "q", required = false) String q,
+      @RequestParam(name = "kind", required = false) String kind) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     return serviceCatalogService.listServices(
-        principal.getTenantId(), Optional.ofNullable(categoryId), q);
+        principal.getTenantId(), Optional.ofNullable(categoryId), q, kind);
   }
 
   @GetMapping("/page")

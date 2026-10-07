@@ -9,6 +9,7 @@ import DashboardsPage from "./pages/DashboardsPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
+import ProductsPage from "./pages/ProductsPage";
 import ServicesPage from "./pages/ServicesPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import TaxSettingsPage from "./pages/TaxSettingsPage";
@@ -51,6 +52,7 @@ export function AppRoutes() {
         <Route path="/app/calendar" element={<CalendarPage />} />
         <Route path="/app/dashboards" element={<DashboardsPage />} />
         <Route path="/app/services" element={<ServicesPage />} />
+        <Route path="/app/products" element={<ProductsPage />} />
         <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/service-records" element={<ServiceRecordsPage />} />
         <Route path="/app/propinas" element={<PropinasPage />} />

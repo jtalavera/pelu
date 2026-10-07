@@ -152,6 +152,51 @@ class ServiceImportServiceTest {
             e -> assertThat(e.productsImported()).isEqualTo(2));
   }
 
+  // Catalog split: categories are created with the kind of the row that introduces them.
+  @Test
+  void newCategory_getsTheKindOfItsRow() {
+    String[] headers = {"categoria", "nombre", "precio", "duracion_minutos", "tipo"};
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Shampoos", "Shampoo", "95000", "1", "Producto"},
+            new String[] {"Cortes", "Corte", "80000", "30", "Servicio"});
+
+    service.importServices(1L, bytes);
+
+    org.mockito.ArgumentCaptor<ServiceCategory> saved =
+        org.mockito.ArgumentCaptor.forClass(ServiceCategory.class);
+    verify(serviceCategoryRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+    assertThat(saved.getAllValues())
+        .extracting(ServiceCategory::getName, ServiceCategory::getKind)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                "Shampoos", com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT),
+            org.assertj.core.groups.Tuple.tuple(
+                "Cortes", com.cursorpoc.backend.domain.enums.ServiceKind.SERVICE));
+  }
+
+  // Catalog split: the same categoria cannot hold both a Servicio and a Producto.
+  @Test
+  void sameCategoryWithBothKinds_rejectsTheRowOfTheOtherKind() {
+    String[] headers = {"categoria", "nombre", "precio", "duracion_minutos", "tipo"};
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Mixta", "Corte", "80000", "30", "Servicio"},
+            new String[] {"Mixta", "Shampoo", "95000", "1", "Producto"});
+
+    ImportResult result = service.importServices(1L, bytes);
+
+    assertThat(result.importedCount()).isEqualTo(1);
+    assertThat(result.failedCount()).isEqualTo(1);
+    assertThat(result.rows())
+        .anySatisfy(
+            r ->
+                assertThat(r.errorCode())
+                    .isEqualTo(ServiceImportService.ERROR_CATEGORY_KIND_MISMATCH));
+  }
+
   @Test
   void invalidTipo_rejectsOnlyThatRowWithItsOwnCode() {
     java.util.List<Object> published = new java.util.ArrayList<>();

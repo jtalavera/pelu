@@ -105,6 +105,7 @@
       "calendar": "Calendario",
       "dashboards": "Dashboards",
       "services": "Servicios",
+      "products": "Productos",
       "professionals": "Profesionales",
       "clients": "Clientes",
       "billing": "Facturación",
@@ -1547,8 +1548,11 @@
       "STOCK_OUTBOX_EVENT_NOT_FAILED": "Solo se pueden reintentar o descartar envíos fallidos.",
       "INVALID_CLIENT": "Credenciales de cliente inválidas.",
       "INVALID_SCOPE": "El alcance solicitado no está permitido.",
+      "CATEGORY_KIND_MISMATCH": "La categoría pertenece al otro catálogo: los servicios y los productos tienen categorías separadas.",
+      "CATEGORY_KIND_IMMUTABLE": "Una categoría no puede pasar de Servicios a Productos ni al revés.",
       "INVALID_SERVICE_KIND": "El tipo debe ser Servicio o Producto.",
       "INVALID_SKU": "El código (SKU) puede tener como máximo 64 caracteres (p. ej. SH-300).",
+      "IMPORT_ROW_CATEGORY_KIND_MISMATCH": "Esa categoría ya existe con el otro tipo: los servicios y los productos tienen categorías separadas.",
       "IMPORT_ROW_KIND_INVALID": "Tipo inválido: usá Servicio o Producto (o dejalo vacío para Servicio).",
       "IMPORT_ROW_SKU_TOO_LONG": "El SKU puede tener como máximo 64 caracteres (p. ej. SH-300)."
     },
@@ -1575,6 +1579,7 @@
       "colService": "Servicio",
       "colCategory": "Categoría",
       "colDuration": "Duración",
+      "colSku": "Código (SKU)",
       "colPrice": "Precio",
       "colStatus": "Estado",
       "priceList": {
@@ -1583,7 +1588,7 @@
         "error": "No se pudo descargar la lista de precios. Intentá de nuevo."
       },
       "tabs": {
-        "services": "Servicios",
+        "items": "Servicios",
         "categories": "Categorías"
       },
       "search": {
@@ -1598,11 +1603,7 @@
         "statusLabel": "Estado",
         "statusAll": "Todos los estados",
         "statusActive": "Solo activos",
-        "statusInactive": "Solo inactivos",
-        "kindLabel": "Filtrar por tipo",
-        "kindAll": "Todos los tipos",
-        "kindService": "Servicios",
-        "kindProduct": "Productos"
+        "statusInactive": "Solo inactivos"
       },
       "categories": {
         "addNew": "+ Nueva categoría",
@@ -1678,11 +1679,42 @@
         "openEdit": "Editar servicio {{name}}",
         "tax": "Tipo de impuesto",
         "taxPlaceholder": "Sin impuesto",
-        "kind": "Tipo",
-        "kindService": "Servicio",
-        "kindProduct": "Producto",
         "sku": "Código (SKU, opcional)",
         "skuPlaceholder": "p. ej. SH-300"
+      }
+    },
+    "products": {
+      "title": "Productos",
+      "lead": "Gestioná las categorías y los productos que vendés y facturás.",
+      "loadError": "No se pudieron cargar los productos.",
+      "createSuccess": "Producto guardado correctamente.",
+      "activateSuccess": "Producto activado correctamente.",
+      "deactivateSuccess": "Producto desactivado correctamente.",
+      "colService": "Producto",
+      "tabs": {
+        "items": "Productos"
+      },
+      "search": {
+        "placeholder": "Buscar por producto o categoría…"
+      },
+      "categories": {
+        "deactivateDialogDescription": "“{{name}}” quedará inactiva. No estará disponible para nuevos productos; el historial existente se conserva.",
+        "emptyBody": "Creá una categoría para empezar a organizar tus productos.",
+        "serviceCount": "{{count}} productos"
+      },
+      "services": {
+        "addNew": "+ Nuevo producto",
+        "add": "Nuevo producto",
+        "addTitle": "Nuevo producto",
+        "editTitle": "Editar producto",
+        "nameRequired": "Ingresá un nombre de producto.",
+        "deactivateDialogTitle": "Desactivar producto",
+        "deactivateDialogDescription": "“{{name}}” quedará inactivo. No aparecerá en nuevas facturas; el historial existente se conserva.",
+        "inactiveHint": "La categoría debe estar activa para reactivar este producto. Elegí una categoría activa o reactivá la categoría primero.",
+        "emptyTitle": "Todavía no hay productos.",
+        "emptyBody": "Creá un producto para venderlo en tus facturas.",
+        "searchInlinePlaceholder": "Buscar por nombre o categoría…",
+        "openEdit": "Editar producto {{name}}"
       }
     },
     "professionals": {
@@ -2018,6 +2050,7 @@
         "dashboard": { "title": "Panel de inicio", "content": "Tu punto de partida: ves los turnos de hoy, los ingresos y la actividad reciente de un vistazo." },
         "calendar": { "title": "Calendario", "content": "Gestioná los turnos por día o semana. Reservá, reprogramá y cancelá desde aquí." },
         "services": { "title": "Servicios", "content": "Administrá el catálogo de servicios y precios que ofrece tu salón." },
+        "products": { "title": "Productos", "content": "Administrá los productos que vendés, con sus propias categorías y precios." },
         "professionals": { "title": "Profesionales", "content": "Agregá y gestioná los estilistas o especialistas que trabajan en tu salón." },
         "clients": { "title": "Clientes", "content": "Tu base de datos completa de clientes: buscá, filtrá y abrí cualquier perfil." },
         "billing": { "title": "Facturación", "content": "Abrí cajas, emitís facturas y revisás el historial de pagos." },
@@ -2060,6 +2093,13 @@
         "filters": { "title": "Filtros de categoría", "content": "Hacé clic en una categoría para mostrar solo los servicios de ese grupo." },
         "addCategory": { "title": "Nueva categoría", "content": "Crea un nuevo grupo para organizar tus servicios (por ejemplo: Cabello, Uñas, Piel)." },
         "list": { "title": "Lista de servicios", "content": "Todos los servicios con su duración, precio y categoría. Hacé clic en cualquier fila para editarla o desactivarla." }
+      },
+      "products": {
+        "header": { "title": "Encabezado de productos", "content": "Muestra la pantalla de productos con un botón para agregar un nuevo producto o categoría." },
+        "search": { "title": "Búsqueda de productos", "content": "Escribí aquí para filtrar productos por nombre en todas las categorías al instante." },
+        "filters": { "title": "Filtros de categoría", "content": "Hacé clic en una categoría para mostrar solo los productos de ese grupo." },
+        "addCategory": { "title": "Nueva categoría", "content": "Crea un nuevo grupo para organizar tus productos (por ejemplo: Shampoos, Styling, Cuidado de la piel)." },
+        "list": { "title": "Lista de productos", "content": "Todos los productos con su código, precio y categoría. Hacé clic en cualquier fila para editarlo o desactivarlo." }
       },
       "billing": {
         "header": { "title": "Facturación", "content": "Gestioná tu sesión de caja aquí y emití comprobantes para los clientes." },

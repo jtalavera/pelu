@@ -133,8 +133,15 @@ export async function createProduct(
   return svc.id;
 }
 
-export async function createCategory(token: string, name: string): Promise<number> {
-  return (await peluOk<{ id: number }>("/api/service-categories", { token, body: { name, accentKey: "stone" } })).id;
+/** Catalog split: a category holds only SERVICE or only PRODUCT items (default: product category). */
+export async function createCategory(
+  token: string,
+  name: string,
+  kind: "SERVICE" | "PRODUCT" = "PRODUCT",
+): Promise<number> {
+  return (
+    await peluOk<{ id: number }>("/api/service-categories", { token, body: { name, accentKey: "stone", kind } })
+  ).id;
 }
 
 // ── control-stock ──────────────────────────────────────────────────────────────────────────────
