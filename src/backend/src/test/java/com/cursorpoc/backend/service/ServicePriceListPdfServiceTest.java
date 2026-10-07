@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.lowagie.text.pdf.PdfReader;
@@ -96,6 +97,38 @@ class ServicePriceListPdfServiceTest {
     assertThat(text).contains("Corte de cabello");
     // Same format as the frontend's formatGuaraniesGs: "Gs. " + dot-grouped, no decimals.
     assertThat(text).contains("Gs. 150.000");
+  }
+
+  /** Catalog split: products are listed in their own "Productos" section. */
+  @Test
+  void listsServicesAndProductsInSeparateSections() throws Exception {
+    SalonService shampoo = service("Shampoo 300 ml", 95_000);
+    shampoo.setKind(ServiceKind.PRODUCT);
+    when(salonServiceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(1L))
+        .thenReturn(List.of(service("Corte", 50_000), shampoo));
+    when(businessProfileRepository.findByTenantId(1L))
+        .thenReturn(Optional.of(profileWith(null, "Peluqueria Demo")));
+
+    String text = extractText(newService().buildPriceListPdf(1L));
+
+    assertThat(text).contains("Servicios").contains("Productos");
+    assertThat(text).contains("Servicio").contains("Producto");
+    // OpenPDF writes paragraphs and table cells to different content layers, so the extracted
+    // text order is "headings, then tables"; assert the order within each kind of content.
+    assertThat(text.indexOf("Servicios")).isLessThan(text.indexOf("Productos"));
+    assertThat(text.indexOf("Corte")).isLessThan(text.indexOf("Shampoo 300 ml"));
+  }
+
+  @Test
+  void onlyServices_hasNoProductsSection() throws Exception {
+    when(salonServiceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(1L))
+        .thenReturn(List.of(service("Corte", 50_000)));
+    when(businessProfileRepository.findByTenantId(1L))
+        .thenReturn(Optional.of(profileWith(null, "Peluqueria Demo")));
+
+    String text = extractText(newService().buildPriceListPdf(1L));
+
+    assertThat(text).doesNotContain("Productos");
   }
 
   @Test

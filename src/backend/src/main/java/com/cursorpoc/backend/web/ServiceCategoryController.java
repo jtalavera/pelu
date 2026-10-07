@@ -35,11 +35,12 @@ public class ServiceCategoryController {
   @GetMapping
   public List<ServiceCategoryResponse> list(
       @AuthenticationPrincipal FemmeUserPrincipal principal,
-      @RequestParam(name = "active", required = false) Boolean active) {
+      @RequestParam(name = "active", required = false) Boolean active,
+      @RequestParam(name = "kind", required = false) String kind) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    return serviceCatalogService.listCategories(principal.getTenantId(), active);
+    return serviceCatalogService.listCategories(principal.getTenantId(), active, kind);
   }
 
   @PostMapping

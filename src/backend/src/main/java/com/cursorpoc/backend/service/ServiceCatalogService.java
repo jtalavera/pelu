@@ -73,8 +73,15 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
   }
 
   public List<ServiceCategoryResponse> listCategories(long tenantId, Boolean active) {
+    return listCategories(tenantId, active, null);
+  }
+
+  /** Catalog split: optionally restricted to the categories of one kind (SERVICE / PRODUCT). */
+  public List<ServiceCategoryResponse> listCategories(long tenantId, Boolean active, String kind) {
+    ServiceKind kindFilter = kind == null || kind.isBlank() ? null : parseKind(kind);
     return serviceCategoryRepository.findByTenant_IdOrderByNameAsc(tenantId).stream()
         .filter(c -> active == null || c.isActive() == active)
+        .filter(c -> kindFilter == null || c.getKind() == kindFilter)
         .map(ServiceCatalogService::toCategoryResponse)
         .toList();
   }
@@ -88,6 +95,7 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
     c.setName(request.name().trim());
     c.setActive(true);
     c.setAccentKey(normalizeAccent(request.accentKey()));
+    c.setKind(parseKind(request.kind()));
     serviceCategoryRepository.save(c);
     return toCategoryResponse(c);
   }
@@ -96,6 +104,11 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
   public ServiceCategoryResponse updateCategory(
       long tenantId, long categoryId, ServiceCategoryUpsertRequest request) {
     ServiceCategory c = loadCategoryOrThrow(tenantId, categoryId);
+    if (request.kind() != null
+        && !request.kind().isBlank()
+        && parseKind(request.kind()) != c.getKind()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_KIND_IMMUTABLE");
+    }
     c.setName(request.name().trim());
     if (request.accentKey() != null) {
       c.setAccentKey(normalizeAccent(request.accentKey()));
@@ -121,10 +134,18 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
   }
 
   public List<ServiceResponse> listServices(long tenantId, Optional<Long> categoryId, String q) {
+    return listServices(tenantId, categoryId, q, null);
+  }
+
+  /** Catalog split: same as above, optionally restricted to one kind (SERVICE / PRODUCT). */
+  public List<ServiceResponse> listServices(
+      long tenantId, Optional<Long> categoryId, String q, String kind) {
+    ServiceKind kindFilter = kind == null || kind.isBlank() ? null : parseKind(kind);
     String qNorm = q == null ? "" : q.trim();
     String qLower = qNorm.toLowerCase(Locale.ROOT);
 
     return salonServiceRepository.findByTenant_IdOrderByNameAsc(tenantId).stream()
+        .filter(s -> kindFilter == null || s.getKind() == kindFilter)
         .filter(
             s -> categoryId.isEmpty() || Objects.equals(s.getCategory().getId(), categoryId.get()))
         .filter(
@@ -185,6 +206,7 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
     Tax tax = request.taxId() != null ? loadTaxOrThrow(tenantId, request.taxId()) : null;
+    ServiceKind kind = resolveItemKind(request.kind(), category, null);
     SalonService s = new SalonService();
     s.setTenant(tenant);
     s.setCategory(category);
@@ -192,7 +214,7 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
-    s.setKind(parseKind(request.kind()));
+    s.setKind(kind);
     s.setSku(normalizeSku(request.sku()));
     s.setActive(true);
     salonServiceRepository.save(s);
@@ -209,15 +231,14 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
     Tax tax = request.taxId() != null ? loadTaxOrThrow(tenantId, request.taxId()) : null;
+    ServiceKind kind = resolveItemKind(request.kind(), category, s.getKind());
     s.setCategory(category);
     s.setTax(tax);
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
     boolean wasProduct = s.isProduct();
-    if (request.kind() != null) {
-      s.setKind(parseKind(request.kind()));
-    }
+    s.setKind(kind);
     s.setSku(normalizeSku(request.sku()));
     salonServiceRepository.save(s);
     events.publishEvent(CatalogStockEvent.itemChanged(s, wasProduct));
@@ -244,6 +265,27 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
     salonServiceRepository.save(s);
     events.publishEvent(CatalogStockEvent.itemChanged(s, s.isProduct()));
     return toServiceResponse(s);
+  }
+
+  /**
+   * Catalog split: an item's kind is the kind of its category. An explicit {@code requested} kind
+   * (or, when none is sent, the item's {@code current} kind) must match; a new item without kind
+   * simply inherits the category's.
+   */
+  private static ServiceKind resolveItemKind(
+      String requested, ServiceCategory category, ServiceKind current) {
+    ServiceKind kind;
+    if (requested != null && !requested.isBlank()) {
+      kind = parseKind(requested);
+    } else if (current != null) {
+      kind = current;
+    } else {
+      kind = category.getKind();
+    }
+    if (kind != category.getKind()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_KIND_MISMATCH");
+    }
+    return kind;
   }
 
   /** HU-59: null/blank → SERVICE; anything but SERVICE/PRODUCT → 400 INVALID_SERVICE_KIND. */
@@ -294,7 +336,12 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
   }
 
   private static ServiceCategoryResponse toCategoryResponse(ServiceCategory c) {
-    return new ServiceCategoryResponse(c.getId(), c.getName(), c.isActive(), c.getAccentKey());
+    return new ServiceCategoryResponse(
+        c.getId(),
+        c.getName(),
+        c.isActive(),
+        c.getAccentKey(),
+        c.getKind() != null ? c.getKind().name() : ServiceKind.SERVICE.name());
   }
 
   private static ServiceResponse toServiceResponse(SalonService s) {

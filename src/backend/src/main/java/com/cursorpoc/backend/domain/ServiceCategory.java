@@ -1,7 +1,10 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -30,6 +33,11 @@ public class ServiceCategory {
 
   @Column(name = "accent_key", nullable = false, length = 32)
   private String accentKey = "stone";
+
+  /** Catalog split: a category holds only SERVICE items or only PRODUCT items. */
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 16)
+  private ServiceKind kind = ServiceKind.SERVICE;
 
   public Long getId() {
     return id;
@@ -61,6 +69,14 @@ public class ServiceCategory {
 
   public void setActive(boolean active) {
     this.active = active;
+  }
+
+  public ServiceKind getKind() {
+    return kind;
+  }
+
+  public void setKind(ServiceKind kind) {
+    this.kind = kind == null ? ServiceKind.SERVICE : kind;
   }
 
   public String getAccentKey() {
