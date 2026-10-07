@@ -176,6 +176,8 @@ describe("ServicesPage", () => {
     await waitFor(() => {
       expect(downloadPriceListPdf).toHaveBeenCalledTimes(1);
     });
+    // Servicios downloads only services (never the products).
+    expect(downloadPriceListPdf).toHaveBeenCalledWith("SERVICE");
     expect(screen.queryByTestId("price-list-error")).toBeNull();
   });
 

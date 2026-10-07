@@ -163,4 +163,18 @@ describe("ProductsPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Categories" }));
     expect(await screen.findByText("1 products")).toBeTruthy();
   });
+
+  it("downloads a price list with only products", async () => {
+    mockLoad([sampleCategory], [product]);
+    downloadPriceListPdf.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByText("Shampoo 300 ml");
+
+    await userEvent.click(screen.getByTestId("download-price-list-button"));
+
+    await waitFor(() => {
+      expect(downloadPriceListPdf).toHaveBeenCalledWith("PRODUCT");
+    });
+    expect(screen.queryByTestId("price-list-error")).toBeNull();
+  });
 });

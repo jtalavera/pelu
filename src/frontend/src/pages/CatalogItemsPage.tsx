@@ -358,12 +358,12 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     setServiceStatusSuccess(null);
   }
 
-  /** Issue #217: "Descargar lista de precios" — active services + fantasy name, as a PDF. */
+  /** Issue #217: "Descargar lista de precios" — active items of this screen's kind (services or products), as a PDF. */
   async function handleDownloadPriceList() {
     setPriceListError(null);
     setPriceListDownloading(true);
     try {
-      await downloadPriceListPdf();
+      await downloadPriceListPdf(kind);
     } catch (e) {
       setPriceListError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     } finally {
