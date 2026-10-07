@@ -149,4 +149,47 @@ test.describe("Issue #217 · Lista de precios compartible", () => {
 
     await expect(page.getByTestId("price-list-error")).not.toBeVisible();
   });
+  // Catalog split: products get their own "Productos" section after the "Servicios" one.
+  test("lists services and products in separate 'Servicios' / 'Productos' sections", async ({ request }) => {
+    const token = await loginAsDemoApi(request);
+    const suffix = Date.now();
+    const serviceCategory = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+      name: `E2E Cat 217 Svc ${suffix}`,
+      accentKey: "stone",
+      kind: "SERVICE",
+    });
+    const productCategory = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+      name: `E2E Cat 217 Prod ${suffix}`,
+      accentKey: "stone",
+      kind: "PRODUCT",
+    });
+    const serviceName = `E2E Lista Servicio ${suffix}`;
+    const productName = `E2E Lista Producto ${suffix}`;
+    await apiPostJson(request, token, "/api/services", {
+      name: serviceName,
+      categoryId: serviceCategory.id,
+      priceMinor: 125000,
+      durationMinutes: 30,
+    });
+    await apiPostJson(request, token, "/api/services", {
+      name: productName,
+      categoryId: productCategory.id,
+      priceMinor: 95000,
+      durationMinutes: 1,
+      kind: "PRODUCT",
+    });
+
+    const res = await request.get(`${API_BASE}/api/services/price-list/pdf`, { headers: authHeaders(token) });
+    expect(res.status()).toBe(200);
+    const text = extractPdfShowTextContent(await res.body());
+
+    expect(text).toContain(serviceName);
+    expect(text).toContain(productName);
+    expect(text).toContain("95.000");
+    // Section headings and per-section column headers.
+    expect(text).toContain("(Servicios)");
+    expect(text).toContain("(Productos)");
+    expect(text).toContain("(Servicio)");
+    expect(text).toContain("(Producto)");
+  });
 });

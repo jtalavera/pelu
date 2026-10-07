@@ -38,6 +38,7 @@ function markToursSeenScript() {
     "dashboard",
     "fiscal-stamp",
     "login",
+    "products",
     "professionals",
     "services",
   ];

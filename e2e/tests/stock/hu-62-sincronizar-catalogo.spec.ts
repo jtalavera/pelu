@@ -71,7 +71,7 @@ test.describe("HU-62 · Sincronizar catálogo", () => {
     const serviceName = `Brushing ${stamp}`;
     await pelu("/api/services", {
       token,
-      body: { name: serviceName, categoryId: world.s1.categoryId, priceMinor: 30000, durationMinutes: 30 },
+      body: { name: serviceName, categoryId: world.s1.serviceCategoryId, priceMinor: 30000, durationMinutes: 30 },
     });
     await page.waitForTimeout(3000);
     expect(await stockItemByName(stockToken, serviceName)).toBeUndefined();

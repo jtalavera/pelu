@@ -176,4 +176,53 @@ test.describe("HU-51 · Importar catálogo de servicios desde Excel", () => {
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText("Gs. 175.000");
   });
+  // Catalog split (Servicios / Productos): a categoria created by the import takes the kind of
+  // the row that introduces it, and a categoria can never hold both kinds — the row of the other
+  // kind is rejected with its own reason while the rest of the file still imports.
+  test("Catálogo separado: la categoría nueva toma el tipo de su fila y una categoría no puede mezclar Servicio y Producto", async ({
+    page,
+    request,
+  }) => {
+    const platformToken = await loginPlatformAdminApi(request);
+    const tenant = await createTenant(request, platformToken, `E2E Import Tipos ${Date.now()}`);
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Servicios");
+    ws.addRow(["categoria", "nombre", "precio", "duracion_minutos", "impuesto", "activo", "tipo", "sku"]);
+    ws.addRow(["Cortes", "Corte clasico", 80000, 30, "", "SI", "Servicio", ""]);
+    ws.addRow(["Shampoos", "Shampoo 300 ml", 95000, 1, "", "SI", "Producto", "SH-300"]);
+    ws.addRow(["Cortes", "Shampoo en categoria de servicios", 50000, 1, "", "SI", "Producto", ""]);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+
+    await loginAsPlatformAdmin(page);
+    await page.goto("/platform/import");
+    await page.getByTestId("import-tab-services").click();
+    await page.locator("#import-run-tenant-services").selectOption({ value: String(tenant.id) });
+    await page.locator("#import-run-file-services").setInputFiles({
+      name: "tipos.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer,
+    });
+    await page.getByRole("button", { name: "Import" }).click();
+
+    await expect(page.getByTestId("import-run-summary-services")).toContainText("2 of 3 rows imported. 1 failed.", {
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("import-run-failed-rows-services")).toContainText(
+      "That category already exists as the other type",
+    );
+
+    const forged = forgeTenantAdminToken(tenant.id, "999996", "e2e-import-tipos@e2e.test");
+    const get = async <T>(url: string) =>
+      (await (await request.get(`${apiBaseUrl()}${url}`, { headers: authHeaders(forged) })).json()) as T;
+    const serviceCats = (await get<Array<{ name: string }>>("/api/service-categories?kind=SERVICE")).map((c) => c.name);
+    const productCats = (await get<Array<{ name: string }>>("/api/service-categories?kind=PRODUCT")).map((c) => c.name);
+    expect(serviceCats).toEqual(["Cortes"]);
+    expect(productCats).toEqual(["Shampoos"]);
+    const items = await get<Array<{ name: string; kind: string }>>("/api/services");
+    expect(items.map((i) => `${i.name}:${i.kind}`).sort()).toEqual(
+      ["Corte clasico:SERVICE", "Shampoo 300 ml:PRODUCT"].sort(),
+    );
+  });
 });
