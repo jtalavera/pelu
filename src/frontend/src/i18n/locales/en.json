@@ -105,6 +105,7 @@
       "calendar": "Calendar",
       "dashboards": "Dashboards",
       "services": "Services",
+      "products": "Products",
       "professionals": "Professionals",
       "clients": "Clients",
       "billing": "Billing",
@@ -1547,8 +1548,11 @@
       "STOCK_OUTBOX_EVENT_NOT_FAILED": "Only failed deliveries can be retried or discarded.",
       "INVALID_CLIENT": "Invalid client credentials.",
       "INVALID_SCOPE": "The requested scope is not allowed.",
+      "CATEGORY_KIND_MISMATCH": "The category belongs to the other catalog: services and products have separate categories.",
+      "CATEGORY_KIND_IMMUTABLE": "A category cannot change between Services and Products.",
       "INVALID_SERVICE_KIND": "Type must be Service or Product.",
       "INVALID_SKU": "The code (SKU) can have at most 64 characters (e.g. SH-300).",
+      "IMPORT_ROW_CATEGORY_KIND_MISMATCH": "That category already exists as the other type: services and products have separate categories.",
       "IMPORT_ROW_KIND_INVALID": "Invalid type: use Servicio or Producto (or leave it empty for Servicio).",
       "IMPORT_ROW_SKU_TOO_LONG": "The SKU can have at most 64 characters (e.g. SH-300)."
     },
@@ -1573,6 +1577,7 @@
       "colService": "Service",
       "colCategory": "Category",
       "colDuration": "Duration",
+      "colSku": "Code (SKU)",
       "colPrice": "Price",
       "colStatus": "Status",
       "priceList": {
@@ -1581,7 +1586,7 @@
         "error": "Could not download the price list. Try again."
       },
       "tabs": {
-        "services": "Services",
+        "items": "Services",
         "categories": "Categories"
       },
       "search": {
@@ -1596,11 +1601,7 @@
         "statusLabel": "Status",
         "statusAll": "All statuses",
         "statusActive": "Active only",
-        "statusInactive": "Inactive only",
-        "kindLabel": "Filter by type",
-        "kindAll": "All types",
-        "kindService": "Services",
-        "kindProduct": "Products"
+        "statusInactive": "Inactive only"
       },
       "cancel": "Cancel",
       "save": "Save",
@@ -1678,11 +1679,42 @@
         "openEdit": "Edit service {{name}}",
         "tax": "Tax type",
         "taxPlaceholder": "No tax",
-        "kind": "Type",
-        "kindService": "Service",
-        "kindProduct": "Product",
         "sku": "Code (SKU, optional)",
         "skuPlaceholder": "e.g. SH-300"
+      }
+    },
+    "products": {
+      "title": "Products",
+      "lead": "Manage product categories and the products you sell and invoice.",
+      "loadError": "Could not load products.",
+      "createSuccess": "Product saved successfully.",
+      "activateSuccess": "Product activated successfully.",
+      "deactivateSuccess": "Product deactivated successfully.",
+      "colService": "Product",
+      "tabs": {
+        "items": "Products"
+      },
+      "search": {
+        "placeholder": "Search by product or category…"
+      },
+      "categories": {
+        "deactivateDialogDescription": "“{{name}}” will be marked inactive. It will not be available for new products; existing history is kept.",
+        "emptyBody": "Create a category to start organizing products.",
+        "serviceCount": "{{count}} products"
+      },
+      "services": {
+        "addNew": "+ New product",
+        "add": "New product",
+        "addTitle": "New product",
+        "editTitle": "Edit product",
+        "nameRequired": "Enter a product name.",
+        "deactivateDialogTitle": "Deactivate product",
+        "deactivateDialogDescription": "“{{name}}” will be marked inactive. It will not appear in new invoices; existing history is kept.",
+        "inactiveHint": "The category must be active to reactivate this product. Select an active category or reactivate the category first.",
+        "emptyTitle": "No products yet.",
+        "emptyBody": "Create a product to sell it in invoices.",
+        "searchInlinePlaceholder": "Search by name or category…",
+        "openEdit": "Edit product {{name}}"
       }
     },
     "professionals": {
@@ -2018,6 +2050,7 @@
         "dashboard": { "title": "Dashboard", "content": "Your home base — view today's appointments, earnings, and activity at a glance." },
         "calendar": { "title": "Calendar", "content": "Manage appointments by day or week. Book, reschedule, and cancel from here." },
         "services": { "title": "Services", "content": "Manage the list of services and their prices offered by your salon." },
+        "products": { "title": "Products", "content": "Manage the products you sell, with their own categories and prices." },
         "professionals": { "title": "Professionals", "content": "Add and manage the stylists or specialists who work at your salon." },
         "clients": { "title": "Clients", "content": "Your full client database — search, filter, and open any client profile." },
         "billing": { "title": "Billing", "content": "Open cash sessions, issue invoices, and review payment history." },
@@ -2060,6 +2093,13 @@
         "filters": { "title": "Category filters", "content": "Click a category pill to show only services from that category." },
         "addCategory": { "title": "New category", "content": "Creates a new group to organise your services (for example: Hair, Nails, Skincare)." },
         "list": { "title": "Services list", "content": "All services with their duration, price, and category. Click any row to edit or deactivate it." }
+      },
+      "products": {
+        "header": { "title": "Products header", "content": "Shows the product screen with a button to add a new product or category." },
+        "search": { "title": "Product search", "content": "Type here to instantly filter products by name across all categories." },
+        "filters": { "title": "Category filters", "content": "Click a category pill to show only products from that category." },
+        "addCategory": { "title": "New category", "content": "Creates a new group to organise your products (for example: Shampoos, Styling, Skincare)." },
+        "list": { "title": "Products list", "content": "All products with their code, price, and category. Click any row to edit or deactivate it." }
       },
       "billing": {
         "header": { "title": "Billing", "content": "Manage your cash session here and issue invoices to clients." },

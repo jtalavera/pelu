@@ -1,7 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
+import { productsSteps } from "../tour/steps/products";
 import { servicesSteps } from "../tour/steps/services";
 import {
   Alert,
@@ -35,11 +37,15 @@ import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyI
 
 // ── Types ────────────────────────────────────────────────────────────────
 
+type ItemKind = "SERVICE" | "PRODUCT";
+
 type ServiceCategory = {
   id: number;
   name: string;
   active: boolean;
   accentKey: string;
+  /** Catalog split: a category holds only SERVICE items or only PRODUCT items. */
+  kind?: ItemKind;
 };
 type Tax = {
   id: number;
@@ -61,7 +67,7 @@ type SalonService = {
   taxName?: string | null;
   taxRate?: number | null;
   /** HU-59: only PRODUCT items are synchronised to Stock. */
-  kind?: "SERVICE" | "PRODUCT";
+  kind?: ItemKind;
   sku?: string | null;
 };
 
@@ -70,11 +76,34 @@ type ServicesDeactivateTarget =
   | { kind: "service"; item: SalonService }
   | null;
 
-export default function ServicesPage() {
-  const { t } = useTranslation();
+/**
+ * Catalog screen shared by "Servicios" (`kind="SERVICE"`) and "Productos" (`kind="PRODUCT"`). Each
+ * screen only lists the items — and manages the categories — of its own kind.
+ *
+ * Copy comes from `femme.services.*`; the product screen overrides any key it needs under
+ * `femme.products.*` (same sub-paths) and falls back to the services copy for the rest.
+ */
+export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
+  const { t: translate } = useTranslation();
+  const isProduct = kind === "PRODUCT";
+  const t = useMemo(() => {
+    const raw = translate as unknown as (keys: string | string[], opts?: unknown) => string;
+    const fn = (key: string, opts?: unknown): string => {
+      if (isProduct && key.startsWith("femme.services.")) {
+        return raw([`femme.products.${key.slice("femme.services.".length)}`, key], opts);
+      }
+      return raw(key, opts);
+    };
+    return fn as unknown as TFunction;
+  }, [translate, isProduct]);
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
-  useTour("services", servicesSteps, undefined, guidedTourEnabled);
-  const [tab, setTab] = useState<"services" | "categories">("services");
+  useTour(
+    isProduct ? "products" : "services",
+    isProduct ? productsSteps : servicesSteps,
+    undefined,
+    guidedTourEnabled,
+  );
+  const [tab, setTab] = useState<"items" | "categories">("items");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,8 +115,6 @@ export default function ServicesPage() {
   const [categoryFilterId, setCategoryFilterId] = useState<string>("all");
   /** Client-side quick filter: list order is always active first when "all". */
   const [serviceStatusFilter, setServiceStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  /** HU-59: list filter by item type. */
-  const [serviceKindFilter, setServiceKindFilter] = useState<"all" | "SERVICE" | "PRODUCT">("all");
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryEditing, setCategoryEditing] = useState<ServiceCategory | null>(null);
@@ -104,7 +131,6 @@ export default function ServicesPage() {
   const [serviceTaxId, setServiceTaxId] = useState<string>("");
   const [servicePrice, setServicePrice] = useState("");
   const [serviceDuration, setServiceDuration] = useState("");
-  const [serviceKind, setServiceKind] = useState<"SERVICE" | "PRODUCT">("SERVICE");
   const [serviceSku, setServiceSku] = useState("");
   const [serviceFieldError, setServiceFieldError] = useState<{
     name?: string;
@@ -161,8 +187,8 @@ export default function ServicesPage() {
     setError(null);
     try {
       const [cats, svcs, txs] = await Promise.all([
-        femmeJson<ServiceCategory[]>("/api/service-categories"),
-        femmeJson<SalonService[]>("/api/services"),
+        femmeJson<ServiceCategory[]>(`/api/service-categories?kind=${kind}`),
+        femmeJson<SalonService[]>(`/api/services?kind=${kind}`),
         femmeJson<Tax[]>("/api/taxes"),
       ]);
       setCategories(Array.isArray(cats) ? cats : []);
@@ -173,7 +199,7 @@ export default function ServicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, kind]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -195,7 +221,6 @@ export default function ServicesPage() {
     async (
       categoryId: string,
       status: "all" | "active" | "inactive",
-      kind: "all" | "SERVICE" | "PRODUCT",
       q: string,
       page: number,
       size: number,
@@ -205,7 +230,7 @@ export default function ServicesPage() {
         const data = await listServicesPaged<SalonService>({
           categoryId: categoryId !== "all" ? Number(categoryId) : undefined,
           active: status === "all" ? undefined : status === "active",
-          kind: kind === "all" ? undefined : kind,
+          kind,
           q: q.trim() || undefined,
           page,
           size,
@@ -217,7 +242,7 @@ export default function ServicesPage() {
         setSvcPageLoading(false);
       }
     },
-    [t],
+    [t, kind],
   );
 
   useEffect(() => {
@@ -226,7 +251,6 @@ export default function ServicesPage() {
       void loadPagedServices(
         categoryFilterId,
         serviceStatusFilter,
-        serviceKindFilter,
         serviceSearchQuery,
         svcPage,
         svcPageSize,
@@ -236,7 +260,7 @@ export default function ServicesPage() {
       if (svcDebounceRef.current) clearTimeout(svcDebounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilterId, serviceStatusFilter, serviceKindFilter, serviceSearchQuery, svcPage, svcPageSize, svcReloadTick, loadPagedServices]);
+  }, [categoryFilterId, serviceStatusFilter, serviceSearchQuery, svcPage, svcPageSize, svcReloadTick, loadPagedServices]);
   // ─────────────────────────────────────────────────────────────────────────
 
   function handleCategoryPill(val: string) {
@@ -246,11 +270,6 @@ export default function ServicesPage() {
 
   function handleServiceStatusPill(val: "all" | "active" | "inactive") {
     setServiceStatusFilter(val);
-    setSvcPage(0);
-  }
-
-  function handleServiceKindPill(val: "all" | "SERVICE" | "PRODUCT") {
-    setServiceKindFilter(val);
     setSvcPage(0);
   }
 
@@ -273,7 +292,7 @@ export default function ServicesPage() {
     }
     setCategorySaving(true);
     try {
-      const payload = { name: categoryName.trim(), accentKey: categoryAccentKey };
+      const payload = { name: categoryName.trim(), accentKey: categoryAccentKey, kind };
       const wasEdit = categoryEditing !== null;
       if (categoryEditing) {
         await femmePutJson<ServiceCategory>(
@@ -326,7 +345,6 @@ export default function ServicesPage() {
     setServiceTaxId(defaultTax ? String(defaultTax.id) : "");
     setServicePrice("");
     setServiceDuration("");
-    setServiceKind("SERVICE");
     setServiceSku("");
     setServiceFieldError(null);
     setServiceSaveError(null);
@@ -365,7 +383,10 @@ export default function ServicesPage() {
     if (!nameTrim) nextErr.name = t("femme.services.services.nameRequired");
     if (!categoryId) nextErr.categoryId = t("femme.services.services.categoryRequired");
     if (price == null) nextErr.price = t("femme.services.services.priceInvalid");
-    if (!Number.isFinite(duration) || duration < 1) nextErr.duration = t("femme.services.services.durationInvalid");
+    // Products have no duration (the field is hidden); the API still stores a minimum of 1.
+    if (!isProduct && (!Number.isFinite(duration) || duration < 1)) {
+      nextErr.duration = t("femme.services.services.durationInvalid");
+    }
     if (Object.keys(nextErr).length > 0) {
       setServiceFieldError(nextErr);
       return;
@@ -377,9 +398,9 @@ export default function ServicesPage() {
         name: nameTrim,
         categoryId: Number(categoryId),
         priceMinor: price,
-        durationMinutes: duration,
+        durationMinutes: isProduct ? (serviceEditing?.durationMinutes ?? 1) : duration,
         taxId: serviceTaxId ? Number(serviceTaxId) : null,
-        kind: serviceKind,
+        kind,
         sku: serviceSku.trim() || null,
       };
       const wasEdit = serviceEditing !== null;
@@ -476,16 +497,6 @@ export default function ServicesPage() {
     ];
   }, [activeCategories, t]);
 
-  const kindFilterOptions = useMemo(
-    () =>
-      [
-        { value: "all" as const, label: t("femme.services.filter.kindAll") },
-        { value: "SERVICE" as const, label: t("femme.services.filter.kindService") },
-        { value: "PRODUCT" as const, label: t("femme.services.filter.kindProduct") },
-      ],
-    [t],
-  );
-
   const statusFilterOptions = useMemo(
     () =>
       [
@@ -540,7 +551,6 @@ export default function ServicesPage() {
         : Number(String(s.priceMinor ?? "").trim());
     setServicePrice(Number.isFinite(priceVal) ? maskMoneyInput(String(priceVal)) : "");
     setServiceDuration(String(s.durationMinutes));
-    setServiceKind(s.kind === "PRODUCT" ? "PRODUCT" : "SERVICE");
     setServiceSku(s.sku ?? "");
     setServiceFieldError(null);
     setServiceSaveError(null);
@@ -684,7 +694,7 @@ export default function ServicesPage() {
               ? t("femme.services.priceList.downloading")
               : t("femme.services.priceList.downloadButton")}
           </Button>
-          {tab === "services" ? (
+          {tab === "items" ? (
             <button type="button" style={primaryBtn} onClick={openNewService}>
               {t("femme.services.services.addNew")}
             </button>
@@ -731,7 +741,7 @@ export default function ServicesPage() {
 
       {/* ── Custom tabs ── */}
       <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
-        {(["services", "categories"] as const).map((v) => (
+        {(["items", "categories"] as const).map((v) => (
           <button
             key={v}
             type="button"
@@ -744,7 +754,7 @@ export default function ServicesPage() {
       </div>
 
       {/* ── Services tab ── */}
-      {tab === "services" && (
+      {tab === "items" && (
         <div>
         <div data-tour="services-list">
           {/* Toolbar */}
@@ -807,41 +817,10 @@ export default function ServicesPage() {
                 </button>
               ))}
             </div>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              style={{
-                width: 1,
-                alignSelf: "stretch",
-                minHeight: 28,
-                background: "var(--color-stone-md)",
-                flexShrink: 0,
-                margin: "0 4px",
-              }}
-            />
-            {/* HU-59: filter by item type (Servicio / Producto). */}
-            <div
-              role="group"
-              aria-label={t("femme.services.filter.kindLabel")}
-              data-testid="services-kind-filter"
-              style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}
-            >
-              {kindFilterOptions.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  aria-pressed={serviceKindFilter === o.value}
-                  style={serviceKindFilter === o.value ? pillActive : pillBase}
-                  onClick={() => handleServiceKindPill(o.value)}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
             </div>
           </div>
 
-          {/* Services table */}
+          {/* Items table */}
           {svcPageLoading && !svcPageData ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "20px 0" }}>
               <Spinner size="sm" />
@@ -871,7 +850,9 @@ export default function ServicesPage() {
                   <tr>
                     <th style={thStyle}>{t("femme.services.colService")}</th>
                     <th style={thStyle}>{t("femme.services.colCategory")}</th>
-                    <th style={thStyle}>{t("femme.services.colDuration")}</th>
+                    <th style={thStyle}>
+                      {isProduct ? t("femme.services.colSku") : t("femme.services.colDuration")}
+                    </th>
                     <th style={thStyle}>{t("femme.services.colPrice")}</th>
                     <th style={thStyle}>{t("femme.services.colStatus")}</th>
                     <th style={thStyle} />
@@ -986,30 +967,13 @@ export default function ServicesPage() {
                                 >
                                   {s.name}
                                 </div>
-                                {s.kind === "PRODUCT" ? (
-                                  <span
-                                    data-testid={`svc-kind-product-${s.id}`}
-                                    style={{
-                                      fontSize: 10,
-                                      fontWeight: 500,
-                                      padding: "1px 6px",
-                                      borderRadius: "var(--radius-pill)",
-                                      background: "var(--color-stone)",
-                                      color: "var(--color-ink-2)",
-                                      border: "var(--border-default)",
-                                      flexShrink: 0,
-                                    }}
-                                  >
-                                    {t("femme.services.services.kindProduct")}
-                                  </span>
-                                ) : null}
                               </div>
                             </td>
                             <td style={tdStyle}>
                               {s.categoryName}
                             </td>
                             <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                              {s.durationMinutes} min
+                              {isProduct ? (s.sku ?? "—") : `${s.durationMinutes} min`}
                             </td>
                             <td
                               style={{
@@ -1461,19 +1425,8 @@ export default function ServicesPage() {
             <FieldValidationError id="svc-name-err">{serviceFieldError?.name}</FieldValidationError>
           </div>
 
-          {/* HU-59: Tipo (Servicio / Producto) + optional SKU. Only products go to Stock. */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="svc-kind">{t("femme.services.services.kind")}</Label>
-              <Select
-                id="svc-kind"
-                value={serviceKind}
-                onChange={(e) => setServiceKind(e.target.value === "PRODUCT" ? "PRODUCT" : "SERVICE")}
-              >
-                <option value="SERVICE">{t("femme.services.services.kindService")}</option>
-                <option value="PRODUCT">{t("femme.services.services.kindProduct")}</option>
-              </Select>
-            </div>
+          {/* HU-59: optional SKU (products only — only products go to Stock). */}
+          {isProduct ? (
             <div>
               <Label htmlFor="svc-sku">{t("femme.services.services.sku")}</Label>
               <Input
@@ -1484,7 +1437,7 @@ export default function ServicesPage() {
                 onChange={(e) => setServiceSku(e.target.value)}
               />
             </div>
-          </div>
+          ) : null}
 
           <div>
             <Label htmlFor="svc-cat">{t("femme.services.services.category")}</Label>
@@ -1522,7 +1475,7 @@ export default function ServicesPage() {
             </Select>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className={isProduct ? undefined : "grid gap-4 sm:grid-cols-2"}>
             <div>
               <Label htmlFor="svc-price">{t("femme.services.services.price")}</Label>
               <Input
@@ -1535,18 +1488,20 @@ export default function ServicesPage() {
               />
               <FieldValidationError id="svc-price-err">{serviceFieldError?.price}</FieldValidationError>
             </div>
-            <div>
-              <Label htmlFor="svc-duration">{t("femme.services.services.duration")}</Label>
-              <Input
-                id="svc-duration"
-                inputMode="numeric"
-                value={serviceDuration}
-                onChange={(e) => setServiceDuration(e.target.value)}
-                aria-invalid={serviceFieldError?.duration ? "true" : "false"}
-                aria-describedby={serviceFieldError?.duration ? "svc-duration-err" : undefined}
-              />
-              <FieldValidationError id="svc-duration-err">{serviceFieldError?.duration}</FieldValidationError>
-            </div>
+            {isProduct ? null : (
+              <div>
+                <Label htmlFor="svc-duration">{t("femme.services.services.duration")}</Label>
+                <Input
+                  id="svc-duration"
+                  inputMode="numeric"
+                  value={serviceDuration}
+                  onChange={(e) => setServiceDuration(e.target.value)}
+                  aria-invalid={serviceFieldError?.duration ? "true" : "false"}
+                  aria-describedby={serviceFieldError?.duration ? "svc-duration-err" : undefined}
+                />
+                <FieldValidationError id="svc-duration-err">{serviceFieldError?.duration}</FieldValidationError>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

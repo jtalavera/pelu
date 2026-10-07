@@ -8,13 +8,14 @@ import ServicesPage from "./ServicesPage";
 
 const femmeJson = vi.fn();
 const femmePostJson = vi.fn();
+const femmePutJson = vi.fn();
 const listServicesPaged = vi.fn();
 const downloadPriceListPdf = vi.fn();
 
 vi.mock("../api/femmeClient", () => ({
   femmeJson: (...args: unknown[]) => femmeJson(...args),
   femmePostJson: (...args: unknown[]) => femmePostJson(...args),
-  femmePutJson: vi.fn(),
+  femmePutJson: (...args: unknown[]) => femmePutJson(...args),
 }));
 
 vi.mock("../api/services", () => ({
@@ -71,6 +72,7 @@ describe("ServicesPage", () => {
     void i18n.changeLanguage("en");
     femmeJson.mockReset();
     femmePostJson.mockReset();
+    femmePutJson.mockReset();
     listServicesPaged.mockReset();
     downloadPriceListPdf.mockReset();
   });
@@ -212,6 +214,47 @@ describe("ServicesPage", () => {
     await waitFor(() => {
       expect(screen.queryByText("Other active")).toBeNull();
       expect(screen.getByText("Basic cut")).toBeTruthy();
+    });
+  });
+  // Catalog split: this screen only lists / manages SERVICE items and service categories.
+  it("only requests SERVICE items and categories and has no item-type filter", async () => {
+    mockLoad([sampleCategory], [inactiveService]);
+    renderPage();
+    await screen.findByText("Basic cut");
+
+    expect(femmeJson).toHaveBeenCalledWith("/api/service-categories?kind=SERVICE");
+    expect(femmeJson).toHaveBeenCalledWith("/api/services?kind=SERVICE");
+    expect(listServicesPaged).toHaveBeenCalledWith(expect.objectContaining({ kind: "SERVICE" }));
+    expect(screen.queryByTestId("services-kind-filter")).toBeNull();
+    expect(screen.queryByText(/filter by type/i)).toBeNull();
+  });
+
+  it("shows the duration column and field for services", async () => {
+    mockLoad([sampleCategory], [inactiveService]);
+    renderPage();
+    await screen.findByText("Basic cut");
+    expect(screen.getByRole("columnheader", { name: "Duration" })).toBeTruthy();
+    expect(screen.getByTestId(`svc-row-${inactiveService.id}`).textContent).toContain("30 min");
+
+    await userEvent.click(screen.getByRole("button", { name: "+ New service" }));
+    expect(await screen.findByLabelText("Duration (minutes)")).toBeTruthy();
+    expect(screen.queryByLabelText("Type")).toBeNull();
+  });
+
+  it("creates new categories as SERVICE categories", async () => {
+    mockLoad([sampleCategory], []);
+    femmePostJson.mockResolvedValue({ id: 5, name: "Nails", active: true, accentKey: "stone" });
+    renderPage();
+    await screen.findByRole("button", { name: "Categories" });
+    await userEvent.click(screen.getByRole("button", { name: "Categories" }));
+    await userEvent.click(screen.getByRole("button", { name: "+ New category" }));
+    await userEvent.type(await screen.findByLabelText("Name"), "Nails");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(femmePostJson).toHaveBeenCalledWith(
+        "/api/service-categories",
+        expect.objectContaining({ name: "Nails", kind: "SERVICE" }),
+      );
     });
   });
 });
