@@ -112,14 +112,30 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
       chart.locator('[data-testid="dashboard-revenue-trend-weekend-band"]').first(),
     ).toBeAttached();
 
-    // Chart-layout follow-up: a linear-regression trend line overlays the bars in a distinct
-    // color, with a legend distinguishing "Invoiced" (bars) from "Trend" (line). Scoped to the
-    // legend specifically — recharts also keeps a (hidden until hover) tooltip entry with the
-    // same series names in the DOM, which would otherwise match too and violate strict mode.
+    // Trend line: a 7-day moving average overlays the bars, with a legend distinguishing
+    // "Invoiced" (bars) from "7-day average" (line). Scoped to the legend specifically — recharts
+    // also keeps a (hidden until hover) tooltip entry with the same series names in the DOM,
+    // which would otherwise match too and violate strict mode.
     await expect(chart.locator(".recharts-line-curve")).toBeAttached();
     const legend = chart.locator(".recharts-legend-wrapper");
     await expect(legend.getByText("Invoiced", { exact: true })).toBeVisible();
-    await expect(legend.getByText("Trend", { exact: true })).toBeVisible();
+    await expect(legend.getByText("7-day average", { exact: true })).toBeVisible();
+
+    // Colour: the trend is the same measure as the bars, so it stays in the same hue — the line in
+    // the full hue (2px) and the daily bars as a recessive tint of it (not a second, rose hue).
+    const line = chart.locator(".recharts-line-curve");
+    await expect(line).toHaveAttribute("stroke", "var(--color-teal)");
+    await expect(line).toHaveAttribute("stroke-width", "2");
+    const bar = chart.locator(".recharts-bar-rectangle path").first();
+    await expect(bar).toHaveAttribute("fill", "var(--color-teal)");
+    await expect(bar).toHaveAttribute("fill-opacity", "0.55");
+
+    // Direct label: only the line's last point carries a ringed dot with the average's value
+    // (never a number on every point).
+    const endDot = chart.getByTestId("dashboard-revenue-trend-end-dot");
+    await expect(endDot).toHaveCount(1);
+    await expect(endDot.locator("text")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
+    await expect(endDot.locator("circle")).toHaveAttribute("stroke", "var(--color-white)");
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document

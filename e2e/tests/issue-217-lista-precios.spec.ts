@@ -192,4 +192,89 @@ test.describe("Issue #217 · Lista de precios compartible", () => {
     expect(text).toContain("(Servicio)");
     expect(text).toContain("(Producto)");
   });
+  // Servicios / Productos screens each download ONLY their own kind.
+  test("the Services screen downloads only services and the Products screen only products", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const suffix = Date.now();
+    const serviceCategory = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+      name: `E2E Cat 217 K Svc ${suffix}`,
+      accentKey: "stone",
+      kind: "SERVICE",
+    });
+    const productCategory = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+      name: `E2E Cat 217 K Prod ${suffix}`,
+      accentKey: "stone",
+      kind: "PRODUCT",
+    });
+    const serviceName = `E2E Solo Servicio ${suffix}`;
+    const productName = `E2E Solo Producto ${suffix}`;
+    await apiPostJson(request, token, "/api/services", {
+      name: serviceName,
+      categoryId: serviceCategory.id,
+      priceMinor: 125000,
+      durationMinutes: 30,
+    });
+    await apiPostJson(request, token, "/api/services", {
+      name: productName,
+      categoryId: productCategory.id,
+      priceMinor: 95000,
+      durationMinutes: 1,
+      kind: "PRODUCT",
+    });
+
+    const fs = await import("fs/promises");
+    async function downloadFrom(path: string): Promise<{ text: string; filename: string }> {
+      await page.goto(path);
+      const button = page.getByTestId("download-price-list-button");
+      await expect(button).toBeVisible({ timeout: 10_000 });
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download", { timeout: 20_000 }),
+        page.waitForResponse(
+          (res) => res.url().includes("/api/services/price-list/pdf") && res.request().method() === "GET",
+        ),
+        button.click(),
+      ]);
+      expect(response.status()).toBe(200);
+      const file = await download.path();
+      expect(file).not.toBeNull();
+      return {
+        text: extractPdfShowTextContent(await fs.readFile(file!)),
+        filename: download.suggestedFilename(),
+      };
+    }
+
+    await loginAsDemo(page);
+
+    const services = await downloadFrom("/app/services");
+    expect(services.filename).toBe("lista-precios-servicios.pdf");
+    expect(services.text).toContain(serviceName);
+    expect(services.text).not.toContain(productName);
+    expect(services.text).not.toContain("(Productos)");
+
+    const products = await downloadFrom("/app/products");
+    expect(products.filename).toBe("lista-precios-productos.pdf");
+    expect(products.text).toContain(productName);
+    expect(products.text).toContain("95.000");
+    expect(products.text).not.toContain(serviceName);
+    expect(products.text).not.toContain("(Servicios)");
+
+    // The API itself: ?kind= filters; without it both kinds keep their separate sections.
+    const get = async (query: string) =>
+      extractPdfShowTextContent(
+        await (await request.get(`${API_BASE}/api/services/price-list/pdf${query}`, { headers: authHeaders(token) })).body(),
+      );
+    const onlyProducts = await get("?kind=PRODUCT");
+    expect(onlyProducts).toContain(productName);
+    expect(onlyProducts).not.toContain(serviceName);
+    const both = await get("");
+    expect(both).toContain(productName);
+    expect(both).toContain(serviceName);
+    const invalid = await request.get(`${API_BASE}/api/services/price-list/pdf?kind=GADGET`, {
+      headers: authHeaders(token),
+    });
+    expect(invalid.status()).toBe(400);
+  });
 });
