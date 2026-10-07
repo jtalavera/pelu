@@ -2,13 +2,14 @@ import { authHeaders } from "./authHeaders";
 import { apiBaseUrl } from "./baseUrl";
 
 /**
- * Issue #217 "Lista de precios compartible": fetches the tenant's active-services price list PDF
- * and triggers a browser file download. Same shape as {@code downloadInvoicePdf} / {@code
+ * Issue #217 "Lista de precios compartible": fetches the tenant's active price list PDF and
+ * triggers a browser file download. {@code kind} restricts it to services or products (the
+ * Servicios screen downloads only services, Productos only products); omitted = both. Same shape as {@code downloadInvoicePdf} / {@code
  * downloadSifenKude} — never downloads a corrupt file, throws the raw error body on failure so
  * callers can forward it to translateApiError().
  */
-export async function downloadPriceListPdf(): Promise<void> {
-  const url = `${apiBaseUrl()}/api/services/price-list/pdf`;
+export async function downloadPriceListPdf(kind?: "SERVICE" | "PRODUCT"): Promise<void> {
+  const url = `${apiBaseUrl()}/api/services/price-list/pdf${kind ? `?kind=${kind}` : ""}`;
   const res = await fetch(url, { headers: authHeaders({ json: false }) });
   if (!res.ok) {
     throw new Error(await res.text());

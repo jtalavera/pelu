@@ -49,10 +49,19 @@ export function chartSeriesColorPastel(index: number): string {
 export const CHART_PRIMARY_COLOR = "var(--color-teal)";
 export const CHART_PRIMARY_COLOR_LIGHT = "var(--color-teal-lt)";
 
-/** Trend-line overlay accent (dusty rose) — the fixed second step of `CHART_SERIES_COLORS`, kept
- * distinct from `CHART_PRIMARY_COLOR` so a trend line reads clearly over a bar series using it
- * (e.g. `RevenueTrendChart`'s billing trend line). */
-export const CHART_TREND_LINE_COLOR = "var(--color-rose)";
+/**
+ * Trend-line overlay for a series drawn as bars (e.g. `RevenueTrendChart`'s 7-day average). The
+ * trend is the SAME measure as the bars, so it stays in the same hue instead of borrowing a second
+ * one: the daily bars recede to a tint (`CHART_BAR_CONTEXT_OPACITY`) and the line takes the full
+ * hue, so the eye lands on the trend while the bars still carry the daily values. This is how
+ * Stripe / Shopify / Google Analytics style "daily values + moving average" charts. The solid hue
+ * clears 3:1 against the card surface in both themes (3.7:1 light, ~9:1 dark).
+ */
+export const CHART_TREND_LINE_COLOR = "var(--color-teal)";
+/** Opacity of the bars that sit behind a trend line — a recessive tint, ≥ ~2:1 on the surface. */
+export const CHART_BAR_CONTEXT_OPACITY = 0.55;
+/** Card surface: used as the 2px ring around end/hover dots so they stay legible over bars. */
+export const CHART_SURFACE_COLOR = "var(--color-white)";
 
 /** Gridlines, axes and tooltip chrome — neutral tokens shared by every chart. */
 export const CHART_GRID_COLOR = "var(--color-stone-md)";

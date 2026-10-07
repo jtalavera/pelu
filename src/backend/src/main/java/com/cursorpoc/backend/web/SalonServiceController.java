@@ -94,20 +94,25 @@ public class SalonServiceController {
 
   /**
    * Issue #217: a shareable PDF price list with the tenant's active services (name + price) and the
-   * business's fantasy name (falling back to its business name) as the document header.
+   * business's fantasy name (falling back to its business name) as the document header. {@code
+   * ?kind=SERVICE|PRODUCT} restricts it to one kind (the Servicios / Productos screens each
+   * download only their own); without it, both kinds are listed in separate sections.
    */
   @GetMapping(value = "/price-list/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
   public ResponseEntity<byte[]> priceListPdf(
-      @AuthenticationPrincipal FemmeUserPrincipal principal) {
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(name = "kind", required = false) String kind) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
     log.info("GET /api/services/price-list/pdf tenantId={}", principal.getTenantId());
     try {
-      byte[] pdf = priceListPdfService.buildPriceListPdf(principal.getTenantId());
+      byte[] pdf = priceListPdfService.buildPriceListPdf(principal.getTenantId(), kind);
       log.info("GET /api/services/price-list/pdf tenantId={} status=200", principal.getTenantId());
       return ResponseEntity.ok()
-          .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"lista-precios.pdf\"")
+          .header(
+              HttpHeaders.CONTENT_DISPOSITION,
+              "attachment; filename=\"" + priceListFilename(kind) + "\"")
           .body(pdf);
     } catch (ResponseStatusException ex) {
       log.error(
@@ -125,6 +130,15 @@ public class SalonServiceController {
       throw new ResponseStatusException(
           HttpStatus.INTERNAL_SERVER_ERROR, "PRICE_LIST_PDF_GENERATION_FAILED", ex);
     }
+  }
+
+  private static String priceListFilename(String kind) {
+    if (kind == null || kind.isBlank()) {
+      return "lista-precios.pdf";
+    }
+    return "PRODUCT".equalsIgnoreCase(kind.trim())
+        ? "lista-precios-productos.pdf"
+        : "lista-precios-servicios.pdf";
   }
 
   @PostMapping
