@@ -14,6 +14,8 @@ import { PARAGUAY_TIMEZONE } from "../lib/paraguayDateTime";
 type DashboardsResponse = {
   revenueTrend: Array<{ date: string; invoiced: string | number }>;
   revenueTrendDays: number;
+  /** Days right before `revenueTrend` — only feed the 7-day average, never plotted as bars. */
+  revenueTrendLookback?: Array<{ date: string; invoiced: string | number }>;
   topServices: Array<{ serviceName: string; revenue: string | number }>;
   paymentMethodMix: Array<{ method: string; amount: string | number }>;
   appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>;
@@ -207,6 +209,7 @@ export default function DashboardsPage() {
         <div className="flex min-w-0 flex-col gap-4">
           <RevenueTrendChart
             data={Array.isArray(data.revenueTrend) ? data.revenueTrend : []}
+            lookback={Array.isArray(data.revenueTrendLookback) ? data.revenueTrendLookback : []}
             days={data.revenueTrendDays ?? 30}
             locale={locale}
           />

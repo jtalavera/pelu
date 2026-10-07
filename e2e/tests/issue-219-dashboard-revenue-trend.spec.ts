@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
   API_BASE,
+  apiGetJson,
   apiPostJson,
   authHeaders,
   ensureActiveFiscalStampForInvoices,
@@ -129,6 +130,28 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
     const bar = chart.locator(".recharts-bar-rectangle path").first();
     await expect(bar).toHaveAttribute("fill", "var(--color-teal)");
     await expect(bar).toHaveAttribute("fill-opacity", "0.55");
+
+    // The 7-day average starts on the window's FIRST day: the backend also returns the 6 days
+    // before the window (`revenueTrendLookback`, not plotted as bars) so day 1 already has a full
+    // week behind it, and the line starts over the first bar instead of one week in.
+    const dashboard = await apiGetJson<{
+      revenueTrend: Array<{ date: string }>;
+      revenueTrendLookback: Array<{ date: string }>;
+    }>(request, token, "/api/dashboard");
+    expect(dashboard.revenueTrendLookback).toHaveLength(6);
+    const dayBefore = (iso: string) => {
+      const d = new Date(`${iso}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    };
+    expect(dashboard.revenueTrendLookback[5].date).toBe(dayBefore(dashboard.revenueTrend[0].date));
+    const startX = (d: string | null) => Number(/^M\s*([\d.]+)/.exec(d ?? "")?.[1]);
+    const lineStartX = startX(await line.getAttribute("d"));
+    const firstBarX = startX(await bar.getAttribute("d"));
+    expect(lineStartX).toBeGreaterThanOrEqual(firstBarX);
+    expect(lineStartX).toBeLessThanOrEqual(firstBarX + 24);
+    // 30 plotted days → 30 bars (the lookback days are never drawn).
+    await expect(chart.locator(".recharts-bar-rectangle")).toHaveCount(dashboard.revenueTrend.length);
 
     // Direct label: only the line's last point carries a ringed dot with the average's value
     // (never a number on every point).
