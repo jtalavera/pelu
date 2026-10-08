@@ -759,6 +759,31 @@ class StockOutboxIntegrationTest {
     assertThat(messageCodes(events.findById(id).orElseThrow()).getLast()).isEqualTo("DELIVERED");
   }
 
+  @Test
+  void listingByAllStatusesReturnsEveryEventWhileTheDefaultOnlyReturnsOpenOnes() {
+    linkTenant();
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_030L, 1)));
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_031L, 1)));
+    long delivered = tenantEvents().get(0).getId();
+    FAKE.failNextCalls = 0;
+    processor.processTenant(tenant.getId(), "c");
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_032L, 1)));
+    long open = tenantEvents().get(2).getId();
+
+    assertThat(admin.list(tenant.getId(), null, 0, 50).content())
+        .extracting(StockAdminService.OutboxEventRow::id)
+        .containsExactly(open);
+    assertThat(admin.list(tenant.getId(), "ALL", 0, 50).content())
+        .extracting(StockAdminService.OutboxEventRow::id)
+        .contains(open, delivered)
+        .hasSize(3);
+    assertThat(admin.list(tenant.getId(), "all", 0, 50).totalElements()).isEqualTo(3);
+    assertThat(admin.list(tenant.getId(), "DONE", 0, 50).content()).hasSize(2);
+    assertThatThrownBy(() -> admin.list(tenant.getId(), "NOPE", 0, 50))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVALID_STATUS");
+  }
+
   private void makeDue(long eventId) {
     StockOutboxEvent e = events.findById(eventId).orElseThrow();
     e.setNextAttemptAt(Instant.now().minusSeconds(1));

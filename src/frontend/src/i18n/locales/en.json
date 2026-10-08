@@ -433,6 +433,7 @@
         "lead": "Deliveries from Femme to Stock that are pending or failed. A failed delivery holds back that salon's later ones until it is retried or discarded.",
         "filterTenant": "Salon",
         "filterStatus": "Status",
+        "statusAll": "All",
         "statusOpen": "Pending or failed",
         "refresh": "Refresh",
         "empty": "Nothing pending: every delivery reached Stock.",

@@ -74,6 +74,11 @@ function page(content: unknown[]) {
   return { content, page: 0, size: 20, totalElements: content.length, totalPages: 1 };
 }
 
+function lastRequestedPath(): string {
+  const calls = vi.mocked(femmeClient.femmeJson).mock.calls;
+  return calls[calls.length - 1]?.[0] ?? "";
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -156,5 +161,54 @@ describe("PlatformStockIntegrationPage", () => {
         { method: "POST" },
       ),
     );
+  });
+
+  it("lists 'All' first among the status options and searches every status with it", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByTestId("stock-outbox-row-10");
+    const select = screen.getByLabelText("Status") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ["ALL", "All"],
+      ["", "Pending or failed"],
+      ["PENDING", "Pending"],
+      ["PROCESSING", "Processing"],
+      ["FAILED", "Failed"],
+      ["DONE", "Delivered"],
+      ["DISCARDED", "Discarded"],
+    ]);
+    // The default keeps showing only what needs attention.
+    expect(select.value).toBe("");
+    expect(lastRequestedPath()).not.toContain("status=");
+
+    await user.selectOptions(select, "ALL");
+
+    await waitFor(() => expect(lastRequestedPath()).toContain("status=ALL"));
+  });
+
+  it("paints each status with its own colour (delivered green, failed red…)", async () => {
+    const statuses = ["PENDING", "PROCESSING", "FAILED", "DONE", "DISCARDED"];
+    vi.mocked(femmeClient.femmeJson).mockResolvedValue(
+      page(statuses.map((status, i) => row({ id: 100 + i, status, attemptCount: 1 }))) as never,
+    );
+    renderPage();
+    await screen.findByTestId("stock-outbox-row-100");
+    const classOf = (id: number) =>
+      within(screen.getByTestId(`stock-outbox-status-${id}`)).getByText(
+        {
+          100: "Pending",
+          101: "Processing",
+          102: "Failed",
+          103: "Delivered",
+          104: "Discarded",
+        }[id]!,
+      ).className;
+
+    expect(classOf(100)).toContain("bg-amber-100");
+    expect(classOf(101)).toContain("bg-indigo-100");
+    expect(classOf(102)).toContain("bg-red-100");
+    expect(classOf(103)).toContain("bg-emerald-100");
+    expect(classOf(104)).toContain("bg-slate-100");
+    expect(new Set([100, 101, 102, 103, 104].map(classOf)).size).toBe(5);
   });
 });
