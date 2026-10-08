@@ -74,6 +74,11 @@ function page(content: unknown[]) {
   return { content, page: 0, size: 20, totalElements: content.length, totalPages: 1 };
 }
 
+function lastRequestedPath(): string {
+  const calls = vi.mocked(femmeClient.femmeJson).mock.calls;
+  return calls[calls.length - 1]?.[0] ?? "";
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -174,13 +179,11 @@ describe("PlatformStockIntegrationPage", () => {
     ]);
     // The default keeps showing only what needs attention.
     expect(select.value).toBe("");
-    expect(vi.mocked(femmeClient.femmeJson).mock.calls.at(-1)?.[0]).not.toContain("status=");
+    expect(lastRequestedPath()).not.toContain("status=");
 
     await user.selectOptions(select, "ALL");
 
-    await waitFor(() =>
-      expect(vi.mocked(femmeClient.femmeJson).mock.calls.at(-1)?.[0]).toContain("status=ALL"),
-    );
+    await waitFor(() => expect(lastRequestedPath()).toContain("status=ALL"));
   });
 
   it("paints each status with its own colour (delivered green, failed red…)", async () => {
