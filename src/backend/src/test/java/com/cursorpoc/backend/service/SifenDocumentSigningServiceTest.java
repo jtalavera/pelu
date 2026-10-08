@@ -38,6 +38,7 @@ class SifenDocumentSigningServiceTest {
   @Mock private SifenCertificateService certificateService;
   @Mock private SifenInvoiceHeaderService headerService;
   @Mock private SifenInvoiceDetailService detailService;
+  @Mock private SifenCscService cscService;
 
   private final SifenControlNumberService controlNumberService = new SifenControlNumberService();
   private final SifenDocumentXmlService xmlService = new SifenDocumentXmlService();
@@ -60,7 +61,12 @@ class SifenDocumentSigningServiceTest {
             controlNumberService,
             xmlService,
             qrCodeService,
-            new FemmeTimeProperties());
+            new FemmeTimeProperties(),
+            cscService);
+    // Default: the SET's public test CSC (a tenant with none configured, TEST environment).
+    org.mockito.Mockito.lenient()
+        .when(cscService.resolveActive(org.mockito.ArgumentMatchers.anyLong()))
+        .thenReturn(new SifenActiveCsc(1, "ABCD0000000000000000000000000000"));
     material = loadFixtureCertificateMaterial();
 
     cdcFields =
@@ -268,6 +274,34 @@ class SifenDocumentSigningServiceTest {
     var deChildren = signed.document().getDocumentElement().getElementsByTagNameNS("*", "gCamFuFD");
     assertThat(deChildren.getLength()).isEqualTo(1);
     assertThat(deChildren.item(0).getParentNode()).isSameAs(signed.document().getDocumentElement());
+  }
+
+  /**
+   * Per-tenant CSC: the QR of a signed invoice carries the IdCSC of the CSC resolved for THAT
+   * tenant (the DNIT issues each taxpayer its own), and is hashed with its secret — not the global
+   * test CSC.
+   */
+  @Test
+  void signInvoice_hashesTheQrWithTheTenantsOwnCsc() {
+    when(certificateService.requireActiveCertificate(TENANT_ID)).thenReturn(material);
+    when(headerService.buildHeader(TENANT_ID, INVOICE_ID)).thenReturn(header);
+    when(detailService.buildDetail(TENANT_ID, INVOICE_ID)).thenReturn(detail);
+    when(cscService.resolveActive(TENANT_ID))
+        .thenReturn(new SifenActiveCsc(7, "TENANT7000000000000000000000000AB"));
+
+    SifenSignedDocument signedWithTenantCsc = service.signInvoice(TENANT_ID, INVOICE_ID);
+
+    assertThat(signedWithTenantCsc.qrUrl()).contains("&IdCSC=0007&cHashQR=");
+    verify(cscService).resolveActive(TENANT_ID);
+
+    // Same document, other CSC → different hash.
+    when(cscService.resolveActive(TENANT_ID))
+        .thenReturn(new SifenActiveCsc(7, "OTHER0000000000000000000000000CD"));
+    SifenSignedDocument signedWithOther = service.signInvoice(TENANT_ID, INVOICE_ID);
+    String hashA =
+        signedWithTenantCsc.qrUrl().substring(signedWithTenantCsc.qrUrl().indexOf("cHashQR="));
+    String hashB = signedWithOther.qrUrl().substring(signedWithOther.qrUrl().indexOf("cHashQR="));
+    assertThat(hashA).isNotEqualTo(hashB);
   }
 
   /**
