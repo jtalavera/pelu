@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.stock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cursorpoc.backend.domain.FeatureFlag;
 import com.cursorpoc.backend.domain.FiscalStamp;
@@ -43,6 +44,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -110,6 +112,7 @@ class StockOutboxIntegrationTest {
   @Autowired StockOutboxService outbox;
   @Autowired StockOutboxReconciler reconciler;
   @Autowired StockAdminService admin;
+  @Autowired StockOutboxMessages history;
   @Autowired StockFeatureFlagPublisher publisher;
   @Autowired FeatureFlagService featureFlagService;
   @Autowired StockOutboxEventRepository events;
@@ -563,6 +566,197 @@ class StockOutboxIntegrationTest {
     assertThat(status.stockEnabled()).isTrue();
     processor.processTenant(tenant.getId(), "c");
     assertThat(links.findById(tenant.getId()).orElseThrow().getCatalogSyncedAt()).isNotNull();
+  }
+
+  // ── history for the support user, retry-now, superseded syncs ─────────────────────────────
+
+  private List<String> messageCodes(StockOutboxEvent e) {
+    return history.read(events.findById(e.getId()).orElseThrow()).stream()
+        .map(StockOutboxMessages.Entry::code)
+        .toList();
+  }
+
+  @Test
+  void theHistoryTellsTheSupportUserWhatHappenedToAnEvent() {
+    linkTenant();
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_020L, 1)));
+    StockOutboxEvent sale = tenantEvents().get(0);
+    assertThat(messageCodes(sale)).containsExactly("ENQUEUED");
+
+    FAKE.failNextCalls = 1;
+    processor.processTenant(tenant.getId(), "c");
+    StockAdminService.OutboxEventRow failedAttempt =
+        admin.list(tenant.getId(), null, 0, 50).content().get(0);
+    assertThat(failedAttempt.messages())
+        .extracting(StockOutboxMessages.Entry::code)
+        .containsExactly("ENQUEUED", "ATTEMPT_STARTED", "ATTEMPT_FAILED_RETRY_SCHEDULED");
+    StockOutboxMessages.Entry failure = failedAttempt.messages().get(2);
+    assertThat(failure.level()).isEqualTo("WARN");
+    assertThat(failure.params())
+        .containsEntry("reason", "SERVER_ERROR")
+        .containsEntry("attempt", 1)
+        .containsEntry("maxAttempts", 3)
+        .containsKey("nextAttemptAt");
+
+    makeDue(sale.getId());
+    processor.processTenant(tenant.getId(), "c");
+    assertThat(messageCodes(events.findById(sale.getId()).orElseThrow()))
+        .containsExactly(
+            "ENQUEUED",
+            "ATTEMPT_STARTED",
+            "ATTEMPT_FAILED_RETRY_SCHEDULED",
+            "ATTEMPT_STARTED",
+            "DELIVERED");
+  }
+
+  @Test
+  void aFailedEventExplainsWhyItGaveUp() {
+    linkTenant();
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_021L, 1)));
+    long id = tenantEvents().get(0).getId();
+    FAKE.failNextCalls = 100;
+    for (int i = 0; i < 3; i++) {
+      makeDue(id);
+      processor.processTenant(tenant.getId(), "c");
+    }
+    StockOutboxEvent e = events.findById(id).orElseThrow();
+    assertThat(e.getStatus()).isEqualTo(StockOutboxStatus.FAILED);
+    assertThat(messageCodes(e)).endsWith("ATTEMPT_STARTED", "ATTEMPT_FAILED_NO_MORE_RETRIES");
+
+    FAKE.failNextCalls = 0;
+    admin.retry(id);
+    assertThat(messageCodes(events.findById(id).orElseThrow()))
+        .endsWith("RETRY_REQUESTED_AFTER_FAILURE");
+    processor.processTenant(tenant.getId(), "c");
+    assertThat(messageCodes(events.findById(id).orElseThrow())).endsWith("DELIVERED");
+  }
+
+  @Test
+  void retryNowOnAPendingEventSkipsItsBackoff() {
+    linkTenant();
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_022L, 1)));
+    long id = tenantEvents().get(0).getId();
+    FAKE.failNextCalls = 1;
+    processor.processTenant(tenant.getId(), "c");
+    StockOutboxEvent waiting = events.findById(id).orElseThrow();
+    assertThat(waiting.getStatus()).isEqualTo(StockOutboxStatus.PENDING);
+    assertThat(waiting.getNextAttemptAt()).isAfter(Instant.now().plusSeconds(30));
+
+    queue.woken.clear();
+    StockAdminService.OutboxEventRow row = admin.retry(id);
+
+    assertThat(row.status()).isEqualTo("PENDING");
+    assertThat(row.nextAttemptAt()).isNull();
+    assertThat(row.attemptCount()).isEqualTo(1);
+    assertThat(queue.woken).contains(tenant.getId());
+    assertThat(row.messages())
+        .last()
+        .extracting(StockOutboxMessages.Entry::code)
+        .isEqualTo("RETRY_REQUESTED_NOW");
+    processor.processTenant(tenant.getId(), "c");
+    assertThat(events.findById(id).orElseThrow().getStatus()).isEqualTo(StockOutboxStatus.DONE);
+  }
+
+  @Test
+  void aPendingEventNeverAttemptedCannotBeRetriedOrDiscarded() {
+    linkTenant();
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_023L, 1)));
+    long id = tenantEvents().get(0).getId();
+
+    assertThatThrownBy(() -> admin.retry(id))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("STOCK_OUTBOX_EVENT_NOT_ACTIONABLE");
+    assertThatThrownBy(() -> admin.discard(id))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("STOCK_OUTBOX_EVENT_NOT_ACTIONABLE");
+  }
+
+  @Test
+  void discardingAPendingEventWaitingForItsRetryUnblocksTheQueue() {
+    linkTenant();
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_024L, 1)));
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_025L, 1)));
+    long first = tenantEvents().get(0).getId();
+    FAKE.failNextCalls = 1;
+    processor.processTenant(tenant.getId(), "c");
+
+    admin.discard(first);
+    processor.processTenant(tenant.getId(), "c");
+
+    assertThat(events.findById(first).orElseThrow().getStatus())
+        .isEqualTo(StockOutboxStatus.DISCARDED);
+    assertThat(messageCodes(events.findById(first).orElseThrow())).endsWith("DISCARDED_MANUALLY");
+    assertThat(tenantEvents().get(1).getStatus()).isEqualTo(StockOutboxStatus.DONE);
+  }
+
+  @Test
+  void theListSaysWhichEventAnOpenOneIsWaitingBehind() {
+    linkTenant();
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_026L, 1)));
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_027L, 1)));
+    long first = tenantEvents().get(0).getId();
+    long second = tenantEvents().get(1).getId();
+
+    List<StockAdminService.OutboxEventRow> rows = admin.list(tenant.getId(), null, 0, 50).content();
+
+    assertThat(
+            rows.stream().filter(r -> r.id() == first).findFirst().orElseThrow().blockedByEventId())
+        .isNull();
+    assertThat(
+            rows.stream()
+                .filter(r -> r.id() == second)
+                .findFirst()
+                .orElseThrow()
+                .blockedByEventId())
+        .isEqualTo(first);
+  }
+
+  @Test
+  void aNewerFullCatalogSyncSupersedesAnOlderOneThatWasHoldingTheQueue() {
+    linkTenant();
+    outbox.enqueueCatalogFullSync(tenant.getId(), true);
+    long oldSync = tenantEvents().get(0).getId();
+    FAKE.failNextCalls = 1;
+    processor.processTenant(tenant.getId(), "c");
+    assertThat(events.findById(oldSync).orElseThrow().getStatus())
+        .isEqualTo(StockOutboxStatus.PENDING);
+    // The old sync is waiting out its backoff, and a sale queues up behind it.
+    tx.executeWithoutResult(s -> outbox.enqueueSale(invoice(5_028L, 1)));
+    assertThat(processor.processTenant(tenant.getId(), "c")).isZero();
+
+    outbox.enqueueCatalogFullSync(tenant.getId(), true);
+    processor.processTenant(tenant.getId(), "c");
+
+    List<StockOutboxEvent> list = tenantEvents();
+    assertThat(list.get(0).getStatus()).isEqualTo(StockOutboxStatus.DISCARDED);
+    assertThat(messageCodes(list.get(0))).endsWith("SUPERSEDED");
+    assertThat(list.get(1).getStatus()).isEqualTo(StockOutboxStatus.DONE);
+    assertThat(list.get(2).getStatus()).isEqualTo(StockOutboxStatus.DONE);
+    StockOutboxMessages.Entry superseded =
+        admin.list(tenant.getId(), "DISCARDED", 0, 10).content().get(0).messages().getLast();
+    assertThat(superseded.params())
+        .containsEntry("byEventId", (int) list.get(2).getId().longValue());
+  }
+
+  @Test
+  void aFullCatalogSyncRetryReusesTheKeysSoStockCanReplayWhatItAlreadyApplied() {
+    linkTenant();
+    FAKE.requests.clear();
+    outbox.enqueueCatalogFullSync(tenant.getId(), true);
+    long id = tenantEvents().get(0).getId();
+    FAKE.failNextCalls = 1;
+    processor.processTenant(tenant.getId(), "c");
+    makeDue(id);
+    processor.processTenant(tenant.getId(), "c");
+
+    List<String> keys =
+        FAKE.calls("/api/v1/integration/items:bulk-upsert").stream()
+            .map(FakeStockServer.Recorded::idempotencyKey)
+            .toList();
+    assertThat(keys).hasSize(2);
+    assertThat(keys.get(0)).isEqualTo(keys.get(1));
+    assertThat(events.findById(id).orElseThrow().getStatus()).isEqualTo(StockOutboxStatus.DONE);
+    assertThat(messageCodes(events.findById(id).orElseThrow()).getLast()).isEqualTo("DELIVERED");
   }
 
   private void makeDue(long eventId) {

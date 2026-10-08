@@ -51,6 +51,7 @@ public class StockOutboxService {
   private final StockProperties properties;
   private final FemmeTimeProperties timeProperties;
   private final ObjectMapper objectMapper;
+  private final StockOutboxMessages messages;
 
   public StockOutboxService(
       StockOutboxEventRepository repository,
@@ -59,7 +60,8 @@ public class StockOutboxService {
       StockPayloads payloads,
       StockProperties properties,
       FemmeTimeProperties timeProperties,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      StockOutboxMessages messages) {
     this.repository = repository;
     this.featureFlagService = featureFlagService;
     this.queue = queue;
@@ -67,6 +69,7 @@ public class StockOutboxService {
     this.properties = properties;
     this.timeProperties = timeProperties;
     this.objectMapper = objectMapper;
+    this.messages = messages;
   }
 
   public boolean stockEnabled(long tenantId) {
@@ -271,6 +274,7 @@ public class StockOutboxService {
     event.setStatus(StockOutboxStatus.PENDING);
     event.setAttemptCount(0);
     event.setCreatedAt(Instant.now());
+    messages.append(event, StockOutboxMessages.INFO, "ENQUEUED", event.getCreatedAt());
     repository.save(event);
     log.info(
         "Stock outbox event enqueued tenantId={} type={} key={}", tenantId, type, idempotencyKey);

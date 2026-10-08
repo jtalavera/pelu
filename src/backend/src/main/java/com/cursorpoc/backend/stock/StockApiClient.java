@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -76,7 +77,8 @@ public class StockApiClient {
         body,
         String.valueOf(tenantId),
         idempotencyKey,
-        correlationId);
+        correlationId,
+        properties.getBulkHttpTimeout());
   }
 
   public StockResponse postDocument(
@@ -124,12 +126,30 @@ public class StockApiClient {
       String tenantHeader,
       String idempotencyKey,
       String correlationId) {
+    return send(
+        method,
+        path,
+        body,
+        tenantHeader,
+        idempotencyKey,
+        correlationId,
+        properties.getHttpTimeout());
+  }
+
+  private StockResponse send(
+      String method,
+      String path,
+      Object body,
+      String tenantHeader,
+      String idempotencyKey,
+      String correlationId,
+      Duration timeout) {
     StockResponse response =
-        sendOnce(method, path, body, tenantHeader, idempotencyKey, correlationId);
+        sendOnce(method, path, body, tenantHeader, idempotencyKey, correlationId, timeout);
     if (response.status() == 401) {
       // Cached token expired or was revoked: get a fresh one and try exactly once more.
       invalidateToken();
-      response = sendOnce(method, path, body, tenantHeader, idempotencyKey, correlationId);
+      response = sendOnce(method, path, body, tenantHeader, idempotencyKey, correlationId, timeout);
     }
     return response;
   }
@@ -140,11 +160,12 @@ public class StockApiClient {
       Object body,
       String tenantHeader,
       String idempotencyKey,
-      String correlationId) {
+      String correlationId,
+      Duration timeout) {
     URI uri = URI.create(baseUrl() + API_PREFIX + path);
     HttpRequest.Builder builder =
         HttpRequest.newBuilder(uri)
-            .timeout(properties.getHttpTimeout())
+            .timeout(timeout)
             .header("Authorization", "Bearer " + token())
             .header("Accept", "application/json");
     if (tenantHeader != null) {

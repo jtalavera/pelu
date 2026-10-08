@@ -23,6 +23,17 @@ public interface StockOutboxEventRepository extends JpaRepository<StockOutboxEve
   Optional<StockOutboxEvent> findFirstByTenantIdAndStatusInOrderByIdAsc(
       Long tenantId, Collection<StockOutboxStatus> statuses);
 
+  /**
+   * The newest not-yet-finished event of {@code type} created after {@code afterId} — used to
+   * detect that a full catalog sync has been superseded by a later one.
+   */
+  Optional<StockOutboxEvent>
+      findFirstByTenantIdAndEventTypeAndStatusInAndIdGreaterThanOrderByIdDesc(
+          Long tenantId,
+          StockEventType eventType,
+          Collection<StockOutboxStatus> statuses,
+          Long afterId);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT e FROM StockOutboxEvent e WHERE e.id = :id")
   Optional<StockOutboxEvent> lockById(@Param("id") Long id);

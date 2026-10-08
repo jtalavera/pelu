@@ -13,6 +13,7 @@ Lo que pelu implementa para que un salón use Stock. Contrato del otro lado: `co
 | Despertador: cola `stock-integration` (Service Bus) o cola local en proceso | `StockServiceBusConfiguration`, `ServiceBusStockOutboxQueue`, `LocalAsyncStockOutboxQueue` |
 | Worker por salón, en orden, con lease de 5 min y reintentos 1m/5m/15m/1h/4h/24h → `FAILED` | `StockOutboxProcessor`, `StockOutboxPersistenceService` |
 | Reconciliador cada minuto (vencidos y leases expirados) | `StockOutboxReconciler` |
+| Historial legible por envío (`stock_outbox.user_messages_json`: códigos + parámetros que el panel traduce) | `StockOutboxMessages` |
 | Activación / flags / nombre-estado del salón → `TENANT_UPSERT`, `FEATURE_FLAGS_SYNC`, `CATALOG_FULL_SYNC` | `StockFeatureFlagPublisher` |
 | Venta (`POST_SALE`, clave `PELU:INVOICE:{id}:{rev}`) y reversión (anular, cancelación SIFEN, inutilización, corrección) | `StockDomainEventListener` ← `InvoiceStockEvent` |
 | SSO a Stock (`POST /api/sso/stock`, HS256 con secreto propio, 5 min) | `StockSsoService`, ítem "Stock" en `AppShell` |
@@ -51,15 +52,27 @@ Los secretos faltantes no impiden arrancar: lo que los necesita responde `STOCK_
   `TENANT_UPSERT` del salón todavía no se entregó. Mirá la cola en Plataforma → Integración con Stock
   (o la tabla `stock_outbox`).
 - **Eventos `PENDING` que no avanzan** (`stopped: NOT_DUE` en el log): el primer evento no entregado
-  de un salón está en espera de reintento y, como el orden por salón se respeta, bloquea al resto.
-  La espera crece 1m/5m/15m/1h/4h/24h tras cada falla. "Reintentar" en el panel solo aplica a
-  `FAILED`; para adelantar uno en espera:
-  `UPDATE stock_outbox SET next_attempt_at = SYSUTCDATETIME() WHERE id = <n> AND status = 'PENDING'`
-  (el reconciliador lo recoge en ≤ 1 minuto).
+  de un salón está en espera de reintento y, como el orden por salón se respeta, bloquea al resto
+  (el panel lo dice en cada fila: "Esperando al envío #N de este salón"). La espera crece
+  1m/5m/15m/1h/4h/24h tras cada falla. En el panel, **"Reintentar ahora"** adelanta uno en espera (sin
+  esperar el backoff) y **"Reintentar"** reactiva uno `FAILED`; **"Descartar"** vale para ambos. Un envío
+  que todavía no se intentó no se puede reintentar ni descartar: primero hay que resolver el que va
+  adelante. Una sincronización de catálogo completo vieja que sigue esperando se descarta sola
+  (`SUPERSEDED`) cuando hay una más nueva del mismo salón: la nueva ya manda todo el catálogo.
+- **¿Qué le pasó a este envío?**: en Plataforma → Integración con Stock, "Detalle" en cada fila muestra el
+  historial completo (en cola, cada intento con su motivo en palabras simples y el detalle técnico,
+  próximo intento, reintentos/descartes manuales, entrega). Se guarda en `stock_outbox.user_messages_json`
+  (JSON `[{at, level, code, params}]`, máx. 60 entradas); los códigos se traducen en el frontend
+  (`femme.platform.stock.msg.*` / `.reason.*`). Los envíos anteriores a V75 no tienen historial.
 - **`STOCK_NOT_CONFIGURED`** en `last_error`: faltan variables (`APP_FEMME_STOCK_*`) o el secreto
   `app-femme-stock-client-secret` en el Key Vault al arrancar el backend.
-- **`STOCK_UNREACHABLE HttpTimeoutException`**: casi siempre arranque en frío de Stock (en dev escala
-  a cero, ~60 s). Es transitorio, pero manda el evento al siguiente backoff: adelantalo como arriba.
+- **`STOCK_UNREACHABLE HttpTimeoutException`**: Stock no respondió a tiempo. Puede ser el arranque en
+  frío de Stock (en dev escala a cero, ~60 s) o un lote grande de catálogo. Timeouts:
+  `app.femme.stock.http-timeout` (30 s, llamadas comunes) y `app.femme.stock.bulk-http-timeout` (120 s,
+  `items:bulk-upsert`); el catálogo completo se envía en lotes de `app.femme.stock.catalog-batch-size`
+  (200). Si Stock llegó a aplicar el lote, el reintento usa la misma `Idempotency-Key` (derivada del
+  contenido del lote) y Stock responde con lo ya hecho en vez de repetirlo. Entre lotes se renueva el
+  lease. Si igual queda en espera, usá "Reintentar ahora" en el panel.
 - **SSO rechazado**: `APP_STOCK_PELU_ISSUER` en Stock debe ser exactamente `femme`
   (`app.femme.stock.sso.issuer`) y el secreto HS256 debe ser el mismo en ambos Key Vaults.
 

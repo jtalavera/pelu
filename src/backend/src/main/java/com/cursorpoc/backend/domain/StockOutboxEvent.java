@@ -66,6 +66,13 @@ public class StockOutboxEvent {
   @Column(name = "response_json", columnDefinition = "NVARCHAR(MAX)")
   private String responseJson;
 
+  /**
+   * JSON array of user-facing history entries ({@code {at, level, code, params}}), oldest first —
+   * see {@code StockOutboxMessages}. Null for rows created before the history existed.
+   */
+  @Column(name = "user_messages_json", columnDefinition = "NVARCHAR(MAX)")
+  private String userMessagesJson;
+
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
@@ -168,6 +175,14 @@ public class StockOutboxEvent {
 
   public void setResponseJson(String responseJson) {
     this.responseJson = responseJson;
+  }
+
+  public String getUserMessagesJson() {
+    return userMessagesJson;
+  }
+
+  public void setUserMessagesJson(String userMessagesJson) {
+    this.userMessagesJson = userMessagesJson;
   }
 
   public Instant getCreatedAt() {
