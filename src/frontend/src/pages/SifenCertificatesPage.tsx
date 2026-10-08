@@ -4,6 +4,7 @@ import { Alert, Button, Heading, PageSizeSelect, Pagination, Spinner, Text } fro
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { SifenCscSection } from "../components/SifenCscSection";
 import { useDateLocale } from "../i18n/dateLocale";
 import { useMe } from "../hooks/useMe";
 import { useFeatureFlagsState } from "../hooks/useFeatureFlags";
@@ -62,7 +63,7 @@ type PagedNumberVoiding = {
   soonestPendingDeadline: string | null;
 };
 
-type SifenSettingsTab = "certificate" | "numberVoiding";
+type SifenSettingsTab = "certificate" | "csc" | "numberVoiding";
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -549,7 +550,7 @@ export default function SifenCertificatesPage() {
         role="tablist"
         aria-label={t("femme.sifenSettings.tablistLabel")}
       >
-        {(["certificate", "numberVoiding"] as const).map((tabKey) => (
+        {(["certificate", "csc", "numberVoiding"] as const).map((tabKey) => (
           <button
             key={tabKey}
             type="button"
@@ -692,6 +693,10 @@ export default function SifenCertificatesPage() {
             </div>
           )}
         </section>
+      </div>
+
+      <div role="tabpanel" hidden={activeTab !== "csc"}>
+        {activeTab === "csc" ? <SifenCscSection /> : null}
       </div>
 
       <div role="tabpanel" hidden={activeTab !== "numberVoiding"}>
