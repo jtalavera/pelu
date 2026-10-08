@@ -15,10 +15,12 @@ import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
+import com.cursorpoc.backend.repository.SifenCscRepository;
 import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.service.SifenCertificateSecretStore;
 import com.cursorpoc.backend.service.SifenCertificateService;
+import com.cursorpoc.backend.service.SifenCscSecretStore;
 import com.cursorpoc.backend.service.SifenDocumentType;
 import com.cursorpoc.backend.service.SifenInvoiceDetail;
 import com.cursorpoc.backend.service.SifenInvoiceDetailService;
@@ -109,6 +111,8 @@ public class SifenInvoiceTestSupportController {
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceNotificationService notificationService;
   private final SifenInvoiceEventLogService eventLogService;
+  private final SifenCscRepository cscRepository;
+  private final SifenCscSecretStore cscSecretStore;
 
   /** Stock (HU-64): the fabricated voids announce themselves exactly like the real services. */
   private final ApplicationEventPublisher events;
@@ -129,6 +133,8 @@ public class SifenInvoiceTestSupportController {
       FemmeTimeProperties timeProperties,
       SifenInvoiceNotificationService notificationService,
       SifenInvoiceEventLogService eventLogService,
+      SifenCscRepository cscRepository,
+      SifenCscSecretStore cscSecretStore,
       ApplicationEventPublisher events) {
     this.events = events;
     this.invoiceRepository = invoiceRepository;
@@ -146,6 +152,8 @@ public class SifenInvoiceTestSupportController {
     this.timeProperties = timeProperties;
     this.notificationService = notificationService;
     this.eventLogService = eventLogService;
+    this.cscRepository = cscRepository;
+    this.cscSecretStore = cscSecretStore;
   }
 
   /**
@@ -166,6 +174,19 @@ public class SifenInvoiceTestSupportController {
     // RT-12: the .p12/password themselves live in the secret store, not the DB row above — clear
     // those too so a re-run doesn't accumulate orphaned local files across the same demo tenant.
     certificateSecretStore.deleteAll(DEMO_TENANT_ID);
+  }
+
+  /**
+   * Per-tenant CSC e2e specs load a CSC into the shared demo tenant; this drops every CSC (rows and
+   * stored values) so they leave it in the known-empty state — i.e. the demo tenant falls back to
+   * the SET's public test CSC again, exactly like the other SIFEN specs expect.
+   */
+  @PostMapping("/csc/clear")
+  @Transactional
+  public void clearCsc() {
+    log.info("POST /api/admin/sifen-test-support/csc/clear tenantId={}", DEMO_TENANT_ID);
+    cscRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    cscSecretStore.deleteAll(DEMO_TENANT_ID);
   }
 
   @PostMapping("/invoices/{id}/prepare-for-status-check")

@@ -63,6 +63,7 @@ public class SifenDocumentSigningService {
   private final SifenDocumentXmlService xmlService;
   private final SifenQrCodeService qrCodeService;
   private final FemmeTimeProperties timeProperties;
+  private final SifenCscService cscService;
 
   public SifenDocumentSigningService(
       SifenCertificateService certificateService,
@@ -71,7 +72,8 @@ public class SifenDocumentSigningService {
       SifenControlNumberService controlNumberService,
       SifenDocumentXmlService xmlService,
       SifenQrCodeService qrCodeService,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenCscService cscService) {
     this.certificateService = certificateService;
     this.headerService = headerService;
     this.detailService = detailService;
@@ -79,6 +81,7 @@ public class SifenDocumentSigningService {
     this.xmlService = xmlService;
     this.qrCodeService = qrCodeService;
     this.timeProperties = timeProperties;
+    this.cscService = cscService;
   }
 
   /**
@@ -117,8 +120,15 @@ public class SifenDocumentSigningService {
     // signature). This is also the fix for the schema gap HU-06/HU-07 both left documented:
     // every prior document this system sent SIFEN was rejected for lacking this exact field.
     String digestValueBase64 = extractDigestValueBase64(signed.document());
+    // The QR is hashed with THIS tenant's own CSC (the DNIT issues one per taxpayer).
     SifenQrCodeService.SifenQrResult qr =
-        qrCodeService.build(header, detail.totals(), detail.lines().size(), digestValueBase64);
+        qrCodeService.build(
+            header,
+            detail.totals(),
+            detail.lines().size(),
+            digestValueBase64,
+            false,
+            cscService.resolveActive(tenantId));
     xmlService.appendQrGroup(signed.document(), qr.qrUrl());
     SifenSignedDocument signedWithQr =
         new SifenSignedDocument(
