@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Heading, Pagination, Select, Spinner, Text } from "@design-system";
+import { Alert, Badge, Button, Heading, Pagination, Select, Spinner, Text } from "@design-system";
+import type { BadgeProps } from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import {
   discardStockOutboxEvent,
@@ -15,7 +16,17 @@ import { formatStockOutboxMessage, isStockOutboxActionable } from "../util/stock
 
 const PAGE_SIZE = 20;
 
-type StatusFilter = "" | "PENDING" | "PROCESSING" | "FAILED" | "DONE" | "DISCARDED";
+/** "" = pending or failed (default), "ALL" = every status. */
+type StatusFilter = "" | "ALL" | "PENDING" | "PROCESSING" | "FAILED" | "DONE" | "DISCARDED";
+
+/** One distinct colour per delivery status (green delivered, red failed, amber pending…). */
+const STATUS_BADGE_VARIANT: Record<string, NonNullable<BadgeProps["variant"]>> = {
+  PENDING: "warning",
+  PROCESSING: "info",
+  FAILED: "destructive",
+  DONE: "success",
+  DISCARDED: "secondary",
+};
 
 /**
  * HU-67: "Integración con Stock" — deliveries to control-stock that are pending or failed, with
@@ -118,6 +129,7 @@ export default function PlatformStockIntegrationPage() {
             }}
             className="mt-1 w-full"
           >
+            <option value="ALL">{t("femme.platform.stock.statusAll")}</option>
             <option value="">{t("femme.platform.stock.statusOpen")}</option>
             {(["PENDING", "PROCESSING", "FAILED", "DONE", "DISCARDED"] as const).map((s) => (
               <option key={s} value={s}>
@@ -174,7 +186,12 @@ export default function PlatformStockIntegrationPage() {
                       </td>
                       <td className={td}>
                         <div data-testid={`stock-outbox-status-${row.id}`}>
-                          {t(`femme.platform.stock.status.${row.status}`, row.status)}
+                          <Badge
+                            variant={STATUS_BADGE_VARIANT[row.status] ?? "outline"}
+                            data-status={row.status}
+                          >
+                            {t(`femme.platform.stock.status.${row.status}`, row.status)}
+                          </Badge>
                         </div>
                         {row.blockedByEventId != null && row.attemptCount === 0 ? (
                           <Text

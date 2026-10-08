@@ -32,6 +32,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class StockAdminService {
 
+  /** {@code status=ALL}: no status filter at all. */
+  public static final String STATUS_ALL = "ALL";
+
   private final StockOutboxEventRepository repository;
   private final StockTenantLinkRepository linkRepository;
   private final TenantRepository tenantRepository;
@@ -83,7 +86,8 @@ public class StockAdminService {
 
   /**
    * HU-67: without a status filter, lists what still needs attention (PENDING, PROCESSING, FAILED);
-   * with one, exactly that status.
+   * {@code ALL} lists every status (delivered and discarded too); any other value is exactly that
+   * status.
    */
   @Transactional(readOnly = true)
   public PageResponse<OutboxEventRow> list(Long tenantId, String status, int page, int size) {
@@ -93,6 +97,8 @@ public class StockAdminService {
       result =
           repository.searchInStatuses(
               tenantId, StockOutboxPersistenceService.OPEN_STATUSES, pageable);
+    } else if (STATUS_ALL.equalsIgnoreCase(status.trim())) {
+      result = repository.search(tenantId, null, pageable);
     } else {
       StockOutboxStatus parsed;
       try {

@@ -205,6 +205,51 @@ test.describe("HU-67 · Panel de integración con Stock", () => {
     await expect(page.getByTestId("stock-outbox-empty")).toBeVisible({ timeout: 15_000 });
   });
 
+  test("el filtro 'All' lista todos los estados y cada estado tiene su propio color", async ({ page }) => {
+    const world = getStockWorld();
+    const platform = await platformToken();
+    const admin = await peluLogin(world.s2.adminEmail, world.s2.adminPassword);
+    await waitForOutboxDrained(platform, world.s2.id);
+    const stamp = Date.now();
+    // One DISCARDED, one FAILED and (after retrying a third) one DONE delivery.
+    await proxyMode("fail400", 1);
+    await createProduct(admin, world.s2.categoryId, `Color descartado ${stamp}`);
+    await expect.poll(async () => (await outbox(platform, world.s2.id, "FAILED")).length, { timeout: 30_000 }).toBe(1);
+    const discarded = (await outbox(platform, world.s2.id, "FAILED"))[0];
+    await peluOk(`/api/platform/stock/outbox/${discarded.id}/discard`, { method: "POST", token: platform });
+    await waitForOutboxDrained(platform, world.s2.id);
+    await createProduct(admin, world.s2.categoryId, `Color entregado ${stamp}`);
+    await waitForOutboxDrained(platform, world.s2.id);
+    const delivered = (await outbox(platform, world.s2.id, "DONE"))[0];
+    await proxyMode("fail400", 1);
+    await createProduct(admin, world.s2.categoryId, `Color fallido ${stamp}`);
+    await expect.poll(async () => (await outbox(platform, world.s2.id, "FAILED")).length, { timeout: 30_000 }).toBe(1);
+    const failed = (await outbox(platform, world.s2.id, "FAILED"))[0];
+
+    await loginAsPlatformAdmin(page);
+    await page.goto("/platform/stock");
+    const status = page.locator("#stock-outbox-status");
+    // "All" is the first option; the default keeps showing only what needs attention.
+    await expect(status.locator("option").first()).toHaveText("All");
+    await expect(status).toHaveValue("");
+    await expect(page.getByTestId(`stock-outbox-row-${failed.id}`)).toBeVisible();
+    await expect(page.getByTestId(`stock-outbox-row-${discarded.id}`)).toHaveCount(0);
+
+    await status.selectOption("ALL");
+    const badge = (id: number) => page.getByTestId(`stock-outbox-status-${id}`).locator("[data-status]");
+    await expect(badge(failed.id)).toHaveAttribute("data-status", "FAILED");
+    await expect(badge(failed.id)).toHaveClass(/bg-red-100/);
+    await expect(badge(discarded.id)).toHaveAttribute("data-status", "DISCARDED");
+    await expect(badge(discarded.id)).toHaveClass(/bg-slate-100/);
+    await expect(badge(delivered.id)).toHaveAttribute("data-status", "DONE");
+    await expect(badge(delivered.id)).toHaveClass(/bg-emerald-100/);
+    await expect(badge(delivered.id)).toHaveText("Delivered");
+
+    // Leave the salon's queue clean for the next tests.
+    await page.getByTestId(`stock-outbox-discard-${failed.id}`).click();
+    await waitForOutboxDrained(platform, world.s2.id);
+  });
+
   test("solo el administrador de plataforma accede al panel", async ({ page }) => {
     const world = getStockWorld();
     const admin = await peluLogin(world.s1.adminEmail, world.s1.adminPassword);

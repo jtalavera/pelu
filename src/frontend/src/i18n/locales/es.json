@@ -433,6 +433,7 @@
         "lead": "Envíos de Femme a Stock pendientes o fallidos. Un envío fallido frena los siguientes de ese salón hasta que se reintente o se descarte.",
         "filterTenant": "Salón",
         "filterStatus": "Estado",
+        "statusAll": "Todos",
         "statusOpen": "Pendientes o fallidos",
         "refresh": "Actualizar",
         "empty": "No hay nada pendiente: todos los envíos llegaron a Stock.",
