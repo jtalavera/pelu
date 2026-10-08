@@ -107,7 +107,7 @@ test.describe("Issue #220 · Dashboard top services chart", () => {
 
     const chart = page.getByTestId("dashboard-top-services");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Top services", { exact: true })).toBeVisible();
+    await expect(page.getByText("Most invoiced services", { exact: true })).toBeVisible();
 
     // Not the empty state, given the invoices seeded above.
     await expect(page.getByTestId("dashboard-top-services-empty")).toHaveCount(0);

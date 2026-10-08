@@ -505,14 +505,17 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
             <FloatingDropdown anchorRef={reportAnchorRef} open={reportMenuOpen} ref={reportPanelRef}>
               <ul
                 role="menu"
-                className="rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] py-1 shadow-lg"
+                data-testid="invoice-history-report-menu"
+                // Issue #284: the design-system tokens are plain hex colors, so the old
+                // `rgb(var(--color-white))` was invalid CSS and left the panel transparent.
+                className="min-w-44 rounded-md border border-[var(--color-stone-md)] bg-[var(--color-white)] py-1 shadow-lg"
               >
                 <li role="none">
                   <button
                     type="button"
                     role="menuitem"
                     data-testid="invoice-history-report-xlsx"
-                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-stone)]"
                     onClick={() => void handleDownloadReport("xlsx")}
                   >
                     {t("femme.billing.history.report.excel")}
@@ -523,7 +526,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     type="button"
                     role="menuitem"
                     data-testid="invoice-history-report-pdf"
-                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-stone)]"
                     onClick={() => void handleDownloadReport("pdf")}
                   >
                     {t("femme.billing.history.report.pdf")}
@@ -928,8 +931,10 @@ function NewInvoiceTab({
           },
         ],
   );
+  // Issue #284: the payment method starts EMPTY so the user has to choose it on purpose (a silent
+  // "Cash" default let invoices go out with the wrong method).
   const [payments, setPayments] = useState<PaymentForm[]>([
-    { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+    { method: "", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -1225,12 +1230,8 @@ function NewInvoiceTab({
   function addPayment() {
     setPayments((prev) => {
       const used = new Set(prev.map((p) => p.method));
-      const next = PAYMENT_METHODS.find((m) => !used.has(m));
-      if (!next) return prev;
-      return [
-        ...prev,
-        { method: next, amount: "", cardBrand: "", cardBrandOtherDescription: "" },
-      ];
+      if (!PAYMENT_METHODS.some((m) => !used.has(m))) return prev;
+      return [...prev, { method: "", amount: "", cardBrand: "", cardBrandOtherDescription: "" }];
     });
   }
 
@@ -1542,7 +1543,7 @@ function NewInvoiceTab({
         },
       ]);
       setPayments([
-        { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+        { method: "", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
       ]);
       setTipsAmount("");
       setServiceRecordId(null);
@@ -2088,6 +2089,9 @@ function NewInvoiceTab({
               const amountIsInvalid =
                 !Number.isFinite(paymentAmountNum) || paymentAmountNum <= 0;
               const isCardPayment = CARD_PAYMENT_METHODS.has(payment.method);
+              // Issue #284: shown as soon as there is something to collect, i.e. exactly when the
+              // empty method is what keeps the "Issue invoice" button disabled.
+              const methodMissing = payment.method === "" && !amountIsInvalid;
               const cardError =
                 !amountIsInvalid && paymentErrors[idx] ? paymentErrors[idx] : undefined;
               return (
@@ -2101,7 +2105,12 @@ function NewInvoiceTab({
                     value={payment.method}
                     onChange={(e) => updatePayment(idx, "method", e.target.value)}
                     className="mt-1 w-full"
+                    aria-invalid={methodMissing}
+                    aria-describedby={methodMissing ? `pay-method-err-${idx}` : undefined}
                   >
+                    <option value="" disabled>
+                      {t("femme.billing.invoice.paymentMethodPlaceholder")}
+                    </option>
                     {PAYMENT_METHODS.map((m) => (
                       <option
                         key={m}
@@ -2112,6 +2121,9 @@ function NewInvoiceTab({
                       </option>
                     ))}
                   </Select>
+                  <FieldValidationError id={`pay-method-err-${idx}`}>
+                    {methodMissing ? t("femme.billing.invoice.paymentMethodRequired") : undefined}
+                  </FieldValidationError>
                 </div>
                 <div className="flex-1 min-w-[120px]">
                   <Label htmlFor={`pay-amount-${idx}`}>

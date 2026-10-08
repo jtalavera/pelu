@@ -36,7 +36,8 @@ import org.springframework.stereotype.Service;
 /**
  * Issue #174 AC-05: "Historial de comprobantes" report in Excel (.xlsx) and PDF. Only the emitted
  * invoice's header data — never the line detail — for every row currently shown by the History
- * filter.
+ * filter. Issue #284: the "Número" column is the full number printed on the KuDE
+ * (establecimiento-punto de expedición-número, e.g. 001-001-0000007).
  */
 @Service
 public class InvoiceHistoryReportService {
@@ -73,7 +74,7 @@ public class InvoiceHistoryReportService {
       document.add(new Paragraph(dateRangeLabel(from, to, zone), bodyFont));
       document.add(new Paragraph(" "));
 
-      PdfPTable table = new PdfPTable(new float[] {1.4f, 2.2f, 3.2f, 1.6f, 2.2f, 2f});
+      PdfPTable table = new PdfPTable(new float[] {2.2f, 2.2f, 3.0f, 1.5f, 2.1f, 2f});
       table.setWidthPercentage(100);
       for (String h :
           new String[] {
@@ -83,7 +84,7 @@ public class InvoiceHistoryReportService {
       }
 
       for (InvoiceReportRow r : rows) {
-        addCell(table, formatInvoiceNumber(r.invoiceNumber()), bodyFont, Element.ALIGN_LEFT);
+        addCell(table, r.fullInvoiceNumber(), bodyFont, Element.ALIGN_LEFT);
         addCell(
             table,
             r.issuedAt() != null ? dateTimeFmt.format(r.issuedAt()) : "",
@@ -159,7 +160,7 @@ public class InvoiceHistoryReportService {
       int rowIdx = 3;
       for (InvoiceReportRow r : rows) {
         Row row = sheet.createRow(rowIdx++);
-        row.createCell(0).setCellValue(formatInvoiceNumber(r.invoiceNumber()));
+        row.createCell(0).setCellValue(r.fullInvoiceNumber());
         row.createCell(1)
             .setCellValue(r.issuedAt() != null ? dateTimeFmt.format(r.issuedAt()) : "");
         row.createCell(2).setCellValue(r.clientName() != null ? r.clientName() : "");
@@ -196,10 +197,6 @@ public class InvoiceHistoryReportService {
       }
     }
     return total;
-  }
-
-  private static String formatInvoiceNumber(int number) {
-    return String.format("%07d", number);
   }
 
   private static String statusLabel(InvoiceStatus status) {

@@ -108,6 +108,34 @@ describe("RevenueTrendChart rendering", () => {
     expect(lineStartX).toBeGreaterThan(firstBarX + 200);
   });
 
+  // Issue #284: days without invoicing must be visible (not just an invisible 0-height bar) and
+  // still count in the 7-day average.
+  it("marks every day with no invoicing on the baseline and lists it in the legend", () => {
+    const withGaps = data.map((p, i) => (i === 2 || i === 3 || i === 9 ? { ...p, invoiced: 0 } : p));
+    const { container } = renderChart(withGaps);
+    const markers = screen.getAllByTestId("dashboard-revenue-trend-zero-day");
+    expect(markers.map((m) => m.getAttribute("data-date"))).toEqual([
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-10",
+    ]);
+    expect(container.querySelector(".recharts-legend-wrapper")?.textContent).toContain("No invoicing");
+  });
+
+  it("does not draw zero-day markers (nor the legend entry) when every day has invoicing", () => {
+    const { container } = renderChart();
+    expect(screen.queryAllByTestId("dashboard-revenue-trend-zero-day")).toHaveLength(0);
+    expect(container.querySelector(".recharts-legend-wrapper")?.textContent).not.toContain("No invoicing");
+  });
+
+  it("the zero days lower the 7-day average (last point = mean including the zeros)", () => {
+    // Last 7 days: 100k, 0, 0, 100k, 100k, 100k, 240k → mean 91.428,57… → Gs. 91.429
+    const withGaps = data.map((p, i) => (i === 8 || i === 9 ? { ...p, invoiced: 0 } : p));
+    renderChart(withGaps);
+    const endDot = screen.getByTestId("dashboard-revenue-trend-end-dot");
+    expect(endDot.querySelector("text")?.textContent).toBe("Gs. 91.429");
+  });
+
   it("does not draw the line (nor list it in the legend) when the window is shorter than a week", () => {
     const { container } = renderChart(data.slice(0, 5));
     expect(container.querySelector(".recharts-line-curve")).toBeNull();

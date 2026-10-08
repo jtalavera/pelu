@@ -28,13 +28,17 @@ class InvoiceHistoryReportServiceTest {
               InvoiceStatus.ISSUED,
               new BigDecimal("150000.00"),
               Instant.parse("2026-08-20T13:00:00Z"),
-              SifenSubmissionStatus.APPROVED),
+              SifenSubmissionStatus.APPROVED,
+              2,
+              3),
           new InvoiceReportRow(
               8,
               "CONSUMIDOR FINAL",
               InvoiceStatus.VOIDED,
               new BigDecimal("50000.00"),
               Instant.parse("2026-08-21T09:30:00Z"),
+              null,
+              null,
               null));
 
   @Test
@@ -54,18 +58,22 @@ class InvoiceHistoryReportServiceTest {
                 InvoiceStatus.ISSUED,
                 new BigDecimal("100000"),
                 Instant.now(),
-                SifenSubmissionStatus.APPROVED),
+                SifenSubmissionStatus.APPROVED,
+                1,
+                1),
             new InvoiceReportRow(
                 2,
                 "B",
                 InvoiceStatus.ISSUED,
                 new BigDecimal("70000"),
                 Instant.now(),
-                SifenSubmissionStatus.REJECTED),
+                SifenSubmissionStatus.REJECTED,
+                1,
+                1),
             new InvoiceReportRow(
-                3, "C", InvoiceStatus.VOIDED, new BigDecimal("50000"), Instant.now(), null),
+                3, "C", InvoiceStatus.VOIDED, new BigDecimal("50000"), Instant.now(), null, 1, 1),
             new InvoiceReportRow(
-                4, "D", InvoiceStatus.ISSUED, new BigDecimal("30000"), Instant.now(), null));
+                4, "D", InvoiceStatus.ISSUED, new BigDecimal("30000"), Instant.now(), null, 1, 1));
 
     assertThat(InvoiceHistoryReportService.computeGrandTotal(rows))
         .isEqualByComparingTo(new BigDecimal("130000"));
@@ -83,7 +91,7 @@ class InvoiceHistoryReportServiceTest {
       assertThat(header.getCell(5).getStringCellValue()).isEqualTo("Total");
 
       Row first = sheet.getRow(3);
-      assertThat(first.getCell(0).getStringCellValue()).isEqualTo("0000007");
+      assertThat(first.getCell(0).getStringCellValue()).isEqualTo("002-003-0000007");
       assertThat(first.getCell(2).getStringCellValue()).isEqualTo("ANA GARCIA");
       assertThat(first.getCell(3).getStringCellValue()).isEqualTo("Emitida");
       assertThat(first.getCell(4).getStringCellValue()).isEqualTo("Aprobado");
@@ -93,7 +101,7 @@ class InvoiceHistoryReportServiceTest {
       assertThat(second.getCell(3).getStringCellValue()).isEqualTo("Anulada");
       assertThat(second.getCell(4).getStringCellValue()).isEqualTo("-");
       // The line-item detail ("Manicura") must never appear in the report.
-      assertThat(second.getCell(0).getStringCellValue()).isEqualTo("0000008");
+      assertThat(second.getCell(0).getStringCellValue()).isEqualTo("001-001-0000008");
     }
   }
 }
