@@ -30,7 +30,17 @@ public class StockProperties {
   /** Source system pelu identifies as in control-stock. */
   private String sourceSystem = "PELU";
 
-  private Duration httpTimeout = Duration.ofSeconds(10);
+  private Duration httpTimeout = Duration.ofSeconds(30);
+
+  /**
+   * Timeout for the catalog bulk upserts, which Stock needs far longer than the plain calls above
+   * (each batch writes up to {@link #catalogBatchSize} items). With the former 10 s limit a big
+   * batch timed out although Stock went on to apply it, leaving the delivery pending for hours.
+   */
+  private Duration bulkHttpTimeout = Duration.ofSeconds(120);
+
+  /** Items per bulk upsert when the whole catalog is synced. */
+  private int catalogBatchSize = 200;
 
   /** Backoff between delivery attempts; after the last one the event becomes FAILED. */
   private List<Duration> retryDelays =
@@ -193,6 +203,22 @@ public class StockProperties {
 
   public void setHttpTimeout(Duration httpTimeout) {
     this.httpTimeout = httpTimeout;
+  }
+
+  public Duration getBulkHttpTimeout() {
+    return bulkHttpTimeout;
+  }
+
+  public void setBulkHttpTimeout(Duration bulkHttpTimeout) {
+    this.bulkHttpTimeout = bulkHttpTimeout;
+  }
+
+  public int getCatalogBatchSize() {
+    return catalogBatchSize;
+  }
+
+  public void setCatalogBatchSize(int catalogBatchSize) {
+    this.catalogBatchSize = Math.max(1, catalogBatchSize);
   }
 
   public List<Duration> getRetryDelays() {

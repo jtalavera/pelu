@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Heading, Pagination, Select, Spinner, Text } from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
@@ -11,6 +11,7 @@ import {
 } from "../api/stock";
 import { TenantSearchField, type TenantSelection } from "../components/TenantSearchField";
 import { useDateLocale } from "../i18n/dateLocale";
+import { formatStockOutboxMessage, isStockOutboxActionable } from "../util/stockOutboxMessage";
 
 const PAGE_SIZE = 20;
 
@@ -18,7 +19,8 @@ type StatusFilter = "" | "PENDING" | "PROCESSING" | "FAILED" | "DONE" | "DISCARD
 
 /**
  * HU-67: "Integración con Stock" — deliveries to control-stock that are pending or failed, with
- * salon, type, attempts and last error; failed ones can be retried or discarded.
+ * salon, type, attempts, next attempt and last error; failed ones (or ones waiting for a retry)
+ * can be retried or discarded. Each delivery has a "Details" history saying exactly what happened.
  */
 export default function PlatformStockIntegrationPage() {
   const { t } = useTranslation();
@@ -31,6 +33,7 @@ export default function PlatformStockIntegrationPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   const tenantId = tenant?.tenant.id ?? null;
 
@@ -62,6 +65,15 @@ export default function PlatformStockIntegrationPage() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  function toggleDetails(id: number) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   const fmt = (iso: string | null) =>
@@ -131,65 +143,167 @@ export default function PlatformStockIntegrationPage() {
         <Text data-testid="stock-outbox-empty">{t("femme.platform.stock.empty")}</Text>
       ) : data ? (
         <div className="overflow-x-auto rounded-[var(--radius-xl)] border border-[var(--color-stone-md)] bg-[var(--color-white)]">
-          <table className="w-full min-w-[760px] border-collapse" data-testid="stock-outbox-table">
+          <table className="w-full min-w-[900px] border-collapse" data-testid="stock-outbox-table">
             <thead>
               <tr>
                 <th className={th}>{t("femme.platform.stock.colTenant")}</th>
                 <th className={th}>{t("femme.platform.stock.colType")}</th>
                 <th className={th}>{t("femme.platform.stock.colStatus")}</th>
                 <th className={th}>{t("femme.platform.stock.colAttempts")}</th>
+                <th className={th}>{t("femme.platform.stock.colNextAttempt")}</th>
                 <th className={th}>{t("femme.platform.stock.colLastError")}</th>
                 <th className={th}>{t("femme.platform.stock.colCreated")}</th>
                 <th className={th} />
               </tr>
             </thead>
             <tbody>
-              {data.content.map((row) => (
-                <tr
-                  key={row.id}
-                  data-testid={`stock-outbox-row-${row.id}`}
-                  className="border-t border-[var(--color-stone-md)]"
-                >
-                  <td className={td}>{row.tenantName}</td>
-                  <td className={td}>{t(`femme.platform.stock.type.${row.eventType}`, row.eventType)}</td>
-                  <td className={td} data-testid={`stock-outbox-status-${row.id}`}>
-                    {t(`femme.platform.stock.status.${row.status}`, row.status)}
-                  </td>
-                  <td className={td}>{row.attemptCount}</td>
-                  <td className={`${td} max-w-[260px] break-words font-mono text-[11px]`}>
-                    {row.lastError ?? "—"}
-                  </td>
-                  <td className={`${td} whitespace-nowrap`}>{fmt(row.createdAt)}</td>
-                  <td className={`${td} whitespace-nowrap`}>
-                    {row.status === "FAILED" ? (
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          className="min-h-11"
-                          disabled={busyId === row.id}
-                          data-testid={`stock-outbox-retry-${row.id}`}
-                          onClick={() => void act(row, "retry")}
-                        >
-                          {t("femme.platform.stock.retry")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="min-h-11"
-                          disabled={busyId === row.id}
-                          data-testid={`stock-outbox-discard-${row.id}`}
-                          onClick={() => void act(row, "discard")}
-                        >
-                          {t("femme.platform.stock.discard")}
-                        </Button>
-                      </div>
+              {data.content.map((row) => {
+                const open = expanded.has(row.id);
+                const latest = row.messages.length > 0 ? row.messages[row.messages.length - 1] : null;
+                const actionable = isStockOutboxActionable(row);
+                const columns = 8;
+                return (
+                  <Fragment key={row.id}>
+                    <tr
+                      data-testid={`stock-outbox-row-${row.id}`}
+                      className="border-t border-[var(--color-stone-md)]"
+                    >
+                      <td className={td}>{row.tenantName}</td>
+                      <td className={td}>
+                        {t(`femme.platform.stock.type.${row.eventType}`, row.eventType)}
+                      </td>
+                      <td className={td}>
+                        <div data-testid={`stock-outbox-status-${row.id}`}>
+                          {t(`femme.platform.stock.status.${row.status}`, row.status)}
+                        </div>
+                        {row.blockedByEventId != null && row.attemptCount === 0 ? (
+                          <Text
+                            variant="muted"
+                            className="mt-1 text-[11px]"
+                            data-testid={`stock-outbox-blocked-${row.id}`}
+                          >
+                            {t("femme.platform.stock.waitingBehind", { id: row.blockedByEventId })}
+                          </Text>
+                        ) : latest ? (
+                          <Text
+                            variant="muted"
+                            className="mt-1 text-[11px]"
+                            data-testid={`stock-outbox-latest-${row.id}`}
+                          >
+                            {formatStockOutboxMessage(t, fmt, latest)}
+                          </Text>
+                        ) : null}
+                      </td>
+                      <td className={td}>{row.attemptCount}</td>
+                      <td
+                        className={`${td} whitespace-nowrap`}
+                        data-testid={`stock-outbox-next-${row.id}`}
+                      >
+                        {row.status === "PENDING" ? fmt(row.nextAttemptAt) : "—"}
+                      </td>
+                      <td className={`${td} max-w-[260px] break-words font-mono text-[11px]`}>
+                        {row.lastError ?? "—"}
+                      </td>
+                      <td className={`${td} whitespace-nowrap`}>{fmt(row.createdAt)}</td>
+                      <td className={td}>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="min-h-11"
+                            aria-expanded={open}
+                            data-testid={`stock-outbox-details-${row.id}`}
+                            onClick={() => toggleDetails(row.id)}
+                          >
+                            {open
+                              ? t("femme.platform.stock.hideDetails")
+                              : t("femme.platform.stock.details")}
+                          </Button>
+                          {actionable ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="min-h-11"
+                                disabled={busyId === row.id}
+                                data-testid={`stock-outbox-retry-${row.id}`}
+                                onClick={() => void act(row, "retry")}
+                              >
+                                {row.status === "FAILED"
+                                  ? t("femme.platform.stock.retry")
+                                  : t("femme.platform.stock.retryNow")}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="min-h-11"
+                                disabled={busyId === row.id}
+                                data-testid={`stock-outbox-discard-${row.id}`}
+                                onClick={() => void act(row, "discard")}
+                              >
+                                {t("femme.platform.stock.discard")}
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                    {open ? (
+                      <tr data-testid={`stock-outbox-history-row-${row.id}`}>
+                        <td colSpan={columns} className="bg-[var(--color-stone)] px-3 py-3">
+                          <Text className="mb-2 text-[12px] font-medium">
+                            {t("femme.platform.stock.historyTitle", { id: row.id })}
+                          </Text>
+                          {row.messages.length === 0 ? (
+                            <Text variant="muted" className="text-[12px]">
+                              {t("femme.platform.stock.historyEmpty")}
+                            </Text>
+                          ) : (
+                            <ol
+                              className="flex flex-col gap-2"
+                              data-testid={`stock-outbox-history-${row.id}`}
+                            >
+                              {row.messages.map((m, i) => (
+                                <li
+                                  key={`${m.at}-${i}`}
+                                  data-testid={`stock-outbox-history-item-${row.id}`}
+                                  data-code={m.code}
+                                  className="flex flex-col gap-0.5 text-[12px] sm:flex-row sm:gap-3"
+                                >
+                                  <span className="whitespace-nowrap text-[var(--color-ink-3)]">
+                                    {fmt(m.at)}
+                                  </span>
+                                  <span
+                                    className={
+                                      m.level === "ERROR"
+                                        ? "text-red-600 dark:text-red-400"
+                                        : m.level === "WARN"
+                                          ? "text-amber-700 dark:text-amber-400"
+                                          : "text-[var(--color-ink)]"
+                                    }
+                                  >
+                                    {formatStockOutboxMessage(t, fmt, m)}
+                                    {typeof m.params?.detail === "string" ? (
+                                      <span className="mt-0.5 block break-words font-mono text-[11px] text-[var(--color-ink-3)]">
+                                        {t("femme.platform.stock.technicalDetail", {
+                                          detail: m.params.detail,
+                                        })}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </td>
+                      </tr>
                     ) : null}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

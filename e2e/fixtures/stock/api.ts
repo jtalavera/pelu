@@ -100,7 +100,11 @@ export type OutboxRow = {
   status: string;
   attemptCount: number;
   lastError: string | null;
+  nextAttemptAt: string | null;
   idempotencyKey: string;
+  /** User-facing history of the delivery (codes + params), oldest first. */
+  messages: Array<{ at: string; level: string; code: string; params: Record<string, unknown> }>;
+  blockedByEventId: number | null;
 };
 
 export async function outbox(token: string, tenantId: number, status?: string): Promise<OutboxRow[]> {
