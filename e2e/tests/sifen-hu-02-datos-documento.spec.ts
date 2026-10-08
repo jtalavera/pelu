@@ -14,7 +14,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
 //
@@ -184,6 +184,8 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
     await expect(page.locator("#line-price-0")).toHaveValue("7.000.000");
     await page.locator("#pay-amount-0").fill("7000000");
 
+    await ensurePaymentMethodChosen(page);
+
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText(
@@ -223,6 +225,8 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("7000000");
     await page.locator("#pay-amount-0").fill("7000000");
+
+    await ensurePaymentMethodChosen(page);
 
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(

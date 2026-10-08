@@ -15,6 +15,7 @@ import {
   clickIssueInvoiceAndExpectSuccess,
   pdfContainsText,
   pickServiceLine,
+  ensurePaymentMethodChosen,
 } from "../fixtures/invoice";
 
 async function setBusinessRuc(request: import("@playwright/test").APIRequestContext, token: string) {
@@ -109,6 +110,7 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
+    await ensurePaymentMethodChosen(page);
 
     // No client picked from the search field at all — button stays disabled until identified.
     await expect(page.getByRole("button", { name: "Issue invoice" })).toBeDisabled();

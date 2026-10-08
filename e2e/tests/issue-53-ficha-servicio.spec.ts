@@ -11,6 +11,7 @@ import {
 } from "../fixtures/api";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
 import { setControlledInputValue } from "../fixtures/ui";
+import { ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 test.describe.configure({ mode: "serial" });
 
@@ -257,6 +258,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     // to cover only the invoice total (50.000), not total + tips.
     await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
 
+    await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([
       page.waitForResponse(
         (r) =>

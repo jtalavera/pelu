@@ -10,7 +10,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { pickServiceLine } from "../fixtures/invoice";
+import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // SIFEN Manual Técnico V150, campo D205/iTiContRec (tipo de contribuyente del receptor): previously
 // always sent as "1" (Persona Física) regardless of the actual client — this covers the fix that
@@ -116,6 +116,7 @@ test.describe("SIFEN D205 · Tipo de contribuyente (Física/Jurídica)", () => {
     await page.locator("#line-price-0").fill("50000");
     await page.locator("#pay-amount-0").fill("50000");
 
+    await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([
       page.waitForResponse(
         (r) =>

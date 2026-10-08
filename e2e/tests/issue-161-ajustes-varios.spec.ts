@@ -10,7 +10,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { pickServiceLine } from "../fixtures/invoice";
+import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog, fillTimeComboboxField } from "../fixtures/ui";
 
 test.describe("Issue #161 · Ajustes varios", () => {
@@ -71,6 +71,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     const errorBox = page.locator("#invoice-submit-error");
     await expect(errorBox).not.toBeVisible();
 
+    await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/invoices") && r.request().method() === "POST",
