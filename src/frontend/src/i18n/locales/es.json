@@ -178,7 +178,14 @@
         "loadError": "No se pudo cargar este negocio.",
         "notFound": "Ese negocio no existe.",
         "dialogLead": "El certificado digital y el código de seguridad (CSC) de SIFEN de este negocio los carga la plataforma desde acá, no el negocio.",
-        "dialogLink": "Gestionar certificado y CSC de SIFEN"
+        "dialogLink": "Gestionar certificado y CSC de SIFEN",
+        "summaryTitle": "Resumen del negocio",
+        "summaryName": "Negocio",
+        "summaryEnvironment": "Ambiente SIFEN",
+        "envTest": "Pruebas (TEST)",
+        "envProduction": "Producción",
+        "sectionCertificateLead": "Certificado digital con el que el sistema firma los comprobantes de este negocio.",
+        "sectionCscLead": "Código que la DNIT entregó a este negocio para firmar el QR de sus comprobantes."
       },
       "loading": "Cargando…",
       "navLabel": "Navegación de plataforma",
@@ -587,6 +594,8 @@
       "idLabel": "IdCSC (asignado por la DNIT)",
       "cscLabel": "CSC (32 caracteres)",
       "secretNote": "El CSC es un secreto: se guarda cifrado y no se puede volver a ver después de guardarlo, solo reemplazar.",
+      "idHint": "Número que la DNIT asignó al código, de 1 a 9999 (ej.: 1, se imprime como 0001).",
+      "cscHint": "32 letras o dígitos, sin espacios (ej.: A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6).",
       "idInvalid": "El IdCSC debe ser un número entero entre 1 y 9999 (ej.: 1).",
       "cscInvalid": "El CSC debe tener exactamente 32 letras o dígitos, sin espacios ni símbolos (ej.: A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6).",
       "save": "Guardar código de seguridad",
@@ -636,7 +645,9 @@
       "colStatus": "Estado",
       "statusValid": "Vigente",
       "statusExpired": "Expirado",
-      "statusNotYetValid": "No vigente aún"
+      "statusNotYetValid": "No vigente aún",
+      "fileHint": "Archivo .p12 / PKCS#12 emitido a este negocio (ej.: mi-negocio.p12).",
+      "passwordHint": "El archivo y su contraseña se guardan cifrados y no se vuelven a mostrar."
     },
     "sifenNumberVoiding": {
       "title": "Numeración inutilizada",

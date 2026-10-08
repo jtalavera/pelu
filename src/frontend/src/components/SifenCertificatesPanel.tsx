@@ -10,79 +10,19 @@ import {
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useDateLocale } from "../i18n/dateLocale";
 import { FieldValidationError } from "./FieldValidationError";
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 11,
-  fontWeight: 500,
-  color: "var(--color-ink-2)",
-  marginBottom: 4,
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 500,
-  letterSpacing: "0.06em",
-  color: "var(--color-ink-3)",
-  textTransform: "uppercase",
-  margin: "0 0 10px",
-  paddingBottom: 6,
-  borderBottom: "var(--border-default)",
-};
-
-const createSectionCardStyle: React.CSSProperties = {
-  border: "var(--border-default)",
-  borderRadius: "var(--radius-xl)",
-  padding: 16,
-  marginBottom: 16,
-  background: "var(--color-stone)",
-};
-
-const tableWrapStyle: React.CSSProperties = {
-  border: "var(--border-default)",
-  borderRadius: "var(--radius-xl)",
-  overflow: "hidden",
-};
-
-const thStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  fontSize: 10,
-  fontWeight: 500,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "var(--color-ink-3)",
-  background: "var(--color-stone)",
-  textAlign: "left",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  fontSize: 12,
-  borderTop: "var(--border-default)",
-  verticalAlign: "top",
-};
-
-function buildInputStyle(hasError: boolean, focused: boolean): React.CSSProperties {
-  const base: React.CSSProperties = {
-    padding: "8px 11px",
-    border: hasError ? "1px solid var(--color-danger)" : "1px solid var(--color-stone-md)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    background: "var(--color-white)",
-    width: "100%",
-    outline: "none",
-    boxSizing: "border-box",
-  };
-  if (focused) {
-    base.boxShadow = hasError
-      ? "0 0 0 3px var(--color-danger-lt)"
-      : "0 0 0 3px var(--color-rose-lt)";
-    if (!hasError) base.borderColor = "var(--color-rose)";
-  }
-  return base;
-}
+import {
+  buildInputStyle,
+  createSectionCardStyle,
+  formGridStyle,
+  fullRowStyle,
+  hintStyle,
+  labelStyle,
+  sectionCardStyle,
+  sectionTitleStyle,
+  tableWrapStyle,
+  tdStyle,
+  thStyle,
+} from "./sifenFormStyles";
 
 function stripDataUrlPrefix(dataUrl: string): string {
   const commaIndex = dataUrl.indexOf(",");
@@ -256,14 +196,10 @@ export function SifenCertificatesPanel({ tenantId }: { tenantId?: number }) {
       {manage ? (
         <section data-testid="sifen-certificate-upload-section" style={createSectionCardStyle}>
           <div style={sectionTitleStyle}>{t("femme.sifenCertificates.uploadTitle")}</div>
-          <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
+          <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 12 }}>
             {t("femme.sifenCertificates.uploadLead")}
           </Text>
-          <form
-            onSubmit={onSubmit}
-            noValidate
-            style={{ display: "flex", flexDirection: "column", gap: 12 }}
-          >
+          <form onSubmit={onSubmit} noValidate style={formGridStyle}>
             <div>
               <label htmlFor="sifen-cert-file" style={labelStyle}>
                 {t("femme.sifenCertificates.fileLabel")}
@@ -275,10 +211,13 @@ export function SifenCertificatesPanel({ tenantId }: { tenantId?: number }) {
                 accept=".p12,application/x-pkcs12"
                 onChange={onFileChange}
                 aria-invalid={!!fieldErrors.file}
-                aria-describedby={fieldErrors.file ? "sifen-cert-file-err" : undefined}
-                style={{ fontSize: 12 }}
+                aria-describedby={fieldErrors.file ? "sifen-cert-file-err" : "sifen-cert-file-hint"}
+                style={{ ...buildInputStyle(!!fieldErrors.file, false), padding: "6px 8px" }}
               />
               <FieldValidationError id="sifen-cert-file-err">{fieldErrors.file}</FieldValidationError>
+              <p id="sifen-cert-file-hint" style={hintStyle}>
+                {t("femme.sifenCertificates.fileHint")}
+              </p>
             </div>
             <div>
               <label htmlFor="sifen-cert-password" style={labelStyle}>
@@ -296,7 +235,9 @@ export function SifenCertificatesPanel({ tenantId }: { tenantId?: number }) {
                   setSuccess(false);
                 }}
                 aria-invalid={!!fieldErrors.password}
-                aria-describedby={fieldErrors.password ? "sifen-cert-password-err" : undefined}
+                aria-describedby={
+                  fieldErrors.password ? "sifen-cert-password-err" : "sifen-cert-password-hint"
+                }
                 onFocus={() => setFocusField("sifen-cert-password")}
                 onBlur={() => setFocusField(null)}
                 style={buildInputStyle(
@@ -307,8 +248,11 @@ export function SifenCertificatesPanel({ tenantId }: { tenantId?: number }) {
               <FieldValidationError id="sifen-cert-password-err">
                 {fieldErrors.password}
               </FieldValidationError>
+              <p id="sifen-cert-password-hint" style={hintStyle}>
+                {t("femme.sifenCertificates.passwordHint")}
+              </p>
             </div>
-            <div>
+            <div style={{ ...fullRowStyle, marginTop: 4 }}>
               <Button type="submit" variant="primary" className="min-h-11" disabled={uploading}>
                 {uploading
                   ? t("femme.sifenCertificates.uploading")
@@ -325,7 +269,10 @@ export function SifenCertificatesPanel({ tenantId }: { tenantId?: number }) {
         </div>
       )}
 
-      <section data-testid="sifen-certificate-list-section" style={{ marginTop: manage ? 0 : 12 }}>
+      <section
+        data-testid="sifen-certificate-list-section"
+        style={{ ...sectionCardStyle, marginTop: manage ? 0 : 12 }}
+      >
         <div style={sectionTitleStyle}>{t("femme.sifenCertificates.listTitle")}</div>
         {rows.length === 0 ? (
           <div data-testid="sifen-certificate-empty-state">

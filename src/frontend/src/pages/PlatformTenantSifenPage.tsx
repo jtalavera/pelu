@@ -6,6 +6,7 @@ import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { SifenCertificatesPanel } from "../components/SifenCertificatesPanel";
 import { SifenCscSection } from "../components/SifenCscSection";
+import { sectionCardStyle, sectionTitleStyle } from "../components/sifenFormStyles";
 
 type TenantSifenInfo = { tenantId: number; tenantName: string; environment: "TEST" | "PRODUCTION" };
 
@@ -49,7 +50,7 @@ export default function PlatformTenantSifenPage() {
         >
           {t("femme.platform.sifen.back")}
         </Link>
-        <Heading as="h1" className="mt-2">
+        <Heading as="h1" className="mt-2 break-words">
           {info
             ? t("femme.platform.sifen.titleFor", { name: info.tenantName })
             : t("femme.platform.sifen.title")}
@@ -72,17 +73,50 @@ export default function PlatformTenantSifenPage() {
 
       {info ? (
         <>
+          <section data-testid="platform-tenant-sifen-summary" style={sectionCardStyle}>
+            <div style={sectionTitleStyle}>{t("femme.platform.sifen.summaryTitle")}</div>
+            <dl
+              className="grid gap-4 sm:grid-cols-2"
+              style={{ margin: 0, fontSize: 12, color: "var(--color-ink)" }}
+            >
+              <div>
+                <dt style={{ fontSize: 11, color: "var(--color-ink-2)", marginBottom: 2 }}>
+                  {t("femme.platform.sifen.summaryName")}
+                </dt>
+                <dd style={{ margin: 0, fontWeight: 500 }} data-testid="platform-tenant-sifen-name">
+                  {info.tenantName}
+                </dd>
+              </div>
+              <div>
+                <dt style={{ fontSize: 11, color: "var(--color-ink-2)", marginBottom: 2 }}>
+                  {t("femme.platform.sifen.summaryEnvironment")}
+                </dt>
+                <dd style={{ margin: 0 }} data-testid="platform-tenant-sifen-environment">
+                  {info.environment === "PRODUCTION"
+                    ? t("femme.platform.sifen.envProduction")
+                    : t("femme.platform.sifen.envTest")}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
           <section aria-labelledby="platform-sifen-cert-title">
-            <Heading as="h2" id="platform-sifen-cert-title" className="mb-3 text-lg">
+            <Heading as="h2" id="platform-sifen-cert-title" className="text-lg">
               {t("femme.sifenSettings.tab.certificate")}
             </Heading>
+            <Text variant="small" className="mb-3" style={{ color: "var(--color-ink-3)" }}>
+              {t("femme.platform.sifen.sectionCertificateLead")}
+            </Text>
             <SifenCertificatesPanel tenantId={info.tenantId} />
           </section>
 
           <section aria-labelledby="platform-sifen-csc-title">
-            <Heading as="h2" id="platform-sifen-csc-title" className="mb-3 text-lg">
+            <Heading as="h2" id="platform-sifen-csc-title" className="text-lg">
               {t("femme.sifenSettings.tab.csc")}
             </Heading>
+            <Text variant="small" className="mb-3" style={{ color: "var(--color-ink-3)" }}>
+              {t("femme.platform.sifen.sectionCscLead")}
+            </Text>
             <SifenCscSection tenantId={info.tenantId} environment={info.environment} />
           </section>
         </>

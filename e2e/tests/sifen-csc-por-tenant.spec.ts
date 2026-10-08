@@ -21,7 +21,8 @@ import { openTenantSifenAsRoot } from "../fixtures/sifenRoot";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
-const CSC_VALUE = "A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6";
+// Must differ from the example shown in the field hint: the test asserts the value never appears in the page.
+const CSC_VALUE = "Q7W8E9R0T1Y2U3I4O5P6A7S8D9F0G1H2";
 const CSC_VALUE_2 = "Z9Y8X7W6V5U4T3S2R1Q0P9O8N7M6L5K4";
 const ROOT_CSC_PATH = `/api/platform/tenants/${DEMO_TENANT_ID}/sifen/csc`;
 
@@ -78,6 +79,48 @@ test.describe("SIFEN · CSC por salón (cargado solo por el usuario root)", () =
     await expect(page.getByTestId("sifen-csc-missing-production")).toHaveCount(0);
     // The CSC is typed into a password field (never echoed back).
     await expect(page.locator("#sifen-csc-value")).toHaveAttribute("type", "password");
+  });
+
+  test("CSC · 1b la pantalla del root tiene resumen del salón y formularios con el formato de «Agregar timbrado»", async ({
+    page,
+  }) => {
+    await openCscAsRoot(page);
+
+    // Summary card: the salon and its SIFEN environment.
+    await expect(page.getByTestId("platform-tenant-sifen-summary")).toBeVisible();
+    await expect(page.getByTestId("platform-tenant-sifen-name")).toContainText("Demo salon");
+    await expect(page.getByTestId("platform-tenant-sifen-environment")).toHaveText("Test (TEST)");
+
+    // Certificate + CSC forms: uppercase card title, labelled fields, a hint under each one.
+    await expect(page.getByTestId("sifen-certificate-upload-section")).toContainText(
+      "Upload new certificate and key",
+    );
+    await expect(page.getByTestId("sifen-csc-form-card")).toContainText("Load a security code (CSC)");
+    await expect(page.locator("#sifen-cert-file-hint")).toContainText(".p12");
+    await expect(page.locator("#sifen-cert-password-hint")).toContainText("stored encrypted");
+    await expect(page.locator("#sifen-csc-id-hint")).toContainText("1 to 9999 (e.g. 1");
+    await expect(page.locator("#sifen-csc-value-hint")).toContainText("32 letters or digits");
+
+    // The two CSC fields sit side by side on a wide screen (two-column grid, like the stamp form).
+    const idBox = await page.locator("#sifen-csc-id").boundingBox();
+    const cscBox = await page.locator("#sifen-csc-value").boundingBox();
+    expect(idBox && cscBox && Math.abs(idBox.y - cscBox.y) < 4).toBeTruthy();
+
+    // On a phone they stack in one column and the content does not overflow horizontally.
+    await page.setViewportSize({ width: 375, height: 800 });
+    const idPhone = await page.locator("#sifen-csc-id").boundingBox();
+    const cscPhone = await page.locator("#sifen-csc-value").boundingBox();
+    expect(idPhone && cscPhone && cscPhone.y > idPhone.y + 10).toBeTruthy();
+    // (measured on the page's own container: the platform shell's fixed side menu is not ours)
+    expect(
+      await page
+        .getByTestId("platform-tenant-sifen")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+    ).toBeTruthy();
+
+    // Registered items live in their own card.
+    await expect(page.getByTestId("sifen-csc-list-card")).toBeVisible();
+    await expect(page.getByTestId("sifen-certificate-list-section")).toBeVisible();
   });
 
   test("CSC · 2 valida el IdCSC y el formato del CSC, con ejemplo concreto", async ({ page }) => {

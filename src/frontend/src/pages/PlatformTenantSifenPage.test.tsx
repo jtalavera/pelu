@@ -53,6 +53,28 @@ describe("PlatformTenantSifenPage (root user loads a salon's certificate + CSC)"
     );
   });
 
+  it("shows a summary card and the Timbrado-style forms with a hint under each field", async () => {
+    renderAt("/platform/tenants/9/sifen");
+
+    expect((await screen.findByTestId("platform-tenant-sifen-name")).textContent).toBe(
+      "Salón Aurora",
+    );
+    expect(screen.getByTestId("platform-tenant-sifen-environment").textContent).toBe(
+      "Test (TEST)",
+    );
+    await screen.findByTestId("sifen-csc-form-card");
+    // Every credential field explains its rule/format below it (same as "Agregar timbrado").
+    for (const id of [
+      "sifen-cert-file-hint",
+      "sifen-cert-password-hint",
+      "sifen-csc-id-hint",
+      "sifen-csc-value-hint",
+    ]) {
+      expect(document.getElementById(id)?.textContent?.length).toBeGreaterThan(0);
+    }
+    expect(screen.getByTestId("sifen-csc-list-card")).toBeTruthy();
+  });
+
   it("an invalid tenant id shows an error and loads nothing", () => {
     renderAt("/platform/tenants/abc/sifen");
 

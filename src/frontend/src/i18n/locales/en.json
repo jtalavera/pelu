@@ -178,7 +178,14 @@
         "loadError": "Could not load this business.",
         "notFound": "That business does not exist.",
         "dialogLead": "The SIFEN digital certificate and the security code (CSC) of this business are loaded here by the platform, not by the business.",
-        "dialogLink": "Manage SIFEN certificate and CSC"
+        "dialogLink": "Manage SIFEN certificate and CSC",
+        "summaryTitle": "Business summary",
+        "summaryName": "Business",
+        "summaryEnvironment": "SIFEN environment",
+        "envTest": "Test (TEST)",
+        "envProduction": "Production",
+        "sectionCertificateLead": "Digital certificate the system uses to sign this business's documents.",
+        "sectionCscLead": "Code the DNIT issued to this business to sign the QR of its documents."
       },
       "loading": "Loading…",
       "navLabel": "Platform navigation",
@@ -587,6 +594,8 @@
       "idLabel": "IdCSC (assigned by the DNIT)",
       "cscLabel": "CSC (32 characters)",
       "secretNote": "The CSC is a secret: it is stored encrypted and cannot be viewed again after saving, only replaced.",
+      "idHint": "Number the DNIT assigned to the code, 1 to 9999 (e.g. 1, printed as 0001).",
+      "cscHint": "32 letters or digits, no spaces (e.g. A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6).",
       "idInvalid": "The IdCSC must be a whole number between 1 and 9999 (e.g. 1).",
       "cscInvalid": "The CSC must be exactly 32 letters or digits, with no spaces or symbols (e.g. A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6).",
       "save": "Save security code",
@@ -636,7 +645,9 @@
       "colStatus": "Status",
       "statusValid": "Valid",
       "statusExpired": "Expired",
-      "statusNotYetValid": "Not yet valid"
+      "statusNotYetValid": "Not yet valid",
+      "fileHint": ".p12 / PKCS#12 file issued to this business (e.g. my-business.p12).",
+      "passwordHint": "The file and its password are stored encrypted and never shown again."
     },
     "sifenNumberVoiding": {
       "title": "Voided document numbers",
