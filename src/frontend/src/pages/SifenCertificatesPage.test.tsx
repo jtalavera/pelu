@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
@@ -69,5 +70,20 @@ describe("SifenCertificatesPage", () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByText("Cargar nuevo certificado y clave")).toBeNull();
+  });
+
+  // The certificate and the CSC are loaded by the platform's root user, never by the salon's admin.
+  it("a tenant admin with SIFEN enabled sees the certificate and CSC tabs read-only (no upload, no CSC form)", async () => {
+    sifenFlagEnabled = true;
+    renderPage();
+
+    expect(await screen.findByTestId("sifen-certificate-readonly-note")).toBeTruthy();
+    expect(screen.queryByTestId("sifen-certificate-upload-section")).toBeNull();
+    expect(screen.queryByText("Cargar nuevo certificado y clave")).toBeNull();
+    expect(femmePostJsonMock).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Código de seguridad (CSC)" }));
+    expect(await screen.findByTestId("sifen-csc-readonly-note")).toBeTruthy();
+    expect(screen.queryByTestId("sifen-csc-form-card")).toBeNull();
   });
 });

@@ -86,16 +86,29 @@ function inputStyle(hasError: boolean): React.CSSProperties {
 }
 
 /**
- * Configuración → SIFEN → "Código de seguridad (CSC)". Each salon loads the CSC the DNIT issued to
- * it (a distinct one per taxpayer); the QR of its invoices is hashed with the active one. The CSC
- * is a secret: it is write-only here — once saved it is never shown again, only replaced.
+ * The tenant's "Código de seguridad (CSC)". The DNIT issues each taxpayer its own CSC and the QR of
+ * its invoices is hashed with the active one. Two modes, one component:
+ *  - **read-only** (no `tenantId`): the salon's administrator sees which CSCs the platform loaded
+ *    for the salon and which is active (Configuración → SIFEN). No form, no activation.
+ *  - **manage** (`tenantId`): the platform's root user loads / replaces / activates a CSC for that
+ *    tenant (Plataforma → Salones → SIFEN).
+ * The CSC is a secret: write-only — once saved it is never shown again, only replaced.
  */
-export function SifenCscSection() {
+export function SifenCscSection({
+  tenantId,
+  environment: knownEnvironment,
+}: {
+  tenantId?: number;
+  /** Given by the root user's page (it has no tenant, so it cannot call /api/sifen/environment). */
+  environment?: SifenEnvironment | null;
+}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
+  const manage = tenantId != null;
 
   const [rows, setRows] = useState<SifenCscRow[]>([]);
-  const [environment, setEnvironment] = useState<SifenEnvironment | null>(null);
+  const [fetchedEnvironment, setFetchedEnvironment] = useState<SifenEnvironment | null>(null);
+  const environment = knownEnvironment ?? fetchedEnvironment;
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [idCsc, setIdCsc] = useState("");
@@ -110,19 +123,20 @@ export function SifenCscSection() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      setRows(await listSifenCsc());
+      setRows(await listSifenCsc(tenantId));
     } catch {
       setLoadError(t("femme.sifenCsc.loadError"));
     }
-  }, [t]);
+  }, [t, tenantId]);
 
   useEffect(() => {
     void load();
-    void fetchSifenEnvironment().then(setEnvironment);
-  }, [load]);
+    if (knownEnvironment == null) void fetchSifenEnvironment().then(setFetchedEnvironment);
+  }, [load, knownEnvironment]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (tenantId == null) return;
     setSaveError(null);
     setSaved(null);
     setActionError(null);
@@ -143,7 +157,7 @@ export function SifenCscSection() {
     setSaving(true);
     try {
       const replaced = rows.some((r) => r.idCsc === idNum);
-      await saveSifenCsc(idNum, cscValue);
+      await saveSifenCsc(tenantId, idNum, cscValue);
       setSaved({ idCsc: idNum, replaced });
       // The secret must not linger in the DOM/state after it was stored.
       setCsc("");
@@ -157,11 +171,12 @@ export function SifenCscSection() {
   }
 
   async function onActivate(id: number) {
+    if (tenantId == null) return;
     setActionError(null);
     setSaved(null);
     setActivating(id);
     try {
-      await activateSifenCsc(id);
+      await activateSifenCsc(tenantId, id);
       await load();
     } catch (err) {
       setActionError(translateApiError(err, t, "femme.sifenCsc.saveError"));
@@ -203,18 +218,27 @@ export function SifenCscSection() {
       {!hasActive && environment === "PRODUCTION" ? (
         <div data-testid="sifen-csc-missing-production">
           <Alert variant="destructive" title={t("femme.sifenCsc.missingProductionTitle")}>
-            {t("femme.sifenCsc.missingProductionBody")}
+            {t(
+              manage
+                ? "femme.sifenCsc.missingProductionBody"
+                : "femme.sifenCsc.missingProductionBodyReadOnly",
+            )}
           </Alert>
         </div>
       ) : null}
       {!hasActive && environment === "TEST" ? (
         <div data-testid="sifen-csc-test-fallback">
           <Alert variant="info" title={t("femme.sifenCsc.testFallbackTitle")}>
-            {t("femme.sifenCsc.testFallbackBody")}
+            {t(
+              manage
+                ? "femme.sifenCsc.testFallbackBody"
+                : "femme.sifenCsc.testFallbackBodyReadOnly",
+            )}
           </Alert>
         </div>
       ) : null}
 
+      {manage ? (
       <div data-testid="sifen-csc-form-card" style={{ ...cardStyle, marginTop: 12 }}>
         <div style={sectionTitleStyle}>{t("femme.sifenCsc.formTitle")}</div>
         <Text variant="small" style={{ color: "var(--color-ink-3)", marginBottom: 14 }}>
@@ -277,11 +301,18 @@ export function SifenCscSection() {
           </div>
         </form>
       </div>
+      ) : (
+        <div data-testid="sifen-csc-readonly-note" style={{ marginTop: 12, marginBottom: 16 }}>
+          <Alert variant="info" title={t("femme.sifenCsc.readOnlyTitle")}>
+            {t("femme.sifenCsc.readOnlyBody")}
+          </Alert>
+        </div>
+      )}
 
       <div style={sectionTitleStyle}>{t("femme.sifenCsc.listTitle")}</div>
       {rows.length === 0 ? (
         <Text variant="muted" data-testid="sifen-csc-empty">
-          {t("femme.sifenCsc.empty")}
+          {t(manage ? "femme.sifenCsc.empty" : "femme.sifenCsc.emptyReadOnly")}
         </Text>
       ) : (
         <div style={tableWrapStyle}>
@@ -304,7 +335,7 @@ export function SifenCscSection() {
                     </td>
                     <td style={tdStyle}>{fmtDate(row.updatedAt)}</td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
-                      {row.active ? null : (
+                      {row.active || !manage ? null : (
                         <Button
                           type="button"
                           variant="secondary"

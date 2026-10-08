@@ -48,7 +48,7 @@ test.describe("Configuración → SIFEN · visible solo si el feature flag está
     // A direct URL shows the "not enabled" message, not the certificate UI.
     await page.goto("/app/settings/sifen");
     await expect(page.getByText(FEATURE_DISABLED_MSG)).toBeVisible();
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toHaveCount(0);
+    await expect(page.getByTestId("sifen-certificate-list-section")).toHaveCount(0);
   });
 
   test("con el flag SIFEN encendido, la sección SIFEN se muestra", async ({ page, request }) => {
@@ -62,7 +62,7 @@ test.describe("Configuración → SIFEN · visible solo si el feature flag está
     await sifenTab.click();
 
     await expect(page).toHaveURL(/\/app\/settings\/sifen$/);
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await expect(page.getByTestId("sifen-certificate-list-section")).toBeVisible();
     await expect(page.getByText(FEATURE_DISABLED_MSG)).toHaveCount(0);
   });
 });

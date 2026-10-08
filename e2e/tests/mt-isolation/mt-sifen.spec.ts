@@ -12,7 +12,7 @@ import {
 } from "../../fixtures/api";
 import { raceAcrossTenants } from "../../fixtures/mt/concurrent";
 import { expectCrossTenantForbidden } from "../../fixtures/mt/probe";
-import { getMtWorld, mtLoginToken } from "../../fixtures/mt/world";
+import { getMtWorld, mtLoginToken, mtPlatformToken } from "../../fixtures/mt/world";
 
 /**
  * Task 8 — mt-sifen: electronic-invoicing configuration divergence & isolation.
@@ -22,7 +22,8 @@ import { getMtWorld, mtLoginToken } from "../../fixtures/mt/world";
  *
  * 1. **What SIFEN capability T-A actually has in this suite: a REAL one, up to the CDC.**
  *    `e2e/global-setup.mt.ts` → `world.ts#ensureSifenCertificate` uploads the real test .p12
- *    (`e2e/fixtures/sifen/test-cert.p12`) through `POST /api/sifen/certificates` for T-A, and gives
+ *    (`e2e/fixtures/sifen/test-cert.p12`) through the platform's root-only
+ *    `POST /api/platform/tenants/{id}/sifen/certificates` for T-A, and gives
  *    it the full SIFEN issuer profile. So `POST /api/invoices` as T-A takes the SIFEN branch of
  *    `InvoiceController.issue` for real: `SifenInvoiceSubmissionService.prepareAndSign` runs
  *    synchronously and MINTS THE CDC (`sifenControlNumber`) before the 201 is written — with zero
@@ -392,6 +393,37 @@ test.describe("mt-isolation · SIFEN / electronic invoicing", () => {
         `B's certificate list LEAKED A's certificate id ${aCert.id}`,
       ).not.toContain(aCert.id);
     }
+
+    // The certificate is loaded ONLY by the platform's root user: a salon's admin has no upload
+    // endpoint of its own and is refused on the platform one, for its own tenant and any other.
+    const tokenRoot = await mtPlatformToken(request);
+    for (const [token, ownId, otherId] of [
+      [tokenA, world.tenantA.id, world.tenantB.id],
+      [tokenB, world.tenantB.id, world.tenantA.id],
+    ] as const) {
+      const body = { fileBase64: "AAAA", password: "x" };
+      expect([403, 405]).toContain(
+        (await raw(request, "post", token, "/api/sifen/certificates", body)).status,
+      );
+      for (const target of [ownId, otherId]) {
+        const path = `/api/platform/tenants/${target}/sifen/certificates`;
+        expect((await raw(request, "post", token, path, body)).status).toBe(403);
+        expect((await raw(request, "get", token, path)).status).toBe(403);
+      }
+    }
+    // The root user lists each tenant's own certificates (A has one, B none) — never mixed.
+    const rootA = await apiGetJson<Cert[]>(
+      request,
+      tokenRoot,
+      `/api/platform/tenants/${world.tenantA.id}/sifen/certificates`,
+    );
+    const rootB = await apiGetJson<Cert[]>(
+      request,
+      tokenRoot,
+      `/api/platform/tenants/${world.tenantB.id}/sifen/certificates`,
+    );
+    expect(rootA.map((c) => c.id).sort()).toEqual(aCerts.map((c) => c.id).sort());
+    expect(rootB.map((c) => c.id).sort()).toEqual(bCerts.map((c) => c.id).sort());
   });
 
   test("3 · numeración inutilizada is per-tenant in both directions", async ({ request }) => {
@@ -573,11 +605,15 @@ test.describe("mt-isolation · SIFEN / electronic invoicing", () => {
     expect(bFinal.sifenControlNumber ?? null).toBeNull();
     expect(bFinal.sifenSubmissionStatus ?? null).toBeNull();
   });
-  // Per-tenant CSC: the DNIT issues each taxpayer its own Código de Seguridad del Contribuyente,
-  // so every salon loads its own and the QR of its invoices is hashed with it.
-  test("7 · each tenant loads its own CSC: lists, activation and values never cross tenants", async ({
+  // Per-tenant CSC: the DNIT issues each taxpayer its own Código de Seguridad del Contribuyente.
+  // It is loaded ONLY by the platform's root user, per tenant; each salon's admin can only read
+  // its own, and the QR of its invoices is hashed with it.
+  test("7 · the root user loads a CSC per tenant: lists, activation and values never cross tenants; the salon admin can only read", async ({
     request,
   }) => {
+    const tokenRoot = await mtPlatformToken(request);
+    const idA = world.tenantA.id;
+    const idB = world.tenantB.id;
     // Run-unique IdCSCs (1–9999) so a reused mt backend never collides with earlier runs.
     const idShared = 100 + (RUN_SEED % 4000);
     const idOnlyA = idShared + 4000;
@@ -586,21 +622,29 @@ test.describe("mt-isolation · SIFEN / electronic invoicing", () => {
     const cscOnlyA = `CCCC${RUN_SEED}`.padEnd(32, "C").slice(0, 32);
 
     type CscRow = { idCsc: number; active: boolean; createdAt: string; updatedAt: string };
-    const list = (token: string) => apiGetJson<CscRow[]>(request, token, "/api/sifen/csc");
-    const save = (token: string, idCsc: number, csc: string) =>
-      raw(request, "post", token, "/api/sifen/csc", { idCsc, csc });
+    const platformCsc = (tenantId: number) => `/api/platform/tenants/${tenantId}/sifen/csc`;
+    const tenantList = (token: string) => apiGetJson<CscRow[]>(request, token, "/api/sifen/csc");
+    const rootList = (tenantId: number) =>
+      apiGetJson<CscRow[]>(request, tokenRoot, platformCsc(tenantId));
+    const rootSave = (tenantId: number, idCsc: number, csc: string) =>
+      raw(request, "post", tokenRoot, platformCsc(tenantId), { idCsc, csc });
 
-    // A loads two CSCs and makes the first one the active one.
-    const savedA = await save(tokenA, idShared, cscA);
+    // The root user loads two CSCs for A and makes the first one the active one.
+    const savedA = await rootSave(idA, idShared, cscA);
     expect(savedA.status, savedA.text).toBe(200);
-    const savedOnlyA = await save(tokenA, idOnlyA, cscOnlyA);
+    const savedOnlyA = await rootSave(idA, idOnlyA, cscOnlyA);
     expect(savedOnlyA.status, savedOnlyA.text).toBe(200);
-    const activatedA = await raw(request, "post", tokenA, `/api/sifen/csc/${idShared}/activate`);
+    const activatedA = await raw(request, "post", tokenRoot, `${platformCsc(idA)}/${idShared}/activate`);
     expect(activatedA.status, activatedA.text).toBe(200);
-    const aRows = await list(tokenA);
+
+    // A's admin sees them read-only; exactly one is active.
+    const aRows = await tenantList(tokenA);
     expect(aRows.find((r) => r.idCsc === idShared)?.active).toBe(true);
     expect(aRows.find((r) => r.idCsc === idOnlyA)?.active).toBe(false);
     expect(aRows.filter((r) => r.active)).toHaveLength(1);
+    expect((await rootList(idA)).map((r) => r.idCsc)).toEqual(
+      expect.arrayContaining([idShared, idOnlyA]),
+    );
 
     // The API is write-only for the secret: no response ever carries a CSC value.
     for (const body of [savedA.text, savedOnlyA.text, activatedA.text, JSON.stringify(aRows)]) {
@@ -608,27 +652,46 @@ test.describe("mt-isolation · SIFEN / electronic invoicing", () => {
       expect(body).not.toContain(cscOnlyA);
     }
 
+    // A salon's admin can NOT load or activate a CSC — not for itself, not for anyone:
+    // there is no tenant-side write endpoint, and the platform one is closed to them.
+    for (const token of [tokenA, tokenB]) {
+      const own = await raw(request, "post", token, "/api/sifen/csc", { idCsc: 1, csc: cscA });
+      expect([403, 405]).toContain(own.status);
+      const ownActivate = await raw(request, "post", token, `/api/sifen/csc/${idShared}/activate`);
+      expect([403, 405]).toContain(ownActivate.status);
+      for (const target of [idA, idB]) {
+        const viaPlatform = await raw(request, "post", token, platformCsc(target), {
+          idCsc: 1,
+          csc: cscA,
+        });
+        expect(viaPlatform.status).toBe(403);
+        expect((await raw(request, "get", token, platformCsc(target))).status).toBe(403);
+      }
+    }
+
     // B does not see A's CSCs.
-    const bBefore = await list(tokenB);
+    const bBefore = await tenantList(tokenB);
     expect(bBefore.map((r) => r.idCsc)).not.toContain(idShared);
     expect(bBefore.map((r) => r.idCsc)).not.toContain(idOnlyA);
 
-    // B cannot activate an IdCSC that only A has …
-    const crossActivate = await raw(request, "post", tokenB, `/api/sifen/csc/${idOnlyA}/activate`);
+    // Root cannot activate, on B, an IdCSC that only A has …
+    const crossActivate = await raw(request, "post", tokenRoot, `${platformCsc(idB)}/${idOnlyA}/activate`);
     expect(crossActivate.status).toBe(404);
     expect(crossActivate.text).toContain("CSC_NOT_FOUND");
 
-    // … and loading the SAME IdCSC number with another value creates B's own row without
+    // … and loading the SAME IdCSC number for B with another value creates B's own row without
     // touching A's (same number, different salon, different secret).
-    const aShared = (await list(tokenA)).find((r) => r.idCsc === idShared)!;
-    const savedB = await save(tokenB, idShared, cscB);
+    const aShared = (await tenantList(tokenA)).find((r) => r.idCsc === idShared)!;
+    const savedB = await rootSave(idB, idShared, cscB);
     expect(savedB.status, savedB.text).toBe(200);
-    const aAfter = await list(tokenA);
-    const aSharedAfter = aAfter.find((r) => r.idCsc === idShared)!;
+    const aSharedAfter = (await tenantList(tokenA)).find((r) => r.idCsc === idShared)!;
     expect(aSharedAfter.updatedAt).toBe(aShared.updatedAt);
     expect(aSharedAfter.active).toBe(true);
-    expect((await list(tokenB)).map((r) => r.idCsc)).toContain(idShared);
-    expect(JSON.stringify(await list(tokenB))).not.toContain(cscA);
+    expect((await tenantList(tokenB)).map((r) => r.idCsc)).toContain(idShared);
+    expect(JSON.stringify(await tenantList(tokenB))).not.toContain(cscA);
+
+    // An unknown tenant is a 404, not an empty list.
+    expect((await raw(request, "get", tokenRoot, platformCsc(999_999_999))).status).toBe(404);
 
     // A salon with a CSC loaded still signs: the signing path resolves THIS tenant's CSC from the
     // secret store (real SIFEN tenant A: certificate + issuer profile — see the header).

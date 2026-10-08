@@ -28,6 +28,7 @@ import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 import PlatformGlobalFeatureFlagsPage from "./pages/PlatformGlobalFeatureFlagsPage";
 import SifenCertificatesPage from "./pages/SifenCertificatesPage";
 import PlatformDashboardPage from "./pages/PlatformDashboardPage";
+import PlatformTenantSifenPage from "./pages/PlatformTenantSifenPage";
 import PlatformTenantsPage from "./pages/PlatformTenantsPage";
 import PlatformTiersPage from "./pages/PlatformTiersPage";
 import PlatformImportPage from "./pages/PlatformImportPage";
@@ -77,6 +78,7 @@ export function AppRoutes() {
       >
         <Route path="/platform" element={<PlatformDashboardPage />} />
         <Route path="/platform/tenants" element={<PlatformTenantsPage />} />
+        <Route path="/platform/tenants/:tenantId/sifen" element={<PlatformTenantSifenPage />} />
         <Route path="/platform/tiers" element={<PlatformTiersPage />} />
         <Route
           path="/platform/global-feature-flags"

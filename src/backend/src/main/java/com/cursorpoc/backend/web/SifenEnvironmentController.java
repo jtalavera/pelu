@@ -35,7 +35,9 @@ public class SifenEnvironmentController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    long tenantId = principal.getTenantId();
+    // The platform's root user (no tenant of its own) reads this too, from the per-tenant SIFEN
+    // setup screen — the environment is global, not per tenant.
+    Long tenantId = principal.getTenantIdOrNull();
     log.info("GET /api/sifen/environment method=GET tenantId={}", tenantId);
     String environment = connectionProperties.activeEnvironment().name();
     log.info(

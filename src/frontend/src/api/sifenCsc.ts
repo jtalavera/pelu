@@ -1,6 +1,6 @@
 import { femmeJson, femmePostJson } from "./femmeClient";
 
-/** A CSC the tenant has loaded. The secret value is write-only: the API never returns it. */
+/** A CSC loaded for a tenant. The secret value is write-only: the API never returns it. */
 export type SifenCscRow = {
   idCsc: number;
   active: boolean;
@@ -8,16 +8,25 @@ export type SifenCscRow = {
   updatedAt: string;
 };
 
-export function listSifenCsc(): Promise<SifenCscRow[]> {
-  return femmeJson<SifenCscRow[]>("/api/sifen/csc");
+/**
+ * The salon's administrator reads their own tenant's CSCs (read-only, no `tenantId`); loading and
+ * activating them is ONLY for the platform's root user, for a given tenant, through the platform
+ * area — there is deliberately no tenant-side write.
+ */
+function base(tenantId?: number): string {
+  return tenantId != null ? `/api/platform/tenants/${tenantId}/sifen/csc` : "/api/sifen/csc";
 }
 
-export function saveSifenCsc(idCsc: number, csc: string): Promise<SifenCscRow> {
-  return femmePostJson<SifenCscRow>("/api/sifen/csc", { idCsc, csc });
+export function listSifenCsc(tenantId?: number): Promise<SifenCscRow[]> {
+  return femmeJson<SifenCscRow[]>(base(tenantId));
 }
 
-export function activateSifenCsc(idCsc: number): Promise<SifenCscRow> {
-  return femmePostJson<SifenCscRow>(`/api/sifen/csc/${idCsc}/activate`, {});
+export function saveSifenCsc(tenantId: number, idCsc: number, csc: string): Promise<SifenCscRow> {
+  return femmePostJson<SifenCscRow>(base(tenantId), { idCsc, csc });
+}
+
+export function activateSifenCsc(tenantId: number, idCsc: number): Promise<SifenCscRow> {
+  return femmePostJson<SifenCscRow>(`${base(tenantId)}/${idCsc}/activate`, {});
 }
 
 export type SifenEnvironment = "TEST" | "PRODUCTION";
