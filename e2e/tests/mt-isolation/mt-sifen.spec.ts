@@ -573,4 +573,66 @@ test.describe("mt-isolation · SIFEN / electronic invoicing", () => {
     expect(bFinal.sifenControlNumber ?? null).toBeNull();
     expect(bFinal.sifenSubmissionStatus ?? null).toBeNull();
   });
+  // Per-tenant CSC: the DNIT issues each taxpayer its own Código de Seguridad del Contribuyente,
+  // so every salon loads its own and the QR of its invoices is hashed with it.
+  test("7 · each tenant loads its own CSC: lists, activation and values never cross tenants", async ({
+    request,
+  }) => {
+    // Run-unique IdCSCs (1–9999) so a reused mt backend never collides with earlier runs.
+    const idShared = 100 + (RUN_SEED % 4000);
+    const idOnlyA = idShared + 4000;
+    const cscA = `AAAA${RUN_SEED}`.padEnd(32, "A").slice(0, 32);
+    const cscB = `BBBB${RUN_SEED}`.padEnd(32, "B").slice(0, 32);
+    const cscOnlyA = `CCCC${RUN_SEED}`.padEnd(32, "C").slice(0, 32);
+
+    type CscRow = { idCsc: number; active: boolean; createdAt: string; updatedAt: string };
+    const list = (token: string) => apiGetJson<CscRow[]>(request, token, "/api/sifen/csc");
+    const save = (token: string, idCsc: number, csc: string) =>
+      raw(request, "post", token, "/api/sifen/csc", { idCsc, csc });
+
+    // A loads two CSCs and makes the first one the active one.
+    const savedA = await save(tokenA, idShared, cscA);
+    expect(savedA.status, savedA.text).toBe(200);
+    const savedOnlyA = await save(tokenA, idOnlyA, cscOnlyA);
+    expect(savedOnlyA.status, savedOnlyA.text).toBe(200);
+    const activatedA = await raw(request, "post", tokenA, `/api/sifen/csc/${idShared}/activate`);
+    expect(activatedA.status, activatedA.text).toBe(200);
+    const aRows = await list(tokenA);
+    expect(aRows.find((r) => r.idCsc === idShared)?.active).toBe(true);
+    expect(aRows.find((r) => r.idCsc === idOnlyA)?.active).toBe(false);
+    expect(aRows.filter((r) => r.active)).toHaveLength(1);
+
+    // The API is write-only for the secret: no response ever carries a CSC value.
+    for (const body of [savedA.text, savedOnlyA.text, activatedA.text, JSON.stringify(aRows)]) {
+      expect(body).not.toContain(cscA);
+      expect(body).not.toContain(cscOnlyA);
+    }
+
+    // B does not see A's CSCs.
+    const bBefore = await list(tokenB);
+    expect(bBefore.map((r) => r.idCsc)).not.toContain(idShared);
+    expect(bBefore.map((r) => r.idCsc)).not.toContain(idOnlyA);
+
+    // B cannot activate an IdCSC that only A has …
+    const crossActivate = await raw(request, "post", tokenB, `/api/sifen/csc/${idOnlyA}/activate`);
+    expect(crossActivate.status).toBe(404);
+    expect(crossActivate.text).toContain("CSC_NOT_FOUND");
+
+    // … and loading the SAME IdCSC number with another value creates B's own row without
+    // touching A's (same number, different salon, different secret).
+    const aShared = (await list(tokenA)).find((r) => r.idCsc === idShared)!;
+    const savedB = await save(tokenB, idShared, cscB);
+    expect(savedB.status, savedB.text).toBe(200);
+    const aAfter = await list(tokenA);
+    const aSharedAfter = aAfter.find((r) => r.idCsc === idShared)!;
+    expect(aSharedAfter.updatedAt).toBe(aShared.updatedAt);
+    expect(aSharedAfter.active).toBe(true);
+    expect((await list(tokenB)).map((r) => r.idCsc)).toContain(idShared);
+    expect(JSON.stringify(await list(tokenB))).not.toContain(cscA);
+
+    // A salon with a CSC loaded still signs: the signing path resolves THIS tenant's CSC from the
+    // secret store (real SIFEN tenant A: certificate + issuer profile — see the header).
+    const invoice = await emitInvoice(request, tokenA, "csc");
+    expect(invoice.sifenControlNumber).toMatch(/^\d{44}$/);
+  });
 });
