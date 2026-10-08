@@ -12,7 +12,13 @@ export async function pickServiceLine(
 ): Promise<void> {
   await page.locator(`#billing-line-svc-${lineIdx}`).fill(serviceFullName.slice(0, 12));
   // exact: false → substring match; avoids dynamic RegExp construction flagged by semgrep
-  await page.getByRole("button", { name: serviceFullName, exact: false }).click();
+  const option = page.getByRole("button", { name: serviceFullName, exact: false });
+  await option.click();
+  // Wait for the option list to close, so the next line's pick never sees this line's stale list
+  // (two matching buttons → strict-mode violation). Best effort: never fails the pick itself.
+  await expect(option)
+    .toHaveCount(0, { timeout: 3_000 })
+    .catch(() => undefined);
 }
 
 /**

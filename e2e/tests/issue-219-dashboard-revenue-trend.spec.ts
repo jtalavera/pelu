@@ -135,7 +135,7 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
     // before the window (`revenueTrendLookback`, not plotted as bars) so day 1 already has a full
     // week behind it, and the line starts over the first bar instead of one week in.
     const dashboard = await apiGetJson<{
-      revenueTrend: Array<{ date: string }>;
+      revenueTrend: Array<{ date: string; invoiced: string | number }>;
       revenueTrendLookback: Array<{ date: string }>;
     }>(request, token, "/api/dashboard");
     expect(dashboard.revenueTrendLookback).toHaveLength(6);
@@ -145,13 +145,25 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
       return d.toISOString().slice(0, 10);
     };
     expect(dashboard.revenueTrendLookback[5].date).toBe(dayBefore(dashboard.revenueTrend[0].date));
+    // The line starts over the FIRST plotted day. recharts draws no rectangle for a day with
+    // zero invoicing, so that day's x is its bar's centre — or, for a zero day, the "no invoicing"
+    // marker the chart draws on it (issue #284).
     const startX = (d: string | null) => Number(/^M\s*([\d.]+)/.exec(d ?? "")?.[1]);
     const lineStartX = startX(await line.getAttribute("d"));
-    const firstBarX = startX(await bar.getAttribute("d"));
-    expect(lineStartX).toBeGreaterThanOrEqual(firstBarX);
-    expect(lineStartX).toBeLessThanOrEqual(firstBarX + 24);
-    // 30 plotted days → 30 bars (the lookback days are never drawn).
-    await expect(chart.locator(".recharts-bar-rectangle")).toHaveCount(dashboard.revenueTrend.length);
+    const first = dashboard.revenueTrend[0];
+    let firstDayCenterX: number;
+    if (Number(first.invoiced) === 0) {
+      const marker = chart.locator(`[data-testid="dashboard-revenue-trend-zero-day"][data-date="${first.date}"]`);
+      firstDayCenterX = Number(await marker.getAttribute("cx"));
+    } else {
+      firstDayCenterX = Number(await bar.getAttribute("x")) + Number(await bar.getAttribute("width")) / 2;
+    }
+    expect(Math.abs(lineStartX - firstDayCenterX)).toBeLessThanOrEqual(1);
+    // Every plotted day is visible: a bar when it has invoicing, a marker when it has none
+    // (the lookback days are never drawn).
+    const zeroDays = dashboard.revenueTrend.filter((p) => Number(p.invoiced) === 0).length;
+    await expect(chart.locator(".recharts-bar-rectangle")).toHaveCount(dashboard.revenueTrend.length - zeroDays);
+    await expect(chart.getByTestId("dashboard-revenue-trend-zero-day")).toHaveCount(zeroDays);
 
     // Direct label: only the line's last point carries a ringed dot with the average's value
     // (never a number on every point).

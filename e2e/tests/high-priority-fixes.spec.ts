@@ -31,7 +31,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog } from "../fixtures/ui";
 
 test.describe.configure({ mode: "serial" });
@@ -291,6 +291,7 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
   await page.locator("#pay-amount-0").fill("50000");
 
   // Wait for the invoice to be issued and capture the response
+  await ensurePaymentMethodChosen(page);
   const [res] = await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -937,8 +938,11 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
   await page.getByRole("button", { name: client.fullName, exact: false }).click();
   await expect(issueBtn).toBeDisabled();
 
-  // Select service — the CASH amount auto-fills and the button must enable
+  // Select service — the amount auto-fills; the payment method starts empty (issue #284), so the
+  // button stays disabled until it is chosen, and then enables.
   await pickServiceLine(page, seed.serviceFullName, 0);
   await expect(page.locator("#pay-amount-0")).not.toHaveValue("", { timeout: 5_000 });
+  await expect(issueBtn).toBeDisabled();
+  await page.locator("#pay-method-0").selectOption("CASH");
   await expect(issueBtn).toBeEnabled({ timeout: 5_000 });
 });

@@ -20,7 +20,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #173 "Cambios en factura electrónica (Parte 1)":
 //  1. recipient-email field on the comprobante form (prefilled from the client, editable,
@@ -84,7 +84,8 @@ async function post(request: APIRequestContext, path: string) {
 
 /** Opens the billing client search, types a query and clicks the matching client row. */
 async function selectClientInSearch(page: import("@playwright/test").Page, fullNameUpper: string) {
-  const field = page.getByLabel("Search or select client");
+  // `.first()`: the open option list carries the same aria-label as the search input.
+  const field = page.getByLabel("Search or select client").first();
   await field.click();
   await field.fill(fullNameUpper.slice(0, 20));
   const listbox = page.getByRole("listbox", { name: "Search or select client" });
@@ -203,6 +204,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     page.on("request", (r) => {
       if (r.url().includes("/api/invoices") && r.method() === "POST") invoicePosted = true;
     });
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(page.locator("#billing-client-email-err")).toBeVisible();
     expect(invoicePosted).toBe(false);

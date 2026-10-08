@@ -10,7 +10,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { pickServiceLine } from "../fixtures/invoice";
+import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
 
 type ServiceRecordSeed = { id: number; status: string };
@@ -150,11 +150,11 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
 
-    // Row 0 defaults to CASH. Adding a second row must not default it to CASH again
-    // (already used) — it should pick the next unused method, and CASH must now be
-    // disabled in row 1's dropdown.
+    // Row 0 starts empty (issue #284): choose CASH. A second row starts empty too and CASH —
+    // already used by row 0 — must be disabled in row 1's dropdown.
+    await page.locator("#pay-method-0").selectOption("CASH");
     await page.getByRole("button", { name: "Add payment method" }).click();
-    await expect(page.locator("#pay-method-1")).not.toHaveValue("CASH");
+    await expect(page.locator("#pay-method-1")).toHaveValue("");
     await expect(page.locator("#pay-method-1 option[value='CASH']")).toBeDisabled();
     await expect(page.locator("#pay-method-0 option[value='CASH']")).toBeEnabled();
 
@@ -200,6 +200,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
 
+    await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([
       page.waitForResponse(
         (r) =>
