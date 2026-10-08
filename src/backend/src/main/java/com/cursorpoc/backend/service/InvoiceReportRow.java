@@ -17,4 +17,21 @@ public record InvoiceReportRow(
     InvoiceStatus status,
     BigDecimal total,
     Instant issuedAt,
-    SifenSubmissionStatus sifenSubmissionStatus) {}
+    SifenSubmissionStatus sifenSubmissionStatus,
+    Integer establishment,
+    Integer expeditionPoint) {
+
+  /** Rows without a fiscal stamp keep the SIFEN defaults (001-001), as the KuDE does. */
+  public InvoiceReportRow {
+    establishment = establishment != null ? establishment : 1;
+    expeditionPoint = expeditionPoint != null ? expeditionPoint : 1;
+  }
+
+  /**
+   * Full document number as printed on the KuDE: establishment-expedition point-number (e.g. {@code
+   * 001-001-0000007}).
+   */
+  public String fullInvoiceNumber() {
+    return String.format("%03d-%03d-%07d", establishment, expeditionPoint, invoiceNumber);
+  }
+}

@@ -21,6 +21,8 @@ import BillingPage from "./pages/BillingPage";
 import ServiceRecordsPage from "./pages/ServiceRecordsPage";
 import PropinasPage from "./pages/PropinasPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
+import AuditSettingsPage from "./pages/settings/AuditSettingsPage";
+import PlatformAuditPage from "./pages/PlatformAuditPage";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -67,6 +69,7 @@ export function AppRoutes() {
           <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
           <Route path="taxes" element={<TaxSettingsPage />} />
           <Route path="sifen" element={<SifenCertificatesPage />} />
+          <Route path="audit" element={<AuditSettingsPage />} />
         </Route>
       </Route>
       <Route
@@ -87,6 +90,7 @@ export function AppRoutes() {
         <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
         <Route path="/platform/import" element={<PlatformImportPage />} />
         <Route path="/platform/stock" element={<PlatformStockIntegrationPage />} />
+        <Route path="/platform/audit" element={<PlatformAuditPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>

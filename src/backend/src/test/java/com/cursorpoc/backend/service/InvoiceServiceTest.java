@@ -937,7 +937,9 @@ class InvoiceServiceTest {
             InvoiceStatus.ISSUED,
             new BigDecimal("10000"),
             Instant.now(),
-            SifenSubmissionStatus.APPROVED);
+            SifenSubmissionStatus.APPROVED,
+            1,
+            1);
     when(invoiceRepository.findReportRows(eq(1L), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(List.of(row));
 

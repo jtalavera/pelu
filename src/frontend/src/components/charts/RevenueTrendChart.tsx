@@ -7,6 +7,7 @@ import {
   Legend,
   Line,
   ReferenceArea,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -118,6 +119,86 @@ export function RevenueTrendChart({
     );
   };
 
+  // Issue #284: days with NO invoicing are real data points (0, and they pull the average down),
+  // so each one gets an explicit marker on the baseline instead of an invisible zero-height bar.
+  const zeroDayDates = points.filter((p) => p.invoiced === 0).map((p) => p.date);
+
+  // Hollow ring on the baseline for a day without invoicing; that day's tooltip reads "Gs. 0".
+  const renderZeroDayDot = (props: { cx?: number; cy?: number; date: string }): ReactElement => {
+    const { cx, cy, date } = props;
+    if (cx == null || cy == null) return <g key={`zero-dot-${date}`} />;
+    return (
+      <circle
+        key={`zero-dot-${date}`}
+        data-testid="dashboard-revenue-trend-zero-day"
+        data-date={date}
+        cx={cx}
+        cy={cy}
+        r={3.5}
+        fill={CHART_SURFACE_COLOR}
+        stroke={CHART_AXIS_TEXT_COLOR}
+        strokeWidth={1.5}
+      />
+    );
+  };
+
+  const legendItems = [
+    { id: "invoiced", label: t("femme.dashboard.invoiced"), icon: "rect" as const, color: CHART_PRIMARY_COLOR },
+    ...(hasTrend
+      ? [
+          {
+            id: "trend",
+            label: t("femme.dashboard.revenueTrendLine", { days: TREND_WINDOW_DAYS }),
+            icon: "line" as const,
+            color: CHART_TREND_LINE_COLOR,
+          },
+        ]
+      : []),
+    ...(zeroDayDates.length > 0
+      ? [
+          {
+            id: "zeroDay",
+            label: t("femme.dashboard.revenueTrendZeroDay"),
+            icon: "ring" as const,
+            color: CHART_AXIS_TEXT_COLOR,
+          },
+        ]
+      : []),
+  ];
+
+  // Same look as recharts' default legend (icon + label, centred under the plot), plus the
+  // "no invoicing" ring, which has no recharts series of its own.
+  const legendContent = () => (
+    <ul
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: "4px 14px",
+        margin: 0,
+        padding: 0,
+        listStyle: "none",
+        fontSize: 11,
+        color: CHART_AXIS_TEXT_COLOR,
+      }}
+    >
+      {legendItems.map((item) => (
+        <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
+            {item.icon === "rect" ? (
+              <rect x={1} y={3} width={12} height={8} rx={2} fill={item.color} fillOpacity={CHART_BAR_CONTEXT_OPACITY} />
+            ) : item.icon === "line" ? (
+              <line x1={1} y1={7} x2={13} y2={7} stroke={item.color} strokeWidth={2} strokeLinecap="round" />
+            ) : (
+              <circle cx={7} cy={7} r={3.5} fill={CHART_SURFACE_COLOR} stroke={item.color} strokeWidth={1.5} />
+            )}
+          </svg>
+          <span>{item.label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+
   const tickFormatter = (value: string) => {
     const d = new Date(`${value}T00:00:00`);
     if (Number.isNaN(d.getTime())) return value;
@@ -205,12 +286,7 @@ export function RevenueTrendChart({
           <Legend
             verticalAlign="bottom"
             height={28}
-            wrapperStyle={{ fontSize: 11, color: CHART_AXIS_TEXT_COLOR }}
-            formatter={(value) =>
-              value === "trend"
-                ? t("femme.dashboard.revenueTrendLine", { days: TREND_WINDOW_DAYS })
-                : t("femme.dashboard.invoiced")
-            }
+            content={legendContent}
           />
           {/* Daily amounts: a recessive tint of the hue, thin bars (≤ 24px), 4px rounded tops. */}
           <Bar
@@ -223,6 +299,18 @@ export function RevenueTrendChart({
             radius={[4, 4, 0, 0]}
             isAnimationActive={false}
           />
+          {zeroDayDates.map((date) => (
+            <ReferenceDot
+              key={`zero-${date}`}
+              x={date}
+              y={0}
+              r={3.5}
+              ifOverflow="visible"
+              shape={(dotProps: { cx?: number; cy?: number }) =>
+                renderZeroDayDot({ cx: dotProps.cx, cy: dotProps.cy, date })
+              }
+            />
+          ))}
           {/* Trend = 7-day moving average, same hue at full strength: 2px, round caps, with a
               ringed end dot + value as the one direct label. */}
           {hasTrend ? (

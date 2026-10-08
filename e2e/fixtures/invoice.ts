@@ -16,12 +16,29 @@ export async function pickServiceLine(
 }
 
 /**
+ * Issue #284: the payment method of every payment row starts EMPTY in "New invoice" so the user
+ * has to choose it. Selects `label` (default "Cash") in each row that is still empty — specs that
+ * don't care about the method call this before issuing.
+ */
+export async function ensurePaymentMethodChosen(page: Page, label = "Cash"): Promise<void> {
+  const selects = page.locator('select[id^="pay-method-"]');
+  const count = await selects.count();
+  for (let i = 0; i < count; i++) {
+    const select = selects.nth(i);
+    if ((await select.inputValue()) === "") {
+      await select.selectOption({ label });
+    }
+  }
+}
+
+/**
  * Waits for POST /api/invoices success and the success alert (title "Invoice issued").
  * Returns the created invoice's id and formatted number from the response body.
  */
 export async function clickIssueInvoiceAndExpectSuccess(
   page: Page,
 ): Promise<{ id: number; invoiceNumberFormatted: string }> {
+  await ensurePaymentMethodChosen(page);
   const [res] = await Promise.all([
     page.waitForResponse(
       (r) =>

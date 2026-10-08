@@ -284,6 +284,45 @@ class ServiceCatalogServiceTest {
         .hasMessageContaining("CATEGORY_KIND_IMMUTABLE");
   }
 
+  /**
+   * Issue #284: products travel to Stock with the NAME of their category → a rename re-sends them.
+   */
+  @Test
+  void updateCategory_renamingAProductCategory_resendsItsProductsToStock() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+    SalonService shampoo = new SalonService();
+    shampoo.setId(100L);
+    shampoo.setTenant(tenant);
+    shampoo.setCategory(catProducts);
+    shampoo.setKind(ServiceKind.PRODUCT);
+    org.mockito.Mockito.when(salonServiceRepository.findProductsByTenantId(1L))
+        .thenReturn(List.of(shampoo));
+
+    service.updateCategory(1L, 12L, new ServiceCategoryUpsertRequest("Shampoos premium", null));
+
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            com.cursorpoc.backend.stock.CatalogStockEvent.class,
+            e -> {
+              assertThat(e.service()).isNull();
+              assertThat(e.tenantId()).isEqualTo(1L);
+              assertThat(e.productsImported()).isEqualTo(1);
+            });
+  }
+
+  @Test
+  void updateCategory_sameNameOrServiceCategory_doesNotTouchStock() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+
+    service.updateCategory(1L, 12L, new ServiceCategoryUpsertRequest("Shampoos", null));
+    service.updateCategory(1L, 10L, new ServiceCategoryUpsertRequest("Hair cuts", null));
+
+    assertThat(published).isEmpty();
+  }
+
   @Test
   void listCategories_filtersByKind() {
     lenient()

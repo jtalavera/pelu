@@ -109,12 +109,38 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
         && parseKind(request.kind()) != c.getKind()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_KIND_IMMUTABLE");
     }
+    String previousName = c.getName();
     c.setName(request.name().trim());
     if (request.accentKey() != null) {
       c.setAccentKey(normalizeAccent(request.accentKey()));
     }
     serviceCategoryRepository.save(c);
+    publishCategoryRenameToStock(tenantId, c, previousName);
     return toCategoryResponse(c);
+  }
+
+  /**
+   * Issue #284: products travel to Stock with the NAME of their Pelu category (Stock keeps its own
+   * category table), so renaming a product category must re-send that category's products — the
+   * individual item events only fire when the product itself is edited.
+   */
+  private void publishCategoryRenameToStock(
+      long tenantId, ServiceCategory category, String previousName) {
+    if (category.getKind() != ServiceKind.PRODUCT
+        || previousName == null
+        || previousName.equals(category.getName())) {
+      return;
+    }
+    int affected =
+        (int)
+            salonServiceRepository.findProductsByTenantId(tenantId).stream()
+                .filter(
+                    p ->
+                        p.getCategory() != null && category.getId().equals(p.getCategory().getId()))
+                .count();
+    if (affected > 0) {
+      events.publishEvent(CatalogStockEvent.imported(tenantId, affected));
+    }
   }
 
   @Transactional

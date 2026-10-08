@@ -219,6 +219,17 @@ export function PlatformShell() {
         >
           {t("femme.platform.nav.stock")}
         </NavLink>
+        <NavLink
+          to="/platform/audit"
+          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
+          style={({ isActive }) => ({
+            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
+            fontWeight: isActive ? 500 : 400,
+            background: isActive ? "var(--color-rose-lt)" : "transparent",
+          })}
+        >
+          {t("femme.platform.nav.audit")}
+        </NavLink>
       </aside>
 
       <main className="ml-[200px] mt-12 min-h-[calc(100vh-3rem)] p-4 sm:p-6">

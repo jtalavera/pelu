@@ -92,7 +92,7 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
 
     const chart = page.getByTestId("dashboard-revenue-trend");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Revenue trend", { exact: true })).toBeVisible();
+    await expect(page.getByText("Invoicing", { exact: true })).toBeVisible();
 
     // Not the empty state, given the invoices seeded above.
     await expect(page.getByTestId("dashboard-revenue-trend-empty")).toHaveCount(0);
