@@ -147,11 +147,13 @@ class SifenBatchResultQueryClientTest {
     assertThat(approved.cdc()).isEqualTo("CDC-APROBADO");
     assertThat(approved.status()).isEqualTo(SifenSubmissionStatus.APPROVED);
     assertThat(approved.resultCode()).isEqualTo("0260");
+    assertThat(approved.protocolNumber()).isEqualTo("1234567890");
 
     SifenBatchDocumentResult rejected = result.get().documents().get(1);
     assertThat(rejected.cdc()).isEqualTo("CDC-RECHAZADO");
     assertThat(rejected.status()).isEqualTo(SifenSubmissionStatus.REJECTED);
     assertThat(rejected.resultCode()).isEqualTo("0160");
+    assertThat(rejected.protocolNumber()).isNull();
     assertThat(rejected.message()).isEqualTo("Primer error; Segundo error");
   }
 

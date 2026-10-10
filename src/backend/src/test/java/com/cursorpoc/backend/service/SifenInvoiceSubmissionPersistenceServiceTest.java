@@ -167,10 +167,13 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
     invoice.setSifenAttemptCount(3);
     invoice.setSifenNextAttemptAt(businessNow());
     invoice.setSifenProcessingStartedAt(businessNow());
+    invoice.setSifenBatchNumber("987654321");
     when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
         .thenReturn(Optional.of(invoice));
 
     persistence.resetForCorrection(TENANT_ID, INVOICE_ID);
+
+    assertThat(invoice.getSifenBatchNumber()).isNull();
 
     assertThat(invoice.getSifenSubmissionStatus()).isNull();
     assertThat(invoice.getSifenSubmissionProtocolNumber()).isNull();
