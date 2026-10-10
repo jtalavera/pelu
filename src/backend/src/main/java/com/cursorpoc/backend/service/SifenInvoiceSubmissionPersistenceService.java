@@ -117,6 +117,7 @@ class SifenInvoiceSubmissionPersistenceService {
     invoice.setSifenSubmissionMessage(null);
     invoice.setSifenSubmittedAt(null);
     invoice.setSifenQueryDocumentContent(null);
+    invoice.setSifenBatchNumber(null);
     invoice.setSifenSignedAt(null);
     invoice.setSifenAttemptCount(0);
     invoice.setSifenNextAttemptAt(null);
@@ -221,6 +222,22 @@ class SifenInvoiceSubmissionPersistenceService {
         SifenInvoiceEventType.SUBMISSION,
         result.resultCode(),
         result.message());
+  }
+
+  /**
+   * SIFEN envío por lote: records (or, with {@code null}, forgets) the {@code dProtConsLote} of the
+   * lote the invoice was sent in.
+   */
+  @Transactional
+  void setBatchNumber(long tenantId, long invoiceId, String batchNumber) {
+    requireInvoice(tenantId, invoiceId).setSifenBatchNumber(batchNumber);
+  }
+
+  /** SIFEN envío por lote: the lote number to poll, if the invoice was sent in one. */
+  @Transactional(readOnly = true)
+  Optional<String> findBatchNumber(long tenantId, long invoiceId) {
+    return Optional.ofNullable(requireInvoice(tenantId, invoiceId).getSifenBatchNumber())
+        .filter(n -> !n.isBlank());
   }
 
   @Transactional(readOnly = true)

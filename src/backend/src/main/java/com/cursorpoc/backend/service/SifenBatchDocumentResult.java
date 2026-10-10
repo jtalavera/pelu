@@ -7,6 +7,14 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
  * gResProcLote} (Manual Técnico V150 sección 9.3.3; live {@code consulta-lote.wsdl.xsd1.xsd}'s
  * {@code tgResProcLote}) by {@link SifenBatchResultQueryClient}. Only meaningful when the enclosing
  * {@link SifenBatchQueryResult#concluded()}.
+ *
+ * @param protocolNumber {@code dProtAut} — the authorization protocol number of an approved
+ *     document, same value {@link SifenDocumentReceptionClient} reads for envío inmediato (null
+ *     when rejected).
  */
 public record SifenBatchDocumentResult(
-    String cdc, SifenSubmissionStatus status, String resultCode, String message) {}
+    String cdc,
+    SifenSubmissionStatus status,
+    String protocolNumber,
+    String resultCode,
+    String message) {}

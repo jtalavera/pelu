@@ -17,6 +17,7 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import io.opentelemetry.api.OpenTelemetry;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +47,9 @@ class SifenInvoiceSubmissionServiceTest {
   @Mock private SifenDocumentReceptionClient receptionClient;
   @Mock private SifenDocumentQueryClient queryClient;
   @Mock private SifenInvoiceEventLogService eventLogService;
+  @Mock private SifenBatchReceptionClient batchReceptionClient;
+  @Mock private SifenBatchResultQueryClient batchResultQueryClient;
+  @Mock private FeatureFlagService featureFlagService;
 
   private SifenInvoiceSubmissionService service;
   private Invoice invoice;
@@ -60,7 +64,14 @@ class SifenInvoiceSubmissionServiceTest {
             new BusinessMetrics(OpenTelemetry.noop()));
     service =
         new SifenInvoiceSubmissionService(
-            persistence, signingService, receptionClient, queryClient, new FemmeTimeProperties());
+            persistence,
+            signingService,
+            receptionClient,
+            queryClient,
+            batchReceptionClient,
+            batchResultQueryClient,
+            featureFlagService,
+            new FemmeTimeProperties());
     invoice = new Invoice();
     // Mirrors the real flow: SifenInvoiceHeaderService (called inside the real signInvoice, not
     // this mock) persists the CDC onto the invoice the first time a document is built (HU-02) — so
@@ -81,6 +92,10 @@ class SifenInvoiceSubmissionServiceTest {
     // AC-05 default: SIFEN gives no answer when queried, so transmit() falls through to a normal
     // (re)send for every pre-existing test below that doesn't care about the query step itself.
     lenient().when(queryClient.query(eq(TENANT_ID), any())).thenReturn(Optional.empty());
+    // Global default (V76): SIFEN_SYNC_SUBMISSION on → envío inmediato.
+    lenient()
+        .when(featureFlagService.isEnabled("SIFEN_SYNC_SUBMISSION", TENANT_ID))
+        .thenReturn(true);
   }
 
   /** AC-02: an approved result, including the protocol number, is persisted on the invoice. */
@@ -417,6 +432,240 @@ class SifenInvoiceSubmissionServiceTest {
     verify(queryClient, times(1)).query(TENANT_ID, "cdc-123");
     verify(signingService, times(1)).signInvoice(eq(TENANT_ID), eq(INVOICE_ID), any());
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.REJECTED);
+  }
+
+  // --- SIFEN_SYNC_SUBMISSION: envío inmediato (flag on) vs. envío por lote (flag off) ---
+
+  @Test
+  void syncSubmissionFlagKey_matchesTheFeatureFlagKeyFormat() {
+    assertThat(SifenInvoiceSubmissionService.SYNC_SUBMISSION_FLAG)
+        .isEqualTo("SIFEN_SYNC_SUBMISSION")
+        .matches("^[A-Z0-9_]{1,100}$");
+  }
+
+  @Test
+  void transmit_usesSynchronousService_andNeverTheBatchOne_whenFlagIsOn() {
+    when(receptionClient.send(eq(TENANT_ID), any()))
+        .thenReturn(
+            Optional.of(
+                new SifenSubmissionResult(
+                    SifenSubmissionStatus.APPROVED, "1234567890", "0260", "Autorizado", now())));
+
+    service.transmit(TENANT_ID, INVOICE_ID);
+
+    verify(receptionClient, times(1)).send(eq(TENANT_ID), any());
+    verify(batchReceptionClient, never()).send(anyLong(), any());
+    assertThat(invoice.getSifenBatchNumber()).isNull();
+  }
+
+  @Test
+  void transmit_sendsOneDocumentLote_andLeavesItPendingWithItsBatchNumber_whenFlagIsOff() {
+    flagOff();
+    when(batchReceptionClient.send(eq(TENANT_ID), any()))
+        .thenReturn(
+            Optional.of(
+                new SifenBatchSubmissionResult(
+                    true, "0300", "Lote recibido con éxito", "987654321", 5)));
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    verify(receptionClient, never()).send(anyLong(), any());
+    verify(batchReceptionClient)
+        .send(
+            eq(TENANT_ID),
+            org.mockito.ArgumentMatchers.argThat(
+                (List<String> xmls) -> xmls.size() == 1 && xmls.get(0).contains("rDE")));
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenSubmissionStatus())
+        .isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenBatchNumber()).isEqualTo("987654321");
+    assertThat(invoice.getSifenSubmissionResultCode()).isEqualTo("0300");
+    // The lote acknowledgment is a real SIFEN response (72h-window guard must not apply).
+    assertThat(invoice.getSifenSubmittedAt()).isNotNull();
+  }
+
+  @Test
+  void transmit_recordsRejection_whenSifenRefusesToQueueTheLote() {
+    flagOff();
+    when(batchReceptionClient.send(eq(TENANT_ID), any()))
+        .thenReturn(
+            Optional.of(
+                new SifenBatchSubmissionResult(
+                    false, "0301", "Lote no encolado para procesamiento", null, null)));
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.REJECTED);
+    assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.REJECTED);
+    assertThat(invoice.getSifenSubmissionResultCode()).isEqualTo("0301");
+    assertThat(invoice.getSifenSubmissionMessage())
+        .isEqualTo("Lote no encolado para procesamiento");
+    assertThat(invoice.getSifenBatchNumber()).isNull();
+  }
+
+  @Test
+  void transmit_marksPendingWithoutBatchNumber_whenTheLoteGetsNoResponse() {
+    flagOff();
+    when(batchReceptionClient.send(eq(TENANT_ID), any())).thenReturn(Optional.empty());
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenBatchNumber()).isNull();
+    assertThat(invoice.getSifenSubmittedAt()).isNull();
+  }
+
+  @Test
+  void transmit_pollsTheLote_andNeverResends_whileSifenIsStillProcessingIt() {
+    pendingInLote("987654321");
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(
+            Optional.of(new SifenBatchQueryResult("0361", "Lote en procesamiento", List.of())));
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenBatchNumber()).isEqualTo("987654321");
+    verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
+    verify(batchReceptionClient, never()).send(anyLong(), any());
+    verify(receptionClient, never()).send(anyLong(), any());
+    verify(queryClient, never()).query(anyLong(), any());
+  }
+
+  @Test
+  void transmit_recordsApproval_withProtocolNumber_whenTheLoteConcluded() {
+    pendingInLote("987654321");
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(
+            Optional.of(
+                new SifenBatchQueryResult(
+                    "0362",
+                    "Procesamiento de lote concluido",
+                    List.of(
+                        new SifenBatchDocumentResult(
+                            "other-cdc", SifenSubmissionStatus.REJECTED, null, "0160", "x"),
+                        new SifenBatchDocumentResult(
+                            "cdc-123",
+                            SifenSubmissionStatus.APPROVED,
+                            "1234567890",
+                            "0260",
+                            "Autorizado")))));
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    assertThat(invoice.getSifenSubmissionProtocolNumber()).isEqualTo("1234567890");
+    assertThat(invoice.getSifenSubmissionResultCode()).isEqualTo("0260");
+    verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
+  }
+
+  @Test
+  void transmit_recordsRejection_whenTheLoteConcludedRejectingTheDocument() {
+    pendingInLote("987654321");
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(
+            Optional.of(
+                new SifenBatchQueryResult(
+                    "0362",
+                    "Procesamiento de lote concluido",
+                    List.of(
+                        new SifenBatchDocumentResult(
+                            "cdc-123",
+                            SifenSubmissionStatus.REJECTED,
+                            null,
+                            "1264",
+                            "RUC del emisor no habilitado")))));
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.REJECTED);
+    assertThat(invoice.getSifenSubmissionMessage()).isEqualTo("RUC del emisor no habilitado");
+  }
+
+  @Test
+  void transmit_fallsBackToCdcQuery_thenResendsInANewLote_whenTheLoteNoLongerExists() {
+    pendingInLote("987654321");
+    flagOff();
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(Optional.of(new SifenBatchQueryResult("0360", "Lote inexistente", List.of())));
+    when(batchReceptionClient.send(eq(TENANT_ID), any()))
+        .thenReturn(
+            Optional.of(
+                new SifenBatchSubmissionResult(true, "0300", "Lote recibido", "111222333", 5)));
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    verify(queryClient, times(1)).query(TENANT_ID, "cdc-123");
+    verify(batchReceptionClient, times(1)).send(eq(TENANT_ID), any());
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenBatchNumber()).isEqualTo("111222333");
+  }
+
+  @Test
+  void transmit_resolvesThroughCdcQuery_whenTheLoteNoLongerExistsButSifenKnowsTheDocument() {
+    pendingInLote("987654321");
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(Optional.of(new SifenBatchQueryResult("0360", "Lote inexistente", List.of())));
+    when(queryClient.query(TENANT_ID, "cdc-123"))
+        .thenReturn(
+            Optional.of(
+                new SifenQueryResult(
+                    new SifenSubmissionResult(
+                        SifenSubmissionStatus.APPROVED, null, "0422", "CDC encontrado", now()),
+                    null)));
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
+  }
+
+  @Test
+  void checkPendingStatus_pollsTheLoteFirst_forADocumentSentInBatch() {
+    pendingInLote("987654321");
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(
+            Optional.of(
+                new SifenBatchQueryResult(
+                    "0362",
+                    "Procesamiento de lote concluido",
+                    List.of(
+                        new SifenBatchDocumentResult(
+                            "cdc-123",
+                            SifenSubmissionStatus.APPROVED,
+                            "1234567890",
+                            "0260",
+                            "Autorizado")))));
+
+    Optional<SifenSubmissionResult> result = service.checkPendingStatus(TENANT_ID, INVOICE_ID);
+
+    assertThat(result).isPresent();
+    assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    verify(queryClient, never()).query(anyLong(), any());
+  }
+
+  @Test
+  void checkPendingStatus_staysPending_whileTheLoteIsStillProcessing() {
+    pendingInLote("987654321");
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(
+            Optional.of(new SifenBatchQueryResult("0361", "Lote en procesamiento", List.of())));
+
+    assertThat(service.checkPendingStatus(TENANT_ID, INVOICE_ID)).isEmpty();
+    assertThat(invoice.getSifenSubmissionStatus())
+        .isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    verify(queryClient, never()).query(anyLong(), any());
+  }
+
+  private void flagOff() {
+    when(featureFlagService.isEnabled("SIFEN_SYNC_SUBMISSION", TENANT_ID)).thenReturn(false);
+  }
+
+  private void pendingInLote(String batchNumber) {
+    invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+    invoice.setSifenBatchNumber(batchNumber);
+    invoice.setSifenSubmittedAt(LocalDateTime.now(BUSINESS_ZONE));
   }
 
   private static LocalDateTime now() {

@@ -152,6 +152,14 @@ public class Invoice {
   private String sifenQueryDocumentContent;
 
   /**
+   * SIFEN envío por lote ({@code SIFEN_SYNC_SUBMISSION} off): {@code dProtConsLote}, the number
+   * SIFEN assigned to the lote this invoice was sent in — what {@code SifenBatchResultQueryClient}
+   * polls for the document's final result. Null when sent through the synchronous service.
+   */
+  @Column(name = "sifen_batch_number", length = 64)
+  private String sifenBatchNumber;
+
+  /**
    * SIFEN HU-08: {@code gCamFuFD/dCarQR} exactly as computed and embedded in the signed document
    * this system actually transmitted (persisted once, at submission time — HU-06's {@code
    * SifenInvoiceSubmissionService}) — so the KuDE PDF (AC-13/AC-14) and the revalidation button
@@ -487,6 +495,14 @@ public class Invoice {
 
   public void setSifenQueryDocumentContent(String sifenQueryDocumentContent) {
     this.sifenQueryDocumentContent = sifenQueryDocumentContent;
+  }
+
+  public String getSifenBatchNumber() {
+    return sifenBatchNumber;
+  }
+
+  public void setSifenBatchNumber(String sifenBatchNumber) {
+    this.sifenBatchNumber = sifenBatchNumber;
   }
 
   public String getSifenQrUrl() {
