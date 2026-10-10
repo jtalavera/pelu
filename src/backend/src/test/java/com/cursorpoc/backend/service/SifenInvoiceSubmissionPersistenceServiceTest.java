@@ -225,4 +225,23 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
                     "REJECTED")))
         .isEqualTo(1);
   }
+
+  @Test
+  void findPendingBatchAcceptedAt_returnsTheLoteAcknowledgmentTime_onlyWhilePendingInALote() {
+    LocalDateTime acceptedAt = businessNow().minusSeconds(5);
+    invoice.setSifenSubmissionStatus(
+        com.cursorpoc.backend.domain.enums.SifenSubmissionStatus.PENDING_VERIFICATION);
+    invoice.setSifenSubmittedAt(acceptedAt);
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(invoice));
+
+    assertThat(persistence.findPendingBatchAcceptedAt(TENANT_ID, INVOICE_ID)).isEmpty();
+
+    invoice.setSifenBatchNumber("19897079572662310350");
+    assertThat(persistence.findPendingBatchAcceptedAt(TENANT_ID, INVOICE_ID)).contains(acceptedAt);
+
+    invoice.setSifenSubmissionStatus(
+        com.cursorpoc.backend.domain.enums.SifenSubmissionStatus.APPROVED);
+    assertThat(persistence.findPendingBatchAcceptedAt(TENANT_ID, INVOICE_ID)).isEmpty();
+  }
 }
