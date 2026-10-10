@@ -240,6 +240,21 @@ class SifenInvoiceSubmissionPersistenceService {
         .filter(n -> !n.isBlank());
   }
 
+  /**
+   * SIFEN envío por lote: when SIFEN acknowledged the lote the invoice is still waiting on ({@code
+   * sifenSubmittedAt}, stamped by the lote's {@code 0300}) — empty unless the invoice is pending in
+   * a lote. Drives the listener's fast consulta-lote polling schedule.
+   */
+  @Transactional(readOnly = true)
+  Optional<LocalDateTime> findPendingBatchAcceptedAt(long tenantId, long invoiceId) {
+    Invoice invoice = requireInvoice(tenantId, invoiceId);
+    boolean pendingInBatch =
+        invoice.getSifenSubmissionStatus() == SifenSubmissionStatus.PENDING_VERIFICATION
+            && invoice.getSifenBatchNumber() != null
+            && !invoice.getSifenBatchNumber().isBlank();
+    return pendingInBatch ? Optional.ofNullable(invoice.getSifenSubmittedAt()) : Optional.empty();
+  }
+
   @Transactional(readOnly = true)
   boolean isPendingVerification(long tenantId, long invoiceId) {
     return requireInvoice(tenantId, invoiceId).getSifenSubmissionStatus()

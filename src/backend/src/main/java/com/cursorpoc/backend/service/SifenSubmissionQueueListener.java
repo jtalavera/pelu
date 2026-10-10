@@ -10,6 +10,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,6 +27,14 @@ import org.springframework.web.server.ResponseStatusException;
  * SifenSubmissionReconciler}) rather than resending immediately — Basic-tier Service Bus has no
  * scheduled messages to lean on natively, and this also doubles as the safety net for messages lost
  * before ever reaching the queue.
+ *
+ * <p><b>Envío por lote</b> ({@code SIFEN_SYNC_SUBMISSION} off): an invoice pending in an accepted
+ * lote is polled on its own, much faster schedule ({@link #BATCH_POLL_SCHEDULE}: 3s, 10s and 30s
+ * after the lote was acknowledged, then the usual minutes/hours) — SIFEN typically concludes a
+ * one-document lote within seconds. Those polls are scheduled directly on the queue with a delay
+ * (Service Bus scheduled messages / the local executor), since the reconciler only runs every 60s;
+ * {@code sifen_next_attempt_at} is still set, with a margin, as the safety net if that scheduled
+ * message is lost.
  */
 @Service
 public class SifenSubmissionQueueListener {
@@ -47,6 +56,32 @@ public class SifenSubmissionQueueListener {
     Duration.ofHours(4)
   };
 
+  /**
+   * Envío por lote: gap before each consulta-lote poll — the first counted from SIFEN's lote
+   * acknowledgment, each later one from the previous poll. The next poll is the first point of this
+   * cumulative schedule still ahead of "now", so the cadence holds regardless of the attempt number
+   * the lote was sent on (e.g. after earlier no-response retries).
+   */
+  static final List<Duration> BATCH_POLL_SCHEDULE =
+      List.of(
+          Duration.ofSeconds(3),
+          Duration.ofSeconds(10),
+          Duration.ofSeconds(30),
+          Duration.ofMinutes(1),
+          Duration.ofMinutes(5),
+          Duration.ofMinutes(15),
+          Duration.ofHours(1),
+          Duration.ofHours(4));
+
+  /**
+   * Envío por lote: {@code sifen_next_attempt_at} lags the scheduled poll by this much, so the
+   * reconciler only re-enqueues when the scheduled message was actually lost.
+   */
+  static final Duration BATCH_POLL_SAFETY_MARGIN = Duration.ofMinutes(2);
+
+  /** Envío por lote: hard cap on attempts, independent of {@link #MAX_ATTEMPTS}. */
+  static final int MAX_BATCH_ATTEMPTS = 1 + BATCH_POLL_SCHEDULE.size() + MAX_ATTEMPTS;
+
   private static final List<SifenSubmissionStatus> TERMINAL_STATUSES =
       List.of(
           SifenSubmissionStatus.APPROVED,
@@ -60,17 +95,22 @@ public class SifenSubmissionQueueListener {
   private final SifenNumberVoidingService numberVoidingService;
   private final SifenInvoiceNotificationService notificationService;
 
+  /** Lazily resolved: {@link LocalAsyncSifenSubmissionQueue} itself depends on this listener. */
+  private final ObjectProvider<SifenSubmissionQueue> queue;
+
   public SifenSubmissionQueueListener(
       SifenInvoiceSubmissionPersistenceService persistence,
       SifenInvoiceSubmissionService submissionService,
       FemmeTimeProperties timeProperties,
       SifenNumberVoidingService numberVoidingService,
-      SifenInvoiceNotificationService notificationService) {
+      SifenInvoiceNotificationService notificationService,
+      ObjectProvider<SifenSubmissionQueue> queue) {
     this.persistence = persistence;
     this.submissionService = submissionService;
     this.timeProperties = timeProperties;
     this.numberVoidingService = numberVoidingService;
     this.notificationService = notificationService;
+    this.queue = queue;
   }
 
   /**
@@ -91,7 +131,7 @@ public class SifenSubmissionQueueListener {
 
       try {
         SifenSubmissionResult result = submissionService.transmit(tenantId, invoiceId);
-        return handleResult(tenantId, invoiceId, claimed.get(), result.status());
+        return handleResult(tenantId, invoiceId, claimed.get(), result.status(), correlationId);
       } catch (ResponseStatusException e) {
         return handleException(tenantId, invoiceId, claimed.get(), e);
       } catch (RuntimeException e) {
@@ -111,7 +151,11 @@ public class SifenSubmissionQueueListener {
   }
 
   private Outcome handleResult(
-      long tenantId, long invoiceId, int attempt, SifenSubmissionStatus status) {
+      long tenantId,
+      long invoiceId,
+      int attempt,
+      SifenSubmissionStatus status,
+      String correlationId) {
     if (TERMINAL_STATUSES.contains(status)) {
       persistence.clearRetrySchedule(tenantId, invoiceId);
       persistence.releaseLease(tenantId, invoiceId);
@@ -138,7 +182,62 @@ public class SifenSubmissionQueueListener {
 
     // Still PENDING_VERIFICATION (or, defensively, QUEUED if transmit somehow didn't advance it) —
     // SIFEN gave no answer yet; schedule another check rather than resending blindly.
+    Optional<LocalDateTime> batchAcceptedAt =
+        persistence.findPendingBatchAcceptedAt(tenantId, invoiceId);
+    if (batchAcceptedAt.isPresent()) {
+      return scheduleBatchPollOrGiveUp(
+          tenantId, invoiceId, attempt, batchAcceptedAt.get(), correlationId);
+    }
     return scheduleRetryOrGiveUp(tenantId, invoiceId, attempt, "still pending");
+  }
+
+  /**
+   * Envío por lote: enqueues the next consulta-lote poll at the next point of {@link
+   * #BATCH_POLL_SCHEDULE} (cumulative from {@code acceptedAt}) still ahead of now. Once the whole
+   * schedule has elapsed (or {@link #MAX_BATCH_ATTEMPTS} is hit) it stops polling; the invoice
+   * stays pending and the manual "Verificar estado" button can still resolve it.
+   */
+  private Outcome scheduleBatchPollOrGiveUp(
+      long tenantId, long invoiceId, int attempt, LocalDateTime acceptedAt, String correlationId) {
+    LocalDateTime now = LocalDateTime.now(timeProperties.zoneId());
+    Optional<LocalDateTime> nextPollAt = nextBatchPollAt(acceptedAt, now);
+    if (nextPollAt.isEmpty() || attempt >= MAX_BATCH_ATTEMPTS) {
+      persistence.releaseLease(tenantId, invoiceId);
+      persistence.clearRetrySchedule(tenantId, invoiceId);
+      log.error(
+          "SIFEN batch polling exhausted, invoice stays pending tenantId={} invoiceId={} "
+              + "attempt={} acceptedAt={}",
+          tenantId,
+          invoiceId,
+          attempt,
+          acceptedAt);
+      return Outcome.DEAD_LETTERED;
+    }
+    Duration delay = Duration.between(now, nextPollAt.get());
+    persistence.scheduleRetry(tenantId, invoiceId, nextPollAt.get().plus(BATCH_POLL_SAFETY_MARGIN));
+    persistence.releaseLease(tenantId, invoiceId);
+    queue.getObject().enqueue(tenantId, invoiceId, attempt + 1, delay, correlationId);
+    log.info(
+        "SIFEN batch poll scheduled tenantId={} invoiceId={} attempt={} delayMs={} "
+            + "nextPollAt={}",
+        tenantId,
+        invoiceId,
+        attempt + 1,
+        delay.toMillis(),
+        nextPollAt.get());
+    return Outcome.RETRY_SCHEDULED;
+  }
+
+  /** First point of the cumulative {@link #BATCH_POLL_SCHEDULE} after {@code now}, if any. */
+  static Optional<LocalDateTime> nextBatchPollAt(LocalDateTime acceptedAt, LocalDateTime now) {
+    LocalDateTime point = acceptedAt;
+    for (Duration gap : BATCH_POLL_SCHEDULE) {
+      point = point.plus(gap);
+      if (point.isAfter(now)) {
+        return Optional.of(point);
+      }
+    }
+    return Optional.empty();
   }
 
   /**
