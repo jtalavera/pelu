@@ -526,6 +526,7 @@ class SifenInvoiceSubmissionServiceTest {
 
     assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
     assertThat(invoice.getSifenBatchNumber()).isEqualTo("987654321");
+    assertThat(invoice.getSifenBatchPollCount()).isEqualTo(1);
     verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
     verify(batchReceptionClient, never()).send(anyLong(), any());
     verify(receptionClient, never()).send(anyLong(), any());

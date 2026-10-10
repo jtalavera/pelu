@@ -160,6 +160,13 @@ public class Invoice {
   private String sifenBatchNumber;
 
   /**
+   * SIFEN envío por lote: consulta-lote polls made so far for {@link #sifenBatchNumber} — drives
+   * the listener's count-based polling cadence. Reset whenever a new lote is accepted.
+   */
+  @Column(name = "sifen_batch_poll_count", nullable = false)
+  private int sifenBatchPollCount;
+
+  /**
    * SIFEN HU-08: {@code gCamFuFD/dCarQR} exactly as computed and embedded in the signed document
    * this system actually transmitted (persisted once, at submission time — HU-06's {@code
    * SifenInvoiceSubmissionService}) — so the KuDE PDF (AC-13/AC-14) and the revalidation button
@@ -503,6 +510,14 @@ public class Invoice {
 
   public void setSifenBatchNumber(String sifenBatchNumber) {
     this.sifenBatchNumber = sifenBatchNumber;
+  }
+
+  public int getSifenBatchPollCount() {
+    return sifenBatchPollCount;
+  }
+
+  public void setSifenBatchPollCount(int sifenBatchPollCount) {
+    this.sifenBatchPollCount = sifenBatchPollCount;
   }
 
   public String getSifenQrUrl() {
