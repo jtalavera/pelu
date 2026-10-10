@@ -11,11 +11,12 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
-// Billing tables (Caja → today's invoices, and Historial) refresh an invoice's SIFEN status on
+// Billing tables (Caja → today's invoices, and Historial) and the invoice detail dialog refresh an invoice's SIFEN status on
 // their own as soon as the backend records it — no reload, no click. SIFEN statuses change in the
 // backend with no user action (queue consumer, consulta-lote polling every second), so both
 // tables silently re-read their page every 2s while any visible row is "En cola" or "Pendiente de
-// verificación" (useSifenStatusLiveRefresh).
+// verificación" (useSifenStatusLiveRefresh); the open detail dialog re-reads its invoice the same
+// way.
 //
 // The backend-side change is made through /api/admin/sifen-test-support (e2e profile only, SIFEN
 // unreachable in e2e): simulate-batch-result runs the same mapping a real consulta-lote answer
@@ -147,5 +148,41 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
     await expect(row.getByText("Approved", { exact: true })).toBeVisible({
       timeout: LIVE_UPDATE_TIMEOUT,
     });
+  });
+
+  test("Detalle: con el diálogo abierto, una factura pendiente de verificación pasa a Aprobada sin cerrarlo", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const { invoiceId, clientName } = await createInvoice(request, "E2E Live Modal");
+    await supportPost(request, `/invoices/${invoiceId}/prepare-pending-in-batch/555000333`);
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#invoice-history-text-filter").fill(clientName);
+    const row = visibleRow(page, clientName);
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    const section = page.getByTestId("sifen-status-section");
+    await expect(section).toBeVisible();
+    await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
+
+    await supportPost(request, `/invoices/${invoiceId}/simulate-batch-result`, {
+      batchResultCode: "0362",
+      status: "APPROVED",
+      protocolNumber: "9988776655",
+      resultCode: "0260",
+      message: "Autorización del DE satisfactoria",
+    });
+
+    await expect(section.getByText("Approved", { exact: true }).first()).toBeVisible({
+      timeout: LIVE_UPDATE_TIMEOUT,
+    });
+    await expect(section.getByText("Pending verification", { exact: true })).toHaveCount(0);
+    // Once approved, the dialog offers the KuDE download — no reopen needed.
+    await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
   });
 });
