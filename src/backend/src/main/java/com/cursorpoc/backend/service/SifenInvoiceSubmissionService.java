@@ -289,6 +289,7 @@ public class SifenInvoiceSubmissionService {
    */
   private BatchPoll pollBatch(long tenantId, long invoiceId, String batchNumber, String cdc) {
     Optional<SifenBatchQueryResult> queried = batchResultQueryClient.query(tenantId, batchNumber);
+    persistence.incrementBatchPollCount(tenantId, invoiceId);
     if (queried.isEmpty() || queried.get().stillProcessing()) {
       log.info(
           "SIFEN batch still pending tenantId={} invoiceId={} batchNumber={} answered={}",

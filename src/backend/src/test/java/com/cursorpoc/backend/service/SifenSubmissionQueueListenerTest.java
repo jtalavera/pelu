@@ -246,99 +246,76 @@ class SifenSubmissionQueueListenerTest {
     assertThat(MDC.get(CorrelationIdFilter.MDC_TENANT_ID)).isNull();
   }
 
-  // --- Envío por lote: fast consulta-lote polling (3s, 10s, 30s, then minutes/hours) ---
+  // --- Envío por lote: 30 polls every 1s, 15 every 2s, then 1m/5m/15m/1h/4h ---
 
   @Test
-  void nextBatchPollAt_followsTheCumulativeScheduleFromTheLoteAcknowledgment() {
-    LocalDateTime acceptedAt = LocalDateTime.of(2026, 10, 10, 18, 0, 0);
+  void batchPollSchedule_is30At1s_then15At2s_thenTheMinuteAndHourBackoff() {
+    var schedule = SifenSubmissionQueueListener.BATCH_POLL_SCHEDULE;
+    assertThat(schedule).hasSize(50);
+    assertThat(schedule.subList(0, 30)).containsOnly(Duration.ofSeconds(1));
+    assertThat(schedule.subList(30, 45)).containsOnly(Duration.ofSeconds(2));
+    assertThat(schedule.subList(45, 50))
+        .containsExactly(
+            Duration.ofMinutes(1),
+            Duration.ofMinutes(5),
+            Duration.ofMinutes(15),
+            Duration.ofHours(1),
+            Duration.ofHours(4));
 
-    assertThat(SifenSubmissionQueueListener.nextBatchPollAt(acceptedAt, acceptedAt))
-        .contains(acceptedAt.plusSeconds(3));
-    assertThat(SifenSubmissionQueueListener.nextBatchPollAt(acceptedAt, acceptedAt.plusSeconds(4)))
-        .contains(acceptedAt.plusSeconds(13));
-    assertThat(SifenSubmissionQueueListener.nextBatchPollAt(acceptedAt, acceptedAt.plusSeconds(14)))
-        .contains(acceptedAt.plusSeconds(43));
-    assertThat(SifenSubmissionQueueListener.nextBatchPollAt(acceptedAt, acceptedAt.plusSeconds(44)))
-        .contains(acceptedAt.plusSeconds(103));
-    assertThat(
-            SifenSubmissionQueueListener.nextBatchPollAt(acceptedAt, acceptedAt.plusSeconds(104)))
-        .contains(acceptedAt.plusSeconds(403));
-    // 3s + 10s + 30s + 1m + 5m + 15m + 1h + 4h = 5h21m43s: nothing left to poll after that.
-    assertThat(
-            SifenSubmissionQueueListener.nextBatchPollAt(
-                acceptedAt, acceptedAt.plusHours(5).plusMinutes(21).plusSeconds(44)))
-        .isEmpty();
+    assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(0)).contains(Duration.ofSeconds(1));
+    assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(29)).contains(Duration.ofSeconds(1));
+    assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(30)).contains(Duration.ofSeconds(2));
+    assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(44)).contains(Duration.ofSeconds(2));
+    assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(45)).contains(Duration.ofMinutes(1));
+    assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(49)).contains(Duration.ofHours(4));
+    assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(50)).isEmpty();
   }
 
   @Test
-  void processMessage_schedulesFirstConsultaLote3sAfterTheLoteWasAccepted() {
-    LocalDateTime acceptedAt = LocalDateTime.now(new FemmeTimeProperties().zoneId());
-    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
-        .thenReturn(Optional.of(1));
-    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
-        .thenReturn(
-            new SifenSubmissionResult(
-                SifenSubmissionStatus.PENDING_VERIFICATION,
-                null,
-                "0300",
-                "Lote recibido con éxito",
-                acceptedAt));
-    when(persistence.findPendingBatchAcceptedAt(TENANT_ID, INVOICE_ID))
-        .thenReturn(Optional.of(acceptedAt));
+  void processMessage_schedulesFirstConsultaLote1sAfterTheLoteWasAccepted() {
+    stillPendingOnAttempt(1);
+    when(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).thenReturn(Optional.of(0));
 
     var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 1, CORRELATION_ID);
 
     assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.RETRY_SCHEDULED);
-    ArgumentCaptor<Duration> delay = ArgumentCaptor.forClass(Duration.class);
-    verify(queue)
-        .enqueue(eq(TENANT_ID), eq(INVOICE_ID), eq(2), delay.capture(), eq(CORRELATION_ID));
-    assertThat(delay.getValue()).isPositive().isLessThanOrEqualTo(Duration.ofSeconds(3));
+    verify(queue).enqueue(TENANT_ID, INVOICE_ID, 2, Duration.ofSeconds(1), CORRELATION_ID);
     // The reconciler's safety net trails the scheduled poll by the margin, never races it.
-    verify(persistence)
-        .scheduleRetry(
-            TENANT_ID,
-            INVOICE_ID,
-            acceptedAt.plusSeconds(3).plus(SifenSubmissionQueueListener.BATCH_POLL_SAFETY_MARGIN));
+    ArgumentCaptor<LocalDateTime> safetyNet = ArgumentCaptor.forClass(LocalDateTime.class);
+    verify(persistence).scheduleRetry(eq(TENANT_ID), eq(INVOICE_ID), safetyNet.capture());
+    assertThat(safetyNet.getValue())
+        .isAfter(
+            LocalDateTime.now(new FemmeTimeProperties().zoneId())
+                .plus(SifenSubmissionQueueListener.BATCH_POLL_SAFETY_MARGIN));
     verify(persistence).releaseLease(TENANT_ID, INVOICE_ID);
   }
 
   @Test
-  void processMessage_schedulesNextConsultaLote_whileTheLoteIsStillProcessing() {
-    LocalDateTime now = LocalDateTime.now(new FemmeTimeProperties().zoneId());
-    // Accepted 5s ago: the 3s poll already ran (and said 0361) → next one at +13s, ~8s from now.
-    LocalDateTime acceptedAt = now.minusSeconds(5);
-    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
-        .thenReturn(Optional.of(2));
-    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
-        .thenReturn(
-            new SifenSubmissionResult(
-                SifenSubmissionStatus.PENDING_VERIFICATION, null, null, null, now));
-    when(persistence.findPendingBatchAcceptedAt(TENANT_ID, INVOICE_ID))
-        .thenReturn(Optional.of(acceptedAt));
+  void processMessage_waits2s_afterThe30thPoll() {
+    stillPendingOnAttempt(31);
+    when(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).thenReturn(Optional.of(30));
 
-    listener.processMessage(TENANT_ID, INVOICE_ID, 2, CORRELATION_ID);
+    listener.processMessage(TENANT_ID, INVOICE_ID, 31, CORRELATION_ID);
 
-    ArgumentCaptor<Duration> delay = ArgumentCaptor.forClass(Duration.class);
-    verify(queue)
-        .enqueue(eq(TENANT_ID), eq(INVOICE_ID), eq(3), delay.capture(), eq(CORRELATION_ID));
-    assertThat(delay.getValue())
-        .isGreaterThan(Duration.ofSeconds(6))
-        .isLessThanOrEqualTo(Duration.ofSeconds(8));
+    verify(queue).enqueue(TENANT_ID, INVOICE_ID, 32, Duration.ofSeconds(2), CORRELATION_ID);
   }
 
   @Test
-  void processMessage_stopsPollingTheLote_onceTheWholeScheduleElapsed() {
-    LocalDateTime acceptedAt = LocalDateTime.now(new FemmeTimeProperties().zoneId()).minusHours(6);
-    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
-        .thenReturn(Optional.of(9));
-    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
-        .thenReturn(
-            new SifenSubmissionResult(
-                SifenSubmissionStatus.PENDING_VERIFICATION, null, null, null, null));
-    when(persistence.findPendingBatchAcceptedAt(TENANT_ID, INVOICE_ID))
-        .thenReturn(Optional.of(acceptedAt));
+  void processMessage_fallsToTheMinuteBackoff_afterThe45thPoll() {
+    stillPendingOnAttempt(46);
+    when(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).thenReturn(Optional.of(45));
 
-    var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 9, CORRELATION_ID);
+    listener.processMessage(TENANT_ID, INVOICE_ID, 46, CORRELATION_ID);
+
+    verify(queue).enqueue(TENANT_ID, INVOICE_ID, 47, Duration.ofMinutes(1), CORRELATION_ID);
+  }
+
+  @Test
+  void processMessage_stopsPollingTheLote_onceTheWholeScheduleIsUsedUp() {
+    stillPendingOnAttempt(51);
+    when(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).thenReturn(Optional.of(50));
+
+    var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 51, CORRELATION_ID);
 
     assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.DEAD_LETTERED);
     verify(queue, never())
@@ -348,13 +325,23 @@ class SifenSubmissionQueueListenerTest {
   }
 
   @Test
-  void processMessage_keepsTheMinuteBackoff_forAPendingInvoiceNotInALote() {
+  void processMessage_retriesARateLimitedConsultaLote_onTheLoteCadence() {
     when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
-        .thenReturn(Optional.of(1));
+        .thenReturn(Optional.of(5));
     when(submissionService.transmit(TENANT_ID, INVOICE_ID))
-        .thenReturn(
-            new SifenSubmissionResult(
-                SifenSubmissionStatus.PENDING_VERIFICATION, null, null, null, null));
+        .thenThrow(
+            new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "SIFEN_RATE_LIMIT_EXCEEDED"));
+    when(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).thenReturn(Optional.of(4));
+
+    var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 5, CORRELATION_ID);
+
+    assertThat(outcome).isEqualTo(SifenSubmissionQueueListener.Outcome.RETRY_SCHEDULED);
+    verify(queue).enqueue(TENANT_ID, INVOICE_ID, 6, Duration.ofSeconds(1), CORRELATION_ID);
+  }
+
+  @Test
+  void processMessage_keepsTheMinuteBackoff_forAPendingInvoiceNotInALote() {
+    stillPendingOnAttempt(1);
 
     var outcome = listener.processMessage(TENANT_ID, INVOICE_ID, 1, CORRELATION_ID);
 
@@ -362,5 +349,14 @@ class SifenSubmissionQueueListenerTest {
     verify(queue, never())
         .enqueue(anyLong(), anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), any());
     verify(persistence).scheduleRetry(eq(TENANT_ID), eq(INVOICE_ID), any());
+  }
+
+  private void stillPendingOnAttempt(int attempt) {
+    when(persistence.claimForSubmission(eq(TENANT_ID), eq(INVOICE_ID), any()))
+        .thenReturn(Optional.of(attempt));
+    when(submissionService.transmit(TENANT_ID, INVOICE_ID))
+        .thenReturn(
+            new SifenSubmissionResult(
+                SifenSubmissionStatus.PENDING_VERIFICATION, null, null, null, null));
   }
 }
