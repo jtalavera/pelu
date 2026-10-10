@@ -42,6 +42,7 @@ import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { InvoiceCorrectionForm } from "../components/InvoiceCorrectionForm";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
+import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../hooks/useSifenStatusLiveRefresh";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
@@ -242,7 +243,14 @@ function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
 
 // ─── InvoiceHistoryTab ────────────────────────────────────────────────────────
 
-function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
+function InvoiceHistoryTab({
+  refreshTrigger,
+  isActive,
+}: {
+  refreshTrigger: number;
+  /** The History tab is the one on screen — live SIFEN refresh only runs while it is. */
+  isActive: boolean;
+}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
@@ -324,8 +332,22 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadInvoices = useCallback(
-    async (from: string, to: string, status: string, q: string, page: number, size: number) => {
-      setLoadError(null);
+    async (
+      from: string,
+      to: string,
+      status: string,
+      q: string,
+      page: number,
+      size: number,
+      silent = false,
+    ) => {
+      // A silent (live SIFEN status) refresh never competes with a user-triggered load: if one is
+      // in flight it just skips this tick, and it never shows the spinner or clears errors.
+      if (silent) {
+        if (loadAbortRef.current) return;
+        if (invoiceHistoryRangeErrorKey(from, to)) return;
+      }
+      if (!silent) setLoadError(null);
       setDateRangeError(null);
       const rangeErr = invoiceHistoryRangeErrorKey(from, to);
       if (rangeErr) {
@@ -344,7 +366,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
       loadAbortRef.current?.abort();
       const controller = new AbortController();
       loadAbortRef.current = controller;
-      setLoading(true);
+      if (!silent) setLoading(true);
       try {
         const data = await listInvoicesPaged(
           {
@@ -368,6 +390,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
         if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
           return;
         }
+        if (silent) return;
         setLoadError(translateApiError(err, t, "femme.billing.history.loadError"));
       } finally {
         if (loadAbortRef.current === controller) {
@@ -420,6 +443,12 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   }
 
   const invoices = invoicePage?.content ?? [];
+  // SIFEN statuses change in the backend with no user action (queue consumer, consulta-lote
+  // polling) — keep re-reading this page while any visible row can still change.
+  useSifenStatusLiveRefresh(
+    isActive && invoices.some((inv) => isSifenStatusInFlight(inv.sifenSubmissionStatus)),
+    () => void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, true),
+  );
   const totalElements = invoicePage?.totalElements ?? 0;
   const totalPages = invoicePage?.totalPages ?? 0;
   const showingFrom = totalElements === 0 ? 0 : pageNum * pageSize + 1;
@@ -2254,12 +2283,15 @@ function CashSessionTab({
   onNewInvoice,
   onOpenCashHistory,
   refreshTrigger,
+  isActive,
 }: {
   currentSession: CashSession | null;
   onSessionChanged: () => void;
   onNewInvoice: () => void;
   onOpenCashHistory: () => void;
   refreshTrigger: number;
+  /** The Cash Register tab is the one on screen — live SIFEN refresh only runs while it is. */
+  isActive: boolean;
 }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
@@ -2389,20 +2421,14 @@ function CashSessionTab({
   }, [loadTodayInvoices, refreshTrigger, currentSession?.id, sessionListQuery, todayPageNum, todayPageSize]);
 
   const visibleTodayInvoices = todayPage?.content ?? [];
-  const hasQueuedTodayInvoice = visibleTodayInvoices.some(
-    (inv) => inv.sifenSubmissionStatus === "QUEUED",
-  );
 
-  // RT-20: SIFEN submission is async — an invoice sitting at "En Cola" (QUEUED) can flip to its
-  // final status (transmitted, rejected, etc.) within seconds without any user action, so poll
-  // silently (no loading spinner) while at least one row on this page is still queued.
-  useEffect(() => {
-    if (!hasQueuedTodayInvoice) return;
-    const id = window.setInterval(() => {
-      void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize, true);
-    }, 5000);
-    return () => window.clearInterval(id);
-  }, [hasQueuedTodayInvoice, loadTodayInvoices, sessionListQuery, todayPageNum, todayPageSize]);
+  // RT-20: SIFEN submission is async — an invoice "En Cola" or "Pendiente de verificación" can
+  // flip to its final status within seconds without any user action (queue consumer, consulta-lote
+  // polling), so re-read silently (no loading spinner) while any row on this page still can.
+  useSifenStatusLiveRefresh(
+    isActive && visibleTodayInvoices.some((inv) => isSifenStatusInFlight(inv.sifenSubmissionStatus)),
+    () => void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize, true),
+  );
   const dayTotalIssued = todayPage?.issuedTotal ?? 0;
   const todayTotalElements = todayPage?.totalElements ?? 0;
   const todayTotalPages = todayPage?.totalPages ?? 0;
@@ -3674,6 +3700,7 @@ export default function BillingPage() {
             setActiveTab("cashHistory");
           }}
           refreshTrigger={invoiceListRefresh}
+          isActive={activeTab === "session"}
         />
       </div>
 
@@ -3696,7 +3723,7 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "history"}>
-        <InvoiceHistoryTab refreshTrigger={historyRefresh} />
+        <InvoiceHistoryTab refreshTrigger={historyRefresh} isActive={activeTab === "history"} />
       </div>
 
       <div hidden={activeTab !== "cashHistory"}>
