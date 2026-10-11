@@ -470,9 +470,12 @@ public class DashboardService {
   private static void addFiscalAlerts(
       FiscalStamp stamp, java.time.ZoneId zone, List<DashboardResponse.FiscalAlert> out) {
     LocalDate today = LocalDate.now(zone);
+    // Issue #290: the end of validity and the upper number are optional — no expiry/range alerts
+    // for a stamp that has none.
     LocalDate until = stamp.getValidUntil();
-    boolean expired = until.isBefore(today);
-    boolean rangeExhausted = stamp.getNextEmissionNumber() > stamp.getRangeTo();
+    Integer rangeTo = stamp.getRangeTo();
+    boolean expired = until != null && until.isBefore(today);
+    boolean rangeExhausted = rangeTo != null && stamp.getNextEmissionNumber() > rangeTo;
     if (expired || rangeExhausted) {
       out.add(
           new DashboardResponse.FiscalAlert(
@@ -481,15 +484,15 @@ public class DashboardService {
               "The fiscal stamp is expired or the number range is exhausted. Add a new stamp in Settings."));
       return;
     }
-    long days = java.time.temporal.ChronoUnit.DAYS.between(today, until);
+    long days = until == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(today, until);
     if (days >= 0 && days < 30) {
       out.add(
           new DashboardResponse.FiscalAlert(
               "warning", "fiscalExpiringSoon", "Timbrado expires in less than 30 days"));
     }
-    int range = stamp.getRangeTo() - stamp.getRangeFrom() + 1;
+    int range = rangeTo == null ? 0 : rangeTo - stamp.getRangeFrom() + 1;
     if (range > 0) {
-      int remaining = stamp.getRangeTo() - stamp.getNextEmissionNumber() + 1;
+      int remaining = rangeTo - stamp.getNextEmissionNumber() + 1;
       BigDecimal pct =
           BigDecimal.valueOf(remaining * 100L)
               .divide(BigDecimal.valueOf(range), 2, RoundingMode.HALF_UP);

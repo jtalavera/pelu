@@ -351,7 +351,8 @@ public class SifenNumberVoidingService implements ApplicationEventPublisherAware
     if (rangeFrom < 1 || rangeFrom > rangeTo) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_NUMBER_RANGE");
     }
-    if (rangeFrom < stamp.getRangeFrom() || rangeTo > stamp.getRangeTo()) {
+    if (rangeFrom < stamp.getRangeFrom()
+        || (stamp.getRangeTo() != null && rangeTo > stamp.getRangeTo())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EMISSION_OUT_OF_RANGE");
     }
     if (invoiceRepository.existsByTenant_IdAndFiscalStamp_IdAndInvoiceNumberBetween(
