@@ -84,11 +84,21 @@ public class FiscalStampService {
     return value;
   }
 
+  /**
+   * Issue #290: while no invoice has been issued against the stamp every field can change (with the
+   * same validation as {@link #create}). Once one has, the stamp number, start of validity, lower
+   * number, establishment and expedition point are frozen (they're baked into the issued invoices'
+   * CDC/XML), and only the optional end of validity, the upper number and — forward only — the next
+   * emission number can still change. The upper number can never drop below the next emission
+   * number (checked by {@link #validateEmissionInRange}), so issued numbers stay covered.
+   */
   @Transactional
   public FiscalStampResponse update(long tenantId, long id, FiscalStampUpdateRequest request) {
     FiscalStamp stamp = loadForTenant(tenantId, id);
+    String stampDigits = validateStampNumberDigits(request.stampNumber());
     validateDateOrder(request.validFrom(), request.validUntil());
-    validateEmissionInRange(request.nextEmissionNumber(), stamp.getRangeFrom(), stamp.getRangeTo());
+    validateRange(request.rangeFrom(), request.rangeTo());
+    validateEmissionInRange(request.nextEmissionNumber(), request.rangeFrom(), request.rangeTo());
     // Once an invoice has been issued against this stamp, its number can only ever move forward:
     // rewinding it would let a later invoice reuse a number an existing one already claimed. A
     // forward move stays allowed — it's the only way to skip a number SIFEN rejected as a
@@ -100,20 +110,30 @@ public class FiscalStampService {
     int establishment = validateSifenCdcField(request.establishment(), "INVALID_ESTABLISHMENT");
     int expeditionPoint =
         validateSifenCdcField(request.expeditionPoint(), "INVALID_EXPEDITION_POINT");
-    // The CDC (SIFEN control code) of an already-issued invoice is generated once and frozen, but
-    // the KuDE/XML re-read establishment/expeditionPoint live off this stamp every time they're
-    // rendered. Changing either value once an invoice exists would make that invoice's printed
-    // dEst/dPunExp diverge from what's already baked into its own CDC — so, like delete(), this is
-    // only allowed while the stamp has never been used to issue an invoice.
     boolean hasInvoices = hasInvoices(tenantId, id);
-    if (hasInvoices
-        && (establishment != stamp.getEstablishment()
-            || expeditionPoint != stamp.getExpeditionPoint())) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "FISCAL_STAMP_ESTABLISHMENT_LOCKED");
+    if (hasInvoices) {
+      // The CDC (SIFEN control code) of an already-issued invoice is generated once and frozen, but
+      // the KuDE/XML re-read establishment/expeditionPoint live off this stamp every time they're
+      // rendered. Changing either value once an invoice exists would make that invoice's printed
+      // dEst/dPunExp diverge from what's already baked into its own CDC.
+      if (establishment != stamp.getEstablishment()
+          || expeditionPoint != stamp.getExpeditionPoint()) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "FISCAL_STAMP_ESTABLISHMENT_LOCKED");
+      }
+      // Same reasoning for the stamp number (part of the CDC) and the start of validity (dFeIniT);
+      // the lower number would no longer cover the invoices already issued.
+      if (!stampDigits.equals(stamp.getStampNumber())
+          || !request.validFrom().equals(stamp.getValidFrom())
+          || request.rangeFrom() != stamp.getRangeFrom()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "FISCAL_STAMP_FIELD_LOCKED");
+      }
     }
+    stamp.setStampNumber(stampDigits);
     stamp.setValidFrom(request.validFrom());
     stamp.setValidUntil(request.validUntil());
+    stamp.setRangeFrom(request.rangeFrom());
+    stamp.setRangeTo(request.rangeTo());
     stamp.setNextEmissionNumber(request.nextEmissionNumber());
     stamp.setEstablishment(establishment);
     stamp.setExpeditionPoint(expeditionPoint);
@@ -179,20 +199,22 @@ public class FiscalStampService {
     return trimmed;
   }
 
+  /** The end of validity is optional (issue #290); only checked when present. */
   private static void validateDateOrder(java.time.LocalDate from, java.time.LocalDate until) {
-    if (!until.isAfter(from)) {
+    if (until != null && !until.isAfter(from)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "VALIDITY_END_BEFORE_START");
     }
   }
 
-  private static void validateRange(int rangeFrom, int rangeTo) {
-    if (rangeFrom > rangeTo) {
+  /** The upper number is optional (issue #290); only checked when present. */
+  private static void validateRange(int rangeFrom, Integer rangeTo) {
+    if (rangeTo != null && rangeFrom > rangeTo) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_NUMBER_RANGE");
     }
   }
 
-  private static void validateEmissionInRange(int emission, int rangeFrom, int rangeTo) {
-    if (emission < rangeFrom || emission > rangeTo) {
+  private static void validateEmissionInRange(int emission, int rangeFrom, Integer rangeTo) {
+    if (emission < rangeFrom || (rangeTo != null && emission > rangeTo)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EMISSION_OUT_OF_RANGE");
     }
   }

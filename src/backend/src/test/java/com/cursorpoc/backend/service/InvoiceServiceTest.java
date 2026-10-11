@@ -161,6 +161,38 @@ class InvoiceServiceTest {
     assertThat(activeStamp.isLockedAfterInvoice()).isTrue();
   }
 
+  /** Issue #290: a stamp without "fin de vigencia" / "número hasta" can still issue invoices. */
+  @Test
+  void issueInvoice_stampWithoutValidUntilOrRangeTo_succeeds() {
+    activeStamp.setValidUntil(null);
+    activeStamp.setRangeTo(null);
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class)))
+        .thenAnswer(
+            inv -> {
+              Invoice i = inv.getArgument(0);
+              i.setId(100L);
+              return i;
+            });
+
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            null, null, null, null, null, List.of(line), List.of(payment), null, null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.invoiceNumber()).isEqualTo(1);
+    assertThat(activeStamp.getNextEmissionNumber()).isEqualTo(2);
+  }
+
   /**
    * Issue #205 AC-1: the counter's next number (1) falls inside an already SIFEN-approved voided
    * range (1-3) — {@code issueInvoice} must skip past the whole range instead of assigning a

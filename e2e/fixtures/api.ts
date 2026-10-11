@@ -338,9 +338,11 @@ export type FiscalStampDto = {
   id: number;
   stampNumber: string;
   validFrom: string;
-  validUntil: string;
+  /** Optional (issue #290). */
+  validUntil: string | null;
   rangeFrom: number;
-  rangeTo: number;
+  /** Optional (issue #290). */
+  rangeTo: number | null;
   nextEmissionNumber: number;
   active: boolean;
   lockedAfterInvoice: boolean;
@@ -375,10 +377,11 @@ export async function ensureActiveFiscalStampForInvoices(
   const todayStr = isoDateLocal(today);
   /** Unused numbers a stamp must still have left to be considered usable by this helper. */
   const RANGE_HEADROOM = 1000;
-  const hasHeadroom = (s: FiscalStampDto) => s.rangeTo - (s.nextEmissionNumber ?? 0) > RANGE_HEADROOM;
+  const hasHeadroom = (s: FiscalStampDto) =>
+    s.rangeTo === null || s.rangeTo - (s.nextEmissionNumber ?? 0) > RANGE_HEADROOM;
   const isUsable = (s: FiscalStampDto) => {
     if (!s.active) return false;
-    if (s.validFrom > todayStr || s.validUntil < todayStr) return false;
+    if (s.validFrom > todayStr || (s.validUntil !== null && s.validUntil < todayStr)) return false;
     return hasHeadroom(s);
   };
   if (stamps.some(isUsable)) return;
