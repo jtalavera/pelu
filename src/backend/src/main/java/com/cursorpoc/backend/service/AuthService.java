@@ -145,6 +145,7 @@ public class AuthService {
             .filter(u -> passwordEncoder.matches(request.password(), u.getPasswordHash()))
             .filter(AppUser::isEnabled)
             .filter(u -> u.getTenant().getStatus() == TenantStatus.ACTIVE)
+            .filter(u -> !isDeactivatedProfessional(u))
             .toList();
 
     if (validMatches.isEmpty()) {
@@ -175,6 +176,16 @@ public class AuthService {
             now);
     businessMetrics.login(LOGIN_SUCCESS, String.valueOf(user.getTenant().getId()));
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
+  }
+
+  /**
+   * A deactivated professional ({@code Professional#active = false}) can't log in even though their
+   * {@link AppUser} is still enabled; it collapses into the same {@code INVALID_CREDENTIALS}
+   * outcome as any other failed match. Reactivating the professional restores access.
+   */
+  private boolean isDeactivatedProfessional(AppUser user) {
+    return user.getRole() == UserRole.PROFESSIONAL
+        && professionalRepository.findByUser_Id(user.getId()).map(p -> !p.isActive()).orElse(false);
   }
 
   /**
