@@ -30,9 +30,17 @@ sql_backup_storage_redundancy = "Zone"
 
 log_analytics_daily_quota_gb = 0.5
 
-# Custom domains already registered on the Static Web App via the Azure Portal
-# (not managed by Terraform); added as allowed CORS origins on the backend.
-frontend_custom_domains = ["flowbit.tech", "www.flowbit.tech"]
+# Custom domains on the pelu Static Web App (registered by Terraform; DNS records are manual at
+# the external DNS provider) and allowed CORS origins on the backend. The apex was created in the
+# Portal, so import it before the first apply (see main.tf).
+frontend_custom_domains = ["flowbit.tech"]
+
+# www.flowbit.tech serves the marketing website SWA (rg-flowbit-website), not pelu. Cut-over
+# order: CNAME www -> white-tree-008be3e10.2.azurestaticapps.net, remove www from the pelu SWA,
+# then apply.
+website_swa_name           = "swa-flowbit-website"
+website_swa_resource_group = "rg-flowbit-website"
+website_custom_domain      = "www.flowbit.tech"
 
 # RT-12 (Hardening_SIFEN.md): the vault holds fiscal signing keys — 90-day retention and
 # purge_protection_enabled=true are correct here. NOTE: purge_protection_enabled is IRREVERSIBLE
