@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -42,6 +42,7 @@ import { FiscalRucWarning } from "../components/FiscalRucWarning";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { InvoiceCorrectionForm } from "../components/InvoiceCorrectionForm";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
+import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../hooks/useSifenStatusLiveRefresh";
 import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
 import { downloadSifenKude } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
@@ -60,6 +61,8 @@ import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyI
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
+import { useStockAvailability } from "../stock/useStockAvailability";
+import { StockAvailabilityHint } from "../stock/StockAvailabilityHint";
 import { billingSteps, registerBillingTabSwitcher } from "../tour/steps/billing";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -240,7 +243,14 @@ function invoiceHistoryRangeErrorKey(from: string, to: string): string | null {
 
 // ─── InvoiceHistoryTab ────────────────────────────────────────────────────────
 
-function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
+function InvoiceHistoryTab({
+  refreshTrigger,
+  isActive,
+}: {
+  refreshTrigger: number;
+  /** The History tab is the one on screen — live SIFEN refresh only runs while it is. */
+  isActive: boolean;
+}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
@@ -322,8 +332,22 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadInvoices = useCallback(
-    async (from: string, to: string, status: string, q: string, page: number, size: number) => {
-      setLoadError(null);
+    async (
+      from: string,
+      to: string,
+      status: string,
+      q: string,
+      page: number,
+      size: number,
+      silent = false,
+    ) => {
+      // A silent (live SIFEN status) refresh never competes with a user-triggered load: if one is
+      // in flight it just skips this tick, and it never shows the spinner or clears errors.
+      if (silent) {
+        if (loadAbortRef.current) return;
+        if (invoiceHistoryRangeErrorKey(from, to)) return;
+      }
+      if (!silent) setLoadError(null);
       setDateRangeError(null);
       const rangeErr = invoiceHistoryRangeErrorKey(from, to);
       if (rangeErr) {
@@ -342,7 +366,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
       loadAbortRef.current?.abort();
       const controller = new AbortController();
       loadAbortRef.current = controller;
-      setLoading(true);
+      if (!silent) setLoading(true);
       try {
         const data = await listInvoicesPaged(
           {
@@ -366,6 +390,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
         if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
           return;
         }
+        if (silent) return;
         setLoadError(translateApiError(err, t, "femme.billing.history.loadError"));
       } finally {
         if (loadAbortRef.current === controller) {
@@ -418,6 +443,12 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
   }
 
   const invoices = invoicePage?.content ?? [];
+  // SIFEN statuses change in the backend with no user action (queue consumer, consulta-lote
+  // polling) — keep re-reading this page while any visible row can still change.
+  useSifenStatusLiveRefresh(
+    isActive && invoices.some((inv) => isSifenStatusInFlight(inv.sifenSubmissionStatus)),
+    () => void loadInvoices(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, true),
+  );
   const totalElements = invoicePage?.totalElements ?? 0;
   const totalPages = invoicePage?.totalPages ?? 0;
   const showingFrom = totalElements === 0 ? 0 : pageNum * pageSize + 1;
@@ -503,14 +534,17 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
             <FloatingDropdown anchorRef={reportAnchorRef} open={reportMenuOpen} ref={reportPanelRef}>
               <ul
                 role="menu"
-                className="rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] py-1 shadow-lg"
+                data-testid="invoice-history-report-menu"
+                // Issue #284: the design-system tokens are plain hex colors, so the old
+                // `rgb(var(--color-white))` was invalid CSS and left the panel transparent.
+                className="min-w-44 rounded-md border border-[var(--color-stone-md)] bg-[var(--color-white)] py-1 shadow-lg"
               >
                 <li role="none">
                   <button
                     type="button"
                     role="menuitem"
                     data-testid="invoice-history-report-xlsx"
-                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-stone)]"
                     onClick={() => void handleDownloadReport("xlsx")}
                   >
                     {t("femme.billing.history.report.excel")}
@@ -521,7 +555,7 @@ function InvoiceHistoryTab({ refreshTrigger }: { refreshTrigger: number }) {
                     type="button"
                     role="menuitem"
                     data-testid="invoice-history-report-pdf"
-                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[rgb(var(--color-muted))]"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-stone)]"
                     onClick={() => void handleDownloadReport("pdf")}
                   >
                     {t("femme.billing.history.report.pdf")}
@@ -926,8 +960,10 @@ function NewInvoiceTab({
           },
         ],
   );
+  // Issue #284: the payment method starts EMPTY so the user has to choose it on purpose (a silent
+  // "Cash" default let invoices go out with the wrong method).
   const [payments, setPayments] = useState<PaymentForm[]>([
-    { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+    { method: "", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -1128,6 +1164,22 @@ function NewInvoiceTab({
     });
   }
 
+  // HU-66: how many of each product are left (informative only, never blocks issuing).
+  const lineServiceIds = useMemo(
+    () => lines.map((l) => Number(l.serviceId)).filter((id) => Number.isFinite(id) && id > 0),
+    [lines],
+  );
+  const stockAvailability = useStockAvailability(lineServiceIds);
+  const requestedByService = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const l of lines) {
+      const id = Number(l.serviceId);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      totals.set(id, (totals.get(id) ?? 0) + (parseInt(l.quantity) || 0));
+    }
+    return totals;
+  }, [lines]);
+
   function handleLineServiceChange(idx: number, service: SalonServiceOption | null) {
     setLines((prev) =>
       prev.map((l, i) => {
@@ -1207,12 +1259,8 @@ function NewInvoiceTab({
   function addPayment() {
     setPayments((prev) => {
       const used = new Set(prev.map((p) => p.method));
-      const next = PAYMENT_METHODS.find((m) => !used.has(m));
-      if (!next) return prev;
-      return [
-        ...prev,
-        { method: next, amount: "", cardBrand: "", cardBrandOtherDescription: "" },
-      ];
+      if (!PAYMENT_METHODS.some((m) => !used.has(m))) return prev;
+      return [...prev, { method: "", amount: "", cardBrand: "", cardBrandOtherDescription: "" }];
     });
   }
 
@@ -1524,7 +1572,7 @@ function NewInvoiceTab({
         },
       ]);
       setPayments([
-        { method: "CASH", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
+        { method: "", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
       ]);
       setTipsAmount("");
       setServiceRecordId(null);
@@ -1902,6 +1950,16 @@ function NewInvoiceTab({
                     </Button>
                   )}
                 </div>
+                {/* HU-66: Stock availability for product lines. */}
+                {line.serviceId && stockAvailability.has(Number(line.serviceId)) ? (
+                  <div className="col-span-12">
+                    <StockAvailabilityHint
+                      item={stockAvailability.get(Number(line.serviceId))}
+                      requested={requestedByService.get(Number(line.serviceId)) ?? 0}
+                      testId={`line-stock-${idx}`}
+                    />
+                  </div>
+                ) : null}
                 {/* Per-line discount row */}
                 <div className="col-span-12 flex flex-wrap items-center gap-3">
                   <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[rgb(var(--color-ink-2))]">
@@ -2060,6 +2118,9 @@ function NewInvoiceTab({
               const amountIsInvalid =
                 !Number.isFinite(paymentAmountNum) || paymentAmountNum <= 0;
               const isCardPayment = CARD_PAYMENT_METHODS.has(payment.method);
+              // Issue #284: shown as soon as there is something to collect, i.e. exactly when the
+              // empty method is what keeps the "Issue invoice" button disabled.
+              const methodMissing = payment.method === "" && !amountIsInvalid;
               const cardError =
                 !amountIsInvalid && paymentErrors[idx] ? paymentErrors[idx] : undefined;
               return (
@@ -2073,7 +2134,12 @@ function NewInvoiceTab({
                     value={payment.method}
                     onChange={(e) => updatePayment(idx, "method", e.target.value)}
                     className="mt-1 w-full"
+                    aria-invalid={methodMissing}
+                    aria-describedby={methodMissing ? `pay-method-err-${idx}` : undefined}
                   >
+                    <option value="" disabled>
+                      {t("femme.billing.invoice.paymentMethodPlaceholder")}
+                    </option>
                     {PAYMENT_METHODS.map((m) => (
                       <option
                         key={m}
@@ -2084,6 +2150,9 @@ function NewInvoiceTab({
                       </option>
                     ))}
                   </Select>
+                  <FieldValidationError id={`pay-method-err-${idx}`}>
+                    {methodMissing ? t("femme.billing.invoice.paymentMethodRequired") : undefined}
+                  </FieldValidationError>
                 </div>
                 <div className="flex-1 min-w-[120px]">
                   <Label htmlFor={`pay-amount-${idx}`}>
@@ -2214,12 +2283,15 @@ function CashSessionTab({
   onNewInvoice,
   onOpenCashHistory,
   refreshTrigger,
+  isActive,
 }: {
   currentSession: CashSession | null;
   onSessionChanged: () => void;
   onNewInvoice: () => void;
   onOpenCashHistory: () => void;
   refreshTrigger: number;
+  /** The Cash Register tab is the one on screen — live SIFEN refresh only runs while it is. */
+  isActive: boolean;
 }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
@@ -2349,20 +2421,14 @@ function CashSessionTab({
   }, [loadTodayInvoices, refreshTrigger, currentSession?.id, sessionListQuery, todayPageNum, todayPageSize]);
 
   const visibleTodayInvoices = todayPage?.content ?? [];
-  const hasQueuedTodayInvoice = visibleTodayInvoices.some(
-    (inv) => inv.sifenSubmissionStatus === "QUEUED",
-  );
 
-  // RT-20: SIFEN submission is async — an invoice sitting at "En Cola" (QUEUED) can flip to its
-  // final status (transmitted, rejected, etc.) within seconds without any user action, so poll
-  // silently (no loading spinner) while at least one row on this page is still queued.
-  useEffect(() => {
-    if (!hasQueuedTodayInvoice) return;
-    const id = window.setInterval(() => {
-      void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize, true);
-    }, 5000);
-    return () => window.clearInterval(id);
-  }, [hasQueuedTodayInvoice, loadTodayInvoices, sessionListQuery, todayPageNum, todayPageSize]);
+  // RT-20: SIFEN submission is async — an invoice "En Cola" or "Pendiente de verificación" can
+  // flip to its final status within seconds without any user action (queue consumer, consulta-lote
+  // polling), so re-read silently (no loading spinner) while any row on this page still can.
+  useSifenStatusLiveRefresh(
+    isActive && visibleTodayInvoices.some((inv) => isSifenStatusInFlight(inv.sifenSubmissionStatus)),
+    () => void loadTodayInvoices(sessionListQuery, todayPageNum, todayPageSize, true),
+  );
   const dayTotalIssued = todayPage?.issuedTotal ?? 0;
   const todayTotalElements = todayPage?.totalElements ?? 0;
   const todayTotalPages = todayPage?.totalPages ?? 0;
@@ -3634,6 +3700,7 @@ export default function BillingPage() {
             setActiveTab("cashHistory");
           }}
           refreshTrigger={invoiceListRefresh}
+          isActive={activeTab === "session"}
         />
       </div>
 
@@ -3656,7 +3723,7 @@ export default function BillingPage() {
       </div>
 
       <div hidden={activeTab !== "history"}>
-        <InvoiceHistoryTab refreshTrigger={historyRefresh} />
+        <InvoiceHistoryTab refreshTrigger={historyRefresh} isActive={activeTab === "history"} />
       </div>
 
       <div hidden={activeTab !== "cashHistory"}>

@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { API_BASE, setTenantFeatureFlag } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openTenantSifenAsRoot } from "../fixtures/sifenRoot";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -40,7 +41,15 @@ test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tena
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("HU-19 · 1 el listado se muestra en Configuración → SIFEN, en la misma sección que la carga (AC-01)", async ({
+  test("HU-19 · 1 el listado se muestra junto a la carga (usuario root) y, solo lectura, en Configuración → SIFEN del salón (AC-01)", async ({
+    page,
+  }) => {
+    // Root user: the upload form and the list live in the same page/section.
+    await openTenantSifenAsRoot(page);
+    await expect(page.getByTestId("sifen-certificate-list-section")).toBeVisible();
+  });
+
+  test("HU-19 · 1b el administrador del salón ve el listado en Configuración → SIFEN, sin formulario de carga (AC-01)", async ({
     page,
   }) => {
     await loginAsDemo(page);
@@ -48,23 +57,24 @@ test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tena
     await page.getByRole("link", { name: "SIFEN" }).click();
     await expect(page).toHaveURL(/\/app\/settings\/sifen/);
 
-    // Both the upload form and the list live inside the same page/section, not separate screens.
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
     await expect(page.getByTestId("sifen-certificate-list-section")).toBeVisible();
+    await expect(page.getByTestId("sifen-certificate-readonly-note")).toBeVisible();
+    await expect(page.getByTestId("sifen-certificate-upload-section")).toHaveCount(0);
+    await expect(page.locator("#sifen-cert-file")).toHaveCount(0);
   });
 
   test("HU-19 · 2 cada certificado muestra únicamente los 4 campos permitidos, sin exponer clave privada ni contraseña (AC-02, AC-03)", async ({
     page,
   }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await openTenantSifenAsRoot(page);
 
     // Set up the listener before uploading: the upload's onSubmit re-fetches the list via
-    // load() once the POST resolves (see SifenCertificatesPage.tsx), so the matching GET always
+    // load() once the POST resolves (see SifenCertificatesPanel.tsx), so the matching GET always
     // fires sometime during/after upload() below — the listener stays attached until then.
     const listResponsePromise = page.waitForResponse(
-      (r) => r.url().endsWith("/api/sifen/certificates") && r.request().method() === "GET",
+      (r) =>
+        r.url().endsWith(`/api/platform/tenants/${DEMO_TENANT_ID}/sifen/certificates`) &&
+        r.request().method() === "GET",
     );
     await upload(page, VALID_P12);
     const listResponse = await listResponsePromise;
@@ -98,7 +108,7 @@ test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tena
     ).toBeVisible();
   });
 
-  test("HU-19 · 3 sin certificados cargados, el listado muestra el estado vacío con acceso directo a la carga (AC-05)", async ({
+  test("HU-19 · 3 sin certificados cargados, el listado muestra el estado vacío junto al formulario de carga (AC-05)", async ({
     page,
     request,
   }) => {
@@ -108,18 +118,13 @@ test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tena
     const clearRes = await request.post(`${API_BASE}/api/admin/sifen-test-support/certificates/clear`);
     expect(clearRes.ok(), await clearRes.text()).toBeTruthy();
 
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await openTenantSifenAsRoot(page);
 
+    // The upload form sits right above the (empty) list, so no separate shortcut is needed.
     await expect(page.getByTestId("sifen-certificate-empty-state")).toBeVisible();
     await expect(page.getByText("No certificates uploaded yet.")).toBeVisible();
     await expect(page.getByTestId("sifen-certificate-row")).toHaveCount(0);
-
-    const shortcut = page.getByRole("button", { name: "Upload your first certificate" });
-    await expect(shortcut).toBeVisible();
-    await shortcut.click();
-    await expect(page.locator("#sifen-cert-file")).toBeFocused();
+    await expect(page.locator("#sifen-cert-file")).toBeVisible();
   });
 
   test("HU-19 · 4 el listado incluye todos los certificados cargados históricamente, no solo el más reciente (AC-06)", async ({
@@ -129,9 +134,7 @@ test.describe("SIFEN HU-19 · Ver el listado de certificados cargados de un tena
     const clearRes = await request.post(`${API_BASE}/api/admin/sifen-test-support/certificates/clear`);
     expect(clearRes.ok(), await clearRes.text()).toBeTruthy();
 
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await openTenantSifenAsRoot(page);
     await expect(page.getByTestId("sifen-certificate-empty-state")).toBeVisible();
 
     await upload(page, VALID_P12);

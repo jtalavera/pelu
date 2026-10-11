@@ -80,6 +80,25 @@ class DashboardServiceFiscalAlertsTest {
   }
 
   @Test
+  void noExpiryOrRangeAlertsWhenStampHasNoEndOrUpperNumber() {
+    // Issue #290: "fin de vigencia" and "número hasta" are optional.
+    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
+    FiscalStamp stamp = activeStamp();
+    stamp.setValidUntil(null);
+    stamp.setRangeTo(null);
+    stamp.setNextEmissionNumber(5000);
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L)).thenReturn(Optional.of(stamp));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.fiscalAlerts())
+        .noneMatch(
+            a ->
+                List.of("fiscalExpiredOrExhausted", "fiscalExpiringSoon", "fiscalLowRange")
+                    .contains(a.messageKey()));
+  }
+
+  @Test
   void exposesDistinctClientsWithAppointmentsThisMonth() {
     when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(false);
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L)).thenReturn(Optional.empty());

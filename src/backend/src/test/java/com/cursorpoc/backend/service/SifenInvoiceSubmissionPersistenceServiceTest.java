@@ -167,10 +167,15 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
     invoice.setSifenAttemptCount(3);
     invoice.setSifenNextAttemptAt(businessNow());
     invoice.setSifenProcessingStartedAt(businessNow());
+    invoice.setSifenBatchNumber("987654321");
+    invoice.setSifenBatchPollCount(7);
     when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
         .thenReturn(Optional.of(invoice));
 
     persistence.resetForCorrection(TENANT_ID, INVOICE_ID);
+
+    assertThat(invoice.getSifenBatchNumber()).isNull();
+    assertThat(invoice.getSifenBatchPollCount()).isZero();
 
     assertThat(invoice.getSifenSubmissionStatus()).isNull();
     assertThat(invoice.getSifenSubmissionProtocolNumber()).isNull();
@@ -221,5 +226,29 @@ class SifenInvoiceSubmissionPersistenceServiceTest {
                     BusinessMetrics.STATUS,
                     "REJECTED")))
         .isEqualTo(1);
+  }
+
+  @Test
+  void batchPollCount_countsPolls_whilePendingInALote_andResetsForANewLote() {
+    invoice.setSifenSubmissionStatus(
+        com.cursorpoc.backend.domain.enums.SifenSubmissionStatus.PENDING_VERIFICATION);
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(invoice));
+
+    assertThat(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).isEmpty();
+
+    persistence.setBatchNumber(TENANT_ID, INVOICE_ID, "19897079572662310350");
+    assertThat(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).contains(0);
+
+    persistence.incrementBatchPollCount(TENANT_ID, INVOICE_ID);
+    persistence.incrementBatchPollCount(TENANT_ID, INVOICE_ID);
+    assertThat(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).contains(2);
+
+    persistence.setBatchNumber(TENANT_ID, INVOICE_ID, "11122233344455566677");
+    assertThat(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).contains(0);
+
+    invoice.setSifenSubmissionStatus(
+        com.cursorpoc.backend.domain.enums.SifenSubmissionStatus.APPROVED);
+    assertThat(persistence.findPendingBatchPollCount(TENANT_ID, INVOICE_ID)).isEmpty();
   }
 }

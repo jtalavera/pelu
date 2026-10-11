@@ -15,7 +15,8 @@ public record DashboardResponse(
     int revenueTrendDays,
     List<TopService> topServices,
     List<PaymentMethodMix> paymentMethodMix,
-    List<AppointmentsByDayOfWeek> appointmentsByDayOfWeek) {
+    List<AppointmentsByDayOfWeek> appointmentsByDayOfWeek,
+    List<RevenueTrendPoint> revenueTrendLookback) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}
@@ -44,6 +45,10 @@ public record DashboardResponse(
    * are expected to reuse.
    */
   public record RevenueTrendPoint(String date, BigDecimal invoiced) {}
+
+  // revenueTrendLookback: the 6 days right before the revenueTrend window (same shape, oldest
+  // first). Not plotted — the chart uses them only so its 7-day moving average has a full week
+  // behind the window's first day.
 
   /**
    * Issue #220 — "Dashboard: gráfico de servicios más vendidos". Top services by invoiced revenue

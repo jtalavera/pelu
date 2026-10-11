@@ -137,4 +137,65 @@ class DashboardServiceRevenueTrendTest {
             .orElseThrow();
     assertThat(point.invoiced()).isEqualByComparingTo(new BigDecimal("77000"));
   }
+
+  /** The 7-day moving average starts on day 1 thanks to the 6 days before the window. */
+  @Test
+  void returnsTheSixDaysBeforeTheWindowAsLookbackOldestFirst() {
+    when(invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
+            eq(1L), eq(InvoiceStatus.ISSUED), any(), any()))
+        .thenReturn(List.of());
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.revenueTrendLookback())
+        .hasSize(DashboardService.REVENUE_TREND_AVERAGE_LOOKBACK_DAYS)
+        .allSatisfy(p -> assertThat(p.invoiced()).isEqualByComparingTo(BigDecimal.ZERO));
+    LocalDate windowStart = LocalDate.now(ZONE).minusDays(DashboardService.REVENUE_TREND_DAYS - 1L);
+    assertThat(d.revenueTrendLookback().get(0).date())
+        .isEqualTo(
+            windowStart.minusDays(DashboardService.REVENUE_TREND_AVERAGE_LOOKBACK_DAYS).toString());
+    assertThat(d.revenueTrendLookback().get(d.revenueTrendLookback().size() - 1).date())
+        .isEqualTo(windowStart.minusDays(1).toString());
+  }
+
+  @Test
+  void invoicesBeforeTheWindowFeedTheLookbackButNeverThePlottedSeries() {
+    // 32 days ago = 2 days before the window start (window = last 30 days) → inside the lookback.
+    LocalDate inLookback = LocalDate.now(ZONE).minusDays(DashboardService.REVENUE_TREND_DAYS + 1L);
+    Instant noon = inLookback.atTime(12, 0).atZone(ZONE).toInstant();
+    when(invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
+            eq(1L), eq(InvoiceStatus.ISSUED), any(), any()))
+        .thenReturn(List.of(new InvoiceRevenueRow(noon, new BigDecimal("90000"))));
+
+    DashboardResponse d = dashboardService.build(1L);
+
+    assertThat(d.revenueTrendLookback())
+        .filteredOn(p -> p.date().equals(inLookback.toString()))
+        .singleElement()
+        .satisfies(p -> assertThat(p.invoiced()).isEqualByComparingTo(new BigDecimal("90000")));
+    assertThat(d.revenueTrend()).hasSize(DashboardService.REVENUE_TREND_DAYS);
+    assertThat(d.revenueTrend())
+        .noneMatch(p -> p.date().equals(inLookback.toString()))
+        .allSatisfy(p -> assertThat(p.invoiced()).isEqualByComparingTo(BigDecimal.ZERO));
+  }
+
+  @Test
+  void readsInvoicesFromTheStartOfTheLookbackWithASingleQuery() {
+    when(invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
+            eq(1L), eq(InvoiceStatus.ISSUED), any(), any()))
+        .thenReturn(List.of());
+
+    dashboardService.build(1L);
+
+    LocalDate lookbackStart =
+        LocalDate.now(ZONE)
+            .minusDays(DashboardService.REVENUE_TREND_DAYS - 1L)
+            .minusDays(DashboardService.REVENUE_TREND_AVERAGE_LOOKBACK_DAYS);
+    org.mockito.Mockito.verify(invoiceRepository)
+        .findRevenueRowsByTenantAndStatusAndIssuedBetween(
+            eq(1L),
+            eq(InvoiceStatus.ISSUED),
+            eq(lookbackStart.atStartOfDay(ZONE).toInstant()),
+            eq(LocalDate.now(ZONE).plusDays(1).atStartOfDay(ZONE).toInstant()));
+  }
 }

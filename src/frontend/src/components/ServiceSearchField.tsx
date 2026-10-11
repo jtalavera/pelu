@@ -13,6 +13,8 @@ export type SalonServiceOption = {
   priceMinor: string | number;
   durationMinutes: number;
   active: boolean;
+  /** HU-59: only PRODUCT items move stock. */
+  kind?: "SERVICE" | "PRODUCT";
 };
 
 type Props = {
@@ -32,6 +34,15 @@ function formatPriceGs(priceMinor: string | number): string {
   const n = Number(priceMinor);
   if (!Number.isFinite(n)) return "—";
   return formatIntegerGs(n);
+}
+
+/**
+ * Dropdown order: every service first, then every product. Items of the same kind keep the order
+ * the API returned them in (Array.prototype.sort is stable). A missing `kind` counts as a service.
+ */
+export function sortServicesBeforeProducts(items: SalonServiceOption[]): SalonServiceOption[] {
+  const rank = (s: SalonServiceOption) => (s.kind === "PRODUCT" ? 1 : 0);
+  return [...items].sort((a, b) => rank(a) - rank(b));
 }
 
 export function ServiceSearchField({
@@ -109,7 +120,7 @@ export function ServiceSearchField({
           : "/api/services";
       const data = await femmeJson<SalonServiceOption[]>(url);
       const list = Array.isArray(data) ? data : [];
-      setResults(list.filter((s) => s.active));
+      setResults(sortServicesBeforeProducts(list.filter((s) => s.active)));
       setOpen(true);
     } catch {
       setResults([]);

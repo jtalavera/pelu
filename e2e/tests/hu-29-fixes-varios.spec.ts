@@ -11,7 +11,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { pickServiceLine } from "../fixtures/invoice";
+import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { setControlledInputValue } from "../fixtures/ui";
 
 test.describe.configure({ mode: "serial" });
@@ -102,6 +102,8 @@ test.describe("HU-29 · Fixes varios", () => {
 
     await page.locator("#line-disc-toggle-0").check();
     await page.locator("#line-disc-val-0").fill("150");
+
+    await ensurePaymentMethodChosen(page);
 
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(

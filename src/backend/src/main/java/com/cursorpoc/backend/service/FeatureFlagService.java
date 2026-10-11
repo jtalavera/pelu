@@ -12,6 +12,7 @@ import com.cursorpoc.backend.repository.TenantFeatureFlagChangeRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TierFeatureFlagRepository;
+import com.cursorpoc.backend.stock.StockFlagsChangedEvent;
 import com.cursorpoc.backend.web.dto.FeatureFlagResponse;
 import com.cursorpoc.backend.web.dto.FeatureGlobalUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantFeatureFlagChangeResponse;
@@ -23,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +41,18 @@ import org.springframework.web.server.ResponseStatusException;
  * tier (defensive: {@code tenants.tier_id} is NOT NULL since V54) contributes ON for the tier term.
  */
 @Service
-public class FeatureFlagService {
+public class FeatureFlagService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-61): announces flag changes to {@code StockFeatureFlagPublisher}.
+   * Defaults to a no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private static final Pattern FLAG_KEY_PATTERN = Pattern.compile("^[A-Z0-9_]{1,100}$");
 
@@ -135,6 +149,7 @@ public class FeatureFlagService {
       row.setDescription(request.description());
     }
     featureFlagRepository.save(row);
+    events.publishEvent(StockFlagsChangedEvent.global(flagKey));
     return new FeatureFlagResponse(row.getFlagKey(), row.isEnabled(), row.getDescription());
   }
 
@@ -208,6 +223,7 @@ public class FeatureFlagService {
     tenantFeatureFlagRepository.save(row);
     recordChange(
         tenantId, flagKey, previousEnabled, request.enabled(), changedByUserId, changedByEmail);
+    events.publishEvent(StockFlagsChangedEvent.tenantFlag(tenantId, flagKey));
   }
 
   @Transactional
@@ -219,6 +235,7 @@ public class FeatureFlagService {
     tenantFeatureFlagRepository.deleteByTenantIdAndFlagKey(tenantId, flagKey);
     boolean newEnabled = isEnabled(flagKey, tenantId);
     recordChange(tenantId, flagKey, previousEnabled, newEnabled, changedByUserId, changedByEmail);
+    events.publishEvent(StockFlagsChangedEvent.tenantFlag(tenantId, flagKey));
   }
 
   /**

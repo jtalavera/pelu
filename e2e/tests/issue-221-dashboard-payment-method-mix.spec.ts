@@ -134,7 +134,7 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
 
     const chart = page.getByTestId("dashboard-payment-method-mix");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Payment method mix", { exact: true })).toBeVisible();
+    await expect(page.getByText("Payment methods", { exact: true })).toBeVisible();
 
     // Not the empty state, given the invoices seeded above.
     await expect(page.getByTestId("dashboard-payment-method-mix-empty")).toHaveCount(0);

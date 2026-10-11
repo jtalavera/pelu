@@ -6,7 +6,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { pickServiceLine } from "../fixtures/invoice";
+import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 test.describe("HU-15 · Múltiples métodos de pago", () => {
   test.beforeEach(async ({ request }) => {
@@ -36,6 +36,7 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await page.locator("#pay-method-1").selectOption("TRANSFER");
     await page.locator("#pay-amount-1").fill("6000");
     await expect(page.locator("#pay-amount-1")).toHaveValue("6.000");
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(page.getByText(/issued successfully/i)).toBeVisible();
   });
@@ -55,6 +56,7 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");
     await page.locator("#pay-amount-0").fill("5000");
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText("The sum of payment amounts must equal the invoice total.", { exact: true }),

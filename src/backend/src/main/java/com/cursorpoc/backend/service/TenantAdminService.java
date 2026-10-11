@@ -12,6 +12,7 @@ import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TenantStatusChangeRepository;
 import com.cursorpoc.backend.repository.TenantTierChangeRepository;
 import com.cursorpoc.backend.repository.TierRepository;
+import com.cursorpoc.backend.stock.StockFlagsChangedEvent;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
@@ -24,6 +25,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -37,7 +40,19 @@ import org.springframework.web.server.ResponseStatusException;
  * edits, and suspends/reactivates tenants.
  */
 @Service
-public class TenantAdminService {
+public class TenantAdminService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-61): announces tier/name/status changes to {@code
+   * StockFeatureFlagPublisher}. Defaults to a no-op so plain unit tests that construct this service
+   * directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private final TenantRepository tenantRepository;
   private final TierRepository tierRepository;
@@ -122,6 +137,8 @@ public class TenantAdminService {
     tenantRepository.save(tenant);
     seedDefaultTaxes(tenant);
     businessMetrics.tenantCreated();
+    // Stock (HU-61): a new tenant whose STOCK_MODULE already resolves ON gets provisioned.
+    events.publishEvent(StockFlagsChangedEvent.tenant(tenant.getId(), false));
     return toResponse(tenant);
   }
 
@@ -196,6 +213,7 @@ public class TenantAdminService {
     Tier previousTier = tenant.getTier();
     boolean tierChanged =
         !Objects.equals(previousTier != null ? previousTier.getId() : null, newTier.getId());
+    boolean nameChanged = !Objects.equals(tenant.getName(), name);
 
     tenant.setName(name);
     tenant.setDomain(domain);
@@ -204,6 +222,10 @@ public class TenantAdminService {
 
     if (tierChanged) {
       recordTierChange(tenant.getId(), previousTier, newTier, changedByUserId, changedByEmail);
+    }
+    if (tierChanged || nameChanged) {
+      // Stock (HU-61): a new tier may change the resolved STOCK_* flags; a new name is re-sent.
+      events.publishEvent(StockFlagsChangedEvent.tenant(tenant.getId(), nameChanged));
     }
 
     return toResponse(tenant);
@@ -239,6 +261,7 @@ public class TenantAdminService {
       tenantRepository.save(tenant);
       recordStatusChange(
           tenant.getId(), previousStatus, newStatus, changedByUserId, changedByEmail);
+      events.publishEvent(StockFlagsChangedEvent.tenant(tenant.getId(), true));
     }
 
     return toResponse(tenant);

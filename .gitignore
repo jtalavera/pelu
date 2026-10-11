@@ -4,3 +4,6 @@
 .vscode/tasks.json
 .gitignore
 local-pelu-sqlserver/local-pelu-sqlserver.sqlproj
+
+# Stock cross-system e2e: control-stock checked out next to the sources in CI
+/control-stock/

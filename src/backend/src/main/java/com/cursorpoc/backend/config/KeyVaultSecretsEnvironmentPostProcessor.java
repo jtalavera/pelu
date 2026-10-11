@@ -4,6 +4,7 @@ import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.secrets.SecretClient;
 import com.azure.security.keyvault.secrets.SecretClientBuilder;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,18 @@ public class KeyVaultSecretsEnvironmentPostProcessor implements EnvironmentPostP
 
   private static final String JWT_SECRET_NAME = "app-femme-jwt-secret";
 
+  /**
+   * Stock integration (HU-60/HU-61/HU-65): optional secrets — fetched once each, skipped (with a
+   * warning) when absent, so a vault without them still boots; the features that need them answer
+   * {@code STOCK_NOT_CONFIGURED} instead.
+   */
+  static final Map<String, String> OPTIONAL_SECRETS =
+      Map.of(
+          "app-femme-stock-client-secret", "app.femme.stock.client-secret",
+          "app-femme-stock-sso-secret", "app.femme.stock.sso.secret",
+          "app-femme-integration-token-secret", "app.femme.stock.integration.token-secret",
+          "app-femme-integration-client-secret", "app.femme.stock.integration.client-secret");
+
   /** Initial attempt plus 3 retries at 2s/4s/8s — mirrors spring.flyway.connect-retries' intent. */
   private static final int MAX_ATTEMPTS = 4;
 
@@ -57,10 +70,25 @@ public class KeyVaultSecretsEnvironmentPostProcessor implements EnvironmentPostP
 
     SecretClient secretClient = buildSecretClient(vaultUri);
     String jwtSecret = fetchWithRetry(secretClient, JWT_SECRET_NAME);
-    environment
-        .getPropertySources()
-        .addFirst(
-            new MapPropertySource("azure-key-vault", Map.of("app.femme.jwt.secret", jwtSecret)));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("app.femme.jwt.secret", jwtSecret);
+    OPTIONAL_SECRETS.forEach(
+        (secretName, property) -> {
+          String value = fetchOptional(secretClient, secretName);
+          if (value != null && !value.isBlank()) {
+            properties.put(property, value);
+          }
+        });
+    environment.getPropertySources().addFirst(new MapPropertySource("azure-key-vault", properties));
+  }
+
+  private String fetchOptional(SecretClient secretClient, String name) {
+    try {
+      return secretClient.getSecret(name).getValue();
+    } catch (RuntimeException e) {
+      log.warn("Optional Key Vault secret name={} not available: {}", name, e.toString());
+      return null;
+    }
   }
 
   SecretClient buildSecretClient(String vaultUri) {

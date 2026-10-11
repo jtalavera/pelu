@@ -13,7 +13,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { setControlledInputValue } from "../fixtures/ui";
 
 test.describe.configure({ mode: "serial" });
@@ -149,6 +149,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await expect(page.locator("#line-price-0")).toHaveValue("1.000");
     await page.locator("#pay-amount-0").fill("1000");
     await expect(page.locator("#pay-amount-0")).toHaveValue("1.000");
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText("No active fiscal stamp. Go to Settings → Timbrado to activate one.", {
@@ -214,6 +215,7 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");
     await page.locator("#pay-amount-0").fill("10000");
     await expect(page.locator("#pay-amount-0")).toHaveValue("10.000");
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText("The active fiscal stamp is not valid for today's date.", { exact: true }),
@@ -399,11 +401,14 @@ test.describe("HU-14 · Emitir comprobante", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await expect(issueBtn).toBeDisabled();
 
-    // Add item with valid price → CASH payment auto-fills → button enabled
+    // Add item with valid price → the amount auto-fills, but the payment method starts empty
+    // (issue #284) → still disabled until a method is chosen → then enabled
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
     await expect(page.locator("#line-price-0")).toHaveValue("5.000");
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
+    await expect(issueBtn).toBeDisabled();
+    await page.locator("#pay-method-0").selectOption("CASH");
     await expect(issueBtn).toBeEnabled();
   });
 

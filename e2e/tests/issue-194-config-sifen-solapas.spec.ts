@@ -41,7 +41,7 @@ test.describe("Issue #194 · Configuración → SIFEN por solapas", () => {
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("AC1 · la pantalla se organiza en las solapas 'Certificado' y 'Numeración inutilizada'", async ({
+  test("AC1 · la pantalla se organiza en las solapas 'Certificado', 'Código de seguridad (CSC)' y 'Numeración inutilizada'", async ({
     page,
   }) => {
     await loginAsDemo(page);
@@ -52,17 +52,20 @@ test.describe("Issue #194 · Configuración → SIFEN por solapas", () => {
     await expect(certTab).toBeVisible();
     await expect(voidingTab).toBeVisible();
 
-    // "Certificado" is the default active solapa: upload + list visible, voiding table hidden.
+    await expect(page.getByRole("tab", { name: "Security code (CSC)" })).toBeVisible();
+
+    // "Certificado" is the default active solapa: the (read-only) list is visible — the upload
+    // belongs to the platform's root user — and the voiding table is hidden.
     await expect(certTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
     await expect(page.getByTestId("sifen-certificate-list-section")).toBeVisible();
+    await expect(page.getByTestId("sifen-certificate-upload-section")).toHaveCount(0);
     await expect(page.getByTestId("sifen-number-voiding-section")).toBeHidden();
 
     // Switching to "Numeración inutilizada" hides the certificate content and shows the voiding one.
     await voidingTab.click();
     await expect(voidingTab).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("sifen-number-voiding-section")).toBeVisible();
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeHidden();
+    await expect(page.getByTestId("sifen-certificate-list-section")).toBeHidden();
   });
 
   test("AC1 · en 'Numeración inutilizada' el formulario de alta manual va antes de la tabla", async ({

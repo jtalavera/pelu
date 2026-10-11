@@ -120,9 +120,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
           i.status,
           i.total,
           i.issuedAt,
-          i.sifenSubmissionStatus)
+          i.sifenSubmissionStatus,
+          fs.establishment,
+          fs.expeditionPoint)
       FROM Invoice i
       LEFT JOIN i.client c
+      LEFT JOIN i.fiscalStamp fs
       WHERE i.tenant.id = :tenantId
       AND (:fromDate IS NULL OR i.issuedAt >= :fromDate)
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)

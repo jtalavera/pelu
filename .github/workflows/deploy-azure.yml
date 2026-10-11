@@ -166,6 +166,9 @@ jobs:
           # *variable* (not a secret — it's a public ingestion endpoint), set from
           # `terraform output -raw app_insights_connection_string`; unset → telemetry stays off.
           VITE_APPINSIGHTS_CONNECTION_STRING: ${{ vars.VITE_APPINSIGHTS_CONNECTION_STRING }}
+          # Stock integration (HU-65): the Stock SPA origin for this environment — a GitHub
+          # Environment *variable*; unset → the "Stock" menu item stays hidden.
+          VITE_STOCK_SPA_URL: ${{ vars.VITE_STOCK_SPA_URL }}
         run: npm ci && npm run build
 
       # Avoid Azure/static-web-apps-deploy@v1: it runs as a Docker action FROM

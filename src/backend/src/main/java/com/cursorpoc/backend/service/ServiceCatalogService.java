@@ -4,10 +4,12 @@ import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
 import com.cursorpoc.backend.domain.Tax;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.stock.CatalogStockEvent;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryResponse;
 import com.cursorpoc.backend.web.dto.ServiceCategoryUpsertRequest;
@@ -20,6 +22,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -28,7 +32,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-public class ServiceCatalogService {
+public class ServiceCatalogService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-62): product changes publish {@code CatalogStockEvent}s. Defaults to a
+   * no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private static final Set<String> ALLOWED_CATEGORY_ACCENTS =
       Set.of(
@@ -58,8 +73,15 @@ public class ServiceCatalogService {
   }
 
   public List<ServiceCategoryResponse> listCategories(long tenantId, Boolean active) {
+    return listCategories(tenantId, active, null);
+  }
+
+  /** Catalog split: optionally restricted to the categories of one kind (SERVICE / PRODUCT). */
+  public List<ServiceCategoryResponse> listCategories(long tenantId, Boolean active, String kind) {
+    ServiceKind kindFilter = kind == null || kind.isBlank() ? null : parseKind(kind);
     return serviceCategoryRepository.findByTenant_IdOrderByNameAsc(tenantId).stream()
         .filter(c -> active == null || c.isActive() == active)
+        .filter(c -> kindFilter == null || c.getKind() == kindFilter)
         .map(ServiceCatalogService::toCategoryResponse)
         .toList();
   }
@@ -73,6 +95,7 @@ public class ServiceCatalogService {
     c.setName(request.name().trim());
     c.setActive(true);
     c.setAccentKey(normalizeAccent(request.accentKey()));
+    c.setKind(parseKind(request.kind()));
     serviceCategoryRepository.save(c);
     return toCategoryResponse(c);
   }
@@ -81,12 +104,43 @@ public class ServiceCatalogService {
   public ServiceCategoryResponse updateCategory(
       long tenantId, long categoryId, ServiceCategoryUpsertRequest request) {
     ServiceCategory c = loadCategoryOrThrow(tenantId, categoryId);
+    if (request.kind() != null
+        && !request.kind().isBlank()
+        && parseKind(request.kind()) != c.getKind()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_KIND_IMMUTABLE");
+    }
+    String previousName = c.getName();
     c.setName(request.name().trim());
     if (request.accentKey() != null) {
       c.setAccentKey(normalizeAccent(request.accentKey()));
     }
     serviceCategoryRepository.save(c);
+    publishCategoryRenameToStock(tenantId, c, previousName);
     return toCategoryResponse(c);
+  }
+
+  /**
+   * Issue #284: products travel to Stock with the NAME of their Pelu category (Stock keeps its own
+   * category table), so renaming a product category must re-send that category's products — the
+   * individual item events only fire when the product itself is edited.
+   */
+  private void publishCategoryRenameToStock(
+      long tenantId, ServiceCategory category, String previousName) {
+    if (category.getKind() != ServiceKind.PRODUCT
+        || previousName == null
+        || previousName.equals(category.getName())) {
+      return;
+    }
+    int affected =
+        (int)
+            salonServiceRepository.findProductsByTenantId(tenantId).stream()
+                .filter(
+                    p ->
+                        p.getCategory() != null && category.getId().equals(p.getCategory().getId()))
+                .count();
+    if (affected > 0) {
+      events.publishEvent(CatalogStockEvent.imported(tenantId, affected));
+    }
   }
 
   @Transactional
@@ -106,10 +160,18 @@ public class ServiceCatalogService {
   }
 
   public List<ServiceResponse> listServices(long tenantId, Optional<Long> categoryId, String q) {
+    return listServices(tenantId, categoryId, q, null);
+  }
+
+  /** Catalog split: same as above, optionally restricted to one kind (SERVICE / PRODUCT). */
+  public List<ServiceResponse> listServices(
+      long tenantId, Optional<Long> categoryId, String q, String kind) {
+    ServiceKind kindFilter = kind == null || kind.isBlank() ? null : parseKind(kind);
     String qNorm = q == null ? "" : q.trim();
     String qLower = qNorm.toLowerCase(Locale.ROOT);
 
     return salonServiceRepository.findByTenant_IdOrderByNameAsc(tenantId).stream()
+        .filter(s -> kindFilter == null || s.getKind() == kindFilter)
         .filter(
             s -> categoryId.isEmpty() || Objects.equals(s.getCategory().getId(), categoryId.get()))
         .filter(
@@ -131,11 +193,25 @@ public class ServiceCatalogService {
   @Transactional(readOnly = true)
   public PageResponse<ServiceResponse> listServicesPaged(
       long tenantId, Optional<Long> categoryId, String q, Boolean active, int page, int size) {
+    return listServicesPaged(tenantId, categoryId, q, active, null, page, size);
+  }
+
+  /** HU-59: same as above, optionally filtered by kind (SERVICE / PRODUCT). */
+  @Transactional(readOnly = true)
+  public PageResponse<ServiceResponse> listServicesPaged(
+      long tenantId,
+      Optional<Long> categoryId,
+      String q,
+      Boolean active,
+      String kind,
+      int page,
+      int size) {
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
+    ServiceKind kindFilter = kind == null || kind.isBlank() ? null : parseKind(kind);
     PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<SalonService> result =
         salonServiceRepository.findByTenantFilteredPaged(
-            tenantId, categoryId.orElse(null), active, qTrimmed, pageable);
+            tenantId, categoryId.orElse(null), active, kindFilter, qTrimmed, pageable);
     List<ServiceResponse> content =
         result.getContent().stream()
             .map(ServiceCatalogService::toServiceResponse)
@@ -156,6 +232,7 @@ public class ServiceCatalogService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
     Tax tax = request.taxId() != null ? loadTaxOrThrow(tenantId, request.taxId()) : null;
+    ServiceKind kind = resolveItemKind(request.kind(), category, null);
     SalonService s = new SalonService();
     s.setTenant(tenant);
     s.setCategory(category);
@@ -163,8 +240,11 @@ public class ServiceCatalogService {
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
+    s.setKind(kind);
+    s.setSku(normalizeSku(request.sku()));
     s.setActive(true);
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, false));
     return toServiceResponse(s);
   }
 
@@ -177,12 +257,17 @@ public class ServiceCatalogService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_INACTIVE");
     }
     Tax tax = request.taxId() != null ? loadTaxOrThrow(tenantId, request.taxId()) : null;
+    ServiceKind kind = resolveItemKind(request.kind(), category, s.getKind());
     s.setCategory(category);
     s.setTax(tax);
     s.setName(request.name().trim());
     s.setPriceMinor(request.priceMinor());
     s.setDurationMinutes(request.durationMinutes());
+    boolean wasProduct = s.isProduct();
+    s.setKind(kind);
+    s.setSku(normalizeSku(request.sku()));
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, wasProduct));
     return toServiceResponse(s);
   }
 
@@ -191,6 +276,7 @@ public class ServiceCatalogService {
     SalonService s = loadServiceOrThrow(tenantId, serviceId);
     s.setActive(false);
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, s.isProduct()));
     return toServiceResponse(s);
   }
 
@@ -203,7 +289,52 @@ public class ServiceCatalogService {
     }
     s.setActive(true);
     salonServiceRepository.save(s);
+    events.publishEvent(CatalogStockEvent.itemChanged(s, s.isProduct()));
     return toServiceResponse(s);
+  }
+
+  /**
+   * Catalog split: an item's kind is the kind of its category. An explicit {@code requested} kind
+   * (or, when none is sent, the item's {@code current} kind) must match; a new item without kind
+   * simply inherits the category's.
+   */
+  private static ServiceKind resolveItemKind(
+      String requested, ServiceCategory category, ServiceKind current) {
+    ServiceKind kind;
+    if (requested != null && !requested.isBlank()) {
+      kind = parseKind(requested);
+    } else if (current != null) {
+      kind = current;
+    } else {
+      kind = category.getKind();
+    }
+    if (kind != category.getKind()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CATEGORY_KIND_MISMATCH");
+    }
+    return kind;
+  }
+
+  /** HU-59: null/blank → SERVICE; anything but SERVICE/PRODUCT → 400 INVALID_SERVICE_KIND. */
+  static ServiceKind parseKind(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return ServiceKind.SERVICE;
+    }
+    try {
+      return ServiceKind.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_SERVICE_KIND");
+    }
+  }
+
+  private static String normalizeSku(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    String sku = raw.trim();
+    if (sku.length() > 64) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_SKU");
+    }
+    return sku;
   }
 
   private Tenant loadTenantOrThrow(long tenantId) {
@@ -231,7 +362,12 @@ public class ServiceCatalogService {
   }
 
   private static ServiceCategoryResponse toCategoryResponse(ServiceCategory c) {
-    return new ServiceCategoryResponse(c.getId(), c.getName(), c.isActive(), c.getAccentKey());
+    return new ServiceCategoryResponse(
+        c.getId(),
+        c.getName(),
+        c.isActive(),
+        c.getAccentKey(),
+        c.getKind() != null ? c.getKind().name() : ServiceKind.SERVICE.name());
   }
 
   private static ServiceResponse toServiceResponse(SalonService s) {
@@ -247,7 +383,9 @@ public class ServiceCatalogService {
         s.getName(),
         s.getPriceMinor(),
         s.getDurationMinutes(),
-        s.isActive());
+        s.isActive(),
+        s.getKind() != null ? s.getKind().name() : ServiceKind.SERVICE.name(),
+        s.getSku());
   }
 
   private static String normalizeAccent(String raw) {

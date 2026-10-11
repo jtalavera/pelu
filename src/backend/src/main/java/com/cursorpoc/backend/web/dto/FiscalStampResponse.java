@@ -6,9 +6,11 @@ public record FiscalStampResponse(
     long id,
     String stampNumber,
     LocalDate validFrom,
+    /** {@code null} when the stamp has no end of validity (issue #290). */
     LocalDate validUntil,
     int rangeFrom,
-    int rangeTo,
+    /** {@code null} when the stamp has no upper number (issue #290). */
+    Integer rangeTo,
     int nextEmissionNumber,
     boolean active,
     boolean lockedAfterInvoice,

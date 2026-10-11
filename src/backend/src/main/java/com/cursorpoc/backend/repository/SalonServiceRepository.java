@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.repository;
 
 import com.cursorpoc.backend.domain.SalonService;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -33,6 +34,7 @@ public interface SalonServiceRepository extends JpaRepository<SalonService, Long
           WHERE s.tenant.id = :tenantId
           AND (:categoryId IS NULL OR c.id = :categoryId)
           AND (:active IS NULL OR s.active = :active)
+          AND (:kind IS NULL OR s.kind = :kind)
           AND (:q IS NULL
                OR LOWER(s.name) LIKE LOWER(CONCAT('%', :q, '%'))
                OR LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')))
@@ -45,6 +47,7 @@ public interface SalonServiceRepository extends JpaRepository<SalonService, Long
           WHERE s.tenant.id = :tenantId
           AND (:categoryId IS NULL OR c.id = :categoryId)
           AND (:active IS NULL OR s.active = :active)
+          AND (:kind IS NULL OR s.kind = :kind)
           AND (:q IS NULL
                OR LOWER(s.name) LIKE LOWER(CONCAT('%', :q, '%'))
                OR LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')))
@@ -53,8 +56,29 @@ public interface SalonServiceRepository extends JpaRepository<SalonService, Long
       @Param("tenantId") Long tenantId,
       @Param("categoryId") Long categoryId,
       @Param("active") Boolean active,
+      @Param("kind") ServiceKind kind,
       @Param("q") String q,
       Pageable pageable);
+
+  /** HU-62: every PRODUCT of a tenant (active or not) for a full catalog sync to control-stock. */
+  @Query(
+      """
+      SELECT s FROM SalonService s
+      JOIN FETCH s.category c
+      WHERE s.tenant.id = :tenantId
+      AND s.kind = com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT
+      ORDER BY s.id ASC
+      """)
+  List<SalonService> findProductsByTenantId(@Param("tenantId") Long tenantId);
+
+  @Query(
+      """
+      SELECT s FROM SalonService s
+      JOIN FETCH s.category c
+      WHERE s.tenant.id = :tenantId AND s.id IN :ids
+      """)
+  List<SalonService> findByTenantIdAndIdIn(
+      @Param("tenantId") Long tenantId, @Param("ids") java.util.Collection<Long> ids);
 
   Optional<SalonService> findByIdAndTenant_Id(Long id, Long tenantId);
 

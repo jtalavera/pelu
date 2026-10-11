@@ -62,6 +62,34 @@ class KeyVaultSecretsEnvironmentPostProcessorTest {
     assertThat(env.getPropertySources().iterator().next().getName()).isEqualTo("azure-key-vault");
   }
 
+  /** Stock integration: optional secrets are applied when present and skipped when absent. */
+  @Test
+  void postProcessEnvironment_optionalStockSecrets_appliedWhenPresentSkippedWhenMissing() {
+    StandardEnvironment env =
+        envWith(
+            Map.of(
+                "app.femme.keyvault.enabled",
+                "true",
+                "app.femme.keyvault.uri",
+                "https://fake.vault.azure.net"));
+    SecretClient mockClient = mock(SecretClient.class);
+    when(mockClient.getSecret("app-femme-jwt-secret"))
+        .thenReturn(
+            new KeyVaultSecret("app-femme-jwt-secret", "kv-resolved-secret-min-32-characters!!"));
+    when(mockClient.getSecret("app-femme-stock-sso-secret"))
+        .thenReturn(new KeyVaultSecret("app-femme-stock-sso-secret", "sso-secret-value"));
+    when(mockClient.getSecret("app-femme-stock-client-secret"))
+        .thenThrow(new RuntimeException("SecretNotFound"));
+    var processor = testableProcessor(mockClient);
+
+    processor.postProcessEnvironment(env, null);
+
+    assertThat(env.getProperty("app.femme.stock.sso.secret")).isEqualTo("sso-secret-value");
+    assertThat(env.getProperty("app.femme.stock.client-secret")).isNull();
+    assertThat(env.getProperty("app.femme.jwt.secret"))
+        .isEqualTo("kv-resolved-secret-min-32-characters!!");
+  }
+
   @Test
   void postProcessEnvironment_keyVaultConsistentlyUnreachable_retriesThenFailsBoot() {
     StandardEnvironment env =

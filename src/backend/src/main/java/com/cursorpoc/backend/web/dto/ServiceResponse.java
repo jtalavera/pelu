@@ -13,4 +13,6 @@ public record ServiceResponse(
     String name,
     BigDecimal priceMinor,
     int durationMinutes,
-    boolean active) {}
+    boolean active,
+    String kind,
+    String sku) {}

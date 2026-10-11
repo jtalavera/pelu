@@ -11,6 +11,9 @@ import { useMe } from "../hooks/useMe";
 import { UserProfileModal } from "../components/UserProfileModal";
 import { useTourContext } from "../tour/TourContext";
 import { TourJoyride } from "../tour/TourJoyride";
+import { translateApiError } from "../api/parseApiErrorMessage";
+import { onBroadcastLogout } from "../auth/sessionBroadcast";
+import { openStockInNewTab, stockSpaBaseUrl } from "../stock/openStock";
 
 function getInitials(email: string): string {
   const parts = email.split("@")[0].split(/[._-]/);
@@ -120,6 +123,13 @@ const ServicesIcon = () => (
   </svg>
 );
 
+const ProductsIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" />
+    <path d="M16 10a4 4 0 0 1-8 0" />
+  </svg>
+);
+
 const ProfessionalsIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
@@ -161,6 +171,85 @@ const SettingsIcon = () => (
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
+
+const StockIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+);
+
+/**
+ * HU-65: "Stock" opens control-stock in a new tab, already signed in, with the same theme and
+ * language. A button (not a NavLink): it never navigates this tab.
+ */
+function StockNavButton({ theme, lang }: { theme: "light" | "dark"; lang: string }) {
+  const { t } = useTranslation();
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onClick() {
+    setError(null);
+    setOpening(true);
+    try {
+      await openStockInNewTab({ theme, lang });
+    } catch (e) {
+      setError(translateApiError(e, t, "femme.stock.openError"));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  return (
+    <div data-tour="nav-stock">
+      <button
+        type="button"
+        data-testid="nav-stock"
+        onClick={() => void onClick()}
+        disabled={opening}
+        aria-label={t("femme.nav.stockAria")}
+        title={t("femme.nav.stockAria")}
+        style={{
+          padding: "8px 10px",
+          minHeight: 32,
+          borderRadius: "var(--radius-md)",
+          fontSize: 12,
+          color: "var(--color-ink-2)",
+          background: "transparent",
+          border: "none",
+          cursor: opening ? "progress" : "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 9,
+          width: "100%",
+          textAlign: "left",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--color-stone)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+        }}
+      >
+        <StockIcon />
+        <span style={{ flex: 1 }}>{t("femme.nav.stock")}</span>
+        <span aria-hidden="true" style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
+          ↗
+        </span>
+      </button>
+      {error && (
+        <p
+          role="alert"
+          data-testid="nav-stock-error"
+          className="text-red-600 dark:text-red-400"
+          style={{ fontSize: 11, padding: "2px 10px" }}
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const BellIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -218,6 +307,9 @@ function AppShellInner() {
   const { me } = useMe();
   const { theme, toggle } = useThemeContext();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  // HU-65: the first sidebar item driven by a flag — only when the tenant has Stock and this build
+  // knows where the Stock SPA lives.
+  const stockEnabled = useFeatureFlag("STOCK_MODULE") && stockSpaBaseUrl() !== "";
   const { clearTour, startTour, tourKey, seenVersion, hasSeenTour } = useTourContext();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -225,6 +317,9 @@ function AppShellInner() {
   const [profileModalTab, setProfileModalTab] = useState<"profile" | "password">("profile");
   useSessionRefresh(true, () => logout("expired"));
   useIdleLogout(true, () => logout("idle"));
+
+  // HU-65: signing out of Stock signs out of Femme too (broadcast by /login?reason=stock_logout).
+  useEffect(() => onBroadcastLogout(() => logout("stock_logout")), []);
 
   useEffect(() => {
     return () => {
@@ -248,7 +343,7 @@ function AppShellInner() {
 
   const currentLang: SupportedLanguage = i18n.resolvedLanguage?.startsWith("es") ? "es" : "en";
 
-  function logout(reason?: "idle" | "expired") {
+  function logout(reason?: "idle" | "expired" | "stock_logout") {
     sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     navigate("/login", { replace: true, state: reason ? { reason } : undefined });
   }
@@ -668,10 +763,19 @@ function AppShellInner() {
           />
         )}
 
+        {/* HU-65: outside the block hidden from professionals — they use Stock as operators. */}
+        {stockEnabled && (
+          <StockNavButton
+            theme={theme === "dark" ? "dark" : "light"}
+            lang={i18n.resolvedLanguage?.startsWith("es") ? "es" : "en"}
+          />
+        )}
+
         {!isProfessional && (
           <>
             <SectionLabel label={t("femme.nav.sectionManagement")} />
             <SideNavItem to="/app/services" label={t("femme.nav.services")} icon={<ServicesIcon />} tourId="nav-services" />
+            <SideNavItem to="/app/products" label={t("femme.nav.products")} icon={<ProductsIcon />} tourId="nav-products" />
             <SideNavItem
               to="/app/professionals"
               label={t("femme.nav.professionals")}

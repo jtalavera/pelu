@@ -19,6 +19,14 @@ public interface TenantRepository extends JpaRepository<Tenant, Long> {
   // listing's per-tier count and the delete-in-use protection.
   long countByTierId(Long tierId);
 
+  /** Stock integration (HU-61): every tenant affected by a tier-level flag change. */
+  @Query("SELECT t.id FROM Tenant t WHERE t.tier.id = :tierId")
+  java.util.List<Long> findIdsByTierId(@Param("tierId") Long tierId);
+
+  /** Stock integration (HU-61): every tenant affected by a global flag change. */
+  @Query("SELECT t.id FROM Tenant t")
+  java.util.List<Long> findAllIds();
+
   // HU-39 AC-2: search matches name or domain (case-insensitive, partial). A blank/null q leaves
   // every tenant in scope — same "empty filter" convention as
   // ClientRepository#findByTenantFilteredPaged.

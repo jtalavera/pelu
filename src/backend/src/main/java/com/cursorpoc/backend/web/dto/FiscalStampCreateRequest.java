@@ -7,9 +7,11 @@ import java.time.LocalDate;
 public record FiscalStampCreateRequest(
     @NotBlank String stampNumber,
     @NotNull LocalDate validFrom,
-    @NotNull LocalDate validUntil,
+    /** Optional (issue #290): electronic invoicing does not require an end of validity. */
+    LocalDate validUntil,
     @NotNull Integer rangeFrom,
-    @NotNull Integer rangeTo,
+    /** Optional (issue #290): electronic invoicing does not require an upper number. */
+    Integer rangeTo,
     @NotNull Integer initialEmissionNumber,
     /** SIFEN C005/dEst — SIFEN HU-02 AC-02. Optional: defaults to 1 ("001"). */
     Integer establishment,

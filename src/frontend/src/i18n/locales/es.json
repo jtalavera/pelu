@@ -89,7 +89,8 @@
       "errorNetwork": "Error de red. Comprobá que la API esté en ejecución.",
       "forgotPassword": "¿Olvidaste tu contraseña?",
       "sessionExpired": "Tu sesión expiró por inactividad. Iniciá sesión nuevamente.",
-      "sessionRefreshExpired": "Tu sesión expiró. Iniciá sesión nuevamente."
+      "sessionRefreshExpired": "Tu sesión expiró. Iniciá sesión nuevamente.",
+      "stockLogout": "Cerraste sesión en Stock, así que también se cerró tu sesión en Femme."
     },
     "forgot": {
       "title": "Restablecer contraseña",
@@ -104,6 +105,7 @@
       "calendar": "Calendario",
       "dashboards": "Dashboards",
       "services": "Servicios",
+      "products": "Productos",
       "professionals": "Profesionales",
       "clients": "Clientes",
       "billing": "Facturación",
@@ -117,7 +119,9 @@
       "professionalRole": "Profesional",
       "sectionMain": "Principal",
       "sectionManagement": "Gestión",
-      "sectionFinance": "Finanzas"
+      "sectionFinance": "Finanzas",
+      "stock": "Stock",
+      "stockAria": "Abrir Stock en una pestaña nueva"
     },
     "activate": {
       "title": "Establecer contraseña",
@@ -165,6 +169,24 @@
     },
     "platform": {
       "brandSuffix": "Plataforma",
+      "sifen": {
+        "title": "Credenciales SIFEN",
+        "titleFor": "Credenciales SIFEN — {{name}}",
+        "lead": "Solo la plataforma carga el certificado y el código de seguridad (CSC) de SIFEN de un negocio. El administrador del negocio puede verlos pero no cambiarlos.",
+        "back": "← Volver a salones",
+        "loading": "Cargando…",
+        "loadError": "No se pudo cargar este negocio.",
+        "notFound": "Ese negocio no existe.",
+        "dialogLead": "El certificado digital y el código de seguridad (CSC) de SIFEN de este negocio los carga la plataforma desde acá, no el negocio.",
+        "dialogLink": "Gestionar certificado y CSC de SIFEN",
+        "summaryTitle": "Resumen del negocio",
+        "summaryName": "Negocio",
+        "summaryEnvironment": "Ambiente SIFEN",
+        "envTest": "Pruebas (TEST)",
+        "envProduction": "Producción",
+        "sectionCertificateLead": "Certificado digital con el que el sistema firma los comprobantes de este negocio.",
+        "sectionCscLead": "Código que la DNIT entregó a este negocio para firmar el QR de sus comprobantes."
+      },
       "loading": "Cargando…",
       "navLabel": "Navegación de plataforma",
       "nav": {
@@ -173,12 +195,17 @@
         "tiers": "Tiers",
         "globalFeatureFlags": "Funcionalidades Globales",
         "featureFlags": "Funcionalidades Tenants",
-        "import": "Importación de datos"
+        "import": "Importación de datos",
+        "stock": "Integración con Stock",
+        "audit": "Auditoría"
       },
       "dashboard": {
         "title": "Platform Admin",
         "welcome": "Bienvenido, {{email}}.",
-        "comingSoon": "La gestión de tenants, usuarios, tiers y feature flags estará disponible próximamente."
+        "comingSoon": "La gestión de tenants, usuarios, tiers y feature flags estará disponible próximamente.",
+        "stockTitle": "Integración con Stock",
+        "stockFailed": "Envíos a Stock fallidos: {{count}}.",
+        "stockLink": "Abrir el panel de integración"
       },
       "tenants": {
         "title": "Tenants",
@@ -265,6 +292,15 @@
           "resendInvitationSuccess": "Se reenvió la invitación de activación a {{email}}.",
           "resendPasswordResetSuccess": "Se envió un correo de restablecimiento de contraseña a {{email}}.",
           "resendError": "No se pudo reenviar la invitación."
+        },
+        "stock": {
+          "title": "Stock",
+          "lastCatalogSync": "Última sincronización del catálogo: {{date}}",
+          "never": "nunca",
+          "syncCatalog": "Sincronizar catálogo con Stock",
+          "syncing": "Solicitando…",
+          "syncRequested": "Sincronización solicitada. Los productos aparecerán en Stock en unos segundos.",
+          "failedEvents": "{{count}} envío(s) a Stock fallido(s) — revisá el panel de integración."
         }
       },
       "tiers": {
@@ -356,7 +392,9 @@
           "email": "Dirección de correo electrónico.",
           "ruc": "RUC (identificación tributaria).",
           "documento_identidad": "Número de documento de identidad (p. ej. cédula), para clientes sin RUC.",
-          "direccion": "Dirección."
+          "direccion": "Dirección.",
+          "tipo": "Servicio o Producto. Si se deja vacío, es Servicio. Solo los productos se envían a Stock.",
+          "sku": "Código de producto opcional (hasta 64 caracteres), visible en Stock."
         },
         "checkSectionTitle": "Verificar encabezados de un archivo",
         "checkSectionLead": "Verificá los encabezados de columna de un archivo candidato contra esta plantilla antes de usarlo, sin importar ningún dato.",
@@ -389,6 +427,75 @@
         "colReason": "Motivo",
         "statusImported": "Importada",
         "statusFailed": "Fallida"
+      },
+      "stock": {
+        "title": "Integración con Stock",
+        "lead": "Envíos de Femme a Stock pendientes o fallidos. Un envío fallido frena los siguientes de ese salón hasta que se reintente o se descarte.",
+        "filterTenant": "Salón",
+        "filterStatus": "Estado",
+        "statusAll": "Todos",
+        "statusOpen": "Pendientes o fallidos",
+        "refresh": "Actualizar",
+        "empty": "No hay nada pendiente: todos los envíos llegaron a Stock.",
+        "colTenant": "Salón",
+        "colType": "Tipo",
+        "colStatus": "Estado",
+        "colAttempts": "Intentos",
+        "colLastError": "Último error",
+        "colCreated": "Creado",
+        "colNextAttempt": "Próximo intento",
+        "retry": "Reintentar",
+        "retryNow": "Reintentar ahora",
+        "discard": "Descartar",
+        "details": "Detalle",
+        "hideDetails": "Ocultar detalle",
+        "historyTitle": "Qué pasó con el envío #{{id}}",
+        "historyEmpty": "No se registró historial de este envío (se creó antes de que existiera el historial).",
+        "waitingBehind": "Esperando al envío #{{id}} de este salón: los envíos salen en orden.",
+        "nextAttemptAt": "Próximo intento: {{at}}",
+        "technicalDetail": "Detalle técnico: {{detail}}",
+        "msg": {
+          "ENQUEUED": "Quedó en cola para enviarse a Stock.",
+          "ATTEMPT_STARTED": "Intento {{attempt}} de {{maxAttempts}}: enviando a Stock.",
+          "LEASE_EXPIRED_RECLAIMED": "El intento anterior se cortó sin dar resultado (la aplicación se reinició o se interrumpió). Se vuelve a intentar.",
+          "ATTEMPT_RELEASED": "El intento se canceló antes de terminar (la aplicación se estaba apagando). Se enviará de nuevo.",
+          "DELIVERED": "Entregado a Stock en el intento {{attempt}}.",
+          "DELIVERED_CATALOG": "Entregado a Stock en el intento {{attempt}}: {{items}} ítem(s) en {{batches}} lote(s).",
+          "ATTEMPT_FAILED_RETRY_SCHEDULED": "El intento {{attempt}} de {{maxAttempts}} falló: {{reason}}. Femme volverá a intentar el {{nextAttemptAt}}.",
+          "ATTEMPT_FAILED_NO_MORE_RETRIES": "El intento {{attempt}} de {{maxAttempts}} falló: {{reason}}. No quedan intentos, así que el envío pasó a Fallido y frena los siguientes de este salón hasta que se reintente o se descarte.",
+          "ATTEMPT_FAILED_NOT_RETRYABLE": "El intento {{attempt}} falló: {{reason}}. Reintentar solo no ayudaría, así que el envío pasó a Fallido y frena los siguientes de este salón hasta que se reintente o se descarte.",
+          "RETRY_REQUESTED_NOW": "Un administrador de la plataforma pidió reintentar ya, sin esperar.",
+          "RETRY_REQUESTED_AFTER_FAILURE": "Un administrador de la plataforma reintentó el envío fallido. Los intentos empiezan de cero.",
+          "DISCARDED_MANUALLY": "Un administrador de la plataforma descartó este envío. No se envió a Stock.",
+          "SUPERSEDED": "Reemplazado por una sincronización de catálogo completo más nueva (envío #{{byEventId}}), así que este ya no hacía falta."
+        },
+        "reason": {
+          "TIMEOUT": "Stock no respondió a tiempo (puede haber aplicado el cambio igual; volver a enviarlo es seguro)",
+          "UNREACHABLE": "no se pudo conectar con Stock",
+          "SERVER_ERROR": "Stock tuvo un error interno",
+          "AUTH": "Stock rechazó las credenciales de Femme",
+          "THROTTLED": "Stock le pidió a Femme que vaya más despacio",
+          "NOT_FOUND": "Stock no encontró el salón o el ítem",
+          "REJECTED": "Stock rechazó los datos enviados",
+          "NOT_CONFIGURED": "la integración con Stock no está configurada en Femme",
+          "UNEXPECTED": "error inesperado dentro de Femme",
+          "UNKNOWN": "error desconocido"
+        },
+        "status": {
+          "PENDING": "Pendiente",
+          "PROCESSING": "Procesando",
+          "FAILED": "Fallido",
+          "DONE": "Entregado",
+          "DISCARDED": "Descartado"
+        },
+        "type": {
+          "TENANT_UPSERT": "Datos del salón",
+          "FEATURE_FLAGS_SYNC": "Flags",
+          "CATALOG_UPSERT": "Producto",
+          "CATALOG_FULL_SYNC": "Catálogo completo",
+          "SALE": "Venta",
+          "REVERSE": "Reversión"
+        }
       }
     },
     "dashboard": {
@@ -440,14 +547,15 @@
       "inactiveClientsColInactivity": "Días de inactividad",
       "inactiveClientsDaysValue": "{{days}} días",
       "inactiveClientsNeverVisited": "Nunca visitó",
-      "revenueTrendTitle": "Tendencia de facturación",
+      "revenueTrendTitle": "Facturación",
       "revenueTrendSubtitle": "Facturación de los últimos {{days}} días",
       "revenueTrendEmpty": "Todavía no hay facturación en este período",
-      "revenueTrendLine": "Tendencia",
-      "topServicesTitle": "Servicios más vendidos",
+      "revenueTrendLine": "Promedio de {{days}} días",
+      "revenueTrendZeroDay": "Sin facturación",
+      "topServicesTitle": "Servicios más facturados",
       "topServicesSubtitle": "Servicios con mayor facturación en los últimos {{days}} días (no incluye ítems personalizados sin un servicio de catálogo vinculado)",
       "topServicesEmpty": "Todavía no hay servicios facturados en este período",
-      "paymentMethodMixTitle": "Mezcla de medios de pago",
+      "paymentMethodMixTitle": "Medios de pago",
       "paymentMethodMixSubtitle": "Facturación por medio de pago en los últimos {{days}} días",
       "paymentMethodMixEmpty": "Todavía no hay pagos registrados en este período",
       "appointmentsByDayOfWeekTitle": "Turnos por día de semana",
@@ -501,18 +609,58 @@
       "tabFiscalStamp": "Timbrado",
       "tabTaxes": "Impuestos",
       "tabFeatureFlags": "Funcionalidades",
-      "tabSifen": "SIFEN"
+      "tabSifen": "SIFEN",
+      "tabAudit": "Auditoría"
     },
     "sifenSettings": {
       "tablistLabel": "Secciones de configuración SIFEN",
       "tab": {
         "certificate": "Certificado",
+        "csc": "Código de seguridad (CSC)",
         "numberVoiding": "Numeración inutilizada"
       }
     },
+    "sifenCsc": {
+      "errorTitle": "Error",
+      "loadError": "No se pudieron cargar los códigos de seguridad.",
+      "saveError": "No se pudo guardar el código de seguridad. Revisá los datos e intentá de nuevo.",
+      "readOnlyTitle": "Lo carga la plataforma",
+      "readOnlyBody": "El código de seguridad (CSC) que la DNIT entregó a tu negocio lo carga y rota el equipo de soporte de la plataforma. Acá podés ver qué IdCSC está cargado y cuál está activo; el código en sí nunca se muestra. Para cambiarlo, contactá a soporte.",
+      "emptyReadOnly": "Todavía no se cargó ningún código de seguridad para tu negocio. Contactá a soporte para que lo carguen.",
+      "missingProductionBodyReadOnly": "Este negocio no tiene un CSC cargado. En producción no se pueden firmar facturas electrónicas sin el CSC que te entregó la DNIT. Contactá a soporte para que lo carguen.",
+      "testFallbackBodyReadOnly": "Este negocio no tiene un CSC cargado, así que las facturas usan el CSC de prueba público de la SET. Antes de pasar a producción, soporte cargará el CSC que te entregó la DNIT.",
+      "formTitle": "Cargar un código de seguridad (CSC)",
+      "lead": "La DNIT entrega a cada contribuyente su propio Código de Seguridad del Contribuyente (CSC) y lo usa para validar el código QR de cada factura. Ingresá el IdCSC y el CSC que asignó a este negocio.",
+      "idLabel": "IdCSC (asignado por la DNIT)",
+      "cscLabel": "CSC (32 caracteres)",
+      "secretNote": "El CSC es un secreto: se guarda cifrado y no se puede volver a ver después de guardarlo, solo reemplazar.",
+      "idHint": "Número que la DNIT asignó al código, de 1 a 9999 (ej.: 1, se imprime como 0001).",
+      "cscHint": "32 letras o dígitos, sin espacios (ej.: A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6).",
+      "idInvalid": "El IdCSC debe ser un número entero entre 1 y 9999 (ej.: 1).",
+      "cscInvalid": "El CSC debe tener exactamente 32 letras o dígitos, sin espacios ni símbolos (ej.: A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6).",
+      "save": "Guardar código de seguridad",
+      "saving": "Guardando…",
+      "savedTitle": "Código de seguridad guardado",
+      "savedBody": "Se guardó el IdCSC {{idCsc}}. Las facturas se firman con el código activo.",
+      "replacedBody": "Se reemplazó el CSC del IdCSC {{idCsc}}. Las facturas se firman con el código activo.",
+      "listTitle": "Códigos de seguridad cargados",
+      "empty": "Todavía no cargaste ningún código de seguridad.",
+      "colId": "IdCSC",
+      "colStatus": "Estado",
+      "colUpdated": "Última actualización",
+      "activate": "Usar este código",
+      "activating": "Activando…",
+      "missingProductionTitle": "Falta el código de seguridad",
+      "missingProductionBody": "Este negocio no tiene un CSC cargado. En producción no se pueden firmar facturas electrónicas sin el CSC que la DNIT entregó a este negocio. Cargalo abajo.",
+      "testFallbackTitle": "Se usa el código de seguridad de prueba",
+      "testFallbackBody": "Este negocio no tiene un CSC cargado, así que las facturas usan el CSC de prueba público de la SET. Antes de pasar a producción, cargá el CSC que la DNIT entregó a este negocio."
+    },
     "sifenCertificates": {
       "title": "Certificados SIFEN",
-      "forbidden": "Solo el administrador del negocio puede gestionar los certificados de SIFEN.",
+      "forbidden": "Solo el administrador del negocio puede ver la configuración de SIFEN.",
+      "readOnlyTitle": "Lo carga la plataforma",
+      "readOnlyBody": "El certificado digital lo carga y renueva el equipo de soporte de la plataforma en tu nombre. Acá podés ver qué certificados están cargados y si están vigentes. Para cambiarlo, contactá a soporte.",
+      "emptyReadOnly": "Todavía no se cargó ningún certificado para tu negocio. Contactá a soporte para que lo carguen.",
       "featureDisabled": "La facturación electrónica (SIFEN) no está habilitada para tu negocio.",
       "loading": "Cargando…",
       "loadError": "No se pudieron cargar los certificados.",
@@ -520,7 +668,7 @@
       "savedTitle": "Certificado cargado",
       "savedBody": "El certificado se cargó y almacenó de forma segura.",
       "uploadTitle": "Cargar nuevo certificado y clave",
-      "uploadLead": "Cargá el archivo .p12 provisto por tu entidad certificadora y la contraseña que lo protege, para que el sistema pueda firmar documentos y conectarse con SIFEN en tu nombre.",
+      "uploadLead": "Cargá el archivo .p12 emitido a este negocio por su entidad certificadora y la contraseña que lo protege, para que el sistema pueda firmar documentos y conectarse con SIFEN en su nombre.",
       "fileLabel": "Archivo del certificado (.p12)",
       "fileRequired": "Elegí un archivo .p12.",
       "passwordLabel": "Contraseña del archivo",
@@ -537,7 +685,9 @@
       "colStatus": "Estado",
       "statusValid": "Vigente",
       "statusExpired": "Expirado",
-      "statusNotYetValid": "No vigente aún"
+      "statusNotYetValid": "No vigente aún",
+      "fileHint": "Archivo .p12 / PKCS#12 emitido a este negocio (ej.: mi-negocio.p12).",
+      "passwordHint": "El archivo y su contraseña se guardan cifrados y no se vuelven a mostrar."
     },
     "sifenNumberVoiding": {
       "title": "Numeración inutilizada",
@@ -746,7 +896,11 @@
       "deactivate": "Desactivar",
       "edit": "Editar timbrado",
       "editTitle": "Editar timbrado",
-      "editLead": "El número de inicio de emisión siempre se puede cambiar. El establecimiento y el punto de expedición solo se pueden cambiar mientras este timbrado no tenga facturas. Para cambiar el número de timbrado, las fechas de vigencia o el rango, desactivá este timbrado y agregá uno nuevo.",
+      "editLead": "Mientras este timbrado no tenga facturas, se puede cambiar cualquier campo. Una vez que tiene facturas, solo se pueden cambiar el fin de vigencia, el número “hasta” y el número de inicio de emisión (solo hacia adelante).",
+      "optionalHint": "Opcional — no es requerido para facturación electrónica.",
+      "fieldLockedHint": "Este timbrado ya tiene facturas, así que este campo queda fijo.",
+      "notSet": "—",
+      "initialEmissionMin": "Debe ser {{from}} o mayor.",
       "save": "Guardar",
       "cancel": "Cancelar",
       "add": "Agregar timbrado",
@@ -892,6 +1046,7 @@
         "paymentAmountInvalid": "Ingresá un monto válido > 0 (con separador de miles, ej.: 50.000).",
         "paymentAmountFirstRowHint": "El campo se autocompleta con el total, pero podés editarlo para pagos parciales",
         "paymentMethodRequired": "Seleccioná un método de pago.",
+        "paymentMethodPlaceholder": "Seleccionar método de pago",
         "paymentMethodCash": "Efectivo",
         "paymentMethodDebitCard": "Tarjeta de débito",
         "paymentMethodCreditCard": "Tarjeta de crédito",
@@ -1199,6 +1354,10 @@
           "submitError": "No se pudo agregar el movimiento. Revisá los datos e intentá de nuevo.",
           "submitSuccess": "Movimiento agregado correctamente."
         }
+      },
+      "stock": {
+        "available": "Disponible: {{available}}",
+        "willGoNegative": "Disponible: {{available}} — quedará en negativo. Igual podés emitir el comprobante."
       }
     },
     "clients": {
@@ -1309,10 +1468,109 @@
         "selected": "Cliente seleccionado"
       }
     },
+    "audit": {
+      "lead": "Quién hizo qué en tu negocio, de lo más reciente a lo más antiguo. Solo se registran las operaciones que modifican datos; nunca se guarda su contenido.",
+      "platformTitle": "Auditoría",
+      "platformLead": "Quién hizo qué en todos los negocios y en la plataforma, de lo más reciente a lo más antiguo.",
+      "loadError": "No se pudo cargar la auditoría.",
+      "errorTitle": "Error",
+      "loading": "Cargando…",
+      "listTitle": "Registro de actividad",
+      "empty": "No hay actividad registrada para estos filtros.",
+      "filterFrom": "Desde",
+      "filterTo": "Hasta",
+      "filterResource": "Qué",
+      "filterResourceAll": "Todo",
+      "filterUser": "Usuario",
+      "filterUserPlaceholder": "Buscar por correo del usuario",
+      "search": "Buscar",
+      "clear": "Limpiar filtros",
+      "rangeInvalid": "La fecha desde tiene que ser anterior o igual a la fecha hasta (ej.: 01/10/2026 a 08/10/2026).",
+      "colWhen": "Cuándo",
+      "colTenant": "Negocio",
+      "colUser": "Quién",
+      "colAction": "Qué hizo",
+      "colRecord": "Registro",
+      "platformScope": "Plataforma",
+      "roles": {
+        "ADMIN": "Administrador",
+        "PROFESSIONAL": "Profesional",
+        "PLATFORM_ADMIN": "Usuario root"
+      },
+      "verbs": {
+        "create": "Creó",
+        "update": "Modificó",
+        "delete": "Eliminó"
+      },
+      "resources": {
+        "appointments": "turno",
+        "business-profile": "datos del negocio",
+        "cash-sessions": "caja",
+        "clients": "cliente",
+        "fiscal-stamps": "timbrado",
+        "invoices": "comprobante",
+        "me": "perfil",
+        "professionals": "profesional",
+        "propinas": "propinas",
+        "service-categories": "categoría",
+        "service-records": "ficha de servicio",
+        "services": "servicio o producto",
+        "sifen": "SIFEN",
+        "taxes": "impuesto",
+        "feature-flags": "funcionalidad",
+        "stock": "integración con Stock",
+        "tenants": "negocio",
+        "tiers": "plan"
+      },
+      "operations": {
+        "invoices_void": "Anuló un comprobante",
+        "invoices_cancel": "Canceló un comprobante en SIFEN",
+        "invoices_correct-and-resend": "Corrigió y reenvió un comprobante a SIFEN",
+        "invoices_identify-client": "Identificó al cliente de un comprobante en SIFEN",
+        "invoices_nullify-number": "Inutilizó una numeración",
+        "invoices_check-status": "Consultó el estado de un comprobante en SIFEN",
+        "invoices_email": "Reenvió el KuDE por correo",
+        "service-records_void": "Anuló una ficha de servicio",
+        "cash-sessions_open": "Abrió la caja",
+        "cash-sessions_close": "Cerró la caja",
+        "cash-sessions_movements": "Registró un movimiento de caja",
+        "clients_activate": "Activó un cliente",
+        "clients_deactivate": "Desactivó un cliente",
+        "services_activate": "Activó un servicio o producto",
+        "services_deactivate": "Desactivó un servicio o producto",
+        "service-categories_activate": "Activó una categoría",
+        "service-categories_deactivate": "Desactivó una categoría",
+        "taxes_activate": "Activó un impuesto",
+        "taxes_deactivate": "Desactivó un impuesto",
+        "professionals_activate": "Activó un profesional",
+        "professionals_deactivate": "Desactivó un profesional",
+        "professionals_schedules": "Modificó los horarios de un profesional",
+        "professionals_grant-access": "Dio acceso al sistema a un profesional",
+        "professionals_revoke-access": "Quitó el acceso al sistema a un profesional",
+        "fiscal-stamps_activate": "Activó un timbrado",
+        "fiscal-stamps_deactivate": "Desactivó un timbrado",
+        "appointments_status": "Cambió el estado de un turno",
+        "me_profile": "Modificó su perfil",
+        "me_change-password": "Cambió su contraseña",
+        "propinas_withdrawals": "Registró un retiro de propinas",
+        "tenants_status": "Cambió el estado de un negocio",
+        "tenants_admins": "Invitó a un administrador de negocio",
+        "tenants_resend-invitation": "Reenvió una invitación",
+        "tenants_certificates": "Cargó el certificado SIFEN de un negocio",
+        "tenants_csc": "Cargó el CSC SIFEN de un negocio",
+        "tenants_activate": "Activó un CSC SIFEN de un negocio",
+        "tenants_catalog-sync": "Sincronizó el catálogo de un negocio con Stock",
+        "stock_retry": "Reintentó un envío a Stock",
+        "stock_discard": "Descartó un envío a Stock",
+        "sifen_number-voiding": "Registró una numeración inutilizada",
+        "sifen_submit": "Envió una numeración inutilizada a SIFEN"
+      }
+    },
     "apiErrors": {
       "GENERIC": "Ocurrió un error inesperado. Intentá de nuevo.",
       "UNAUTHORIZED": "Debés iniciar sesión para realizar esta acción.",
       "FORBIDDEN": "No tenés permiso para realizar esta acción.",
+      "INVALID_DATE_RANGE": "La fecha desde tiene que ser anterior o igual a la fecha hasta (ej.: 01/10/2026 a 08/10/2026).",
       "TENANT_NOT_FOUND": "Organización no encontrada.",
       "TENANT_AMBIGUOUS": "Tu cuenta está vinculada a más de un negocio. Usá el enlace de acceso específico de tu negocio.",
       "TENANT_NAME_REQUIRED": "Ingresá un nombre para el tenant.",
@@ -1427,6 +1685,7 @@
       "INVALID_ESTABLISHMENT": "Ingresá un código de establecimiento válido (0-999, ej.: 1).",
       "INVALID_EXPEDITION_POINT": "Ingresá un código de punto de expedición válido (0-999, ej.: 1).",
       "FISCAL_STAMP_ESTABLISHMENT_LOCKED": "El establecimiento y el punto de expedición no se pueden cambiar una vez que el timbrado tiene facturas.",
+      "FISCAL_STAMP_FIELD_LOCKED": "El número de timbrado, el inicio de vigencia y el número “desde” no se pueden cambiar una vez que el timbrado tiene facturas.",
       "INVALID_CREDENTIALS": "El correo o la contraseña no son correctos.",
       "INVALID_TOKEN": "Este enlace de restablecimiento no es válido o expiró.",
       "TOKEN_EXPIRED": "Este enlace de restablecimiento expiró. Solicitá uno nuevo.",
@@ -1486,7 +1745,24 @@
       "TIP_PROFESSIONAL_NOT_IN_LINES": "Solo se pueden cargar propinas para profesionales que realizaron un servicio en esta ficha.",
       "SERVICE_RECORD_LIST_RANGE_INCOMPLETE": "Elegí fecha desde y hasta.",
       "SERVICE_RECORD_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
-      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 6 meses."
+      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 6 meses.",
+      "STOCK_MODULE_DISABLED": "Este salón no tiene habilitado el módulo Stock.",
+      "STOCK_NOT_CONFIGURED": "La integración con Stock todavía no está configurada. Contactá a soporte.",
+      "STOCK_OUTBOX_EVENT_NOT_FOUND": "Ese envío a Stock ya no existe.",
+      "STOCK_OUTBOX_EVENT_NOT_ACTIONABLE": "Solo se pueden reintentar o descartar envíos fallidos, o que esperan un reintento tras un intento fallido.",
+      "INVALID_CLIENT": "Credenciales de cliente inválidas.",
+      "INVALID_SCOPE": "El alcance solicitado no está permitido.",
+      "CATEGORY_KIND_MISMATCH": "La categoría pertenece al otro catálogo: los servicios y los productos tienen categorías separadas.",
+      "CATEGORY_KIND_IMMUTABLE": "Una categoría no puede pasar de Servicios a Productos ni al revés.",
+      "INVALID_SERVICE_KIND": "El tipo debe ser Servicio o Producto.",
+      "INVALID_CSC_ID": "El IdCSC debe ser un número entero entre 1 y 9999 (ej.: 1).",
+      "INVALID_CSC_FORMAT": "El CSC debe tener exactamente 32 letras o dígitos, sin espacios ni símbolos (ej.: A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6).",
+      "CSC_NOT_FOUND": "Ese código de seguridad no está cargado para este negocio.",
+      "SIFEN_CSC_NOT_CONFIGURED": "Este negocio no tiene un código de seguridad (CSC) cargado. Cargá el que entregó la DNIT en Configuración → SIFEN → Código de seguridad.",
+      "INVALID_SKU": "El código (SKU) puede tener como máximo 64 caracteres (p. ej. SH-300).",
+      "IMPORT_ROW_CATEGORY_KIND_MISMATCH": "Esa categoría ya existe con el otro tipo: los servicios y los productos tienen categorías separadas.",
+      "IMPORT_ROW_KIND_INVALID": "Tipo inválido: usá Servicio o Producto (o dejalo vacío para Servicio).",
+      "IMPORT_ROW_SKU_TOO_LONG": "El SKU puede tener como máximo 64 caracteres (p. ej. SH-300)."
     },
     "pagination": {
       "rowsPerPage": "Filas por página:",
@@ -1511,6 +1787,7 @@
       "colService": "Servicio",
       "colCategory": "Categoría",
       "colDuration": "Duración",
+      "colSku": "Código (SKU)",
       "colPrice": "Precio",
       "colStatus": "Estado",
       "priceList": {
@@ -1519,7 +1796,7 @@
         "error": "No se pudo descargar la lista de precios. Intentá de nuevo."
       },
       "tabs": {
-        "services": "Servicios",
+        "items": "Servicios",
         "categories": "Categorías"
       },
       "search": {
@@ -1609,7 +1886,43 @@
         "searchInlinePlaceholder": "Buscar por nombre o categoría…",
         "openEdit": "Editar servicio {{name}}",
         "tax": "Tipo de impuesto",
-        "taxPlaceholder": "Sin impuesto"
+        "taxPlaceholder": "Sin impuesto",
+        "sku": "Código (SKU, opcional)",
+        "skuPlaceholder": "p. ej. SH-300"
+      }
+    },
+    "products": {
+      "title": "Productos",
+      "lead": "Gestioná las categorías y los productos que vendés y facturás.",
+      "loadError": "No se pudieron cargar los productos.",
+      "createSuccess": "Producto guardado correctamente.",
+      "activateSuccess": "Producto activado correctamente.",
+      "deactivateSuccess": "Producto desactivado correctamente.",
+      "colService": "Producto",
+      "tabs": {
+        "items": "Productos"
+      },
+      "search": {
+        "placeholder": "Buscar por producto o categoría…"
+      },
+      "categories": {
+        "deactivateDialogDescription": "“{{name}}” quedará inactiva. No estará disponible para nuevos productos; el historial existente se conserva.",
+        "emptyBody": "Creá una categoría para empezar a organizar tus productos.",
+        "serviceCount": "{{count}} productos"
+      },
+      "services": {
+        "addNew": "+ Nuevo producto",
+        "add": "Nuevo producto",
+        "addTitle": "Nuevo producto",
+        "editTitle": "Editar producto",
+        "nameRequired": "Ingresá un nombre de producto.",
+        "deactivateDialogTitle": "Desactivar producto",
+        "deactivateDialogDescription": "“{{name}}” quedará inactivo. No aparecerá en nuevas facturas; el historial existente se conserva.",
+        "inactiveHint": "La categoría debe estar activa para reactivar este producto. Elegí una categoría activa o reactivá la categoría primero.",
+        "emptyTitle": "Todavía no hay productos.",
+        "emptyBody": "Creá un producto para venderlo en tus facturas.",
+        "searchInlinePlaceholder": "Buscar por nombre o categoría…",
+        "openEdit": "Editar producto {{name}}"
       }
     },
     "professionals": {
@@ -1945,6 +2258,7 @@
         "dashboard": { "title": "Panel de inicio", "content": "Tu punto de partida: ves los turnos de hoy, los ingresos y la actividad reciente de un vistazo." },
         "calendar": { "title": "Calendario", "content": "Gestioná los turnos por día o semana. Reservá, reprogramá y cancelá desde aquí." },
         "services": { "title": "Servicios", "content": "Administrá el catálogo de servicios y precios que ofrece tu salón." },
+        "products": { "title": "Productos", "content": "Administrá los productos que vendés, con sus propias categorías y precios." },
         "professionals": { "title": "Profesionales", "content": "Agregá y gestioná los estilistas o especialistas que trabajan en tu salón." },
         "clients": { "title": "Clientes", "content": "Tu base de datos completa de clientes: buscá, filtrá y abrí cualquier perfil." },
         "billing": { "title": "Facturación", "content": "Abrí cajas, emitís facturas y revisás el historial de pagos." },
@@ -1988,6 +2302,13 @@
         "addCategory": { "title": "Nueva categoría", "content": "Crea un nuevo grupo para organizar tus servicios (por ejemplo: Cabello, Uñas, Piel)." },
         "list": { "title": "Lista de servicios", "content": "Todos los servicios con su duración, precio y categoría. Hacé clic en cualquier fila para editarla o desactivarla." }
       },
+      "products": {
+        "header": { "title": "Encabezado de productos", "content": "Muestra la pantalla de productos con un botón para agregar un nuevo producto o categoría." },
+        "search": { "title": "Búsqueda de productos", "content": "Escribí aquí para filtrar productos por nombre en todas las categorías al instante." },
+        "filters": { "title": "Filtros de categoría", "content": "Hacé clic en una categoría para mostrar solo los productos de ese grupo." },
+        "addCategory": { "title": "Nueva categoría", "content": "Crea un nuevo grupo para organizar tus productos (por ejemplo: Shampoos, Styling, Cuidado de la piel)." },
+        "list": { "title": "Lista de productos", "content": "Todos los productos con su código, precio y categoría. Hacé clic en cualquier fila para editarlo o desactivarlo." }
+      },
       "billing": {
         "header": { "title": "Facturación", "content": "Gestioná tu sesión de caja aquí y emití comprobantes para los clientes." },
         "session": { "title": "Pestañas de sesión", "content": "Cambiá entre la caja activa, la creación de un comprobante y el historial completo." },
@@ -2025,6 +2346,9 @@
         "list": { "title": "Timbrados registrados", "content": "Todos los timbrados registrados, con el activo en primer lugar. Desde aquí podés editar, activar, desactivar o borrar cualquiera de ellos." },
         "form": { "title": "Registrar nuevo timbrado", "content": "Ingresá el número de timbrado, las fechas de vigencia y el rango de numeración habilitado por la SET." }
       }
+    },
+    "stock": {
+      "openError": "No se pudo abrir Stock. Intentá de nuevo en un momento."
     }
   },
   "language": {

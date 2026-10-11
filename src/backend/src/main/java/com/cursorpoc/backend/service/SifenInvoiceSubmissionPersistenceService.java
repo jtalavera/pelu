@@ -117,6 +117,8 @@ class SifenInvoiceSubmissionPersistenceService {
     invoice.setSifenSubmissionMessage(null);
     invoice.setSifenSubmittedAt(null);
     invoice.setSifenQueryDocumentContent(null);
+    invoice.setSifenBatchNumber(null);
+    invoice.setSifenBatchPollCount(0);
     invoice.setSifenSignedAt(null);
     invoice.setSifenAttemptCount(0);
     invoice.setSifenNextAttemptAt(null);
@@ -221,6 +223,45 @@ class SifenInvoiceSubmissionPersistenceService {
         SifenInvoiceEventType.SUBMISSION,
         result.resultCode(),
         result.message());
+  }
+
+  /**
+   * SIFEN envío por lote: records (or, with {@code null}, forgets) the {@code dProtConsLote} of the
+   * lote the invoice was sent in.
+   */
+  @Transactional
+  void setBatchNumber(long tenantId, long invoiceId, String batchNumber) {
+    Invoice invoice = requireInvoice(tenantId, invoiceId);
+    invoice.setSifenBatchNumber(batchNumber);
+    invoice.setSifenBatchPollCount(0);
+  }
+
+  /** SIFEN envío por lote: one more consulta-lote poll was made for the invoice's lote. */
+  @Transactional
+  void incrementBatchPollCount(long tenantId, long invoiceId) {
+    Invoice invoice = requireInvoice(tenantId, invoiceId);
+    invoice.setSifenBatchPollCount(invoice.getSifenBatchPollCount() + 1);
+  }
+
+  /** SIFEN envío por lote: the lote number to poll, if the invoice was sent in one. */
+  @Transactional(readOnly = true)
+  Optional<String> findBatchNumber(long tenantId, long invoiceId) {
+    return Optional.ofNullable(requireInvoice(tenantId, invoiceId).getSifenBatchNumber())
+        .filter(n -> !n.isBlank());
+  }
+
+  /**
+   * SIFEN envío por lote: how many consulta-lote polls the invoice's lote has had — empty unless
+   * the invoice is pending in a lote. Drives the listener's count-based polling cadence.
+   */
+  @Transactional(readOnly = true)
+  Optional<Integer> findPendingBatchPollCount(long tenantId, long invoiceId) {
+    Invoice invoice = requireInvoice(tenantId, invoiceId);
+    boolean pendingInBatch =
+        invoice.getSifenSubmissionStatus() == SifenSubmissionStatus.PENDING_VERIFICATION
+            && invoice.getSifenBatchNumber() != null
+            && !invoice.getSifenBatchNumber().isBlank();
+    return pendingInBatch ? Optional.of(invoice.getSifenBatchPollCount()) : Optional.empty();
   }
 
   @Transactional(readOnly = true)
