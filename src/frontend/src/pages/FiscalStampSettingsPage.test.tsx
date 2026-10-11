@@ -165,8 +165,8 @@ describe("FiscalStampSettingsPage (HU-02b)", () => {
   });
 
   it("shows stored dates without shifting a day west of UTC, and a dash for missing ends (issue #290)", async () => {
-    const previousTz = process.env.TZ;
-    process.env.TZ = "America/Asuncion";
+    // vi.stubEnv writes process.env.TZ, which Node applies to Date right away.
+    vi.stubEnv("TZ", "America/Asuncion");
     try {
       femmeJsonMock.mockResolvedValueOnce([
         ACTIVE_STAMP,
@@ -180,7 +180,7 @@ describe("FiscalStampSettingsPage (HU-02b)", () => {
       const openEnded = screen.getByTestId("fiscal-stamp-row-8");
       expect(within(openEnded).getAllByText("—")).toHaveLength(2);
     } finally {
-      process.env.TZ = previousTz;
+      vi.unstubAllEnvs();
     }
   });
 });
