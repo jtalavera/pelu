@@ -8,10 +8,12 @@ import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
 import com.cursorpoc.backend.domain.AppUser;
+import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -45,6 +47,7 @@ class JwtAuthenticationFilterTest {
   private JwtService jwtService;
   private TenantRepository tenantRepository;
   private AppUserRepository appUserRepository;
+  private ProfessionalRepository professionalRepository;
   private JwtAuthenticationFilter filter;
 
   @BeforeEach
@@ -55,6 +58,7 @@ class JwtAuthenticationFilterTest {
     jwtService = new JwtService(props);
     tenantRepository = mock(TenantRepository.class);
     appUserRepository = mock(AppUserRepository.class);
+    professionalRepository = mock(ProfessionalRepository.class);
     // Default: every tenant looked up is ACTIVE, unless a test overrides it below (HU-40 AC-3).
     Tenant activeTenant = new Tenant();
     activeTenant.setStatus(TenantStatus.ACTIVE);
@@ -63,7 +67,9 @@ class JwtAuthenticationFilterTest {
     AppUser enabledUser = new AppUser();
     enabledUser.setEnabled(true);
     lenient().when(appUserRepository.findById(anyLong())).thenReturn(Optional.of(enabledUser));
-    filter = new JwtAuthenticationFilter(jwtService, tenantRepository, appUserRepository);
+    filter =
+        new JwtAuthenticationFilter(
+            jwtService, tenantRepository, appUserRepository, professionalRepository);
   }
 
   @AfterEach
@@ -183,6 +189,36 @@ class JwtAuthenticationFilterTest {
     runFilter(token, "/api/clients");
 
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+  }
+
+  @Test
+  void professionalToken_doesNotAuthenticate_whenProfessionalDeactivated() throws Exception {
+    Professional inactive = new Professional();
+    inactive.setActive(false);
+    when(professionalRepository.findById(5L)).thenReturn(Optional.of(inactive));
+
+    String token =
+        jwtService.createAccessToken(
+            2L, 7L, "pro@tenant.test", UserRole.PROFESSIONAL, 5L, Instant.now());
+
+    runFilter(token, "/api/clients");
+
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+  }
+
+  @Test
+  void professionalToken_authenticates_whenProfessionalActive() throws Exception {
+    Professional active = new Professional();
+    active.setActive(true);
+    when(professionalRepository.findById(5L)).thenReturn(Optional.of(active));
+
+    String token =
+        jwtService.createAccessToken(
+            2L, 7L, "pro@tenant.test", UserRole.PROFESSIONAL, 5L, Instant.now());
+
+    runFilter(token, "/api/clients");
+
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
   }
 
   // HU-43 AC-3: reactivating the user (enabled back to true) immediately lets the very same

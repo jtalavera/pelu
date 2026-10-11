@@ -3,6 +3,7 @@ package com.cursorpoc.backend.web;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.FeatureFlagService;
 import com.cursorpoc.backend.service.InvoiceHistoryReportService;
+import com.cursorpoc.backend.service.InvoiceIssuanceService;
 import com.cursorpoc.backend.service.InvoiceReportRow;
 import com.cursorpoc.backend.service.InvoiceService;
 import com.cursorpoc.backend.service.SifenCertificateService;
@@ -11,7 +12,6 @@ import com.cursorpoc.backend.service.SifenInvoiceClientIdentificationService;
 import com.cursorpoc.backend.service.SifenInvoiceEventLogService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
-import com.cursorpoc.backend.service.SifenSubmissionQueue;
 import com.cursorpoc.backend.web.dto.InvoiceCancellationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceClientIdentificationRequest;
 import com.cursorpoc.backend.web.dto.InvoiceCorrectionRequest;
@@ -22,12 +22,10 @@ import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import com.cursorpoc.backend.web.dto.SifenInvoiceEventLogResponse;
 import com.cursorpoc.backend.web.dto.SifenNumberVoidingSubmitRequest;
 import jakarta.validation.Valid;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -58,35 +56,35 @@ public class InvoiceController {
   static final String SIFEN_ELECTRONIC_INVOICING_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
   private final InvoiceService invoiceService;
+  private final InvoiceIssuanceService invoiceIssuanceService;
   private final InvoiceHistoryReportService invoiceHistoryReportService;
   private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
   private final SifenInvoiceCancellationService sifenInvoiceCancellationService;
   private final SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService;
   private final FeatureFlagService featureFlagService;
   private final SifenCertificateService sifenCertificateService;
-  private final SifenSubmissionQueue sifenSubmissionQueue;
   private final SifenNumberVoidingService sifenNumberVoidingService;
   private final SifenInvoiceEventLogService sifenInvoiceEventLogService;
 
   public InvoiceController(
       InvoiceService invoiceService,
+      InvoiceIssuanceService invoiceIssuanceService,
       InvoiceHistoryReportService invoiceHistoryReportService,
       SifenInvoiceSubmissionService sifenInvoiceSubmissionService,
       SifenInvoiceCancellationService sifenInvoiceCancellationService,
       SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService,
       FeatureFlagService featureFlagService,
       SifenCertificateService sifenCertificateService,
-      SifenSubmissionQueue sifenSubmissionQueue,
       SifenNumberVoidingService sifenNumberVoidingService,
       SifenInvoiceEventLogService sifenInvoiceEventLogService) {
     this.invoiceService = invoiceService;
+    this.invoiceIssuanceService = invoiceIssuanceService;
     this.invoiceHistoryReportService = invoiceHistoryReportService;
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
     this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
     this.sifenInvoiceClientIdentificationService = sifenInvoiceClientIdentificationService;
     this.featureFlagService = featureFlagService;
     this.sifenCertificateService = sifenCertificateService;
-    this.sifenSubmissionQueue = sifenSubmissionQueue;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
     this.sifenInvoiceEventLogService = sifenInvoiceEventLogService;
   }
@@ -97,13 +95,16 @@ public class InvoiceController {
    * certificate is required *before* the invoice is created (AC-04: blocks issuance entirely,
    * nothing is persisted, if {@link SifenCertificateService#requireActiveCertificate} throws).
    *
-   * <p>RT-20 (Hardening_SIFEN.md): the freshly persisted invoice is signed synchronously — {@link
+   * <p>RT-20 (Hardening_SIFEN.md): the invoice is signed synchronously — {@link
    * SifenInvoiceSubmissionService#prepareAndSign} mints the CDC/QR and marks it {@code QUEUED},
-   * with zero calls to SIFEN — and a transmit attempt is enqueued for the async consumer to pick
-   * up. This request never waits on SIFEN itself; the response already carries the CDC/QR, which is
-   * what makes the KuDE (RT-28) downloadable the instant this returns, before SIFEN has answered.
-   * When the flag is disabled, the invoice is issued exactly as before this story — the traditional
-   * generator is simply "no SIFEN fields ever get populated" (AC-03), not a separate code path.
+   * with zero calls to SIFEN — and a transmit attempt is enqueued (after commit) for the async
+   * consumer to pick up. Creation and signing run in a single transaction ({@link
+   * InvoiceIssuanceService#issueWithSifen}): if the SIFEN preparation fails (e.g. incomplete issuer
+   * data) nothing is persisted. This request never waits on SIFEN itself; the response already
+   * carries the CDC/QR, which is what makes the KuDE (RT-28) downloadable the instant this returns,
+   * before SIFEN has answered. When the flag is disabled, the invoice is issued exactly as before
+   * this story — the traditional generator is simply "no SIFEN fields ever get populated" (AC-03),
+   * not a separate code path.
    */
   @PostMapping
   public ResponseEntity<InvoiceResponse> issue(
@@ -125,13 +126,10 @@ public class InvoiceController {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_RECIPIENT_EMAIL_REQUIRED");
       }
     }
-    InvoiceResponse response = invoiceService.issueInvoice(tenantId, request);
-    if (sifenEnabled) {
-      sifenInvoiceSubmissionService.prepareAndSign(tenantId, response.id());
-      String correlationId = UUID.randomUUID().toString();
-      sifenSubmissionQueue.enqueue(tenantId, response.id(), 1, Duration.ZERO, correlationId);
-      response = invoiceService.getInvoice(tenantId, response.id());
-    }
+    InvoiceResponse response =
+        sifenEnabled
+            ? invoiceIssuanceService.issueWithSifen(tenantId, request)
+            : invoiceService.issueInvoice(tenantId, request);
     log.info("POST /api/invoices tenantId={} status=201", tenantId);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
   }
@@ -324,10 +322,11 @@ public class InvoiceController {
   /**
    * Issue #175: corrects a {@code REJECTED} SIFEN invoice's client / lines / discount / payments
    * and re-queues it for transmission under the same CDC (Manual Técnico V150 §6.5 — no CDC field
-   * is user-editable in this domain, so any such correction qualifies). Same {@code prepareAndSign}
-   * + {@code enqueue} pipeline as {@code issue()}. Guards: {@code INVOICE_NOT_REJECTED} (409) if
-   * the invoice isn't currently Rechazado, {@code SIFEN_NUMBER_ALREADY_VOIDED} (409) if SIFEN
-   * already approved the number's inutilización.
+   * is user-editable in this domain, so any such correction qualifies). Same atomic {@code
+   * prepareAndSign} + {@code enqueue} pipeline as {@code issue()}: if re-signing fails, the invoice
+   * stays untouched. Guards: {@code INVOICE_NOT_REJECTED} (409) if the invoice isn't currently
+   * Rechazado, {@code SIFEN_NUMBER_ALREADY_VOIDED} (409) if SIFEN already approved the number's
+   * inutilización.
    */
   @PostMapping("/{id}/sifen/correct-and-resend")
   public ResponseEntity<InvoiceResponse> correctAndResend(
@@ -340,10 +339,8 @@ public class InvoiceController {
     // A valid certificate is required to re-sign — fail fast before mutating anything (AC-04 of
     // HU-22's own contract).
     sifenCertificateService.requireActiveCertificate(tenantId);
-    invoiceService.correctAndResendInvoice(tenantId, id, request);
-    sifenInvoiceSubmissionService.prepareAndSign(tenantId, id);
-    sifenSubmissionQueue.enqueue(tenantId, id, 1, Duration.ZERO, UUID.randomUUID().toString());
-    InvoiceResponse response = invoiceService.getInvoice(tenantId, id);
+    InvoiceResponse response =
+        invoiceIssuanceService.correctAndResendWithSifen(tenantId, id, request);
     log.info("POST /api/invoices/{}/sifen/correct-and-resend tenantId={} status=200", id, tenantId);
     return ResponseEntity.ok(response);
   }
