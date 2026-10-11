@@ -9,7 +9,7 @@ location            = "centralus"
 sql_server_location = ""
 
 # Operator IP allowed through the SQL firewall for manual admin tasks.
-deployer_ip = "181.91.85.175"  # TODO: update if the prod deployer machine has a different IP
+deployer_ip = "181.91.85.175" # TODO: update if the prod deployer machine has a different IP
 
 # Entra ID group (recommended) or user to set as the SQL Entra administrator.
 # After apply, connect as this principal to run the managed-identity DB user grant.
@@ -41,8 +41,14 @@ frontend_custom_domains = ["flowbit.tech", "www.flowbit.tech"]
 key_vault_soft_delete_retention_days = 90
 key_vault_purge_protection_enabled   = true
 
-# Stock integration (HU-59..HU-67). Off until a production control-stock exists. When it does, set
-# stock_enabled = true and stock_api_base_url = "<Stock prod API URL>", then follow the "Stock
-# integration" runbook in infrastructure_v2/infrastructure_v2.md (Key Vault secrets and the
+# SIFEN: production taxpayers' documents go to sifen.set.gov.py (backend default is TEST).
+sifen_environment = "PRODUCTION"
+
+# Stock integration (HU-59..HU-67). Prepared ahead of the production control-stock: the queue, roles
+# and env vars exist, and with no stock_api_base_url the backend reports STOCK_NOT_CONFIGURED (and
+# STOCK_MODULE is OFF for every tenant), so nothing is sent. When Stock is deployed, set
+# stock_api_base_url = "<Stock prod API URL>" and `terraform apply`, then follow the "Stock
+# integration" runbook in infrastructure_v2/infrastructure_v2.md (remaining Key Vault secret and the
 # VITE_STOCK_SPA_URL GitHub variable are not managed by Terraform).
-stock_enabled = false
+stock_enabled = true
+# stock_api_base_url = ""

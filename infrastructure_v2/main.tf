@@ -602,6 +602,11 @@ resource "azurerm_container_app" "backend" {
         value = azurerm_servicebus_queue.sifen_submission.name
       }
 
+      env {
+        name  = "FEMME_SIFEN_ENVIRONMENT"
+        value = var.sifen_environment
+      }
+
       # Stock integration (HU-60..HU-65). Secrets come from Key Vault at boot
       # (KeyVaultSecretsEnvironmentPostProcessor), not from env vars.
       env {
