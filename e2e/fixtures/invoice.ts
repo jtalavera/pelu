@@ -12,7 +12,29 @@ export async function pickServiceLine(
 ): Promise<void> {
   await page.locator(`#billing-line-svc-${lineIdx}`).fill(serviceFullName.slice(0, 12));
   // exact: false → substring match; avoids dynamic RegExp construction flagged by semgrep
-  await page.getByRole("button", { name: serviceFullName, exact: false }).click();
+  const option = page.getByRole("button", { name: serviceFullName, exact: false });
+  await option.click();
+  // Wait for the option list to close, so the next line's pick never sees this line's stale list
+  // (two matching buttons → strict-mode violation). Best effort: never fails the pick itself.
+  await expect(option)
+    .toHaveCount(0, { timeout: 3_000 })
+    .catch(() => undefined);
+}
+
+/**
+ * Issue #284: the payment method of every payment row starts EMPTY in "New invoice" so the user
+ * has to choose it. Selects `label` (default "Cash") in each row that is still empty — specs that
+ * don't care about the method call this before issuing.
+ */
+export async function ensurePaymentMethodChosen(page: Page, label = "Cash"): Promise<void> {
+  const selects = page.locator('select[id^="pay-method-"]');
+  const count = await selects.count();
+  for (let i = 0; i < count; i++) {
+    const select = selects.nth(i);
+    if ((await select.inputValue()) === "") {
+      await select.selectOption({ label });
+    }
+  }
 }
 
 /**
@@ -22,6 +44,7 @@ export async function pickServiceLine(
 export async function clickIssueInvoiceAndExpectSuccess(
   page: Page,
 ): Promise<{ id: number; invoiceNumberFormatted: string }> {
+  await ensurePaymentMethodChosen(page);
   const [res] = await Promise.all([
     page.waitForResponse(
       (r) =>

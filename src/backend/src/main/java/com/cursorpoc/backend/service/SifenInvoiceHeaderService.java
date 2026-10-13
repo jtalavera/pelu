@@ -20,14 +20,14 @@ import org.springframework.web.server.ResponseStatusException;
  * SIFEN HU-02: completa, para una factura ya emitida, los datos de identificación (CDC de HU-01),
  * timbrado, emisor y receptor que SIFEN exige (sección 10 y grupo D1/D2 del Manual Técnico).
  *
- * <p>Sin endpoint HTTP ni pantalla propia — igual que HU-01/HU-05/HU-21, es una capacidad de
- * servicio consumida por historias futuras (HU-03 agrega el detalle de servicios al documento,
- * HU-04 lo firma). Deliberadamente <b>no</b> se llama desde {@link InvoiceService#issueInvoice} —
- * exigir RUC/actividad económica/tipo de contribuyente completos en cada factura rompería la
- * emisión de cualquier tenant que todavía no use SIFEN (la activación real por tenant es HU-22,
- * Fase 5, que todavía no existe). El único criterio de HU-02 que sí es una regla de negocio
- * universal, no específica de SIFEN, es el umbral de Gs. 7.000.000 (AC-05) — ver la validación en
- * {@link InvoiceService#issueInvoice}, no aquí.
+ * <p>Sin endpoint HTTP ni pantalla propia — es una capacidad de servicio. No se llama desde {@link
+ * InvoiceService#issueInvoice} (exigir RUC/actividad económica/tipo de contribuyente completos en
+ * cada factura rompería la emisión de los tenants que no usan SIFEN); con SIFEN activo la invoca la
+ * firma del documento dentro de {@link InvoiceIssuanceService#issueWithSifen}, en la misma
+ * transacción que la creación de la factura: si falta un dato del emisor ({@code SIFEN_ISSUER_*})
+ * la emisión completa hace rollback y no queda ninguna factura. El único criterio de HU-02 que sí
+ * es una regla de negocio universal, no específica de SIFEN, es el umbral de Gs. 7.000.000 (AC-05)
+ * — ver la validación en {@link InvoiceService#issueInvoice}, no aquí.
  */
 @Service
 public class SifenInvoiceHeaderService {

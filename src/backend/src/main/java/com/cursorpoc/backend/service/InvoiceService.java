@@ -187,7 +187,9 @@ public class InvoiceService implements ApplicationEventPublisherAware {
                 () -> new ResponseStatusException(HttpStatus.CONFLICT, "NO_ACTIVE_FISCAL_STAMP"));
 
     LocalDate today = LocalDate.now(ZoneId.systemDefault());
-    if (today.isBefore(stamp.getValidFrom()) || today.isAfter(stamp.getValidUntil())) {
+    // Issue #290: the end of validity and the upper number are optional (not required for SIFEN).
+    if (today.isBefore(stamp.getValidFrom())
+        || (stamp.getValidUntil() != null && today.isAfter(stamp.getValidUntil()))) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "FISCAL_STAMP_NOT_VALID");
     }
 
@@ -204,7 +206,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
           candidateNumber,
           nextNumber);
     }
-    if (nextNumber > stamp.getRangeTo()) {
+    if (stamp.getRangeTo() != null && nextNumber > stamp.getRangeTo()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "FISCAL_STAMP_RANGE_EXHAUSTED");
     }
 

@@ -8,9 +8,12 @@ import com.cursorpoc.backend.stock.StockApiClient.StockUnavailableException;
 import com.cursorpoc.backend.stock.StockOutboxPersistenceService.Claim;
 import com.cursorpoc.backend.stock.StockOutboxPersistenceService.ClaimOutcome;
 import com.cursorpoc.backend.stock.StockOutboxPersistenceService.ClaimedEvent;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -38,8 +41,6 @@ public class StockOutboxProcessor {
 
   /** Safety valve: a single wake-up never loops forever. */
   static final int MAX_EVENTS_PER_RUN = 500;
-
-  static final int CATALOG_BATCH_SIZE = 500;
 
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -187,14 +188,16 @@ public class StockOutboxProcessor {
   private Outcome fullCatalogSync(ClaimedEvent event, String correlationId) {
     long tenantId = event.tenantId();
     List<Map<String, Object>> items = payloads.catalogItems(tenantId);
-    List<String> bodies = new ArrayList<>();
-    for (int from = 0, batch = 0; from < items.size(); from += CATALOG_BATCH_SIZE, batch++) {
+    int batchSize = properties.getCatalogBatchSize();
+    int batches = (items.size() + batchSize - 1) / batchSize;
+    for (int from = 0, batch = 0; from < items.size(); from += batchSize, batch++) {
       List<Map<String, Object>> slice =
-          items.subList(from, Math.min(items.size(), from + CATALOG_BATCH_SIZE));
-      // The body changes with the catalog, so every attempt and batch gets its own key; a bulk
-      // upsert is naturally idempotent anyway.
-      String key = event.idempotencyKey() + ":a" + event.attempt() + ":b" + batch;
+          items.subList(from, Math.min(items.size(), from + batchSize));
       Map<String, Object> body = payloads.bulkUpsert(slice);
+      // The key follows the batch's content, not the attempt: when a call times out after Stock
+      // already applied the batch, the retry carries the same key and Stock replays the answer
+      // instead of doing the work again; if the catalog changed meanwhile, the key changes too.
+      String key = event.idempotencyKey() + ":b" + batch + ":" + contentHash(body);
       StockResponse response =
           withProvisioning(
               tenantId,
@@ -202,11 +205,24 @@ public class StockOutboxProcessor {
               () -> client.bulkUpsertItems(tenantId, body, key, correlationId));
       Outcome outcome = evaluate(response);
       if (!outcome.success()) {
-        return outcome;
+        return Outcome.failure(
+            outcome.error() + " [batch " + (batch + 1) + "/" + batches + "]", outcome.retryable());
       }
-      bodies.add(response.body());
+      // Several batches can outlast the lease: keep it so no other worker takes the event over.
+      persistence.renewLease(event.id(), clock.instant());
     }
-    return Outcome.success("{\"items\":" + items.size() + ",\"batches\":" + bodies.size() + "}");
+    return Outcome.success("{\"items\":" + items.size() + ",\"batches\":" + batches + "}");
+  }
+
+  private String contentHash(Map<String, Object> body) {
+    try {
+      byte[] digest =
+          MessageDigest.getInstance("SHA-256")
+              .digest(objectMapper.writeValueAsString(body).getBytes(StandardCharsets.UTF_8));
+      return HexFormat.of().formatHex(digest, 0, 6);
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   /** {@code TENANT_NOT_PROVISIONED}: provision the tenant first, then retry the call once. */

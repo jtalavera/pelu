@@ -100,7 +100,11 @@ export type OutboxRow = {
   status: string;
   attemptCount: number;
   lastError: string | null;
+  nextAttemptAt: string | null;
   idempotencyKey: string;
+  /** User-facing history of the delivery (codes + params), oldest first. */
+  messages: Array<{ at: string; level: string; code: string; params: Record<string, unknown> }>;
+  blockedByEventId: number | null;
 };
 
 export async function outbox(token: string, tenantId: number, status?: string): Promise<OutboxRow[]> {
@@ -133,8 +137,15 @@ export async function createProduct(
   return svc.id;
 }
 
-export async function createCategory(token: string, name: string): Promise<number> {
-  return (await peluOk<{ id: number }>("/api/service-categories", { token, body: { name, accentKey: "stone" } })).id;
+/** Catalog split: a category holds only SERVICE or only PRODUCT items (default: product category). */
+export async function createCategory(
+  token: string,
+  name: string,
+  kind: "SERVICE" | "PRODUCT" = "PRODUCT",
+): Promise<number> {
+  return (
+    await peluOk<{ id: number }>("/api/service-categories", { token, body: { name, accentKey: "stone", kind } })
+  ).id;
 }
 
 // ── control-stock ──────────────────────────────────────────────────────────────────────────────

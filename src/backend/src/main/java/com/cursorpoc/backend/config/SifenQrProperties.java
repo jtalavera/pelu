@@ -12,10 +12,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * AC-10/AC-15) both depend on {@link SifenConnectionProperties#activeEnvironment()}.
  *
  * <p>Defaults are the two test CSCs the SET/DNIT published for the homologation environment (spec
- * "Configuración del ambiente de pruebas"); production requires its own CSC per tenant from the
- * DNIT — deliberately not modeled per-tenant yet (homologación real, activación por tenant, is
- * HU-22/Fase 5), same scope decision as {@code SifenConnectionProperties}' single environment flag
- * today.
+ * "Configuración del ambiente de pruebas"). They are only the TEST-environment fallback for a
+ * tenant that has not loaded its own: the DNIT issues each taxpayer a distinct CSC, so every tenant
+ * loads and uses its own (Configuración → SIFEN → Código de seguridad, see {@link
+ * com.cursorpoc.backend.service.SifenCscService}), and in PRODUCTION a tenant without one cannot
+ * sign — a test CSC is never substituted.
  */
 @ConfigurationProperties(prefix = "app.femme.sifen.qr")
 public class SifenQrProperties {

@@ -58,20 +58,21 @@ test.describe("HU-59 · Flags de Stock y tipo Producto", () => {
     expect(getStockWorld().stockModuleInitiallyOff).toBe(true);
   });
 
-  test("Cambio 2 · formulario de Servicios con Tipo (Servicio/Producto) y SKU, y filtro por tipo", async ({
+  test("Cambio 2 · el menú Productos crea ítems tipo Producto con SKU (sin duración) y los separa de Servicios", async ({
     page,
   }) => {
     const world = getStockWorld();
     const name = `Crema de peinar ${Date.now()}`;
     await loginAs(page, world.s1.adminEmail, world.s1.adminPassword);
-    await page.goto("/app/services");
-    await page.getByRole("button", { name: /New service/i }).click();
+    await page.goto("/app/products");
+    await page.getByRole("button", { name: /New product/i }).click();
     await page.locator("#svc-name").fill(name);
-    await page.locator("#svc-kind").selectOption("PRODUCT");
     await page.locator("#svc-sku").fill("CP-250");
     await page.locator("#svc-cat").selectOption({ label: "Productos" });
     await page.locator("#svc-price").fill("45000");
-    await page.locator("#svc-duration").fill("1");
+    // Products have neither a Tipo selector nor a duration field.
+    await expect(page.locator("#svc-kind")).toHaveCount(0);
+    await expect(page.locator("#svc-duration")).toHaveCount(0);
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
     const token = await peluLogin(world.s1.adminEmail, world.s1.adminPassword);
@@ -82,23 +83,21 @@ test.describe("HU-59 · Flags de Stock y tipo Producto", () => {
       })
       .toMatchObject({ kind: "PRODUCT", sku: "CP-250" });
 
-    await page.goto("/app/services");
-    const filter = page.getByTestId("services-kind-filter");
-    await filter.getByRole("button", { name: "Products" }).click();
-    const row = page.locator("tr").filter({ hasText: name });
-    await expect(row).toBeVisible();
-    await expect(row.getByText("Product", { exact: true })).toBeVisible();
-    // Services are filtered out of "Products".
+    // The new product shows up in Productos (with its SKU, no kind filter) ...
     const serviceName = `Corte filtro ${Date.now()}`;
     await pelu("/api/services", {
       token,
-      body: { name: serviceName, categoryId: world.s1.categoryId, priceMinor: 1000, durationMinutes: 30 },
+      body: { name: serviceName, categoryId: world.s1.serviceCategoryId, priceMinor: 1000, durationMinutes: 30 },
     });
-    await page.reload();
-    await page.getByTestId("services-kind-filter").getByRole("button", { name: "Products" }).click();
-    await expect(page.locator("tr").filter({ hasText: name })).toBeVisible();
+    await page.goto("/app/products");
+    await expect(page.getByTestId("services-kind-filter")).toHaveCount(0);
+    const row = page.locator("tr").filter({ hasText: name });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("CP-250");
     await expect(page.locator("tr").filter({ hasText: serviceName })).toHaveCount(0);
-    await page.getByTestId("services-kind-filter").getByRole("button", { name: "Services" }).click();
+
+    // ... and only there: Servicios lists the service but not the product.
+    await page.goto("/app/services");
     await expect(page.locator("tr").filter({ hasText: serviceName })).toBeVisible();
     await expect(page.locator("tr").filter({ hasText: name })).toHaveCount(0);
   });

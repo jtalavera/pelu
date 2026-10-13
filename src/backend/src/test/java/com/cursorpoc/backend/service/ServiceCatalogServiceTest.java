@@ -8,6 +8,7 @@ import static org.mockito.Mockito.lenient;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceCategory;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
@@ -40,6 +41,7 @@ class ServiceCatalogServiceTest {
   private Tenant tenant;
   private ServiceCategory catHair;
   private ServiceCategory catBeard;
+  private ServiceCategory catProducts;
 
   private final AtomicLong ids = new AtomicLong(1);
 
@@ -62,6 +64,16 @@ class ServiceCatalogServiceTest {
     catBeard.setName("Beard");
     catBeard.setActive(false);
 
+    catProducts = new ServiceCategory();
+    catProducts.setId(12L);
+    catProducts.setTenant(tenant);
+    catProducts.setName("Shampoos");
+    catProducts.setActive(true);
+    catProducts.setKind(ServiceKind.PRODUCT);
+
+    lenient()
+        .when(serviceCategoryRepository.findByIdAndTenant_Id(12L, 1L))
+        .thenReturn(Optional.of(catProducts));
     lenient()
         .when(serviceCategoryRepository.findByIdAndTenant_Id(10L, 1L))
         .thenReturn(Optional.of(catHair));
@@ -202,7 +214,7 @@ class ServiceCatalogServiceTest {
         service.createService(
             1L,
             new ServiceUpsertRequest(
-                "Shampoo", 10L, null, new BigDecimal("95000"), 1, "PRODUCT", "  SH-300 "));
+                "Shampoo", 12L, null, new BigDecimal("95000"), 1, "PRODUCT", "  SH-300 "));
 
     assertThat(res.kind()).isEqualTo("PRODUCT");
     assertThat(res.sku()).isEqualTo("SH-300");
@@ -214,6 +226,115 @@ class ServiceCatalogServiceTest {
               assertThat(e.service().isProduct()).isTrue();
               assertThat(e.wasProduct()).isFalse();
             });
+  }
+
+  /** Catalog split: an item's kind must match its category's kind. */
+  @Test
+  void createService_productInServiceCategory_isRejected() {
+    assertThatThrownBy(
+            () ->
+                service.createService(
+                    1L,
+                    new ServiceUpsertRequest(
+                        "Shampoo", 10L, null, new BigDecimal("95000"), 1, "PRODUCT", null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("CATEGORY_KIND_MISMATCH");
+  }
+
+  @Test
+  void createService_serviceInProductCategory_isRejected() {
+    assertThatThrownBy(
+            () ->
+                service.createService(
+                    1L,
+                    new ServiceUpsertRequest(
+                        "Trim", 12L, null, new BigDecimal("1.00"), 15, "SERVICE", null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("CATEGORY_KIND_MISMATCH");
+  }
+
+  @Test
+  void createService_withoutKindInProductCategory_inheritsProduct() {
+    var res =
+        service.createService(
+            1L, new ServiceUpsertRequest("Shampoo", 12L, null, new BigDecimal("1.00"), 1));
+    assertThat(res.kind()).isEqualTo("PRODUCT");
+  }
+
+  @Test
+  void createCategory_withProductKind_isStoredAsProduct() {
+    var res =
+        service.createCategory(1L, new ServiceCategoryUpsertRequest("Shampoos", null, "PRODUCT"));
+    assertThat(res.kind()).isEqualTo("PRODUCT");
+  }
+
+  @Test
+  void createCategory_withoutKind_isAService() {
+    var res = service.createCategory(1L, new ServiceCategoryUpsertRequest("Cuts", null));
+    assertThat(res.kind()).isEqualTo("SERVICE");
+  }
+
+  @Test
+  void updateCategory_changingKind_isRejected() {
+    assertThatThrownBy(
+            () ->
+                service.updateCategory(
+                    1L, 10L, new ServiceCategoryUpsertRequest("Hair", null, "PRODUCT")))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("CATEGORY_KIND_IMMUTABLE");
+  }
+
+  /**
+   * Issue #284: products travel to Stock with the NAME of their category → a rename re-sends them.
+   */
+  @Test
+  void updateCategory_renamingAProductCategory_resendsItsProductsToStock() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+    SalonService shampoo = new SalonService();
+    shampoo.setId(100L);
+    shampoo.setTenant(tenant);
+    shampoo.setCategory(catProducts);
+    shampoo.setKind(ServiceKind.PRODUCT);
+    org.mockito.Mockito.when(salonServiceRepository.findProductsByTenantId(1L))
+        .thenReturn(List.of(shampoo));
+
+    service.updateCategory(1L, 12L, new ServiceCategoryUpsertRequest("Shampoos premium", null));
+
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            com.cursorpoc.backend.stock.CatalogStockEvent.class,
+            e -> {
+              assertThat(e.service()).isNull();
+              assertThat(e.tenantId()).isEqualTo(1L);
+              assertThat(e.productsImported()).isEqualTo(1);
+            });
+  }
+
+  @Test
+  void updateCategory_sameNameOrServiceCategory_doesNotTouchStock() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+
+    service.updateCategory(1L, 12L, new ServiceCategoryUpsertRequest("Shampoos", null));
+    service.updateCategory(1L, 10L, new ServiceCategoryUpsertRequest("Hair cuts", null));
+
+    assertThat(published).isEmpty();
+  }
+
+  @Test
+  void listCategories_filtersByKind() {
+    lenient()
+        .when(serviceCategoryRepository.findByTenant_IdOrderByNameAsc(1L))
+        .thenReturn(List.of(catHair, catProducts));
+    assertThat(service.listCategories(1L, null, "PRODUCT"))
+        .extracting(c -> c.name())
+        .containsExactly("Shampoos");
+    assertThat(service.listCategories(1L, null, "SERVICE"))
+        .extracting(c -> c.name())
+        .containsExactly("Hair");
+    assertThat(service.listCategories(1L, null, null)).hasSize(2);
   }
 
   @Test

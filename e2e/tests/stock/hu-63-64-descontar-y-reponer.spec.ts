@@ -46,7 +46,7 @@ test.describe("HU-63 · Descontar stock al facturar", () => {
     const b = await productInStock(world.s1.id, admin, world.s1.categoryId, `Máscara kardex ${stamp}`, "10");
     const haircut = await peluOk<{ id: number }>("/api/services", {
       token: admin,
-      body: { name: `Corte kardex ${stamp}`, categoryId: world.s1.categoryId, priceMinor: 50000, durationMinutes: 30 },
+      body: { name: `Corte kardex ${stamp}`, categoryId: world.s1.serviceCategoryId, priceMinor: 50000, durationMinutes: 30 },
     });
 
     await loginAs(page, world.s1.adminEmail, world.s1.adminPassword);

@@ -32,7 +32,10 @@ export type StockTenant = {
   name: string;
   adminEmail: string;
   adminPassword: string;
+  /** PRODUCT category ("Productos"). */
   categoryId: number;
+  /** SERVICE category ("Servicios"): plain services can't live in a product category. */
+  serviceCategoryId: number;
 };
 
 export type StockWorld = {
@@ -190,6 +193,9 @@ export async function provisionStockWorld(): Promise<StockWorld> {
   const s1Cat = await createCategory(s1Token, "Productos");
   const s2Cat = await createCategory(s2Token, "Productos");
   const s3Cat = await createCategory(s3Token, "Productos");
+  const s1SvcCat = await createCategory(s1Token, "Servicios", "SERVICE");
+  const s2SvcCat = await createCategory(s2Token, "Servicios", "SERVICE");
+  const s3SvcCat = await createCategory(s3Token, "Servicios", "SERVICE");
   const professionalEmail = `stock-operadora-${suffix}@e2e.local`;
   const professionalPassword = "StockOper1!";
   await createOperator(s1Token, professionalEmail, professionalPassword);
@@ -215,10 +221,11 @@ export async function provisionStockWorld(): Promise<StockWorld> {
       name: `Stock Salón Uno ${suffix}`,
       ...s1c,
       categoryId: s1Cat,
+      serviceCategoryId: s1SvcCat,
       professionalEmail,
       professionalPassword,
     },
-    s2: { id: s2Id, name: `Stock Salón Dos ${suffix}`, ...s2c, categoryId: s2Cat },
-    s3: { id: s3Id, name: `Salón Sin Stock ${suffix}`, ...s3c, categoryId: s3Cat },
+    s2: { id: s2Id, name: `Stock Salón Dos ${suffix}`, ...s2c, categoryId: s2Cat, serviceCategoryId: s2SvcCat },
+    s3: { id: s3Id, name: `Salón Sin Stock ${suffix}`, ...s3c, categoryId: s3Cat, serviceCategoryId: s3SvcCat },
   };
 }

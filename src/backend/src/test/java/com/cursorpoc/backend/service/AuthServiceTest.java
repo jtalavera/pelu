@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.cursorpoc.backend.config.FemmeJwtProperties;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.AppUserActivationToken;
+import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.domain.enums.UserRole;
@@ -150,6 +151,40 @@ class AuthServiceTest {
 
     assertThat(response.accessToken()).isNotBlank();
     assertThat(loginCount(AuthService.LOGIN_SUCCESS, "1")).isEqualTo(1);
+  }
+
+  @Test
+  void deactivatedProfessional_rejectsLogin_withSameErrorAsBadCredentials() {
+    Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
+    AppUser appUser = user(tenant, "pro@tenant.test", "hashed");
+    appUser.setRole(UserRole.PROFESSIONAL);
+    Professional professional = new Professional();
+    professional.setActive(false);
+    when(appUserRepository.findAllByEmail("pro@tenant.test")).thenReturn(List.of(appUser));
+    when(passwordEncoder.matches("correct-password", "hashed")).thenReturn(true);
+    when(professionalRepository.findByUser_Id(5L)).thenReturn(Optional.of(professional));
+
+    ResponseStatusException ex =
+        catchLoginException(new LoginRequest("pro@tenant.test", "correct-password"));
+
+    assertThat(ex.getReason()).isEqualTo("INVALID_CREDENTIALS");
+  }
+
+  @Test
+  void activeProfessional_allowsLogin() {
+    Tenant tenant = tenant(1L, TenantStatus.ACTIVE);
+    AppUser appUser = user(tenant, "pro@tenant.test", "hashed");
+    appUser.setRole(UserRole.PROFESSIONAL);
+    Professional professional = new Professional();
+    professional.setActive(true);
+    when(appUserRepository.findAllByEmail("pro@tenant.test")).thenReturn(List.of(appUser));
+    when(passwordEncoder.matches("correct-password", "hashed")).thenReturn(true);
+    when(professionalRepository.findByUser_Id(5L)).thenReturn(Optional.of(professional));
+
+    TokenResponse response =
+        service.login(new LoginRequest("pro@tenant.test", "correct-password"), null);
+
+    assertThat(response.accessToken()).isNotBlank();
   }
 
   @Test

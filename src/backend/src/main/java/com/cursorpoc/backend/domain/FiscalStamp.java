@@ -29,14 +29,16 @@ public class FiscalStamp {
   @Column(name = "valid_from", nullable = false)
   private LocalDate validFrom;
 
-  @Column(name = "valid_until", nullable = false)
+  /** Optional (issue #290): SIFEN does not require an end of validity. */
+  @Column(name = "valid_until")
   private LocalDate validUntil;
 
   @Column(name = "range_from", nullable = false)
   private int rangeFrom;
 
-  @Column(name = "range_to", nullable = false)
-  private int rangeTo;
+  /** Optional (issue #290): SIFEN does not require an upper number. */
+  @Column(name = "range_to")
+  private Integer rangeTo;
 
   @Column(name = "next_emission_number", nullable = false)
   private int nextEmissionNumber;
@@ -103,11 +105,11 @@ public class FiscalStamp {
     this.rangeFrom = rangeFrom;
   }
 
-  public int getRangeTo() {
+  public Integer getRangeTo() {
     return rangeTo;
   }
 
-  public void setRangeTo(int rangeTo) {
+  public void setRangeTo(Integer rangeTo) {
     this.rangeTo = rangeTo;
   }
 

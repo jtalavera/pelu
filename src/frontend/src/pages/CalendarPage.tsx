@@ -255,7 +255,7 @@ export default function CalendarPage() {
   useEffect(() => {
     Promise.all([
       femmeJson<Professional[]>("/api/professionals"),
-      femmeJson<SalonService[]>("/api/services"),
+      femmeJson<SalonService[]>("/api/services?kind=SERVICE"),
     ])
       .then(([profs, svcs]) => {
         const active = profs.filter((p) => p.active);

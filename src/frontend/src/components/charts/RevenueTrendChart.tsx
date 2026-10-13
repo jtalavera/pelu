@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Bar,
@@ -7,6 +7,7 @@ import {
   Legend,
   Line,
   ReferenceArea,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,8 +17,10 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { ChartCard } from "./ChartCard";
 import {
   CHART_AXIS_TEXT_COLOR,
+  CHART_BAR_CONTEXT_OPACITY,
   CHART_GRID_COLOR,
   CHART_PRIMARY_COLOR,
+  CHART_SURFACE_COLOR,
   CHART_TREND_LINE_COLOR,
   CHART_WEEKEND_BG,
   chartAxisTickStyle,
@@ -32,6 +35,25 @@ function isWeekendDate(dateStr: string): boolean {
 
 export type RevenueTrendPoint = { date: string; invoiced: string | number };
 
+/** Width of the trailing moving average drawn as the trend line (one full week, so weekday/weekend
+ * seasonality cancels out and the line shows the real direction of the business). */
+export const TREND_WINDOW_DAYS = 7;
+
+/**
+ * Trailing moving average: the value at day `i` is the mean of days `i-window+1 … i`. Days before
+ * the first full window are `null` instead of averaging a partial window, which would drag the
+ * line's start toward a misleading low/high. The chart avoids that gap by prepending the backend's
+ * `lookback` days (the week before the plotted window) to the series before averaging.
+ */
+export function trailingAverage(values: number[], window: number): Array<number | null> {
+  return values.map((_, i) => {
+    if (i < window - 1) return null;
+    let sum = 0;
+    for (let j = i - window + 1; j <= i; j++) sum += values[j];
+    return sum / window;
+  });
+}
+
 /**
  * Issue #219 — "Dashboard: fundamentos de gráficos + tendencia de facturación": bar chart of
  * daily invoiced revenue (`ISSUED` invoices) over the trailing `days`-day window the backend
@@ -41,17 +63,141 @@ export type RevenueTrendPoint = { date: string; invoiced: string | number };
  */
 export function RevenueTrendChart({
   data,
+  lookback = [],
   days,
   locale,
 }: {
   data: RevenueTrendPoint[];
+  /** The days just before `data` (oldest first). Used ONLY to compute the 7-day average of the
+   * first plotted days, so the trend line starts on day 1; they are never drawn as bars. If
+   * missing/short (older backend), the line starts once a full week is available. */
+  lookback?: RevenueTrendPoint[];
   days: number;
   locale: string;
 }) {
   const { t } = useTranslation();
 
-  const points = data.map((p) => ({ date: p.date, invoiced: Number(p.invoiced) || 0 }));
+  const points = useMemo(() => {
+    const daily = data.map((p) => ({ date: p.date, invoiced: Number(p.invoiced) || 0 }));
+    // Average over lookback + window, then keep only the plotted days' values.
+    const before = lookback.map((p) => Number(p.invoiced) || 0);
+    const average = trailingAverage(
+      [...before, ...daily.map((p) => p.invoiced)],
+      TREND_WINDOW_DAYS,
+    ).slice(before.length);
+    return daily.map((p, i) => ({ ...p, trend: average[i] }));
+  }, [data, lookback]);
   const hasRevenue = points.some((p) => p.invoiced > 0);
+  const lastTrendIndex = points.reduce((last, p, i) => (p.trend != null ? i : last), -1);
+  const hasTrend = lastTrendIndex >= 0;
+
+  // Direct label: only the line's last point gets a dot + value (never a number on every point).
+  const renderTrendEndDot = (props: {
+    cx?: number;
+    cy?: number;
+    index?: number;
+    value?: number | null;
+  }): ReactElement => {
+    const { cx, cy, index, value } = props;
+    if (index !== lastTrendIndex || cx == null || cy == null || value == null) {
+      return <g key={`trend-dot-${index}`} />;
+    }
+    return (
+      <g key={`trend-dot-${index}`} data-testid="dashboard-revenue-trend-end-dot">
+        <circle cx={cx} cy={cy} r={4} fill={CHART_TREND_LINE_COLOR} stroke={CHART_SURFACE_COLOR} strokeWidth={2} />
+        <text
+          x={cx}
+          y={cy - 10}
+          textAnchor="end"
+          fontSize={11}
+          fontWeight={500}
+          fill="var(--color-ink)"
+        >
+          {formatGuaraniesGs(value)}
+        </text>
+      </g>
+    );
+  };
+
+  // Issue #284: days with NO invoicing are real data points (0, and they pull the average down),
+  // so each one gets an explicit marker on the baseline instead of an invisible zero-height bar.
+  const zeroDayDates = points.filter((p) => p.invoiced === 0).map((p) => p.date);
+
+  // Hollow ring on the baseline for a day without invoicing; that day's tooltip reads "Gs. 0".
+  const renderZeroDayDot = (props: { cx?: number; cy?: number; date: string }): ReactElement => {
+    const { cx, cy, date } = props;
+    if (cx == null || cy == null) return <g key={`zero-dot-${date}`} />;
+    return (
+      <circle
+        key={`zero-dot-${date}`}
+        data-testid="dashboard-revenue-trend-zero-day"
+        data-date={date}
+        cx={cx}
+        cy={cy}
+        r={3.5}
+        fill={CHART_SURFACE_COLOR}
+        stroke={CHART_AXIS_TEXT_COLOR}
+        strokeWidth={1.5}
+      />
+    );
+  };
+
+  const legendItems = [
+    { id: "invoiced", label: t("femme.dashboard.invoiced"), icon: "rect" as const, color: CHART_PRIMARY_COLOR },
+    ...(hasTrend
+      ? [
+          {
+            id: "trend",
+            label: t("femme.dashboard.revenueTrendLine", { days: TREND_WINDOW_DAYS }),
+            icon: "line" as const,
+            color: CHART_TREND_LINE_COLOR,
+          },
+        ]
+      : []),
+    ...(zeroDayDates.length > 0
+      ? [
+          {
+            id: "zeroDay",
+            label: t("femme.dashboard.revenueTrendZeroDay"),
+            icon: "ring" as const,
+            color: CHART_AXIS_TEXT_COLOR,
+          },
+        ]
+      : []),
+  ];
+
+  // Same look as recharts' default legend (icon + label, centred under the plot), plus the
+  // "no invoicing" ring, which has no recharts series of its own.
+  const legendContent = () => (
+    <ul
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: "4px 14px",
+        margin: 0,
+        padding: 0,
+        listStyle: "none",
+        fontSize: 11,
+        color: CHART_AXIS_TEXT_COLOR,
+      }}
+    >
+      {legendItems.map((item) => (
+        <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
+            {item.icon === "rect" ? (
+              <rect x={1} y={3} width={12} height={8} rx={2} fill={item.color} fillOpacity={CHART_BAR_CONTEXT_OPACITY} />
+            ) : item.icon === "line" ? (
+              <line x1={1} y1={7} x2={13} y2={7} stroke={item.color} strokeWidth={2} strokeLinecap="round" />
+            ) : (
+              <circle cx={7} cy={7} r={3.5} fill={CHART_SURFACE_COLOR} stroke={item.color} strokeWidth={1.5} />
+            )}
+          </svg>
+          <span>{item.label}</span>
+        </li>
+      ))}
+    </ul>
+  );
 
   const tickFormatter = (value: string) => {
     const d = new Date(`${value}T00:00:00`);
@@ -88,7 +234,7 @@ export function RevenueTrendChart({
       height={250}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <ComposedChart data={points} margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
           {weekendBands.map((band) => (
             <ReferenceArea
@@ -122,41 +268,67 @@ export function RevenueTrendChart({
             contentStyle={chartTooltipContentStyle}
             labelStyle={chartTooltipLabelStyle}
             labelFormatter={(value) => tickFormatter(String(value ?? ""))}
-            // The trend curve traces the same `invoiced` values as the bar (just interpolated
-            // smoothly), so its tooltip entry would only ever duplicate the bar's — returning
-            // `null` (not a [value, name] tuple) drops that row instead of showing the same
-            // amount twice under two different labels (see recharts' `DefaultTooltipContent`).
-            formatter={(value, name) =>
-              name === "trend"
-                ? null
-                : [formatGuaraniesGs(Number(value) || 0), t("femme.dashboard.invoiced")]
-            }
+            cursor={{ fill: CHART_WEEKEND_BG, fillOpacity: 0.7 }}
+            // One tooltip lists both series at the hovered day: the day's amount and the 7-day
+            // average. Days before the first full week have no average (`null`) → that row is
+            // dropped (returning `null` instead of a [value, name] tuple, see recharts'
+            // `DefaultTooltipContent`) rather than shown as a bogus "Gs. 0".
+            formatter={(value, name) => {
+              if (value == null) return null;
+              return [
+                formatGuaraniesGs(Number(value) || 0),
+                name === "trend"
+                  ? t("femme.dashboard.revenueTrendLine", { days: TREND_WINDOW_DAYS })
+                  : t("femme.dashboard.invoiced"),
+              ];
+            }}
           />
           <Legend
             verticalAlign="bottom"
             height={28}
-            wrapperStyle={{ fontSize: 11, color: CHART_AXIS_TEXT_COLOR }}
-            formatter={(value) =>
-              value === "trend" ? t("femme.dashboard.revenueTrendLine") : t("femme.dashboard.invoiced")
-            }
+            content={legendContent}
           />
+          {/* Daily amounts: a recessive tint of the hue, thin bars (≤ 24px), 4px rounded tops. */}
           <Bar
             dataKey="invoiced"
             name="invoiced"
+            legendType="rect"
             fill={CHART_PRIMARY_COLOR}
+            fillOpacity={CHART_BAR_CONTEXT_OPACITY}
+            maxBarSize={24}
             radius={[4, 4, 0, 0]}
             isAnimationActive={false}
           />
-          <Line
-            dataKey="invoiced"
-            name="trend"
-            type="monotone"
-            stroke={CHART_TREND_LINE_COLOR}
-            strokeWidth={2}
-            dot={false}
-            activeDot={false}
-            isAnimationActive={false}
-          />
+          {zeroDayDates.map((date) => (
+            <ReferenceDot
+              key={`zero-${date}`}
+              x={date}
+              y={0}
+              r={3.5}
+              ifOverflow="visible"
+              shape={(dotProps: { cx?: number; cy?: number }) =>
+                renderZeroDayDot({ cx: dotProps.cx, cy: dotProps.cy, date })
+              }
+            />
+          ))}
+          {/* Trend = 7-day moving average, same hue at full strength: 2px, round caps, with a
+              ringed end dot + value as the one direct label. */}
+          {hasTrend ? (
+            <Line
+              dataKey="trend"
+              name="trend"
+              legendType="line"
+              type="monotone"
+              stroke={CHART_TREND_LINE_COLOR}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              connectNulls={false}
+              dot={renderTrendEndDot}
+              activeDot={{ r: 4, fill: CHART_TREND_LINE_COLOR, stroke: CHART_SURFACE_COLOR, strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
+          ) : null}
         </ComposedChart>
       </ResponsiveContainer>
     </ChartCard>

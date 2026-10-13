@@ -53,6 +53,13 @@ public class DashboardService {
   public static final int REVENUE_TREND_DAYS = 30;
 
   /**
+   * Days before the revenue-trend window that are also returned ({@code revenueTrendLookback}) so
+   * the chart's 7-day moving average has a full week behind every plotted day, including the first
+   * one. They are only used for that calculation — never plotted as bars.
+   */
+  public static final int REVENUE_TREND_AVERAGE_LOOKBACK_DAYS = 6;
+
+  /**
    * Issue #220 — "Dashboard: gráfico de servicios más vendidos": caps the top-services-by-revenue
    * chart, same single-named-constant pattern as {@link #INACTIVE_CLIENTS_LIMIT}. The AC calls for
    * "top 5-10 services by revenue" — 10 is the cap; a tenant with fewer distinct services simply
@@ -197,8 +204,7 @@ public class DashboardService {
     List<DashboardResponse.InactiveClient> inactiveClients =
         buildInactiveClients(tenantId, zone, today);
 
-    List<DashboardResponse.RevenueTrendPoint> revenueTrend =
-        buildRevenueTrend(tenantId, zone, today);
+    RevenueTrendSeries revenueTrendSeries = buildRevenueTrend(tenantId, zone, today);
 
     List<DashboardResponse.TopService> topServices = buildTopServices(tenantId, zone, today);
 
@@ -216,11 +222,12 @@ public class DashboardService {
         alerts,
         inactiveClients,
         INACTIVE_CLIENT_THRESHOLD_DAYS,
-        revenueTrend,
+        revenueTrendSeries.points(),
         REVENUE_TREND_DAYS,
         topServices,
         paymentMethodMix,
-        appointmentsByDayOfWeek);
+        appointmentsByDayOfWeek,
+        revenueTrendSeries.lookback());
   }
 
   /**
@@ -245,20 +252,31 @@ public class DashboardService {
    * {@link #REVENUE_TREND_DAYS}-day window ending today (inclusive). Always returns exactly {@link
    * #REVENUE_TREND_DAYS} points, oldest first, one per day — days with no invoices get {@code
    * BigDecimal.ZERO}, never a gap, so the frontend chart's x-axis is always a fixed, contiguous
-   * range.
+   * range. Also returns the {@link #REVENUE_TREND_AVERAGE_LOOKBACK_DAYS} days right before the
+   * window (same shape, oldest first), read with the same single query, so the 7-day moving average
+   * can start on the window's first day.
    */
-  private List<DashboardResponse.RevenueTrendPoint> buildRevenueTrend(
-      long tenantId, ZoneId zone, LocalDate today) {
+  private RevenueTrendSeries buildRevenueTrend(long tenantId, ZoneId zone, LocalDate today) {
     RevenueWindow window = revenueWindow(zone, today);
+    LocalDate lookbackStartDate = window.startDate().minusDays(REVENUE_TREND_AVERAGE_LOOKBACK_DAYS);
+    Instant lookbackStart = lookbackStartDate.atStartOfDay(zone).toInstant();
 
     Map<LocalDate, BigDecimal> totalsByDay = new HashMap<>();
     for (InvoiceRevenueRow row :
         invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
-            tenantId, InvoiceStatus.ISSUED, window.start(), window.end())) {
+            tenantId, InvoiceStatus.ISSUED, lookbackStart, window.end())) {
       LocalDate day = row.issuedAt().atZone(zone).toLocalDate();
       totalsByDay.merge(day, nz(row.total()), BigDecimal::add);
     }
 
+    List<DashboardResponse.RevenueTrendPoint> lookback =
+        new ArrayList<>(REVENUE_TREND_AVERAGE_LOOKBACK_DAYS);
+    for (int i = 0; i < REVENUE_TREND_AVERAGE_LOOKBACK_DAYS; i++) {
+      LocalDate day = lookbackStartDate.plusDays(i);
+      lookback.add(
+          new DashboardResponse.RevenueTrendPoint(
+              day.toString(), totalsByDay.getOrDefault(day, BigDecimal.ZERO)));
+    }
     List<DashboardResponse.RevenueTrendPoint> points = new ArrayList<>(REVENUE_TREND_DAYS);
     for (int i = 0; i < REVENUE_TREND_DAYS; i++) {
       LocalDate day = window.startDate().plusDays(i);
@@ -266,8 +284,13 @@ public class DashboardService {
           new DashboardResponse.RevenueTrendPoint(
               day.toString(), totalsByDay.getOrDefault(day, BigDecimal.ZERO)));
     }
-    return points;
+    return new RevenueTrendSeries(points, lookback);
   }
+
+  /** The plotted window plus the days just before it that feed the moving average. */
+  private record RevenueTrendSeries(
+      List<DashboardResponse.RevenueTrendPoint> points,
+      List<DashboardResponse.RevenueTrendPoint> lookback) {}
 
   private record InactiveCandidate(
       ClientRepository.InactiveClientRow row, long daysSinceLastVisit) {}
@@ -447,9 +470,12 @@ public class DashboardService {
   private static void addFiscalAlerts(
       FiscalStamp stamp, java.time.ZoneId zone, List<DashboardResponse.FiscalAlert> out) {
     LocalDate today = LocalDate.now(zone);
+    // Issue #290: the end of validity and the upper number are optional — no expiry/range alerts
+    // for a stamp that has none.
     LocalDate until = stamp.getValidUntil();
-    boolean expired = until.isBefore(today);
-    boolean rangeExhausted = stamp.getNextEmissionNumber() > stamp.getRangeTo();
+    Integer rangeTo = stamp.getRangeTo();
+    boolean expired = until != null && until.isBefore(today);
+    boolean rangeExhausted = rangeTo != null && stamp.getNextEmissionNumber() > rangeTo;
     if (expired || rangeExhausted) {
       out.add(
           new DashboardResponse.FiscalAlert(
@@ -458,15 +484,15 @@ public class DashboardService {
               "The fiscal stamp is expired or the number range is exhausted. Add a new stamp in Settings."));
       return;
     }
-    long days = java.time.temporal.ChronoUnit.DAYS.between(today, until);
+    long days = until == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(today, until);
     if (days >= 0 && days < 30) {
       out.add(
           new DashboardResponse.FiscalAlert(
               "warning", "fiscalExpiringSoon", "Timbrado expires in less than 30 days"));
     }
-    int range = stamp.getRangeTo() - stamp.getRangeFrom() + 1;
+    int range = rangeTo == null ? 0 : rangeTo - stamp.getRangeFrom() + 1;
     if (range > 0) {
-      int remaining = stamp.getRangeTo() - stamp.getNextEmissionNumber() + 1;
+      int remaining = rangeTo - stamp.getNextEmissionNumber() + 1;
       BigDecimal pct =
           BigDecimal.valueOf(remaining * 100L)
               .divide(BigDecimal.valueOf(range), 2, RoundingMode.HALF_UP);

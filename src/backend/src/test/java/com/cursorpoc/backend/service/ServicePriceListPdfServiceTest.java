@@ -1,11 +1,13 @@
 package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.domain.BusinessProfile;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.lowagie.text.pdf.PdfReader;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Issue #217 "Lista de precios compartible". */
 @ExtendWith(MockitoExtension.class)
@@ -96,6 +99,86 @@ class ServicePriceListPdfServiceTest {
     assertThat(text).contains("Corte de cabello");
     // Same format as the frontend's formatGuaraniesGs: "Gs. " + dot-grouped, no decimals.
     assertThat(text).contains("Gs. 150.000");
+  }
+
+  /** Catalog split: products are listed in their own "Productos" section. */
+  @Test
+  void listsServicesAndProductsInSeparateSections() throws Exception {
+    SalonService shampoo = service("Shampoo 300 ml", 95_000);
+    shampoo.setKind(ServiceKind.PRODUCT);
+    when(salonServiceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(1L))
+        .thenReturn(List.of(service("Corte", 50_000), shampoo));
+    when(businessProfileRepository.findByTenantId(1L))
+        .thenReturn(Optional.of(profileWith(null, "Peluqueria Demo")));
+
+    String text = extractText(newService().buildPriceListPdf(1L));
+
+    assertThat(text).contains("Servicios").contains("Productos");
+    assertThat(text).contains("Servicio").contains("Producto");
+    // OpenPDF writes paragraphs and table cells to different content layers, so the extracted
+    // text order is "headings, then tables"; assert the order within each kind of content.
+    assertThat(text.indexOf("Servicios")).isLessThan(text.indexOf("Productos"));
+    assertThat(text.indexOf("Corte")).isLessThan(text.indexOf("Shampoo 300 ml"));
+  }
+
+  /** Servicios screen: only services, no products, no section titles. */
+  @Test
+  void kindService_listsOnlyServices() throws Exception {
+    SalonService shampoo = service("Shampoo 300 ml", 95_000);
+    shampoo.setKind(ServiceKind.PRODUCT);
+    when(salonServiceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(1L))
+        .thenReturn(List.of(service("Corte", 50_000), shampoo));
+    when(businessProfileRepository.findByTenantId(1L))
+        .thenReturn(Optional.of(profileWith(null, "Peluqueria Demo")));
+
+    String text = extractText(newService().buildPriceListPdf(1L, "SERVICE"));
+
+    assertThat(text)
+        .contains("Corte")
+        .contains("Gs. 50.000")
+        .contains("Lista de precios de servicios");
+    assertThat(text).doesNotContain("Shampoo 300 ml").doesNotContain("Gs. 95.000");
+    assertThat(text).doesNotContain("Productos").doesNotContain("Producto");
+  }
+
+  /** Productos screen: only products, no services. */
+  @Test
+  void kindProduct_listsOnlyProducts() throws Exception {
+    SalonService shampoo = service("Shampoo 300 ml", 95_000);
+    shampoo.setKind(ServiceKind.PRODUCT);
+    when(salonServiceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(1L))
+        .thenReturn(List.of(service("Corte", 50_000), shampoo));
+    when(businessProfileRepository.findByTenantId(1L))
+        .thenReturn(Optional.of(profileWith(null, "Peluqueria Demo")));
+
+    String text = extractText(newService().buildPriceListPdf(1L, "product"));
+
+    assertThat(text)
+        .contains("Shampoo 300 ml")
+        .contains("Gs. 95.000")
+        .contains("Lista de precios de productos")
+        .contains("Producto");
+    assertThat(text).doesNotContain("Corte").doesNotContain("Gs. 50.000");
+    assertThat(text).doesNotContain("Servicios");
+  }
+
+  @Test
+  void invalidKind_isBadRequest() {
+    assertThatThrownBy(() -> newService().buildPriceListPdf(1L, "GADGET"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVALID_SERVICE_KIND");
+  }
+
+  @Test
+  void onlyServices_hasNoProductsSection() throws Exception {
+    when(salonServiceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(1L))
+        .thenReturn(List.of(service("Corte", 50_000)));
+    when(businessProfileRepository.findByTenantId(1L))
+        .thenReturn(Optional.of(profileWith(null, "Peluqueria Demo")));
+
+    String text = extractText(newService().buildPriceListPdf(1L));
+
+    assertThat(text).doesNotContain("Productos");
   }
 
   @Test

@@ -193,28 +193,42 @@ SELECT tenant_id, COUNT(*) FROM sifen_certificates GROUP BY tenant_id;
     --name sifen-submission --query countDetails.deadLetterMessageCount
   ```
 
+## SIFEN environment (`sifen_environment`)
+
+Terraform sets the backend's `FEMME_SIFEN_ENVIRONMENT` from `sifen_environment` in each
+`environments/<env>/terraform.tfvars` (`TEST` default, or `PRODUCTION`). `prod` and `dev` are both
+`PRODUCTION`: documents go to `sifen.set.gov.py`, the KuDE drops the test legend and
+`ALLOW_DUPLICATE_CLIENT_EMAIL` stops applying (TEST only). Each tenant needs its production
+certificate (uploaded in the UI, stored in Key Vault), real timbrado and CSC. Never flip this by hand
+in the Portal: the next `terraform apply` would revert it.
+
 ## Stock integration (HU-59..HU-67)
 
 Terraform owns the `stock-integration` Service Bus queue, its four role assignments and the
 Container App env vars (`APP_FEMME_STOCK_ENABLED`, `APP_FEMME_STOCK_BASE_URL`,
 `APP_FEMME_STOCK_CLIENT_ID`, `FEMME_SERVICEBUS_STOCK_QUEUE`), driven by the `stock_enabled`,
 `stock_api_base_url` and `stock_client_id` variables in each `environments/<env>/terraform.tfvars`.
-`dev` points at the control-stock test API; `prod` stays `stock_enabled = false` until a
-production control-stock exists. What Terraform does **not** manage, by design, must be done per
-environment, in this order:
+`dev` points at the control-stock test API; `prod` is prepared ahead of time (`stock_enabled = true`,
+no `stock_api_base_url` yet → the backend answers `STOCK_NOT_CONFIGURED` and sends nothing; the
+`STOCK_MODULE` flag is OFF for every tenant). What Terraform does **not** manage, by design, must be
+done per environment, in this order:
 
 1. **control-stock exists** for the environment (its own repo/Terraform). Note its API URL and SPA URL.
    Its `pelu_issuer` must be `femme` (pelu signs the SSO token with `app.femme.stock.sso.issuer`,
    default `femme`) and `pelu_home_url` / `pelu_logout_url` must point at this environment's pelu
    SPA (`<spa>/app`, `<spa>/login?reason=stock_logout`).
-2. **tfvars**: set `stock_enabled = true` and `stock_api_base_url`; `terraform plan` should show
-   only the queue, the four roles and the env vars; apply.
+2. **tfvars**: set `stock_enabled = true` (already true in prod) and `stock_api_base_url`;
+   `terraform plan` should show only the `APP_FEMME_STOCK_BASE_URL` env var change; apply.
 3. **Key Vault secrets** (values never in Terraform): `app-femme-stock-sso-secret` = Stock's
    `pelu-handoff-hs256-secret`, and `app-femme-stock-client-secret` = Stock's
    `pelu-platform-client-secret`. Copy them vault-to-vault so the values are never printed. The
    Stock→pelu direction (flags reconciler) additionally needs `app-femme-integration-token-secret`
    and `app-femme-integration-client-secret` — see `docs/stock-integration.md`. Restart the backend
-   revision afterwards: secrets are read at boot.
+   revision afterwards: secrets are read at boot. In prod, `app-femme-stock-sso-secret`,
+   `app-femme-integration-token-secret` and `app-femme-integration-client-secret` were pre-generated
+   with random values (pelu-originated: give the SSO one to Stock as `APP_STOCK_PELU_HS256_SECRET`
+   and the client one as `APP_STOCK_PELU_CLIENT_SECRET`); only `app-femme-stock-client-secret`
+   is still pending, because Stock defines it.
 4. **GitHub Environment variable** `VITE_STOCK_SPA_URL` (the Stock SPA origin) and a frontend
    redeploy — without it the "Stock" menu item stays hidden.
 5. Activate `STOCK_MODULE` for a tenant and check `stock_outbox` reaches `DONE` (operational

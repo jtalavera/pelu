@@ -129,7 +129,7 @@ class SifenHomologationDocumentQueryAndKudeLiveTest {
   private final SifenControlNumberService controlNumberService = new SifenControlNumberService();
   private final SifenDocumentXmlService xmlService = new SifenDocumentXmlService();
   private final SifenDocumentSigningService signingService =
-      new SifenDocumentSigningService(null, null, null, null, null, null, null);
+      new SifenDocumentSigningService(null, null, null, null, null, null, null, null);
   private final SifenQrCodeService qrCodeService =
       new SifenQrCodeService(new SifenQrProperties(), new SifenConnectionProperties());
   private final FemmeTimeProperties timeProperties = new FemmeTimeProperties();

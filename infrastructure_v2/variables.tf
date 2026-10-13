@@ -149,9 +149,27 @@ variable "tags" {
 }
 
 variable "frontend_custom_domains" {
-  description = "Custom domains already registered on the Static Web App outside Terraform (e.g. [\"flowbit.tech\", \"www.flowbit.tech\"]), added as allowed CORS origins."
+  description = "Custom domains served by the pelu Static Web App (e.g. [\"flowbit.tech\"]). Each one is registered on the SWA by azurerm_static_web_app_custom_domain (DNS records are created by hand at the external DNS provider) and added as an allowed CORS origin. Two-label hostnames are treated as apex domains (TXT-token validation); anything deeper uses CNAME validation."
   type        = list(string)
   default     = []
+}
+
+variable "website_swa_name" {
+  description = "Name of the separate marketing-website Static Web App (managed outside this Terraform). Empty (default) skips the website custom domain."
+  type        = string
+  default     = ""
+}
+
+variable "website_swa_resource_group" {
+  description = "Resource group of the marketing-website Static Web App (var.website_swa_name)."
+  type        = string
+  default     = ""
+}
+
+variable "website_custom_domain" {
+  description = "Subdomain registered on the marketing-website Static Web App (e.g. \"www.flowbit.tech\"). Must be a subdomain: the CNAME at the DNS provider has to point to the website SWA's default hostname before apply, and the hostname must not be registered on the pelu SWA."
+  type        = string
+  default     = ""
 }
 
 variable "email_custom_domain" {
@@ -208,6 +226,16 @@ variable "backend_ai_logging_level" {
   validation {
     condition     = contains(["OFF", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"], var.backend_ai_logging_level)
     error_message = "backend_ai_logging_level must be one of OFF, ERROR, WARN, INFO, DEBUG, TRACE."
+  }
+}
+
+variable "sifen_environment" {
+  description = "Which SIFEN environment the backend talks to (FEMME_SIFEN_ENVIRONMENT, HU-05 AC-04): TEST (sifen-test.set.gov.py) or PRODUCTION (sifen.set.gov.py). Production needs real per-tenant certificates, timbrado and CSC."
+  type        = string
+  default     = "TEST"
+  validation {
+    condition     = contains(["TEST", "PRODUCTION"], var.sifen_environment)
+    error_message = "sifen_environment must be TEST or PRODUCTION."
   }
 }
 

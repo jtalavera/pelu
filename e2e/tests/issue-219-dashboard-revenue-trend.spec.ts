@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
   API_BASE,
+  apiGetJson,
   apiPostJson,
   authHeaders,
   ensureActiveFiscalStampForInvoices,
@@ -91,7 +92,7 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
 
     const chart = page.getByTestId("dashboard-revenue-trend");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Revenue trend", { exact: true })).toBeVisible();
+    await expect(page.getByText("Invoicing", { exact: true })).toBeVisible();
 
     // Not the empty state, given the invoices seeded above.
     await expect(page.getByTestId("dashboard-revenue-trend-empty")).toHaveCount(0);
@@ -112,14 +113,64 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
       chart.locator('[data-testid="dashboard-revenue-trend-weekend-band"]').first(),
     ).toBeAttached();
 
-    // Chart-layout follow-up: a linear-regression trend line overlays the bars in a distinct
-    // color, with a legend distinguishing "Invoiced" (bars) from "Trend" (line). Scoped to the
-    // legend specifically — recharts also keeps a (hidden until hover) tooltip entry with the
-    // same series names in the DOM, which would otherwise match too and violate strict mode.
+    // Trend line: a 7-day moving average overlays the bars, with a legend distinguishing
+    // "Invoiced" (bars) from "7-day average" (line). Scoped to the legend specifically — recharts
+    // also keeps a (hidden until hover) tooltip entry with the same series names in the DOM,
+    // which would otherwise match too and violate strict mode.
     await expect(chart.locator(".recharts-line-curve")).toBeAttached();
     const legend = chart.locator(".recharts-legend-wrapper");
     await expect(legend.getByText("Invoiced", { exact: true })).toBeVisible();
-    await expect(legend.getByText("Trend", { exact: true })).toBeVisible();
+    await expect(legend.getByText("7-day average", { exact: true })).toBeVisible();
+
+    // Colour: the trend is the same measure as the bars, so it stays in the same hue — the line in
+    // the full hue (2px) and the daily bars as a recessive tint of it (not a second, rose hue).
+    const line = chart.locator(".recharts-line-curve");
+    await expect(line).toHaveAttribute("stroke", "var(--color-teal)");
+    await expect(line).toHaveAttribute("stroke-width", "2");
+    const bar = chart.locator(".recharts-bar-rectangle path").first();
+    await expect(bar).toHaveAttribute("fill", "var(--color-teal)");
+    await expect(bar).toHaveAttribute("fill-opacity", "0.55");
+
+    // The 7-day average starts on the window's FIRST day: the backend also returns the 6 days
+    // before the window (`revenueTrendLookback`, not plotted as bars) so day 1 already has a full
+    // week behind it, and the line starts over the first bar instead of one week in.
+    const dashboard = await apiGetJson<{
+      revenueTrend: Array<{ date: string; invoiced: string | number }>;
+      revenueTrendLookback: Array<{ date: string }>;
+    }>(request, token, "/api/dashboard");
+    expect(dashboard.revenueTrendLookback).toHaveLength(6);
+    const dayBefore = (iso: string) => {
+      const d = new Date(`${iso}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    };
+    expect(dashboard.revenueTrendLookback[5].date).toBe(dayBefore(dashboard.revenueTrend[0].date));
+    // The line starts over the FIRST plotted day. recharts draws no rectangle for a day with
+    // zero invoicing, so that day's x is its bar's centre — or, for a zero day, the "no invoicing"
+    // marker the chart draws on it (issue #284).
+    const startX = (d: string | null) => Number(/^M\s*([\d.]+)/.exec(d ?? "")?.[1]);
+    const lineStartX = startX(await line.getAttribute("d"));
+    const first = dashboard.revenueTrend[0];
+    let firstDayCenterX: number;
+    if (Number(first.invoiced) === 0) {
+      const marker = chart.locator(`[data-testid="dashboard-revenue-trend-zero-day"][data-date="${first.date}"]`);
+      firstDayCenterX = Number(await marker.getAttribute("cx"));
+    } else {
+      firstDayCenterX = Number(await bar.getAttribute("x")) + Number(await bar.getAttribute("width")) / 2;
+    }
+    expect(Math.abs(lineStartX - firstDayCenterX)).toBeLessThanOrEqual(1);
+    // Every plotted day is visible: a bar when it has invoicing, a marker when it has none
+    // (the lookback days are never drawn).
+    const zeroDays = dashboard.revenueTrend.filter((p) => Number(p.invoiced) === 0).length;
+    await expect(chart.locator(".recharts-bar-rectangle")).toHaveCount(dashboard.revenueTrend.length - zeroDays);
+    await expect(chart.getByTestId("dashboard-revenue-trend-zero-day")).toHaveCount(zeroDays);
+
+    // Direct label: only the line's last point carries a ringed dot with the average's value
+    // (never a number on every point).
+    const endDot = chart.getByTestId("dashboard-revenue-trend-end-dot");
+    await expect(endDot).toHaveCount(1);
+    await expect(endDot.locator("text")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
+    await expect(endDot.locator("circle")).toHaveAttribute("stroke", "var(--color-white)");
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document

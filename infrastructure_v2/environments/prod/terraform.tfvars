@@ -9,7 +9,7 @@ location            = "centralus"
 sql_server_location = ""
 
 # Operator IP allowed through the SQL firewall for manual admin tasks.
-deployer_ip = "181.91.85.175"  # TODO: update if the prod deployer machine has a different IP
+deployer_ip = "181.91.85.175" # TODO: update if the prod deployer machine has a different IP
 
 # Entra ID group (recommended) or user to set as the SQL Entra administrator.
 # After apply, connect as this principal to run the managed-identity DB user grant.
@@ -30,9 +30,17 @@ sql_backup_storage_redundancy = "Zone"
 
 log_analytics_daily_quota_gb = 0.5
 
-# Custom domains already registered on the Static Web App via the Azure Portal
-# (not managed by Terraform); added as allowed CORS origins on the backend.
-frontend_custom_domains = ["flowbit.tech", "www.flowbit.tech"]
+# Custom domains on the pelu Static Web App (registered by Terraform; DNS records are manual at
+# the external DNS provider) and allowed CORS origins on the backend. The apex was created in the
+# Portal, so import it before the first apply (see main.tf).
+frontend_custom_domains = ["flowbit.tech"]
+
+# www.flowbit.tech serves the marketing website SWA (rg-flowbit-website), not pelu. Cut-over
+# order: CNAME www -> white-tree-008be3e10.2.azurestaticapps.net, remove www from the pelu SWA,
+# then apply.
+website_swa_name           = "swa-flowbit-website"
+website_swa_resource_group = "rg-flowbit-website"
+website_custom_domain      = "www.flowbit.tech"
 
 # RT-12 (Hardening_SIFEN.md): the vault holds fiscal signing keys — 90-day retention and
 # purge_protection_enabled=true are correct here. NOTE: purge_protection_enabled is IRREVERSIBLE
@@ -41,8 +49,14 @@ frontend_custom_domains = ["flowbit.tech", "www.flowbit.tech"]
 key_vault_soft_delete_retention_days = 90
 key_vault_purge_protection_enabled   = true
 
-# Stock integration (HU-59..HU-67). Off until a production control-stock exists. When it does, set
-# stock_enabled = true and stock_api_base_url = "<Stock prod API URL>", then follow the "Stock
-# integration" runbook in infrastructure_v2/infrastructure_v2.md (Key Vault secrets and the
+# SIFEN: production taxpayers' documents go to sifen.set.gov.py (backend default is TEST).
+sifen_environment = "PRODUCTION"
+
+# Stock integration (HU-59..HU-67). Prepared ahead of the production control-stock: the queue, roles
+# and env vars exist, and with no stock_api_base_url the backend reports STOCK_NOT_CONFIGURED (and
+# STOCK_MODULE is OFF for every tenant), so nothing is sent. When Stock is deployed, set
+# stock_api_base_url = "<Stock prod API URL>" and `terraform apply`, then follow the "Stock
+# integration" runbook in infrastructure_v2/infrastructure_v2.md (remaining Key Vault secret and the
 # VITE_STOCK_SPA_URL GitHub variable are not managed by Terraform).
-stock_enabled = false
+stock_enabled = true
+# stock_api_base_url = ""

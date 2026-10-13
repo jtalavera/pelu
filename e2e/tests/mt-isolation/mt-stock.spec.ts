@@ -15,11 +15,19 @@ test.describe("mt-stock · aislamiento de la integración con Stock", () => {
     const tokenA = await mtLoginToken(request, world.tenantA);
     const tokenB = await mtLoginToken(request, world.tenantB);
     const name = `MT Producto aislado ${Date.now()}`;
+    // Catalog split: products live in product categories (service categories reject them).
+    const categoryRes = await request.post(`${API_BASE}/api/service-categories`, {
+      headers: authHeaders(tokenA),
+      data: { name: `MT Cat Productos ${Date.now()}`, accentKey: "stone", kind: "PRODUCT" },
+    });
+    expect(categoryRes.ok(), await categoryRes.text()).toBeTruthy();
+    const productCategory = (await categoryRes.json()) as { id: number; name: string; kind: string };
+    expect(productCategory.kind).toBe("PRODUCT");
     const created = await request.post(`${API_BASE}/api/services`, {
       headers: authHeaders(tokenA),
       data: {
         name,
-        categoryId: world.tenantA.catalog.categoryIds[0],
+        categoryId: productCategory.id,
         priceMinor: 10000,
         durationMinutes: 1,
         kind: "PRODUCT",
@@ -34,6 +42,15 @@ test.describe("mt-stock · aislamiento de la integración con Stock", () => {
     const namesB = ((await pageB.json()) as { content: Array<{ name: string }> }).content.map((s) => s.name);
     expect(namesA).toContain(name);
     expect(namesB).not.toContain(name);
+
+    // The product category is exclusive to its kind and to its tenant.
+    const catsAProducts = await request.get(`${API_BASE}/api/service-categories?kind=PRODUCT`, { headers: authHeaders(tokenA) });
+    const catsAServices = await request.get(`${API_BASE}/api/service-categories?kind=SERVICE`, { headers: authHeaders(tokenA) });
+    const catsBProducts = await request.get(`${API_BASE}/api/service-categories?kind=PRODUCT`, { headers: authHeaders(tokenB) });
+    const ids = async (r: typeof catsAProducts) => ((await r.json()) as Array<{ id: number }>).map((c) => c.id);
+    expect(await ids(catsAProducts)).toContain(productCategory.id);
+    expect(await ids(catsAServices)).not.toContain(productCategory.id);
+    expect(await ids(catsBProducts)).not.toContain(productCategory.id);
   });
 
   test("availability solo considera servicios del propio salón; SSO sin Stock es 403", async ({ request }) => {

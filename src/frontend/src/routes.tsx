@@ -9,6 +9,7 @@ import DashboardsPage from "./pages/DashboardsPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
+import ProductsPage from "./pages/ProductsPage";
 import ServicesPage from "./pages/ServicesPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import TaxSettingsPage from "./pages/TaxSettingsPage";
@@ -20,6 +21,8 @@ import BillingPage from "./pages/BillingPage";
 import ServiceRecordsPage from "./pages/ServiceRecordsPage";
 import PropinasPage from "./pages/PropinasPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
+import AuditSettingsPage from "./pages/settings/AuditSettingsPage";
+import PlatformAuditPage from "./pages/PlatformAuditPage";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -27,6 +30,7 @@ import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 import PlatformGlobalFeatureFlagsPage from "./pages/PlatformGlobalFeatureFlagsPage";
 import SifenCertificatesPage from "./pages/SifenCertificatesPage";
 import PlatformDashboardPage from "./pages/PlatformDashboardPage";
+import PlatformTenantSifenPage from "./pages/PlatformTenantSifenPage";
 import PlatformTenantsPage from "./pages/PlatformTenantsPage";
 import PlatformTiersPage from "./pages/PlatformTiersPage";
 import PlatformImportPage from "./pages/PlatformImportPage";
@@ -51,6 +55,7 @@ export function AppRoutes() {
         <Route path="/app/calendar" element={<CalendarPage />} />
         <Route path="/app/dashboards" element={<DashboardsPage />} />
         <Route path="/app/services" element={<ServicesPage />} />
+        <Route path="/app/products" element={<ProductsPage />} />
         <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/service-records" element={<ServiceRecordsPage />} />
         <Route path="/app/propinas" element={<PropinasPage />} />
@@ -64,6 +69,7 @@ export function AppRoutes() {
           <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
           <Route path="taxes" element={<TaxSettingsPage />} />
           <Route path="sifen" element={<SifenCertificatesPage />} />
+          <Route path="audit" element={<AuditSettingsPage />} />
         </Route>
       </Route>
       <Route
@@ -75,6 +81,7 @@ export function AppRoutes() {
       >
         <Route path="/platform" element={<PlatformDashboardPage />} />
         <Route path="/platform/tenants" element={<PlatformTenantsPage />} />
+        <Route path="/platform/tenants/:tenantId/sifen" element={<PlatformTenantSifenPage />} />
         <Route path="/platform/tiers" element={<PlatformTiersPage />} />
         <Route
           path="/platform/global-feature-flags"
@@ -83,6 +90,7 @@ export function AppRoutes() {
         <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
         <Route path="/platform/import" element={<PlatformImportPage />} />
         <Route path="/platform/stock" element={<PlatformStockIntegrationPage />} />
+        <Route path="/platform/audit" element={<PlatformAuditPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />
     </Routes>

@@ -87,6 +87,10 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
   public static final String ERROR_TAX_NOT_FOUND = "IMPORT_ROW_TAX_NOT_FOUND";
   public static final String ERROR_ROW_FAILED = "IMPORT_ROW_FAILED";
   public static final String ERROR_KIND_INVALID = "IMPORT_ROW_KIND_INVALID";
+
+  /** Catalog split: the row's categoria already exists with the other kind (Servicio/Producto). */
+  public static final String ERROR_CATEGORY_KIND_MISMATCH = "IMPORT_ROW_CATEGORY_KIND_MISMATCH";
+
   public static final String ERROR_SKU_TOO_LONG = "IMPORT_ROW_SKU_TOO_LONG";
 
   private static final String COL_CATEGORIA = "categoria";
@@ -262,12 +266,16 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
     }
 
     ServiceCategory category = categoryByName.get(normalize(categoria));
+    if (category != null && category.getKind() != kind) {
+      return ImportRowOutcome.rejected(excelRowNumber, ERROR_CATEGORY_KIND_MISMATCH, nombre.trim());
+    }
     if (category == null) {
       category = new ServiceCategory();
       category.setTenant(tenant);
       category.setName(categoria.trim());
       category.setActive(true);
       category.setAccentKey("stone");
+      category.setKind(kind);
       serviceCategoryRepository.save(category);
       categoryByName.put(normalize(categoria), category);
     }

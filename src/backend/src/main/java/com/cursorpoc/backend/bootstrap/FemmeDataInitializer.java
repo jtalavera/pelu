@@ -113,6 +113,14 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag SIFEN_ELECTRONIC_INVOICING (enabled=true)");
       }
 
+      // SIFEN transmission channel: same flag as V76 (Flyway is disabled for `e2e`). Keep the
+      // description in sync with V76.
+      seedFlag(
+          "SIFEN_SYNC_SUBMISSION",
+          true,
+          "SIFEN transmission channel. On \u2192 envío inmediato (synchronous SiRecepDE). Off at"
+              + " any level \u2192 envío por lote (asynchronous SiRecepLoteDE + consulta-lote).");
+
       // Stock integration (HU-59): same flags as V69 (Flyway is disabled for `e2e`). STOCK_MODULE
       // starts OFF globally; STOCK_HOST_MOVEMENTS_ALLOW_NEGATIVE is deliberately not registered.
       seedFlag(

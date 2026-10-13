@@ -33,6 +33,13 @@ export const appShellSteps: FemmeTourStepDef[] = [
     roles: ["ADMIN"],
   },
   {
+    target: "[data-tour='nav-products']",
+    titleKey: "femme.tour.nav.products.title",
+    contentKey: "femme.tour.nav.products.content",
+    placement: "right",
+    roles: ["ADMIN"],
+  },
+  {
     target: "[data-tour='nav-professionals']",
     titleKey: "femme.tour.nav.professionals.title",
     contentKey: "femme.tour.nav.professionals.content",

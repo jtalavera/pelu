@@ -29,8 +29,8 @@ locals {
     local.sql_db
   )
 
-  # Comma-separated origins for CORS: the SWA default host plus any custom domains
-  # already registered on the Static Web App outside Terraform (var.frontend_custom_domains).
+  # Comma-separated origins for CORS: the SWA default host plus the custom domains
+  # registered on the Static Web App below (var.frontend_custom_domains).
   frontend_allowed_origins = join(",", concat(
     ["https://${azurerm_static_web_app.frontend.default_host_name}"],
     [for d in var.frontend_custom_domains : "https://${d}"]
@@ -115,6 +115,42 @@ resource "azurerm_static_web_app" "frontend" {
   sku_tier            = "Free"
   sku_size            = "Free"
   tags                = local.tags
+}
+
+# Custom domains on the pelu SWA. The DNS provider is external to Azure, so the records
+# (apex TXT/ALIAS, subdomain CNAME -> default host) are edited by hand; this only registers
+# and validates the hostname. Adopting a domain registered in the Portal: terraform import
+# 'azurerm_static_web_app_custom_domain.frontend["<host>"]' '<swa_id>/customDomains/<host>'.
+resource "azurerm_static_web_app_custom_domain" "frontend" {
+  for_each          = toset(var.frontend_custom_domains)
+  static_web_app_id = azurerm_static_web_app.frontend.id
+  domain_name       = each.value
+  validation_type   = length(split(".", each.value)) == 2 ? "dns-txt-token" : "cname-delegation"
+
+  lifecycle {
+    # validation_type is not returned by the API, so an imported domain would otherwise
+    # plan a destroy/create (ForceNew) and drop the live hostname.
+    ignore_changes = [validation_type]
+  }
+}
+
+# Marketing website SWA (separate resource group, not managed here): only its custom domain
+# lives in this stack so the flowbit.tech DNS cut-over is declared next to the pelu domains.
+data "azurerm_static_web_app" "website" {
+  count               = var.website_custom_domain != "" ? 1 : 0
+  name                = var.website_swa_name
+  resource_group_name = var.website_swa_resource_group
+}
+
+resource "azurerm_static_web_app_custom_domain" "website" {
+  count             = var.website_custom_domain != "" ? 1 : 0
+  static_web_app_id = data.azurerm_static_web_app.website[0].id
+  domain_name       = var.website_custom_domain
+  validation_type   = "cname-delegation"
+
+  lifecycle {
+    ignore_changes = [validation_type]
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -600,6 +636,11 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "FEMME_SERVICEBUS_QUEUE"
         value = azurerm_servicebus_queue.sifen_submission.name
+      }
+
+      env {
+        name  = "FEMME_SIFEN_ENVIRONMENT"
+        value = var.sifen_environment
       }
 
       # Stock integration (HU-60..HU-65). Secrets come from Key Vault at boot

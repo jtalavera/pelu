@@ -30,6 +30,14 @@ export function fetchStockAvailability(serviceIds: number[]): Promise<StockAvail
   });
 }
 
+/** One line of a delivery's history: a code plus parameters, translated by the UI. */
+export type StockOutboxMessage = {
+  at: string;
+  level: "INFO" | "WARN" | "ERROR";
+  code: string;
+  params: Record<string, string | number | null | undefined>;
+};
+
 /** HU-67: platform outbox panel. */
 export type StockOutboxRow = {
   id: number;
@@ -43,6 +51,10 @@ export type StockOutboxRow = {
   nextAttemptAt: string | null;
   doneAt: string | null;
   idempotencyKey: string;
+  /** Everything that happened to this delivery, oldest first (empty for pre-history rows). */
+  messages: StockOutboxMessage[];
+  /** Id of the earlier open delivery of the same salon this one is waiting behind, if any. */
+  blockedByEventId: number | null;
 };
 
 export type StockOutboxPage = {
