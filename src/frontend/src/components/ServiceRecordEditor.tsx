@@ -335,8 +335,17 @@ export function ServiceRecordEditor({
     }
   }
 
-  function handleGenerateInvoice() {
+  async function handleGenerateInvoice() {
     if (!record) return;
+    // The ficha only carries the client's name/RUC, so load the profile to prefill the invoice's
+    // recipient email (it is written back to the client if edited on the comprobante form).
+    let email: string | null = null;
+    try {
+      const client = await femmeJson<{ email: string | null }>(`/api/clients/${record.clientId}`);
+      email = client.email;
+    } catch {
+      // Best effort: the invoice form still works with a blank email.
+    }
     navigate("/app/billing", {
       state: {
         activeTab: "invoice",
@@ -346,7 +355,7 @@ export function ServiceRecordEditor({
             id: record.clientId,
             fullName: record.clientFullName,
             phone: null,
-            email: null,
+            email,
             ruc: record.clientRuc,
           },
           lines: record.lines.map((l) => ({

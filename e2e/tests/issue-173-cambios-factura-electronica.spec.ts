@@ -174,6 +174,88 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     expect(updated.email).toBe(newEmail);
   });
 
+  test("item 1 · editing the prefilled email of a client that already has one updates the client record", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    await enableSifen(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const stamp = Date.now();
+    const name = `E2E 173 EDITA CORREO ${stamp}`;
+    const oldEmail = `old-${stamp}@example.com`;
+    const editedEmail = `edited-${stamp}@example.com`;
+    const client = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
+      fullName: name,
+      phone: null,
+      email: oldEmail,
+      ruc: null,
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await ensureCashSessionOpen(page);
+    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await page.getByRole("button", { name: "New Invoice" }).click();
+
+    await selectClientInSearch(page, name);
+    await expect(page.locator("#billing-client-email")).toHaveValue(oldEmail);
+    await page.locator("#billing-client-email").fill(editedEmail);
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("45000");
+    await page.locator("#pay-amount-0").fill("45000");
+    await clickIssueInvoiceAndExpectSuccess(page);
+
+    const updated = await apiGetJson<{ email: string }>(request, token, `/api/clients/${client.id}`);
+    expect(updated.email).toBe(editedEmail);
+  });
+
+  test("item 1 · invoicing from a ficha de servicio prefills the client's email", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, true);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const stamp = Date.now();
+    const name = `E2E 173 FICHA ${stamp}`;
+    const email = `ficha-${stamp}@example.com`;
+    const client = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
+      fullName: name,
+      phone: null,
+      email,
+      ruc: null,
+    });
+    await apiPostJson(request, token, "/api/service-records", {
+      clientId: client.id,
+      lines: [
+        {
+          serviceId: seed.serviceId,
+          professionalId: seed.professionalId,
+          quantity: 1,
+          unitPrice: 45000,
+        },
+      ],
+      tips: [],
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app/service-records");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.locator("#service-record-history-text-filter").fill(name);
+    await page.locator("tbody tr").filter({ hasText: name }).first().click();
+    await page.getByRole("button", { name: "Generate invoice" }).click();
+
+    await expect(page).toHaveURL(/\/app\/billing/);
+    await expect(page.locator("#billing-client-email")).toHaveValue(email);
+  });
+
   test("item 1 · with SIFEN enabled the email is mandatory, except for a 'Sin nominar' comprobante", async ({
     page,
     request,
