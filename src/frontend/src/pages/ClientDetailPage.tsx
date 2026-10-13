@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -30,6 +30,7 @@ import {
 } from "../api/appointments";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { focusMessageBox } from "../util/focusMessageBox";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
@@ -176,6 +177,7 @@ export default function ClientDetailPage() {
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const saveMessagesRef = useRef<HTMLDivElement | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [deactivating, setDeactivating] = useState(false);
@@ -309,6 +311,11 @@ export default function ClientDetailPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoicePageNum, invoicePageSize]);
+
+  // After saving, move the user to the result message so the outcome is seen right away.
+  useEffect(() => {
+    if (saveSuccess || saveError) focusMessageBox(saveMessagesRef.current);
+  }, [saveSuccess, saveError]);
 
   async function saveClient() {
     setFieldError(null);
@@ -465,6 +472,7 @@ export default function ClientDetailPage() {
 
         <TabsContent value="info">
           <Card data-tour="client-detail-edit" className="p-6">
+            <div ref={saveMessagesRef} tabIndex={-1} className="outline-none">
             {saveSuccess ? (
               <Alert variant="success" title={t("femme.clients.editSuccess")} className="mb-4" />
             ) : null}
@@ -484,6 +492,7 @@ export default function ClientDetailPage() {
                 {saveError}
               </Alert>
             ) : null}
+            </div>
 
             <div className="flex flex-col gap-4">
               <div>
