@@ -13,7 +13,7 @@
 |---|-----------|-------------|
 | P1 | **Núcleo genérico** | Conceptos: *Beneficiario*, *Ítem comisionable*, *Evento generador*, *Regla*, *Entrada de comisión*, *Liquidación*. Ninguna entidad del núcleo menciona "peluquería". |
 | P2 | **Libro de movimientos inmutable (append-only)** | Una entrada de comisión nunca se edita ni se borra. Las correcciones se hacen con **contra-asientos** (ajustes). |
-| P3 | **Snapshot en cada entrada** | Cada entrada guarda congelados: % aplicado, origen de la regla, base de cálculo usada, monto base y moneda. Cambios posteriores de reglas o configuración **no alteran lo ya devengado**. |
+| P3 | **Snapshot en cada entrada** | Cada entrada guarda congelados: % aplicado, origen de la regla, base de cálculo usada, monto base y moneda. Cambios posteriores de reglas o configuración **no alteran lo ya devengado**, salvo que el administrador elija explícitamente recalcular el periodo vigente (§4.4); en ese caso el recálculo se hace con contra-entradas, sin editar ni borrar nada. |
 | P4 | **Idempotencia** | Reintentos del evento generador (emisión del comprobante) no duplican entradas. |
 | P5 | **Auditabilidad** | Toda acción de configuración, aprobación y pago registra quién, cuándo y valor anterior/nuevo. |
 | P6 | **Multi-tenant estricto** | Todo dato y toda configuración están aislados por tenant. Cubierto por la suite `mt-isolation`. |
@@ -43,7 +43,7 @@
 | **Pago** | Liquidaciones por periodo con aprobación y marca de pagado. Sin integración con caja en V1. |
 | **Anulación tras liquidar** | **Ajuste negativo** en la próxima liquidación; las liquidaciones cerradas son inmutables. |
 | **Periodicidad** | Configurable por tenant: semanal, quincenal, mensual o rango manual. |
-| **Cambios a mitad de periodo** | Todo cambio que afecte el cálculo (base, % por defecto, reglas) pregunta al `ADMIN` si rige **desde el momento del cambio** o **desde el inicio del próximo periodo** (ver §4.4 y HU-COM-09). Nunca recalcula lo ya devengado. |
+| **Cambios a mitad de periodo** | Todo cambio que afecte el cálculo (base, % por defecto, reglas) pregunta al `ADMIN` si rige **desde el momento del cambio**, **desde el inicio del próximo periodo** o **desde el inicio del periodo vigente** (recalcula lo no cerrado; ver §4.4 y HU-COM-09). Las liquidaciones Aprobadas o Pagadas nunca se recalculan. |
 | **Permisos** | `ADMIN` configura, aprueba, paga y ve todo. `PROFESSIONAL` ve **solo lo suyo**, en lectura. |
 | **Habilitación** | Feature flag `COMMISSIONS` por tenant / tier. |
 
@@ -78,10 +78,10 @@ Con un descuento de 10.000 Gs sobre esa línea (lineNet = 100.000, IVA = 9.090,9
 ### 4.3 Reglas de cambio de la base
 
 1. Solo `ADMIN` puede cambiar la base; el cambio se audita (usuario, fecha, valor anterior y nuevo).
-2. El cambio **nunca es retroactivo**: no recalcula entradas existentes (P3). La fecha desde la que rige la define el administrador al guardar, según §4.4 (desde el momento del cambio o desde el inicio del próximo periodo).
+2. **Por defecto el cambio no es retroactivo.** La fecha desde la que rige la define el administrador al guardar, según §4.4. Solo si elige explícitamente "desde el inicio del periodo vigente" se recalculan las entradas del periodo en curso que aún no estén en una liquidación Aprobada o Pagada; nunca se recalcula nada más antiguo.
 3. Cada entrada de comisión guarda la base con la que fue calculada (`baseTypeApplied`). Las **reversiones** por anulación usan **el snapshot de la entrada original**, nunca la configuración vigente.
 4. En una misma liquidación pueden coexistir entradas calculadas con bases distintas (si el tenant cambió la base durante el periodo). La liquidación y los reportes muestran la base de cada entrada y avisan cuando hay mezcla.
-5. Si el cambio se guarda a mitad de un periodo, el sistema **pregunta cómo aplicarlo** (§4.4); la pantalla advierte explícitamente que el cambio no es retroactivo.
+5. Si el cambio se guarda a mitad de un periodo, el sistema **pregunta cómo aplicarlo** (§4.4); la pantalla advierte explícitamente qué opciones recalculan entradas y cuáles no.
 
 ### 4.4 Cambios a mitad de periodo
 
@@ -101,21 +101,32 @@ La **periodicidad de liquidación** no afecta el cálculo y no dispara esta preg
 | Mensual | Mes calendario | Día 1 del mes siguiente, 00:00 |
 | Manual | No hay periodos predefinidos | No aplica |
 
-**Pregunta al guardar:** si el cambio se confirma con un periodo en curso, el sistema muestra un diálogo obligatorio con dos opciones:
+**Pregunta al guardar:** si el cambio se confirma con un periodo en curso, el sistema muestra un diálogo obligatorio con tres opciones:
 
 | Opción | Fecha de vigencia (`effectiveFrom`) | Efecto |
 |--------|-------------------------------------|--------|
 | **Desde el momento del cambio** | Instante de confirmación | Los comprobantes emitidos desde ese instante usan el nuevo cálculo; los anteriores del mismo periodo conservan el anterior. El periodo queda **mixto**. |
 | **Desde el inicio del próximo periodo** | Inicio del próximo periodo (00:00) | Todo el periodo en curso se calcula con el cálculo anterior; el cambio queda **programado** y se aplica solo al periodo siguiente. |
+| **Desde el inicio del periodo vigente** | Inicio del periodo en curso (00:00) | Se **recalculan** las entradas del periodo en curso alcanzadas por el cambio que no estén en una liquidación Aprobada o Pagada; el periodo completo queda calculado con la nueva regla. |
 
 Reglas:
-1. Ninguna opción recalcula entradas ya devengadas (P3); no existe opción retroactiva.
+1. Solo **Desde el inicio del periodo vigente** recalcula entradas ya devengadas, y solo dentro del periodo en curso. Las otras dos opciones no recalculan nada (P3).
 2. No hay opción por defecto preseleccionada: el administrador debe elegir explícitamente (`COMMISSION_CHANGE_APPLY_MODE_REQUIRED`).
-3. Con periodicidad **Manual** no se hace la pregunta: el cambio rige desde el momento del cambio y el diálogo lo informa.
+3. Con periodicidad **Manual** no existe "próximo periodo": el diálogo ofrece solo **Desde el momento del cambio** y **Desde el último corte**, donde el periodo vigente son las entradas posteriores a la última liquidación Aprobada o Pagada de cada beneficiario.
 4. El diálogo muestra el periodo en curso (fechas), la fecha exacta de vigencia de cada opción y, en el cambio de base, el ejemplo numérico de §4.2.
 5. El cálculo de cada comprobante usa la configuración y las reglas **vigentes en el instante de su emisión** (`issuedAt` frente a `effectiveFrom`), y el resultado queda en el snapshot.
 6. Un cambio **programado** es visible, cancelable antes de entrar en vigencia y queda auditado. Solo puede haber **un cambio programado por alcance** (base, % por defecto de servicios, % por defecto de productos, o regla concreta); uno nuevo reemplaza al anterior previa confirmación.
-7. La opción elegida (`applyMode`: `IMMEDIATE` o `NEXT_PERIOD`) queda en la auditoría.
+7. La opción elegida (`applyMode`: `IMMEDIATE`, `NEXT_PERIOD` o `PERIOD_START`) queda en la auditoría.
+
+**Recálculo con «Desde el inicio del periodo vigente» (`PERIOD_START`):**
+1. **Vista previa obligatoria:** antes de confirmar, el diálogo muestra cuántas entradas se recalcularán, cuántas quedan fuera por estar en liquidaciones Aprobadas o Pagadas y la diferencia total estimada en la moneda del tenant (por beneficiario si hay más de uno).
+2. **Entradas alcanzadas:** cambio de base → todas las del periodo; cambio del % por defecto de servicios o de productos → las de ese tipo cuyo origen era el defecto; cambio de regla → las del ítem (y del profesional, si es una excepción).
+3. **Entradas excluidas:** las de liquidaciones Aprobadas o Pagadas, los ajustes manuales y las de comprobantes ya anulados. El recálculo no genera entradas para líneas que nunca tuvieron comisión.
+4. **Mecánica:** cada entrada alcanzada se revierte con una contra-entrada (`reasonCode = RECALCULATION`) y se emite una nueva entrada con la regla y la base nuevas, con revisión incrementada. Nada se edita ni se borra (P2).
+5. **Liquidaciones en Borrador:** se actualizan con las entradas nuevas y el administrador ve el total corregido.
+6. **Vigencia:** el nuevo valor rige desde el inicio del periodo y sustituye a cualquier versión anterior que rigiera dentro del periodo en curso.
+7. **Atomicidad:** el recálculo es todo o nada; si falla, no se aplica ni el recálculo ni el cambio (`COMMISSION_RECALCULATION_FAILED`).
+8. **Auditoría:** queda un registro del recálculo (usuario, fecha, alcance, periodo, entradas afectadas y diferencia total).
 
 ---
 
@@ -154,7 +165,7 @@ Reglas:
 - [ ] Existe un **historial de cambios** por regla (quién, cuándo, % anterior y nuevo, vigencia).
 - [ ] Puedo ver una **matriz** de profesionales × ítems con el % efectivo y su origen (excepción / general / defecto de servicios o de productos).
 - [ ] Las pantallas de **Servicios** y de **Productos** muestran una advertencia en los ítems sin % general (usan el defecto de su tipo) y un acceso directo a su regla.
-- [ ] Las reglas nuevas **no modifican** entradas ya devengadas.
+- [ ] Las reglas nuevas **no modifican** entradas ya devengadas, salvo que el administrador elija "desde el inicio del periodo vigente" (HU-COM-09).
 - [ ] Todo alta, cambio de % o cierre de una regla, hecho con un periodo en curso, dispara el diálogo de HU-COM-09; la fecha elegida se convierte en el `validFrom` de la nueva versión y el `validTo` de la anterior.
 - [ ] La matriz permite ver el % efectivo **a una fecha dada** e indica los cambios **programados** pendientes.
 
@@ -188,7 +199,7 @@ Reglas:
 - [ ] Una línea sin beneficiario asignado **no genera comisión** y queda listada en el reporte de "líneas sin beneficiario" (con su tipo de ítem).
 - [ ] La entrada guarda el **tipo de ítem** (`itemKind`) como snapshot; si el ítem cambia después en el catálogo, la entrada no se altera.
 - [ ] Aplica igual a **ventas sueltas de productos** (comprobante sin registro de servicio) siempre que la línea tenga beneficiario asignado.
-- [ ] Los comprobantes emitidos **antes** de habilitar el módulo no generan comisión (no hay recálculo retroactivo).
+- [ ] Los comprobantes emitidos **antes** de habilitar el módulo no generan comisión (tampoco con la opción "desde el inicio del periodo vigente").
 - [ ] Un fallo al calcular la comisión **no bloquea** la emisión del comprobante: queda un evento pendiente de reproceso y un error registrado (`COMMISSION_CALCULATION_FAILED`).
 - [ ] Si la feature flag no está habilitada para el tenant, no se generan entradas.
 
@@ -204,6 +215,7 @@ Reglas:
 - [ ] La reversión usa el **snapshot** de la entrada original (misma base, mismo %), no la configuración vigente.
 - [ ] Si el saldo de una liquidación resulta negativo, se **arrastra** el saldo a la siguiente (no se paga negativo).
 - [ ] La anulación es idempotente: anular dos veces no duplica la reversión.
+- [ ] Si las entradas fueron recalculadas antes (HU-COM-09), la anulación revierte la **revisión vigente** de cada entrada.
 - [ ] **Dependencia con Stock:** si el comprobante anulado contiene productos y el módulo de Stock está activo, la devolución del producto al inventario la gestiona la integración con Stock existente (HU-64) y **no forma parte de este módulo**. La reversión de la comisión es **independiente** de esa devolución: un fallo o demora en Stock no impide revertir la comisión, ni al revés.
 
 ### HU-COM-06 · Gestionar liquidaciones por periodo
@@ -256,21 +268,27 @@ Reglas:
 
 **Como** administrador,
 **quiero** que el sistema me pregunte cómo aplicar un cambio de cálculo cuando lo hago a mitad de un periodo,
-**para** decidir si rige desde ahora o desde el próximo periodo y evitar liquidaciones inconsistentes.
+**para** decidir si rige desde ahora, desde el próximo periodo o desde el inicio del periodo vigente, y evitar liquidaciones inconsistentes.
 
 **Criterios de aceptación:**
-- [ ] Al confirmar un cambio alcanzado (base, % por defecto o regla, ver §4.4) con un periodo en curso, se abre un diálogo con dos opciones: **Desde el momento del cambio** y **Desde el inicio del próximo periodo**.
+- [ ] Al confirmar un cambio alcanzado (base, % por defecto o regla, ver §4.4) con un periodo en curso, se abre un diálogo con tres opciones: **Desde el momento del cambio**, **Desde el inicio del próximo periodo** y **Desde el inicio del periodo vigente**.
 - [ ] Ninguna opción viene preseleccionada y no se puede guardar sin elegir una (`COMMISSION_CHANGE_APPLY_MODE_REQUIRED`).
 - [ ] El diálogo muestra el periodo en curso (desde–hasta) y la fecha y hora exactas de vigencia de cada opción.
 - [ ] Con **Desde el momento del cambio**, los comprobantes emitidos a partir de la confirmación usan el nuevo cálculo y los anteriores del periodo conservan el suyo; el periodo queda mixto y la liquidación lo indica (columna y aviso de HU-COM-06).
 - [ ] Con **Desde el inicio del próximo periodo**, el cambio queda **programado**: todo el periodo en curso se calcula con el cálculo anterior y el nuevo rige desde las 00:00 del primer día del próximo periodo.
-- [ ] Ninguna opción modifica entradas ya devengadas ni liquidaciones existentes.
-- [ ] Con periodicidad **Manual** no se muestra la pregunta; el cambio rige desde el momento de la confirmación y el sistema lo informa.
+- [ ] Las opciones **Desde el momento del cambio** y **Desde el inicio del próximo periodo** no modifican entradas ya devengadas ni liquidaciones existentes.
+- [ ] Con **Desde el inicio del periodo vigente**, el diálogo muestra una **vista previa** (entradas a recalcular, entradas excluidas por estar en liquidaciones Aprobadas o Pagadas, y diferencia total) y exige confirmar tras verla.
+- [ ] Al confirmar esa opción, las entradas alcanzadas se **revierten y se reemitan** con la nueva regla mediante contra-entradas, sin editar ni borrar entradas.
+- [ ] Las liquidaciones **Aprobadas o Pagadas** no se modifican; las liquidaciones en **Borrador** se actualizan con las entradas recalculadas y muestran el total corregido.
+- [ ] Los ajustes manuales y las entradas de comprobantes anulados no se recalculan.
+- [ ] El recálculo es atómico: si falla, no se aplica el cambio ni el recálculo y se informa el error.
+- [ ] Con periodicidad **Manual**, el diálogo ofrece solo **Desde el momento del cambio** y **Desde el último corte** (entradas posteriores a la última liquidación Aprobada o Pagada del beneficiario); no ofrece "próximo periodo".
+- [ ] Si el cambio recalculado deja un periodo con varios tramos de cálculo previos, el nuevo valor los sustituye para todo el periodo vigente.
 - [ ] Los cambios programados se listan (qué cambia, valor actual, valor nuevo, fecha de vigencia, autor) y se pueden **cancelar** antes de que entren en vigencia.
 - [ ] Un cambio programado nuevo sobre el mismo alcance **reemplaza** al anterior tras confirmación explícita.
 - [ ] Al llegar la fecha de vigencia el nuevo cálculo se aplica automáticamente, sin intervención del administrador, y los comprobantes emitidos desde ese instante lo usan.
-- [ ] El cálculo de cada comprobante usa lo vigente en su instante de emisión y lo deja en el snapshot (P3).
-- [ ] La auditoría registra el modo elegido (`applyMode`), la fecha de vigencia, valor anterior y nuevo, usuario y fecha/hora; también las cancelaciones de cambios programados.
+- [ ] El cálculo de cada comprobante usa lo vigente en su instante de emisión y lo deja en el snapshot (P3); tras un recálculo, el snapshot de la nueva entrada refleja la regla y la base nuevas.
+- [ ] La auditoría registra el modo elegido (`applyMode`), la fecha de vigencia, valor anterior y nuevo, usuario y fecha/hora; también las cancelaciones de cambios programados y cada recálculo (alcance, periodo, entradas afectadas, diferencia total).
 - [ ] Solo `ADMIN` puede aplicar o cancelar cambios; un `PROFESSIONAL` recibe `403`.
 - [ ] El diálogo y los mensajes están en `en.json` y `es.json`, son accesibles (foco, `role="dialog"`, cierre con Esc sin guardar) y funcionan en modo claro/oscuro y mobile.
 
@@ -301,17 +319,18 @@ Reglas:
 
 | Entidad | Campos clave |
 |---------|--------------|
-| **CommissionSettings** (versionada, N por tenant) | `tenantId`, `commissionBase` (`NET_OF_TAX` \| `TAX_INCLUDED`), `defaultPercentService`, `defaultPercentProduct`, `effectiveFrom`, `applyMode` (`IMMEDIATE` \| `NEXT_PERIOD`), `status` (`SCHEDULED` \| `ACTIVE` \| `SUPERSEDED` \| `CANCELLED`), auditoría. La versión vigente a un instante es la de mayor `effectiveFrom` ≤ instante con estado `ACTIVE`. |
+| **CommissionSettings** (versionada, N por tenant) | `tenantId`, `commissionBase` (`NET_OF_TAX` \| `TAX_INCLUDED`), `defaultPercentService`, `defaultPercentProduct`, `effectiveFrom`, `applyMode` (`IMMEDIATE` \| `NEXT_PERIOD` \| `PERIOD_START`), `status` (`SCHEDULED` \| `ACTIVE` \| `SUPERSEDED` \| `CANCELLED`), auditoría. La versión vigente a un instante es la de mayor `effectiveFrom` ≤ instante con estado `ACTIVE`. |
 | **SettlementConfig** (1 por tenant) | `tenantId`, `settlementPeriodicity` (`WEEKLY` \| `BIWEEKLY` \| `MONTHLY` \| `MANUAL`), auditoría |
-| **CommissionRule** | `tenantId`, `itemId`, `beneficiaryId` (nulo = regla general), `percent`, `validFrom`, `validTo`, `active`, `applyMode`, `status` (`SCHEDULED` \| `ACTIVE` \| `CLOSED` \| `CANCELLED`), auditoría |
+| **CommissionRule** | `tenantId`, `itemId`, `beneficiaryId` (nulo = regla general), `percent`, `validFrom`, `validTo`, `active`, `applyMode` (`IMMEDIATE` \| `NEXT_PERIOD` \| `PERIOD_START`), `status` (`SCHEDULED` \| `ACTIVE` \| `CLOSED` \| `CANCELLED`), auditoría |
 | **InvoiceLine** (cambio a entidad existente) | Nuevo campo opcional `professionalId` (beneficiario), inmutable tras emitir (HU-COM-10). |
 | **CommissionRuleChange** | `ruleId`, `oldPercent`, `newPercent`, vigencia, `changedBy`, `changedAt` |
-| **CommissionEntry** (append-only) | `tenantId`, `beneficiaryId`, `sourceType` (`INVOICE_LINE` \| `REVERSAL` \| `ADJUSTMENT`), `invoiceId`, `invoiceLineId`, `itemId`, `itemKind` (`SERVICE` \| `PRODUCT`), `baseTypeApplied`, `baseAmount`, `taxAmount`, `percentApplied`, `ruleIdApplied`, `ruleOrigin` (`BENEFICIARY_ITEM` \| `ITEM` \| `TENANT_DEFAULT_SERVICE` \| `TENANT_DEFAULT_PRODUCT`), `commissionAmount`, `currency`, `accrualDate`, `settlementId`, `reversesEntryId` |
+| **CommissionEntry** (append-only) | `tenantId`, `beneficiaryId`, `sourceType` (`INVOICE_LINE` \| `REVERSAL` \| `ADJUSTMENT`), `revision` (1 al emitir; +1 en cada recálculo), `reasonCode` (`VOID` \| `RECALCULATION`, solo en reversiones), `recalculationId`, `invoiceId`, `invoiceLineId`, `itemId`, `itemKind` (`SERVICE` \| `PRODUCT`), `baseTypeApplied`, `baseAmount`, `taxAmount`, `percentApplied`, `ruleIdApplied`, `ruleOrigin` (`BENEFICIARY_ITEM` \| `ITEM` \| `TENANT_DEFAULT_SERVICE` \| `TENANT_DEFAULT_PRODUCT`), `commissionAmount`, `currency`, `accrualDate`, `settlementId`, `reversesEntryId` |
+| **CommissionRecalculation** | `tenantId`, `scopeType` / `scopeRef` (base, % por defecto de servicios o de productos, regla), `periodFrom`, `periodTo`, `entriesRecalculated`, `entriesExcluded`, `deltaAmount`, `requestedBy`, `requestedAt` |
 | **Settlement** | `tenantId`, `beneficiaryId`, `periodFrom`, `periodTo`, `status`, `totalAmount`, `approvedBy/At`, `paidBy/At`, `paymentMethod`, `paymentReference` |
 | **SettlementAdjustment** | `settlementId`, `amount` (±), `reason`, `createdBy/At` |
 | **SettlementStatusChange** | `settlementId`, `fromStatus`, `toStatus`, `changedBy`, `changedAt` |
 
-Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `CommissionEntry` sin `UPDATE`/`DELETE` salvo asignación de `settlementId` en la liquidación.
+Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempotencia; `CommissionEntry` sin `UPDATE`/`DELETE` salvo asignación de `settlementId` en la liquidación.
 
 ## 7. Casos límite
 
@@ -324,7 +343,7 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | C5 | Dos reglas vigentes del mismo alcance | Bloqueado por validación (`COMMISSION_RULE_OVERLAP`). |
 | C6 | Profesional desactivado con comisiones pendientes | Se puede seguir liquidando sus entradas existentes; no devenga nuevas si no se le asignan ventas. |
 | C7 | Liquidación con total negativo por ajustes | Se arrastra el saldo negativo a la siguiente liquidación. |
-| C8 | Reintento de emisión / evento duplicado | Idempotencia por `(invoiceLineId, sourceType)`. |
+| C8 | Reintento de emisión / evento duplicado | Idempotencia por `(invoiceLineId, sourceType, revision)`. |
 | C9 | Tenant desactiva la feature flag con liquidaciones abiertas | Se conserva todo el dato; la UI y las generaciones se ocultan/bloquean hasta reactivar. |
 | C10 | Línea con cantidad > 1 | La base es el total de la línea (cantidad × precio, tras descuento). |
 | C11 | Cambio con `NEXT_PERIOD` y, antes de que rija, el admin hace otro cambio sobre el mismo alcance | Reemplaza al programado previo tras confirmación; el reemplazado queda `CANCELLED` en la auditoría. |
@@ -336,11 +355,16 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | C17 | Venta suelta de un producto sin profesional asignado | No genera comisión; aparece en el reporte de líneas sin beneficiario. |
 | C18 | Comprobante con servicios y productos de distintos profesionales | Una entrada por línea, cada una con su beneficiario y con la regla de su ítem / tipo. |
 | C19 | Profesional con % de excepción para un servicio pero no para un producto | El servicio usa la excepción; el producto usa el % general del producto o, si no existe, el defecto de productos. |
-| C20 | Comprobante emitido antes de habilitar el módulo | Sin entradas; no hay backfill. |
+| C20 | Comprobante emitido antes de habilitar el módulo | Sin entradas; no hay backfill, tampoco con `PERIOD_START`. |
+| C21 | Anulación de un comprobante cuyas entradas fueron recalculadas | Se revierte la revisión vigente; las revisiones anteriores ya están compensadas por sus contra-entradas. |
+| C22 | `PERIOD_START` con parte del periodo ya en una liquidación Aprobada o Pagada | Solo se recalcula lo que no está en ellas; la vista previa informa cuántas entradas quedan fuera. |
+| C23 | Dos recálculos `PERIOD_START` en el mismo periodo | Cada uno reemite sobre la revisión vigente; el historial conserva todas las revisiones. |
+| C24 | `PERIOD_START` cuando antes hubo un cambio `IMMEDIATE` en el mismo periodo | El nuevo valor sustituye al anterior para todo el periodo; el tramo `IMMEDIATE` deja de aplicar. |
+| C25 | `PERIOD_START` sin entradas alcanzadas | Se aplica el cambio con vigencia desde el inicio del periodo; la vista previa muestra 0 entradas. |
 
 ## 8. Códigos de error (backend → i18n `femme.apiErrors.*`)
 
-`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`.
+`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`.
 
 ## 9. Requisitos transversales
 
@@ -363,7 +387,7 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | HU-COM-06 | Flujo Borrador→Aprobada→Pagada; ajuste manual con motivo; inmutabilidad; solapamiento bloqueado; mezcla de bases avisada. |
 | HU-COM-07 | Profesional ve solo lo suyo; acceso cruzado rechazado. |
 | HU-COM-08 | Reportes con filtros; PDF y CSV de liquidación. |
-| HU-COM-09 | Diálogo aparece con periodo en curso en cada periodicidad; sin opción preseleccionada; `IMMEDIATE` deja periodo mixto; `NEXT_PERIOD` programa y no altera el periodo actual; cambio programado visible y cancelable; reemplazo de programado; Manual no pregunta; entrada en vigencia automática (reloj controlado); aplica a base, % por defecto y reglas; `PROFESSIONAL` recibe 403. |
+| HU-COM-09 | Diálogo aparece con periodo en curso en cada periodicidad; sin opción preseleccionada; `IMMEDIATE` deja periodo mixto; `NEXT_PERIOD` programa y no altera el periodo actual; cambio programado visible y cancelable; reemplazo de programado; Manual no pregunta; entrada en vigencia automática (reloj controlado); aplica a base, % por defecto y reglas; `PROFESSIONAL` recibe 403; `PERIOD_START`: vista previa con conteos y diferencia, recálculo con contra-entradas, Borrador actualizado, Aprobada/Pagada intactas, ajustes y anulados excluidos, atomicidad ante error, Manual con "desde el último corte", anulación posterior al recálculo. |
 | HU-COM-10 | Campo profesional por línea (servicio y producto); precarga desde registro de servicio; asignación manual en venta suelta; profesional inactivo rechazado; aviso de línea sin comisión; campo oculto con flag deshabilitada; **actualizar los specs existentes de HU-14**. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
@@ -375,7 +399,7 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 - Devengo al cobrar (V1 devenga solo al emitir).
 - Comisión sobre **ganancia / margen** de productos (precio menos costo): la base de V1 es el precio de venta. Requeriría un dato de costo que hoy el catálogo no guarda.
 - Devoluciones de producto con reingreso a stock (la reversión por anulación sí está cubierta).
-- Recálculo **retroactivo** de comisiones ya devengadas (ninguna opción aplica un cambio a comprobantes ya emitidos).
+- Recálculo de periodos **ya cerrados** (liquidaciones Aprobadas o Pagadas) o anteriores al periodo vigente: nada de eso se recalcula en V1.
 - Notas de crédito: su tratamiento se definirá cuando ese módulo esté implementado.
 - Base de cálculo configurable **por regla o por ítem** (decidido: la base es solo por tenant, sin plan de cambiarlo).
 - Notificaciones por email al profesional.
@@ -396,5 +420,9 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | 10 | ¿Comprobantes anteriores a habilitar el módulo? | **No comisionan**; no hay recálculo retroactivo (HU-COM-04, C20). |
 | 11 | ¿Una línea sin profesional bloquea la emisión? | **No**: solo muestra un aviso y no genera comisión (HU-COM-10). |
 | 12 | ¿Se comisiona sobre la ganancia del producto? | **No en V1**: la base es el precio de venta (§11). |
+| 13 | ¿Se puede aplicar un cambio a todo el periodo vigente? | **Sí, como tercera opción** elegida por el admin: recalcula con contra-entradas lo no cerrado, con vista previa (§4.4, HU-COM-09). |
+| 14 | ¿Los Borradores se recalculan? | **Sí.** Solo las liquidaciones Aprobadas y Pagadas quedan intactas. |
+| 15 | ¿Cómo se interpreta con periodicidad Manual? | **Desde el último corte**: entradas posteriores a la última liquidación Aprobada o Pagada del beneficiario. |
+| 16 | ¿La devolución de stock al anular forma parte de comisiones? | **No**: la gestiona la integración con Stock (HU-64); la reversión de la comisión es independiente (HU-COM-05). |
 
 No quedan preguntas abiertas.
