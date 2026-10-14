@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Keybo
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { getItemsWithoutRule } from "../api/commissions";
+import { ItemRulesEditor } from "./commissions/ItemRulesEditor";
 import { useTour } from "../tour/useTour";
 import { productsSteps } from "../tour/steps/products";
 import { servicesSteps } from "../tour/steps/services";
@@ -125,6 +127,18 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
   const [categorySaving, setCategorySaving] = useState(false);
 
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  // HU-COM-02: «Comisión» section + warning on items without a general percent (ADMIN only).
+  const commissionsEnabled = useFeatureFlag("COMMISSIONS");
+  const [itemsWithoutRule, setItemsWithoutRule] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    if (!commissionsEnabled) {
+      setItemsWithoutRule(new Set());
+      return;
+    }
+    getItemsWithoutRule()
+      .then((list) => setItemsWithoutRule(new Set(list.map((i) => i.serviceId))))
+      .catch(() => setItemsWithoutRule(new Set()));
+  }, [commissionsEnabled, serviceModalOpen]);
   const [serviceEditing, setServiceEditing] = useState<SalonService | null>(null);
   const [serviceName, setServiceName] = useState("");
   const [serviceCategoryId, setServiceCategoryId] = useState<string>("");
@@ -966,6 +980,15 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
                                   style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}
                                 >
                                   {s.name}
+                                  {commissionsEnabled && s.active && itemsWithoutRule.has(s.id) ? (
+                                    <span
+                                      className="ml-2 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                                      data-testid={`svc-no-commission-${s.id}`}
+                                      title={t("femme.commissions.rules.noGeneralWarning")}
+                                    >
+                                      {t("femme.commissions.rules.noGeneralBadge")}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </div>
                             </td>
@@ -1512,6 +1535,15 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
               {serviceSaving ? t("femme.services.saving") : t("femme.services.save")}
             </Button>
           </div>
+
+          {serviceEditing && commissionsEnabled ? (
+            <section className="flex flex-col gap-2 border-t pt-4" aria-labelledby="svc-commission-title">
+              <h3 id="svc-commission-title" className="text-sm font-semibold">
+                {t("femme.commissions.rules.sectionTitle")}
+              </h3>
+              <ItemRulesEditor serviceId={serviceEditing.id} />
+            </section>
+          ) : null}
         </div>
       </Modal>
 

@@ -12,4 +12,34 @@ public record InvoiceLineResponse(
     BigDecimal discountValue,
     BigDecimal lineTotal,
     BigDecimal taxRate,
-    BigDecimal taxAmount) {}
+    BigDecimal taxAmount,
+    /** HU-COM-10: professional / seller of the line (null when none). */
+    Long professionalId,
+    String professionalName) {
+
+  public InvoiceLineResponse(
+      Long id,
+      Long serviceId,
+      String description,
+      int quantity,
+      BigDecimal unitPrice,
+      String discountType,
+      BigDecimal discountValue,
+      BigDecimal lineTotal,
+      BigDecimal taxRate,
+      BigDecimal taxAmount) {
+    this(
+        id,
+        serviceId,
+        description,
+        quantity,
+        unitPrice,
+        discountType,
+        discountValue,
+        lineTotal,
+        taxRate,
+        taxAmount,
+        null,
+        null);
+  }
+}

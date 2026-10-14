@@ -165,6 +165,14 @@ const PropinasIcon = () => (
   </svg>
 );
 
+const CommissionsIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="5" x2="5" y2="19" />
+    <circle cx="6.5" cy="6.5" r="2.5" />
+    <circle cx="17.5" cy="17.5" r="2.5" />
+  </svg>
+);
+
 const SettingsIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -310,6 +318,8 @@ function AppShellInner() {
   // HU-65: the first sidebar item driven by a flag — only when the tenant has Stock and this build
   // knows where the Stock SPA lives.
   const stockEnabled = useFeatureFlag("STOCK_MODULE") && stockSpaBaseUrl() !== "";
+  // HU-COM-11: commissions module, enabled per tier / tenant by the platform admin.
+  const commissionsEnabled = useFeatureFlag("COMMISSIONS");
   const { clearTour, startTour, tourKey, seenVersion, hasSeenTour } = useTourContext();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -798,7 +808,25 @@ function AppShellInner() {
               icon={<PropinasIcon />}
               tourId="nav-propinas"
             />
+            {commissionsEnabled && (
+              <SideNavItem
+                to="/app/commissions"
+                label={t("femme.nav.commissions")}
+                icon={<CommissionsIcon />}
+                tourId="nav-commissions"
+              />
+            )}
           </>
+        )}
+
+        {/* HU-COM-07: the professional's own (read-only) commissions. */}
+        {isProfessional && commissionsEnabled && (
+          <SideNavItem
+            to="/app/my-commissions"
+            label={t("femme.nav.myCommissions")}
+            icon={<CommissionsIcon />}
+            tourId="nav-my-commissions"
+          />
         )}
 
         {/* Spacer */}

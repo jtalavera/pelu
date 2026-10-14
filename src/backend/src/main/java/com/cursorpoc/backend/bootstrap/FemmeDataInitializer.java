@@ -130,6 +130,13 @@ public class FemmeDataInitializer {
               + " STOCK_MODULE_DISABLED.");
       seedFlag("STOCK_PHYSICAL_COUNT", true, "Physical inventory (counts) available.");
       seedFlag("STOCK_TOURS", true, "Guided tours in the Stock SPA.");
+      // Módulo de comisiones (HU-COM-11): same flag as V80, OFF globally until a Platform Admin
+      // enables it (Flyway is disabled for `e2e`).
+      seedFlag(
+          "COMMISSIONS",
+          false,
+          "Commissions module (rules, accrual on invoice issue, settlements). Off -> API answers"
+              + " 403 FEATURE_NOT_ENABLED.");
 
       // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's
       // full tier CRUD hasn't landed yet). V41's Flyway INSERT only reaches dev/prod the same way

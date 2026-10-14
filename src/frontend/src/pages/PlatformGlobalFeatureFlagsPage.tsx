@@ -121,7 +121,9 @@ export default function PlatformGlobalFeatureFlagsPage() {
                     {flag.flagKey}
                   </div>
                   {flag.description ? (
-                    <p className="mt-1 text-sm text-[var(--color-ink-2)]">{flag.description}</p>
+                    <p className="mt-1 text-sm text-[var(--color-ink-2)]">
+                      {t(`femme.featureFlags.descriptions.${flag.flagKey}`, { defaultValue: flag.description })}
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

@@ -164,6 +164,7 @@ export function InvoiceCorrectionForm({
               l.discountType === "FIXED"
                 ? maskMoneyInput(String(Math.round(Number(l.discountValue ?? 0))))
                 : (l.discountValue ?? ""),
+            professionalId: l.professionalId != null ? String(l.professionalId) : "",
           }))
         : [emptyInvoiceLine()],
     );
@@ -330,6 +331,7 @@ export function InvoiceCorrectionForm({
               ? parseMaskedMoney(l.discountValue)
               : parseFloat(l.discountValue.replace(",", "."))
             : null,
+        professionalId: l.professionalId ? Number(l.professionalId) : null,
       })),
       payments: payments.map((p) => ({
         method: p.method,

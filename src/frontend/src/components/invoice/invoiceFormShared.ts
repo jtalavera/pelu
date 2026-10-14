@@ -16,6 +16,8 @@ export type InvoiceLineForm = {
   discountEnabled: boolean;
   discountType: "FIXED" | "PERCENT";
   discountValue: string;
+  /** HU-COM-10: kept on a SIFEN correction so the line keeps its commission beneficiary. */
+  professionalId?: string;
 };
 
 export type InvoicePaymentForm = {

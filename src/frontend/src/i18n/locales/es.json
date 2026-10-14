@@ -26,6 +26,274 @@
     }
   },
   "femme": {
+    "commissions": {
+      "pageTitle": "Comisiones",
+      "pageSubtitle": "Reglas, liquidaciones y reportes de comisiones por servicios y productos",
+      "notEnabled": "El módulo de comisiones no está habilitado para este negocio.",
+      "tabs": {
+        "settlements": "Liquidaciones",
+        "rules": "Reglas",
+        "settings": "Configuración",
+        "simulator": "Simulador",
+        "reports": "Reportes"
+      },
+      "common": {
+        "save": "Guardar",
+        "cancel": "Cancelar",
+        "back": "Volver",
+        "search": "Buscar",
+        "exportCsv": "Exportar CSV",
+        "from": "Desde",
+        "to": "Hasta",
+        "professional": "Profesional",
+        "allProfessionals": "Todos los profesionales",
+        "status": "Estado",
+        "allStatuses": "Todos los estados",
+        "total": "Total",
+        "item": "Ítem",
+        "itemKind": "Tipo de ítem",
+        "inactive": "inactivo"
+      },
+      "kind": {
+        "SERVICE": "Servicios",
+        "PRODUCT": "Productos",
+        "ALL": "Servicios y productos"
+      },
+      "base": {
+        "NET_OF_TAX": "Sin IVA",
+        "TAX_INCLUDED": "Con IVA"
+      },
+      "baseHelp": {
+        "NET_OF_TAX": "Total de la línea después de descuentos, menos el IVA de la línea.",
+        "TAX_INCLUDED": "Total de la línea después de descuentos, IVA incluido (lo que pagó el cliente)."
+      },
+      "periodicity": {
+        "WEEKLY": "Semanal (lunes a domingo)",
+        "BIWEEKLY": "Quincenal (1–15 y 16–fin de mes)",
+        "MONTHLY": "Mensual (mes calendario)",
+        "MANUAL": "Manual (rango libre)"
+      },
+      "scope": {
+        "BASE": "Base de cálculo",
+        "DEFAULT_SERVICE": "% por defecto de servicios",
+        "DEFAULT_PRODUCT": "% por defecto de productos",
+        "PERIODICITY": "Periodicidad",
+        "RULE": "Regla"
+      },
+      "origin": {
+        "BENEFICIARY_ITEM": "Excepción del profesional",
+        "ITEM": "% general del ítem",
+        "TENANT_DEFAULT_SERVICE": "% por defecto de servicios",
+        "TENANT_DEFAULT_PRODUCT": "% por defecto de productos"
+      },
+      "versionStatus": {
+        "ACTIVE": "Vigente",
+        "SCHEDULED": "Programado",
+        "SUPERSEDED": "Reemplazado",
+        "CANCELLED": "Cancelado"
+      },
+      "settlementStatus": {
+        "UNSETTLED": "Sin liquidar",
+        "DRAFT": "Borrador",
+        "APPROVED": "Aprobada",
+        "PAID": "Pagada",
+        "VOIDED": "Anulada"
+      },
+      "paymentMethod": {
+        "CASH": "Efectivo",
+        "TRANSFER": "Transferencia",
+        "OTHER": "Otro",
+        "null": "—"
+      },
+      "reason": {
+        "VOID": "Reversión por anulación del comprobante",
+        "CORRECTION": "Reversión por corrección del comprobante",
+        "RECALCULATION": "Reversión por recálculo",
+        "MANUAL_ADJUSTMENT": "Ajuste manual",
+        "CARRY_FORWARD_OUT": "Saldo negativo trasladado a la próxima liquidación",
+        "CARRY_FORWARD_IN": "Saldo negativo de la liquidación anterior",
+        "CARRY_REVERSAL": "Reversión de ajuste por anulación de la liquidación",
+        "null": "—"
+      },
+      "validation": {
+        "percent": "Ingresá un porcentaje entre 0 y 100 con hasta 2 decimales, por ejemplo 40,5."
+      },
+      "applyDialog": {
+        "title": "¿Desde cuándo aplicar el cambio?",
+        "notRetroactiveHint": "Elegí cómo aplicar el cambio. Las dos primeras opciones no modifican comisiones ya devengadas; la última recalcula las del periodo vigente que aún no estén aprobadas ni pagadas.",
+        "currentPeriod": "Periodo vigente: {{from}} – {{to}}.",
+        "manualPeriod": "Periodicidad manual: no hay próximo periodo; el periodo vigente son las comisiones posteriores al último corte aprobado o pagado.",
+        "modes": {
+          "IMMEDIATE": "Desde el momento del cambio",
+          "NEXT_PERIOD": "Desde el inicio del próximo periodo",
+          "PERIOD_START": "Desde el inicio del periodo vigente",
+          "SINCE_LAST_CUTOFF": "Desde el último corte"
+        },
+        "modeHelp": {
+          "IMMEDIATE": "Rige desde {{date}}. Los comprobantes anteriores del periodo conservan su cálculo.",
+          "NEXT_PERIOD": "Queda programado y rige desde {{date}}. Todo el periodo vigente se calcula con el valor actual.",
+          "PERIOD_START": "Rige desde {{date}} y recalcula las comisiones del periodo que no estén en liquidaciones aprobadas o pagadas."
+        },
+        "preview": {
+          "recalculated_one": "Se recalculará {{count}} comisión.",
+          "recalculated_other": "Se recalcularán {{count}} comisiones.",
+          "excluded_one": "{{count}} comisión queda fuera por estar en una liquidación aprobada o pagada.",
+          "excluded_other": "{{count}} comisiones quedan fuera por estar en liquidaciones aprobadas o pagadas.",
+          "delta": "Diferencia total: {{amount}}"
+        },
+        "pendingExists": "Ya hay un cambio programado para esto. Si continuás, el cambio programado se reemplaza.",
+        "replaceAndApply": "Reemplazar y aplicar",
+        "apply": "Aplicar",
+        "applied": "Cambio aplicado."
+      },
+      "settings": {
+        "baseTitle": "Base de cálculo",
+        "baseExample": "Ejemplo: línea de 110.000 Gs con IVA 10 % y 40 % de comisión → sin IVA 40.000 Gs; con IVA 44.000 Gs.",
+        "baseChangeSummary": "Cambiar la base de cálculo de «{{from}}» a «{{to}}». El cambio no es retroactivo salvo que lo apliques desde el inicio del periodo vigente.",
+        "DEFAULT_SERVICE": "% por defecto de servicios",
+        "DEFAULT_PRODUCT": "% por defecto de productos",
+        "DEFAULT_SERVICEHelp": "Se aplica a servicios sin % general ni excepción.",
+        "DEFAULT_PRODUCTHelp": "Se aplica a productos sin % general ni excepción.",
+        "defaultServiceSummary": "Cambiar el % por defecto de servicios a {{value}}.",
+        "defaultProductSummary": "Cambiar el % por defecto de productos a {{value}}.",
+        "periodicity": "Periodicidad de liquidación",
+        "periodicityHelp": "Cambiar la periodicidad no modifica el cálculo: rige para las liquidaciones que se generen después.",
+        "periodicitySaved": "Periodicidad actualizada.",
+        "historyTitle": "Historial de cambios"
+      },
+      "scheduled": {
+        "title": "Cambios programados",
+        "empty": "No hay cambios programados.",
+        "cancel": "Cancelar cambio",
+        "cancelTitle": "Cancelar cambio programado",
+        "cancelDescription": "El cambio programado no entrará en vigencia."
+      },
+      "history": {
+        "date": "Fecha",
+        "what": "Qué cambia",
+        "previous": "Valor anterior",
+        "value": "Valor nuevo",
+        "effectiveFrom": "Vigente desde",
+        "mode": "Modo",
+        "status": "Estado",
+        "user": "Usuario"
+      },
+      "rules": {
+        "sectionTitle": "Comisión",
+        "generalPercent": "% general del ítem (aplica a todos los profesionales)",
+        "general": "General",
+        "percent": "Porcentaje",
+        "removeGeneral": "Quitar % general",
+        "zeroHint": "Usá 0 para marcar el ítem explícitamente sin comisión.",
+        "usesDefault": "Este ítem no tiene % general: usa el % por defecto de su tipo ({{value}}).",
+        "exceptionsTitle": "Excepciones por profesional",
+        "noExceptions": "Sin excepciones: todos los profesionales usan el % general.",
+        "exceptionFor": "Porcentaje para {{name}}",
+        "removeException": "Quitar",
+        "addException": "Agregar excepción",
+        "chooseProfessional": "Elegí un profesional",
+        "scheduledBadge": "Programado: {{value}} desde {{date}}",
+        "historyTitle": "Historial de la regla",
+        "noRule": "Sin regla",
+        "noRuleShort": "Sin % general",
+        "noGeneralBadge": "Sin % de comisión",
+        "noGeneralWarning": "Este ítem no tiene % general de comisión y usa el % por defecto de su tipo.",
+        "generalSummary": "Fijar el % general de «{{item}}» en {{value}}.",
+        "generalRemoveSummary": "Quitar el % general de «{{item}}» (pasará a usar el % por defecto).",
+        "exceptionSummary": "Fijar el % de {{professional}} para «{{item}}» en {{value}}.",
+        "exceptionRemoveSummary": "Quitar la excepción de {{professional}} para «{{item}}».",
+        "atDate": "% vigente al",
+        "legend": "Origen: (E) excepción del profesional, (G) % general del ítem, (D) % por defecto del tipo. ⏱ indica un cambio programado. Tocá una celda para editarla o el nombre del ítem para ver todas sus reglas.",
+        "select": "Seleccionar",
+        "selectItem": "Seleccionar {{name}}",
+        "bulkTitle": "Ítems seleccionados: {{count}}. Aplicá el mismo % a todos.",
+        "bulkTarget": "Aplicar a",
+        "bulkApply": "Aplicar a seleccionados",
+        "bulkSummary": "Fijar {{value}} ({{target}}) en {{count}} ítems.",
+        "cellTitle": "{{professional}} · {{item}}"
+      },
+      "simulator": {
+        "hint": "Simulá qué comisión se aplicaría. No se guarda nada.",
+        "chooseItem": "Elegí un ítem",
+        "noProfessional": "Sin profesional",
+        "amount": "Monto de la línea (con IVA)",
+        "taxRate": "Tasa de IVA",
+        "exempt": "Exenta",
+        "discount": "Descuento (Gs)",
+        "date": "Fecha",
+        "run": "Simular",
+        "amountRequired": "Elegí un ítem e ingresá un monto mayor a 0, por ejemplo 110.000.",
+        "percentLine": "Porcentaje aplicado: {{percent}} ({{origin}})",
+        "formula": "Base {{base}}: {{baseAmount}} × {{percent}} = {{commission}}",
+        "comparison": "Con la otra base ({{base}}): {{baseAmount}} → {{commission}}"
+      },
+      "settlements": {
+        "generateTitle": "Generar liquidaciones",
+        "generate": "Generar",
+        "generateHint": "Se crea una liquidación en borrador por profesional con las comisiones aún no liquidadas hasta la fecha «Hasta».",
+        "generated_one": "Se generó {{count}} liquidación.",
+        "generated_other": "Se generaron {{count}} liquidaciones.",
+        "noneGenerated": "No hay comisiones pendientes para liquidar en ese periodo.",
+        "empty": "No hay liquidaciones.",
+        "period": "Periodo",
+        "open": "Ver"
+      },
+      "settlement": {
+        "title": "Liquidación #{{id}} · {{name}}",
+        "approve": "Aprobar",
+        "approveTitle": "Aprobar liquidación",
+        "approveDescription": "Al aprobarla la liquidación queda inmutable. Si el total es negativo, el saldo se traslada a la próxima.",
+        "markPaid": "Marcar como pagada",
+        "void": "Anular liquidación",
+        "voidDescription": "Las comisiones vuelven a quedar sin liquidar. Indicá el motivo.",
+        "pdf": "Descargar PDF",
+        "lines": "Detalle por línea",
+        "base": "Base",
+        "baseAmount": "Monto base",
+        "commission": "Comisión",
+        "byKind": "Subtotal por tipo",
+        "byItem": "Subtotal por ítem",
+        "adjustments": "Ajustes",
+        "noAdjustments": "Sin ajustes.",
+        "adjustmentType": "Tipo",
+        "bonus": "Bono (+)",
+        "deduction": "Descuento (−)",
+        "amount": "Monto (Gs)",
+        "reason": "Motivo",
+        "addAdjustment": "Agregar ajuste",
+        "adjustmentAmountInvalid": "Ingresá un monto mayor a 0, por ejemplo 50.000.",
+        "mixedBases": "Esta liquidación tiene comisiones calculadas con bases distintas (la base cambió durante el periodo). Revisá la columna «Base».",
+        "historyTitle": "Historial de estados",
+        "paymentMethod": "Método de pago",
+        "paidOn": "Fecha de pago",
+        "reference": "Referencia (opcional)",
+        "paidInfo": "Pagada el {{date}} · {{method}} · Ref.: {{reference}}",
+        "voidedInfo": "Anulada: {{reason}}"
+      },
+      "reports": {
+        "total": "Total del periodo: {{amount}}",
+        "byProfessional": "Por profesional",
+        "byItem": "Por ítem",
+        "byKind": "Por tipo de ítem",
+        "byPeriod": "Por mes",
+        "concept": "Concepto",
+        "lines": "Líneas",
+        "empty": "Sin datos.",
+        "settlementState": "Estado de liquidación",
+        "linesWithoutBeneficiary": "Líneas sin profesional (no generan comisión)",
+        "itemsWithoutRule": "Ítems sin % general (usan el % por defecto)",
+        "invoice": "Comprobante"
+      },
+      "my": {
+        "title": "Mis comisiones",
+        "subtitle": "Tus comisiones devengadas y liquidaciones (solo lectura)",
+        "currentPeriod": "Periodo {{from}} – {{to}}",
+        "currentMonth": "Mes en curso",
+        "entriesTitle": "Comisiones del periodo",
+        "noEntries": "Todavía no tenés comisiones en este periodo.",
+        "settlementsTitle": "Mis liquidaciones"
+      }
+    },
     "appTitle": "Gestión Peluquería",
     "listFilter": {
       "label": "Filtrar lista",
@@ -100,6 +368,8 @@
       "backToLogin": "Volver al inicio de sesión"
     },
     "nav": {
+      "commissions": "Comisiones",
+      "myCommissions": "Mis comisiones",
       "mainLabel": "Navegación principal",
       "dashboard": "Panel",
       "calendar": "Calendario",
@@ -756,6 +1026,9 @@
       "emptyBody": "Creá un impuesto para asignarlo a los servicios."
     },
     "featureFlags": {
+      "descriptions": {
+        "COMMISSIONS": "Módulo de comisiones: reglas por ítem y profesional, devengo al emitir comprobantes y liquidaciones. Apagado → la API responde 403 FEATURE_NOT_ENABLED."
+      },
       "title": "Funcionalidades por tenant",
       "subtitle": "Un flag está activo solo si lo está en los tres niveles: global, el tier de la organización y la organización. Apagarlo en cualquier nivel lo desactiva. Los cambios se aplican cuando los usuarios cargan la app.",
       "globalEditLink": "Editar en Funcionalidades Globales →",
@@ -980,6 +1253,9 @@
         "cashHistory": "Historial de cajas"
       },
       "invoice": {
+        "lineProfessional": "Profesional / Vendedor",
+        "lineProfessionalNone": "Sin profesional",
+        "lineNoCommission": "Esta línea no generará comisión.",
         "title": "Emitir comprobante",
         "clientSection": "Cliente",
         "clientSearchLabel": "Buscar o seleccionar cliente",
@@ -1567,6 +1843,35 @@
       }
     },
     "apiErrors": {
+      "FEATURE_NOT_ENABLED": "Esta funcionalidad no está habilitada para tu negocio.",
+      "COMMISSION_CHANGES_REQUIRED": "No hay cambios para aplicar.",
+      "COMMISSION_CHANGE_APPLY_MODE_REQUIRED": "Elegí cómo aplicar el cambio: desde ahora, desde el próximo periodo o desde el inicio del periodo vigente.",
+      "COMMISSION_APPLY_MODE_NOT_AVAILABLE": "Esa forma de aplicar el cambio no está disponible con la periodicidad actual.",
+      "COMMISSION_PENDING_CHANGE_EXISTS": "Ya hay un cambio programado para esto. Confirmá si querés reemplazarlo.",
+      "COMMISSION_PENDING_CHANGE_NOT_FOUND": "El cambio programado no existe o ya fue cancelado.",
+      "COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE": "El cambio ya entró en vigencia y no se puede cancelar.",
+      "COMMISSION_PERCENT_OUT_OF_RANGE": "Ingresá un porcentaje entre 0 y 100 con hasta 2 decimales, por ejemplo 40,5.",
+      "COMMISSION_BASE_INVALID": "Base de cálculo inválida. Elegí «Con IVA» o «Sin IVA».",
+      "COMMISSION_PERIODICITY_INVALID": "Periodicidad inválida. Elegí semanal, quincenal, mensual o manual.",
+      "COMMISSION_SCOPE_INVALID": "Tipo de cambio inválido.",
+      "COMMISSION_VALID_UNTIL_INVALID": "La fecha «hasta» debe ser posterior a la fecha de vigencia.",
+      "COMMISSION_PROFESSIONAL_INACTIVE": "No se puede crear una excepción para un profesional inactivo.",
+      "COMMISSION_RULE_OVERLAP": "Ya existe una regla vigente para ese ítem y profesional en esas fechas.",
+      "COMMISSION_RULE_NOT_FOUND": "La regla no existe.",
+      "COMMISSION_CALCULATION_FAILED": "No se pudo calcular la comisión; se reintentará automáticamente.",
+      "COMMISSION_RECALCULATION_FAILED": "No se pudo recalcular el periodo. No se aplicó ningún cambio.",
+      "COMMISSION_PERIOD_OVERLAP": "Ya existe una liquidación para ese profesional que se superpone con el periodo elegido.",
+      "COMMISSION_PERIOD_INVALID": "Periodo inválido: la fecha «Hasta» debe ser igual o posterior a «Desde».",
+      "COMMISSION_SIMULATION_INVALID": "Elegí un ítem e ingresá un monto válido, por ejemplo 110.000.",
+      "SETTLEMENT_NOT_FOUND": "La liquidación no existe.",
+      "SETTLEMENT_INVALID_STATE_TRANSITION": "La liquidación no admite esa acción en su estado actual.",
+      "SETTLEMENT_ADJUSTMENT_REASON_REQUIRED": "El motivo del ajuste es obligatorio, por ejemplo «Adelanto».",
+      "SETTLEMENT_ADJUSTMENT_AMOUNT_INVALID": "Ingresá un monto distinto de 0, por ejemplo 50.000.",
+      "SETTLEMENT_NOT_EDITABLE": "Solo se pueden agregar ajustes a una liquidación en borrador.",
+      "SETTLEMENT_EMPTY": "No hay comisiones para liquidar.",
+      "SETTLEMENT_PAYMENT_METHOD_INVALID": "Elegí un método de pago: efectivo, transferencia u otro.",
+      "SETTLEMENT_VOID_REASON_REQUIRED": "El motivo de la anulación es obligatorio.",
+      "INVOICE_LINE_PROFESSIONAL_INACTIVE": "El profesional elegido para una línea está inactivo. Elegí otro profesional.",
       "GENERIC": "Ocurrió un error inesperado. Intentá de nuevo.",
       "UNAUTHORIZED": "Debés iniciar sesión para realizar esta acción.",
       "FORBIDDEN": "No tenés permiso para realizar esta acción.",
