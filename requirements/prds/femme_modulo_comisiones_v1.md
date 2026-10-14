@@ -199,7 +199,7 @@ Reglas:
 - [ ] El monto base se calcula según la **base configurada del tenant** en el instante de la emisión (§4), después de descuentos.
 - [ ] La entrada guarda un **snapshot**: % aplicado, origen de la regla (id), `baseTypeApplied`, monto base, monto IVA de la línea, moneda y comisión resultante.
 - [ ] Las **propinas** no generan comisión.
-- [ ] La base parte del **neto ya calculado por línea** (`lineNet`, tras el descuento de esa línea). El sistema solo admite descuentos por línea, por lo que no hay prorrateo de descuentos globales.
+- [ ] La base parte del **neto ya calculado por línea** (`lineNet`, tras el descuento de esa línea). El descuento global del comprobante **no se prorratea** entre las líneas: no afecta la base de comisión.
 - [ ] El proceso es **idempotente**: reintentar la emisión no duplica entradas (clave única por comprobante + línea).
 - [ ] El redondeo se hace **por entrada** a la unidad mínima de la moneda (Gs sin decimales) con `HALF_UP`.
 - [ ] Una línea sin beneficiario asignado **no genera comisión** y queda listada en el reporte de "líneas sin beneficiario" (con su tipo de ítem).
@@ -435,7 +435,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 |---|----------|----------|
 | 1 | ¿La base debe poder sobrescribirse por ítem o por regla? | **No.** La base es única por tenant. |
 | 2 | ¿El profesional ve el desglose del IVA? | **No.** Solo ve la base usada, el monto base, el % y la comisión (HU-COM-07). |
-| 3 | ¿Cómo afectan los descuentos globales a la base? | Se usa el **neto ya calculado por línea**; el sistema solo admite descuento por línea, no hay prorrateo (HU-COM-04). |
+| 3 | ¿Cómo afectan los descuentos globales a la base? | Se usa el **neto ya calculado por línea**; el descuento global del comprobante no se prorratea ni reduce la base (HU-COM-04). |
 | 4 | ¿Cómo se definen los periodos semanal, quincenal y mensual? | **Calendario fijo**: semanal lunes a domingo, quincenal días 1–15 y 16–fin de mes, mensual mes calendario (§4.4). |
 | 5 | ¿Qué pasa al cambiar la periodicidad a mitad de periodo? | Rige para las **liquidaciones que se generen después**, **sin pregunta**; no toca liquidaciones existentes ni cambios programados (C13). |
 | 6 | ¿El simulador y la matriz de reglas aceptan una fecha? | **Sí, ambos**: muestran el cálculo vigente a esa fecha, incluidos cambios programados (HU-COM-02, HU-COM-03). |

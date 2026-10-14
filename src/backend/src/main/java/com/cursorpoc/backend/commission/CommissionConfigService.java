@@ -259,7 +259,7 @@ public class CommissionConfigService {
     for (CommissionConfigVersion v :
         versionRepository.findByTenantIdAndStatus(tenantId, CommissionVersionStatus.ACTIVE)) {
       if (v.getEffectiveFrom().isAfter(now)) {
-        v.setEffectiveFrom(now.minusSeconds(1));
+        v.setEffectiveFrom(now);
         count++;
       }
     }

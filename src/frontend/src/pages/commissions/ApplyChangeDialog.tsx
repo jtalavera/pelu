@@ -42,12 +42,15 @@ export function ApplyChangeDialog({ open, changes, summary, onClose, onApplied }
   const isBaseChange = changes.some((c) => c.scope === "BASE");
 
   useEffect(() => {
-    if (!open) return;
-    setMode("");
-    setPreview(null);
-    setError(null);
-    setNeedsReplace(false);
-    setOptions(null);
+    if (!open) {
+      // Reset on close so a reopened dialog never shows (and lets the user pick) stale options.
+      setMode("");
+      setPreview(null);
+      setError(null);
+      setNeedsReplace(false);
+      setOptions(null);
+      return;
+    }
     getApplyModeOptions()
       .then(setOptions)
       .catch((err) => setError(translateApiError(err, t)));

@@ -29,12 +29,15 @@ export function ItemRulesEditor({ serviceId }: { serviceId: number }) {
   const [pending, setPending] = useState<{ changes: ConfigChange[]; summary: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  /** `resetForm` only on the first load: a reload after saving one rule keeps unsaved edits of the others. */
+  const load = useCallback(async (resetForm = false) => {
     try {
       const r = await getItemRules(serviceId);
       setRules(r);
-      setGeneral(r.generalPercent === null ? "" : String(r.generalPercent).replace(".", ","));
-      setEdits({});
+      if (resetForm) {
+        setGeneral(r.generalPercent === null ? "" : String(r.generalPercent).replace(".", ","));
+        setEdits({});
+      }
       setLoadError(null);
     } catch (err) {
       setLoadError(translateApiError(err, t));
@@ -42,7 +45,7 @@ export function ItemRulesEditor({ serviceId }: { serviceId: number }) {
   }, [serviceId, t]);
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, [load]);
 
   const addable = useMemo(() => {
@@ -297,6 +300,9 @@ export function ItemRulesEditor({ serviceId }: { serviceId: number }) {
         summary={pending?.summary ?? ""}
         onClose={() => setPending(null)}
         onApplied={() => {
+          if (pending?.changes.some((c) => c.professionalId == null && c.value === null)) {
+            setGeneral("");
+          }
           setPending(null);
           setExceptionPercent("");
           setExceptionProfessional("");

@@ -31,14 +31,17 @@ export function SettingsTab() {
   const [notice, setNotice] = useState<string | null>(null);
   const [periodicityError, setPeriodicityError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  /** `resetForm` only on the first load: a reload after saving one field keeps unsaved edits of the others. */
+  const load = useCallback(async (resetForm = false) => {
     try {
       const s = await getSettings();
       setSettings(s);
-      setBase(s.base);
-      setDefService(String(s.defaultPercentService).replace(".", ","));
-      setDefProduct(String(s.defaultPercentProduct).replace(".", ","));
-      setPeriodicity(s.periodicity);
+      if (resetForm) {
+        setBase(s.base);
+        setDefService(String(s.defaultPercentService).replace(".", ","));
+        setDefProduct(String(s.defaultPercentProduct).replace(".", ","));
+        setPeriodicity(s.periodicity);
+      }
       setLoadError(null);
     } catch (err) {
       setLoadError(translateApiError(err, t));
@@ -46,7 +49,7 @@ export function SettingsTab() {
   }, [t]);
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, [load]);
 
   function saveBase() {
