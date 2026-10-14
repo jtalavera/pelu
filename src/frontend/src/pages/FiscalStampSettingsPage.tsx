@@ -17,9 +17,11 @@ type FiscalStampRow = {
   id: number;
   stampNumber: string;
   validFrom: string;
-  validUntil: string;
+  /** Optional (issue #290): SIFEN does not require an end of validity. */
+  validUntil: string | null;
   rangeFrom: number;
-  rangeTo: number;
+  /** Optional (issue #290): SIFEN does not require an upper number. */
+  rangeTo: number | null;
   nextEmissionNumber: number;
   active: boolean;
   lockedAfterInvoice: boolean;
@@ -27,6 +29,14 @@ type FiscalStampRow = {
   expeditionPoint: number;
   hasInvoices: boolean;
 };
+
+const EDIT_FIELD_KEYS = [
+  "editStampNumber",
+  "editValidFrom",
+  "editValidUntil",
+  "editRangeFrom",
+  "editRangeTo",
+] as const;
 
 function parsePositiveInt(raw: string): number | null {
   const t = raw.trim();
@@ -43,9 +53,15 @@ function parseSifenField(raw: string): number | null {
   return n;
 }
 
+/**
+ * Issue #290: `iso` is a plain calendar date ("YYYY-MM-DD"). `new Date(iso)` would read it as UTC
+ * midnight and show the previous day west of UTC (Paraguay), so parse it as a local date instead.
+ */
 function fmtDateShort(iso: string, locale: string): string {
   try {
-    return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(iso));
+    return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
+      new Date(`${iso}T00:00:00`),
+    );
   } catch {
     return iso;
   }
@@ -139,6 +155,9 @@ export default function FiscalStampSettingsPage() {
   const [focusField, setFocusField] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editStampNumber, setEditStampNumber] = useState("");
+  const [editRangeFrom, setEditRangeFrom] = useState("");
+  const [editRangeTo, setEditRangeTo] = useState("");
   const [editValidFrom, setEditValidFrom] = useState("");
   const [editValidUntil, setEditValidUntil] = useState("");
   const [editStartingEmission, setEditStartingEmission] = useState("");
@@ -176,28 +195,20 @@ export default function FiscalStampSettingsPage() {
     if (!sn || !/^\d+$/.test(sn)) {
       err.stampNumber = t("femme.fiscalStamp.stampNumberInvalid");
     }
-    if (!validFrom) err.validFrom = t("femme.fiscalStamp.dateRequired");
-    if (!validUntil) err.validUntil = t("femme.fiscalStamp.dateRequired");
-    const rf = parsePositiveInt(rangeFrom);
-    const rt = parsePositiveInt(rangeTo);
-    const ie = parsePositiveInt(initialEmission);
-    if (rf === null) err.rangeFrom = t("femme.fiscalStamp.integerInvalid");
-    if (rt === null) err.rangeTo = t("femme.fiscalStamp.integerInvalid");
-    if (ie === null) err.initialEmission = t("femme.fiscalStamp.integerInvalid");
-    if (rf !== null && rt !== null && rf > rt) {
-      err.rangeTo = t("femme.fiscalStamp.rangeOrder");
-    }
-    if (validFrom && validUntil && validFrom >= validUntil) {
-      err.validUntil = t("femme.fiscalStamp.validUntilBeforeFrom");
-    }
-    if (rf !== null && rt !== null && ie !== null) {
-      if (ie < rf || ie > rt) {
-        err.initialEmission = t("femme.fiscalStamp.initialEmissionRange", {
-          from: rf,
-          to: rt,
-        });
-      }
-    }
+    validateStampFields(err, {
+      validFrom,
+      validUntil,
+      rangeFrom,
+      rangeTo,
+      emission: initialEmission,
+      keys: {
+        validFrom: "validFrom",
+        validUntil: "validUntil",
+        rangeFrom: "rangeFrom",
+        rangeTo: "rangeTo",
+        emission: "initialEmission",
+      },
+    });
     if (establishment.trim() !== "" && parseSifenField(establishment) === null) {
       err.establishment = t("femme.fiscalStamp.sifenFieldInvalid");
     }
@@ -205,6 +216,45 @@ export default function FiscalStampSettingsPage() {
       err.expeditionPoint = t("femme.fiscalStamp.sifenFieldInvalid");
     }
     return err;
+  }
+
+  /**
+   * Shared create/edit checks. Issue #290: the end of validity and the "to" number are optional, so
+   * their order/range checks only run when they're filled in.
+   */
+  function validateStampFields(
+    err: Record<string, string | null>,
+    f: {
+      validFrom: string;
+      validUntil: string;
+      rangeFrom: string;
+      rangeTo: string;
+      emission: string;
+      keys: Record<"validFrom" | "validUntil" | "rangeFrom" | "rangeTo" | "emission", string>;
+    },
+  ) {
+    if (!f.validFrom) err[f.keys.validFrom] = t("femme.fiscalStamp.dateRequired");
+    const rf = parsePositiveInt(f.rangeFrom);
+    const rt = f.rangeTo.trim() === "" ? null : parsePositiveInt(f.rangeTo);
+    const ie = parsePositiveInt(f.emission);
+    if (rf === null) err[f.keys.rangeFrom] = t("femme.fiscalStamp.integerInvalid");
+    if (f.rangeTo.trim() !== "" && rt === null) {
+      err[f.keys.rangeTo] = t("femme.fiscalStamp.integerInvalid");
+    }
+    if (ie === null) err[f.keys.emission] = t("femme.fiscalStamp.integerInvalid");
+    if (rf !== null && rt !== null && rf > rt) {
+      err[f.keys.rangeTo] = t("femme.fiscalStamp.rangeOrder");
+    }
+    if (f.validFrom && f.validUntil && f.validFrom >= f.validUntil) {
+      err[f.keys.validUntil] = t("femme.fiscalStamp.validUntilBeforeFrom");
+    }
+    if (rf !== null && ie !== null && !err[f.keys.emission]) {
+      if (rt !== null && (ie < rf || ie > rt)) {
+        err[f.keys.emission] = t("femme.fiscalStamp.initialEmissionRange", { from: rf, to: rt });
+      } else if (rt === null && ie < rf) {
+        err[f.keys.emission] = t("femme.fiscalStamp.initialEmissionMin", { from: rf });
+      }
+    }
   }
 
   async function onCreate(e: React.FormEvent) {
@@ -215,7 +265,7 @@ export default function FiscalStampSettingsPage() {
     if (Object.keys(err).length > 0) return;
 
     const rf = parsePositiveInt(rangeFrom)!;
-    const rt = parsePositiveInt(rangeTo)!;
+    const rt = rangeTo.trim() === "" ? null : parsePositiveInt(rangeTo)!;
     const ie = parsePositiveInt(initialEmission)!;
     const est = establishment.trim() === "" ? undefined : parseSifenField(establishment)!;
     const exp = expeditionPoint.trim() === "" ? undefined : parseSifenField(expeditionPoint)!;
@@ -226,7 +276,7 @@ export default function FiscalStampSettingsPage() {
       await femmePostJson<FiscalStampRow>("/api/fiscal-stamps", {
         stampNumber: stampNumber.trim(),
         validFrom,
-        validUntil,
+        validUntil: validUntil || null,
         rangeFrom: rf,
         rangeTo: rt,
         initialEmissionNumber: ie,
@@ -294,14 +344,18 @@ export default function FiscalStampSettingsPage() {
 
   function openEdit(row: FiscalStampRow) {
     setEditingId(row.id);
+    setEditStampNumber(row.stampNumber);
     setEditValidFrom(row.validFrom);
-    setEditValidUntil(row.validUntil);
+    setEditValidUntil(row.validUntil ?? "");
+    setEditRangeFrom(String(row.rangeFrom));
+    setEditRangeTo(row.rangeTo === null ? "" : String(row.rangeTo));
     setEditStartingEmission(String(row.nextEmissionNumber));
     setEditEstablishment(String(row.establishment));
     setEditExpeditionPoint(String(row.expeditionPoint));
     setSaveError(null);
     setFieldErrors((prev) => {
       const next = { ...prev };
+      for (const k of EDIT_FIELD_KEYS) delete next[k];
       delete next.editStartingEmission;
       delete next.editEstablishment;
       delete next.editExpeditionPoint;
@@ -319,15 +373,32 @@ export default function FiscalStampSettingsPage() {
     if (editingId === null) return;
     const err: Record<string, string | null> = {};
     const row = rows.find((r) => r.id === editingId);
+    const sn = editStampNumber.trim();
+    if (!sn || !/^\d+$/.test(sn)) {
+      err.editStampNumber = t("femme.fiscalStamp.stampNumberInvalid");
+    }
+    validateStampFields(err, {
+      validFrom: editValidFrom,
+      validUntil: editValidUntil,
+      rangeFrom: editRangeFrom,
+      rangeTo: editRangeTo,
+      emission: editStartingEmission,
+      keys: {
+        validFrom: "editValidFrom",
+        validUntil: "editValidUntil",
+        rangeFrom: "editRangeFrom",
+        rangeTo: "editRangeTo",
+        emission: "editStartingEmission",
+      },
+    });
     const nextN = parsePositiveInt(editStartingEmission);
-    if (nextN === null) {
-      err.editStartingEmission = t("femme.fiscalStamp.integerInvalid");
-    } else if (row && (nextN < row.rangeFrom || nextN > row.rangeTo)) {
-      err.editStartingEmission = t("femme.fiscalStamp.initialEmissionRange", {
-        from: row.rangeFrom,
-        to: row.rangeTo,
-      });
-    } else if (row && row.lockedAfterInvoice && nextN < row.nextEmissionNumber) {
+    if (
+      !err.editStartingEmission &&
+      nextN !== null &&
+      row &&
+      row.lockedAfterInvoice &&
+      nextN < row.nextEmissionNumber
+    ) {
       err.editStartingEmission = t("femme.fiscalStamp.cannotMoveBackwardLocked");
     }
     const canEditEstablishment = !!row && !row.hasInvoices;
@@ -346,8 +417,11 @@ export default function FiscalStampSettingsPage() {
     setSaveError(null);
     try {
       await femmePutJson<FiscalStampRow>(`/api/fiscal-stamps/${editingId}`, {
+        stampNumber: sn,
         validFrom: editValidFrom,
-        validUntil: editValidUntil,
+        validUntil: editValidUntil || null,
+        rangeFrom: parsePositiveInt(editRangeFrom)!,
+        rangeTo: editRangeTo.trim() === "" ? null : parsePositiveInt(editRangeTo)!,
         nextEmissionNumber: nextN!,
         establishment: est,
         expeditionPoint: exp,
@@ -364,6 +438,45 @@ export default function FiscalStampSettingsPage() {
 
   const editingRow = rows.find((r) => r.id === editingId) ?? null;
 
+  /** Edit-modal field; `locked` fields are frozen once the stamp has invoices (issue #290). */
+  function renderEditField(f: {
+    id: string;
+    errorKey: string;
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    locked: boolean;
+    type?: "date";
+    inputMode?: "numeric";
+    hint?: string;
+  }) {
+    const error = fieldErrors[f.errorKey];
+    const hint = f.locked ? t("femme.fiscalStamp.fieldLockedHint") : f.hint;
+    return (
+      <div>
+        <Label htmlFor={f.id}>{f.label}</Label>
+        <Input
+          id={f.id}
+          type={f.type}
+          inputMode={f.inputMode}
+          value={f.value}
+          onChange={(e) => f.onChange(e.target.value)}
+          disabled={f.locked}
+          className="mt-1 w-full"
+          invalid={!!error}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${f.id}-err` : hint ? `${f.id}-hint` : undefined}
+        />
+        <FieldValidationError id={`${f.id}-err`}>{error}</FieldValidationError>
+        {!error && hint ? (
+          <p id={`${f.id}-hint`} style={hintStyle}>
+            {hint}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   const sortedRows = useMemo(
     () => [...rows].sort((a, b) => Number(b.active) - Number(a.active)),
     [rows],
@@ -374,10 +487,10 @@ export default function FiscalStampSettingsPage() {
       filterByListQuery(sortedRows, stampListQuery, (r) => [
         r.stampNumber,
         String(r.rangeFrom),
-        String(r.rangeTo),
+        r.rangeTo === null ? "" : String(r.rangeTo),
         String(r.nextEmissionNumber),
         r.validFrom,
-        r.validUntil,
+        r.validUntil ?? "",
       ]),
     [sortedRows, stampListQuery],
   );
@@ -504,9 +617,13 @@ export default function FiscalStampSettingsPage() {
                             <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} />
                           </td>
                           <td style={tdStyle}>{fmtDateShort(row.validFrom, dateLocale)}</td>
-                          <td style={tdStyle}>{fmtDateShort(row.validUntil, dateLocale)}</td>
+                          <td style={tdStyle}>
+                            {row.validUntil
+                              ? fmtDateShort(row.validUntil, dateLocale)
+                              : t("femme.fiscalStamp.notSet")}
+                          </td>
                           <td style={tdStyle}>{row.rangeFrom}</td>
-                          <td style={tdStyle}>{row.rangeTo}</td>
+                          <td style={tdStyle}>{row.rangeTo ?? t("femme.fiscalStamp.notSet")}</td>
                           <td style={tdStyle}>{row.nextEmissionNumber}</td>
                           <td style={tdStyle}>{String(row.establishment).padStart(3, "0")}</td>
                           <td style={tdStyle}>{String(row.expeditionPoint).padStart(3, "0")}</td>
@@ -631,12 +748,15 @@ export default function FiscalStampSettingsPage() {
               clearCreateErrors();
             }}
             aria-invalid={!!fieldErrors.validUntil}
-            aria-describedby={fieldErrors.validUntil ? "fs-vu-err" : undefined}
+            aria-describedby={fieldErrors.validUntil ? "fs-vu-err" : "fs-vu-hint"}
             onFocus={() => setFocusField("fs-vu")}
             onBlur={() => setFocusField(null)}
             style={buildInputStyle(!!fieldErrors.validUntil, focusField === "fs-vu")}
           />
           <FieldValidationError id="fs-vu-err">{fieldErrors.validUntil}</FieldValidationError>
+          <p id="fs-vu-hint" style={hintStyle}>
+            {t("femme.fiscalStamp.optionalHint")}
+          </p>
         </div>
         <div>
           <label htmlFor="fs-rf" style={labelStyle}>
@@ -671,12 +791,15 @@ export default function FiscalStampSettingsPage() {
               clearCreateErrors();
             }}
             aria-invalid={!!fieldErrors.rangeTo}
-            aria-describedby={fieldErrors.rangeTo ? "fs-rt-err" : undefined}
+            aria-describedby={fieldErrors.rangeTo ? "fs-rt-err" : "fs-rt-hint"}
             onFocus={() => setFocusField("fs-rt")}
             onBlur={() => setFocusField(null)}
             style={buildInputStyle(!!fieldErrors.rangeTo, focusField === "fs-rt")}
           />
           <FieldValidationError id="fs-rt-err">{fieldErrors.rangeTo}</FieldValidationError>
+          <p id="fs-rt-hint" style={hintStyle}>
+            {t("femme.fiscalStamp.optionalHint")}
+          </p>
         </div>
         <div style={{ gridColumn: "1 / -1" }}>
           <label htmlFor="fs-ie" style={labelStyle}>
@@ -779,6 +902,56 @@ export default function FiscalStampSettingsPage() {
               {t("femme.fiscalStamp.editLead")}
             </Text>
             <form className="mt-4 flex flex-col gap-4" onSubmit={onSaveEdit} noValidate>
+              {renderEditField({
+                id: "edit-stamp-number",
+                errorKey: "editStampNumber",
+                label: t("femme.fiscalStamp.stampNumber"),
+                value: editStampNumber,
+                onChange: setEditStampNumber,
+                inputMode: "numeric",
+                locked: !!editingRow?.hasInvoices,
+                hint: t("femme.fiscalStamp.stampNumberHint"),
+              })}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {renderEditField({
+                  id: "edit-valid-from",
+                  errorKey: "editValidFrom",
+                  label: t("femme.fiscalStamp.validFrom"),
+                  value: editValidFrom,
+                  onChange: setEditValidFrom,
+                  type: "date",
+                  locked: !!editingRow?.hasInvoices,
+                })}
+                {renderEditField({
+                  id: "edit-valid-until",
+                  errorKey: "editValidUntil",
+                  label: t("femme.fiscalStamp.validUntil"),
+                  value: editValidUntil,
+                  onChange: setEditValidUntil,
+                  type: "date",
+                  locked: false,
+                  hint: t("femme.fiscalStamp.optionalHint"),
+                })}
+                {renderEditField({
+                  id: "edit-range-from",
+                  errorKey: "editRangeFrom",
+                  label: t("femme.fiscalStamp.rangeFrom"),
+                  value: editRangeFrom,
+                  onChange: setEditRangeFrom,
+                  inputMode: "numeric",
+                  locked: !!editingRow?.hasInvoices,
+                })}
+                {renderEditField({
+                  id: "edit-range-to",
+                  errorKey: "editRangeTo",
+                  label: t("femme.fiscalStamp.rangeTo"),
+                  value: editRangeTo,
+                  onChange: setEditRangeTo,
+                  inputMode: "numeric",
+                  locked: false,
+                  hint: t("femme.fiscalStamp.optionalHint"),
+                })}
+              </div>
               <div>
                 <Label htmlFor="edit-start">{t("femme.fiscalStamp.initialEmission")}</Label>
                 <Input

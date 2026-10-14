@@ -2,6 +2,7 @@ package com.cursorpoc.backend.security;
 
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -44,14 +45,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   private final JwtService jwtService;
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
+  private final ProfessionalRepository professionalRepository;
 
   public JwtAuthenticationFilter(
       JwtService jwtService,
       TenantRepository tenantRepository,
-      AppUserRepository appUserRepository) {
+      AppUserRepository appUserRepository,
+      ProfessionalRepository professionalRepository) {
     this.jwtService = jwtService;
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
+    this.professionalRepository = professionalRepository;
+  }
+
+  /**
+   * Stock integration (HU-61): {@code /api/integration/**} is authenticated only by integration
+   * tokens ({@code IntegrationAuthenticationFilter}) — a Femme user session never applies there.
+   */
+  @Override
+  protected boolean shouldNotFilter(HttpServletRequest request) {
+    return request.getRequestURI().startsWith("/api/integration/");
   }
 
   @Override
@@ -100,6 +113,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                       request.getRequestURI());
                   return;
                 }
+                // A deactivated professional can't use the system either: same per-request check,
+                // so an already-open session dies on its next request and reactivating the
+                // professional restores access without a new login.
+                if (principal.getProfessionalId() != null
+                    && isProfessionalInactive(principal.getProfessionalId())) {
+                  log.warn(
+                      "request rejected: professional inactive professionalId={} path={}",
+                      principal.getProfessionalId(),
+                      request.getRequestURI());
+                  return;
+                }
                 UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(
                         principal, null, principal.getAuthorities());
@@ -119,6 +143,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private boolean isUserDisabled(long userId) {
     return appUserRepository.findById(userId).map(u -> !u.isEnabled()).orElse(false);
+  }
+
+  private boolean isProfessionalInactive(long professionalId) {
+    return professionalRepository.findById(professionalId).map(p -> !p.isActive()).orElse(false);
   }
 
   private static boolean isTenantOptionalPath(String requestUri) {

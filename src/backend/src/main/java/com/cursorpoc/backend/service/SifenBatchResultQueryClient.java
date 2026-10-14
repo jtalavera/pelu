@@ -168,6 +168,7 @@ public class SifenBatchResultQueryClient {
         String cdc = SifenXmlUtils.firstDescendantText(gResProcLote, "id");
         SifenSubmissionStatus status =
             mapStatus(SifenXmlUtils.firstDescendantText(gResProcLote, "dEstRes"));
+        String protocolNumber = SifenXmlUtils.firstDescendantText(gResProcLote, "dProtAut");
 
         // "en caso de rechazo, será informado el motivo (solo el primer motivo de rechazo)" —
         // sección 9.3.2 — so this keeps only the first gResProc's code but joins every message,
@@ -187,7 +188,11 @@ public class SifenBatchResultQueryClient {
         }
         documents.add(
             new SifenBatchDocumentResult(
-                cdc, status, resultCode, messages.isEmpty() ? null : String.join("; ", messages)));
+                cdc,
+                status,
+                protocolNumber,
+                resultCode,
+                messages.isEmpty() ? null : String.join("; ", messages)));
       }
 
       return Optional.of(

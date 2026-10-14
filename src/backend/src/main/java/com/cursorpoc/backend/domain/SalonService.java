@@ -1,7 +1,10 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -42,6 +45,15 @@ public class SalonService {
 
   @Column(nullable = false)
   private boolean active;
+
+  /** HU-59: SERVICE (default) or PRODUCT — only products are synchronised to control-stock. */
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 16)
+  private ServiceKind kind = ServiceKind.SERVICE;
+
+  /** HU-59: optional product code shown in control-stock. */
+  @Column(length = 64)
+  private String sku;
 
   public Long getId() {
     return id;
@@ -105,5 +117,25 @@ public class SalonService {
 
   public void setActive(boolean active) {
     this.active = active;
+  }
+
+  public ServiceKind getKind() {
+    return kind;
+  }
+
+  public void setKind(ServiceKind kind) {
+    this.kind = kind == null ? ServiceKind.SERVICE : kind;
+  }
+
+  public boolean isProduct() {
+    return kind == ServiceKind.PRODUCT;
+  }
+
+  public String getSku() {
+    return sku;
+  }
+
+  public void setSku(String sku) {
+    this.sku = sku;
   }
 }

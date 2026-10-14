@@ -154,7 +154,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     ).toBeVisible();
   });
 
-  test("HU-02b · 8 botón Edit stamp: sin facturas se puede cambiar Starting invoice number, establecimiento y punto de expedición", async ({
+  test("HU-02b · 8 botón Edit stamp: sin facturas se puede cambiar cualquier campo (issue #290)", async ({
     page,
     request,
   }) => {
@@ -191,9 +191,10 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
       dlg.getByRole("heading", { name: /^(Edit stamp|Editar timbrado)$/ }),
     ).toBeVisible();
     await expect(dlg.getByLabel(/Starting invoice number|Número de inicio de emisión/)).toBeVisible();
-    await expect(dlg.getByLabel(/Validity start|Inicio de vigencia/)).toHaveCount(0);
-    await expect(dlg.getByLabel(/Validity end|Fin de vigencia/)).toHaveCount(0);
-    await expect(dlg.getByLabel(/Stamp number|Número de timbrado/)).toHaveCount(0);
+    // Issue #290: while the stamp has no invoices every field is editable.
+    await expect(dlg.getByLabel(/Validity start|Inicio de vigencia/)).toBeEditable();
+    await expect(dlg.getByLabel(/Validity end|Fin de vigencia/)).toBeEditable();
+    await expect(dlg.getByLabel(/Stamp number|Número de timbrado/)).toBeEditable();
 
     const establishmentInput = dlg.getByLabel(/^Establishment$|^Establecimiento$/);
     const expeditionInput = dlg.getByLabel(/Expedition point|Punto de expedición/);
@@ -275,6 +276,13 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     const expeditionInput = dlg.getByLabel(/Expedition point|Punto de expedición/);
     await expect(establishmentInput).toBeDisabled();
     await expect(expeditionInput).toBeDisabled();
+    // Issue #290: same for stamp number, start of validity and "from" number; the optional end of
+    // validity and "to" number stay editable.
+    await expect(dlg.getByLabel(/Stamp number|Número de timbrado/)).toBeDisabled();
+    await expect(dlg.getByLabel(/Validity start|Inicio de vigencia/)).toBeDisabled();
+    await expect(dlg.getByLabel(/^(Number from|Número desde)$/)).toBeDisabled();
+    await expect(dlg.getByLabel(/Validity end|Fin de vigencia/)).toBeEditable();
+    await expect(dlg.getByLabel(/^(Number to|Número hasta)$/)).toBeEditable();
 
     // Backward move is rejected client-side, without a round trip to the backend.
     await startInput.fill(String(lockedRow!.nextEmissionNumber - 1));

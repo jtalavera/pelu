@@ -417,15 +417,21 @@ async function ensureActiveFiscalStamp(token: string): Promise<void> {
  * BOTH provisioning paths (fresh + re-derive) — on a reused mt backend the cert already exists, so
  * `GET /api/sifen/certificates` returns a non-empty list and this is a no-op.
  */
-async function ensureSifenCertificate(token: string): Promise<void> {
+async function ensureSifenCertificate(
+  token: string,
+  tenantId: number,
+  platformToken: string,
+): Promise<void> {
   const existing = await must<Array<{ id: number }>>("GET", "/api/sifen/certificates", { token });
   if (existing.length > 0) {
     return;
   }
+  // The certificate is loaded ONLY by the platform's root user, on the tenant's behalf — the
+  // salon's own admin has no upload endpoint.
   const fileBase64 = readFileSync(SIFEN_TEST_CERT_PATH).toString("base64");
-  await must("POST", "/api/sifen/certificates", {
+  await must("POST", `/api/platform/tenants/${tenantId}/sifen/certificates`, {
     body: { fileBase64, password: SIFEN_TEST_CERT_PASSWORD },
-    token,
+    token: platformToken,
   });
 }
 
@@ -535,7 +541,7 @@ async function fullProvision(platformToken: string): Promise<MtWorld> {
   const aClients = [];
   for (let i = 1; i <= 3; i++) aClients.push(await createClient(tokenA, `MT Cliente Aurora ${i}`));
   await ensureActiveFiscalStamp(tokenA);
-  await ensureSifenCertificate(tokenA);
+  await ensureSifenCertificate(tokenA, tenantAId, platformToken);
 
   // --- T-B: RUC, minimal (non-SIFEN) profile, 1 category / 2 services (names copied from A) /
   //     2 professionals / 3 clients, + an active fiscal stamp (traditional numbering still needs
@@ -638,7 +644,7 @@ async function rederiveWorld(platformToken: string, tokenA: string): Promise<MtW
 
   // T-A's tier enables SIFEN — it must carry a valid certificate to emit any invoice. A partial
   // prior provisioning could have skipped this; re-assert it here (no-op when already present).
-  await ensureSifenCertificate(tokenA);
+  await ensureSifenCertificate(tokenA, rowA.id, platformToken);
 
   const [aDerived, bDerived, sifenA, sifenB] = await Promise.all([
     deriveCatalog(tokenA, "A"),

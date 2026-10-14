@@ -1,10 +1,13 @@
 package com.cursorpoc.backend.config;
 
 import com.cursorpoc.backend.repository.AppUserRepository;
+import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.CorrelationIdFilter;
 import com.cursorpoc.backend.security.JwtAuthenticationFilter;
 import com.cursorpoc.backend.security.JwtService;
+import com.cursorpoc.backend.stock.IntegrationAuthenticationFilter;
+import com.cursorpoc.backend.stock.IntegrationTokenService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,8 +41,10 @@ public class SecurityConfig {
   public JwtAuthenticationFilter jwtAuthenticationFilter(
       JwtService jwtService,
       TenantRepository tenantRepository,
-      AppUserRepository appUserRepository) {
-    return new JwtAuthenticationFilter(jwtService, tenantRepository, appUserRepository);
+      AppUserRepository appUserRepository,
+      ProfessionalRepository professionalRepository) {
+    return new JwtAuthenticationFilter(
+        jwtService, tenantRepository, appUserRepository, professionalRepository);
   }
 
   /** RT-21 (Hardening_SIFEN.md): see the filter's own javadoc for why it runs after JWT auth. */
@@ -52,8 +57,12 @@ public class SecurityConfig {
   public SecurityFilterChain securityFilterChain(
       HttpSecurity http,
       JwtAuthenticationFilter jwtAuthenticationFilter,
-      CorrelationIdFilter correlationIdFilter)
+      CorrelationIdFilter correlationIdFilter,
+      IntegrationTokenService integrationTokenService)
       throws Exception {
+    // Stock integration (HU-61): built here (not a @Bean) so it only runs inside this chain.
+    IntegrationAuthenticationFilter integrationFilter =
+        new IntegrationAuthenticationFilter(integrationTokenService);
     return http.csrf(csrf -> csrf.disable())
         .cors(Customizer.withDefaults())
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -78,9 +87,15 @@ public class SecurityConfig {
                     // gated by its own hub.verify_token check inside WhatsAppWebhookController.
                     .requestMatchers("/api/whatsapp/webhook")
                     .permitAll()
+                    // Stock integration (HU-61): control-stock's technical user gets its token
+                    // here; every other /api/integration/** route is guarded by
+                    // IntegrationAuthenticationFilter (integration tokens only).
+                    .requestMatchers(IntegrationAuthenticationFilter.TOKEN_PATH)
+                    .permitAll()
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(integrationFilter, JwtAuthenticationFilter.class)
         .addFilterAfter(correlationIdFilter, JwtAuthenticationFilter.class)
         .build();
   }

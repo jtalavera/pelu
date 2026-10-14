@@ -15,10 +15,14 @@ import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
+import com.cursorpoc.backend.repository.SifenCscRepository;
 import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.service.SifenBatchDocumentResult;
+import com.cursorpoc.backend.service.SifenBatchQueryResult;
 import com.cursorpoc.backend.service.SifenCertificateSecretStore;
 import com.cursorpoc.backend.service.SifenCertificateService;
+import com.cursorpoc.backend.service.SifenCscSecretStore;
 import com.cursorpoc.backend.service.SifenDocumentType;
 import com.cursorpoc.backend.service.SifenInvoiceDetail;
 import com.cursorpoc.backend.service.SifenInvoiceDetailService;
@@ -26,8 +30,11 @@ import com.cursorpoc.backend.service.SifenInvoiceEventLogService;
 import com.cursorpoc.backend.service.SifenInvoiceHeader;
 import com.cursorpoc.backend.service.SifenInvoiceHeaderService;
 import com.cursorpoc.backend.service.SifenInvoiceNotificationService;
+import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenQrCodeService;
+import com.cursorpoc.backend.service.SifenSubmissionResult;
+import com.cursorpoc.backend.stock.InvoiceStockEvent;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,13 +43,17 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -107,6 +118,12 @@ public class SifenInvoiceTestSupportController {
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceNotificationService notificationService;
   private final SifenInvoiceEventLogService eventLogService;
+  private final SifenCscRepository cscRepository;
+  private final SifenCscSecretStore cscSecretStore;
+  private final SifenInvoiceSubmissionService submissionService;
+
+  /** Stock (HU-64): the fabricated voids announce themselves exactly like the real services. */
+  private final ApplicationEventPublisher events;
 
   public SifenInvoiceTestSupportController(
       InvoiceRepository invoiceRepository,
@@ -123,7 +140,13 @@ public class SifenInvoiceTestSupportController {
       SifenNumberVoidingEventRepository numberVoidingEventRepository,
       FemmeTimeProperties timeProperties,
       SifenInvoiceNotificationService notificationService,
-      SifenInvoiceEventLogService eventLogService) {
+      SifenInvoiceEventLogService eventLogService,
+      SifenCscRepository cscRepository,
+      SifenCscSecretStore cscSecretStore,
+      SifenInvoiceSubmissionService submissionService,
+      ApplicationEventPublisher events) {
+    this.events = events;
+    this.submissionService = submissionService;
     this.invoiceRepository = invoiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.tenantRepository = tenantRepository;
@@ -139,6 +162,8 @@ public class SifenInvoiceTestSupportController {
     this.timeProperties = timeProperties;
     this.notificationService = notificationService;
     this.eventLogService = eventLogService;
+    this.cscRepository = cscRepository;
+    this.cscSecretStore = cscSecretStore;
   }
 
   /**
@@ -161,6 +186,19 @@ public class SifenInvoiceTestSupportController {
     certificateSecretStore.deleteAll(DEMO_TENANT_ID);
   }
 
+  /**
+   * Per-tenant CSC e2e specs load a CSC into the shared demo tenant; this drops every CSC (rows and
+   * stored values) so they leave it in the known-empty state — i.e. the demo tenant falls back to
+   * the SET's public test CSC again, exactly like the other SIFEN specs expect.
+   */
+  @PostMapping("/csc/clear")
+  @Transactional
+  public void clearCsc() {
+    log.info("POST /api/admin/sifen-test-support/csc/clear tenantId={}", DEMO_TENANT_ID);
+    cscRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    cscSecretStore.deleteAll(DEMO_TENANT_ID);
+  }
+
   @PostMapping("/invoices/{id}/prepare-for-status-check")
   @Transactional
   public void prepareForStatusCheck(@PathVariable long id) {
@@ -178,6 +216,73 @@ public class SifenInvoiceTestSupportController {
     invoice.setSifenControlNumber(FIXTURE_CONTROL_NUMBER);
     invoice.setSifenSignedAt(LocalDateTime.now());
     invoice.setSifenSubmissionStatus(SifenSubmissionStatus.PENDING_VERIFICATION);
+  }
+
+  /**
+   * SIFEN envío por lote ({@code SIFEN_SYNC_SUBMISSION} off): fabricates what an accepted lote
+   * leaves behind — the {@link #prepareForStatusCheck} precondition plus the {@code dProtConsLote}
+   * SIFEN would have returned — so Playwright can drive the real "check status" button through the
+   * real consulta-lote client (unreachable in e2e, so it answers "no response").
+   */
+  @PostMapping("/invoices/{id}/prepare-pending-in-batch/{batchNumber}")
+  @Transactional
+  public void preparePendingInBatch(@PathVariable long id, @PathVariable String batchNumber) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/prepare-pending-in-batch/{}",
+        id,
+        batchNumber);
+    prepareForStatusCheck(id);
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    invoice.setSifenBatchNumber(batchNumber);
+    invoice.setSifenSubmittedAt(LocalDateTime.now(timeProperties.zoneId()));
+  }
+
+  /** Body of {@link #simulateBatchResult}: one consulta-lote answer for the invoice's document. */
+  public record SimulatedBatchResult(
+      String batchResultCode,
+      SifenSubmissionStatus status,
+      String protocolNumber,
+      String resultCode,
+      String message) {}
+
+  /**
+   * SIFEN envío por lote: feeds a fabricated consulta-lote answer (e2e never reaches a real SIFEN)
+   * to the real {@code SifenInvoiceSubmissionService#recordBatchQueryResult} — the same mapping the
+   * real poll uses — for an invoice left pending in a lote by {@link #preparePendingInBatch}.
+   */
+  @PostMapping("/invoices/{id}/simulate-batch-result")
+  public SifenSubmissionResult simulateBatchResult(
+      @PathVariable long id, @RequestBody SimulatedBatchResult body) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/simulate-batch-result code={} status={}",
+        id,
+        body.batchResultCode(),
+        body.status());
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    long tenantId = invoice.getTenant().getId();
+    List<SifenBatchDocumentResult> documents =
+        body.status() == null
+            ? List.of()
+            : List.of(
+                new SifenBatchDocumentResult(
+                    invoice.getSifenControlNumber(),
+                    body.status(),
+                    body.protocolNumber(),
+                    body.resultCode(),
+                    body.message()));
+    Optional<SifenSubmissionResult> result =
+        submissionService.recordBatchQueryResult(
+            tenantId, id, new SifenBatchQueryResult(body.batchResultCode(), null, documents));
+    return result.orElseThrow(
+        () -> new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_BATCH_RESULT_UNRESOLVED"));
   }
 
   /**
@@ -293,8 +398,12 @@ public class SifenInvoiceTestSupportController {
       invoice.setSifenSubmissionStatus(SifenSubmissionStatus.CANCELLED);
       // Issue #145: mirrors SifenInvoiceCancellationService.recordCancellationResult, which also
       // voids the invoice record on a successful SIFEN cancellation.
+      boolean wasVoided = invoice.getStatus() == InvoiceStatus.VOIDED;
       invoice.setStatus(InvoiceStatus.VOIDED);
       invoice.setVoidReason(invoice.getSifenCancellationReason());
+      if (!wasVoided) {
+        events.publishEvent(InvoiceStockEvent.voided(invoice, invoice.getVoidReason()));
+      }
     } else {
       invoice.setSifenCancellationResultCode("4009");
       invoice.setSifenCancellationMessage(
@@ -448,6 +557,7 @@ public class SifenInvoiceTestSupportController {
       if (invoice.getStatus() == InvoiceStatus.ISSUED) {
         invoice.setStatus(InvoiceStatus.VOIDED);
         invoice.setVoidReason("Numeración inutilizada ante SIFEN (protocolo 135791113)");
+        events.publishEvent(InvoiceStockEvent.voided(invoice, invoice.getVoidReason()));
       }
     } else {
       event.setResultCode("4004");

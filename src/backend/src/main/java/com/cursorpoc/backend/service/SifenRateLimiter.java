@@ -32,7 +32,7 @@ public class SifenRateLimiter {
   private final ConcurrentHashMap<Long, TenantWindow> windows = new ConcurrentHashMap<>();
 
   public SifenRateLimiter(
-      @Value("${app.femme.sifen.rate-limit.max-calls-per-window:30}") int maxCallsPerWindow,
+      @Value("${app.femme.sifen.rate-limit.max-calls-per-window:120}") int maxCallsPerWindow,
       @Value("${app.femme.sifen.rate-limit.window-seconds:60}") long windowSeconds) {
     this.maxCallsPerWindow = maxCallsPerWindow;
     this.window = Duration.ofSeconds(windowSeconds);

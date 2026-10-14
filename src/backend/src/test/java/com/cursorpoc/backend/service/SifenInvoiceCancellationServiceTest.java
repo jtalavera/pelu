@@ -89,6 +89,32 @@ class SifenInvoiceCancellationServiceTest {
         .thenAnswer(inv -> inv.getArgument(1));
   }
 
+  /** Stock (HU-64): an approved SIFEN cancellation gives the products back to stock. */
+  @Test
+  void cancel_whenSifenApproves_publishesStockVoidedEvent() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+    when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))
+        .thenReturn(
+            Optional.of(
+                new SifenSubmissionResult(
+                    SifenSubmissionStatus.APPROVED,
+                    "987654321",
+                    "0600",
+                    "Evento registrado correctamente",
+                    LocalDateTime.now())));
+
+    service.cancel(TENANT_ID, INVOICE_ID, USER_ID, USER_EMAIL, REASON);
+
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            com.cursorpoc.backend.stock.InvoiceStockEvent.class,
+            e ->
+                assertThat(e.kind())
+                    .isEqualTo(com.cursorpoc.backend.stock.InvoiceStockEvent.Kind.VOIDED));
+  }
+
   @Test
   void cancel_whenSifenApproves_movesTheInvoiceToCancelled() {
     when(eventClient.send(eq(TENANT_ID), anyString(), anyString()))

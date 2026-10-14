@@ -2,12 +2,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { setTenantFeatureFlag } from "../fixtures/api";
-import { loginAsDemo } from "../fixtures/auth";
+import { openTenantSifenAsRoot } from "../fixtures/sifenRoot";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
+// Certificates are loaded by the platform's root user (Plataforma → Salones → SIFEN), never by the
+// salon's administrator — the status/list rules themselves are unchanged.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VALID_P12 = path.join(__dirname, "../fixtures/sifen/test-cert.p12");
@@ -33,9 +35,7 @@ test.describe("SIFEN HU-20 · Calcular el estado de cada certificado según su v
   });
 
   test("HU-20 · 1 certificado vigente hoy muestra el estado Valid (AC-01)", async ({ page }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await openTenantSifenAsRoot(page);
 
     await upload(page, VALID_P12);
     const row = page.getByTestId("sifen-certificate-row").first();
@@ -45,9 +45,7 @@ test.describe("SIFEN HU-20 · Calcular el estado de cada certificado según su v
   test("HU-20 · 2 certificado con fecha de vencimiento pasada muestra el estado Expired (AC-02)", async ({
     page,
   }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await openTenantSifenAsRoot(page);
 
     await upload(page, EXPIRED_P12);
     const row = page.getByTestId("sifen-certificate-row").first();
@@ -57,9 +55,7 @@ test.describe("SIFEN HU-20 · Calcular el estado de cada certificado según su v
   test("HU-20 · 3 certificado cuya fecha de expedición todavía no llegó muestra Not yet valid (AC-03)", async ({
     page,
   }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await openTenantSifenAsRoot(page);
 
     await upload(page, NOT_YET_VALID_P12);
     const row = page.getByTestId("sifen-certificate-row").first();
@@ -69,9 +65,7 @@ test.describe("SIFEN HU-20 · Calcular el estado de cada certificado según su v
   test("HU-20 · 4 un tenant puede tener más de un certificado Valid al mismo tiempo sin error (AC-05)", async ({
     page,
   }) => {
-    await loginAsDemo(page);
-    await page.goto("/app/settings/sifen");
-    await expect(page.getByTestId("sifen-certificate-upload-section")).toBeVisible();
+    await openTenantSifenAsRoot(page);
 
     await upload(page, VALID_P12);
     await upload(page, VALID_P12);

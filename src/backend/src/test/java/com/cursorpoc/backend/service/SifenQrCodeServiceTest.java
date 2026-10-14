@@ -170,4 +170,41 @@ class SifenQrCodeServiceTest {
         .isEqualTo("https://ekuatia.set.gov.py/consultas-test/");
     assertThat(result.productionEnvironment()).isFalse();
   }
+
+  /**
+   * Per-tenant CSC: the explicit-CSC overload hashes with the given secret and prints the given
+   * IdCSC — the manual's worked example still reproduces its expected hash when handed the same CSC
+   * the global test configuration uses, and a different CSC changes IdCSC and hash.
+   */
+  @Test
+  void explicitCsc_isUsedForTheIdCscAndTheHash() {
+    SifenReceiverData receiver =
+        new SifenReceiverData("88899990-1", null, "Cliente", null, null, null, null, null, null);
+    SifenQrCodeService service = productionService();
+    SifenActiveCsc manualsCsc = new SifenActiveCsc(1, "ABCD0000000000000000000000000000");
+
+    String withManualsCsc =
+        service
+            .build(
+                header(receiver),
+                totals("300000", "27272"),
+                2,
+                EXAMPLE_DIGEST_BASE64,
+                false,
+                manualsCsc)
+            .qrUrl();
+    String withTenantCsc =
+        service
+            .build(
+                header(receiver),
+                totals("300000", "27272"),
+                2,
+                EXAMPLE_DIGEST_BASE64,
+                false,
+                new SifenActiveCsc(23, "TENANT23000000000000000000000AB"))
+            .qrUrl();
+
+    assertThat(withManualsCsc).endsWith("&IdCSC=0001&cHashQR=" + EXPECTED_HASH);
+    assertThat(withTenantCsc).contains("&IdCSC=0023&cHashQR=").doesNotContain(EXPECTED_HASH);
+  }
 }

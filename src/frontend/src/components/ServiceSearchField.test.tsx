@@ -74,6 +74,28 @@ describe("ServiceSearchField", () => {
     expect(screen.queryByText("Old service")).toBeNull();
   });
 
+  it("lists all services first and then all products, keeping API order within each kind", async () => {
+    const mk = (id: number, name: string, kind: "SERVICE" | "PRODUCT"): SalonServiceOption => ({
+      ...activeSvc,
+      id,
+      name,
+      kind,
+    });
+    femmeJson.mockResolvedValue([
+      mk(1, "Shampoo", "PRODUCT"),
+      mk(2, "Corte", "SERVICE"),
+      mk(3, "Acondicionador", "PRODUCT"),
+      mk(4, "Brushing", "SERVICE"),
+    ]);
+    renderField();
+    await userEvent.click(screen.getByRole("combobox"));
+    await screen.findByText("Corte", {}, { timeout: 1000 });
+    const names = screen
+      .getAllByRole("option")
+      .map((o) => o.querySelector("span.font-medium")?.textContent);
+    expect(names).toEqual(["Corte", "Brushing", "Shampoo", "Acondicionador"]);
+  });
+
   it("searches with debounced query param", async () => {
     femmeJson.mockResolvedValue([activeSvc]);
     renderField();

@@ -5,11 +5,14 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.security.CorrelationIdFilter;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,6 +29,14 @@ import org.springframework.web.server.ResponseStatusException;
  * SifenSubmissionReconciler}) rather than resending immediately — Basic-tier Service Bus has no
  * scheduled messages to lean on natively, and this also doubles as the safety net for messages lost
  * before ever reaching the queue.
+ *
+ * <p><b>Envío por lote</b> ({@code SIFEN_SYNC_SUBMISSION} off): an invoice pending in an accepted
+ * lote is polled on its own, much faster schedule ({@link #BATCH_POLL_SCHEDULE}: 30 polls 1s apart,
+ * then 15 polls 2s apart, then the usual minutes/hours) — SIFEN typically concludes a one-document
+ * lote within seconds. Those polls are scheduled directly on the queue with a delay (Service Bus
+ * scheduled messages / the local executor), since the reconciler only runs every 60s; {@code
+ * sifen_next_attempt_at} is still set, with a margin, as the safety net if that scheduled message
+ * is lost.
  */
 @Service
 public class SifenSubmissionQueueListener {
@@ -47,6 +58,37 @@ public class SifenSubmissionQueueListener {
     Duration.ofHours(4)
   };
 
+  /**
+   * Envío por lote: wait before each consulta-lote poll, indexed by how many polls the lote already
+   * had ({@code sifen_batch_poll_count}) and measured from the end of the previous one — 30 polls
+   * every 1s, then 15 polls every 2s, then 1m, 5m, 15m, 1h and 4h. Count-based on purpose: each
+   * SIFEN round trip itself takes seconds, so a time-based schedule would silently skip polls.
+   */
+  static final List<Duration> BATCH_POLL_SCHEDULE = buildBatchPollSchedule();
+
+  private static List<Duration> buildBatchPollSchedule() {
+    List<Duration> schedule = new ArrayList<>();
+    schedule.addAll(Collections.nCopies(30, Duration.ofSeconds(1)));
+    schedule.addAll(Collections.nCopies(15, Duration.ofSeconds(2)));
+    schedule.addAll(
+        List.of(
+            Duration.ofMinutes(1),
+            Duration.ofMinutes(5),
+            Duration.ofMinutes(15),
+            Duration.ofHours(1),
+            Duration.ofHours(4)));
+    return List.copyOf(schedule);
+  }
+
+  /**
+   * Envío por lote: {@code sifen_next_attempt_at} lags the scheduled poll by this much, so the
+   * reconciler only re-enqueues when the scheduled message was actually lost.
+   */
+  static final Duration BATCH_POLL_SAFETY_MARGIN = Duration.ofMinutes(2);
+
+  /** Envío por lote: hard cap on attempts, independent of {@link #MAX_ATTEMPTS}. */
+  static final int MAX_BATCH_ATTEMPTS = 1 + BATCH_POLL_SCHEDULE.size() + MAX_ATTEMPTS;
+
   private static final List<SifenSubmissionStatus> TERMINAL_STATUSES =
       List.of(
           SifenSubmissionStatus.APPROVED,
@@ -60,17 +102,22 @@ public class SifenSubmissionQueueListener {
   private final SifenNumberVoidingService numberVoidingService;
   private final SifenInvoiceNotificationService notificationService;
 
+  /** Lazily resolved: {@link LocalAsyncSifenSubmissionQueue} itself depends on this listener. */
+  private final ObjectProvider<SifenSubmissionQueue> queue;
+
   public SifenSubmissionQueueListener(
       SifenInvoiceSubmissionPersistenceService persistence,
       SifenInvoiceSubmissionService submissionService,
       FemmeTimeProperties timeProperties,
       SifenNumberVoidingService numberVoidingService,
-      SifenInvoiceNotificationService notificationService) {
+      SifenInvoiceNotificationService notificationService,
+      ObjectProvider<SifenSubmissionQueue> queue) {
     this.persistence = persistence;
     this.submissionService = submissionService;
     this.timeProperties = timeProperties;
     this.numberVoidingService = numberVoidingService;
     this.notificationService = notificationService;
+    this.queue = queue;
   }
 
   /**
@@ -91,9 +138,9 @@ public class SifenSubmissionQueueListener {
 
       try {
         SifenSubmissionResult result = submissionService.transmit(tenantId, invoiceId);
-        return handleResult(tenantId, invoiceId, claimed.get(), result.status());
+        return handleResult(tenantId, invoiceId, claimed.get(), result.status(), correlationId);
       } catch (ResponseStatusException e) {
-        return handleException(tenantId, invoiceId, claimed.get(), e);
+        return handleException(tenantId, invoiceId, claimed.get(), e, correlationId);
       } catch (RuntimeException e) {
         log.error(
             "SIFEN transmit failed unexpectedly tenantId={} invoiceId={} error={}",
@@ -111,7 +158,11 @@ public class SifenSubmissionQueueListener {
   }
 
   private Outcome handleResult(
-      long tenantId, long invoiceId, int attempt, SifenSubmissionStatus status) {
+      long tenantId,
+      long invoiceId,
+      int attempt,
+      SifenSubmissionStatus status,
+      String correlationId) {
     if (TERMINAL_STATUSES.contains(status)) {
       persistence.clearRetrySchedule(tenantId, invoiceId);
       persistence.releaseLease(tenantId, invoiceId);
@@ -138,7 +189,54 @@ public class SifenSubmissionQueueListener {
 
     // Still PENDING_VERIFICATION (or, defensively, QUEUED if transmit somehow didn't advance it) —
     // SIFEN gave no answer yet; schedule another check rather than resending blindly.
+    Optional<Integer> batchPollCount = persistence.findPendingBatchPollCount(tenantId, invoiceId);
+    if (batchPollCount.isPresent()) {
+      return scheduleBatchPollOrGiveUp(
+          tenantId, invoiceId, attempt, batchPollCount.get(), correlationId);
+    }
     return scheduleRetryOrGiveUp(tenantId, invoiceId, attempt, "still pending");
+  }
+
+  /**
+   * Envío por lote: enqueues the next consulta-lote poll after the {@link #BATCH_POLL_SCHEDULE}
+   * wait matching the polls already made. Once the whole schedule is used up (or {@link
+   * #MAX_BATCH_ATTEMPTS} is hit) it stops polling; the invoice stays pending and the manual
+   * "Verificar estado" button can still resolve it.
+   */
+  private Outcome scheduleBatchPollOrGiveUp(
+      long tenantId, long invoiceId, int attempt, int pollsMade, String correlationId) {
+    Optional<Duration> wait = nextBatchPollDelay(pollsMade);
+    if (wait.isEmpty() || attempt >= MAX_BATCH_ATTEMPTS) {
+      persistence.releaseLease(tenantId, invoiceId);
+      persistence.clearRetrySchedule(tenantId, invoiceId);
+      log.error(
+          "SIFEN batch polling exhausted, invoice stays pending tenantId={} invoiceId={} "
+              + "attempt={} pollsMade={}",
+          tenantId,
+          invoiceId,
+          attempt,
+          pollsMade);
+      return Outcome.DEAD_LETTERED;
+    }
+    LocalDateTime nextPollAt = LocalDateTime.now(timeProperties.zoneId()).plus(wait.get());
+    persistence.scheduleRetry(tenantId, invoiceId, nextPollAt.plus(BATCH_POLL_SAFETY_MARGIN));
+    persistence.releaseLease(tenantId, invoiceId);
+    queue.getObject().enqueue(tenantId, invoiceId, attempt + 1, wait.get(), correlationId);
+    log.info(
+        "SIFEN batch poll scheduled tenantId={} invoiceId={} attempt={} pollsMade={} delayMs={}",
+        tenantId,
+        invoiceId,
+        attempt + 1,
+        pollsMade,
+        wait.get().toMillis());
+    return Outcome.RETRY_SCHEDULED;
+  }
+
+  /** The wait before the next poll, given the polls already made — empty once exhausted. */
+  static Optional<Duration> nextBatchPollDelay(int pollsMade) {
+    return pollsMade >= 0 && pollsMade < BATCH_POLL_SCHEDULE.size()
+        ? Optional.of(BATCH_POLL_SCHEDULE.get(pollsMade))
+        : Optional.empty();
   }
 
   /**
@@ -152,7 +250,7 @@ public class SifenSubmissionQueueListener {
    * manual attention, hence dead-lettered rather than silently dropped).
    */
   private Outcome handleException(
-      long tenantId, long invoiceId, int attempt, ResponseStatusException e) {
+      long tenantId, long invoiceId, int attempt, ResponseStatusException e, String correlationId) {
     if (e.getStatusCode() == HttpStatus.CONFLICT) {
       persistence.releaseLease(tenantId, invoiceId);
       persistence.clearRetrySchedule(tenantId, invoiceId);
@@ -169,6 +267,13 @@ public class SifenSubmissionQueueListener {
           tenantId,
           invoiceId,
           attempt);
+      // A rate-limited consulta-lote wasn't counted as a poll, so it retries on the lote's own
+      // fast cadence instead of falling back to the minute backoff.
+      Optional<Integer> batchPollCount = persistence.findPendingBatchPollCount(tenantId, invoiceId);
+      if (batchPollCount.isPresent()) {
+        return scheduleBatchPollOrGiveUp(
+            tenantId, invoiceId, attempt, batchPollCount.get(), correlationId);
+      }
       return scheduleRetryOrGiveUp(tenantId, invoiceId, attempt, "rate limited");
     }
     persistence.releaseLease(tenantId, invoiceId);

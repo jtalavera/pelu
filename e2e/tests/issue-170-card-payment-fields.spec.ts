@@ -6,7 +6,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #170: SIFEN rejected invoices paid with Tarjeta de crédito/débito because the mandatory
 // E7.1.1/gPagTarCD card-brand group was never captured or emitted. These tests cover the
@@ -43,12 +43,14 @@ test.describe("Issue #170 · Marca de tarjeta y redondeo de descuento", () => {
     await expect(page.locator("#pay-card-brand-0")).toBeVisible();
 
     // AC1: submitting without a brand is blocked with a validation error.
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(page.getByText("Select the card brand.", { exact: true })).toBeVisible();
 
     // AC2: brand "Otro" reveals a required free-text description field.
     await page.locator("#pay-card-brand-0").selectOption("OTHER");
     await expect(page.locator("#pay-card-brand-other-0")).toBeVisible();
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
       page.getByText("Enter the card brand description.", { exact: true }),

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import {
   Alert,
   Button,
@@ -32,6 +33,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
+import { TenantStockSection } from "../components/TenantStockSection";
 
 type FormErrors = {
   name?: string;
@@ -908,6 +910,32 @@ export default function PlatformTenantsPage() {
                 next: t(`femme.status.${editingTenant.lastStatusChange.newStatus}`),
               })}
             </p>
+          ) : null}
+
+          {/* SIFEN credentials (certificate + CSC) are loaded here, by the root user only — never by
+              the salon's own administrator. */}
+          {editingTenant ? (
+            <div className="rounded-md border border-[var(--color-stone-md)] p-3">
+              <Text variant="small" className="mb-2 text-[var(--color-ink-2)]">
+                {t("femme.platform.sifen.dialogLead")}
+              </Text>
+              <Link
+                to={`/platform/tenants/${editingTenant.id}/sifen`}
+                data-testid="platform-tenant-sifen-link"
+                className="text-sm font-medium text-[var(--color-rose-dk)] underline"
+              >
+                {t("femme.platform.sifen.dialogLink")}
+              </Link>
+            </div>
+          ) : null}
+
+          {/* HU-62: Stock — last catalog sync + manual "Sincronizar catálogo con Stock". */}
+          {editingTenant ? (
+            <TenantStockSection
+              key={editingTenant.id}
+              tenantId={editingTenant.id}
+              dateLocale={dateLocale}
+            />
           ) : null}
 
           {/* HU-41 AC-1/AC-2/AC-3/AC-4/AC-6: invite a tenant ADMIN user for this tenant, from its

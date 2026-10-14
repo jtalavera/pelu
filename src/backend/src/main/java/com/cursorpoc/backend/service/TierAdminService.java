@@ -10,6 +10,7 @@ import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TierFeatureFlagChangeRepository;
 import com.cursorpoc.backend.repository.TierFeatureFlagRepository;
 import com.cursorpoc.backend.repository.TierRepository;
+import com.cursorpoc.backend.stock.StockFlagsChangedEvent;
 import com.cursorpoc.backend.web.dto.TierCreateRequest;
 import com.cursorpoc.backend.web.dto.TierFeatureFlagChangeResponse;
 import com.cursorpoc.backend.web.dto.TierFeatureFlagRowResponse;
@@ -17,6 +18,8 @@ import com.cursorpoc.backend.web.dto.TierResponse;
 import com.cursorpoc.backend.web.dto.TierUpdateRequest;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +40,18 @@ import org.springframework.web.server.ResponseStatusException;
  * tier's package as the middle priority level is HU-47, out of this story's scope.
  */
 @Service
-public class TierAdminService {
+public class TierAdminService implements ApplicationEventPublisherAware {
+
+  /**
+   * Stock integration (HU-61): announces tier flag changes to {@code StockFeatureFlagPublisher}.
+   * Defaults to a no-op so plain unit tests that construct this service directly need no publisher.
+   */
+  private ApplicationEventPublisher events = event -> {};
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.events = applicationEventPublisher;
+  }
 
   private final TierRepository tierRepository;
   private final TenantRepository tenantRepository;
@@ -215,6 +229,7 @@ public class TierAdminService {
 
     recordTierFlagChange(
         tierId, flagKey, previousEnabled, enabled, changedByUserId, changedByEmail);
+    events.publishEvent(StockFlagsChangedEvent.tier(tierId, flagKey));
   }
 
   private void recordTierFlagChange(

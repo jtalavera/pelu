@@ -114,6 +114,111 @@ class ServiceImportServiceTest {
     verify(salonServiceRepository).save(any());
   }
 
+  // HU-59: optional tipo/sku columns; one CatalogStockEvent per upload with products (HU-62).
+  @Test
+  void tipoAndSkuColumns_createProductsAndPublishOneCatalogEvent() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+    String[] headers = {
+      "categoria", "nombre", "precio", "duracion_minutos", "impuesto", "activo", "tipo", "sku"
+    };
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Productos", "Shampoo", "95000", "1", "", "SI", "Producto", "SH-300"},
+            new String[] {"Productos", "Acondicionador", "85000", "1", "", "SI", "PRODUCTO", ""},
+            new String[] {"Cortes", "Corte", "80000", "30", "", "SI", "", ""},
+            new String[] {"Cortes", "Brushing", "60000", "30", "", "SI", "Servicio", ""});
+
+    ImportResult result = service.importServices(1L, bytes);
+
+    assertThat(result.importedCount()).isEqualTo(4);
+    org.mockito.ArgumentCaptor<com.cursorpoc.backend.domain.SalonService> saved =
+        org.mockito.ArgumentCaptor.forClass(com.cursorpoc.backend.domain.SalonService.class);
+    verify(salonServiceRepository, org.mockito.Mockito.times(4)).save(saved.capture());
+    assertThat(saved.getAllValues())
+        .extracting(com.cursorpoc.backend.domain.SalonService::getKind)
+        .containsExactly(
+            com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT,
+            com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT,
+            com.cursorpoc.backend.domain.enums.ServiceKind.SERVICE,
+            com.cursorpoc.backend.domain.enums.ServiceKind.SERVICE);
+    assertThat(saved.getAllValues().get(0).getSku()).isEqualTo("SH-300");
+    assertThat(saved.getAllValues().get(1).getSku()).isNull();
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            com.cursorpoc.backend.stock.CatalogStockEvent.class,
+            e -> assertThat(e.productsImported()).isEqualTo(2));
+  }
+
+  // Catalog split: categories are created with the kind of the row that introduces them.
+  @Test
+  void newCategory_getsTheKindOfItsRow() {
+    String[] headers = {"categoria", "nombre", "precio", "duracion_minutos", "tipo"};
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Shampoos", "Shampoo", "95000", "1", "Producto"},
+            new String[] {"Cortes", "Corte", "80000", "30", "Servicio"});
+
+    service.importServices(1L, bytes);
+
+    org.mockito.ArgumentCaptor<ServiceCategory> saved =
+        org.mockito.ArgumentCaptor.forClass(ServiceCategory.class);
+    verify(serviceCategoryRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+    assertThat(saved.getAllValues())
+        .extracting(ServiceCategory::getName, ServiceCategory::getKind)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                "Shampoos", com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT),
+            org.assertj.core.groups.Tuple.tuple(
+                "Cortes", com.cursorpoc.backend.domain.enums.ServiceKind.SERVICE));
+  }
+
+  // Catalog split: the same categoria cannot hold both a Servicio and a Producto.
+  @Test
+  void sameCategoryWithBothKinds_rejectsTheRowOfTheOtherKind() {
+    String[] headers = {"categoria", "nombre", "precio", "duracion_minutos", "tipo"};
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Mixta", "Corte", "80000", "30", "Servicio"},
+            new String[] {"Mixta", "Shampoo", "95000", "1", "Producto"});
+
+    ImportResult result = service.importServices(1L, bytes);
+
+    assertThat(result.importedCount()).isEqualTo(1);
+    assertThat(result.failedCount()).isEqualTo(1);
+    assertThat(result.rows())
+        .anySatisfy(
+            r ->
+                assertThat(r.errorCode())
+                    .isEqualTo(ServiceImportService.ERROR_CATEGORY_KIND_MISMATCH));
+  }
+
+  @Test
+  void invalidTipo_rejectsOnlyThatRowWithItsOwnCode() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+    String[] headers = {"categoria", "nombre", "precio", "duracion_minutos", "tipo"};
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Productos", "Shampoo", "95000", "1", "Gadget"},
+            new String[] {"Cortes", "Corte", "80000", "30", "Servicio"});
+
+    ImportResult result = service.importServices(1L, bytes);
+
+    assertThat(result.importedCount()).isEqualTo(1);
+    assertThat(result.failedCount()).isEqualTo(1);
+    assertThat(result.rows())
+        .anySatisfy(
+            r -> assertThat(r.errorCode()).isEqualTo(ServiceImportService.ERROR_KIND_INVALID));
+    // Only services were imported: nothing for Stock.
+    assertThat(published).isEmpty();
+  }
+
   // AC-3: non-numeric price rejects only that row.
   @Test
   void nonNumericPrice_rejectsOnlyThatRow() {

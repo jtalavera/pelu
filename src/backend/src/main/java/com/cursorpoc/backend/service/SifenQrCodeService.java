@@ -86,6 +86,28 @@ public class SifenQrCodeService {
       int itemCount,
       String digestValueBase64,
       boolean isAutoInvoice) {
+    return build(header, totals, itemCount, digestValueBase64, isAutoInvoice, testCsc());
+  }
+
+  /** The SET's public test CSC (see {@link SifenQrProperties}) — homologation/demo only. */
+  private SifenActiveCsc testCsc() {
+    return new SifenActiveCsc(qrProperties.getActiveCscId(), qrProperties.activeCscSecret());
+  }
+
+  /**
+   * Same as above but hashed with the given {@code csc} — the tenant's own Código de Seguridad del
+   * Contribuyente, resolved by {@link SifenCscService#resolveActive}. This is what real signing
+   * uses: the DNIT issues each taxpayer its own CSC and rejects a QR hashed with any other (the
+   * overloads without a {@code csc} fall back to the SET's public test CSC, for tests/fixtures
+   * only).
+   */
+  public SifenQrResult build(
+      SifenInvoiceHeader header,
+      SifenInvoiceTotals totals,
+      int itemCount,
+      String digestValueBase64,
+      boolean isAutoInvoice,
+      SifenActiveCsc csc) {
     boolean production =
         connectionProperties.activeEnvironment()
             == SifenConnectionProperties.Environment.PRODUCTION;
@@ -118,9 +140,9 @@ public class SifenQrCodeService {
             + "&DigestValue="
             + hexEncode(digestValueBase64)
             + "&IdCSC="
-            + pad4(qrProperties.getActiveCscId());
+            + pad4(csc.idCsc());
 
-    String hash = sha256Hex(query + qrProperties.activeCscSecret());
+    String hash = sha256Hex(query + csc.secret());
     String qrUrl = qrBase + query + "&cHashQR=" + hash;
     return new SifenQrResult(qrUrl, consultationUrl, production);
   }

@@ -326,6 +326,32 @@ class SifenNumberVoidingServiceTest {
     assertThat(inv.getVoidReason()).contains("P123");
   }
 
+  /** Stock (HU-64): an approved inutilización voids the invoice and reverses its sale. */
+  @Test
+  void recordSubmissionResult_approvedWithInvoice_publishesStockVoidedEvent() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+    SifenNumberVoidingEvent event = pendingEventForInvoice();
+    when(repository.findByIdAndTenantId(7L, TENANT_ID)).thenReturn(Optional.of(event));
+    Invoice inv = new Invoice();
+    inv.setStatus(InvoiceStatus.ISSUED);
+    when(invoiceRepository.findByIdAndTenant_Id(INVOICE_ID, TENANT_ID))
+        .thenReturn(Optional.of(inv));
+
+    service.recordSubmissionResult(
+        TENANT_ID,
+        7L,
+        "Motivo suficientemente largo para el evento",
+        new SifenSubmissionResult(
+            SifenSubmissionStatus.APPROVED, "P123", "0600", "Aprobado", LocalDateTime.now()));
+
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            com.cursorpoc.backend.stock.InvoiceStockEvent.class,
+            e -> assertThat(e.invoice()).isSameAs(inv));
+  }
+
   @Test
   void recordSubmissionResult_rejected_leavesTheInvoiceUntouched() {
     SifenNumberVoidingEvent event = pendingEventForInvoice();

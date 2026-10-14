@@ -20,6 +20,7 @@ import { femmePostJson } from "../api/femmeClient";
 import { listClientsAll, listClientsPaged, type ClientListFilterParams } from "../api/clients";
 import type { PageResponse } from "../api/pagination";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { focusMessageBox } from "../util/focusMessageBox";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchInput } from "../components/ui/SearchInput";
 import { StatusBadge } from "../components/StatusBadge";
@@ -159,6 +160,8 @@ export default function ClientsPage() {
   } | null>(null);
   const [saveError, setSaveError]   = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const resultMessagesRef = useRef<HTMLDivElement | null>(null);
+  const modalErrorRef = useRef<HTMLDivElement | null>(null);
   const [saving, setSaving]         = useState(false);
 
   // ── Server-side filtered + paged loader ────────────────────────────────────
@@ -316,6 +319,15 @@ export default function ClientsPage() {
     }
   }
 
+  // After saving, move the user to the result message so the outcome is seen right away.
+  useEffect(() => {
+    if (saveSuccess) focusMessageBox(resultMessagesRef.current);
+  }, [saveSuccess]);
+
+  useEffect(() => {
+    if (saveError) focusMessageBox(modalErrorRef.current);
+  }, [saveError]);
+
   // ── Deactivate / activate ───────────────────────────────────────────────────
   async function confirmDeactivateFromList() {
     if (!deactivateTarget) return;
@@ -469,7 +481,11 @@ export default function ClientsPage() {
 
       {/* ── Success / Error ── */}
       {(saveSuccess || rowStatusSuccess || error) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+        <div
+          ref={resultMessagesRef}
+          tabIndex={-1}
+          style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, outline: "none" }}
+        >
           {saveSuccess && (
             <Alert variant="success" title={t("femme.clients.createSuccessTitle")}>
               {t("femme.clients.createSuccessBody")}
@@ -773,9 +789,11 @@ export default function ClientsPage() {
       >
         <div className="flex flex-col gap-4">
           {saveError && (
-            <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
-              {saveError}
-            </Alert>
+            <div ref={modalErrorRef} tabIndex={-1} className="outline-none">
+              <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
+                {saveError}
+              </Alert>
+            </div>
           )}
 
           <div>

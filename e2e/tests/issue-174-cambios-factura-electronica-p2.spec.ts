@@ -20,7 +20,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #174 "Cambios en factura electrónica (Parte 2)":
 //  1. Tipo de documento = Tarjeta Diplomática de exoneración fiscal → ítems y totales sin IVA
@@ -250,6 +250,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     page.on("request", (r) => {
       if (r.url().includes("/api/invoices") && r.method() === "POST") posted = true;
     });
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(page.locator("#billing-issue-date-err")).toBeVisible();
     expect(posted).toBe(false);

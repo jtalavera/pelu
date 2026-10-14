@@ -230,4 +230,47 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     });
     expect(loginAfterRes.status()).toBe(401);
   });
+
+  test("HU-23 · desactivar la profesional bloquea su login y su sesión abierta; reactivarla los restituye", async ({
+    request,
+  }) => {
+    const base = apiBaseUrl();
+    const token = await adminToken(base);
+    const email = `deactivate${Date.now()}@test.com`;
+    const profId = await createProfessional(token, `E2E Deactivate ${Date.now()}`, email);
+
+    const grantRes = await request.post(`${base}/api/professionals/${profId}/grant-access`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const { rawToken } = (await grantRes.json()) as { rawToken: string };
+    const activateRes = await request.post(`${base}/api/auth/activate`, {
+      data: { token: rawToken, password: "ValidPass1!", confirmPassword: "ValidPass1!" },
+    });
+    expect(activateRes.ok()).toBeTruthy();
+
+    const login = () =>
+      request.post(`${base}/api/auth/login`, { data: { email, password: "ValidPass1!" } });
+    const openSession = await login();
+    expect(openSession.ok()).toBeTruthy();
+    const { accessToken } = (await openSession.json()) as { accessToken: string };
+    const me = () =>
+      request.get(`${base}/api/me`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    expect((await me()).ok()).toBeTruthy();
+
+    // Deactivated professional: no new login, and the already-open session stops working.
+    const deactivateRes = await request.post(`${base}/api/professionals/${profId}/deactivate`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(deactivateRes.ok()).toBeTruthy();
+    expect((await login()).status()).toBe(401);
+    expect((await me()).ok()).toBeFalsy();
+
+    // Reactivated: access is restored without any new grant.
+    const activateProfRes = await request.post(`${base}/api/professionals/${profId}/activate`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(activateProfRes.ok()).toBeTruthy();
+    expect((await login()).ok()).toBeTruthy();
+    expect((await me()).ok()).toBeTruthy();
+  });
 });

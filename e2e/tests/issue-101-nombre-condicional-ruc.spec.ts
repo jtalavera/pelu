@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { loginAsDemoApi, seedCategoryServiceProfessional } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen } from "../fixtures/billing";
-import { pickServiceLine } from "../fixtures/invoice";
+import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
   test("RUC cargado sin nombre bloquea la emisión del comprobante", async ({ page, request }) => {
@@ -21,6 +21,7 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
+    await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
 
     await expect(
@@ -51,6 +52,7 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
     await page.locator("#line-price-0").fill("9000");
     await page.locator("#pay-amount-0").fill("9000");
 
+    await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([
       page.waitForResponse(
         (r) =>

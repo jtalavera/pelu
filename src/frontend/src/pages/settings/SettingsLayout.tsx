@@ -69,6 +69,11 @@ export default function SettingsLayout() {
               {t("femme.settings.tabSifen")}
             </NavLink>
           ) : null}
+          {isTenantAdmin ? (
+            <NavLink to="/app/settings/audit" className={navClass}>
+              {t("femme.settings.tabAudit")}
+            </NavLink>
+          ) : null}
         </nav>
         <div style={{ padding: 20, minWidth: 0 }}>
           <Outlet />

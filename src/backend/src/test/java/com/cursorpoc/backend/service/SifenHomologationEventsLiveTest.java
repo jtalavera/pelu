@@ -133,7 +133,7 @@ class SifenHomologationEventsLiveTest {
   // already use for their own seed invoices).
   private final SifenDocumentXmlService xmlService = new SifenDocumentXmlService();
   private final SifenDocumentSigningService signingService =
-      new SifenDocumentSigningService(null, null, null, null, null, null, null);
+      new SifenDocumentSigningService(null, null, null, null, null, null, null, null);
   private final SifenQrCodeService qrCodeService =
       new SifenQrCodeService(new SifenQrProperties(), connectionProperties);
   private final SifenDocumentReceptionClient receptionClient =
@@ -648,7 +648,8 @@ class SifenHomologationEventsLiveTest {
         org.mockito.Mockito.mock(SifenCertificateService.class);
     org.mockito.Mockito.when(certificateService.requireActiveCertificate(0L)).thenReturn(material);
     SifenDocumentSigningService signingService =
-        new SifenDocumentSigningService(certificateService, null, null, null, null, null, null);
+        new SifenDocumentSigningService(
+            certificateService, null, null, null, null, null, null, null);
     return signingService.signEvent(0L, unsigned);
   }
 

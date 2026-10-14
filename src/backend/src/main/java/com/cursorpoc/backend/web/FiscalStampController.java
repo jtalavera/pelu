@@ -45,7 +45,18 @@ public class FiscalStampController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody FiscalStampCreateRequest request) {
     requirePrincipal(principal);
-    return fiscalStampService.create(principal.getTenantId(), request);
+    log.info("POST /api/fiscal-stamps tenantId={}", principal.getTenantId());
+    try {
+      FiscalStampResponse response = fiscalStampService.create(principal.getTenantId(), request);
+      log.info("POST /api/fiscal-stamps tenantId={} status=200", principal.getTenantId());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/fiscal-stamps tenantId={} status={}",
+          principal.getTenantId(),
+          ex.getStatusCode());
+      throw ex;
+    }
   }
 
   @PutMapping("/{id}")
@@ -54,7 +65,20 @@ public class FiscalStampController {
       @PathVariable("id") long id,
       @Valid @RequestBody FiscalStampUpdateRequest request) {
     requirePrincipal(principal);
-    return fiscalStampService.update(principal.getTenantId(), id, request);
+    log.info("PUT /api/fiscal-stamps/{} tenantId={}", id, principal.getTenantId());
+    try {
+      FiscalStampResponse response =
+          fiscalStampService.update(principal.getTenantId(), id, request);
+      log.info("PUT /api/fiscal-stamps/{} tenantId={} status=200", id, principal.getTenantId());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PUT /api/fiscal-stamps/{} tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode());
+      throw ex;
+    }
   }
 
   @PostMapping("/{id}/activate")

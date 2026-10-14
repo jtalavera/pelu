@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Alert, Button, Heading, Input, Label, Text } from "@design-system";
@@ -7,6 +7,7 @@ import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
+import { broadcastLogout } from "../auth/sessionBroadcast";
 import { useTour } from "../tour/useTour";
 import { loginSteps } from "../tour/steps/login";
 
@@ -19,6 +20,16 @@ export default function LoginPage() {
   const from = state?.from?.pathname ?? "/app";
   const sessionExpired = state?.reason === "idle";
   const sessionRefreshExpired = state?.reason === "expired";
+  // HU-65: Stock's "Cerrar sesión" lands here (its configured host logout URL).
+  const stockLogout =
+    state?.reason === "stock_logout" ||
+    new URLSearchParams(location.search).get("reason") === "stock_logout";
+
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("reason") !== "stock_logout") return;
+    sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    broadcastLogout("stock_logout");
+  }, [location.search]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -117,6 +128,11 @@ export default function LoginPage() {
           {sessionRefreshExpired ? (
             <Alert variant="info" className="mb-4">
               {t("femme.login.sessionRefreshExpired")}
+            </Alert>
+          ) : null}
+          {stockLogout ? (
+            <Alert variant="info" className="mb-4" data-testid="login-stock-logout">
+              {t("femme.login.stockLogout")}
             </Alert>
           ) : null}
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>

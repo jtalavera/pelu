@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Accordion,
@@ -36,6 +36,7 @@ import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { toWhatsAppPhone } from "../lib/paraguayPhone";
+import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../hooks/useSifenStatusLiveRefresh";
 
 export type InvoiceLine = {
   id: number;
@@ -319,6 +320,32 @@ export function InvoiceDetailModal({
       cancelled = true;
     };
   }, [invoiceId, t]);
+
+  // SIFEN statuses change in the backend with no user action (queue consumer, consulta-lote
+  // polling every second): while this invoice is still "En cola" / "Pendiente de verificación",
+  // silently re-read it so the dialog shows the new status as soon as the backend records it.
+  // Only the invoice itself is replaced — form fields the user may be typing in stay untouched.
+  const liveRefreshInFlightRef = useRef(false);
+  const refreshInvoiceSilently = useCallback(() => {
+    if (liveRefreshInFlightRef.current) return;
+    liveRefreshInFlightRef.current = true;
+    femmeJson<InvoiceDetail>(`/api/invoices/${invoiceId}`)
+      .then((data) => {
+        setInvoice(data);
+        // A manual "check status" message ("still pending…") is stale once SIFEN resolved it.
+        if (!isSifenStatusInFlight(data.sifenSubmissionStatus)) setSifenCheckMessage(null);
+      })
+      .catch(() => {
+        // Silent refresh: a transient failure just waits for the next tick.
+      })
+      .finally(() => {
+        liveRefreshInFlightRef.current = false;
+      });
+  }, [invoiceId]);
+  useSifenStatusLiveRefresh(
+    !loading && !checkingSifenStatus && isSifenStatusInFlight(invoice?.sifenSubmissionStatus),
+    refreshInvoiceSilently,
+  );
 
   // Only used to decide whether to offer the "production-style" sample KuDE (test environment only).
   useEffect(() => {
