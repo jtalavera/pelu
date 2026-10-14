@@ -36,7 +36,7 @@ test.afterAll(async ({ request }) => {
   await restoreCommissionsGlobal(request);
 });
 
-test("reportes por profesional, ítem, tipo y periodo con filtros; líneas sin beneficiario e ítems sin % general", async ({
+test("reportes por profesional, ítem, tipo y periodo con filtros; y líneas sin beneficiario", async ({
   page,
 }) => {
   await loginAdminUi(page, w);
@@ -49,7 +49,8 @@ test("reportes por profesional, ítem, tipo y periodo con filtros; líneas sin b
   await expect(page.getByTestId("report-by-kind")).toContainText("Products");
   await expect(page.getByTestId("report-by-period").locator("tbody tr")).toHaveCount(1);
   await expect(page.getByTestId("report-lines-without-beneficiary")).toContainText(w.service2.name);
-  await expect(page.getByTestId("report-items-without-rule")).toContainText(w.product.name);
+  // The «ítems sin % general» section was removed from the report (it added no value).
+  await expect(page.getByTestId("report-items-without-rule")).toHaveCount(0);
 
   await page.locator("#report-kind").selectOption("PRODUCT");
   await page.getByTestId("commission-report-search").click();

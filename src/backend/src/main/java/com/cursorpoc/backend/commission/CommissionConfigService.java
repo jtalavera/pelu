@@ -21,13 +21,14 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.ConfigChange;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ExceptionView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ItemRulesResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ItemWithoutRule;
-import com.cursorpoc.backend.web.dto.CommissionDtos.MatrixCell;
-import com.cursorpoc.backend.web.dto.CommissionDtos.MatrixProfessional;
-import com.cursorpoc.backend.web.dto.CommissionDtos.MatrixResponse;
-import com.cursorpoc.backend.web.dto.CommissionDtos.MatrixRow;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PeriodInfo;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalAmount;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RecalculationPreview;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RuleCategory;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RuleException;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RuleItem;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RuleProfessional;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RulesView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettingsResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.VersionView;
 import java.math.BigDecimal;
@@ -465,52 +466,127 @@ public class CommissionConfigService {
         history);
   }
 
+  /**
+   * HU-COM-02 rules view: active items of one kind grouped (visually) by category, each with its
+   * standard % (own item rule, or the general % of its kind) and the per-professional exceptions in
+   * force at {@code date} (today by default).
+   */
   @Transactional(readOnly = true)
-  public MatrixResponse matrix(long tenantId, String kindRaw, LocalDate date) {
-    ServiceKind kind = kindRaw == null || kindRaw.isBlank() ? null : ServiceKind.valueOf(kindRaw);
+  public RulesView rulesView(long tenantId, String kindRaw, LocalDate date) {
+    ServiceKind kind;
+    try {
+      kind =
+          kindRaw == null || kindRaw.isBlank() ? ServiceKind.SERVICE : ServiceKind.valueOf(kindRaw);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_SCOPE_INVALID");
+    }
     LocalDate day = date != null ? date : LocalDate.now(zone());
     Instant now = Instant.now();
-    // "At a date": end of that day for past/future dates, now for today.
     Instant at =
         day.equals(LocalDate.now(zone()))
             ? now
             : day.plusDays(1).atStartOfDay(zone()).toInstant().minusMillis(1);
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
+    CommissionBaseType baseType = snapshot.baseAt(at);
+    BigDecimal general =
+        snapshot.defaultPercentAt(
+            kind == ServiceKind.PRODUCT
+                ? CommissionConfigScope.DEFAULT_PRODUCT
+                : CommissionConfigScope.DEFAULT_SERVICE,
+            at);
     List<Professional> professionals =
         professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
             .filter(Professional::isActive)
             .toList();
-    List<MatrixRow> rows = new ArrayList<>();
-    for (SalonService s : serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId)) {
-      if (kind != null && s.getKind() != kind) {
-        continue;
-      }
-      List<MatrixCell> cells = new ArrayList<>();
+    Map<Long, RuleCategoryBuilder> categories = new java.util.LinkedHashMap<>();
+    int itemCount = 0;
+    int withExceptions = 0;
+    List<SalonService> items =
+        serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId).stream()
+            .filter(s -> s.getKind() == kind)
+            .sorted(
+                Comparator.comparing((SalonService s) -> s.getCategory().getName())
+                    .thenComparing(SalonService::getName))
+            .toList();
+    for (SalonService s : items) {
+      Optional<CommissionConfigVersion> own = snapshot.ruleAt(s.getId(), null, at);
+      BigDecimal standard = own.map(v -> new BigDecimal(v.getConfigValue())).orElse(general);
+      List<RuleException> exceptions = new ArrayList<>();
       for (Professional p : professionals) {
-        CommissionCalculator.Resolution r =
-            CommissionCalculator.resolve(snapshot, s.getId(), s.getKind(), p.getId(), at);
-        boolean scheduled =
-            !snapshot.scheduledAfter(ScopeKey.rule(s.getId(), p.getId()), at).isEmpty()
-                || !snapshot.scheduledAfter(ScopeKey.rule(s.getId(), null), at).isEmpty();
-        cells.add(new MatrixCell(p.getId(), r.percent(), r.origin().name(), scheduled));
+        snapshot
+            .ruleAt(s.getId(), p.getId(), at)
+            .ifPresent(
+                v -> {
+                  BigDecimal pct = new BigDecimal(v.getConfigValue());
+                  exceptions.add(
+                      new RuleException(p.getId(), p.getFullName(), pct, pct.subtract(standard)));
+                });
       }
-      rows.add(
-          new MatrixRow(
+      boolean scheduled =
+          snapshot.timelines().keySet().stream()
+              .filter(
+                  k ->
+                      k.scope() == CommissionConfigScope.RULE
+                          && Objects.equals(k.serviceId(), s.getId()))
+              .anyMatch(k -> !snapshot.scheduledAfter(k, at).isEmpty());
+      BigDecimal price = s.getPriceMinor() == null ? BigDecimal.ZERO : s.getPriceMinor();
+      BigDecimal rate = s.getTax() != null ? s.getTax().getRate() : BigDecimal.ZERO;
+      BigDecimal base =
+          baseType == CommissionBaseType.NET_OF_TAX
+              ? price.subtract(CommissionCalculator.includedTax(price, rate))
+              : price;
+      RuleItem item =
+          new RuleItem(
               s.getId(),
               s.getName(),
-              s.getKind().name(),
-              snapshot
-                  .ruleAt(s.getId(), null, at)
-                  .map(v -> new BigDecimal(v.getConfigValue()))
-                  .orElse(null),
-              cells));
+              price,
+              base.setScale(0, java.math.RoundingMode.HALF_UP),
+              standard,
+              own.isPresent(),
+              exceptions,
+              scheduled);
+      itemCount++;
+      boolean hasException = own.isPresent() || !exceptions.isEmpty();
+      if (hasException) {
+        withExceptions++;
+      }
+      categories
+          .computeIfAbsent(
+              s.getCategory().getId(), id -> new RuleCategoryBuilder(id, s.getCategory().getName()))
+          .add(item, hasException);
     }
-    return new MatrixResponse(
+    return new RulesView(
+        kind.name(),
         day,
-        professionals.stream()
-            .map(p -> new MatrixProfessional(p.getId(), p.getFullName()))
-            .toList(),
-        rows);
+        baseType.name(),
+        general,
+        itemCount,
+        withExceptions,
+        professionals.stream().map(p -> new RuleProfessional(p.getId(), p.getFullName())).toList(),
+        categories.values().stream().map(RuleCategoryBuilder::build).toList());
+  }
+
+  private static final class RuleCategoryBuilder {
+    private final Long id;
+    private final String name;
+    private final List<RuleItem> items = new ArrayList<>();
+    private int exceptions;
+
+    RuleCategoryBuilder(Long id, String name) {
+      this.id = id;
+      this.name = name;
+    }
+
+    void add(RuleItem item, boolean hasException) {
+      items.add(item);
+      if (hasException) {
+        exceptions++;
+      }
+    }
+
+    RuleCategory build() {
+      return new RuleCategory(id, name, exceptions, items);
+    }
   }
 
   /** HU-COM-02 / HU-COM-08: active items whose general percent is not defined. */

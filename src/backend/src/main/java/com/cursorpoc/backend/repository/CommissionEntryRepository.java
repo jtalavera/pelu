@@ -16,6 +16,12 @@ public interface CommissionEntryRepository extends JpaRepository<CommissionEntry
 
   boolean existsByReversesEntryId(long reversesEntryId);
 
+  /** Ids of the tenant's entries already compensated by a REVERSAL row. */
+  @Query(
+      "SELECT r.reversesEntryId FROM CommissionEntry r"
+          + " WHERE r.tenantId = :tenantId AND r.reversesEntryId IS NOT NULL")
+  java.util.Set<Long> findReversedIds(@Param("tenantId") long tenantId);
+
   /**
    * Entries that still count: INVOICE_LINE entries of the tenant whose accrual is at or after
    * {@code from} and that no REVERSAL row compensates yet.

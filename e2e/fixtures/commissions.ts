@@ -224,6 +224,7 @@ export type Entry = {
   sourceType: string;
   reasonCode: string | null;
   invoiceId: number | null;
+  serviceId: number | null;
   itemKind: string | null;
   baseType: string | null;
   baseAmount: number | null;
