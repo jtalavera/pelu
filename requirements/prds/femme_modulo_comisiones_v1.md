@@ -23,9 +23,9 @@
 | Término genérico | En peluquería (V1) |
 |------------------|--------------------|
 | **Beneficiario** | Profesional (`Professional`). |
-| **Ítem comisionable** | Servicio o producto (`SalonService`; los productos son servicios de la categoría "Productos", ver HU-31). |
+| **Ítem comisionable** | Servicio (`SalonService.kind = SERVICE`) o producto (`kind = PRODUCT`). Ambos tipos son comisionables y se gestionan en catálogos separados (Servicios / Productos). En el núcleo se llama *tipo de ítem* (`itemKind`). |
 | **Evento generador** | Emisión de un comprobante (`Invoice`). |
-| **Línea comisionable** | Línea de comprobante (`InvoiceLine`) asociada a un beneficiario. |
+| **Línea comisionable** | Línea de comprobante (`InvoiceLine`) con un **beneficiario asignado** (profesional / vendedor). Hoy `InvoiceLine` no guarda profesional; se agrega en HU-COM-10. |
 | **Regla de comisión** | Porcentaje aplicable a un ítem, general o por beneficiario. |
 | **Entrada de comisión** | Registro inmutable generado por una línea (o un ajuste). |
 | **Liquidación** | Agrupación de entradas de un periodo para un beneficiario, que se aprueba y se paga. |
@@ -36,7 +36,9 @@
 |------|----------|
 | **Devengo** | Al **emitir el comprobante**. Si se anula, la comisión se revierte (ver HU-COM-05). |
 | **Tipo de regla (V1)** | **Porcentaje** sobre el valor del ítem. |
-| **Resolución del %** | 1) % específico **beneficiario + ítem**, 2) % **general del ítem**, 3) **% por defecto del negocio**. |
+| **Ítems comisionables** | **Servicios y productos.** Un producto vendido comisiona igual que un servicio prestado. |
+| **Beneficiario de la línea** | Campo **profesional / vendedor** en cada línea del comprobante, precargado desde el registro de servicio si existe y editable al facturar; también para ventas sueltas de productos (HU-COM-10). |
+| **Resolución del %** | 1) % específico **beneficiario + ítem**, 2) % **general del ítem**, 3) **% por defecto del tipo de ítem** (uno para servicios y otro para productos). |
 | **Base de cálculo** | **Configurable por tenant**: *con IVA* o *sin IVA* (ver §4). Siempre **después de descuentos**. |
 | **Pago** | Liquidaciones por periodo con aprobación y marca de pagado. Sin integración con caja en V1. |
 | **Anulación tras liquidar** | **Ajuste negativo** en la próxima liquidación; las liquidaciones cerradas son inmutables. |
@@ -85,7 +87,7 @@ Con un descuento de 10.000 Gs sobre esa línea (lineNet = 100.000, IVA = 9.090,9
 
 **Cambios alcanzados:** todo cambio que afecta el cálculo de comisiones:
 - la **base de cálculo** (con IVA / sin IVA);
-- el **% por defecto del negocio**;
+- el **% por defecto de servicios** o el **% por defecto de productos** (cada uno es un alcance independiente);
 - una **regla** de % (alta, modificación de %, cierre o desactivación, general o por profesional).
 
 La **periodicidad de liquidación** no afecta el cálculo y no dispara esta pregunta (ver C13).
@@ -112,7 +114,7 @@ Reglas:
 3. Con periodicidad **Manual** no se hace la pregunta: el cambio rige desde el momento del cambio y el diálogo lo informa.
 4. El diálogo muestra el periodo en curso (fechas), la fecha exacta de vigencia de cada opción y, en el cambio de base, el ejemplo numérico de §4.2.
 5. El cálculo de cada comprobante usa la configuración y las reglas **vigentes en el instante de su emisión** (`issuedAt` frente a `effectiveFrom`), y el resultado queda en el snapshot.
-6. Un cambio **programado** es visible, cancelable antes de entrar en vigencia y queda auditado. Solo puede haber **un cambio programado por alcance** (base, % por defecto, o regla concreta); uno nuevo reemplaza al anterior previa confirmación.
+6. Un cambio **programado** es visible, cancelable antes de entrar en vigencia y queda auditado. Solo puede haber **un cambio programado por alcance** (base, % por defecto de servicios, % por defecto de productos, o regla concreta); uno nuevo reemplaza al anterior previa confirmación.
 7. La opción elegida (`applyMode`: `IMMEDIATE` o `NEXT_PERIOD`) queda en la auditoría.
 
 ---
@@ -129,7 +131,7 @@ Reglas:
 - [ ] Existe una pantalla de configuración de comisiones accesible solo para `ADMIN`; si la feature flag `COMMISSIONS` no está habilitada para el tenant, la sección no aparece y la API responde `FEATURE_NOT_ENABLED`.
 - [ ] Puedo elegir la **base de cálculo**: *Sin IVA* o *Con IVA* (por defecto *Sin IVA*). Cada opción incluye texto de ayuda con el ejemplo de §4.2.
 - [ ] Al cambiar la base (o el % por defecto) se muestra el diálogo de §4.4 / HU-COM-09, que indica que el cambio **no es retroactivo** y pregunta desde cuándo aplicarlo.
-- [ ] Puedo definir el **% por defecto del negocio** (0–100, hasta 2 decimales; por defecto 0 %).
+- [ ] Puedo definir dos valores por defecto: el **% por defecto de servicios** y el **% por defecto de productos** (0–100, hasta 2 decimales; ambos 0 % al inicio). Se aplican solo a ítems del tipo correspondiente que no tengan regla propia.
 - [ ] Puedo elegir la **periodicidad de liquidación**: semanal (lunes a domingo), quincenal (días 1–15 y 16–fin de mes), mensual (mes calendario) o manual.
 - [ ] Cambiar la periodicidad **no muestra** la pregunta de HU-COM-09: rige para las liquidaciones que se generen después y no altera liquidaciones existentes ni cambios programados.
 - [ ] Cada cambio de configuración queda en el historial de auditoría (usuario, fecha/hora, valor anterior y nuevo).
@@ -145,12 +147,13 @@ Reglas:
 - [ ] Puedo definir un **% general** para cada ítem del catálogo, que aplica a todos los profesionales por defecto.
 - [ ] Puedo definir un **% de excepción** para una combinación **profesional + ítem**, que prevalece sobre el % general del ítem.
 - [ ] Puedo marcar explícitamente un ítem como **sin comisión** (0 %), distinto de "sin regla definida".
-- [ ] Si no existe ni % general ni excepción, se aplica el **% por defecto del negocio**.
+- [ ] Si no existe ni % general ni excepción, se aplica el **% por defecto del tipo del ítem**: el de servicios para un servicio y el de productos para un producto.
+- [ ] Las reglas se pueden definir tanto para **servicios** como para **productos**; la matriz y los listados permiten filtrar por tipo (Servicios / Productos).
 - [ ] Cada regla admite **vigencia** (fecha desde, fecha hasta opcional). Dos reglas del mismo alcance (mismo ítem, o mismo profesional+ítem) **no pueden solaparse** (`COMMISSION_RULE_OVERLAP`).
 - [ ] Una regla vigente puede cerrarse (poner fecha hasta) pero **no se elimina** si ya generó entradas; se desactiva.
 - [ ] Existe un **historial de cambios** por regla (quién, cuándo, % anterior y nuevo, vigencia).
-- [ ] Puedo ver una **matriz** de profesionales × ítems con el % efectivo y su origen (excepción / general / defecto del negocio).
-- [ ] El catálogo muestra una advertencia en los ítems sin % general (usan el defecto del negocio).
+- [ ] Puedo ver una **matriz** de profesionales × ítems con el % efectivo y su origen (excepción / general / defecto de servicios o de productos).
+- [ ] Las pantallas de **Servicios** y de **Productos** muestran una advertencia en los ítems sin % general (usan el defecto de su tipo) y un acceso directo a su regla.
 - [ ] Las reglas nuevas **no modifican** entradas ya devengadas.
 - [ ] Todo alta, cambio de % o cierre de una regla, hecho con un periodo en curso, dispara el diálogo de HU-COM-09; la fecha elegida se convierte en el `validFrom` de la nueva versión y el `validTo` de la anterior.
 - [ ] La matriz permite ver el % efectivo **a una fecha dada** e indica los cambios **programados** pendientes.
@@ -163,7 +166,7 @@ Reglas:
 
 **Criterios de aceptación:**
 - [ ] Ingreso: ítem, profesional, monto de la línea con IVA, tasa de IVA, descuento opcional y fecha (por defecto hoy).
-- [ ] Salida: monto base según la **base configurada del tenant** (con la fórmula visible), % aplicado, **origen del %** (excepción / general / defecto del negocio) y comisión resultante.
+- [ ] Salida: monto base según la **base configurada del tenant** (con la fórmula visible), % aplicado, **origen del %** (excepción / general / defecto de servicios o de productos) y comisión resultante.
 - [ ] Puedo ver el resultado con la **otra base** a modo de comparación (sin guardar nada).
 - [ ] La fecha de simulación usa el cálculo vigente a esa fecha, incluidos cambios **programados** que ya rijan para ella.
 - [ ] El simulador **no persiste** datos.
@@ -175,14 +178,17 @@ Reglas:
 **para** que el devengo sea automático y consistente.
 
 **Criterios de aceptación:**
-- [ ] Al emitir un comprobante se genera **una entrada por línea** con profesional asignado y se atribuye al periodo según la fecha de emisión.
+- [ ] Al emitir un comprobante se genera **una entrada por línea** con beneficiario asignado, sea de **servicio o de producto**, y se atribuye al periodo según la fecha de emisión.
 - [ ] El monto base se calcula según la **base configurada del tenant** en el instante de la emisión (§4), después de descuentos.
 - [ ] La entrada guarda un **snapshot**: % aplicado, origen de la regla (id), `baseTypeApplied`, monto base, monto IVA de la línea, moneda y comisión resultante.
 - [ ] Las **propinas** no generan comisión.
 - [ ] La base parte del **neto ya calculado por línea** (`lineNet`, tras el descuento de esa línea). El sistema solo admite descuentos por línea, por lo que no hay prorrateo de descuentos globales.
 - [ ] El proceso es **idempotente**: reintentar la emisión no duplica entradas (clave única por comprobante + línea).
 - [ ] El redondeo se hace **por entrada** a la unidad mínima de la moneda (Gs sin decimales) con `HALF_UP`.
-- [ ] Una línea sin profesional asignado **no genera comisión** y queda listada en el reporte de "líneas sin beneficiario".
+- [ ] Una línea sin beneficiario asignado **no genera comisión** y queda listada en el reporte de "líneas sin beneficiario" (con su tipo de ítem).
+- [ ] La entrada guarda el **tipo de ítem** (`itemKind`) como snapshot; si el ítem cambia después en el catálogo, la entrada no se altera.
+- [ ] Aplica igual a **ventas sueltas de productos** (comprobante sin registro de servicio) siempre que la línea tenga beneficiario asignado.
+- [ ] Los comprobantes emitidos **antes** de habilitar el módulo no generan comisión (no hay recálculo retroactivo).
 - [ ] Un fallo al calcular la comisión **no bloquea** la emisión del comprobante: queda un evento pendiente de reproceso y un error registrado (`COMMISSION_CALCULATION_FAILED`).
 - [ ] Si la feature flag no está habilitada para el tenant, no se generan entradas.
 
@@ -209,7 +215,7 @@ Reglas:
 - [ ] Puedo generar liquidaciones para un periodo según la periodicidad del tenant (o un rango manual). Se crea una liquidación **Borrador** por beneficiario con las entradas del periodo aún no liquidadas.
 - [ ] Una entrada pertenece a **una sola** liquidación; no puede liquidarse dos veces.
 - [ ] Estados: **Borrador → Aprobada → Pagada**, y **Anulada** (solo desde Borrador o Aprobada, nunca desde Pagada).
-- [ ] La liquidación muestra: detalle por línea (fecha, comprobante, ítem, base usada, monto base, %, comisión), subtotales por ítem, ajustes y total.
+- [ ] La liquidación muestra: detalle por línea (fecha, comprobante, ítem, tipo de ítem, base usada, monto base, %, comisión), subtotales por ítem y por tipo (servicios / productos), ajustes y total.
 - [ ] Si hay entradas con **bases distintas** (cambió la configuración en el periodo), se muestra el aviso y la columna "Base" por línea.
 - [ ] Puedo agregar **ajustes manuales** (bono o descuento, positivo o negativo) con **motivo obligatorio** únicamente en estado Borrador.
 - [ ] Al **aprobar**, la liquidación queda **inmutable** (no se editan líneas ni ajustes).
@@ -226,7 +232,7 @@ Reglas:
 **para** conocer lo que he generado y lo que se me pagó.
 
 **Criterios de aceptación:**
-- [ ] Veo mis comisiones devengadas del periodo en curso y mis liquidaciones (estado, periodo, total).
+- [ ] Veo mis comisiones devengadas del periodo en curso y mis liquidaciones (estado, periodo, total), con el detalle separado por servicios y por productos.
 - [ ] Veo el detalle por línea de mis liquidaciones, en **solo lectura**.
 - [ ] **No** veo comisiones ni liquidaciones de otros profesionales, ni la configuración de reglas de otros (la API devuelve `403`/`404` ante intentos de acceso cruzado).
 - [ ] Veo la base de cálculo usada en cada línea (con IVA / sin IVA) y el monto base, pero **no** el IVA discriminado ni el total de la línea; esos campos no se exponen en la API del profesional.
@@ -239,10 +245,10 @@ Reglas:
 **para** analizar costos y conciliar pagos.
 
 **Criterios de aceptación:**
-- [ ] Reporte de comisiones por **profesional**, por **ítem** y por **periodo**, con filtros de fecha, profesional y estado de liquidación.
-- [ ] Reporte de **líneas sin beneficiario** y de **ítems sin % general** (usan el defecto).
+- [ ] Reporte de comisiones por **profesional**, por **ítem**, por **tipo de ítem** (servicios / productos) y por **periodo**, con filtros de fecha, profesional, tipo de ítem y estado de liquidación.
+- [ ] Reporte de **líneas sin beneficiario** y de **ítems sin % general** (usan el defecto de su tipo).
 - [ ] **Comprobante de liquidación** imprimible en PDF (datos del negocio, profesional, periodo, detalle, ajustes, total, base de cálculo usada).
-- [ ] **Exportación CSV** de entradas y de liquidaciones, con la base y el % aplicados por línea.
+- [ ] **Exportación CSV** de entradas y de liquidaciones, con el tipo de ítem, la base y el % aplicados por línea.
 - [ ] Los montos y fechas respetan el formato y la zona horaria del servidor.
 
 ### HU-COM-09 · Aplicar cambios de cálculo a mitad de periodo
@@ -267,6 +273,25 @@ Reglas:
 - [ ] Solo `ADMIN` puede aplicar o cancelar cambios; un `PROFESSIONAL` recibe `403`.
 - [ ] El diálogo y los mensajes están en `en.json` y `es.json`, son accesibles (foco, `role="dialog"`, cierre con Esc sin guardar) y funcionan en modo claro/oscuro y mobile.
 
+### HU-COM-10 · Asignar profesional / vendedor a las líneas del comprobante
+
+> Modifica **HU-14 (Emitir comprobante)**. Es el origen del beneficiario de cada comisión, tanto en servicios como en productos.
+
+**Como** administrador,
+**quiero** indicar qué profesional realizó o vendió cada línea del comprobante,
+**para** que la comisión de servicios y de productos se atribuya correctamente.
+
+**Criterios de aceptación:**
+- [ ] Cada línea del formulario de emisión (servicio o producto) tiene un campo opcional **Profesional / Vendedor** que lista los profesionales activos del tenant.
+- [ ] Si el comprobante se crea desde un **registro de servicio**, el campo se **precarga** con el profesional de la línea del registro (si lo tiene) y se puede cambiar o quitar.
+- [ ] En un comprobante creado **sin registro de servicio** (p. ej. venta suelta de un producto) el campo parte vacío y se puede asignar manualmente.
+- [ ] El valor queda guardado en la línea del comprobante al emitirlo y **no se puede modificar** después, igual que el resto del comprobante emitido.
+- [ ] Un profesional inactivo o de otro tenant se rechaza (`PROFESSIONAL_NOT_FOUND` / `INVOICE_LINE_PROFESSIONAL_INACTIVE`).
+- [ ] Con la feature flag `COMMISSIONS` habilitada, una línea sin profesional muestra un aviso discreto ("esta línea no generará comisión"); **no impide emitir**.
+- [ ] Con la feature flag deshabilitada, el campo no se muestra y el flujo de HU-14 no cambia.
+- [ ] El campo y el aviso están en `en.json` y `es.json`, y funcionan en modo claro/oscuro y mobile.
+- [ ] Los tests Playwright de HU-14 (emisión de comprobante) se actualizan para cubrir el nuevo campo.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -275,11 +300,12 @@ Reglas:
 
 | Entidad | Campos clave |
 |---------|--------------|
-| **CommissionSettings** (versionada, N por tenant) | `tenantId`, `commissionBase` (`NET_OF_TAX` \| `TAX_INCLUDED`), `defaultPercent`, `effectiveFrom`, `applyMode` (`IMMEDIATE` \| `NEXT_PERIOD`), `status` (`SCHEDULED` \| `ACTIVE` \| `SUPERSEDED` \| `CANCELLED`), auditoría. La versión vigente a un instante es la de mayor `effectiveFrom` ≤ instante con estado `ACTIVE`. |
+| **CommissionSettings** (versionada, N por tenant) | `tenantId`, `commissionBase` (`NET_OF_TAX` \| `TAX_INCLUDED`), `defaultPercentService`, `defaultPercentProduct`, `effectiveFrom`, `applyMode` (`IMMEDIATE` \| `NEXT_PERIOD`), `status` (`SCHEDULED` \| `ACTIVE` \| `SUPERSEDED` \| `CANCELLED`), auditoría. La versión vigente a un instante es la de mayor `effectiveFrom` ≤ instante con estado `ACTIVE`. |
 | **SettlementConfig** (1 por tenant) | `tenantId`, `settlementPeriodicity` (`WEEKLY` \| `BIWEEKLY` \| `MONTHLY` \| `MANUAL`), auditoría |
 | **CommissionRule** | `tenantId`, `itemId`, `beneficiaryId` (nulo = regla general), `percent`, `validFrom`, `validTo`, `active`, `applyMode`, `status` (`SCHEDULED` \| `ACTIVE` \| `CLOSED` \| `CANCELLED`), auditoría |
+| **InvoiceLine** (cambio a entidad existente) | Nuevo campo opcional `professionalId` (beneficiario), inmutable tras emitir (HU-COM-10). |
 | **CommissionRuleChange** | `ruleId`, `oldPercent`, `newPercent`, vigencia, `changedBy`, `changedAt` |
-| **CommissionEntry** (append-only) | `tenantId`, `beneficiaryId`, `sourceType` (`INVOICE_LINE` \| `REVERSAL` \| `ADJUSTMENT`), `invoiceId`, `invoiceLineId`, `itemId`, `baseTypeApplied`, `baseAmount`, `taxAmount`, `percentApplied`, `ruleIdApplied`, `ruleOrigin` (`BENEFICIARY_ITEM` \| `ITEM` \| `TENANT_DEFAULT`), `commissionAmount`, `currency`, `accrualDate`, `settlementId`, `reversesEntryId` |
+| **CommissionEntry** (append-only) | `tenantId`, `beneficiaryId`, `sourceType` (`INVOICE_LINE` \| `REVERSAL` \| `ADJUSTMENT`), `invoiceId`, `invoiceLineId`, `itemId`, `itemKind` (`SERVICE` \| `PRODUCT`), `baseTypeApplied`, `baseAmount`, `taxAmount`, `percentApplied`, `ruleIdApplied`, `ruleOrigin` (`BENEFICIARY_ITEM` \| `ITEM` \| `TENANT_DEFAULT_SERVICE` \| `TENANT_DEFAULT_PRODUCT`), `commissionAmount`, `currency`, `accrualDate`, `settlementId`, `reversesEntryId` |
 | **Settlement** | `tenantId`, `beneficiaryId`, `periodFrom`, `periodTo`, `status`, `totalAmount`, `approvedBy/At`, `paidBy/At`, `paymentMethod`, `paymentReference` |
 | **SettlementAdjustment** | `settlementId`, `amount` (±), `reason`, `createdBy/At` |
 | **SettlementStatusChange** | `settlementId`, `fromStatus`, `toStatus`, `changedBy`, `changedAt` |
@@ -306,10 +332,14 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | C14 | Comprobante emitido en el mismo instante en que entra en vigencia un cambio | Se usa `issuedAt` (UTC en servidor) frente a `effectiveFrom`: si `issuedAt` ≥ `effectiveFrom`, aplica el nuevo; el resultado queda en el snapshot. |
 | C15 | Dos cambios con `IMMEDIATE` en el mismo periodo | El periodo queda con tres tramos de cálculo; cada línea de la liquidación indica el que usó. |
 | C16 | Tenant desactiva la flag con cambios programados | Se conservan; entran en vigencia en su fecha si la flag está activa, sino quedan sin efecto hasta reactivar. |
+| C17 | Venta suelta de un producto sin profesional asignado | No genera comisión; aparece en el reporte de líneas sin beneficiario. |
+| C18 | Comprobante con servicios y productos de distintos profesionales | Una entrada por línea, cada una con su beneficiario y con la regla de su ítem / tipo. |
+| C19 | Profesional con % de excepción para un servicio pero no para un producto | El servicio usa la excepción; el producto usa el % general del producto o, si no existe, el defecto de productos. |
+| C20 | Comprobante emitido antes de habilitar el módulo | Sin entradas; no hay backfill. |
 
 ## 8. Códigos de error (backend → i18n `femme.apiErrors.*`)
 
-`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`.
+`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`.
 
 ## 9. Requisitos transversales
 
@@ -327,12 +357,13 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | HU-COM-01 | Cambiar base con confirmación; validación de % inválido; auditoría visible; flag deshabilitada oculta la sección. |
 | HU-COM-02 | Crear % general; excepción por profesional prevalece; 0 % explícito; solapamiento rechazado; historial de cambios; matriz de % efectivos. |
 | HU-COM-03 | Simulación con base sin IVA y con IVA; comparación; no persiste. |
-| HU-COM-04 | Emisión genera entradas con snapshot; base sin IVA vs con IVA según config; descuento; IVA exento; propina excluida; idempotencia; línea sin profesional. |
+| HU-COM-04 | Emisión genera entradas con snapshot para líneas de servicio y de producto; % por defecto de servicios vs de productos; venta suelta de producto con vendedor; base sin IVA vs con IVA según config; descuento; IVA exento; propina excluida; idempotencia; línea sin profesional. |
 | HU-COM-05 | Anulación pre-liquidación revierte; anulación post-liquidación genera ajuste en la siguiente; reversión tras cambio de base usa snapshot. |
 | HU-COM-06 | Flujo Borrador→Aprobada→Pagada; ajuste manual con motivo; inmutabilidad; solapamiento bloqueado; mezcla de bases avisada. |
 | HU-COM-07 | Profesional ve solo lo suyo; acceso cruzado rechazado. |
 | HU-COM-08 | Reportes con filtros; PDF y CSV de liquidación. |
 | HU-COM-09 | Diálogo aparece con periodo en curso en cada periodicidad; sin opción preseleccionada; `IMMEDIATE` deja periodo mixto; `NEXT_PERIOD` programa y no altera el periodo actual; cambio programado visible y cancelable; reemplazo de programado; Manual no pregunta; entrada en vigencia automática (reloj controlado); aplica a base, % por defecto y reglas; `PROFESSIONAL` recibe 403. |
+| HU-COM-10 | Campo profesional por línea (servicio y producto); precarga desde registro de servicio; asignación manual en venta suelta; profesional inactivo rechazado; aviso de línea sin comisión; campo oculto con flag deshabilitada; **actualizar los specs existentes de HU-14**. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
 ## 11. Fuera de alcance V1
@@ -341,6 +372,8 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 - Integración con caja (egreso automático al pagar).
 - Combos / paquetes con prorrateo entre varios profesionales.
 - Devengo al cobrar (V1 devenga solo al emitir).
+- Comisión sobre **ganancia / margen** de productos (precio menos costo): la base de V1 es el precio de venta. Requeriría un dato de costo que hoy el catálogo no guarda.
+- Devoluciones de producto con reingreso a stock (la reversión por anulación sí está cubierta).
 - Recálculo **retroactivo** de comisiones ya devengadas (ninguna opción aplica un cambio a comprobantes ya emitidos).
 - Notas de crédito: su tratamiento se definirá cuando ese módulo esté implementado.
 - Base de cálculo configurable **por regla o por ítem** (decidido: la base es solo por tenant, sin plan de cambiarlo).
@@ -356,5 +389,11 @@ Restricciones: clave única `(invoiceLineId, sourceType)` para idempotencia; `Co
 | 4 | ¿Cómo se definen los periodos semanal, quincenal y mensual? | **Calendario fijo**: semanal lunes a domingo, quincenal días 1–15 y 16–fin de mes, mensual mes calendario (§4.4). |
 | 5 | ¿Qué pasa al cambiar la periodicidad a mitad de periodo? | Rige para las **liquidaciones que se generen después**, **sin pregunta**; no toca liquidaciones existentes ni cambios programados (C13). |
 | 6 | ¿El simulador y la matriz de reglas aceptan una fecha? | **Sí, ambos**: muestran el cálculo vigente a esa fecha, incluidos cambios programados (HU-COM-02, HU-COM-03). |
+| 7 | ¿Se comisiona por servicios y por productos? | **Sí, ambos**, con las mismas reglas por ítem (§2, HU-COM-02, HU-COM-04). |
+| 8 | ¿De dónde sale el beneficiario de una línea? | **Campo profesional / vendedor en cada línea del comprobante**, precargado del registro de servicio y editable (HU-COM-10). |
+| 9 | ¿El % por defecto es único? | **No**: uno para servicios y otro para productos (HU-COM-01). |
+| 10 | ¿Comprobantes anteriores a habilitar el módulo? | **No comisionan**; no hay recálculo retroactivo (HU-COM-04, C20). |
+| 11 | ¿Una línea sin profesional bloquea la emisión? | **No**: solo muestra un aviso y no genera comisión (HU-COM-10). |
+| 12 | ¿Se comisiona sobre la ganancia del producto? | **No en V1**: la base es el precio de venta (§11). |
 
 No quedan preguntas abiertas.
