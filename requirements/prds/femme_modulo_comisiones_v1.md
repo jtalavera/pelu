@@ -204,6 +204,7 @@ Reglas:
 - [ ] La reversión usa el **snapshot** de la entrada original (misma base, mismo %), no la configuración vigente.
 - [ ] Si el saldo de una liquidación resulta negativo, se **arrastra** el saldo a la siguiente (no se paga negativo).
 - [ ] La anulación es idempotente: anular dos veces no duplica la reversión.
+- [ ] **Dependencia con Stock:** si el comprobante anulado contiene productos y el módulo de Stock está activo, la devolución del producto al inventario la gestiona la integración con Stock existente (HU-64) y **no forma parte de este módulo**. La reversión de la comisión es **independiente** de esa devolución: un fallo o demora en Stock no impide revertir la comisión, ni al revés.
 
 ### HU-COM-06 · Gestionar liquidaciones por periodo
 
