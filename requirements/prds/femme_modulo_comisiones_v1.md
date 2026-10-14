@@ -163,7 +163,13 @@ Reglas:
 - [ ] Cada regla admite **vigencia** (fecha desde, fecha hasta opcional). Dos reglas del mismo alcance (mismo ítem, o mismo profesional+ítem) **no pueden solaparse** (`COMMISSION_RULE_OVERLAP`).
 - [ ] Una regla vigente puede cerrarse (poner fecha hasta) pero **no se elimina** si ya generó entradas; se desactiva.
 - [ ] Existe un **historial de cambios** por regla (quién, cuándo, % anterior y nuevo, vigencia).
-- [ ] Puedo ver una **matriz** de profesionales × ítems con el % efectivo y su origen (excepción / general / defecto de servicios o de productos).
+- [ ] El **% general** de un servicio o de un producto se define en el **formulario del ítem**, en las pantallas de **Servicios** y de **Productos**, dentro de una sección **«Comisión»**.
+- [ ] La misma sección «Comisión» incluye una lista **«Excepciones por profesional»** donde puedo **agregar, editar y quitar** el % de uno o varios profesionales para ese ítem. Un mismo ítem puede tener un % distinto para cada profesional.
+- [ ] Al agregar una excepción solo se ofrecen profesionales **activos** que aún no tengan una excepción vigente para ese ítem. Una excepción de un profesional que luego se desactiva sigue visible y se puede cerrar, pero no se puede crear una nueva para él.
+- [ ] La sección «Comisión» del formulario del ítem solo es visible para `ADMIN` y si la feature flag `COMMISSIONS` está habilitada; en caso contrario el formulario del ítem no cambia.
+- [ ] Puedo ver una **matriz** de profesionales × ítems con el % efectivo y su origen (excepción / general / defecto de servicios o de productos), como **vista global**.
+- [ ] La matriz permite **editar directamente una celda** (crear o cambiar una excepción) y **aplicar un mismo % a varios ítems seleccionados** (general o de excepción para un profesional).
+- [ ] Todas las vías de edición (formulario del ítem y matriz) usan las **mismas validaciones**, el mismo historial y el mismo diálogo de HU-COM-09: el resultado es idéntico sin importar desde dónde se edite.
 - [ ] Las pantallas de **Servicios** y de **Productos** muestran una advertencia en los ítems sin % general (usan el defecto de su tipo) y un acceso directo a su regla.
 - [ ] Las reglas nuevas **no modifican** entradas ya devengadas, salvo que el administrador elija "desde el inicio del periodo vigente" (HU-COM-09).
 - [ ] Todo alta, cambio de % o cierre de una regla, hecho con un periodo en curso, dispara el diálogo de HU-COM-09; la fecha elegida se convierte en el `validFrom` de la nueva versión y el `validTo` de la anterior.
@@ -380,7 +386,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | Historia | Escenarios mínimos |
 |----------|--------------------|
 | HU-COM-01 | Cambiar base con confirmación; validación de % inválido; auditoría visible; flag deshabilitada oculta la sección. |
-| HU-COM-02 | Crear % general; excepción por profesional prevalece; 0 % explícito; solapamiento rechazado; historial de cambios; matriz de % efectivos. |
+| HU-COM-02 | Crear % general desde el formulario de un servicio y de un producto; varias excepciones distintas por profesional en el mismo ítem; solo profesionales activos sin excepción vigente en la lista; sección «Comisión» oculta para no admin o con flag deshabilitada; edición desde la matriz y aplicación a varios ítems; excepción por profesional prevalece; 0 % explícito; solapamiento rechazado; historial de cambios; matriz de % efectivos. |
 | HU-COM-03 | Simulación con base sin IVA y con IVA; comparación; no persiste. |
 | HU-COM-04 | Emisión genera entradas con snapshot para líneas de servicio y de producto; % por defecto de servicios vs de productos; venta suelta de producto con vendedor; base sin IVA vs con IVA según config; descuento; IVA exento; propina excluida; idempotencia; línea sin profesional. |
 | HU-COM-05 | Anulación pre-liquidación revierte; anulación post-liquidación genera ajuste en la siguiente; reversión tras cambio de base usa snapshot. |
@@ -397,6 +403,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 - Integración con caja (egreso automático al pagar).
 - Combos / paquetes con prorrateo entre varios profesionales.
 - Devengo al cobrar (V1 devenga solo al emitir).
+- Vista inversa en la **ficha del profesional** (todos sus % por ítem); en V1 las excepciones se editan desde el ítem y desde la matriz.
 - Comisión sobre **ganancia / margen** de productos (precio menos costo): la base de V1 es el precio de venta. Requeriría un dato de costo que hoy el catálogo no guarda.
 - Devoluciones de producto con reingreso a stock (la reversión por anulación sí está cubierta).
 - Recálculo de periodos **ya cerrados** (liquidaciones Aprobadas o Pagadas) o anteriores al periodo vigente: nada de eso se recalcula en V1.
@@ -424,5 +431,6 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | 14 | ¿Los Borradores se recalculan? | **Sí.** Solo las liquidaciones Aprobadas y Pagadas quedan intactas. |
 | 15 | ¿Cómo se interpreta con periodicidad Manual? | **Desde el último corte**: entradas posteriores a la última liquidación Aprobada o Pagada del beneficiario. |
 | 16 | ¿La devolución de stock al anular forma parte de comisiones? | **No**: la gestiona la integración con Stock (HU-64); la reversión de la comisión es independiente (HU-COM-05). |
+| 17 | ¿Dónde se define el % de un ítem y las excepciones por profesional? | En la **sección «Comisión» del formulario del ítem** (Servicios / Productos), con lista de excepciones por profesional, y en la **matriz** como vista global. **Sin vista inversa** en la ficha del profesional en V1 (HU-COM-02). |
 
 No quedan preguntas abiertas.
