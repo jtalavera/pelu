@@ -40,9 +40,10 @@ key_vault_purge_protection_enabled   = false
 email_custom_domain               = "flowbit.tech"
 email_domain_verification_enabled = true
 
-# SIFEN: this environment was switched to SIFEN production by hand on 2026-10-10; declared here so
-# a `terraform apply` doesn't revert it to the TEST default.
-sifen_environment = "PRODUCTION"
+# SIFEN: this environment talks to the SIFEN testing endpoint (sifen-test.set.gov.py). It was
+# switched to production by hand on 2026-10-10 and put back on TEST on 2026-10-14; only prod uses
+# PRODUCTION.
+sifen_environment = "TEST"
 
 # Stock integration (HU-59..HU-67): the control-stock test API (control-stock-dev-rg / cstock-dev-api).
 # Its four secrets live in this environment's Key Vault, created by an operator — see
