@@ -45,7 +45,7 @@
 | **Periodicidad** | Configurable por tenant: semanal, quincenal, mensual o rango manual. |
 | **Cambios a mitad de periodo** | Todo cambio que afecte el cálculo (base, % por defecto, reglas) pregunta al `ADMIN` si rige **desde el momento del cambio**, **desde el inicio del próximo periodo** o **desde el inicio del periodo vigente** (recalcula lo no cerrado; ver §4.4 y HU-COM-09). Las liquidaciones Aprobadas o Pagadas nunca se recalculan. |
 | **Permisos** | `ADMIN` configura, aprueba, paga y ve todo. `PROFESSIONAL` ve **solo lo suyo**, en lectura. |
-| **Habilitación** | Feature flag `COMMISSIONS` por tenant / tier. |
+| **Habilitación** | Feature flag `COMMISSIONS`, **apagada globalmente por defecto** y habilitada desde la vista de plataforma (`PLATFORM_ADMIN`) por tier y por tenant, igual que el módulo de Stock (`STOCK_MODULE`). Ver HU-COM-11. |
 
 ## 4. Base de cálculo configurable por tenant
 
@@ -317,6 +317,23 @@ Reglas:
 - [ ] El campo y el aviso están en `en.json` y `es.json`, y funcionan en modo claro/oscuro y mobile.
 - [ ] Los tests Playwright de HU-14 (emisión de comprobante) se actualizan para cubrir el nuevo campo.
 
+### HU-COM-11 · Habilitar el módulo de comisiones desde la plataforma
+
+**Como** administrador de plataforma (`PLATFORM_ADMIN`),
+**quiero** habilitar o deshabilitar el módulo de comisiones por tier y por negocio,
+**para** ofrecerlo solo a los negocios que lo contraten, igual que el módulo de Stock.
+
+**Criterios de aceptación:**
+- [ ] Existe la feature flag **`COMMISSIONS`**, creada **apagada globalmente** (ningún tenant tiene el módulo hasta que un `PLATFORM_ADMIN` lo active).
+- [ ] La flag se gestiona en las pantallas de plataforma existentes: **flags globales**, **tiers** y **detalle del tenant** (override por negocio).
+- [ ] La habilitación efectiva sigue la **misma resolución que el resto de las flags**: global **Y** tier **Y** tenant (si no hay valor de tier o de tenant, se asume habilitado).
+- [ ] Con la flag efectiva apagada: el menú y las secciones de comisiones no aparecen, el campo Profesional / Vendedor de HU-COM-10 no se muestra, los endpoints responden `FEATURE_NOT_ENABLED` y no se generan entradas de comisión (HU-COM-04).
+- [ ] Al **habilitar** la flag por primera vez para un tenant, el módulo arranca con su configuración por defecto (base *Sin IVA*, % por defecto de servicios y de productos en 0 %, periodicidad mensual) y no genera comisiones sobre comprobantes anteriores.
+- [ ] Al **deshabilitar** la flag se conservan todos los datos (reglas, entradas, liquidaciones, cambios programados); al reactivarla se retoma donde quedó (C9, C16).
+- [ ] Cada cambio de la flag queda auditado con el historial de flags existente (quién, cuándo, valor anterior y nuevo).
+- [ ] Solo `PLATFORM_ADMIN` puede cambiar la flag; un `ADMIN` de tenant no puede habilitarla ni deshabilitarla.
+- [ ] La flag aparece traducida en `en.json` y `es.json` en las pantallas de plataforma.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -378,7 +395,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 - **Logs:** cada endpoint registra en INFO la solicitud y la respuesta (path, método, tenantId, status) y en ERROR los no-2xx.
 - **i18n:** todo texto visible en `en.json` y `es.json`, incluidos errores y etiquetas de la base ("Con IVA" / "Sin IVA").
 - **UI:** modo claro y oscuro, mobile-first, tablas dentro de `overflow-x-auto`, validación de campos con `FieldValidationError`, componentes del design-system.
-- **Feature flag:** `COMMISSIONS` integrada con el sistema de flags por tenant/tier.
+- **Feature flag:** `COMMISSIONS` integrada con el sistema de flags existente (global, tier y tenant); ver HU-COM-11.
 - **Performance:** el cálculo no debe añadir latencia perceptible a la emisión del comprobante; reproceso asíncrono ante fallos.
 
 ## 10. Plan de pruebas Playwright (cobertura de criterios)
@@ -395,6 +412,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-08 | Reportes con filtros; PDF y CSV de liquidación. |
 | HU-COM-09 | Diálogo aparece con periodo en curso en cada periodicidad; sin opción preseleccionada; `IMMEDIATE` deja periodo mixto; `NEXT_PERIOD` programa y no altera el periodo actual; cambio programado visible y cancelable; reemplazo de programado; Manual no pregunta; entrada en vigencia automática (reloj controlado); aplica a base, % por defecto y reglas; `PROFESSIONAL` recibe 403; `PERIOD_START`: vista previa con conteos y diferencia, recálculo con contra-entradas, Borrador actualizado, Aprobada/Pagada intactas, ajustes y anulados excluidos, atomicidad ante error, Manual con "desde el último corte", anulación posterior al recálculo. |
 | HU-COM-10 | Campo profesional por línea (servicio y producto); precarga desde registro de servicio; asignación manual en venta suelta; profesional inactivo rechazado; aviso de línea sin comisión; campo oculto con flag deshabilitada; **actualizar los specs existentes de HU-14**. |
+| HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
 ## 11. Fuera de alcance V1
@@ -432,5 +450,6 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | 15 | ¿Cómo se interpreta con periodicidad Manual? | **Desde el último corte**: entradas posteriores a la última liquidación Aprobada o Pagada del beneficiario. |
 | 16 | ¿La devolución de stock al anular forma parte de comisiones? | **No**: la gestiona la integración con Stock (HU-64); la reversión de la comisión es independiente (HU-COM-05). |
 | 17 | ¿Dónde se define el % de un ítem y las excepciones por profesional? | En la **sección «Comisión» del formulario del ítem** (Servicios / Productos), con lista de excepciones por profesional, y en la **matriz** como vista global. **Sin vista inversa** en la ficha del profesional en V1 (HU-COM-02). |
+| 18 | ¿Cómo se habilita el módulo? | Feature flag `COMMISSIONS` apagada por defecto, activada por `PLATFORM_ADMIN` por tier y por tenant, como `STOCK_MODULE` (HU-COM-11). |
 
 No quedan preguntas abiertas.
