@@ -7,6 +7,7 @@ import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
+import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.CardBrand;
@@ -22,6 +23,7 @@ import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -73,6 +75,14 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   @Override
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
     this.events = applicationEventPublisher;
+  }
+
+  /** HU-COM-10: resolves the professional / seller of each line. Setter-injected (optional). */
+  private ProfessionalRepository professionalRepository;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setProfessionalRepository(ProfessionalRepository professionalRepository) {
+    this.professionalRepository = professionalRepository;
   }
 
   private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
@@ -493,6 +503,21 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       line.setInvoice(invoice);
       line.setDescription(lr.description());
       line.setQuantity(lr.quantity());
+      // HU-COM-10: professional / seller of the line (commission beneficiary).
+      if (lr.professionalId() != null) {
+        Professional professional =
+            professionalRepository
+                .findByIdAndTenant_Id(lr.professionalId(), tenantId)
+                .orElseThrow(
+                    () ->
+                        new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+        if (!professional.isActive()) {
+          throw new ResponseStatusException(
+              HttpStatus.CONFLICT, "INVOICE_LINE_PROFESSIONAL_INACTIVE");
+        }
+        line.setProfessional(professional);
+      }
 
       // Issue #174 AC-01: strip the included 10% IVA for a diplomatic-exoneration receiver, so
       // subtotal/total/payments all reconcile on the net amount the client actually pays.
@@ -886,7 +911,9 @@ public class InvoiceService implements ApplicationEventPublisherAware {
                         l.getDiscountValue(),
                         l.getLineTotal(),
                         l.getTaxRate(),
-                        l.getTaxAmount()))
+                        l.getTaxAmount(),
+                        l.getProfessional() != null ? l.getProfessional().getId() : null,
+                        l.getProfessional() != null ? l.getProfessional().getFullName() : null))
             .collect(Collectors.toList());
 
     List<InvoicePaymentAllocationResponse> payments =

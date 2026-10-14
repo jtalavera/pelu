@@ -15,4 +15,17 @@ public record InvoiceLineRequest(
     /** Optional per-line discount type: FIXED or PERCENT (null = no discount). */
     String discountType,
     /** Optional per-line discount value (null when discountType is null). */
-    BigDecimal discountValue) {}
+    BigDecimal discountValue,
+    /** HU-COM-10: optional professional / seller who earns this line's commission. */
+    Long professionalId) {
+
+  public InvoiceLineRequest(
+      Long serviceId,
+      String description,
+      int quantity,
+      BigDecimal unitPrice,
+      String discountType,
+      BigDecimal discountValue) {
+    this(serviceId, description, quantity, unitPrice, discountType, discountValue, null);
+  }
+}

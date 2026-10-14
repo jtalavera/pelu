@@ -256,7 +256,9 @@ export default function FeatureFlagsPage() {
                 {row.flagKey}
               </div>
               {row.description ? (
-                <p className="mb-3 text-sm text-[var(--color-ink-2)]">{row.description}</p>
+                <p className="mb-3 text-sm text-[var(--color-ink-2)]">
+                  {t(`femme.featureFlags.descriptions.${row.flagKey}`, { defaultValue: row.description })}
+                </p>
               ) : null}
 
               <div className="grid gap-3 sm:grid-cols-3">

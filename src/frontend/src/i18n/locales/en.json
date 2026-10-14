@@ -26,6 +26,274 @@
     }
   },
   "femme": {
+    "commissions": {
+      "pageTitle": "Commissions",
+      "pageSubtitle": "Commission rules, settlements and reports for services and products",
+      "notEnabled": "The commissions module is not enabled for this business.",
+      "tabs": {
+        "settlements": "Settlements",
+        "rules": "Rules",
+        "settings": "Settings",
+        "simulator": "Simulator",
+        "reports": "Reports"
+      },
+      "common": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "back": "Back",
+        "search": "Search",
+        "exportCsv": "Export CSV",
+        "from": "From",
+        "to": "To",
+        "professional": "Professional",
+        "allProfessionals": "All professionals",
+        "status": "Status",
+        "allStatuses": "All statuses",
+        "total": "Total",
+        "item": "Item",
+        "itemKind": "Item type",
+        "inactive": "inactive"
+      },
+      "kind": {
+        "SERVICE": "Services",
+        "PRODUCT": "Products",
+        "ALL": "Services and products"
+      },
+      "base": {
+        "NET_OF_TAX": "Excluding VAT",
+        "TAX_INCLUDED": "Including VAT"
+      },
+      "baseHelp": {
+        "NET_OF_TAX": "Line total after discounts, minus the line's VAT.",
+        "TAX_INCLUDED": "Line total after discounts, VAT included (what the client paid)."
+      },
+      "periodicity": {
+        "WEEKLY": "Weekly (Monday to Sunday)",
+        "BIWEEKLY": "Biweekly (1–15 and 16–end of month)",
+        "MONTHLY": "Monthly (calendar month)",
+        "MANUAL": "Manual (free range)"
+      },
+      "scope": {
+        "BASE": "Calculation base",
+        "DEFAULT_SERVICE": "Default % for services",
+        "DEFAULT_PRODUCT": "Default % for products",
+        "PERIODICITY": "Periodicity",
+        "RULE": "Rule"
+      },
+      "origin": {
+        "BENEFICIARY_ITEM": "Professional exception",
+        "ITEM": "Item general %",
+        "TENANT_DEFAULT_SERVICE": "Default % for services",
+        "TENANT_DEFAULT_PRODUCT": "Default % for products"
+      },
+      "versionStatus": {
+        "ACTIVE": "In force",
+        "SCHEDULED": "Scheduled",
+        "SUPERSEDED": "Replaced",
+        "CANCELLED": "Cancelled"
+      },
+      "settlementStatus": {
+        "UNSETTLED": "Unsettled",
+        "DRAFT": "Draft",
+        "APPROVED": "Approved",
+        "PAID": "Paid",
+        "VOIDED": "Voided"
+      },
+      "paymentMethod": {
+        "CASH": "Cash",
+        "TRANSFER": "Bank transfer",
+        "OTHER": "Other",
+        "null": "—"
+      },
+      "reason": {
+        "VOID": "Reversal: invoice voided",
+        "CORRECTION": "Reversal: invoice corrected",
+        "RECALCULATION": "Reversal: recalculation",
+        "MANUAL_ADJUSTMENT": "Manual adjustment",
+        "CARRY_FORWARD_OUT": "Negative balance carried to the next settlement",
+        "CARRY_FORWARD_IN": "Negative balance from the previous settlement",
+        "CARRY_REVERSAL": "Adjustment reversed: settlement voided",
+        "null": "—"
+      },
+      "validation": {
+        "percent": "Enter a percentage between 0 and 100 with up to 2 decimals, e.g. 40.5."
+      },
+      "applyDialog": {
+        "title": "When should the change apply?",
+        "notRetroactiveHint": "Choose how to apply the change. The first two options never modify accrued commissions; the last one recalculates the current period's commissions not yet approved or paid.",
+        "currentPeriod": "Current period: {{from}} – {{to}}.",
+        "manualPeriod": "Manual periodicity: there is no next period; the current period is every commission after the last approved or paid cutoff.",
+        "modes": {
+          "IMMEDIATE": "From the moment of the change",
+          "NEXT_PERIOD": "From the start of the next period",
+          "PERIOD_START": "From the start of the current period",
+          "SINCE_LAST_CUTOFF": "Since the last cutoff"
+        },
+        "modeHelp": {
+          "IMMEDIATE": "Applies from {{date}}. Earlier invoices of the period keep their calculation.",
+          "NEXT_PERIOD": "Scheduled from {{date}}. The whole current period keeps the current value.",
+          "PERIOD_START": "Applies from {{date}} and recalculates the period's commissions not in approved or paid settlements."
+        },
+        "preview": {
+          "recalculated_one": "{{count}} commission will be recalculated.",
+          "recalculated_other": "{{count}} commissions will be recalculated.",
+          "excluded_one": "{{count}} commission is left out because it is in an approved or paid settlement.",
+          "excluded_other": "{{count}} commissions are left out because they are in approved or paid settlements.",
+          "delta": "Total difference: {{amount}}"
+        },
+        "pendingExists": "There is already a scheduled change for this. Continuing replaces the scheduled change.",
+        "replaceAndApply": "Replace and apply",
+        "apply": "Apply",
+        "applied": "Change applied."
+      },
+      "settings": {
+        "baseTitle": "Calculation base",
+        "baseExample": "Example: a 110,000 Gs line with 10% VAT and a 40% commission → excluding VAT 40,000 Gs; including VAT 44,000 Gs.",
+        "baseChangeSummary": "Change the calculation base from “{{from}}” to “{{to}}”. The change is not retroactive unless you apply it from the start of the current period.",
+        "DEFAULT_SERVICE": "Default % for services",
+        "DEFAULT_PRODUCT": "Default % for products",
+        "DEFAULT_SERVICEHelp": "Applies to services with no general % or exception.",
+        "DEFAULT_PRODUCTHelp": "Applies to products with no general % or exception.",
+        "defaultServiceSummary": "Change the default % for services to {{value}}.",
+        "defaultProductSummary": "Change the default % for products to {{value}}.",
+        "periodicity": "Settlement periodicity",
+        "periodicityHelp": "Changing the periodicity does not change the calculation: it applies to settlements generated afterwards.",
+        "periodicitySaved": "Periodicity updated.",
+        "historyTitle": "Change history"
+      },
+      "scheduled": {
+        "title": "Scheduled changes",
+        "empty": "No scheduled changes.",
+        "cancel": "Cancel change",
+        "cancelTitle": "Cancel scheduled change",
+        "cancelDescription": "The scheduled change will not take effect."
+      },
+      "history": {
+        "date": "Date",
+        "what": "What changes",
+        "previous": "Previous value",
+        "value": "New value",
+        "effectiveFrom": "Effective from",
+        "mode": "Mode",
+        "status": "Status",
+        "user": "User"
+      },
+      "rules": {
+        "sectionTitle": "Commission",
+        "generalPercent": "Item general % (applies to every professional)",
+        "general": "General",
+        "percent": "Percentage",
+        "removeGeneral": "Remove general %",
+        "zeroHint": "Use 0 to explicitly mark the item as not commissioned.",
+        "usesDefault": "This item has no general %: it uses its type's default % ({{value}}).",
+        "exceptionsTitle": "Exceptions per professional",
+        "noExceptions": "No exceptions: every professional uses the general %.",
+        "exceptionFor": "Percentage for {{name}}",
+        "removeException": "Remove",
+        "addException": "Add exception",
+        "chooseProfessional": "Choose a professional",
+        "scheduledBadge": "Scheduled: {{value}} from {{date}}",
+        "historyTitle": "Rule history",
+        "noRule": "No rule",
+        "noRuleShort": "No general %",
+        "noGeneralBadge": "No commission %",
+        "noGeneralWarning": "This item has no general commission % and uses its type's default %.",
+        "generalSummary": "Set the general % of “{{item}}” to {{value}}.",
+        "generalRemoveSummary": "Remove the general % of “{{item}}” (it will use the default %).",
+        "exceptionSummary": "Set {{professional}}'s % for “{{item}}” to {{value}}.",
+        "exceptionRemoveSummary": "Remove {{professional}}'s exception for “{{item}}”.",
+        "atDate": "% in force on",
+        "legend": "Origin: (E) professional exception, (G) item general %, (D) type default %. ⏱ marks a scheduled change. Tap a cell to edit it or the item name to see all its rules.",
+        "select": "Select",
+        "selectItem": "Select {{name}}",
+        "bulkTitle": "Selected items: {{count}}. Apply the same % to all of them.",
+        "bulkTarget": "Apply to",
+        "bulkApply": "Apply to selected",
+        "bulkSummary": "Set {{value}} ({{target}}) on {{count}} items.",
+        "cellTitle": "{{professional}} · {{item}}"
+      },
+      "simulator": {
+        "hint": "Simulate which commission would apply. Nothing is saved.",
+        "chooseItem": "Choose an item",
+        "noProfessional": "No professional",
+        "amount": "Line amount (VAT included)",
+        "taxRate": "VAT rate",
+        "exempt": "Exempt",
+        "discount": "Discount (Gs)",
+        "date": "Date",
+        "run": "Simulate",
+        "amountRequired": "Choose an item and enter an amount greater than 0, e.g. 110,000.",
+        "percentLine": "Applied percentage: {{percent}} ({{origin}})",
+        "formula": "Base {{base}}: {{baseAmount}} × {{percent}} = {{commission}}",
+        "comparison": "With the other base ({{base}}): {{baseAmount}} → {{commission}}"
+      },
+      "settlements": {
+        "generateTitle": "Generate settlements",
+        "generate": "Generate",
+        "generateHint": "One draft settlement is created per professional with the commissions not yet settled up to the “To” date.",
+        "generated_one": "{{count}} settlement generated.",
+        "generated_other": "{{count}} settlements generated.",
+        "noneGenerated": "There are no pending commissions to settle in that period.",
+        "empty": "No settlements.",
+        "period": "Period",
+        "open": "View"
+      },
+      "settlement": {
+        "title": "Settlement #{{id}} · {{name}}",
+        "approve": "Approve",
+        "approveTitle": "Approve settlement",
+        "approveDescription": "Once approved the settlement is immutable. A negative total is carried to the next one.",
+        "markPaid": "Mark as paid",
+        "void": "Void settlement",
+        "voidDescription": "Its commissions go back to unsettled. Enter the reason.",
+        "pdf": "Download PDF",
+        "lines": "Line detail",
+        "base": "Base",
+        "baseAmount": "Base amount",
+        "commission": "Commission",
+        "byKind": "Subtotal per type",
+        "byItem": "Subtotal per item",
+        "adjustments": "Adjustments",
+        "noAdjustments": "No adjustments.",
+        "adjustmentType": "Type",
+        "bonus": "Bonus (+)",
+        "deduction": "Deduction (−)",
+        "amount": "Amount (Gs)",
+        "reason": "Reason",
+        "addAdjustment": "Add adjustment",
+        "adjustmentAmountInvalid": "Enter an amount greater than 0, e.g. 50,000.",
+        "mixedBases": "This settlement has commissions calculated with different bases (the base changed during the period). Check the “Base” column.",
+        "historyTitle": "Status history",
+        "paymentMethod": "Payment method",
+        "paidOn": "Payment date",
+        "reference": "Reference (optional)",
+        "paidInfo": "Paid on {{date}} · {{method}} · Ref.: {{reference}}",
+        "voidedInfo": "Voided: {{reason}}"
+      },
+      "reports": {
+        "total": "Period total: {{amount}}",
+        "byProfessional": "By professional",
+        "byItem": "By item",
+        "byKind": "By item type",
+        "byPeriod": "By month",
+        "concept": "Concept",
+        "lines": "Lines",
+        "empty": "No data.",
+        "settlementState": "Settlement status",
+        "linesWithoutBeneficiary": "Lines without a professional (no commission)",
+        "itemsWithoutRule": "Items without a general % (use the default %)",
+        "invoice": "Invoice"
+      },
+      "my": {
+        "title": "My commissions",
+        "subtitle": "Your accrued commissions and settlements (read only)",
+        "currentPeriod": "Period {{from}} – {{to}}",
+        "currentMonth": "Current month",
+        "entriesTitle": "Commissions of the period",
+        "noEntries": "You have no commissions in this period yet.",
+        "settlementsTitle": "My settlements"
+      }
+    },
     "appTitle": "Saloon Management",
     "listFilter": {
       "label": "Filter list",
@@ -100,6 +368,8 @@
       "backToLogin": "Back to sign in"
     },
     "nav": {
+      "commissions": "Commissions",
+      "myCommissions": "My commissions",
       "mainLabel": "Main navigation",
       "dashboard": "Dashboard",
       "calendar": "Calendar",
@@ -756,6 +1026,9 @@
       "emptyBody": "Create a tax to assign it to services."
     },
     "featureFlags": {
+      "descriptions": {
+        "COMMISSIONS": "Commissions module: rules per item and professional, accrual on invoice issue and settlements. Off → the API answers 403 FEATURE_NOT_ENABLED."
+      },
       "title": "Tenant feature flags",
       "subtitle": "A flag is on only when it is on at all three levels: global, the organization's tier, and the organization. Turning it off at any level disables it. Changes apply when users load the app.",
       "globalEditLink": "Edit in Global feature flags →",
@@ -980,6 +1253,9 @@
         "cashHistory": "Cash Sessions Log"
       },
       "invoice": {
+        "lineProfessional": "Professional / Seller",
+        "lineProfessionalNone": "No professional",
+        "lineNoCommission": "This line will not generate a commission.",
         "title": "Issue Invoice",
         "clientSection": "Client",
         "clientSearchLabel": "Search or select client",
@@ -1567,6 +1843,35 @@
       }
     },
     "apiErrors": {
+      "FEATURE_NOT_ENABLED": "This feature is not enabled for your business.",
+      "COMMISSION_CHANGES_REQUIRED": "There are no changes to apply.",
+      "COMMISSION_CHANGE_APPLY_MODE_REQUIRED": "Choose how to apply the change: from now, from the next period or from the start of the current period.",
+      "COMMISSION_APPLY_MODE_NOT_AVAILABLE": "That way of applying the change is not available with the current periodicity.",
+      "COMMISSION_PENDING_CHANGE_EXISTS": "There is already a scheduled change for this. Confirm whether to replace it.",
+      "COMMISSION_PENDING_CHANGE_NOT_FOUND": "The scheduled change does not exist or was already cancelled.",
+      "COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE": "The change is already in force and can no longer be cancelled.",
+      "COMMISSION_PERCENT_OUT_OF_RANGE": "Enter a percentage between 0 and 100 with up to 2 decimals, e.g. 40.5.",
+      "COMMISSION_BASE_INVALID": "Invalid calculation base. Choose “Including VAT” or “Excluding VAT”.",
+      "COMMISSION_PERIODICITY_INVALID": "Invalid periodicity. Choose weekly, biweekly, monthly or manual.",
+      "COMMISSION_SCOPE_INVALID": "Invalid change type.",
+      "COMMISSION_VALID_UNTIL_INVALID": "The “until” date must be after the effective date.",
+      "COMMISSION_PROFESSIONAL_INACTIVE": "An exception cannot be created for an inactive professional.",
+      "COMMISSION_RULE_OVERLAP": "A rule for that item and professional already exists in those dates.",
+      "COMMISSION_RULE_NOT_FOUND": "The rule does not exist.",
+      "COMMISSION_CALCULATION_FAILED": "The commission could not be calculated; it will be retried automatically.",
+      "COMMISSION_RECALCULATION_FAILED": "The period could not be recalculated. No change was applied.",
+      "COMMISSION_PERIOD_OVERLAP": "A settlement for that professional already overlaps the chosen period.",
+      "COMMISSION_PERIOD_INVALID": "Invalid period: the “To” date must be on or after “From”.",
+      "COMMISSION_SIMULATION_INVALID": "Choose an item and enter a valid amount, e.g. 110,000.",
+      "SETTLEMENT_NOT_FOUND": "The settlement does not exist.",
+      "SETTLEMENT_INVALID_STATE_TRANSITION": "The settlement does not allow that action in its current status.",
+      "SETTLEMENT_ADJUSTMENT_REASON_REQUIRED": "The adjustment reason is required, e.g. “Advance”.",
+      "SETTLEMENT_ADJUSTMENT_AMOUNT_INVALID": "Enter an amount other than 0, e.g. 50,000.",
+      "SETTLEMENT_NOT_EDITABLE": "Adjustments can only be added to a draft settlement.",
+      "SETTLEMENT_EMPTY": "There are no commissions to settle.",
+      "SETTLEMENT_PAYMENT_METHOD_INVALID": "Choose a payment method: cash, bank transfer or other.",
+      "SETTLEMENT_VOID_REASON_REQUIRED": "The void reason is required.",
+      "INVOICE_LINE_PROFESSIONAL_INACTIVE": "The professional chosen for a line is inactive. Choose another professional.",
       "GENERIC": "An unexpected error occurred. Please try again.",
       "UNAUTHORIZED": "You must be signed in to perform this action.",
       "FORBIDDEN": "You are not allowed to perform this action.",

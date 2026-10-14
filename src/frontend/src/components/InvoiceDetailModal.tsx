@@ -47,6 +47,9 @@ export type InvoiceLine = {
   lineTotal: string;
   discountType?: string | null;
   discountValue?: string | null;
+  /** HU-COM-10: professional / seller of the line. */
+  professionalId?: number | null;
+  professionalName?: string | null;
 };
 
 export type InvoicePayment = {

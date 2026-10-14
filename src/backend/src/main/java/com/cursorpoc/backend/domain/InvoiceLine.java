@@ -30,6 +30,13 @@ public class InvoiceLine {
   @JoinColumn(name = "service_id")
   private SalonService salonService;
 
+  /**
+   * HU-COM-10: professional / seller who earns the commission of this line (immutable once issued).
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "professional_id")
+  private Professional professional;
+
   /** SIFEN HU-03 AC-02: up to 2000 chars so a service can be described in detail. */
   @Column(nullable = false, length = 2000)
   private String description;
@@ -80,6 +87,14 @@ public class InvoiceLine {
 
   public void setSalonService(SalonService salonService) {
     this.salonService = salonService;
+  }
+
+  public Professional getProfessional() {
+    return professional;
+  }
+
+  public void setProfessional(Professional professional) {
+    this.professional = professional;
   }
 
   public String getDescription() {

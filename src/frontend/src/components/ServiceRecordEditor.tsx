@@ -362,6 +362,7 @@ export function ServiceRecordEditor({
             serviceId: l.serviceId,
             description: l.description,
             unitPrice: l.unitPrice,
+            professionalId: l.professionalId,
           })),
           tipsAmount: record.tipsTotal,
         },

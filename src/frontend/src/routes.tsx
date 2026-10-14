@@ -20,6 +20,9 @@ import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import ServiceRecordsPage from "./pages/ServiceRecordsPage";
 import PropinasPage from "./pages/PropinasPage";
+import CommissionsPage from "./pages/commissions/CommissionsPage";
+import CommissionSettlementPage from "./pages/commissions/CommissionSettlementPage";
+import MyCommissionsPage from "./pages/commissions/MyCommissionsPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import AuditSettingsPage from "./pages/settings/AuditSettingsPage";
 import PlatformAuditPage from "./pages/PlatformAuditPage";
@@ -59,6 +62,9 @@ export function AppRoutes() {
         <Route path="/app/billing" element={<BillingPage />} />
         <Route path="/app/service-records" element={<ServiceRecordsPage />} />
         <Route path="/app/propinas" element={<PropinasPage />} />
+        <Route path="/app/commissions" element={<CommissionsPage />} />
+        <Route path="/app/commissions/settlements/:id" element={<CommissionSettlementPage />} />
+        <Route path="/app/my-commissions" element={<MyCommissionsPage />} />
         <Route path="/app/clients" element={<ClientsPage />} />
         <Route path="/app/clients/:id" element={<ClientDetailPage />} />
         <Route path="/app/inactive-clients" element={<InactiveClientsPage />} />
