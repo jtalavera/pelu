@@ -62,6 +62,9 @@ function deltaLabel(delta: number): string {
   return `${rounded > 0 ? "+" : "−"}${new Intl.NumberFormat("es-PY", { maximumFractionDigits: 2 }).format(Math.abs(rounded))}`;
 }
 
+/** Case- and accent-insensitive text for the item search ("coloracion" finds "Coloración"). */
+const normalize = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 /** HU-COM-02 rules: general % → item % → professional + item exception (the most specific wins). */
 export function RulesTab() {
   const { t } = useTranslation();
@@ -196,6 +199,7 @@ export function RulesTab() {
         <Spinner />
       ) : (
         <KindRules
+          key={tab}
           view={views[tab]!}
           general={generalOf(tab)}
           base={base}
@@ -209,6 +213,10 @@ export function RulesTab() {
           stage={stage}
           unstage={unstage}
           onEditBase={() => setTab("GENERAL")}
+          onSave={() => {
+            setSelected(null);
+            setSaving(true);
+          }}
         />
       )}
 
@@ -340,6 +348,7 @@ function KindRules({
   stage,
   unstage,
   onEditBase,
+  onSave,
 }: {
   view: RulesView;
   general: number;
@@ -354,8 +363,10 @@ function KindRules({
   stage: (c: ConfigChange) => void;
   unstage: (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) => void;
   onEditBase: () => void;
+  onSave: () => void;
 }) {
   const { t } = useTranslation();
+  const [search, setSearch] = useState("");
   const isProduct = view.kind === "PRODUCT";
   const effective = useMemo(() => {
     const map = new Map<number, ReturnType<typeof effectiveItem>>();
@@ -367,7 +378,18 @@ function KindRules({
     return e.ownStandard || e.exceptions.size > 0;
   };
   const withExceptions = [...effective.keys()].filter(hasException).length;
-  const selectedItem = view.categories.flatMap((c) => c.items.map((i) => ({ item: i, category: c.name }))).find((x) => x.item.serviceId === selected);
+  const allItems = useMemo(
+    () =>
+      view.categories
+        .flatMap((c) => c.items.map((i) => ({ item: i, category: c.name })))
+        .sort((a, b) => a.item.name.localeCompare(b.item.name, "es", { sensitivity: "base" })),
+    [view],
+  );
+  const selectedItem = allItems.find((x) => x.item.serviceId === selected);
+  const needle = normalize(search.trim());
+  const rows = allItems.filter(
+    (x) => (!onlyExceptions || hasException(x.item.serviceId)) && (!needle || normalize(x.item.name).includes(needle)),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -404,8 +426,21 @@ function KindRules({
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1 rounded-lg border">
+      <form className="flex max-w-md flex-col gap-1" role="search" onSubmit={(e) => e.preventDefault()}>
+        <Label htmlFor="rules-search">
+          {t(isProduct ? "femme.commissions.rules.searchProduct" : "femme.commissions.rules.searchService")}
+        </Label>
+        <Input
+          id="rules-search"
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t(isProduct ? "femme.commissions.rules.searchProductPlaceholder" : "femme.commissions.rules.searchServicePlaceholder")}
+          data-testid="rules-search"
+        />
+      </form>
+
+      <div className="min-w-0 rounded-lg border">
           <TableWrap testId="rules-table">
             <thead>
               <tr>
@@ -416,13 +451,14 @@ function KindRules({
               </tr>
             </thead>
             <tbody>
-              {view.categories.map((c) => {
-                const items = c.items.filter((i) => !onlyExceptions || hasException(i.serviceId));
-                if (items.length === 0) return null;
-                const catExceptions = c.items.filter((i) => hasException(i.serviceId)).length;
-                return (
-                  <CategoryRows key={c.categoryId} name={c.name} total={c.items.length} exceptions={catExceptions} isProduct={isProduct}>
-                    {items.map((i) => {
+              {rows.length === 0 && (
+                <tr>
+                  <td className={`${tdClass} text-[var(--color-ink-3)]`} colSpan={4} data-testid="rules-empty">
+                    {t("femme.commissions.rules.noResults")}
+                  </td>
+                </tr>
+              )}
+              {rows.map(({ item: i }) => {
                       const e = effective.get(i.serviceId)!;
                       return (
                         <tr
@@ -478,62 +514,27 @@ function KindRules({
                           </td>
                         </tr>
                       );
-                    })}
-                  </CategoryRows>
-                );
               })}
             </tbody>
           </TableWrap>
-        </div>
-        {selectedItem && (
-          <ItemPanel
-            key={selectedItem.item.serviceId}
-            item={selectedItem.item}
-            category={selectedItem.category}
-            general={general}
-            base={base}
-            effective={effective.get(selectedItem.item.serviceId)!}
-            professionals={view.professionals}
-            pending={pending}
-            stage={stage}
-            unstage={unstage}
-            onClose={() => onSelect(null)}
-          />
-        )}
       </div>
+      {selectedItem && (
+        <ItemPanel
+          key={selectedItem.item.serviceId}
+          item={selectedItem.item}
+          category={selectedItem.category}
+          general={general}
+          base={base}
+          effective={effective.get(selectedItem.item.serviceId)!}
+          professionals={view.professionals}
+          pending={pending}
+          stage={stage}
+          unstage={unstage}
+          onClose={() => onSelect(null)}
+          onSave={onSave}
+        />
+      )}
     </div>
-  );
-}
-
-function CategoryRows({
-  name,
-  total,
-  exceptions,
-  isProduct,
-  children,
-}: {
-  name: string;
-  total: number;
-  exceptions: number;
-  isProduct: boolean;
-  children: React.ReactNode;
-}) {
-  const { t } = useTranslation();
-  return (
-    <>
-      <tr className="border-t bg-[var(--color-stone)]">
-        <td className={`${tdClass} font-semibold`} colSpan={2}>
-          {name}
-        </td>
-        <td className={`${tdClass} text-right text-xs text-[var(--color-ink-3)]`} colSpan={2}>
-          {t(isProduct ? "femme.commissions.rules.categoryCountProducts" : "femme.commissions.rules.categoryCountServices", {
-            count: total,
-          })}{" "}
-          · {t("femme.commissions.rules.categoryExceptions", { count: exceptions })}
-        </td>
-      </tr>
-      {children}
-    </>
   );
 }
 
@@ -548,6 +549,7 @@ function ItemPanel({
   stage,
   unstage,
   onClose,
+  onSave,
 }: {
   item: RuleItem;
   category: string;
@@ -559,6 +561,7 @@ function ItemPanel({
   stage: (c: ConfigChange) => void;
   unstage: (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) => void;
   onClose: () => void;
+  onSave: () => void;
 }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
@@ -620,219 +623,231 @@ function ItemPanel({
   const inheriting = professionals.filter((p) => !effective.exceptions.has(p.id));
 
   return (
-    <Card className="flex w-full flex-col gap-3 p-4 lg:w-80 lg:shrink-0" data-testid="rules-panel">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="break-words text-[10px] font-medium uppercase text-[var(--color-ink-3)]">{category}</div>
-          <div className="break-words text-lg font-semibold">{item.name}</div>
-          <div className="text-xs text-[var(--color-ink-3)]">
-            {t("femme.commissions.rules.priceLine", {
-              price: formatGuaraniesGs(item.price),
-              base: t(`femme.commissions.baseShort.${base}`),
-              amount: formatGuaraniesGs(item.baseAmount),
-            })}
-          </div>
-        </div>
-        <button type="button" className="min-h-11 min-w-11 text-lg" aria-label={t("femme.commissions.common.close")} onClick={onClose}>
-          ×
-        </button>
-      </div>
-
-      <div className="rounded-md bg-emerald-50 p-3 dark:bg-emerald-900/20">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-xs">{t("femme.commissions.rules.itemStandard")}</div>
-            <div className="text-2xl font-semibold" data-testid="rules-panel-standard">
-              {formatPercent(effective.standard)}
+    <Modal
+      open
+      // Escape closes the history dialog first, not the item.
+      onClose={() => (history ? setHistory(null) : onClose())}
+      title={item.name}
+      description={`${category} · ${t("femme.commissions.rules.priceLine", {
+        price: formatGuaraniesGs(item.price),
+        base: t(`femme.commissions.baseShort.${base}`),
+        amount: formatGuaraniesGs(item.baseAmount),
+      })}`}
+      className="max-w-xl"
+      footer={
+        <>
+          <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={onClose} data-testid="rules-panel-close">
+            {t("femme.commissions.common.close")}
+          </Button>
+          <Button
+            type="button"
+            className="min-h-11 w-full sm:w-auto"
+            disabled={Object.keys(pending).length === 0}
+            onClick={onSave}
+            data-testid="rules-panel-save"
+          >
+            {t("femme.commissions.rules.saveChanges")}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3" data-testid="rules-panel">
+        <div className="rounded-md bg-emerald-50 p-3 dark:bg-emerald-900/20">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs">{t("femme.commissions.rules.itemStandard")}</div>
+              <div className="text-2xl font-semibold" data-testid="rules-panel-standard">
+                {formatPercent(effective.standard)}
+              </div>
+              <div className="text-[10px] text-[var(--color-ink-3)]">
+                {effective.ownStandard
+                  ? t("femme.commissions.rules.ownStandard")
+                  : t("femme.commissions.rules.inheritsGeneral", { value: formatPercent(general) })}
+              </div>
             </div>
-            <div className="text-[10px] text-[var(--color-ink-3)]">
-              {effective.ownStandard
-                ? t("femme.commissions.rules.ownStandard")
-                : t("femme.commissions.rules.inheritsGeneral", { value: formatPercent(general) })}
-            </div>
-          </div>
-          {!editingStandard && (
-            <Button type="button" variant="secondary" onClick={() => setEditingStandard(true)} data-testid="rules-change-standard">
-              {t("femme.commissions.rules.change")}
-            </Button>
-          )}
-        </div>
-        {editingStandard && (
-          <div className="mt-2 flex flex-wrap items-end gap-2">
-            <Input
-              aria-label={t("femme.commissions.rules.itemStandard")}
-              inputMode="decimal"
-              value={standardInput}
-              onChange={(e) => setStandardInput(e.target.value)}
-              className="max-w-[6rem]"
-              data-testid="rules-standard-input"
-            />
-            <Button type="button" size="sm" onClick={applyStandard} data-testid="rules-standard-apply">
-              {t("femme.commissions.rules.apply")}
-            </Button>
-            {effective.ownStandard && (
-              <Button type="button" size="sm" variant="secondary" onClick={useGeneral}>
-                {t("femme.commissions.rules.useGeneral", { value: formatPercent(general) })}
+            {!editingStandard && (
+              <Button type="button" variant="secondary" onClick={() => setEditingStandard(true)} data-testid="rules-change-standard">
+                {t("femme.commissions.rules.change")}
               </Button>
             )}
           </div>
-        )}
-      </div>
-
-      <div className="flex justify-between gap-2 text-[10px] font-medium uppercase text-[var(--color-ink-3)]">
-        <span>{t("femme.commissions.common.professional")}</span>
-        <span>{t("femme.commissions.rules.percentAndCommission")}</span>
-      </div>
-      <ul className="flex flex-col divide-y" data-testid="rules-panel-professionals">
-        {professionals.map((p) => {
-          const exc = effective.exceptions.get(p.id);
-          const pct = exc ? exc.percent : effective.standard;
-          return (
-            <li key={p.id} className="py-2" data-testid={`rules-panel-prof-${p.id}`}>
-              <button
-                type="button"
-                className="flex min-h-11 w-full items-start justify-between gap-2 text-left"
-                onClick={() => {
-                  setEditing(p.id);
-                  setEditValue(String(pct).replace(".", ","));
-                  setFieldError(null);
-                }}
-              >
-                <span className="min-w-0 break-words text-sm font-medium">{p.fullName}</span>
-                <span className="shrink-0 text-right">
-                  {exc ? (
-                    <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-                      {formatPercent(exc.percent)} <span className="text-[10px] font-normal">{deltaLabel(exc.percent - effective.standard)}</span>
-                    </span>
-                  ) : (
-                    <span className="text-xs text-[var(--color-ink-3)]">
-                      {t("femme.commissions.rules.inherits", { value: formatPercent(effective.standard) })}
-                    </span>
-                  )}
-                  <span className="block text-xs">{formatGuaraniesGs(commission(pct))}</span>
-                </span>
-              </button>
-              {editing === p.id && (
-                <div className="mt-1 flex flex-wrap items-end gap-2">
-                  <Input
-                    aria-label={t("femme.commissions.rules.exceptionFor", { name: p.fullName })}
-                    inputMode="decimal"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    className="max-w-[6rem]"
-                  />
-                  <Button type="button" size="sm" onClick={() => applyException(p.id)}>
-                    {t("femme.commissions.rules.apply")}
-                  </Button>
-                  {exc && (
-                    <Button type="button" size="sm" variant="secondary" onClick={() => removeException(p.id)}>
-                      {t("femme.commissions.rules.removeException")}
-                    </Button>
-                  )}
-                </div>
+          {editingStandard && (
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <Input
+                aria-label={t("femme.commissions.rules.itemStandard")}
+                inputMode="decimal"
+                value={standardInput}
+                onChange={(e) => setStandardInput(e.target.value)}
+                className="max-w-[6rem]"
+                data-testid="rules-standard-input"
+              />
+              <Button type="button" size="sm" onClick={applyStandard} data-testid="rules-standard-apply">
+                {t("femme.commissions.rules.apply")}
+              </Button>
+              {effective.ownStandard && (
+                <Button type="button" size="sm" variant="secondary" onClick={useGeneral}>
+                  {t("femme.commissions.rules.useGeneral", { value: formatPercent(general) })}
+                </Button>
               )}
-            </li>
-          );
-        })}
-      </ul>
-      <FieldValidationError>{fieldError}</FieldValidationError>
-
-      {adding ? (
-        <div className="flex flex-wrap items-end gap-2">
-          <Select
-            aria-label={t("femme.commissions.common.professional")}
-            value={addProfessional}
-            onChange={(e) => setAddProfessional(e.target.value)}
-            data-testid="rules-add-professional"
-          >
-            <option value="">{t("femme.commissions.rules.chooseProfessional")}</option>
-            {inheriting.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.fullName}
-              </option>
-            ))}
-          </Select>
-          <Input
-            aria-label={t("femme.commissions.rules.percent")}
-            inputMode="decimal"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            className="max-w-[6rem]"
-            data-testid="rules-add-percent"
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={!addProfessional}
-            onClick={() => applyException(Number(addProfessional))}
-            data-testid="rules-add-apply"
-          >
-            {t("femme.commissions.rules.apply")}
-          </Button>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            disabled={inheriting.length === 0}
-            onClick={() => {
-              setAdding(true);
-              setEditValue("");
-              setFieldError(null);
-            }}
-            data-testid="rules-add-exception"
-          >
-            {t("femme.commissions.rules.addException")}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void getItemRules(item.serviceId).then(setHistory)}
-            data-testid="rules-history"
-          >
-            {t("femme.commissions.rules.viewHistory")}
-          </Button>
-        </div>
-      )}
-      {Object.keys(pending).some((k) => k.startsWith(`RULE|${item.serviceId}|`)) && (
-        <Text variant="small" className="text-amber-700 dark:text-amber-300">
-          {t("femme.commissions.rules.panelPending")}
-        </Text>
-      )}
-      <Text variant="small" className="text-[var(--color-ink-3)]">
-        {t("femme.commissions.rules.panelFootnote")}
-      </Text>
 
-      <Modal open={history !== null} onClose={() => setHistory(null)} title={t("femme.commissions.rules.historyTitle")} className="max-w-3xl">
-        {history && (
-          <TableWrap testId="commission-rule-history">
-            <thead>
-              <tr>
-                <th className={thClass}>{t("femme.commissions.history.date")}</th>
-                <th className={thClass}>{t("femme.commissions.common.professional")}</th>
-                <th className={thClass}>{t("femme.commissions.history.previous")}</th>
-                <th className={thClass}>{t("femme.commissions.history.value")}</th>
-                <th className={thClass}>{t("femme.commissions.history.effectiveFrom")}</th>
-                <th className={thClass}>{t("femme.commissions.history.status")}</th>
-                <th className={thClass}>{t("femme.commissions.history.user")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.history.map((v) => (
-                <tr key={v.id} className="border-t">
-                  <td className={tdClass}>{formatParaguayDateTime(v.createdAt, dateLocale)}</td>
-                  <td className={tdClass}>{v.professionalName ?? t("femme.commissions.rules.general")}</td>
-                  <td className={tdClass}>{describeVersionValue(t, "RULE", v.previousValue)}</td>
-                  <td className={tdClass}>{describeVersionValue(t, "RULE", v.value)}</td>
-                  <td className={tdClass}>{formatParaguayDateTime(v.effectiveFrom, dateLocale)}</td>
-                  <td className={tdClass}>{t(`femme.commissions.versionStatus.${v.scheduled ? "SCHEDULED" : v.status}`)}</td>
-                  <td className={tdClass}>{v.createdByEmail}</td>
-                </tr>
+        <div className="flex justify-between gap-2 text-[10px] font-medium uppercase text-[var(--color-ink-3)]">
+          <span>{t("femme.commissions.common.professional")}</span>
+          <span>{t("femme.commissions.rules.percentAndCommission")}</span>
+        </div>
+        <ul className="flex flex-col divide-y" data-testid="rules-panel-professionals">
+          {professionals.map((p) => {
+            const exc = effective.exceptions.get(p.id);
+            const pct = exc ? exc.percent : effective.standard;
+            return (
+              <li key={p.id} className="py-2" data-testid={`rules-panel-prof-${p.id}`}>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-start justify-between gap-2 text-left"
+                  onClick={() => {
+                    setEditing(p.id);
+                    setEditValue(String(pct).replace(".", ","));
+                    setFieldError(null);
+                  }}
+                >
+                  <span className="min-w-0 break-words text-sm font-medium">{p.fullName}</span>
+                  <span className="shrink-0 text-right">
+                    {exc ? (
+                      <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                        {formatPercent(exc.percent)} <span className="text-[10px] font-normal">{deltaLabel(exc.percent - effective.standard)}</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[var(--color-ink-3)]">
+                        {t("femme.commissions.rules.inherits", { value: formatPercent(effective.standard) })}
+                      </span>
+                    )}
+                    <span className="block text-xs">{formatGuaraniesGs(commission(pct))}</span>
+                  </span>
+                </button>
+                {editing === p.id && (
+                  <div className="mt-1 flex flex-wrap items-end gap-2">
+                    <Input
+                      aria-label={t("femme.commissions.rules.exceptionFor", { name: p.fullName })}
+                      inputMode="decimal"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      className="max-w-[6rem]"
+                    />
+                    <Button type="button" size="sm" onClick={() => applyException(p.id)}>
+                      {t("femme.commissions.rules.apply")}
+                    </Button>
+                    {exc && (
+                      <Button type="button" size="sm" variant="secondary" onClick={() => removeException(p.id)}>
+                        {t("femme.commissions.rules.removeException")}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <FieldValidationError>{fieldError}</FieldValidationError>
+
+        {adding ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <Select
+              aria-label={t("femme.commissions.common.professional")}
+              value={addProfessional}
+              onChange={(e) => setAddProfessional(e.target.value)}
+              data-testid="rules-add-professional"
+            >
+              <option value="">{t("femme.commissions.rules.chooseProfessional")}</option>
+              {inheriting.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.fullName}
+                </option>
               ))}
-            </tbody>
-          </TableWrap>
+            </Select>
+            <Input
+              aria-label={t("femme.commissions.rules.percent")}
+              inputMode="decimal"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="max-w-[6rem]"
+              data-testid="rules-add-percent"
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={!addProfessional}
+              onClick={() => applyException(Number(addProfessional))}
+              data-testid="rules-add-apply"
+            >
+              {t("femme.commissions.rules.apply")}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              disabled={inheriting.length === 0}
+              onClick={() => {
+                setAdding(true);
+                setEditValue("");
+                setFieldError(null);
+              }}
+              data-testid="rules-add-exception"
+            >
+              {t("femme.commissions.rules.addException")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void getItemRules(item.serviceId).then(setHistory)}
+              data-testid="rules-history"
+            >
+              {t("femme.commissions.rules.viewHistory")}
+            </Button>
+          </div>
         )}
-      </Modal>
-    </Card>
+        {Object.keys(pending).some((k) => k.startsWith(`RULE|${item.serviceId}|`)) && (
+          <Text variant="small" className="text-amber-700 dark:text-amber-300">
+            {t("femme.commissions.rules.panelPending")}
+          </Text>
+        )}
+        <Text variant="small" className="text-[var(--color-ink-3)]">
+          {t("femme.commissions.rules.panelFootnote")}
+        </Text>
+
+        <Modal open={history !== null} onClose={() => setHistory(null)} title={t("femme.commissions.rules.historyTitle")} className="max-w-3xl">
+          {history && (
+            <TableWrap testId="commission-rule-history">
+              <thead>
+                <tr>
+                  <th className={thClass}>{t("femme.commissions.history.date")}</th>
+                  <th className={thClass}>{t("femme.commissions.common.professional")}</th>
+                  <th className={thClass}>{t("femme.commissions.history.previous")}</th>
+                  <th className={thClass}>{t("femme.commissions.history.value")}</th>
+                  <th className={thClass}>{t("femme.commissions.history.effectiveFrom")}</th>
+                  <th className={thClass}>{t("femme.commissions.history.status")}</th>
+                  <th className={thClass}>{t("femme.commissions.history.user")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.history.map((v) => (
+                  <tr key={v.id} className="border-t">
+                    <td className={tdClass}>{formatParaguayDateTime(v.createdAt, dateLocale)}</td>
+                    <td className={tdClass}>{v.professionalName ?? t("femme.commissions.rules.general")}</td>
+                    <td className={tdClass}>{describeVersionValue(t, "RULE", v.previousValue)}</td>
+                    <td className={tdClass}>{describeVersionValue(t, "RULE", v.value)}</td>
+                    <td className={tdClass}>{formatParaguayDateTime(v.effectiveFrom, dateLocale)}</td>
+                    <td className={tdClass}>{t(`femme.commissions.versionStatus.${v.scheduled ? "SCHEDULED" : v.status}`)}</td>
+                    <td className={tdClass}>{v.createdByEmail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          )}
+        </Modal>
+      </div>
+    </Modal>
   );
 }
