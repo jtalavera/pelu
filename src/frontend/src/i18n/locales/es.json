@@ -27,17 +27,53 @@
   },
   "femme": {
     "commissions": {
+      "baseShort": {
+        "NET_OF_TAX": "sin IVA",
+        "TAX_INCLUDED": "con IVA"
+      },
+      "movements": {
+        "hint": "Todas las comisiones registradas. Si una quedó asignada al profesional equivocado, usá «Cambiar profesional».",
+        "empty": "No hay movimientos para esos filtros.",
+        "movement": "Movimiento",
+        "search": "Buscar",
+        "searchPlaceholder": "Ítem, comprobante o nota",
+        "type": {
+          "LINE": "Comisión"
+        }
+      },
+      "preview": {
+        "hint": "Calculá cuánto cobraría un profesional en un periodo abierto con las comisiones registradas hasta hoy. No se guarda nada.",
+        "run": "Calcular",
+        "total": "Total a liquidar",
+        "empty": "No hay comisiones pendientes de liquidar para ese profesional en el periodo.",
+        "draftExists_one": "Ya hay {{count}} liquidación en borrador para este profesional; sus comisiones no se incluyen en esta vista previa.",
+        "draftExists_other": "Ya hay {{count}} liquidaciones en borrador para este profesional; sus comisiones no se incluyen en esta vista previa."
+      },
+      "reassign": {
+        "action": "Cambiar profesional",
+        "title": "Cambiar profesional de la comisión",
+        "description": "{{item}} · comprobante {{invoice}} · asignada a {{professional}} ({{amount}})",
+        "hint": "La factura no se modifica. Se revierte la comisión del profesional actual y se genera una nueva para el profesional correcto, calculada con sus reglas.",
+        "closedWarning": "Esta comisión ya está en una liquidación aprobada o pagada. Esa liquidación no cambia: la reversión y la nueva comisión entran en la próxima liquidación.",
+        "newProfessional": "Profesional correcto",
+        "professionalRequired": "Elegí un profesional de la lista.",
+        "reasonPlaceholder": "Ej.: el servicio lo realizó Ana, no Laura",
+        "confirm": "Cambiar profesional",
+        "done": "Comisión reasignada."
+      },
       "pageTitle": "Comisiones",
       "pageSubtitle": "Reglas, liquidaciones y reportes de comisiones por servicios y productos",
       "notEnabled": "El módulo de comisiones no está habilitado para este negocio.",
       "tabs": {
+        "movements": "Movimientos",
+        "preview": "Vista previa",
         "settlements": "Liquidaciones",
         "rules": "Reglas",
         "settings": "Configuración",
-        "simulator": "Simulador",
         "reports": "Reportes"
       },
       "common": {
+        "close": "Cerrar",
         "save": "Guardar",
         "cancel": "Cancelar",
         "back": "Volver",
@@ -106,6 +142,7 @@
         "null": "—"
       },
       "reason": {
+        "REASSIGNMENT": "Reversión por cambio de profesional",
         "VOID": "Reversión por anulación del comprobante",
         "CORRECTION": "Reversión por corrección del comprobante",
         "RECALCULATION": "Reversión por recálculo",
@@ -179,6 +216,58 @@
         "user": "Usuario"
       },
       "rules": {
+        "intro": "Precedencia: 1) comisión general · 2) % estándar del servicio o producto (excepción) · 3) % de un profesional para ese servicio o producto (excepción individual). Gana la regla más específica.",
+        "pendingCount_one": "{{count}} cambio sin guardar",
+        "pendingCount_other": "{{count}} cambios sin guardar",
+        "discard": "Descartar",
+        "saveChanges": "Guardar cambios",
+        "saveSummary_one": "Se guardará {{count}} cambio de reglas.",
+        "saveSummary_other": "Se guardarán {{count}} cambios de reglas.",
+        "periodicityNote": "Periodicidad de liquidación: {{periodicity}} (se cambia en Configuración).",
+        "countServices_one": "{{count}} servicio",
+        "countServices_other": "{{count}} servicios",
+        "countProducts_one": "{{count}} producto",
+        "countProducts_other": "{{count}} productos",
+        "countWithExceptions_one": "{{count}} con excepciones",
+        "countWithExceptions_other": "{{count}} con excepciones",
+        "countProfessionals_one": "{{count}} profesional",
+        "countProfessionals_other": "{{count}} profesionales",
+        "baseLine": "Base de cálculo: precio {{base}}.",
+        "edit": "Editar",
+        "onlyExceptions": "Ver solo excepciones",
+        "colService": "Servicio",
+        "colProduct": "Producto",
+        "colPrice": "Precio",
+        "colStandard": "% estándar",
+        "colExceptions": "Excepciones por profesional",
+        "unsaved": "sin guardar",
+        "differsFromGeneral": "Difiere de la comisión general",
+        "generalShort": "general",
+        "hasScheduled": "Tiene un cambio programado",
+        "allInherit": "Todos usan el estándar",
+        "categoryCountServices_one": "{{count}} servicio",
+        "categoryCountServices_other": "{{count}} servicios",
+        "categoryCountProducts_one": "{{count}} producto",
+        "categoryCountProducts_other": "{{count}} productos",
+        "categoryExceptions_one": "{{count}} excepción",
+        "categoryExceptions_other": "{{count}} excepciones",
+        "priceLine": "Precio {{price}} · base {{base}}: {{amount}}",
+        "itemStandard": "% estándar del ítem",
+        "ownStandard": "Propio de este ítem",
+        "inheritsGeneral": "Hereda la comisión general ({{value}})",
+        "change": "Cambiar",
+        "apply": "Aplicar",
+        "useGeneral": "Usar la comisión general ({{value}})",
+        "percentAndCommission": "% y comisión estimada",
+        "inherits": "Hereda {{value}}",
+        "viewHistory": "Ver historial de cambios",
+        "panelPending": "Hay cambios sin guardar. Usá «Guardar cambios» arriba para aplicarlos.",
+        "panelFootnote": "La comisión estimada se calcula sobre la base del precio de lista. Los cambios se aplican al guardar y no modifican comisiones ya liquidadas.",
+        "subtabs": {
+          "SERVICE": "Servicios",
+          "PRODUCT": "Productos",
+          "GENERAL": "Reglas generales"
+        },
         "sectionTitle": "Comisión",
         "generalPercent": "% general del ítem (aplica a todos los profesionales)",
         "general": "General",
@@ -211,21 +300,6 @@
         "bulkApply": "Aplicar a seleccionados",
         "bulkSummary": "Fijar {{value}} ({{target}}) en {{count}} ítems.",
         "cellTitle": "{{professional}} · {{item}}"
-      },
-      "simulator": {
-        "hint": "Simulá qué comisión se aplicaría. No se guarda nada.",
-        "chooseItem": "Elegí un ítem",
-        "noProfessional": "Sin profesional",
-        "amount": "Monto de la línea (con IVA)",
-        "taxRate": "Tasa de IVA",
-        "exempt": "Exenta",
-        "discount": "Descuento (Gs)",
-        "date": "Fecha",
-        "run": "Simular",
-        "amountRequired": "Elegí un ítem e ingresá un monto mayor a 0, por ejemplo 110.000.",
-        "percentLine": "Porcentaje aplicado: {{percent}} ({{origin}})",
-        "formula": "Base {{base}}: {{baseAmount}} × {{percent}} = {{commission}}",
-        "comparison": "Con la otra base ({{base}}): {{baseAmount}} → {{commission}}"
       },
       "settlements": {
         "generateTitle": "Generar liquidaciones",
@@ -281,7 +355,6 @@
         "empty": "Sin datos.",
         "settlementState": "Estado de liquidación",
         "linesWithoutBeneficiary": "Líneas sin profesional (no generan comisión)",
-        "itemsWithoutRule": "Ítems sin % general (usan el % por defecto)",
         "invoice": "Comprobante"
       },
       "my": {
@@ -1843,6 +1916,10 @@
       }
     },
     "apiErrors": {
+      "COMMISSION_ENTRY_NOT_FOUND": "No se encontró la comisión.",
+      "COMMISSION_ENTRY_NOT_REASSIGNABLE": "Esta comisión no se puede reasignar: solo se reasignan comisiones de comprobantes que no hayan sido revertidas.",
+      "COMMISSION_REASSIGN_REASON_REQUIRED": "Indicá el motivo del cambio, por ejemplo: «el servicio lo realizó Ana».",
+      "COMMISSION_REASSIGN_SAME_PROFESSIONAL": "Elegí un profesional distinto al que tiene asignada la comisión.",
       "FEATURE_NOT_ENABLED": "Esta funcionalidad no está habilitada para tu negocio.",
       "COMMISSION_CHANGES_REQUIRED": "No hay cambios para aplicar.",
       "COMMISSION_CHANGE_APPLY_MODE_REQUIRED": "Elegí cómo aplicar el cambio: desde ahora, desde el próximo periodo o desde el inicio del periodo vigente.",

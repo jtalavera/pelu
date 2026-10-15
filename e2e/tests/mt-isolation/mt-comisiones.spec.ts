@@ -80,9 +80,13 @@ test.describe("mt-comisiones · aislamiento del módulo de comisiones", () => {
     const rulesOfA = await request.get(`${API_BASE}/api/commissions/items/${serviceA}/rules`, { headers: authHeaders(tokenB) });
     expect(rulesOfA.status()).toBe(404);
 
-    const matrixB = await (await request.get(`${API_BASE}/api/commissions/matrix`, { headers: authHeaders(tokenB) })).json();
-    const rowIds = matrixB.rows.map((r: { serviceId: number }) => r.serviceId);
+    const rulesB = (await (
+      await request.get(`${API_BASE}/api/commissions/rules-view?kind=SERVICE`, { headers: authHeaders(tokenB) })
+    ).json()) as { categories: { items: { serviceId: number }[] }[]; professionals: { id: number }[] };
+    const rowIds = rulesB.categories.flatMap((c) => c.items.map((i) => i.serviceId));
     for (const id of world.tenantA.catalog.serviceIds) expect(rowIds).not.toContain(id);
+    const profIds = rulesB.professionals.map((p) => p.id);
+    for (const id of world.tenantA.professionalIds) expect(profIds).not.toContain(id);
   });
 
   test("entradas y liquidaciones de un tenant no son visibles ni accesibles desde otro", async ({ request }) => {
@@ -109,12 +113,27 @@ test.describe("mt-comisiones · aislamiento del módulo de comisiones", () => {
     expect(inv.ok(), await inv.text()).toBeTruthy();
     const invoiceId = ((await inv.json()) as { id: number }).id;
 
+    let entryId = 0;
     await expect
       .poll(async () => {
-        const es = await (await request.get(`${API_BASE}/api/commissions/entries`, { headers: authHeaders(tokenI) })).json();
-        return (es as { invoiceId: number }[]).some((e) => e.invoiceId === invoiceId);
+        const es = (await (await request.get(`${API_BASE}/api/commissions/entries`, { headers: authHeaders(tokenI) })).json()) as {
+          id: number;
+          invoiceId: number;
+        }[];
+        entryId = es.find((e) => e.invoiceId === invoiceId)?.id ?? 0;
+        return entryId > 0;
       })
       .toBe(true);
+    // Another tenant can neither reassign this commission nor preview this professional's settlement.
+    const crossReassign = await request.post(`${API_BASE}/api/commissions/entries/${entryId}/reassign`, {
+      headers: authHeaders(tokenO),
+      data: { professionalId: other.professionalIds[0], reason: "x" },
+    });
+    expect(crossReassign.status()).toBe(404);
+    const crossPreview = await request.get(`${API_BASE}/api/commissions/settlement-preview?professionalId=${professionalId}`, {
+      headers: authHeaders(tokenO),
+    });
+    expect(crossPreview.status()).toBe(404);
     const today = new Date().toISOString().slice(0, 10);
     const gen = await request.post(`${API_BASE}/api/commissions/settlements/generate`, {
       headers: authHeaders(tokenI),

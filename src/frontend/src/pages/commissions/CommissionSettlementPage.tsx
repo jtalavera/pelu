@@ -20,6 +20,7 @@ import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDate, formatParaguayDateTime } from "../../lib/paraguayDateTime";
+import { ReassignDialog } from "./ReassignDialog";
 import { SettlementStatusBadge, TableWrap, formatPercent, tdClass, thClass, todayYmd } from "./common";
 
 /** HU-COM-06: settlement detail, adjustments (Draft), approve, pay, void, PDF. */
@@ -42,6 +43,7 @@ export default function CommissionSettlementPage() {
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState<string | null>(null);
+  const [toReassign, setToReassign] = useState<EntryView | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -171,6 +173,7 @@ export default function CommissionSettlementPage() {
               <th className={`${thClass} text-right`}>{t("femme.commissions.settlement.baseAmount")}</th>
               <th className={`${thClass} text-right`}>%</th>
               <th className={`${thClass} text-right`}>{t("femme.commissions.settlement.commission")}</th>
+              {isDraft && <th className={thClass} />}
             </tr>
           </thead>
           <tbody>
@@ -187,6 +190,15 @@ export default function CommissionSettlementPage() {
                 <td className={`${tdClass} text-right`}>{formatGuaraniesGs(e.baseAmount)}</td>
                 <td className={`${tdClass} text-right`}>{formatPercent(e.percentApplied)}</td>
                 <td className={`${tdClass} text-right`}>{formatGuaraniesGs(e.commissionAmount)}</td>
+                {isDraft && (
+                  <td className={`${tdClass} whitespace-nowrap`}>
+                    {e.reassignable && (
+                      <Button type="button" size="sm" variant="secondary" onClick={() => setToReassign(e)}>
+                        {t("femme.commissions.reassign.action")}
+                      </Button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -270,6 +282,15 @@ export default function CommissionSettlementPage() {
           ))}
         </ul>
       </Card>
+
+      <ReassignDialog
+        entry={toReassign}
+        onClose={() => setToReassign(null)}
+        onDone={() => {
+          setToReassign(null);
+          void load();
+        }}
+      />
 
       <ConfirmDialog
         open={confirmApprove}

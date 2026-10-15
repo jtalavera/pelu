@@ -2,8 +2,6 @@ package com.cursorpoc.backend.commission;
 
 import com.cursorpoc.backend.domain.CommissionEntry;
 import com.cursorpoc.backend.domain.CommissionSettlement;
-import com.cursorpoc.backend.domain.SalonService;
-import com.cursorpoc.backend.domain.enums.CommissionBaseType;
 import com.cursorpoc.backend.domain.enums.CommissionEntrySource;
 import com.cursorpoc.backend.domain.enums.CommissionSettlementStatus;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
@@ -11,7 +9,6 @@ import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.CommissionEntryRepository;
 import com.cursorpoc.backend.repository.CommissionSettlementRepository;
 import com.cursorpoc.backend.repository.CommissionSettlementStatusChangeRepository;
-import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.web.dto.CommissionDtos.EntryView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.LineWithoutBeneficiary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MyEntryView;
@@ -22,15 +19,12 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.PeriodInfo;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReportResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReportRow;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementDetail;
+import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementPreview;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementView;
-import com.cursorpoc.backend.web.dto.CommissionDtos.SimulateRequest;
-import com.cursorpoc.backend.web.dto.CommissionDtos.SimulateResponse;
-import com.cursorpoc.backend.web.dto.CommissionDtos.SimulationResult;
 import com.cursorpoc.backend.web.dto.CommissionDtos.StatusChangeView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.Subtotal;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -54,7 +48,6 @@ public class CommissionQueryService {
   private final CommissionEntryRepository entryRepository;
   private final CommissionSettlementRepository settlementRepository;
   private final CommissionSettlementStatusChangeRepository changeRepository;
-  private final SalonServiceRepository serviceRepository;
   private final CommissionConfigService configService;
   private final CommissionLedger ledger;
   private final EntityManager entityManager;
@@ -63,68 +56,78 @@ public class CommissionQueryService {
       CommissionEntryRepository entryRepository,
       CommissionSettlementRepository settlementRepository,
       CommissionSettlementStatusChangeRepository changeRepository,
-      SalonServiceRepository serviceRepository,
       CommissionConfigService configService,
       CommissionLedger ledger,
       EntityManager entityManager) {
     this.entryRepository = entryRepository;
     this.settlementRepository = settlementRepository;
     this.changeRepository = changeRepository;
-    this.serviceRepository = serviceRepository;
     this.configService = configService;
     this.ledger = ledger;
     this.entityManager = entityManager;
   }
 
-  // ── Simulator ─────────────────────────────────────────────────────────────────────────────
+  // ── Settlement preview (replaces the simulator) ──────────────────────────────────────────
 
-  public SimulateResponse simulate(long tenantId, SimulateRequest r) {
-    if (r == null
-        || r.serviceId() == null
-        || r.lineAmount() == null
-        || r.lineAmount().signum() < 0) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_SIMULATION_INVALID");
+  /**
+   * What the professional would be paid today for an open period: exactly the entries a settlement
+   * generated now for {@code [from, to]} would take (unsettled entries accrued up to {@code to},
+   * including carried balances and reversals). Read-only.
+   */
+  public SettlementPreview settlementPreview(
+      long tenantId, long professionalId, LocalDate from, LocalDate to) {
+    Map<Long, String> names = configService.professionalNames(tenantId);
+    if (!names.containsKey(professionalId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND");
     }
-    SalonService item =
-        serviceRepository
-            .findByIdAndTenant_Id(r.serviceId(), tenantId)
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND"));
     ZoneId zone = configService.zone();
-    LocalDate day = r.date() != null ? r.date() : LocalDate.now(zone);
-    Instant at =
-        day.equals(LocalDate.now(zone))
-            ? Instant.now()
-            : day.atTime(12, 0).atZone(zone).toInstant();
-    CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
-    BigDecimal discount = r.discount() == null ? BigDecimal.ZERO : r.discount();
-    BigDecimal lineTotal = r.lineAmount().subtract(discount).max(BigDecimal.ZERO);
-    BigDecimal rate = r.taxRate() != null ? r.taxRate() : itemRate(item);
-    BigDecimal tax = CommissionCalculator.includedTax(lineTotal, rate);
-    CommissionCalculator.Resolution res =
-        CommissionCalculator.resolve(
-            snapshot, item.getId(), item.getKind(), r.professionalId(), at);
-    CommissionBaseType configured = snapshot.baseAt(at);
-    CommissionBaseType other =
-        configured == CommissionBaseType.NET_OF_TAX
-            ? CommissionBaseType.TAX_INCLUDED
-            : CommissionBaseType.NET_OF_TAX;
-    CommissionCalculator.Amounts a =
-        CommissionCalculator.amounts(lineTotal, tax, configured, res.percent());
-    CommissionCalculator.Amounts b =
-        CommissionCalculator.amounts(lineTotal, tax, other, res.percent());
-    return new SimulateResponse(
-        lineTotal.setScale(2, RoundingMode.HALF_UP),
-        tax,
-        res.percent(),
-        res.origin().name(),
-        configured.name(),
-        new SimulationResult(configured.name(), a.baseAmount(), a.commissionAmount()),
-        new SimulationResult(other.name(), b.baseAmount(), b.commissionAmount()));
-  }
-
-  private static BigDecimal itemRate(SalonService s) {
-    return s.getTax() != null ? s.getTax().getRate() : BigDecimal.ZERO;
+    PeriodInfo period = configService.currentPeriod(ledger.snapshot(tenantId), Instant.now());
+    LocalDate today = LocalDate.now(zone);
+    LocalDate f =
+        from != null ? from : period.from() != null ? period.from() : today.withDayOfMonth(1);
+    LocalDate t = to != null ? to : period.to() != null ? period.to() : today;
+    if (t.isBefore(f)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERIOD_INVALID");
+    }
+    List<CommissionEntry> entries =
+        entryRepository.findUnsettled(
+            tenantId, professionalId, t.plusDays(1).atStartOfDay(zone).toInstant());
+    java.util.Set<Long> reversed = entryRepository.findReversedIds(tenantId);
+    BigDecimal services = BigDecimal.ZERO;
+    BigDecimal products = BigDecimal.ZERO;
+    BigDecimal adjustments = BigDecimal.ZERO;
+    int lines = 0;
+    for (CommissionEntry e : entries) {
+      if (e.getSourceType() == CommissionEntrySource.ADJUSTMENT) {
+        adjustments = adjustments.add(e.getCommissionAmount());
+      } else if (e.getItemKind() == ServiceKind.PRODUCT) {
+        products = products.add(e.getCommissionAmount());
+      } else {
+        services = services.add(e.getCommissionAmount());
+      }
+      if (e.getSourceType() == CommissionEntrySource.INVOICE_LINE) {
+        lines++;
+      }
+    }
+    List<SettlementView> drafts =
+        settlementRepository
+            .findByTenantIdAndProfessionalIdOrderByPeriodFromDescIdDesc(tenantId, professionalId)
+            .stream()
+            .filter(x -> x.getStatus() == CommissionSettlementStatus.DRAFT)
+            .map(x -> view(x, names))
+            .toList();
+    return new SettlementPreview(
+        professionalId,
+        names.get(professionalId),
+        f,
+        t,
+        services.add(products).add(adjustments),
+        services,
+        products,
+        adjustments,
+        lines,
+        entries.stream().map(e -> entryView(e, names, null, reversed)).toList(),
+        drafts);
   }
 
   // ── Settlements ───────────────────────────────────────────────────────────────────────────
@@ -163,8 +166,9 @@ public class CommissionQueryService {
         entryRepository.findBySettlementIdOrderByAccrualAtAscIdAsc(s.getId());
     List<EntryView> lines = new ArrayList<>();
     List<EntryView> adjustments = new ArrayList<>();
+    java.util.Set<Long> reversed = entryRepository.findReversedIds(tenantId);
     for (CommissionEntry e : entries) {
-      EntryView v = entryView(e, names, s.getStatus());
+      EntryView v = entryView(e, names, s.getStatus(), reversed);
       if (e.getSourceType() == CommissionEntrySource.ADJUSTMENT) {
         adjustments.add(v);
       } else {
@@ -246,7 +250,10 @@ public class CommissionQueryService {
   }
 
   public EntryView entryView(
-      CommissionEntry e, Map<Long, String> names, CommissionSettlementStatus settlementStatus) {
+      CommissionEntry e,
+      Map<Long, String> names,
+      CommissionSettlementStatus settlementStatus,
+      java.util.Set<Long> reversedIds) {
     return new EntryView(
         e.getId(),
         e.getProfessionalId(),
@@ -270,7 +277,9 @@ public class CommissionQueryService {
         e.getReversesEntryId(),
         e.getSettlementId(),
         settlementStatus == null ? null : settlementStatus.name(),
-        e.getNote());
+        e.getNote(),
+        e.getSourceType() == CommissionEntrySource.INVOICE_LINE
+            && !reversedIds.contains(e.getId()));
   }
 
   // ── Entries & reports (HU-COM-08) ─────────────────────────────────────────────────────────
@@ -292,6 +301,7 @@ public class CommissionQueryService {
     Map<Long, String> names = configService.professionalNames(tenantId);
     Map<Long, CommissionSettlementStatus> statuses = new HashMap<>();
     List<EntryView> out = new ArrayList<>();
+    java.util.Set<Long> reversed = entryRepository.findReversedIds(tenantId);
     for (CommissionEntry e : entryRepository.findForReport(tenantId, fromI, toI, professionalId)) {
       if (kind != null
           && !kind.isBlank()
@@ -306,7 +316,7 @@ public class CommissionQueryService {
       if (settlementState != null && !settlementState.isBlank() && !settlementState.equals(state)) {
         continue;
       }
-      out.add(entryView(e, names, st));
+      out.add(entryView(e, names, st, reversed));
     }
     return out;
   }

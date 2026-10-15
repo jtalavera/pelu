@@ -67,6 +67,8 @@ class CommissionFlowIntegrationTest {
   @Autowired private CommissionSettlementService settlementService;
   @Autowired private CommissionAccrualService accrualService;
   @Autowired private PlatformTransactionManager transactionManager;
+  @Autowired private CommissionReassignmentService reassignmentService;
+  @Autowired private CommissionQueryService queryService;
 
   private TransactionTemplate tx;
   private Tenant tenant;
@@ -376,5 +378,135 @@ class CommissionFlowIntegrationTest {
     professionalRepository.save(bea);
     assertThatThrownBy(() -> change("IMMEDIATE", rule(corte, bea, "50")))
         .hasMessageContaining("COMMISSION_PROFESSIONAL_INACTIVE");
+  }
+
+  @Test
+  void reassignMovesTheCommissionToTheRightProfessionalWithItsOwnRules() {
+    change("IMMEDIATE", rule(corte, null, "40"), rule(corte, bea, "50"));
+    Invoice inv = invoice(corte, ana, "110000");
+    accrue(inv);
+    LocalDate today = LocalDate.now(configService.zone());
+    CommissionSettlement anaDraft =
+        settlementService
+            .generate(
+                tenant.getId(),
+                "a",
+                new GenerateSettlementsRequest(today, today, List.of(ana.getId())))
+            .get(0);
+    CommissionEntry wrong = entries().get(0);
+
+    assertThatThrownBy(
+            () ->
+                reassignmentService.reassign(
+                    tenant.getId(),
+                    wrong.getId(),
+                    "a",
+                    new com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest(
+                        bea.getId(), " ")))
+        .hasMessageContaining("COMMISSION_REASSIGN_REASON_REQUIRED");
+    assertThatThrownBy(
+            () ->
+                reassignmentService.reassign(
+                    tenant.getId(),
+                    wrong.getId(),
+                    "a",
+                    new com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest(
+                        ana.getId(), "x")))
+        .hasMessageContaining("COMMISSION_REASSIGN_SAME_PROFESSIONAL");
+
+    CommissionEntry fixed =
+        reassignmentService.reassign(
+            tenant.getId(),
+            wrong.getId(),
+            "a",
+            new com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest(
+                bea.getId(), "Se cargó a Ana por error"));
+    assertThat(fixed.getProfessionalId()).isEqualTo(bea.getId());
+    assertThat(fixed.getCommissionAmount()).isEqualByComparingTo("50000"); // Bea's exception
+    assertThat(fixed.getSettlementId()).isNull();
+    // Ana's draft: the line and its reversal cancel out.
+    assertThat(settlementRepository.findById(anaDraft.getId()).get().getTotalAmount())
+        .isEqualByComparingTo("0");
+    // Only one live entry left; the reversed one can't be reassigned again.
+    assertThatThrownBy(
+            () ->
+                reassignmentService.reassign(
+                    tenant.getId(),
+                    wrong.getId(),
+                    "a",
+                    new com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest(
+                        bea.getId(), "x")))
+        .hasMessageContaining("COMMISSION_ENTRY_NOT_REASSIGNABLE");
+  }
+
+  @Test
+  void reassignAfterApprovalLeavesTheApprovedSettlementUntouched() {
+    change("IMMEDIATE", rule(corte, null, "40"));
+    accrue(invoice(corte, ana, "110000"));
+    LocalDate today = LocalDate.now(configService.zone());
+    CommissionSettlement s =
+        settlementService
+            .generate(tenant.getId(), "a", new GenerateSettlementsRequest(today, today, null))
+            .get(0);
+    settlementService.approve(tenant.getId(), s.getId(), "a");
+    CommissionEntry wrong = entries().get(0);
+    reassignmentService.reassign(
+        tenant.getId(),
+        wrong.getId(),
+        "a",
+        new com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest(
+            bea.getId(), "Error de carga"));
+    assertThat(settlementRepository.findById(s.getId()).get().getTotalAmount())
+        .isEqualByComparingTo("40000");
+    Instant later = Instant.now().plusSeconds(60);
+    assertThat(total(entryRepository.findUnsettled(tenant.getId(), ana.getId(), later)))
+        .isEqualByComparingTo("-40000");
+    assertThat(total(entryRepository.findUnsettled(tenant.getId(), bea.getId(), later)))
+        .isEqualByComparingTo("40000");
+  }
+
+  @Test
+  void settlementPreviewShowsWhatWouldBePaidToday() {
+    change(
+        "IMMEDIATE",
+        rule(corte, null, "40"),
+        new ConfigChange("DEFAULT_PRODUCT", null, null, "10", null));
+    accrue(invoice(corte, ana, "110000", shampoo, ana, "110000"));
+    var preview = queryService.settlementPreview(tenant.getId(), ana.getId(), null, null);
+    assertThat(preview.total()).isEqualByComparingTo("50000");
+    assertThat(preview.servicesTotal()).isEqualByComparingTo("40000");
+    assertThat(preview.productsTotal()).isEqualByComparingTo("10000");
+    assertThat(preview.lines()).isEqualTo(2);
+    assertThat(queryService.settlementPreview(tenant.getId(), bea.getId(), null, null).total())
+        .isEqualByComparingTo("0");
+  }
+
+  @Test
+  void rulesViewGroupsByCategoryWithStandardAndExceptions() {
+    change(
+        "IMMEDIATE",
+        new ConfigChange("DEFAULT_SERVICE", null, null, "30", null),
+        rule(corte, bea, "45"));
+    var view = configService.rulesView(tenant.getId(), "SERVICE", null);
+    assertThat(view.generalPercent()).isEqualByComparingTo("30");
+    assertThat(view.itemCount()).isEqualTo(1);
+    assertThat(view.itemsWithExceptions()).isEqualTo(1);
+    var item = view.categories().get(0).items().get(0);
+    assertThat(item.standardPercent()).isEqualByComparingTo("30");
+    assertThat(item.ownStandard()).isFalse();
+    assertThat(item.baseAmount()).isEqualByComparingTo("100000");
+    assertThat(item.exceptions())
+        .singleElement()
+        .satisfies(
+            e -> {
+              assertThat(e.professionalId()).isEqualTo(bea.getId());
+              assertThat(e.delta()).isEqualByComparingTo("15");
+            });
+    change("IMMEDIATE", rule(corte, null, "40"));
+    var after =
+        configService.rulesView(tenant.getId(), "SERVICE", null).categories().get(0).items().get(0);
+    assertThat(after.standardPercent()).isEqualByComparingTo("40");
+    assertThat(after.ownStandard()).isTrue();
+    assertThat(after.exceptions().get(0).delta()).isEqualByComparingTo("5");
   }
 }

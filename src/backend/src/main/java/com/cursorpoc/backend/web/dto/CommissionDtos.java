@@ -94,44 +94,38 @@ public final class CommissionDtos {
       List<ExceptionView> exceptions,
       List<VersionView> history) {}
 
-  public record MatrixCell(
-      Long professionalId, BigDecimal percent, String origin, boolean scheduled) {}
+  /** Rules view (mockup): items grouped by category with their standard % and exceptions. */
+  public record RuleException(
+      Long professionalId, String professionalName, BigDecimal percent, BigDecimal delta) {}
 
-  public record MatrixRow(
+  public record RuleItem(
       Long serviceId,
-      String serviceName,
-      String itemKind,
+      String name,
+      BigDecimal price,
+      /** Base of one unit at list price with the tenant's calculation base (e.g. without IVA). */
+      BigDecimal baseAmount,
+      /** % of the item rule, or the general % of its kind when it has none. */
+      BigDecimal standardPercent,
+      /** True when the item has its own % (differs from / overrides the general one). */
+      boolean ownStandard,
+      List<RuleException> exceptions,
+      boolean scheduled) {}
+
+  public record RuleCategory(Long categoryId, String name, int exceptions, List<RuleItem> items) {}
+
+  public record RuleProfessional(Long id, String fullName) {}
+
+  public record RulesView(
+      String kind,
+      LocalDate date,
+      String baseType,
       BigDecimal generalPercent,
-      List<MatrixCell> cells) {}
-
-  public record MatrixProfessional(Long id, String fullName) {}
-
-  public record MatrixResponse(
-      LocalDate date, List<MatrixProfessional> professionals, List<MatrixRow> rows) {}
+      int itemCount,
+      int itemsWithExceptions,
+      List<RuleProfessional> professionals,
+      List<RuleCategory> categories) {}
 
   public record ItemWithoutRule(Long serviceId, String serviceName, String itemKind) {}
-
-  // ── Simulator (HU-COM-03) ─────────────────────────────────────────────────────────────────
-
-  public record SimulateRequest(
-      Long serviceId,
-      Long professionalId,
-      BigDecimal lineAmount,
-      BigDecimal taxRate,
-      BigDecimal discount,
-      LocalDate date) {}
-
-  public record SimulationResult(
-      String baseType, BigDecimal baseAmount, BigDecimal commissionAmount) {}
-
-  public record SimulateResponse(
-      BigDecimal lineTotal,
-      BigDecimal taxAmount,
-      BigDecimal percent,
-      String origin,
-      String configuredBase,
-      SimulationResult configured,
-      SimulationResult alternative) {}
 
   // ── Entries / settlements (HU-COM-04..08) ─────────────────────────────────────────────────
 
@@ -158,7 +152,26 @@ public final class CommissionDtos {
       Long reversesEntryId,
       Long settlementId,
       String settlementStatus,
-      String note) {}
+      String note,
+      /** True for a live INVOICE_LINE entry whose professional can be changed. */
+      boolean reassignable) {}
+
+  /** Change the professional who earns a commission (wrong assignment at billing). */
+  public record ReassignRequest(Long professionalId, String reason) {}
+
+  /** What the professional would be paid today for an open period (replaces the simulator). */
+  public record SettlementPreview(
+      Long professionalId,
+      String professionalName,
+      LocalDate periodFrom,
+      LocalDate periodTo,
+      BigDecimal total,
+      BigDecimal servicesTotal,
+      BigDecimal productsTotal,
+      BigDecimal adjustmentsTotal,
+      int lines,
+      List<EntryView> entries,
+      List<SettlementView> draftSettlements) {}
 
   public record GenerateSettlementsRequest(
       LocalDate periodFrom, LocalDate periodTo, List<Long> professionalIds) {}

@@ -1,278 +1,838 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Checkbox, Input, Label, Modal, Select, Spinner, Text } from "@design-system";
-import { getMatrix, type ConfigChange, type MatrixResponse } from "../../api/commissions";
+import { Alert, Button, Card, Input, Label, Modal, Radio, RadioGroup, Select, Spinner, Switch, Text } from "@design-system";
+import {
+  getItemRules,
+  getRulesView,
+  getSettings,
+  type BaseType,
+  type ConfigChange,
+  type ItemKind,
+  type ItemRules,
+  type RuleItem,
+  type RulesView,
+  type SettingsResponse,
+} from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
+import { useDateLocale } from "../../i18n/dateLocale";
+import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ApplyChangeDialog } from "./ApplyChangeDialog";
-import { ItemRulesEditor } from "./ItemRulesEditor";
+import { describeVersionValue } from "./ScheduledChangesList";
 import { TableWrap, formatPercent, parsePercentInput, tdClass, thClass, todayYmd } from "./common";
 
-const ORIGIN_SHORT: Record<string, string> = {
-  BENEFICIARY_ITEM: "E",
-  ITEM: "G",
-  TENANT_DEFAULT_SERVICE: "D",
-  TENANT_DEFAULT_PRODUCT: "D",
-};
+type SubTab = "SERVICE" | "PRODUCT" | "GENERAL";
 
-/** HU-COM-02: global matrix (professionals × items) with per-cell edit and bulk apply. */
+/** Unsaved changes, keyed by scope + item + professional ("Guardar cambios" applies them all). */
+type Pending = Record<string, ConfigChange>;
+
+const key = (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) =>
+  `${c.scope}|${c.serviceId ?? ""}|${c.professionalId ?? ""}`;
+
+/** The item as it would look once the pending changes are saved. */
+function effectiveItem(item: RuleItem, general: number, pending: Pending, professionals: { id: number; fullName: string }[]) {
+  const own = pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: null })];
+  let ownStandard = item.ownStandard;
+  let standard = Number(item.standardPercent);
+  if (own) {
+    ownStandard = own.value !== null;
+    standard = own.value !== null ? Number(own.value) : general;
+  } else if (!item.ownStandard) {
+    standard = general;
+  }
+  const exceptions = new Map<number, { percent: number; dirty: boolean }>();
+  for (const e of item.exceptions) exceptions.set(e.professionalId, { percent: Number(e.percent), dirty: false });
+  for (const p of professionals) {
+    const c = pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: p.id })];
+    if (!c) continue;
+    if (c.value === null) exceptions.delete(p.id);
+    else exceptions.set(p.id, { percent: Number(c.value), dirty: true });
+  }
+  const dirty =
+    !!own ||
+    professionals.some((p) => !!pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: p.id })]);
+  return { standard, ownStandard, exceptions, dirty, ownDirty: !!own };
+}
+
+function deltaLabel(delta: number): string {
+  const rounded = Math.round(delta * 100) / 100;
+  if (rounded === 0) return "±0";
+  return `${rounded > 0 ? "+" : "−"}${new Intl.NumberFormat("es-PY", { maximumFractionDigits: 2 }).format(Math.abs(rounded))}`;
+}
+
+/** HU-COM-02 rules: general % → item % → professional + item exception (the most specific wins). */
 export function RulesTab() {
   const { t } = useTranslation();
-  const [kind, setKind] = useState("");
+  const [tab, setTab] = useState<SubTab>("SERVICE");
+  const [views, setViews] = useState<Partial<Record<ItemKind, RulesView>>>({});
+  const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [date, setDate] = useState(todayYmd());
-  const [matrix, setMatrix] = useState<MatrixResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ serviceId: number; name: string } | null>(null);
-  const [cellEdit, setCellEdit] = useState<{ serviceId: number; item: string; professionalId: number; name: string; value: string } | null>(null);
-  const [cellError, setCellError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<number[]>([]);
-  const [bulkPercent, setBulkPercent] = useState("");
-  const [bulkProfessional, setBulkProfessional] = useState("");
-  const [bulkError, setBulkError] = useState<string | null>(null);
-  const [pending, setPending] = useState<{ changes: ConfigChange[]; summary: string } | null>(null);
+  const [onlyExceptions, setOnlyExceptions] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [pending, setPending] = useState<Pending>({});
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setMatrix(await getMatrix(kind || undefined, date || undefined));
+      const [services, products, s] = await Promise.all([
+        getRulesView("SERVICE", date),
+        getRulesView("PRODUCT", date),
+        getSettings(),
+      ]);
+      setViews({ SERVICE: services, PRODUCT: products });
+      setSettings(s);
       setError(null);
     } catch (err) {
       setError(translateApiError(err, t));
     }
-  }, [kind, date, t]);
+  }, [date, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  function applyBulk() {
-    const parsed = parsePercentInput(bulkPercent);
-    if (parsed === null) {
-      setBulkError(t("femme.commissions.validation.percent"));
-      return;
-    }
-    setBulkError(null);
-    const professionalId = bulkProfessional ? Number(bulkProfessional) : null;
-    setPending({
-      changes: selected.map((serviceId) => ({ scope: "RULE", serviceId, professionalId, value: parsed })),
-      summary: t("femme.commissions.rules.bulkSummary", {
-        count: selected.length,
-        value: formatPercent(parsed),
-        target: professionalId
-          ? matrix?.professionals.find((p) => p.id === professionalId)?.fullName
-          : t("femme.commissions.rules.general"),
-      }),
+  const pendingList = Object.values(pending);
+
+  function stage(change: ConfigChange) {
+    setNotice(null);
+    setPending((prev) => ({ ...prev, [key(change)]: change }));
+  }
+
+  function unstage(change: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) {
+    setPending((prev) => {
+      const next = { ...prev };
+      delete next[key(change)];
+      return next;
     });
   }
 
-  function saveCell() {
-    if (!cellEdit) return;
-    const parsed = parsePercentInput(cellEdit.value);
-    if (parsed === null) {
-      setCellError(t("femme.commissions.validation.percent"));
-      return;
-    }
-    setCellError(null);
-    setPending({
-      changes: [{ scope: "RULE", serviceId: cellEdit.serviceId, professionalId: cellEdit.professionalId, value: parsed }],
-      summary: t("femme.commissions.rules.exceptionSummary", {
-        item: cellEdit.item,
-        professional: cellEdit.name,
-        value: formatPercent(parsed),
-      }),
-    });
-    setCellEdit(null);
+  /** General % of a kind including a pending change. */
+  function generalOf(kind: ItemKind): number {
+    const c = pending[key({ scope: kind === "PRODUCT" ? "DEFAULT_PRODUCT" : "DEFAULT_SERVICE", serviceId: null, professionalId: null })];
+    if (c && c.value !== null) return Number(c.value);
+    return Number(views[kind]?.generalPercent ?? 0);
   }
+
+  const base: BaseType =
+    (pending[key({ scope: "BASE", serviceId: null, professionalId: null })]?.value as BaseType | undefined) ??
+    (views.SERVICE?.baseType as BaseType | undefined) ??
+    "NET_OF_TAX";
 
   return (
-    <div className="flex flex-col gap-4" data-testid="commission-rules">
+    <div className="flex min-w-0 flex-col gap-4" data-testid="commission-rules">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <Text variant="small" className="max-w-xl text-[var(--color-ink-3)]">
+          {t("femme.commissions.rules.intro")}
+        </Text>
+        <div className="flex flex-wrap items-center gap-2">
+          {pendingList.length > 0 && (
+            <>
+              <span className="text-xs text-amber-700 dark:text-amber-300" data-testid="rules-pending-count">
+                {t("femme.commissions.rules.pendingCount", { count: pendingList.length })}
+              </span>
+              <Button type="button" variant="secondary" onClick={() => setPending({})} data-testid="rules-discard">
+                {t("femme.commissions.rules.discard")}
+              </Button>
+            </>
+          )}
+          <Button
+            type="button"
+            disabled={pendingList.length === 0}
+            onClick={() => setSaving(true)}
+            data-testid="rules-save"
+          >
+            {t("femme.commissions.rules.saveChanges")}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex gap-1 overflow-x-auto border-b" role="tablist" aria-label={t("femme.commissions.tabs.rules")}>
+        {(["SERVICE", "PRODUCT", "GENERAL"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => {
+              setTab(k);
+              setSelected(null);
+            }}
+            className={
+              "min-h-11 border-b-2 px-3 text-sm " +
+              (tab === k
+                ? "border-[var(--color-rose)] font-medium text-[var(--color-ink)]"
+                : "border-transparent text-[var(--color-ink-2)]")
+            }
+          >
+            {t(`femme.commissions.rules.subtabs.${k}`)}
+          </button>
+        ))}
+      </div>
+
       {notice && (
         <Alert variant="success" role="status">
           {notice}
         </Alert>
       )}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="commission-matrix-kind">{t("femme.commissions.common.itemKind")}</Label>
-          <Select id="commission-matrix-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">{t("femme.commissions.kind.ALL")}</option>
-            <option value="SERVICE">{t("femme.commissions.kind.SERVICE")}</option>
-            <option value="PRODUCT">{t("femme.commissions.kind.PRODUCT")}</option>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="commission-matrix-date">{t("femme.commissions.rules.atDate")}</Label>
-          <LocalizedDateInput id="commission-matrix-date" value={date} onChange={setDate} data-testid="commission-matrix-date" />
-        </div>
-      </div>
-      <Text variant="small" className="text-[var(--color-ink-3)]">
-        {t("femme.commissions.rules.legend")}
-      </Text>
       {error && <Alert variant="destructive">{error}</Alert>}
-      {!matrix ? (
+
+      {tab === "GENERAL" ? (
+        <GeneralRules
+          services={generalOf("SERVICE")}
+          products={generalOf("PRODUCT")}
+          base={base}
+          savedServices={Number(views.SERVICE?.generalPercent ?? 0)}
+          savedProducts={Number(views.PRODUCT?.generalPercent ?? 0)}
+          savedBase={(views.SERVICE?.baseType as BaseType | undefined) ?? "NET_OF_TAX"}
+          periodicity={settings?.periodicity}
+          stage={stage}
+          unstage={unstage}
+        />
+      ) : !views[tab] ? (
         <Spinner />
       ) : (
-        <TableWrap testId="commission-matrix">
-          <thead>
-            <tr>
-              <th className={thClass}>
-                <span className="sr-only">{t("femme.commissions.rules.select")}</span>
-              </th>
-              <th className={thClass}>{t("femme.commissions.common.item")}</th>
-              <th className={thClass}>{t("femme.commissions.rules.general")}</th>
-              {matrix.professionals.map((p) => (
-                <th key={p.id} className={thClass}>
-                  {p.fullName}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {matrix.rows.map((r) => (
-              <tr key={r.serviceId} className="border-t" data-testid="commission-matrix-row">
-                <td className={tdClass}>
-                  <Checkbox
-                    aria-label={t("femme.commissions.rules.selectItem", { name: r.serviceName })}
-                    checked={selected.includes(r.serviceId)}
-                    onChange={(e) =>
-                      setSelected(
-                        e.target.checked ? [...selected, r.serviceId] : selected.filter((x) => x !== r.serviceId),
-                      )
-                    }
-                  />
-                </td>
-                <td className={tdClass}>
-                  <button
-                    type="button"
-                    className="min-h-11 text-left underline-offset-2 hover:underline"
-                    onClick={() => setEditing({ serviceId: r.serviceId, name: r.serviceName })}
-                  >
-                    {r.serviceName}
-                  </button>
-                  <span className="block text-xs text-[var(--color-ink-3)]">{t(`femme.commissions.kind.${r.itemKind}`)}</span>
-                </td>
-                <td className={tdClass}>{r.generalPercent === null ? t("femme.commissions.rules.noRuleShort") : formatPercent(r.generalPercent)}</td>
-                {r.cells.map((c) => {
-                  const prof = matrix.professionals.find((p) => p.id === c.professionalId);
-                  return (
-                    <td key={c.professionalId} className={tdClass}>
-                      <button
-                        type="button"
-                        className="min-h-11 whitespace-nowrap text-left"
-                        data-testid={`commission-cell-${r.serviceId}-${c.professionalId}`}
-                        title={t(`femme.commissions.origin.${c.origin}`)}
-                        onClick={() =>
-                          setCellEdit({
-                            serviceId: r.serviceId,
-                            item: r.serviceName,
-                            professionalId: c.professionalId,
-                            name: prof?.fullName ?? "",
-                            value: String(c.percent).replace(".", ","),
-                          })
-                        }
-                      >
-                        {formatPercent(c.percent)}{" "}
-                        <span className="text-xs text-[var(--color-ink-3)]">
-                          ({ORIGIN_SHORT[c.origin] ?? "?"}){c.scheduled ? " ⏱" : ""}
-                        </span>
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </TableWrap>
+        <KindRules
+          view={views[tab]!}
+          general={generalOf(tab)}
+          base={base}
+          date={date}
+          onDate={setDate}
+          onlyExceptions={onlyExceptions}
+          onOnlyExceptions={setOnlyExceptions}
+          selected={selected}
+          onSelect={setSelected}
+          pending={pending}
+          stage={stage}
+          unstage={unstage}
+          onEditBase={() => setTab("GENERAL")}
+        />
       )}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-md border p-3">
-        <Text variant="small" className="w-full">
-          {t("femme.commissions.rules.bulkTitle", { count: selected.length })}
-        </Text>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="commission-bulk-target">{t("femme.commissions.rules.bulkTarget")}</Label>
-          <Select id="commission-bulk-target" value={bulkProfessional} onChange={(e) => setBulkProfessional(e.target.value)}>
-            <option value="">{t("femme.commissions.rules.general")}</option>
-            {matrix?.professionals.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.fullName}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="commission-bulk-percent">{t("femme.commissions.rules.percent")}</Label>
-          <Input
-            id="commission-bulk-percent"
-            inputMode="decimal"
-            value={bulkPercent}
-            onChange={(e) => setBulkPercent(e.target.value)}
-            invalid={!!bulkError}
-            aria-describedby={bulkError ? "commission-bulk-error" : undefined}
-            className="max-w-[8rem]"
-          />
-        </div>
-        <Button type="button" disabled={selected.length === 0} onClick={applyBulk} data-testid="commission-bulk-apply">
-          {t("femme.commissions.rules.bulkApply")}
-        </Button>
-        <div className="w-full">
-          <FieldValidationError id="commission-bulk-error">{bulkError}</FieldValidationError>
-        </div>
-      </div>
-
-      <Modal
-        open={cellEdit !== null}
-        onClose={() => setCellEdit(null)}
-        title={t("femme.commissions.rules.cellTitle", { item: cellEdit?.item, professional: cellEdit?.name })}
-        footer={
-          <>
-            <Button type="button" variant="secondary" onClick={() => setCellEdit(null)}>
-              {t("femme.commissions.common.cancel")}
-            </Button>
-            <Button type="button" onClick={saveCell} data-testid="commission-cell-save">
-              {t("femme.commissions.common.save")}
-            </Button>
-          </>
-        }
-      >
-        <Label htmlFor="commission-cell-percent">{t("femme.commissions.rules.percent")}</Label>
-        <Input
-          id="commission-cell-percent"
-          inputMode="decimal"
-          value={cellEdit?.value ?? ""}
-          onChange={(e) => cellEdit && setCellEdit({ ...cellEdit, value: e.target.value })}
-          invalid={!!cellError}
-          aria-describedby={cellError ? "commission-cell-error" : undefined}
-        />
-        <FieldValidationError id="commission-cell-error">{cellError}</FieldValidationError>
-      </Modal>
-
-      <Modal
-        open={editing !== null}
-        onClose={() => {
-          setEditing(null);
-          void load();
-        }}
-        title={editing?.name}
-        className="max-w-3xl"
-      >
-        {editing && <ItemRulesEditor serviceId={editing.serviceId} />}
-      </Modal>
-
       <ApplyChangeDialog
-        open={pending !== null}
-        changes={pending?.changes ?? []}
-        summary={pending?.summary ?? ""}
-        onClose={() => setPending(null)}
+        open={saving}
+        changes={pendingList}
+        summary={t("femme.commissions.rules.saveSummary", { count: pendingList.length })}
+        onClose={() => setSaving(false)}
         onApplied={() => {
-          setPending(null);
-          setSelected([]);
-          setBulkPercent("");
+          setSaving(false);
+          setPending({});
           setNotice(t("femme.commissions.applyDialog.applied"));
           void load();
         }}
       />
     </div>
+  );
+}
+
+function GeneralRules({
+  services,
+  products,
+  base,
+  savedServices,
+  savedProducts,
+  savedBase,
+  periodicity,
+  stage,
+  unstage,
+}: {
+  services: number;
+  products: number;
+  base: BaseType;
+  savedServices: number;
+  savedProducts: number;
+  savedBase: BaseType;
+  periodicity?: string;
+  stage: (c: ConfigChange) => void;
+  unstage: (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) => void;
+}) {
+  const { t } = useTranslation();
+  const [svc, setSvc] = useState(String(services).replace(".", ","));
+  const [prod, setProd] = useState(String(products).replace(".", ","));
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+
+  function stagePercent(scope: "DEFAULT_SERVICE" | "DEFAULT_PRODUCT", raw: string, saved: number) {
+    const parsed = parsePercentInput(raw);
+    if (parsed === null) {
+      setErrors((e) => ({ ...e, [scope]: t("femme.commissions.validation.percent") }));
+      return;
+    }
+    setErrors((e) => ({ ...e, [scope]: null }));
+    if (Number(parsed) === saved) unstage({ scope, serviceId: null, professionalId: null });
+    else stage({ scope, value: parsed });
+  }
+
+  return (
+    <div className="flex flex-col gap-4" data-testid="rules-general">
+      <Card className="grid gap-4 p-4 sm:grid-cols-2">
+        {(
+          [
+            ["DEFAULT_SERVICE", svc, setSvc, savedServices],
+            ["DEFAULT_PRODUCT", prod, setProd, savedProducts],
+          ] as const
+        ).map(([scope, value, setValue, saved]) => (
+          <div key={scope} className="flex flex-col gap-1">
+            <Label htmlFor={`commission-${scope}`}>{t(`femme.commissions.settings.${scope}`)}</Label>
+            <Input
+              id={`commission-${scope}`}
+              inputMode="decimal"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onBlur={() => stagePercent(scope, value, saved)}
+              invalid={!!errors[scope]}
+              aria-describedby={errors[scope] ? `commission-${scope}-error` : undefined}
+              className="max-w-[8rem]"
+            />
+            <FieldValidationError id={`commission-${scope}-error`}>{errors[scope]}</FieldValidationError>
+            <Text variant="small" className="text-[var(--color-ink-3)]">
+              {t(`femme.commissions.settings.${scope}Help`)}
+            </Text>
+          </div>
+        ))}
+      </Card>
+      <Card className="flex flex-col gap-3 p-4">
+        <h3 className="text-base font-medium">{t("femme.commissions.settings.baseTitle")}</h3>
+        <RadioGroup
+          value={base}
+          onChange={(v) => {
+            if (v === savedBase) unstage({ scope: "BASE", serviceId: null, professionalId: null });
+            else stage({ scope: "BASE", value: v });
+          }}
+          aria-label={t("femme.commissions.settings.baseTitle")}
+        >
+          {(["NET_OF_TAX", "TAX_INCLUDED"] as const).map((b) => (
+            <label key={b} className="flex min-h-11 cursor-pointer items-start gap-2 text-sm">
+              <Radio value={b} data-testid={`commission-base-${b}`} className="mt-1" />
+              <span>
+                <span className="font-medium">{t(`femme.commissions.base.${b}`)}</span>
+                <span className="block text-xs text-[var(--color-ink-3)]">{t(`femme.commissions.baseHelp.${b}`)}</span>
+              </span>
+            </label>
+          ))}
+        </RadioGroup>
+        <Text variant="small" className="text-[var(--color-ink-3)]">
+          {t("femme.commissions.settings.baseExample")}
+        </Text>
+      </Card>
+      {periodicity && (
+        <Text variant="small" className="text-[var(--color-ink-3)]">
+          {t("femme.commissions.rules.periodicityNote", { periodicity: t(`femme.commissions.periodicity.${periodicity}`) })}
+        </Text>
+      )}
+    </div>
+  );
+}
+
+function KindRules({
+  view,
+  general,
+  base,
+  date,
+  onDate,
+  onlyExceptions,
+  onOnlyExceptions,
+  selected,
+  onSelect,
+  pending,
+  stage,
+  unstage,
+  onEditBase,
+}: {
+  view: RulesView;
+  general: number;
+  base: BaseType;
+  date: string;
+  onDate: (v: string) => void;
+  onlyExceptions: boolean;
+  onOnlyExceptions: (v: boolean) => void;
+  selected: number | null;
+  onSelect: (id: number | null) => void;
+  pending: Pending;
+  stage: (c: ConfigChange) => void;
+  unstage: (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) => void;
+  onEditBase: () => void;
+}) {
+  const { t } = useTranslation();
+  const isProduct = view.kind === "PRODUCT";
+  const effective = useMemo(() => {
+    const map = new Map<number, ReturnType<typeof effectiveItem>>();
+    for (const c of view.categories) for (const i of c.items) map.set(i.serviceId, effectiveItem(i, general, pending, view.professionals));
+    return map;
+  }, [view, general, pending]);
+  const hasException = (id: number) => {
+    const e = effective.get(id)!;
+    return e.ownStandard || e.exceptions.size > 0;
+  };
+  const withExceptions = [...effective.keys()].filter(hasException).length;
+  const selectedItem = view.categories.flatMap((c) => c.items.map((i) => ({ item: i, category: c.name }))).find((x) => x.item.serviceId === selected);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full border px-3 py-1 text-xs" data-testid="rules-count-items">
+          {t(isProduct ? "femme.commissions.rules.countProducts" : "femme.commissions.rules.countServices", { count: view.itemCount })}
+        </span>
+        <span
+          className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+          data-testid="rules-count-exceptions"
+        >
+          {t("femme.commissions.rules.countWithExceptions", { count: withExceptions })}
+        </span>
+        <span className="rounded-full border px-3 py-1 text-xs" data-testid="rules-count-professionals">
+          {t("femme.commissions.rules.countProfessionals", { count: view.professionals.length })}
+        </span>
+        <div className="ml-auto flex flex-wrap items-center gap-3 text-xs">
+          <span>
+            {t("femme.commissions.rules.baseLine", { base: t(`femme.commissions.baseShort.${base}`) })}{" "}
+            <button type="button" className="underline" onClick={onEditBase} data-testid="rules-edit-base">
+              {t("femme.commissions.rules.edit")}
+            </button>
+          </span>
+          <label className="flex min-h-11 items-center gap-2">
+            <Switch checked={onlyExceptions} onChange={(e) => onOnlyExceptions(e.target.checked)} data-testid="rules-only-exceptions" />
+            {t("femme.commissions.rules.onlyExceptions")}
+          </label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="rules-date" className="text-xs">
+              {t("femme.commissions.rules.atDate")}
+            </Label>
+            <LocalizedDateInput id="rules-date" value={date} onChange={onDate} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1 rounded-lg border">
+          <TableWrap testId="rules-table">
+            <thead>
+              <tr>
+                <th className={thClass}>{t(isProduct ? "femme.commissions.rules.colProduct" : "femme.commissions.rules.colService")}</th>
+                <th className={thClass}>{t("femme.commissions.rules.colPrice")}</th>
+                <th className={thClass}>{t("femme.commissions.rules.colStandard")}</th>
+                <th className={thClass}>{t("femme.commissions.rules.colExceptions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.categories.map((c) => {
+                const items = c.items.filter((i) => !onlyExceptions || hasException(i.serviceId));
+                if (items.length === 0) return null;
+                const catExceptions = c.items.filter((i) => hasException(i.serviceId)).length;
+                return (
+                  <CategoryRows key={c.categoryId} name={c.name} total={c.items.length} exceptions={catExceptions} isProduct={isProduct}>
+                    {items.map((i) => {
+                      const e = effective.get(i.serviceId)!;
+                      return (
+                        <tr
+                          key={i.serviceId}
+                          className={
+                            "cursor-pointer border-t " +
+                            (selected === i.serviceId ? "bg-emerald-50 dark:bg-emerald-900/20" : "hover:bg-[var(--color-stone)]")
+                          }
+                          onClick={() => onSelect(i.serviceId)}
+                          data-testid={`rules-row-${i.serviceId}`}
+                        >
+                          <td className={`${tdClass} font-medium`}>
+                            <button type="button" className="min-h-11 text-left" onClick={() => onSelect(i.serviceId)}>
+                              {i.name}
+                            </button>
+                            {e.dirty && (
+                              <span className="ml-2 text-[10px] text-amber-700 dark:text-amber-300">
+                                ● {t("femme.commissions.rules.unsaved")}
+                              </span>
+                            )}
+                          </td>
+                          <td className={`${tdClass} whitespace-nowrap`}>{formatGuaraniesGs(i.price)}</td>
+                          <td className={`${tdClass} whitespace-nowrap`} data-testid={`rules-standard-${i.serviceId}`}>
+                            <span className="font-semibold">{formatPercent(e.standard)}</span>
+                            {e.ownStandard && e.standard !== general && (
+                              <span className="ml-1 rounded border px-1 text-[10px] text-[var(--color-ink-3)]" title={t("femme.commissions.rules.differsFromGeneral")}>
+                                ≠ {t("femme.commissions.rules.generalShort")}
+                              </span>
+                            )}
+                            {i.scheduled && <span className="ml-1" title={t("femme.commissions.rules.hasScheduled")}>⏱</span>}
+                          </td>
+                          <td className={tdClass} data-testid={`rules-exceptions-${i.serviceId}`}>
+                            {e.exceptions.size === 0 ? (
+                              <span className="text-xs text-[var(--color-ink-3)]">{t("femme.commissions.rules.allInherit")}</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {view.professionals
+                                  .filter((p) => e.exceptions.has(p.id))
+                                  .map((p) => {
+                                    const x = e.exceptions.get(p.id)!;
+                                    return (
+                                      <span
+                                        key={p.id}
+                                        className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+                                      >
+                                        {p.fullName.split(" ")[0]} <strong>{formatPercent(x.percent)}</strong>{" "}
+                                        <span className="text-[10px]">{deltaLabel(x.percent - e.standard)}</span>
+                                      </span>
+                                    );
+                                  })}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </CategoryRows>
+                );
+              })}
+            </tbody>
+          </TableWrap>
+        </div>
+        {selectedItem && (
+          <ItemPanel
+            key={selectedItem.item.serviceId}
+            item={selectedItem.item}
+            category={selectedItem.category}
+            general={general}
+            base={base}
+            effective={effective.get(selectedItem.item.serviceId)!}
+            professionals={view.professionals}
+            pending={pending}
+            stage={stage}
+            unstage={unstage}
+            onClose={() => onSelect(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CategoryRows({
+  name,
+  total,
+  exceptions,
+  isProduct,
+  children,
+}: {
+  name: string;
+  total: number;
+  exceptions: number;
+  isProduct: boolean;
+  children: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <tr className="border-t bg-[var(--color-stone)]">
+        <td className={`${tdClass} font-semibold`} colSpan={2}>
+          {name}
+        </td>
+        <td className={`${tdClass} text-right text-xs text-[var(--color-ink-3)]`} colSpan={2}>
+          {t(isProduct ? "femme.commissions.rules.categoryCountProducts" : "femme.commissions.rules.categoryCountServices", {
+            count: total,
+          })}{" "}
+          · {t("femme.commissions.rules.categoryExceptions", { count: exceptions })}
+        </td>
+      </tr>
+      {children}
+    </>
+  );
+}
+
+function ItemPanel({
+  item,
+  category,
+  general,
+  base,
+  effective,
+  professionals,
+  pending,
+  stage,
+  unstage,
+  onClose,
+}: {
+  item: RuleItem;
+  category: string;
+  general: number;
+  base: BaseType;
+  effective: ReturnType<typeof effectiveItem>;
+  professionals: { id: number; fullName: string }[];
+  pending: Pending;
+  stage: (c: ConfigChange) => void;
+  unstage: (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const dateLocale = useDateLocale();
+  const [editingStandard, setEditingStandard] = useState(false);
+  const [standardInput, setStandardInput] = useState(String(effective.standard).replace(".", ","));
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addProfessional, setAddProfessional] = useState("");
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [history, setHistory] = useState<ItemRules | null>(null);
+  const baseAmount = Number(item.baseAmount);
+  const commission = (pct: number) => Math.round((baseAmount * pct) / 100);
+  const savedException = (pid: number) => item.exceptions.find((e) => e.professionalId === pid);
+
+  function applyStandard() {
+    const parsed = parsePercentInput(standardInput);
+    if (parsed === null) {
+      setFieldError(t("femme.commissions.validation.percent"));
+      return;
+    }
+    setFieldError(null);
+    const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: null };
+    if (item.ownStandard && Number(parsed) === Number(item.standardPercent)) unstage(change);
+    else stage({ ...change, value: parsed });
+    setEditingStandard(false);
+  }
+
+  function useGeneral() {
+    const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: null };
+    if (!item.ownStandard) unstage(change);
+    else stage({ ...change, value: null });
+    setEditingStandard(false);
+  }
+
+  function applyException(pid: number) {
+    const parsed = parsePercentInput(editValue);
+    if (parsed === null) {
+      setFieldError(t("femme.commissions.validation.percent"));
+      return;
+    }
+    setFieldError(null);
+    const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: pid };
+    const saved = savedException(pid);
+    if (saved && Number(saved.percent) === Number(parsed)) unstage(change);
+    else stage({ ...change, value: parsed });
+    setEditing(null);
+    setAdding(false);
+    setAddProfessional("");
+  }
+
+  function removeException(pid: number) {
+    const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: pid };
+    if (savedException(pid)) stage({ ...change, value: null });
+    else unstage(change);
+    setEditing(null);
+  }
+
+  const inheriting = professionals.filter((p) => !effective.exceptions.has(p.id));
+
+  return (
+    <Card className="flex w-full flex-col gap-3 p-4 lg:w-80 lg:shrink-0" data-testid="rules-panel">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="break-words text-[10px] font-medium uppercase text-[var(--color-ink-3)]">{category}</div>
+          <div className="break-words text-lg font-semibold">{item.name}</div>
+          <div className="text-xs text-[var(--color-ink-3)]">
+            {t("femme.commissions.rules.priceLine", {
+              price: formatGuaraniesGs(item.price),
+              base: t(`femme.commissions.baseShort.${base}`),
+              amount: formatGuaraniesGs(item.baseAmount),
+            })}
+          </div>
+        </div>
+        <button type="button" className="min-h-11 min-w-11 text-lg" aria-label={t("femme.commissions.common.close")} onClick={onClose}>
+          ×
+        </button>
+      </div>
+
+      <div className="rounded-md bg-emerald-50 p-3 dark:bg-emerald-900/20">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs">{t("femme.commissions.rules.itemStandard")}</div>
+            <div className="text-2xl font-semibold" data-testid="rules-panel-standard">
+              {formatPercent(effective.standard)}
+            </div>
+            <div className="text-[10px] text-[var(--color-ink-3)]">
+              {effective.ownStandard
+                ? t("femme.commissions.rules.ownStandard")
+                : t("femme.commissions.rules.inheritsGeneral", { value: formatPercent(general) })}
+            </div>
+          </div>
+          {!editingStandard && (
+            <Button type="button" variant="secondary" onClick={() => setEditingStandard(true)} data-testid="rules-change-standard">
+              {t("femme.commissions.rules.change")}
+            </Button>
+          )}
+        </div>
+        {editingStandard && (
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <Input
+              aria-label={t("femme.commissions.rules.itemStandard")}
+              inputMode="decimal"
+              value={standardInput}
+              onChange={(e) => setStandardInput(e.target.value)}
+              className="max-w-[6rem]"
+              data-testid="rules-standard-input"
+            />
+            <Button type="button" size="sm" onClick={applyStandard} data-testid="rules-standard-apply">
+              {t("femme.commissions.rules.apply")}
+            </Button>
+            {effective.ownStandard && (
+              <Button type="button" size="sm" variant="secondary" onClick={useGeneral}>
+                {t("femme.commissions.rules.useGeneral", { value: formatPercent(general) })}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-between gap-2 text-[10px] font-medium uppercase text-[var(--color-ink-3)]">
+        <span>{t("femme.commissions.common.professional")}</span>
+        <span>{t("femme.commissions.rules.percentAndCommission")}</span>
+      </div>
+      <ul className="flex flex-col divide-y" data-testid="rules-panel-professionals">
+        {professionals.map((p) => {
+          const exc = effective.exceptions.get(p.id);
+          const pct = exc ? exc.percent : effective.standard;
+          return (
+            <li key={p.id} className="py-2" data-testid={`rules-panel-prof-${p.id}`}>
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-start justify-between gap-2 text-left"
+                onClick={() => {
+                  setEditing(p.id);
+                  setEditValue(String(pct).replace(".", ","));
+                  setFieldError(null);
+                }}
+              >
+                <span className="min-w-0 break-words text-sm font-medium">{p.fullName}</span>
+                <span className="shrink-0 text-right">
+                  {exc ? (
+                    <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                      {formatPercent(exc.percent)} <span className="text-[10px] font-normal">{deltaLabel(exc.percent - effective.standard)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[var(--color-ink-3)]">
+                      {t("femme.commissions.rules.inherits", { value: formatPercent(effective.standard) })}
+                    </span>
+                  )}
+                  <span className="block text-xs">{formatGuaraniesGs(commission(pct))}</span>
+                </span>
+              </button>
+              {editing === p.id && (
+                <div className="mt-1 flex flex-wrap items-end gap-2">
+                  <Input
+                    aria-label={t("femme.commissions.rules.exceptionFor", { name: p.fullName })}
+                    inputMode="decimal"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="max-w-[6rem]"
+                  />
+                  <Button type="button" size="sm" onClick={() => applyException(p.id)}>
+                    {t("femme.commissions.rules.apply")}
+                  </Button>
+                  {exc && (
+                    <Button type="button" size="sm" variant="secondary" onClick={() => removeException(p.id)}>
+                      {t("femme.commissions.rules.removeException")}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <FieldValidationError>{fieldError}</FieldValidationError>
+
+      {adding ? (
+        <div className="flex flex-wrap items-end gap-2">
+          <Select
+            aria-label={t("femme.commissions.common.professional")}
+            value={addProfessional}
+            onChange={(e) => setAddProfessional(e.target.value)}
+            data-testid="rules-add-professional"
+          >
+            <option value="">{t("femme.commissions.rules.chooseProfessional")}</option>
+            {inheriting.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.fullName}
+              </option>
+            ))}
+          </Select>
+          <Input
+            aria-label={t("femme.commissions.rules.percent")}
+            inputMode="decimal"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            className="max-w-[6rem]"
+            data-testid="rules-add-percent"
+          />
+          <Button
+            type="button"
+            size="sm"
+            disabled={!addProfessional}
+            onClick={() => applyException(Number(addProfessional))}
+            data-testid="rules-add-apply"
+          >
+            {t("femme.commissions.rules.apply")}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            disabled={inheriting.length === 0}
+            onClick={() => {
+              setAdding(true);
+              setEditValue("");
+              setFieldError(null);
+            }}
+            data-testid="rules-add-exception"
+          >
+            {t("femme.commissions.rules.addException")}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void getItemRules(item.serviceId).then(setHistory)}
+            data-testid="rules-history"
+          >
+            {t("femme.commissions.rules.viewHistory")}
+          </Button>
+        </div>
+      )}
+      {Object.keys(pending).some((k) => k.startsWith(`RULE|${item.serviceId}|`)) && (
+        <Text variant="small" className="text-amber-700 dark:text-amber-300">
+          {t("femme.commissions.rules.panelPending")}
+        </Text>
+      )}
+      <Text variant="small" className="text-[var(--color-ink-3)]">
+        {t("femme.commissions.rules.panelFootnote")}
+      </Text>
+
+      <Modal open={history !== null} onClose={() => setHistory(null)} title={t("femme.commissions.rules.historyTitle")} className="max-w-3xl">
+        {history && (
+          <TableWrap testId="commission-rule-history">
+            <thead>
+              <tr>
+                <th className={thClass}>{t("femme.commissions.history.date")}</th>
+                <th className={thClass}>{t("femme.commissions.common.professional")}</th>
+                <th className={thClass}>{t("femme.commissions.history.previous")}</th>
+                <th className={thClass}>{t("femme.commissions.history.value")}</th>
+                <th className={thClass}>{t("femme.commissions.history.effectiveFrom")}</th>
+                <th className={thClass}>{t("femme.commissions.history.status")}</th>
+                <th className={thClass}>{t("femme.commissions.history.user")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.history.map((v) => (
+                <tr key={v.id} className="border-t">
+                  <td className={tdClass}>{formatParaguayDateTime(v.createdAt, dateLocale)}</td>
+                  <td className={tdClass}>{v.professionalName ?? t("femme.commissions.rules.general")}</td>
+                  <td className={tdClass}>{describeVersionValue(t, "RULE", v.previousValue)}</td>
+                  <td className={tdClass}>{describeVersionValue(t, "RULE", v.value)}</td>
+                  <td className={tdClass}>{formatParaguayDateTime(v.effectiveFrom, dateLocale)}</td>
+                  <td className={tdClass}>{t(`femme.commissions.versionStatus.${v.scheduled ? "SCHEDULED" : v.status}`)}</td>
+                  <td className={tdClass}>{v.createdByEmail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </TableWrap>
+        )}
+      </Modal>
+    </Card>
   );
 }

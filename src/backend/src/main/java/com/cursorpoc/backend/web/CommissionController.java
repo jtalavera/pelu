@@ -4,6 +4,7 @@ import com.cursorpoc.backend.commission.CommissionAccess;
 import com.cursorpoc.backend.commission.CommissionConfigService;
 import com.cursorpoc.backend.commission.CommissionExportService;
 import com.cursorpoc.backend.commission.CommissionQueryService;
+import com.cursorpoc.backend.commission.CommissionReassignmentService;
 import com.cursorpoc.backend.commission.CommissionSettlementService;
 import com.cursorpoc.backend.domain.CommissionSettlement;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
@@ -16,17 +17,17 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.GenerateSettlementsRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ItemRulesResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ItemWithoutRule;
 import com.cursorpoc.backend.web.dto.CommissionDtos.LineWithoutBeneficiary;
-import com.cursorpoc.backend.web.dto.CommissionDtos.MatrixResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MySettlementDetail;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MySummary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PagedSettlements;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PayRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReportResponse;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RulesView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettingsResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementDetail;
+import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementPreview;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementView;
-import com.cursorpoc.backend.web.dto.CommissionDtos.SimulateRequest;
-import com.cursorpoc.backend.web.dto.CommissionDtos.SimulateResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.VoidSettlementRequest;
 import java.time.LocalDate;
 import java.util.List;
@@ -61,18 +62,21 @@ public class CommissionController {
   private final CommissionSettlementService settlementService;
   private final CommissionQueryService queryService;
   private final CommissionExportService exportService;
+  private final CommissionReassignmentService reassignmentService;
 
   public CommissionController(
       CommissionAccess access,
       CommissionConfigService configService,
       CommissionSettlementService settlementService,
       CommissionQueryService queryService,
-      CommissionExportService exportService) {
+      CommissionExportService exportService,
+      CommissionReassignmentService reassignmentService) {
     this.access = access;
     this.configService = configService;
     this.settlementService = settlementService;
     this.queryService = queryService;
     this.exportService = exportService;
+    this.reassignmentService = reassignmentService;
   }
 
   // ── Configuration & rules ─────────────────────────────────────────────────────────────────
@@ -125,8 +129,8 @@ public class CommissionController {
         () -> configService.itemRules(p.getTenantId(), serviceId));
   }
 
-  @GetMapping("/matrix")
-  public MatrixResponse matrix(
+  @GetMapping("/rules-view")
+  public RulesView rulesView(
       @AuthenticationPrincipal FemmeUserPrincipal p,
       @RequestParam(required = false) String kind,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -134,8 +138,8 @@ public class CommissionController {
     return admin(
         p,
         "GET",
-        "/api/commissions/matrix",
-        () -> configService.matrix(p.getTenantId(), kind, date));
+        "/api/commissions/rules-view",
+        () -> configService.rulesView(p.getTenantId(), kind, date));
   }
 
   @GetMapping("/items-without-rule")
@@ -147,14 +151,35 @@ public class CommissionController {
         () -> configService.itemsWithoutGeneralRule(p.getTenantId()));
   }
 
-  @PostMapping("/simulate")
-  public SimulateResponse simulate(
-      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody SimulateRequest request) {
+  /** Replaces the simulator: what the professional would be paid today for an open period. */
+  @GetMapping("/settlement-preview")
+  public SettlementPreview settlementPreview(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestParam long professionalId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+    return admin(
+        p,
+        "GET",
+        "/api/commissions/settlement-preview",
+        () -> queryService.settlementPreview(p.getTenantId(), professionalId, from, to));
+  }
+
+  /** Change the professional who earns a commission (wrong assignment at billing). */
+  @PostMapping("/entries/{id}/reassign")
+  public EntryView reassign(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @PathVariable long id,
+      @RequestBody ReassignRequest request) {
     return admin(
         p,
         "POST",
-        "/api/commissions/simulate",
-        () -> queryService.simulate(p.getTenantId(), request));
+        "/api/commissions/entries/" + id + "/reassign",
+        () -> {
+          var saved = reassignmentService.reassign(p.getTenantId(), id, p.getUsername(), request);
+          return queryService.entryView(
+              saved, configService.professionalNames(p.getTenantId()), null, java.util.Set.of());
+        });
   }
 
   // ── Entries & reports ─────────────────────────────────────────────────────────────────────

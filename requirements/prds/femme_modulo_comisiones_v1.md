@@ -139,10 +139,10 @@ Reglas:
 **para** que el cálculo se ajuste a mis políticas.
 
 **Criterios de aceptación:**
-- [ ] Existe una pantalla de configuración de comisiones accesible solo para `ADMIN`; si la feature flag `COMMISSIONS` no está habilitada para el tenant, la sección no aparece y la API responde `FEATURE_NOT_ENABLED`.
+- [ ] La configuración de comisiones es accesible solo para `ADMIN`: la **base de cálculo** y la **comisión general** de servicios y de productos están en **Reglas → «Reglas generales»**; la periodicidad, los cambios programados y el historial están en **Configuración**. Si la feature flag `COMMISSIONS` no está habilitada para el tenant, si la feature flag `COMMISSIONS` no está habilitada para el tenant, la sección no aparece y la API responde `FEATURE_NOT_ENABLED`.
 - [ ] Puedo elegir la **base de cálculo**: *Sin IVA* o *Con IVA* (por defecto *Sin IVA*). Cada opción incluye texto de ayuda con el ejemplo de §4.2.
 - [ ] Al cambiar la base (o el % por defecto) se muestra el diálogo de §4.4 / HU-COM-09, que indica que el cambio **no es retroactivo** y pregunta desde cuándo aplicarlo.
-- [ ] Puedo definir dos valores por defecto: el **% por defecto de servicios** y el **% por defecto de productos** (0–100, hasta 2 decimales; ambos 0 % al inicio). Se aplican solo a ítems del tipo correspondiente que no tengan regla propia.
+- [ ] Puedo definir dos valores por defecto: la **comisión general de servicios** y la **de productos** (0–100, hasta 2 decimales; ambos 0 % al inicio). Se aplican solo a ítems del tipo correspondiente que no tengan % estándar propio. Los cambios de base y comisión general quedan pendientes y se guardan juntos con **«Guardar cambios»**.
 - [ ] Puedo elegir la **periodicidad de liquidación**: semanal (lunes a domingo), quincenal (días 1–15 y 16–fin de mes), mensual (mes calendario) o manual.
 - [ ] Cambiar la periodicidad **no muestra** la pregunta de HU-COM-09: rige para las liquidaciones que se generen después y no altera liquidaciones existentes ni cambios programados.
 - [ ] Cada cambio de configuración queda en el historial de auditoría (usuario, fecha/hora, valor anterior y nuevo).
@@ -159,7 +159,7 @@ Reglas:
 - [ ] Puedo definir un **% de excepción** para una combinación **profesional + ítem**, que prevalece sobre el % general del ítem.
 - [ ] Puedo marcar explícitamente un ítem como **sin comisión** (0 %), distinto de "sin regla definida".
 - [ ] Si no existe ni % general ni excepción, se aplica el **% por defecto del tipo del ítem**: el de servicios para un servicio y el de productos para un producto.
-- [ ] Las reglas se pueden definir tanto para **servicios** como para **productos**; la matriz y los listados permiten filtrar por tipo (Servicios / Productos).
+- [ ] Las reglas se pueden definir tanto para **servicios** como para **productos**; la vista de Reglas los separa en sub-pestañas (Servicios / Productos).
 - [ ] Cada regla admite **vigencia** (fecha desde, fecha hasta opcional). Dos reglas del mismo alcance (mismo ítem, o mismo profesional+ítem) **no pueden solaparse** (`COMMISSION_RULE_OVERLAP`).
 - [ ] Una regla vigente puede cerrarse (poner fecha hasta) pero **no se elimina** si ya generó entradas; se desactiva.
 - [ ] Existe un **historial de cambios** por regla (quién, cuándo, % anterior y nuevo, vigencia).
@@ -167,26 +167,28 @@ Reglas:
 - [ ] La misma sección «Comisión» incluye una lista **«Excepciones por profesional»** donde puedo **agregar, editar y quitar** el % de uno o varios profesionales para ese ítem. Un mismo ítem puede tener un % distinto para cada profesional.
 - [ ] Al agregar una excepción solo se ofrecen profesionales **activos** que aún no tengan una excepción vigente para ese ítem. Una excepción de un profesional que luego se desactiva sigue visible y se puede cerrar, pero no se puede crear una nueva para él.
 - [ ] La sección «Comisión» del formulario del ítem solo es visible para `ADMIN` y si la feature flag `COMMISSIONS` está habilitada; en caso contrario el formulario del ítem no cambia.
-- [ ] Puedo ver una **matriz** de profesionales × ítems con el % efectivo y su origen (excepción / general / defecto de servicios o de productos), como **vista global**.
-- [ ] La matriz permite **editar directamente una celda** (crear o cambiar una excepción) y **aplicar un mismo % a varios ítems seleccionados** (general o de excepción para un profesional).
-- [ ] Todas las vías de edición (formulario del ítem y matriz) usan las **mismas validaciones**, el mismo historial y el mismo diálogo de HU-COM-09: el resultado es idéntico sin importar desde dónde se edite.
+- [ ] La pestaña **Reglas** del módulo tiene tres sub-pestañas: **Servicios**, **Productos** y **Reglas generales**. Modelo de precedencia (gana la más específica): **1)** comisión general del tipo → **2)** % estándar del servicio/producto (excepción) → **3)** % de un profesional para ese servicio/producto (excepción individual).
+- [ ] En Servicios / Productos los ítems activos se muestran **agrupados por categoría** (con cantidad de ítems y de excepciones por categoría), con **precio**, **% estándar** (marcado «≠ general» si difiere de la comisión general) y las **excepciones por profesional** como chips con el % y la **diferencia** respecto del estándar (p. ej. «Ana 50 % +10»).
+- [ ] Encima de la tabla se ven contadores (**N servicios/productos**, **N con excepciones**, **N profesionales**), la **base de cálculo** con acceso a editarla, el interruptor **«Ver solo excepciones»** y la fecha a la que se calcula el % vigente.
+- [ ] Al seleccionar un ítem se abre un **panel lateral** con categoría, nombre, precio y monto base; el **% estándar** del ítem (propio o heredado de la comisión general) con **«Cambiar»** (y volver a la comisión general); la lista de **profesionales** con su % (excepción con diferencia, o «Hereda») y la **comisión estimada** sobre el precio de lista; **«Agregar excepción»** y **«Ver historial de cambios»**.
+- [ ] Los cambios hechos en la vista quedan **pendientes** (marcados «sin guardar», con contador y opción **«Descartar»**) y se aplican **todos juntos** con **«Guardar cambios»**, que abre una sola vez el diálogo de HU-COM-09.
+- [ ] Todas las vías de edición (formulario del ítem y vista de Reglas) usan las **mismas validaciones**, el mismo historial y el mismo diálogo de HU-COM-09: el resultado es idéntico sin importar desde dónde se edite.
 - [ ] Las pantallas de **Servicios** y de **Productos** muestran una advertencia en los ítems sin % general (usan el defecto de su tipo) y un acceso directo a su regla.
 - [ ] Las reglas nuevas **no modifican** entradas ya devengadas, salvo que el administrador elija "desde el inicio del periodo vigente" (HU-COM-09).
 - [ ] Todo alta, cambio de % o cierre de una regla, hecho con un periodo en curso, dispara el diálogo de HU-COM-09; la fecha elegida se convierte en el `validFrom` de la nueva versión y el `validTo` de la anterior.
-- [ ] La matriz permite ver el % efectivo **a una fecha dada** e indica los cambios **programados** pendientes.
+- [ ] La vista de Reglas permite ver el % vigente **a una fecha dada** e indica los cambios **programados** pendientes (⏱).
 
-### HU-COM-03 · Simulador de comisión
+### HU-COM-03 · Vista previa de la liquidación (reemplaza al simulador)
 
 **Como** administrador,
-**quiero** simular qué comisión se aplicaría a un ítem y profesional,
-**para** validar mis reglas antes de que impacten en liquidaciones.
+**quiero** ver cuánto cobraría un profesional en un periodo abierto con las comisiones registradas hasta hoy,
+**para** anticipar la liquidación sin generarla.
 
 **Criterios de aceptación:**
-- [ ] Ingreso: ítem, profesional, monto de la línea con IVA, tasa de IVA, descuento opcional y fecha (por defecto hoy).
-- [ ] Salida: monto base según la **base configurada del tenant** (con la fórmula visible), % aplicado, **origen del %** (excepción / general / defecto de servicios o de productos) y comisión resultante.
-- [ ] Puedo ver el resultado con la **otra base** a modo de comparación (sin guardar nada).
-- [ ] La fecha de simulación usa el cálculo vigente a esa fecha, incluidos cambios **programados** que ya rijan para ella.
-- [ ] El simulador **no persiste** datos.
+- [ ] En la pestaña **«Vista previa»** elijo un profesional (obligatorio) y un periodo, que por defecto es el **periodo vigente** según la periodicidad.
+- [ ] Se muestra el **total a liquidar**, los subtotales de **servicios**, **productos** y **ajustes**, y el detalle de las comisiones incluidas: exactamente las que entrarían si hoy se generara la liquidación (comisiones aún no liquidadas hasta la fecha «Hasta», incluidas reversiones y saldos arrastrados).
+- [ ] Las comisiones que ya están en una **liquidación en borrador** no se cuentan; se avisa que existe ese borrador.
+- [ ] La vista previa **no persiste** nada.
 
 ### HU-COM-04 · Generación automática de comisiones al emitir un comprobante
 
@@ -265,7 +267,7 @@ Reglas:
 
 **Criterios de aceptación:**
 - [ ] Reporte de comisiones por **profesional**, por **ítem**, por **tipo de ítem** (servicios / productos) y por **periodo**, con filtros de fecha, profesional, tipo de ítem y estado de liquidación.
-- [ ] Reporte de **líneas sin beneficiario** y de **ítems sin % general** (usan el defecto de su tipo).
+- [ ] Reporte de **líneas sin beneficiario**. (El reporte de «ítems sin % general» se quitó: el aviso se ve en las pantallas de Servicios / Productos y en la vista de Reglas.)
 - [ ] **Comprobante de liquidación** imprimible en PDF (datos del negocio, profesional, periodo, detalle, ajustes, total, base de cálculo usada).
 - [ ] **Exportación CSV** de entradas y de liquidaciones, con el tipo de ítem, la base y el % aplicados por línea.
 - [ ] Los montos y fechas respetan el formato y la zona horaria del servidor.
@@ -334,6 +336,20 @@ Reglas:
 - [ ] Solo `PLATFORM_ADMIN` puede cambiar la flag; un `ADMIN` de tenant no puede habilitarla ni deshabilitarla.
 - [ ] La flag aparece traducida en `en.json` y `es.json` en las pantallas de plataforma.
 
+### HU-COM-12 · Cambiar el profesional de una comisión asignada por error
+
+**Como** administrador,
+**quiero** reasignar una comisión al profesional correcto,
+**para** corregir errores de asignación sin tocar la factura.
+
+**Criterios de aceptación:**
+- [ ] Desde la pestaña **«Movimientos»** (todas las comisiones registradas, con filtros de fecha, profesional y texto) y desde el **detalle de una liquidación en borrador**, cada comisión de comprobante no revertida ofrece **«Cambiar profesional»**.
+- [ ] El diálogo pide el **profesional correcto** (solo activos, distinto del actual) y un **motivo** obligatorio; sin ellos muestra el error de campo.
+- [ ] Al confirmar: la factura y sus datos fiscales **no cambian**; se crea una **reversión** de la comisión original (motivo «cambio de profesional», con la nota ingresada) y una **nueva comisión** para el profesional correcto, calculada con **sus reglas** vigentes a la fecha de devengo original (revisión +1). El profesional de la línea del comprobante se actualiza.
+- [ ] Si la comisión estaba en una liquidación **en borrador**, la reversión entra en ese borrador; la nueva comisión queda pendiente para el profesional correcto.
+- [ ] Si estaba en una liquidación **aprobada o pagada**, se avisa en el diálogo: esa liquidación **no cambia** y la reversión (negativa) y la nueva comisión van a la **próxima** liquidación de cada profesional.
+- [ ] Una comisión ya reasignada (revertida) no se puede volver a reasignar (`COMMISSION_ENTRY_NOT_REASSIGNABLE`); errores: `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`, `COMMISSION_PROFESSIONAL_INACTIVE`.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -387,7 +403,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 
 ## 8. Códigos de error (backend → i18n `femme.apiErrors.*`)
 
-`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`.
+`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`, `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_ENTRY_NOT_REASSIGNABLE`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`.
 
 ## 9. Requisitos transversales
 
@@ -402,9 +418,9 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 
 | Historia | Escenarios mínimos |
 |----------|--------------------|
-| HU-COM-01 | Cambiar base con confirmación; validación de % inválido; auditoría visible; flag deshabilitada oculta la sección. |
-| HU-COM-02 | Crear % general desde el formulario de un servicio y de un producto; varias excepciones distintas por profesional en el mismo ítem; solo profesionales activos sin excepción vigente en la lista; sección «Comisión» oculta para no admin o con flag deshabilitada; edición desde la matriz y aplicación a varios ítems; excepción por profesional prevalece; 0 % explícito; solapamiento rechazado; historial de cambios; matriz de % efectivos. |
-| HU-COM-03 | Simulación con base sin IVA y con IVA; comparación; no persiste. |
+| HU-COM-01 | Cambiar base y comisión general desde «Reglas generales» con «Guardar cambios»; validación de % inválido; auditoría visible; flag deshabilitada oculta la sección. |
+| HU-COM-02 | Crear % general desde el formulario de un servicio y de un producto; varias excepciones distintas por profesional en el mismo ítem; solo profesionales activos sin excepción vigente en la lista; sección «Comisión» oculta para no admin o con flag deshabilitada; vista de Reglas (categorías, contadores, chips con diferencia, «Ver solo excepciones», panel con comisión estimada, varios cambios con un solo «Guardar cambios», «Descartar»); excepción por profesional prevalece; 0 % explícito; historial de cambios; % vigente a una fecha y programados. |
+| HU-COM-03 | Vista previa por profesional del periodo vigente (total y subtotales); borrador existente excluido y avisado; profesional obligatorio; no persiste. |
 | HU-COM-04 | Emisión genera entradas con snapshot para líneas de servicio y de producto; % por defecto de servicios vs de productos; venta suelta de producto con vendedor; base sin IVA vs con IVA según config; descuento; IVA exento; propina excluida; idempotencia; línea sin profesional. |
 | HU-COM-05 | Anulación pre-liquidación revierte; anulación post-liquidación genera ajuste en la siguiente; reversión tras cambio de base usa snapshot. |
 | HU-COM-06 | Flujo Borrador→Aprobada→Pagada; ajuste manual con motivo; inmutabilidad; solapamiento bloqueado; mezcla de bases avisada. |
@@ -412,6 +428,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-08 | Reportes con filtros; PDF y CSV de liquidación. |
 | HU-COM-09 | Diálogo aparece con periodo en curso en cada periodicidad; sin opción preseleccionada; `IMMEDIATE` deja periodo mixto; `NEXT_PERIOD` programa y no altera el periodo actual; cambio programado visible y cancelable; reemplazo de programado; Manual no pregunta; entrada en vigencia automática (reloj controlado); aplica a base, % por defecto y reglas; `PROFESSIONAL` recibe 403; `PERIOD_START`: vista previa con conteos y diferencia, recálculo con contra-entradas, Borrador actualizado, Aprobada/Pagada intactas, ajustes y anulados excluidos, atomicidad ante error, Manual con "desde el último corte", anulación posterior al recálculo. |
 | HU-COM-10 | Campo profesional por línea (servicio y producto); precarga desde registro de servicio; asignación manual en venta suelta; profesional inactivo rechazado; aviso de línea sin comisión; campo oculto con flag deshabilitada; **actualizar los specs existentes de HU-14**. |
+| HU-COM-12 | Reasignar desde Movimientos (validaciones, reversión + nueva comisión con las reglas del correcto); desde el detalle de un borrador; con liquidación aprobada: aviso, liquidación intacta, corrección en la próxima; códigos de error. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
@@ -421,7 +438,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 - Integración con caja (egreso automático al pagar).
 - Combos / paquetes con prorrateo entre varios profesionales.
 - Devengo al cobrar (V1 devenga solo al emitir).
-- Vista inversa en la **ficha del profesional** (todos sus % por ítem); en V1 las excepciones se editan desde el ítem y desde la matriz.
+- Vista inversa en la **ficha del profesional** (todos sus % por ítem); en V1 las excepciones se editan desde el ítem y desde la vista de Reglas.
 - Comisión sobre **ganancia / margen** de productos (precio menos costo): la base de V1 es el precio de venta. Requeriría un dato de costo que hoy el catálogo no guarda.
 - Devoluciones de producto con reingreso a stock (la reversión por anulación sí está cubierta).
 - Recálculo de periodos **ya cerrados** (liquidaciones Aprobadas o Pagadas) o anteriores al periodo vigente: nada de eso se recalcula en V1.
@@ -438,7 +455,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | 3 | ¿Cómo afectan los descuentos globales a la base? | Se usa el **neto ya calculado por línea**; el descuento global del comprobante no se prorratea ni reduce la base (HU-COM-04). |
 | 4 | ¿Cómo se definen los periodos semanal, quincenal y mensual? | **Calendario fijo**: semanal lunes a domingo, quincenal días 1–15 y 16–fin de mes, mensual mes calendario (§4.4). |
 | 5 | ¿Qué pasa al cambiar la periodicidad a mitad de periodo? | Rige para las **liquidaciones que se generen después**, **sin pregunta**; no toca liquidaciones existentes ni cambios programados (C13). |
-| 6 | ¿El simulador y la matriz de reglas aceptan una fecha? | **Sí, ambos**: muestran el cálculo vigente a esa fecha, incluidos cambios programados (HU-COM-02, HU-COM-03). |
+| 6 | ¿La vista de reglas acepta una fecha? | **Sí**: muestra el % vigente a esa fecha, incluidos cambios programados (HU-COM-02). El simulador fue reemplazado por la vista previa de liquidación (HU-COM-03). |
 | 7 | ¿Se comisiona por servicios y por productos? | **Sí, ambos**, con las mismas reglas por ítem (§2, HU-COM-02, HU-COM-04). |
 | 8 | ¿De dónde sale el beneficiario de una línea? | **Campo profesional / vendedor en cada línea del comprobante**, precargado del registro de servicio y editable (HU-COM-10). |
 | 9 | ¿El % por defecto es único? | **No**: uno para servicios y otro para productos (HU-COM-01). |
@@ -449,7 +466,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | 14 | ¿Los Borradores se recalculan? | **Sí.** Solo las liquidaciones Aprobadas y Pagadas quedan intactas. |
 | 15 | ¿Cómo se interpreta con periodicidad Manual? | **Desde el último corte**: entradas posteriores a la última liquidación Aprobada o Pagada del beneficiario. |
 | 16 | ¿La devolución de stock al anular forma parte de comisiones? | **No**: la gestiona la integración con Stock (HU-64); la reversión de la comisión es independiente (HU-COM-05). |
-| 17 | ¿Dónde se define el % de un ítem y las excepciones por profesional? | En la **sección «Comisión» del formulario del ítem** (Servicios / Productos), con lista de excepciones por profesional, y en la **matriz** como vista global. **Sin vista inversa** en la ficha del profesional en V1 (HU-COM-02). |
+| 17 | ¿Dónde se define el % de un ítem y las excepciones por profesional? | En la **sección «Comisión» del formulario del ítem** (Servicios / Productos), con lista de excepciones por profesional, y en la **vista de Reglas** (Servicios / Productos, con panel por ítem) como vista global. **Sin vista inversa** en la ficha del profesional en V1 (HU-COM-02). |
 | 18 | ¿Cómo se habilita el módulo? | Feature flag `COMMISSIONS` apagada por defecto, activada por `PLATFORM_ADMIN` por tier y por tenant, como `STOCK_MODULE` (HU-COM-11). |
 
 No quedan preguntas abiertas.

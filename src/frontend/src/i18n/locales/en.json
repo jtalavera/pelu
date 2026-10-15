@@ -27,17 +27,53 @@
   },
   "femme": {
     "commissions": {
+      "baseShort": {
+        "NET_OF_TAX": "excl. VAT",
+        "TAX_INCLUDED": "incl. VAT"
+      },
+      "movements": {
+        "hint": "All recorded commissions. If one was assigned to the wrong professional, use \"Change professional\".",
+        "empty": "No movements for those filters.",
+        "movement": "Movement",
+        "search": "Search",
+        "searchPlaceholder": "Item, invoice or note",
+        "type": {
+          "LINE": "Commission"
+        }
+      },
+      "preview": {
+        "hint": "See how much a professional would be paid for an open period with the commissions recorded so far. Nothing is saved.",
+        "run": "Calculate",
+        "total": "Total to settle",
+        "empty": "No unsettled commissions for that professional in the period.",
+        "draftExists_one": "There is already {{count}} draft settlement for this professional; its commissions are not included in this preview.",
+        "draftExists_other": "There are already {{count}} draft settlements for this professional; their commissions are not included in this preview."
+      },
+      "reassign": {
+        "action": "Change professional",
+        "title": "Change the commission's professional",
+        "description": "{{item}} · invoice {{invoice}} · assigned to {{professional}} ({{amount}})",
+        "hint": "The invoice is not modified. The current professional's commission is reversed and a new one is created for the right professional, calculated with their rules.",
+        "closedWarning": "This commission is already in an approved or paid settlement. That settlement does not change: the reversal and the new commission go into the next settlement.",
+        "newProfessional": "Right professional",
+        "professionalRequired": "Choose a professional from the list.",
+        "reasonPlaceholder": "E.g. the service was done by Ana, not Laura",
+        "confirm": "Change professional",
+        "done": "Commission reassigned."
+      },
       "pageTitle": "Commissions",
       "pageSubtitle": "Commission rules, settlements and reports for services and products",
       "notEnabled": "The commissions module is not enabled for this business.",
       "tabs": {
+        "movements": "Movements",
+        "preview": "Preview",
         "settlements": "Settlements",
         "rules": "Rules",
         "settings": "Settings",
-        "simulator": "Simulator",
         "reports": "Reports"
       },
       "common": {
+        "close": "Close",
         "save": "Save",
         "cancel": "Cancel",
         "back": "Back",
@@ -106,6 +142,7 @@
         "null": "—"
       },
       "reason": {
+        "REASSIGNMENT": "Reversal due to professional change",
         "VOID": "Reversal: invoice voided",
         "CORRECTION": "Reversal: invoice corrected",
         "RECALCULATION": "Reversal: recalculation",
@@ -179,6 +216,58 @@
         "user": "User"
       },
       "rules": {
+        "intro": "Precedence: 1) general commission · 2) standard % of the service or product (exception) · 3) a professional's % for that service or product (individual exception). The most specific rule wins.",
+        "pendingCount_one": "{{count}} unsaved change",
+        "pendingCount_other": "{{count}} unsaved changes",
+        "discard": "Discard",
+        "saveChanges": "Save changes",
+        "saveSummary_one": "{{count}} rule change will be saved.",
+        "saveSummary_other": "{{count}} rule changes will be saved.",
+        "periodicityNote": "Settlement periodicity: {{periodicity}} (changed in Settings).",
+        "countServices_one": "{{count}} service",
+        "countServices_other": "{{count}} services",
+        "countProducts_one": "{{count}} product",
+        "countProducts_other": "{{count}} products",
+        "countWithExceptions_one": "{{count}} with exceptions",
+        "countWithExceptions_other": "{{count}} with exceptions",
+        "countProfessionals_one": "{{count}} professional",
+        "countProfessionals_other": "{{count}} professionals",
+        "baseLine": "Calculation base: price {{base}}.",
+        "edit": "Edit",
+        "onlyExceptions": "Show only exceptions",
+        "colService": "Service",
+        "colProduct": "Product",
+        "colPrice": "Price",
+        "colStandard": "Standard %",
+        "colExceptions": "Exceptions by professional",
+        "unsaved": "unsaved",
+        "differsFromGeneral": "Differs from the general commission",
+        "generalShort": "general",
+        "hasScheduled": "Has a scheduled change",
+        "allInherit": "Everyone uses the standard",
+        "categoryCountServices_one": "{{count}} service",
+        "categoryCountServices_other": "{{count}} services",
+        "categoryCountProducts_one": "{{count}} product",
+        "categoryCountProducts_other": "{{count}} products",
+        "categoryExceptions_one": "{{count}} exception",
+        "categoryExceptions_other": "{{count}} exceptions",
+        "priceLine": "Price {{price}} · base {{base}}: {{amount}}",
+        "itemStandard": "Item standard %",
+        "ownStandard": "Specific to this item",
+        "inheritsGeneral": "Inherits the general commission ({{value}})",
+        "change": "Change",
+        "apply": "Apply",
+        "useGeneral": "Use the general commission ({{value}})",
+        "percentAndCommission": "% and estimated commission",
+        "inherits": "Inherits {{value}}",
+        "viewHistory": "View change history",
+        "panelPending": "There are unsaved changes. Use \"Save changes\" above to apply them.",
+        "panelFootnote": "The estimated commission is computed on the list price base. Changes apply when saved and do not modify commissions already settled.",
+        "subtabs": {
+          "SERVICE": "Services",
+          "PRODUCT": "Products",
+          "GENERAL": "General rules"
+        },
         "sectionTitle": "Commission",
         "generalPercent": "Item general % (applies to every professional)",
         "general": "General",
@@ -211,21 +300,6 @@
         "bulkApply": "Apply to selected",
         "bulkSummary": "Set {{value}} ({{target}}) on {{count}} items.",
         "cellTitle": "{{professional}} · {{item}}"
-      },
-      "simulator": {
-        "hint": "Simulate which commission would apply. Nothing is saved.",
-        "chooseItem": "Choose an item",
-        "noProfessional": "No professional",
-        "amount": "Line amount (VAT included)",
-        "taxRate": "VAT rate",
-        "exempt": "Exempt",
-        "discount": "Discount (Gs)",
-        "date": "Date",
-        "run": "Simulate",
-        "amountRequired": "Choose an item and enter an amount greater than 0, e.g. 110,000.",
-        "percentLine": "Applied percentage: {{percent}} ({{origin}})",
-        "formula": "Base {{base}}: {{baseAmount}} × {{percent}} = {{commission}}",
-        "comparison": "With the other base ({{base}}): {{baseAmount}} → {{commission}}"
       },
       "settlements": {
         "generateTitle": "Generate settlements",
@@ -281,7 +355,6 @@
         "empty": "No data.",
         "settlementState": "Settlement status",
         "linesWithoutBeneficiary": "Lines without a professional (no commission)",
-        "itemsWithoutRule": "Items without a general % (use the default %)",
         "invoice": "Invoice"
       },
       "my": {
@@ -1843,6 +1916,10 @@
       }
     },
     "apiErrors": {
+      "COMMISSION_ENTRY_NOT_FOUND": "Commission not found.",
+      "COMMISSION_ENTRY_NOT_REASSIGNABLE": "This commission cannot be reassigned: only invoice commissions that have not been reversed can be reassigned.",
+      "COMMISSION_REASSIGN_REASON_REQUIRED": "Enter the reason for the change, e.g. \"the service was done by Ana\".",
+      "COMMISSION_REASSIGN_SAME_PROFESSIONAL": "Choose a professional other than the one currently assigned.",
       "FEATURE_NOT_ENABLED": "This feature is not enabled for your business.",
       "COMMISSION_CHANGES_REQUIRED": "There are no changes to apply.",
       "COMMISSION_CHANGE_APPLY_MODE_REQUIRED": "Choose how to apply the change: from now, from the next period or from the start of the current period.",

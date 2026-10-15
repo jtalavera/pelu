@@ -4,11 +4,9 @@ import { Alert, Button, Card, Label, Select, Text } from "@design-system";
 import {
   downloadCommissionFile,
   entriesCsvPath,
-  getItemsWithoutRule,
   getLinesWithoutBeneficiary,
   getReport,
   type EntryFilters,
-  type ItemWithoutRule,
   type LineWithoutBeneficiary,
   type ReportResponse,
   type ReportRow,
@@ -57,7 +55,6 @@ export function ReportsTab() {
   const [state, setState] = useState("");
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [orphans, setOrphans] = useState<LineWithoutBeneficiary[]>([]);
-  const [noRule, setNoRule] = useState<ItemWithoutRule[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const filters: EntryFilters = {
@@ -70,14 +67,12 @@ export function ReportsTab() {
 
   const load = useCallback(async () => {
     try {
-      const [r, o, n] = await Promise.all([
+      const [r, o] = await Promise.all([
         getReport({ from, to, professionalId: professionalId ? Number(professionalId) : null, kind, state }),
         getLinesWithoutBeneficiary(from, to),
-        getItemsWithoutRule(),
       ]);
       setReport(r);
       setOrphans(o);
-      setNoRule(n);
       setError(null);
     } catch (err) {
       setError(translateApiError(err, t));
@@ -205,20 +200,6 @@ export function ReportsTab() {
               ))}
             </tbody>
           </TableWrap>
-        )}
-      </Card>
-      <Card className="flex flex-col gap-2 p-4">
-        <SectionTitle>{t("femme.commissions.reports.itemsWithoutRule")}</SectionTitle>
-        {noRule.length === 0 ? (
-          <Text variant="muted">{t("femme.commissions.reports.empty")}</Text>
-        ) : (
-          <ul className="list-disc pl-5 text-sm" data-testid="report-items-without-rule">
-            {noRule.map((n) => (
-              <li key={n.serviceId}>
-                {n.serviceName} ({t(`femme.commissions.kind.${n.itemKind}`)})
-              </li>
-            ))}
-          </ul>
         )}
       </Card>
     </div>

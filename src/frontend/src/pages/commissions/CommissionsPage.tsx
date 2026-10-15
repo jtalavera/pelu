@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { Alert, Spinner } from "@design-system";
 import { useFeatureFlag, useFeatureFlagsState } from "../../hooks/useFeatureFlags";
 import { useMe } from "../../hooks/useMe";
+import { MovementsTab } from "./MovementsTab";
+import { PreviewTab } from "./PreviewTab";
 import { ReportsTab } from "./ReportsTab";
 import { RulesTab } from "./RulesTab";
 import { SettingsTab } from "./SettingsTab";
 import { SettlementsTab } from "./SettlementsTab";
-import { SimulatorTab } from "./SimulatorTab";
 
-const TABS = ["settlements", "rules", "settings", "simulator", "reports"] as const;
+const TABS = ["settlements", "movements", "rules", "preview", "reports", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
 /** Módulo de comisiones (ADMIN): HU-COM-01/02/03/06/08/09. */
@@ -52,10 +53,11 @@ export default function CommissionsPage() {
         ))}
       </div>
       {tab === "settlements" && <SettlementsTab />}
+      {tab === "movements" && <MovementsTab />}
       {tab === "rules" && <RulesTab />}
-      {tab === "settings" && <SettingsTab />}
-      {tab === "simulator" && <SimulatorTab />}
+      {tab === "preview" && <PreviewTab />}
       {tab === "reports" && <ReportsTab />}
+      {tab === "settings" && <SettingsTab />}
     </div>
   );
 }

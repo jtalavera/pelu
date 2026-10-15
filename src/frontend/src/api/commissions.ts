@@ -91,40 +91,30 @@ export type ItemRules = {
   history: VersionView[];
 };
 
-export type MatrixCell = { professionalId: number; percent: number; origin: string; scheduled: boolean };
-export type MatrixRow = {
+export type RuleException = { professionalId: number; professionalName: string; percent: number; delta: number };
+export type RuleItem = {
   serviceId: number;
-  serviceName: string;
-  itemKind: ItemKind;
-  generalPercent: number | null;
-  cells: MatrixCell[];
+  name: string;
+  price: number;
+  baseAmount: number;
+  standardPercent: number;
+  ownStandard: boolean;
+  exceptions: RuleException[];
+  scheduled: boolean;
 };
-export type MatrixResponse = {
+export type RuleCategory = { categoryId: number; name: string; exceptions: number; items: RuleItem[] };
+export type RulesView = {
+  kind: ItemKind;
   date: string;
+  baseType: BaseType;
+  generalPercent: number;
+  itemCount: number;
+  itemsWithExceptions: number;
   professionals: { id: number; fullName: string }[];
-  rows: MatrixRow[];
+  categories: RuleCategory[];
 };
 
 export type ItemWithoutRule = { serviceId: number; serviceName: string; itemKind: ItemKind };
-
-export type SimulateRequest = {
-  serviceId: number;
-  professionalId?: number | null;
-  lineAmount: number;
-  taxRate?: number | null;
-  discount?: number | null;
-  date?: string | null;
-};
-export type SimulationResult = { baseType: BaseType; baseAmount: number; commissionAmount: number };
-export type SimulateResponse = {
-  lineTotal: number;
-  taxAmount: number;
-  percent: number;
-  origin: string;
-  configuredBase: BaseType;
-  configured: SimulationResult;
-  alternative: SimulationResult;
-};
 
 export type EntryView = {
   id: number;
@@ -150,6 +140,22 @@ export type EntryView = {
   settlementId: number | null;
   settlementStatus: string | null;
   note: string | null;
+  /** Live INVOICE_LINE entry whose professional can be changed. */
+  reassignable: boolean;
+};
+
+export type SettlementPreview = {
+  professionalId: number;
+  professionalName: string | null;
+  periodFrom: string;
+  periodTo: string;
+  total: number;
+  servicesTotal: number;
+  productsTotal: number;
+  adjustmentsTotal: number;
+  lines: number;
+  entries: EntryView[];
+  draftSettlements: SettlementView[];
 };
 
 export type SettlementStatus = "DRAFT" | "APPROVED" | "PAID" | "VOIDED";
@@ -259,10 +265,13 @@ export const cancelScheduledChange = (versionId: number) =>
   femmeJson<void>(`/api/commissions/changes/${versionId}`, { method: "DELETE" });
 export const getItemRules = (serviceId: number) =>
   femmeJson<ItemRules>(`/api/commissions/items/${serviceId}/rules`);
-export const getMatrix = (kind?: string, date?: string) =>
-  femmeJson<MatrixResponse>(`/api/commissions/matrix${qs({ kind, date })}`);
+export const getRulesView = (kind: ItemKind, date?: string) =>
+  femmeJson<RulesView>(`/api/commissions/rules-view${qs({ kind, date })}`);
 export const getItemsWithoutRule = () => femmeJson<ItemWithoutRule[]>("/api/commissions/items-without-rule");
-export const simulate = (body: SimulateRequest) => femmePostJson<SimulateResponse>("/api/commissions/simulate", body);
+export const getSettlementPreview = (professionalId: number, from?: string, to?: string) =>
+  femmeJson<SettlementPreview>(`/api/commissions/settlement-preview${qs({ professionalId, from, to })}`);
+export const reassignEntry = (entryId: number, professionalId: number, reason: string) =>
+  femmePostJson<EntryView>(`/api/commissions/entries/${entryId}/reassign`, { professionalId, reason });
 export const getEntries = (f: EntryFilters) => femmeJson<EntryView[]>(`/api/commissions/entries${qs(f)}`);
 export const getReport = (f: EntryFilters) => femmeJson<ReportResponse>(`/api/commissions/reports${qs(f)}`);
 export const getLinesWithoutBeneficiary = (from?: string, to?: string) =>

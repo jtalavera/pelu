@@ -141,56 +141,176 @@ test("historial de cambios por regla (quién, valor anterior y nuevo, vigencia)"
   await expect(firstRow).toContainText(w.adminEmail);
 });
 
-test("matriz profesionales × ítems con origen, filtro por tipo, edición de celda y aplicación a varios ítems", async ({
+async function openRules(page: Page) {
+  await page.getByRole("link", { name: "Commissions" }).click();
+  await page.getByRole("tab", { name: "Rules", exact: true }).click();
+  await expect(page.getByTestId("rules-table")).toBeVisible();
+}
+
+test("vista de reglas: ítems por categoría con precio, % estándar, excepciones con diferencia, contadores y «Ver solo excepciones»", async ({
   page,
   request,
 }) => {
-  await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, value: "40" }]);
+  await applyChanges(request, w.adminToken, [
+    { scope: "DEFAULT_SERVICE", value: "30" },
+    { scope: "RULE", serviceId: w.service.id, value: "40" },
+    { scope: "RULE", serviceId: w.service.id, professionalId: w.ana.id, value: "50" },
+  ]);
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Rules" }).click();
-  const matrix = page.getByTestId("commission-matrix");
-  await expect(matrix).toBeVisible();
-  await expect(page.getByTestId(`commission-cell-${w.service.id}-${w.ana.id}`)).toContainText("40 % (G)");
+  await openRules(page);
 
-  await page.locator("#commission-matrix-kind").selectOption("PRODUCT");
-  await expect(page.getByTestId("commission-matrix-row")).toHaveCount(1);
-  await page.locator("#commission-matrix-kind").selectOption("SERVICE");
-  await expect(page.getByTestId("commission-matrix-row")).toHaveCount(2);
+  await expect(page.getByTestId("rules-count-items")).toHaveText("2 services");
+  await expect(page.getByTestId("rules-count-exceptions")).toHaveText("1 with exceptions");
+  await expect(page.getByTestId("rules-count-professionals")).toHaveText("2 professionals");
+  await expect(page.getByText("Calculation base: price excl. VAT.")).toBeVisible();
 
-  // Cell edit → exception.
-  await page.getByTestId(`commission-cell-${w.service.id}-${w.bea.id}`).click();
-  await page.locator("#commission-cell-percent").fill("55");
-  await page.getByTestId("commission-cell-save").click();
-  await confirmImmediate(page);
-  await expect(page.getByTestId(`commission-cell-${w.service.id}-${w.bea.id}`)).toContainText("55 % (E)");
+  const table = page.getByTestId("rules-table");
+  const categoryRow = table.locator("tr", { hasText: "Peluquería" });
+  await expect(categoryRow).toContainText("2 services · 1 exception");
+  await expect(page.getByTestId(`rules-row-${w.service.id}`)).toContainText("Gs. 110.000");
+  // Item standard differs from the general commission; the professional exception shows its delta.
+  await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("40 %");
+  await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("≠ general");
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText(/ana/i);
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("50 %");
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("+10");
+  // Without its own %, the item inherits the general commission.
+  await expect(page.getByTestId(`rules-standard-${w.service2.id}`)).toHaveText("30 %");
+  await expect(page.getByTestId(`rules-exceptions-${w.service2.id}`)).toHaveText("Everyone uses the standard");
 
-  // Bulk: same general % on both services.
-  await page.getByLabel(`Select ${w.service.name}`).check();
-  await page.getByLabel(`Select ${w.service2.name}`).check();
-  await page.locator("#commission-bulk-percent").fill("33");
-  await page.getByTestId("commission-bulk-apply").click();
-  await confirmImmediate(page);
-  await expect(page.getByTestId(`commission-cell-${w.service2.id}-${w.ana.id}`)).toContainText("33 % (G)");
-  await expect(page.getByTestId(`commission-cell-${w.service.id}-${w.bea.id}`)).toContainText("55 % (E)");
+  // The Switch input is sr-only: dispatch the click on the input itself (see hu-46).
+  await page.getByTestId("rules-only-exceptions").dispatchEvent("click");
+  await expect(page.getByTestId("rules-only-exceptions")).toBeChecked();
+  await expect(page.getByTestId(`rules-row-${w.service.id}`)).toBeVisible();
+  await expect(page.getByTestId(`rules-row-${w.service2.id}`)).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Products" }).click();
+  await expect(page.getByTestId("rules-count-items")).toHaveText("1 product");
+  await page.getByTestId("rules-only-exceptions").dispatchEvent("click");
+  await expect(page.getByTestId("rules-only-exceptions")).not.toBeChecked();
+  await expect(page.getByTestId(`rules-row-${w.product.id}`)).toBeVisible();
+
+  // «Editar» on the base goes to the general rules.
+  await page.getByRole("tab", { name: "Services" }).click();
+  await page.getByTestId("rules-edit-base").click();
+  await expect(page.getByTestId("rules-general")).toBeVisible();
 });
 
-test("la matriz muestra el % efectivo a una fecha dada y marca los cambios programados", async ({ request }) => {
+test("panel del ítem: estándar con «Cambiar», % y comisión por profesional, «Agregar excepción»; varios cambios se guardan juntos", async ({
+  page,
+  request,
+}) => {
+  await applyChanges(request, w.adminToken, [
+    { scope: "DEFAULT_SERVICE", value: "30" },
+    { scope: "RULE", serviceId: w.service.id, professionalId: w.ana.id, value: "50" },
+  ]);
+  await loginAdminUi(page, w);
+  await openRules(page);
+
+  await page.getByTestId(`rules-row-${w.service2.id}`).click();
+  const panel = page.getByTestId("rules-panel");
+  await expect(panel).toContainText(w.service2.name);
+  await expect(panel).toContainText("Price Gs. 110.000 · base excl. VAT: Gs. 100.000");
+  await expect(panel.getByTestId("rules-panel-standard")).toHaveText("30 %");
+  await expect(panel).toContainText("Inherits the general commission (30 %)");
+  await expect(panel.getByTestId(`rules-panel-prof-${w.ana.id}`)).toContainText("Inherits 30 %");
+  await expect(panel.getByTestId(`rules-panel-prof-${w.ana.id}`)).toContainText("Gs. 30.000");
+
+  // 1) Change the item standard (validated, staged).
+  await panel.getByTestId("rules-change-standard").click();
+  await panel.getByTestId("rules-standard-input").fill("150");
+  await panel.getByTestId("rules-standard-apply").click();
+  await expect(panel.getByText(/between 0 and 100.*e\.g\. 40\.5/)).toBeVisible();
+  await panel.getByTestId("rules-standard-input").fill("45");
+  await panel.getByTestId("rules-standard-apply").click();
+  await expect(panel.getByTestId("rules-panel-standard")).toHaveText("45 %");
+  await expect(page.getByTestId(`rules-row-${w.service2.id}`)).toContainText("unsaved");
+  await expect(page.getByTestId("rules-pending-count")).toHaveText("1 unsaved change");
+
+  // 2) Add an exception for Bea.
+  await panel.getByTestId("rules-add-exception").click();
+  await panel.getByTestId("rules-add-professional").selectOption({ label: w.bea.name });
+  await panel.getByTestId("rules-add-percent").fill("60");
+  await panel.getByTestId("rules-add-apply").click();
+  await expect(panel.getByTestId(`rules-panel-prof-${w.bea.id}`)).toContainText("60 %");
+  await expect(panel.getByTestId(`rules-panel-prof-${w.bea.id}`)).toContainText("+15");
+  await expect(panel.getByTestId(`rules-panel-prof-${w.bea.id}`)).toContainText("Gs. 60.000");
+
+  // 3) Edit Ana's exception on the other service.
+  await page.getByTestId(`rules-row-${w.service.id}`).click();
+  await panel.getByTestId(`rules-panel-prof-${w.ana.id}`).getByRole("button").first().click();
+  await panel.getByLabel(`Percentage for ${w.ana.name}`).fill("55");
+  await panel.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByTestId("rules-pending-count")).toHaveText("3 unsaved changes");
+
+  await page.getByTestId("rules-save").click();
+  await expect(page.getByRole("dialog")).toContainText("3 rule changes will be saved.");
+  await confirmImmediate(page);
+  await expect(page.getByRole("status").filter({ hasText: "Change applied." })).toBeVisible();
+  await expect(page.getByTestId("rules-pending-count")).toHaveCount(0);
+  await expect(page.getByTestId(`rules-standard-${w.service2.id}`)).toContainText("45 %");
+  await expect(page.getByTestId(`rules-exceptions-${w.service2.id}`)).toContainText("60 %");
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("55 %");
+
+  // Effective on the next invoices (precedence: professional + item > item > general).
+  const inv = await issueInvoice(request, w.adminToken, [
+    { serviceId: w.service2.id, name: w.service2.name, professionalId: w.ana.id },
+    { serviceId: w.service2.id, name: w.service2.name, professionalId: w.bea.id },
+    { serviceId: w.service.id, name: w.service.name, professionalId: w.ana.id },
+    { serviceId: w.service.id, name: w.service.name, professionalId: w.bea.id },
+  ]);
+  const es = await entriesOfInvoice(request, w.adminToken, inv.id, 4);
+  const pct = (sid: number, pid: number) =>
+    es.find((e) => e.professionalId === pid && e.serviceId === sid)!.percentApplied;
+  expect(Number(pct(w.service2.id, w.ana.id))).toBe(45);
+  expect(Number(pct(w.service2.id, w.bea.id))).toBe(60);
+  expect(Number(pct(w.service.id, w.ana.id))).toBe(55);
+  expect(Number(pct(w.service.id, w.bea.id))).toBe(30);
+});
+
+test("«Descartar» deshace los cambios sin guardar; «Ver historial de cambios» muestra quién y qué cambió", async ({
+  page,
+  request,
+}) => {
+  await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, value: "30" }]);
+  await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, value: "35" }]);
+  await loginAdminUi(page, w);
+  await openRules(page);
+  await page.getByTestId(`rules-row-${w.service.id}`).click();
+  const panel = page.getByTestId("rules-panel");
+  await panel.getByTestId("rules-change-standard").click();
+  await panel.getByTestId("rules-standard-input").fill("70");
+  await panel.getByTestId("rules-standard-apply").click();
+  await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("70 %");
+  await page.getByTestId("rules-discard").click();
+  await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("35 %");
+  await expect(page.getByTestId("rules-save")).toBeDisabled();
+
+  await panel.getByTestId("rules-history").click();
+  const history = page.getByTestId("commission-rule-history");
+  const firstRow = history.locator("tbody tr").first();
+  await expect(firstRow).toContainText("30 %");
+  await expect(firstRow).toContainText("35 %");
+  await expect(firstRow).toContainText(w.adminEmail);
+});
+
+test("la vista muestra el % vigente a una fecha dada y marca los cambios programados", async ({ page, request }) => {
   await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, value: "40" }]);
   const scheduled = await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, value: "45" }], "NEXT_PERIOD");
-  const today = await apiGetJson<{ rows: { serviceId: number; cells: { percent: number; scheduled: boolean }[] }[] }>(
-    request,
-    w.adminToken,
-    "/api/commissions/matrix",
-  );
-  const row = today.rows.find((r) => r.serviceId === w.service.id)!;
-  expect(Number(row.cells[0].percent)).toBe(40);
-  expect(row.cells[0].scheduled).toBe(true);
+  type View = { categories: { items: { serviceId: number; standardPercent: number; scheduled: boolean }[] }[] };
+  const find = (v: View) => v.categories.flatMap((c) => c.items).find((i) => i.serviceId === w.service.id)!;
+  const today = await apiGetJson<View>(request, w.adminToken, "/api/commissions/rules-view?kind=SERVICE");
+  expect(Number(find(today).standardPercent)).toBe(40);
+  expect(find(today).scheduled).toBe(true);
   const future = new Date(scheduled.effectiveFrom);
   future.setDate(future.getDate() + 2);
   const ymd = future.toISOString().slice(0, 10);
-  const later = await apiGetJson<typeof today>(request, w.adminToken, `/api/commissions/matrix?date=${ymd}`);
-  expect(Number(later.rows.find((r) => r.serviceId === w.service.id)!.cells[0].percent)).toBe(45);
+  const later = await apiGetJson<View>(request, w.adminToken, `/api/commissions/rules-view?kind=SERVICE&date=${ymd}`);
+  expect(Number(find(later).standardPercent)).toBe(45);
+
+  await loginAdminUi(page, w);
+  await openRules(page);
+  await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("⏱");
 });
 
 test("no se puede crear una excepción para un profesional inactivo; la ya existente se puede cerrar", async ({ request }) => {
