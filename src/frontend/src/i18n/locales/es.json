@@ -27,6 +27,16 @@
   },
   "femme": {
     "commissions": {
+      "assignLine": {
+        "action": "Asignar profesional",
+        "title": "Asignar profesional a la línea",
+        "description": "{{item}} · comprobante {{invoice}} · {{amount}}",
+        "hint": "La factura no se modifica. La línea queda asignada al profesional y genera su comisión con las reglas vigentes a la fecha de la factura; entra en su próxima liquidación.",
+        "note": "Nota (opcional)",
+        "notePlaceholder": "Ej.: no se cargó la profesional al facturar",
+        "confirm": "Asignar",
+        "done": "Línea asignada a {{professional}}; se generó su comisión."
+      },
       "baseShort": {
         "NET_OF_TAX": "sin IVA",
         "TAX_INCLUDED": "con IVA"
@@ -1915,6 +1925,8 @@
       }
     },
     "apiErrors": {
+      "INVOICE_LINE_NOT_FOUND": "No se encontró la línea del comprobante.",
+      "COMMISSION_LINE_NOT_ASSIGNABLE": "Esta línea no se puede asignar: ya tiene profesional, el comprobante está anulado o no es un ítem del catálogo.",
       "COMMISSION_ENTRY_NOT_FOUND": "No se encontró la comisión.",
       "COMMISSION_ENTRY_NOT_REASSIGNABLE": "Esta comisión no se puede reasignar: solo se reasignan comisiones de comprobantes que no hayan sido revertidas.",
       "COMMISSION_REASSIGN_REASON_REQUIRED": "Indicá el motivo del cambio, por ejemplo: «el servicio lo realizó Ana».",

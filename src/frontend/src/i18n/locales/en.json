@@ -27,6 +27,16 @@
   },
   "femme": {
     "commissions": {
+      "assignLine": {
+        "action": "Assign professional",
+        "title": "Assign a professional to the line",
+        "description": "{{item}} · invoice {{invoice}} · {{amount}}",
+        "hint": "The invoice is not modified. The line is assigned to the professional and accrues their commission with the rules in force on the invoice date; it goes into their next settlement.",
+        "note": "Note (optional)",
+        "notePlaceholder": "E.g. the professional was not entered at billing",
+        "confirm": "Assign",
+        "done": "Line assigned to {{professional}}; their commission was created."
+      },
       "baseShort": {
         "NET_OF_TAX": "excl. VAT",
         "TAX_INCLUDED": "incl. VAT"
@@ -1915,6 +1925,8 @@
       }
     },
     "apiErrors": {
+      "INVOICE_LINE_NOT_FOUND": "Invoice line not found.",
+      "COMMISSION_LINE_NOT_ASSIGNABLE": "This line can't be assigned: it already has a professional, the invoice is voided or it isn't a catalog item.",
       "COMMISSION_ENTRY_NOT_FOUND": "Commission not found.",
       "COMMISSION_ENTRY_NOT_REASSIGNABLE": "This commission cannot be reassigned: only invoice commissions that have not been reversed can be reassigned.",
       "COMMISSION_REASSIGN_REASON_REQUIRED": "Enter the reason for the change, e.g. \"the service was done by Ana\".",

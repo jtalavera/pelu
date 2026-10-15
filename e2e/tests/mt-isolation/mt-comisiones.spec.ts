@@ -161,6 +161,32 @@ test.describe("mt-comisiones · aislamiento del módulo de comisiones", () => {
       headers: authHeaders(tokenO),
     });
     expect(approve.status()).toBe(404);
+    // Another tenant can't assign a professional to this tenant's line billed without one.
+    const orphanInv = await request.post(`${API_BASE}/api/invoices`, {
+      headers: authHeaders(tokenI),
+      data: {
+        clientId: null,
+        clientDisplayName: "MT comisiones",
+        discountType: "NONE",
+        lines: [{ serviceId, description: "sin profesional", quantity: 1, unitPrice: 100000, professionalId: null }],
+        payments: [{ method: "CASH", amount: 100000 }],
+      },
+    });
+    expect(orphanInv.ok(), await orphanInv.text()).toBeTruthy();
+    const orphanInvoiceId = ((await orphanInv.json()) as { id: number }).id;
+    const orphans = (await (
+      await request.get(`${API_BASE}/api/commissions/lines-without-beneficiary`, { headers: authHeaders(tokenI) })
+    ).json()) as { invoiceId: number; invoiceLineId: number }[];
+    const orphanLine = orphans.find((o) => o.invoiceId === orphanInvoiceId)!.invoiceLineId;
+    const crossAssign = await request.post(`${API_BASE}/api/commissions/invoice-lines/${orphanLine}/assign`, {
+      headers: authHeaders(tokenO),
+      data: { professionalId: other.professionalIds[0] },
+    });
+    expect(crossAssign.status()).toBe(404);
+    const otherLines = (await (
+      await request.get(`${API_BASE}/api/commissions/lines-without-beneficiary`, { headers: authHeaders(tokenO) })
+    ).json()) as { invoiceLineId: number }[];
+    expect(otherLines.map((o) => o.invoiceLineId)).not.toContain(orphanLine);
     // An invoice line can't name another tenant's professional.
     const crossLine = await request.post(`${API_BASE}/api/invoices`, {
       headers: authHeaders(tokenI),

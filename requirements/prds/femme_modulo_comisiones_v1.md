@@ -312,7 +312,7 @@ Reglas:
 - [ ] Cada línea del formulario de emisión (servicio o producto) tiene un campo opcional **Profesional / Vendedor** que lista los profesionales activos del tenant.
 - [ ] Si el comprobante se crea desde un **registro de servicio**, el campo se **precarga** con el profesional de la línea del registro (si lo tiene) y se puede cambiar o quitar.
 - [ ] En un comprobante creado **sin registro de servicio** (p. ej. venta suelta de un producto) el campo parte vacío y se puede asignar manualmente.
-- [ ] El valor queda guardado en la línea del comprobante al emitirlo y **no se puede modificar** después, igual que el resto del comprobante emitido.
+- [ ] El valor queda guardado en la línea del comprobante al emitirlo y **no se edita desde el comprobante**. Solo cambia desde el módulo de comisiones: reasignación (HU-COM-12) o asignación de una línea sin profesional (HU-COM-13), sin tocar los datos fiscales.
 - [ ] Un profesional inactivo o de otro tenant se rechaza (`PROFESSIONAL_NOT_FOUND` / `INVOICE_LINE_PROFESSIONAL_INACTIVE`).
 - [ ] Con la feature flag `COMMISSIONS` habilitada, una línea sin profesional muestra un aviso discreto ("esta línea no generará comisión"); **no impide emitir**.
 - [ ] Con la feature flag deshabilitada, el campo no se muestra y el flujo de HU-14 no cambia.
@@ -350,6 +350,20 @@ Reglas:
 - [ ] Si estaba en una liquidación **aprobada o pagada**, se avisa en el diálogo: esa liquidación **no cambia** y la reversión (negativa) y la nueva comisión van a la **próxima** liquidación de cada profesional.
 - [ ] Una comisión ya reasignada (revertida) no se puede volver a reasignar (`COMMISSION_ENTRY_NOT_REASSIGNABLE`); errores: `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`, `COMMISSION_PROFESSIONAL_INACTIVE`.
 
+### HU-COM-13 · Asignar un profesional a una línea facturada sin profesional
+
+**Como** administrador,
+**quiero** asignar un profesional a una línea de un comprobante emitido que se facturó sin profesional,
+**para** que esa venta genere la comisión que corresponde sin anular la factura.
+
+**Criterios de aceptación:**
+- [ ] En **Reportes → «Líneas sin profesional»** cada línea ofrece **«Asignar profesional»**.
+- [ ] El diálogo pide el **profesional** (obligatorio, solo activos) y una **nota** opcional; sin profesional muestra el error de campo.
+- [ ] Al confirmar: la factura y sus datos fiscales **no cambian**; la línea queda con ese profesional y se genera su **comisión**, calculada con **sus reglas** vigentes a la **fecha de emisión** de la factura (como si se hubiera cargado al facturar).
+- [ ] La comisión queda **sin liquidar**: entra en la próxima liquidación del profesional (aunque el periodo de la factura ya esté en una liquidación aprobada o pagada) y se ve en «Movimientos» y en la «Vista previa».
+- [ ] La línea deja de figurar en «Líneas sin profesional». Si después se anula la factura, la comisión se revierte como cualquier otra (HU-COM-05).
+- [ ] Solo se pueden asignar líneas de ítems del catálogo, de comprobantes emitidos no anulados y sin profesional (`COMMISSION_LINE_NOT_ASSIGNABLE`); otros errores: `INVOICE_LINE_NOT_FOUND`, `PROFESSIONAL_NOT_FOUND`, `COMMISSION_PROFESSIONAL_INACTIVE`.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -361,7 +375,7 @@ Reglas:
 | **CommissionSettings** (versionada, N por tenant) | `tenantId`, `commissionBase` (`NET_OF_TAX` \| `TAX_INCLUDED`), `defaultPercentService`, `defaultPercentProduct`, `effectiveFrom`, `applyMode` (`IMMEDIATE` \| `NEXT_PERIOD` \| `PERIOD_START`), `status` (`SCHEDULED` \| `ACTIVE` \| `SUPERSEDED` \| `CANCELLED`), auditoría. La versión vigente a un instante es la de mayor `effectiveFrom` ≤ instante con estado `ACTIVE`. |
 | **SettlementConfig** (1 por tenant) | `tenantId`, `settlementPeriodicity` (`WEEKLY` \| `BIWEEKLY` \| `MONTHLY` \| `MANUAL`), auditoría |
 | **CommissionRule** | `tenantId`, `itemId`, `beneficiaryId` (nulo = regla general), `percent`, `validFrom`, `validTo`, `active`, `applyMode` (`IMMEDIATE` \| `NEXT_PERIOD` \| `PERIOD_START`), `status` (`SCHEDULED` \| `ACTIVE` \| `CLOSED` \| `CANCELLED`), auditoría |
-| **InvoiceLine** (cambio a entidad existente) | Nuevo campo opcional `professionalId` (beneficiario), inmutable tras emitir (HU-COM-10). |
+| **InvoiceLine** (cambio a entidad existente) | Nuevo campo opcional `professionalId` (beneficiario). Tras emitir solo cambia por una reasignación (HU-COM-12) o al asignar una línea sin profesional (HU-COM-13). |
 | **CommissionRuleChange** | `ruleId`, `oldPercent`, `newPercent`, vigencia, `changedBy`, `changedAt` |
 | **CommissionEntry** (append-only) | `tenantId`, `beneficiaryId`, `sourceType` (`INVOICE_LINE` \| `REVERSAL` \| `ADJUSTMENT`), `revision` (1 al emitir; +1 en cada recálculo), `reasonCode` (`VOID` \| `RECALCULATION`, solo en reversiones), `recalculationId`, `invoiceId`, `invoiceLineId`, `itemId`, `itemKind` (`SERVICE` \| `PRODUCT`), `baseTypeApplied`, `baseAmount`, `taxAmount`, `percentApplied`, `ruleIdApplied`, `ruleOrigin` (`BENEFICIARY_ITEM` \| `ITEM` \| `TENANT_DEFAULT_SERVICE` \| `TENANT_DEFAULT_PRODUCT`), `commissionAmount`, `currency`, `accrualDate`, `settlementId`, `reversesEntryId` |
 | **CommissionRecalculation** | `tenantId`, `scopeType` / `scopeRef` (base, % por defecto de servicios o de productos, regla), `periodFrom`, `periodTo`, `entriesRecalculated`, `entriesExcluded`, `deltaAmount`, `requestedBy`, `requestedAt` |
@@ -403,7 +417,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 
 ## 8. Códigos de error (backend → i18n `femme.apiErrors.*`)
 
-`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`, `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_ENTRY_NOT_REASSIGNABLE`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`.
+`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`, `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_ENTRY_NOT_REASSIGNABLE`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`, `INVOICE_LINE_NOT_FOUND`, `COMMISSION_LINE_NOT_ASSIGNABLE`.
 
 ## 9. Requisitos transversales
 
@@ -429,6 +443,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-09 | Diálogo aparece con periodo en curso en cada periodicidad; sin opción preseleccionada; `IMMEDIATE` deja periodo mixto; `NEXT_PERIOD` programa y no altera el periodo actual; cambio programado visible y cancelable; reemplazo de programado; Manual no pregunta; entrada en vigencia automática (reloj controlado); aplica a base, % por defecto y reglas; `PROFESSIONAL` recibe 403; `PERIOD_START`: vista previa con conteos y diferencia, recálculo con contra-entradas, Borrador actualizado, Aprobada/Pagada intactas, ajustes y anulados excluidos, atomicidad ante error, Manual con "desde el último corte", anulación posterior al recálculo. |
 | HU-COM-10 | Campo profesional por línea (servicio y producto); precarga desde registro de servicio; asignación manual en venta suelta; profesional inactivo rechazado; aviso de línea sin comisión; campo oculto con flag deshabilitada; **actualizar los specs existentes de HU-14**. |
 | HU-COM-12 | Reasignar desde Movimientos (validaciones, reversión + nueva comisión con las reglas del correcto); desde el detalle de un borrador; con liquidación aprobada: aviso, liquidación intacta, corrección en la próxima; códigos de error. |
+| HU-COM-13 | Asignar desde «Líneas sin profesional» (validación, comisión con las reglas del profesional a la fecha de la factura, sin liquidar, la línea deja de figurar, visible en Movimientos); anulación posterior revierte; errores con códigos; aislamiento entre tenants. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

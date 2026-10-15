@@ -159,6 +159,9 @@ public final class CommissionDtos {
   /** Change the professional who earns a commission (wrong assignment at billing). */
   public record ReassignRequest(Long professionalId, String reason) {}
 
+  /** HU-COM-13: assign a professional to an issued line billed without one. */
+  public record AssignLineRequest(Long professionalId, String note) {}
+
   /** What the professional would be paid today for an open period (replaces the simulator). */
   public record SettlementPreview(
       Long professionalId,
@@ -228,6 +231,7 @@ public final class CommissionDtos {
       List<ReportRow> byPeriod) {}
 
   public record LineWithoutBeneficiary(
+      Long invoiceLineId,
       Long invoiceId,
       String invoiceNumber,
       Instant issuedAt,
