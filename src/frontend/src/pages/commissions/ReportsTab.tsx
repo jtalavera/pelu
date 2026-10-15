@@ -16,6 +16,7 @@ import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
+import { AssignLineDialog } from "./AssignLineDialog";
 import { SectionTitle, TableWrap, firstOfMonthYmd, tdClass, thClass, todayYmd, useProfessionals } from "./common";
 
 function RowsTable({ rows, testId, labelOf }: { rows: ReportRow[]; testId: string; labelOf?: (r: ReportRow) => string }) {
@@ -56,6 +57,8 @@ export function ReportsTab() {
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [orphans, setOrphans] = useState<LineWithoutBeneficiary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [toAssign, setToAssign] = useState<LineWithoutBeneficiary | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const filters: EntryFilters = {
     from,
@@ -175,6 +178,11 @@ export function ReportsTab() {
       )}
       <Card className="flex flex-col gap-2 p-4">
         <SectionTitle>{t("femme.commissions.reports.linesWithoutBeneficiary")}</SectionTitle>
+        {notice && (
+          <Alert variant="success" role="status">
+            {notice}
+          </Alert>
+        )}
         {orphans.length === 0 ? (
           <Text variant="muted">{t("femme.commissions.reports.empty")}</Text>
         ) : (
@@ -186,22 +194,37 @@ export function ReportsTab() {
                 <th className={thClass}>{t("femme.commissions.common.item")}</th>
                 <th className={thClass}>{t("femme.commissions.common.itemKind")}</th>
                 <th className={`${thClass} text-right`}>{t("femme.commissions.common.total")}</th>
+                <th className={thClass} />
               </tr>
             </thead>
             <tbody>
-              {orphans.map((o, i) => (
-                <tr key={`${o.invoiceId}-${i}`} className="border-t">
+              {orphans.map((o) => (
+                <tr key={o.invoiceLineId} className="border-t" data-testid={`orphan-line-${o.invoiceLineId}`}>
                   <td className={tdClass}>{o.invoiceNumber}</td>
                   <td className={tdClass}>{formatParaguayDateTime(o.issuedAt, dateLocale)}</td>
                   <td className={tdClass}>{o.description}</td>
                   <td className={tdClass}>{o.itemKind ? t(`femme.commissions.kind.${o.itemKind}`) : ""}</td>
                   <td className={`${tdClass} text-right`}>{formatGuaraniesGs(o.lineTotal)}</td>
+                  <td className={`${tdClass} whitespace-nowrap`}>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setToAssign(o)}>
+                      {t("femme.commissions.assignLine.action")}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </TableWrap>
         )}
       </Card>
+      <AssignLineDialog
+        line={toAssign}
+        onClose={() => setToAssign(null)}
+        onDone={(name) => {
+          setToAssign(null);
+          setNotice(t("femme.commissions.assignLine.done", { professional: name }));
+          void load();
+        }}
+      />
     </div>
   );
 }

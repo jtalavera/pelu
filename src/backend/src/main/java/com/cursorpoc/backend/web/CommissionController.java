@@ -12,6 +12,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.AdjustmentRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyModeOptions;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AssignLineRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.EntryView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GenerateSettlementsRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ItemRulesResponse;
@@ -177,6 +178,24 @@ public class CommissionController {
         "/api/commissions/entries/" + id + "/reassign",
         () -> {
           var saved = reassignmentService.reassign(p.getTenantId(), id, p.getUsername(), request);
+          return queryService.entryView(
+              saved, configService.professionalNames(p.getTenantId()), null, java.util.Set.of());
+        });
+  }
+
+  /** HU-COM-13: assign a professional to an issued line that was billed without one. */
+  @PostMapping("/invoice-lines/{lineId}/assign")
+  public EntryView assignLine(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @PathVariable long lineId,
+      @RequestBody AssignLineRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/invoice-lines/" + lineId + "/assign",
+        () -> {
+          var saved =
+              reassignmentService.assignLine(p.getTenantId(), lineId, p.getUsername(), request);
           return queryService.entryView(
               saved, configService.professionalNames(p.getTenantId()), null, java.util.Set.of());
         });

@@ -405,7 +405,7 @@ public class CommissionQueryService {
         entityManager
             .createQuery(
                 """
-                SELECT i.id, i.invoiceNumber, i.issuedAt, l.description, s.kind, l.lineTotal
+                SELECT l.id, i.id, i.invoiceNumber, i.issuedAt, l.description, s.kind, l.lineTotal
                 FROM InvoiceLine l JOIN l.invoice i JOIN l.salonService s
                 WHERE i.tenant.id = :tenantId AND i.status <> :voided
                   AND l.professional IS NULL
@@ -423,11 +423,12 @@ public class CommissionQueryService {
             r ->
                 new LineWithoutBeneficiary(
                     (Long) r[0],
-                    String.format("%07d", (Integer) r[1]),
-                    (Instant) r[2],
-                    (String) r[3],
-                    r[4] == null ? null : r[4].toString(),
-                    (BigDecimal) r[5]))
+                    (Long) r[1],
+                    String.format("%07d", (Integer) r[2]),
+                    (Instant) r[3],
+                    (String) r[4],
+                    r[5] == null ? null : r[5].toString(),
+                    (BigDecimal) r[6]))
         .toList();
   }
 

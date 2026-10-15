@@ -202,6 +202,7 @@ export type ReportResponse = {
 };
 
 export type LineWithoutBeneficiary = {
+  invoiceLineId: number;
   invoiceId: number;
   invoiceNumber: string;
   issuedAt: string;
@@ -272,6 +273,11 @@ export const getSettlementPreview = (professionalId: number, from?: string, to?:
   femmeJson<SettlementPreview>(`/api/commissions/settlement-preview${qs({ professionalId, from, to })}`);
 export const reassignEntry = (entryId: number, professionalId: number, reason: string) =>
   femmePostJson<EntryView>(`/api/commissions/entries/${entryId}/reassign`, { professionalId, reason });
+export const assignLineProfessional = (invoiceLineId: number, professionalId: number, note: string) =>
+  femmePostJson<EntryView>(`/api/commissions/invoice-lines/${invoiceLineId}/assign`, {
+    professionalId,
+    note: note || null,
+  });
 export const getEntries = (f: EntryFilters) => femmeJson<EntryView[]>(`/api/commissions/entries${qs(f)}`);
 export const getReport = (f: EntryFilters) => femmeJson<ReportResponse>(`/api/commissions/reports${qs(f)}`);
 export const getLinesWithoutBeneficiary = (from?: string, to?: string) =>
