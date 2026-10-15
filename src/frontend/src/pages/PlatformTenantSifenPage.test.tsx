@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
@@ -63,6 +63,8 @@ describe("PlatformTenantSifenPage (root user loads a salon's certificate + CSC)"
       "Test (TEST)",
     );
     await screen.findByTestId("sifen-csc-form-card");
+    // The certificate section loads on its own request: wait for it too before checking its hints.
+    await screen.findByTestId("sifen-certificate-upload-section");
     // Every credential field explains its rule/format below it (same as "Agregar timbrado").
     for (const id of [
       "sifen-cert-file-hint",
@@ -70,7 +72,7 @@ describe("PlatformTenantSifenPage (root user loads a salon's certificate + CSC)"
       "sifen-csc-id-hint",
       "sifen-csc-value-hint",
     ]) {
-      expect(document.getElementById(id)?.textContent?.length).toBeGreaterThan(0);
+      await waitFor(() => expect(document.getElementById(id)?.textContent?.length).toBeGreaterThan(0));
     }
     expect(screen.getByTestId("sifen-csc-list-card")).toBeTruthy();
   });
