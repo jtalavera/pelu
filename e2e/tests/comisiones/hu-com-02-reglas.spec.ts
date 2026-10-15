@@ -165,8 +165,9 @@ test("vista de reglas: ítems por categoría con precio, % estándar, excepcione
   await expect(page.getByText("Calculation base: price excl. VAT.")).toBeVisible();
 
   const table = page.getByTestId("rules-table");
-  const categoryRow = table.locator("tr", { hasText: "Peluquería" });
-  await expect(categoryRow).toContainText("2 services · 1 exception");
+  // No category grouping rows: one row per item, sorted by name.
+  await expect(table.locator("tbody tr", { hasText: "Peluquería" })).toHaveCount(0);
+  await expect(table.locator("tbody tr")).toHaveCount(2);
   await expect(page.getByTestId(`rules-row-${w.service.id}`)).toContainText("Gs. 110.000");
   // Item standard differs from the general commission; the professional exception shows its delta.
   await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("40 %");
@@ -179,6 +180,16 @@ test("vista de reglas: ítems por categoría con precio, % estándar, excepcione
   await expect(page.getByTestId(`rules-exceptions-${w.service2.id}`)).toHaveText("Everyone uses the standard");
 
   // The Switch input is sr-only: dispatch the click on the input itself (see hu-46).
+  // Search by item name (case and accent insensitive) at the top of the table.
+  await expect(page.getByLabel("Search service")).toBeVisible();
+  await page.getByTestId("rules-search").fill("COLOR");
+  await expect(page.getByTestId(`rules-row-${w.service2.id}`)).toBeVisible();
+  await expect(page.getByTestId(`rules-row-${w.service.id}`)).toHaveCount(0);
+  await page.getByTestId("rules-search").fill("zzz-no-existe");
+  await expect(page.getByTestId("rules-empty")).toHaveText("No item matches the search.");
+  await page.getByTestId("rules-search").fill("");
+  await expect(table.locator("tbody tr")).toHaveCount(2);
+
   await page.getByTestId("rules-only-exceptions").dispatchEvent("click");
   await expect(page.getByTestId("rules-only-exceptions")).toBeChecked();
   await expect(page.getByTestId(`rules-row-${w.service.id}`)).toBeVisible();
@@ -186,6 +197,9 @@ test("vista de reglas: ítems por categoría con precio, % estándar, excepcione
 
   await page.getByRole("tab", { name: "Products" }).click();
   await expect(page.getByTestId("rules-count-items")).toHaveText("1 product");
+  await expect(page.getByLabel("Search product")).toBeVisible();
+  await expect(page.getByTestId("rules-table").locator("tbody tr", { hasText: "Reventa" })).toHaveCount(0);
+  await page.getByTestId("rules-search").fill("shamp");
   await page.getByTestId("rules-only-exceptions").dispatchEvent("click");
   await expect(page.getByTestId("rules-only-exceptions")).not.toBeChecked();
   await expect(page.getByTestId(`rules-row-${w.product.id}`)).toBeVisible();
@@ -208,9 +222,16 @@ test("panel del ítem: estándar con «Cambiar», % y comisión por profesional,
   await openRules(page);
 
   await page.getByTestId(`rules-row-${w.service2.id}`).click();
+  // The item detail is a dialog centered on the screen.
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  const box = (await dialog.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThan(2);
+  expect(Math.abs(box.y + box.height / 2 - viewport.height / 2)).toBeLessThan(2);
   const panel = page.getByTestId("rules-panel");
-  await expect(panel).toContainText(w.service2.name);
-  await expect(panel).toContainText("Price Gs. 110.000 · base excl. VAT: Gs. 100.000");
+  await expect(dialog).toContainText(w.service2.name);
+  await expect(dialog).toContainText("Price Gs. 110.000 · base excl. VAT: Gs. 100.000");
   await expect(panel.getByTestId("rules-panel-standard")).toHaveText("30 %");
   await expect(panel).toContainText("Inherits the general commission (30 %)");
   await expect(panel.getByTestId(`rules-panel-prof-${w.ana.id}`)).toContainText("Inherits 30 %");
@@ -236,14 +257,18 @@ test("panel del ítem: estándar con «Cambiar», % y comisión por profesional,
   await expect(panel.getByTestId(`rules-panel-prof-${w.bea.id}`)).toContainText("+15");
   await expect(panel.getByTestId(`rules-panel-prof-${w.bea.id}`)).toContainText("Gs. 60.000");
 
-  // 3) Edit Ana's exception on the other service.
+  // 3) Close the dialog and edit Ana's exception on the other service.
+  await page.getByTestId("rules-panel-close").click();
+  await expect(dialog).toHaveCount(0);
   await page.getByTestId(`rules-row-${w.service.id}`).click();
   await panel.getByTestId(`rules-panel-prof-${w.ana.id}`).getByRole("button").first().click();
   await panel.getByLabel(`Percentage for ${w.ana.name}`).fill("55");
   await panel.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByTestId("rules-pending-count")).toHaveText("3 unsaved changes");
 
-  await page.getByTestId("rules-save").click();
+  // «Guardar cambios» from the dialog closes it and asks how to apply all pending changes.
+  await page.getByTestId("rules-panel-save").click();
+  await expect(page.getByTestId("rules-panel")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toContainText("3 rule changes will be saved.");
   await confirmImmediate(page);
   await expect(page.getByRole("status").filter({ hasText: "Change applied." })).toBeVisible();
@@ -282,10 +307,13 @@ test("«Descartar» deshace los cambios sin guardar; «Ver historial de cambios�
   await panel.getByTestId("rules-standard-input").fill("70");
   await panel.getByTestId("rules-standard-apply").click();
   await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("70 %");
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
   await page.getByTestId("rules-discard").click();
   await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("35 %");
   await expect(page.getByTestId("rules-save")).toBeDisabled();
 
+  await page.getByTestId(`rules-row-${w.service.id}`).click();
   await panel.getByTestId("rules-history").click();
   const history = page.getByTestId("commission-rule-history");
   const firstRow = history.locator("tbody tr").first();
