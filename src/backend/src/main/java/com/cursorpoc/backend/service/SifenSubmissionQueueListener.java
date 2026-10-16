@@ -81,6 +81,22 @@ public class SifenSubmissionQueueListener {
   }
 
   /**
+   * Envío por lote: how many of the last {@link #BATCH_POLL_SCHEDULE} polls also ask {@code
+   * SiConsDE} by CDC when the lote is still pending — SIFEN can leave a lote in {@code 0361} for
+   * hours while the document itself is already approved.
+   */
+  static final int BATCH_CDC_CROSS_CHECK_POLLS = 10;
+
+  /**
+   * Whether the automatic poll that brought the lote's count to {@code pollsMade} also checks by
+   * CDC: true for the last {@link #BATCH_CDC_CROSS_CHECK_POLLS} polls of the schedule (and any poll
+   * past it).
+   */
+  static boolean crossChecksCdc(int pollsMade) {
+    return pollsMade > BATCH_POLL_SCHEDULE.size() - BATCH_CDC_CROSS_CHECK_POLLS;
+  }
+
+  /**
    * Envío por lote: {@code sifen_next_attempt_at} lags the scheduled poll by this much, so the
    * reconciler only re-enqueues when the scheduled message was actually lost.
    */
