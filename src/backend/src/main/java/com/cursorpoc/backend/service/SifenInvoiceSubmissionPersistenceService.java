@@ -236,11 +236,17 @@ class SifenInvoiceSubmissionPersistenceService {
     invoice.setSifenBatchPollCount(0);
   }
 
-  /** SIFEN envío por lote: one more consulta-lote poll was made for the invoice's lote. */
+  /**
+   * SIFEN envío por lote: one more consulta-lote poll was made for the invoice's lote.
+   *
+   * @return the poll count including this one.
+   */
   @Transactional
-  void incrementBatchPollCount(long tenantId, long invoiceId) {
+  int incrementBatchPollCount(long tenantId, long invoiceId) {
     Invoice invoice = requireInvoice(tenantId, invoiceId);
-    invoice.setSifenBatchPollCount(invoice.getSifenBatchPollCount() + 1);
+    int pollsMade = invoice.getSifenBatchPollCount() + 1;
+    invoice.setSifenBatchPollCount(pollsMade);
+    return pollsMade;
   }
 
   /** SIFEN envío por lote: the lote number to poll, if the invoice was sent in one. */

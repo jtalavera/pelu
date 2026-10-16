@@ -271,6 +271,16 @@ class SifenSubmissionQueueListenerTest {
     assertThat(SifenSubmissionQueueListener.nextBatchPollDelay(50)).isEmpty();
   }
 
+  /** The last 10 of the 50 scheduled polls (counts 41..50) also ask SIFEN by CDC. */
+  @Test
+  void crossChecksCdc_onlyForTheLastTenPollsOfTheSchedule() {
+    assertThat(SifenSubmissionQueueListener.crossChecksCdc(1)).isFalse();
+    assertThat(SifenSubmissionQueueListener.crossChecksCdc(40)).isFalse();
+    assertThat(SifenSubmissionQueueListener.crossChecksCdc(41)).isTrue();
+    assertThat(SifenSubmissionQueueListener.crossChecksCdc(50)).isTrue();
+    assertThat(SifenSubmissionQueueListener.crossChecksCdc(52)).isTrue();
+  }
+
   @Test
   void processMessage_schedulesFirstConsultaLote1sAfterTheLoteWasAccepted() {
     stillPendingOnAttempt(1);

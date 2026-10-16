@@ -5,6 +5,7 @@ import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.IntPredicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,12 @@ import org.w3c.dom.Document;
  * SifenBatchResultQueryClient}) for the document's final result instead of resending it. SIFEN
  * production answers {@code SiRecepDE} with {@code 1264} for taxpayers not enabled for the
  * synchronous service, which is why both channels exist.
+ *
+ * <p><b>Lote stuck in {@code 0361}</b>: SIFEN can keep a lote "en procesamiento" for hours. So the
+ * last {@value SifenSubmissionQueueListener#BATCH_CDC_CROSS_CHECK_POLLS} automatic polls, and every
+ * manual {@link #checkPendingStatus}, also ask {@code SiConsDE} by CDC when the lote is still
+ * pending — and only an approval from that answer is recorded (see {@link
+ * #crossCheckApprovalByControlNumber} for why a {@code 0420} is ignored there).
  */
 @Service
 public class SifenInvoiceSubmissionService {
@@ -121,7 +128,13 @@ public class SifenInvoiceSubmissionService {
       Optional<String> batchNumber = persistence.findBatchNumber(tenantId, invoiceId);
       if (batchNumber.isPresent()) {
         String cdc = persistence.requirePendingInvoiceControlNumber(tenantId, invoiceId);
-        BatchPoll poll = pollBatch(tenantId, invoiceId, batchNumber.get(), cdc);
+        BatchPoll poll =
+            pollBatch(
+                tenantId,
+                invoiceId,
+                batchNumber.get(),
+                cdc,
+                SifenSubmissionQueueListener::crossChecksCdc);
         if (poll.outcome() == BatchPollOutcome.RESOLVED) {
           return poll.result();
         }
@@ -238,12 +251,14 @@ public class SifenInvoiceSubmissionService {
    * status (and, for AC-03, its full document content when found) is persisted and the resolved
    * result returned. Throws {@code SIFEN_INVOICE_NOT_PENDING_VERIFICATION} (409) if called on an
    * invoice that isn't currently pending verification — this check only ever makes sense for one.
+   * For a document sent in a lote it polls the lote first; if the lote is still pending it then
+   * asks by CDC too, recording only an approval.
    */
   public Optional<SifenSubmissionResult> checkPendingStatus(long tenantId, long invoiceId) {
     String cdc = persistence.requirePendingInvoiceControlNumber(tenantId, invoiceId);
     Optional<String> batchNumber = persistence.findBatchNumber(tenantId, invoiceId);
     if (batchNumber.isPresent()) {
-      BatchPoll poll = pollBatch(tenantId, invoiceId, batchNumber.get(), cdc);
+      BatchPoll poll = pollBatch(tenantId, invoiceId, batchNumber.get(), cdc, pollsMade -> true);
       if (poll.outcome() == BatchPollOutcome.RESOLVED) {
         return Optional.of(poll.result());
       }
@@ -268,7 +283,60 @@ public class SifenInvoiceSubmissionService {
       return Optional.empty();
     }
 
-    SifenQueryResult result = queried.get();
+    return Optional.of(recordQueryResult(tenantId, invoiceId, cdc, queried.get()));
+  }
+
+  /**
+   * Lote still {@code 0361}: asks {@code SiConsDE} by CDC whether SIFEN already approved the
+   * document anyway. Only an approval is recorded — while the lote is still being processed, a
+   * {@code 0420} ("No existe o ha sido Rechazado") just means SIFEN hasn't processed the document
+   * yet, and recording it as a rejection would wrongly mark the invoice rejected and queue its
+   * number for inutilización. Anything other than an approval leaves the invoice untouched.
+   */
+  private Optional<SifenSubmissionResult> crossCheckApprovalByControlNumber(
+      long tenantId, long invoiceId, String batchNumber, String cdc) {
+    return applyCdcCrossCheck(
+        tenantId, invoiceId, batchNumber, cdc, queryClient.query(tenantId, cdc));
+  }
+
+  /**
+   * Records what a {@code SiConsDE} answer obtained while the invoice's lote is still {@code 0361}
+   * says — the same mapping {@link #crossCheckApprovalByControlNumber} uses. Public so the e2e-only
+   * {@code SifenInvoiceTestSupportController} can feed it a fabricated answer (e2e never reaches a
+   * real SIFEN). Returns the persisted result, or empty when the invoice stays pending.
+   */
+  public Optional<SifenSubmissionResult> recordCdcCrossCheckResult(
+      long tenantId, long invoiceId, SifenQueryResult queried) {
+    String cdc = persistence.requirePendingInvoiceControlNumber(tenantId, invoiceId);
+    String batchNumber = persistence.findBatchNumber(tenantId, invoiceId).orElse(null);
+    return applyCdcCrossCheck(tenantId, invoiceId, batchNumber, cdc, Optional.ofNullable(queried));
+  }
+
+  private Optional<SifenSubmissionResult> applyCdcCrossCheck(
+      long tenantId,
+      long invoiceId,
+      String batchNumber,
+      String cdc,
+      Optional<SifenQueryResult> queried) {
+    SifenSubmissionStatus status = queried.map(q -> q.submissionResult().status()).orElse(null);
+    if (status == SifenSubmissionStatus.APPROVED
+        || status == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
+      return Optional.of(recordQueryResult(tenantId, invoiceId, cdc, queried.get()));
+    }
+    log.info(
+        "SIFEN CDC cross-check found no approval, lote still pending tenantId={} invoiceId={} "
+            + "batchNumber={} controlNumber={} answered={} code={}",
+        tenantId,
+        invoiceId,
+        batchNumber,
+        cdc,
+        queried.isPresent(),
+        queried.map(q -> q.submissionResult().resultCode()).orElse(null));
+    return Optional.empty();
+  }
+
+  private SifenSubmissionResult recordQueryResult(
+      long tenantId, long invoiceId, String cdc, SifenQueryResult result) {
     persistence.recordResult(
         tenantId, invoiceId, result.submissionResult(), true, result.documentContent());
     log.info(
@@ -277,7 +345,7 @@ public class SifenInvoiceSubmissionService {
         invoiceId,
         cdc,
         result.submissionResult().status());
-    return Optional.of(result.submissionResult());
+    return result.submissionResult();
   }
 
   /**
@@ -285,18 +353,30 @@ public class SifenInvoiceSubmissionService {
    * {@code 0361} (still processing) or no answer → {@link BatchPollOutcome#STILL_PENDING}; {@code
    * 0362} with this CDC's row → the document's final result, persisted; anything else ({@code 0360}
    * unknown lote, {@code 0363} whole lote rejected, or a concluded lote without this CDC) → {@link
-   * BatchPollOutcome#GONE}, and the caller falls back to querying by CDC.
+   * BatchPollOutcome#GONE}, and the caller falls back to querying by CDC. When still pending and
+   * {@code crossCheckCdc} accepts the poll count (this poll included), it also asks by CDC ({@link
+   * #crossCheckApprovalByControlNumber}) and resolves on an approval.
    */
-  private BatchPoll pollBatch(long tenantId, long invoiceId, String batchNumber, String cdc) {
+  private BatchPoll pollBatch(
+      long tenantId, long invoiceId, String batchNumber, String cdc, IntPredicate crossCheckCdc) {
     Optional<SifenBatchQueryResult> queried = batchResultQueryClient.query(tenantId, batchNumber);
-    persistence.incrementBatchPollCount(tenantId, invoiceId);
+    int pollsMade = persistence.incrementBatchPollCount(tenantId, invoiceId);
     if (queried.isEmpty() || queried.get().stillProcessing()) {
       log.info(
-          "SIFEN batch still pending tenantId={} invoiceId={} batchNumber={} answered={}",
+          "SIFEN batch still pending tenantId={} invoiceId={} batchNumber={} answered={} "
+              + "pollsMade={}",
           tenantId,
           invoiceId,
           batchNumber,
-          queried.isPresent());
+          queried.isPresent(),
+          pollsMade);
+      if (crossCheckCdc.test(pollsMade)) {
+        Optional<SifenSubmissionResult> approved =
+            crossCheckApprovalByControlNumber(tenantId, invoiceId, batchNumber, cdc);
+        if (approved.isPresent()) {
+          return new BatchPoll(BatchPollOutcome.RESOLVED, approved.get());
+        }
+      }
       return new BatchPoll(BatchPollOutcome.STILL_PENDING, null);
     }
     return applyBatchQueryResult(tenantId, invoiceId, batchNumber, cdc, queried.get());

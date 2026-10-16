@@ -33,6 +33,7 @@ import com.cursorpoc.backend.service.SifenInvoiceNotificationService;
 import com.cursorpoc.backend.service.SifenInvoiceSubmissionService;
 import com.cursorpoc.backend.service.SifenNumberVoidingService;
 import com.cursorpoc.backend.service.SifenQrCodeService;
+import com.cursorpoc.backend.service.SifenQueryResult;
 import com.cursorpoc.backend.service.SifenSubmissionResult;
 import com.cursorpoc.backend.stock.InvoiceStockEvent;
 import com.cursorpoc.backend.web.dto.SifenCertificateUploadRequest;
@@ -283,6 +284,44 @@ public class SifenInvoiceTestSupportController {
             tenantId, id, new SifenBatchQueryResult(body.batchResultCode(), null, documents));
     return result.orElseThrow(
         () -> new ResponseStatusException(HttpStatus.CONFLICT, "SIFEN_BATCH_RESULT_UNRESOLVED"));
+  }
+
+  /** Body of {@link #simulateCdcCrossCheck}: one SiConsDE answer for the invoice's CDC. */
+  public record SimulatedCdcAnswer(
+      SifenSubmissionStatus status, String resultCode, String message) {}
+
+  /**
+   * SIFEN envío por lote, lote still {@code 0361}: feeds a fabricated SiConsDE answer (e2e never
+   * reaches a real SIFEN) to the real {@code
+   * SifenInvoiceSubmissionService#recordCdcCrossCheckResult} — the same mapping the last automatic
+   * polls and the manual check use — for an invoice left pending in a lote by {@link
+   * #preparePendingInBatch}. Answers the persisted result, or an empty body when the invoice stays
+   * pending.
+   */
+  @PostMapping("/invoices/{id}/simulate-cdc-cross-check")
+  public SifenSubmissionResult simulateCdcCrossCheck(
+      @PathVariable long id, @RequestBody SimulatedCdcAnswer body) {
+    log.info(
+        "POST /api/admin/sifen-test-support/invoices/{}/simulate-cdc-cross-check status={} code={}",
+        id,
+        body.status(),
+        body.resultCode());
+    Invoice invoice =
+        invoiceRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_NOT_FOUND"));
+    long tenantId = invoice.getTenant().getId();
+    SifenQueryResult answer =
+        new SifenQueryResult(
+            new SifenSubmissionResult(
+                body.status(),
+                null,
+                body.resultCode(),
+                body.message(),
+                LocalDateTime.now(timeProperties.zoneId())),
+            null);
+    return submissionService.recordCdcCrossCheckResult(tenantId, id, answer).orElse(null);
   }
 
   /**
