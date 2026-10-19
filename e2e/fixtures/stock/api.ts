@@ -298,15 +298,16 @@ export async function proxyMode(mode: "up" | "down" | "fail400", count = 0): Pro
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Builds a servicios .xlsx (HU-50 template + HU-59 tipo/sku) in memory for the platform upload. */
-export async function serviciosXlsx(
-  rows: Array<{ categoria: string; nombre: string; precio: number; tipo?: string; sku?: string }>,
+/** Platform upload file for the "Productos" tab (no duracion_minutos; every row is a Producto). */
+export async function productosXlsx(
+  rows: Array<{ categoria: string; nombre: string; precio: number; sku?: string }>,
 ): Promise<Buffer> {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Servicios");
-  ws.addRow(["categoria", "nombre", "precio", "duracion_minutos", "impuesto", "activo", "tipo", "sku"]);
+  const ws = wb.addWorksheet("Productos");
+  ws.addRow(["categoria", "nombre", "precio", "impuesto", "activo", "sku"]);
   for (const r of rows) {
-    ws.addRow([r.categoria, r.nombre, r.precio, 1, "", "SI", r.tipo ?? "", r.sku ?? ""]);
+    ws.addRow([r.categoria, r.nombre, r.precio, "", "SI", r.sku ?? ""]);
   }
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

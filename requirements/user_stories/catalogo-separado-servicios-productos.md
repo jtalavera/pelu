@@ -35,7 +35,7 @@ Cada criterio está cubierto por `e2e/tests/menu-productos-separado-de-servicios
 6. **Reglas de la API.** Un ítem solo puede estar en una categoría de su mismo tipo (`CATEGORY_KIND_MISMATCH`); una categoría no puede cambiar de tipo (`CATEGORY_KIND_IMMUTABLE`). `GET /api/services` y `GET /api/service-categories` aceptan `?kind=SERVICE|PRODUCT`.
 7. **Calendario.** Al agendar un turno solo se ofrecen Servicios (nunca Productos).
 8. **Lista de precios (PDF).** Servicios y Productos van en secciones separadas (`issue-217-lista-precios.spec.ts`).
-9. **Importación Excel.** Se mantiene la columna `tipo`. La categoría nueva toma el tipo de la fila; una fila cuyo tipo no coincide con el de una categoría ya existente se rechaza con `IMPORT_ROW_CATEGORY_KIND_MISMATCH` (`hu-51-importar-servicios-desde-excel.spec.ts`).
+9. **Importación Excel.** Servicios y Productos se importan con archivos separados (ver [Importar productos desde Excel](../multi-tenant/importar-productos-desde-excel.md)); ya no hay columna `tipo`. La categoría nueva toma el tipo del archivo; una fila cuya categoría ya existe con el otro tipo se rechaza con `IMPORT_ROW_CATEGORY_KIND_MISMATCH` (`hu-51-importar-servicios-desde-excel.spec.ts`, `importar-productos-desde-excel.spec.ts`).
 10. **Multi-tenant.** Las categorías por tipo respetan el aislamiento entre salones (`mt-isolation/mt-stock.spec.ts`).
 
 ## Migración de datos (V72)

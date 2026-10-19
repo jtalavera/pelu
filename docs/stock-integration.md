@@ -7,7 +7,7 @@ Lo que pelu implementa para que un salón use Stock. Contrato del otro lado: `co
 | Pieza | Dónde |
 |---|---|
 | Flags `STOCK_MODULE` (OFF global), `STOCK_PHYSICAL_COUNT`, `STOCK_TOURS` | `V69`, `FemmeDataInitializer` — misma resolución "Y" que cualquier flag |
-| Tipo Servicio/Producto + SKU en el catálogo y en el upload de plataforma (`tipo`, `sku`) | `V70`, `ServiceCatalogService`, `ServiceImportService` |
+| Tipo Servicio/Producto + SKU en el catálogo; el upload de plataforma tiene archivos separados de Servicios y Productos (`sku` solo en Productos) y **no** sincroniza con Stock: después de importar productos hay que usar «Sincronizar catálogo con Stock» desde la ficha del salón | `V70`, `ServiceCatalogService`, `ServiceImportService` — [HU](../requirements/multi-tenant/importar-productos-desde-excel.md) |
 | Catálogo separado: Servicios y Productos con pantallas y categorías propias (`service_categories.kind`) | `V72`, `ServiceCatalogService`, `CatalogItemsPage` — [HU](../requirements/user_stories/catalogo-separado-servicios-productos.md) |
 | Outbox transaccional (`stock_outbox`) + estado por salón (`stock_tenant_link`) | `V71`, paquete `com.cursorpoc.backend.stock` |
 | Despertador: cola `stock-integration` (Service Bus) o cola local en proceso | `StockServiceBusConfiguration`, `ServiceBusStockOutboxQueue`, `LocalAsyncStockOutboxQueue` |
