@@ -138,7 +138,6 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
   private final SifenNumberVoidingService sifenNumberVoidingService;
   private final SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
-  private final DuplicateClientEmailPolicy duplicateClientEmailPolicy;
   private final BusinessMetrics businessMetrics;
 
   public InvoiceService(
@@ -154,7 +153,6 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       SifenInvoiceHeaderService sifenInvoiceHeaderService,
       SifenNumberVoidingService sifenNumberVoidingService,
       SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence,
-      DuplicateClientEmailPolicy duplicateClientEmailPolicy,
       BusinessMetrics businessMetrics) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
@@ -168,7 +166,6 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
     this.sifenSubmissionPersistence = sifenSubmissionPersistence;
-    this.duplicateClientEmailPolicy = duplicateClientEmailPolicy;
     this.businessMetrics = businessMetrics;
   }
 
@@ -466,10 +463,6 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     if (client != null
         && recipientEmail != null
         && !recipientEmail.equalsIgnoreCase(client.getEmail())) {
-      if (duplicateClientEmailPolicy.isUniquenessEnforced(tenantId)
-          && clientRepository.findByTenantIdAndEmail(tenantId, recipientEmail).isPresent()) {
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
-      }
       client.setEmail(recipientEmail);
     }
     return client;

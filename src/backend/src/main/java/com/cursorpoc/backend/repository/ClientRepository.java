@@ -39,11 +39,6 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
       Pageable pageable);
 
   @Query(
-      "SELECT c FROM Client c WHERE c.tenant.id = :tenantId AND LOWER(c.email) = LOWER(:email) AND c.email IS NOT NULL")
-  Optional<Client> findByTenantIdAndEmail(
-      @Param("tenantId") Long tenantId, @Param("email") String email);
-
-  @Query(
       "SELECT c FROM Client c WHERE c.tenant.id = :tenantId AND c.ruc = :ruc AND c.ruc IS NOT NULL")
   Optional<Client> findByTenantIdAndRuc(@Param("tenantId") Long tenantId, @Param("ruc") String ruc);
 

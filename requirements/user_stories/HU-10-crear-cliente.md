@@ -28,7 +28,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 1. **Campos** — Se puede crear una cliente con: nombre completo, teléfono, email y RUC; todos opcionales excepto el nombre.
 2. **Validación RUC** — Si se informa RUC, acepta formato paraguayo (`XXXXXXXX-D`) y valida el dígito verificador al guardar.
-3. **Unicidad** — Antes de guardar, el sistema verifica duplicados por teléfono, email o RUC **solo cuando el campo tiene valor** (valores vacíos no participan en la unicidad); si hay conflicto, muestra qué campo está duplicado.
+3. **Unicidad** — Antes de guardar, el sistema verifica duplicados por teléfono o RUC **solo cuando el campo tiene valor** (valores vacíos no participan en la unicidad); si hay conflicto, muestra qué campo está duplicado. El **email no es único**: varias clientes del mismo negocio pueden compartir el mismo email.
 4. **Disponibilidad inmediata** — La cliente creada está disponible de inmediato para búsqueda al agendar un turno (listado y buscador de clientes).
 5. **Cliente ocasional — identificador** — Existe opción de “cliente ocasional” representada por un **identificador genérico** del sistema (sin alta con datos obligatorios); su uso en agendas y ventas se describe en las historias correspondientes.
 

@@ -25,15 +25,10 @@ public class ClientService {
 
   private final ClientRepository clientRepository;
   private final TenantRepository tenantRepository;
-  private final DuplicateClientEmailPolicy duplicateClientEmailPolicy;
 
-  public ClientService(
-      ClientRepository clientRepository,
-      TenantRepository tenantRepository,
-      DuplicateClientEmailPolicy duplicateClientEmailPolicy) {
+  public ClientService(ClientRepository clientRepository, TenantRepository tenantRepository) {
     this.clientRepository = clientRepository;
     this.tenantRepository = tenantRepository;
-    this.duplicateClientEmailPolicy = duplicateClientEmailPolicy;
   }
 
   public List<ClientResponse> search(
@@ -86,11 +81,6 @@ public class ClientService {
 
     if (phone != null && phoneDuplicateExists(tenantId, phone, null)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
-    }
-    if (email != null
-        && duplicateClientEmailPolicy.isUniquenessEnforced(tenantId)
-        && clientRepository.findByTenantIdAndEmail(tenantId, email).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
     }
     if (ruc != null && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
@@ -157,12 +147,6 @@ public class ClientService {
         && !phone.equals(client.getPhone())
         && phoneDuplicateExists(tenantId, phone, client.getId())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
-    }
-    if (email != null
-        && !email.equalsIgnoreCase(client.getEmail())
-        && duplicateClientEmailPolicy.isUniquenessEnforced(tenantId)
-        && clientRepository.findByTenantIdAndEmail(tenantId, email).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
     }
     if (ruc != null
         && !ruc.equals(client.getRuc())
