@@ -16,22 +16,29 @@ test.describe("Nuevo comprobante · orden de la lista de ítems (servicios antes
     await ensureActiveFiscalStampForInvoices(request, token);
 
     const stamp = Date.now();
-    const cat = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
-      name: `E2E Orden ${stamp}`,
-      accentKey: "stone",
-    });
+    // A category only holds items of its own kind, so each kind gets its own category.
+    const createCategory = (kind: "SERVICE" | "PRODUCT") =>
+      apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+        name: `E2E Orden ${kind} ${stamp}`,
+        accentKey: "stone",
+        kind,
+      });
+    const categoryIdByKind = {
+      SERVICE: (await createCategory("SERVICE")).id,
+      PRODUCT: (await createCategory("PRODUCT")).id,
+    };
     // Names are chosen so that the alphabetical/creation order would put the products first;
     // the dropdown must still list the services before them.
     const items = [
-      { name: `Aaa Producto ${stamp}`, kind: "PRODUCT" },
-      { name: `Bbb Producto ${stamp}`, kind: "PRODUCT" },
-      { name: `Yyy Servicio ${stamp}`, kind: "SERVICE" },
-      { name: `Zzz Servicio ${stamp}`, kind: "SERVICE" },
+      { name: `Aaa Producto ${stamp}`, kind: "PRODUCT" as const },
+      { name: `Bbb Producto ${stamp}`, kind: "PRODUCT" as const },
+      { name: `Yyy Servicio ${stamp}`, kind: "SERVICE" as const },
+      { name: `Zzz Servicio ${stamp}`, kind: "SERVICE" as const },
     ];
     for (const item of items) {
       await apiPostJson(request, token, "/api/services", {
         name: item.name,
-        categoryId: cat.id,
+        categoryId: categoryIdByKind[item.kind],
         priceMinor: 10000,
         durationMinutes: 30,
         kind: item.kind,
