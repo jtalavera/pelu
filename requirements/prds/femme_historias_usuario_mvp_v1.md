@@ -15,7 +15,7 @@
 | **Zona horaria** | Todos los cálculos de “día”, rangos de fecha y timestamps de negocio usan la **zona horaria configurada en el servidor**. Se asume que todos los clientes del producto operan en **el mismo huso** que el servidor (no hay selector de timezone por usuario en esta etapa). |
 | **Sesión (HU-01)** | El límite de sesión (p. ej. 8 horas) aplica por **inactividad**: ante actividad del usuario, el temporizador se reinicia; al vencer el inactivo, redirige al login. |
 | **Ingresos / métricas (HU-03)** | “Ingresos” se desdobla en dos métricas: **facturado** (total de comprobantes emitidos según reglas definidas, excluyendo anulados salvo que se indique lo contrario) y **cobrado** (pagos efectivamente registrados en comprobantes). Ambas deben mostrarse donde el dashboard refiera ingresos del día o de la semana. |
-| **Unicidad de clientes (HU-10, HU-12)** | Las comprobaciones de duplicado por teléfono, email o RUC consideran **solo valores no vacíos** (cadenas vacías o nulas no participan en la unicidad). |
+| **Unicidad de clientes (HU-10, HU-12)** | Las comprobaciones de duplicado por teléfono o RUC consideran **solo valores no vacíos** (cadenas vacías o nulas no participan en la unicidad). El email de la cliente **no es único**. |
 | **Cliente ocasional** | Se representa mediante un **identificador genérico** del sistema (por tenant), no como fila de cliente con datos obligatorios. |
 | **Actualización “en tiempo real” (HU-03)** | El refresco de datos del dashboard es por **polling cada 1 minuto** (no WebSockets en esta definición). |
 | **Categorías de servicio (HU-04)** | El administrador del negocio puede **crear, editar y desactivar** su propia lista de categorías. En servicios y filtros, la categoría es siempre una **lista cerrada** definida por ese negocio. |
@@ -206,7 +206,7 @@
 **Criterios de aceptación:**
 - [ ] Puedo crear una cliente con: nombre completo, teléfono, email y RUC (todos opcionales salvo el nombre).
 - [ ] El campo RUC acepta el formato paraguayo (`XXXXXXXX-D`) y valida el dígito verificador al guardar.
-- [ ] El sistema verifica que no exista ya una cliente con el mismo teléfono, email o RUC **cuando esos campos tienen valor** (no se consideran duplicados los vacíos); muestra un mensaje indicando cuál campo está duplicado.
+- [ ] El sistema verifica que no exista ya una cliente con el mismo teléfono o RUC **cuando esos campos tienen valor** (no se consideran duplicados los vacíos); muestra un mensaje indicando cuál campo está duplicado.
 - [ ] La cliente creada queda disponible inmediatamente para buscar al agendar o facturar.
 - [ ] Existe la opción de **cliente ocasional**, representada por un **identificador genérico** del sistema (sin alta de cliente con datos obligatorios).
 
