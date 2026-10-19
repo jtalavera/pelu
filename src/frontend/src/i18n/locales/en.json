@@ -746,7 +746,6 @@
           "ruc": "RUC (tax ID).",
           "documento_identidad": "Identity document number (e.g. cédula), for clients without a RUC.",
           "direccion": "Address.",
-          "tipo": "Servicio or Producto. Defaults to Servicio when left empty. Only products are sent to Stock.",
           "sku": "Optional product code (up to 64 characters), shown in Stock."
         },
         "columnsByEntity": {
@@ -2162,7 +2161,6 @@
       "SIFEN_CSC_NOT_CONFIGURED": "This business has no security code (CSC) loaded. Load the one the DNIT issued in Settings → SIFEN → Security code.",
       "INVALID_SKU": "The code (SKU) can have at most 64 characters (e.g. SH-300).",
       "IMPORT_ROW_CATEGORY_KIND_MISMATCH": "That category already exists as the other type: services and products have separate categories.",
-      "IMPORT_ROW_KIND_INVALID": "Invalid type: use Servicio or Producto (or leave it empty for Servicio).",
       "IMPORT_ROW_SKU_TOO_LONG": "The SKU can have at most 64 characters (e.g. SH-300)."
     },
     "pagination": {

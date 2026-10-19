@@ -17,9 +17,7 @@ import org.springframework.stereotype.Component;
  *       SalonService.priceMinor}, integer Guaraníes, no separators), {@code duracion_minutos}
  *       ({@code SalonService.durationMinutes}), optional {@code impuesto} (maps to {@code
  *       Tax.name}; omitted = no tax), optional {@code activo} (SI/NO, default SI, maps to {@code
- *       SalonService.active}), and since HU-59 (Stock) optional {@code tipo} (Servicio/Producto,
- *       blank = Servicio, maps to {@code SalonService.kind}) and {@code sku} ({@code
- *       SalonService.sku}).
+ *       SalonService.active}). Every row is a Servicio — products have their own file.
  *   <li>AC-3 Clientes: {@code nombre_completo} ({@code Client.fullName}), optional {@code
  *       telefono}/{@code email}/{@code ruc}/{@code documento_identidad}/{@code direccion}/{@code
  *       activo} (mapping to {@code Client.phone}/{@code email}/{@code ruc}/{@code
@@ -28,7 +26,8 @@ import org.springframework.stereotype.Component;
  *       {@code telefono}/{@code email}/{@code direccion}/{@code activo}. PIN and system access are
  *       deliberately excluded — configured manually per HU-22, never via Excel.
  *   <li>Productos (catálogo separado): same as Servicios minus {@code duracion_minutos} (stored as
- *       the 1-minute minimum) and {@code tipo} (always Producto).
+ *       the 1-minute minimum), plus optional {@code sku} ({@code SalonService.sku}). Every row is a
+ *       Producto.
  * </ul>
  */
 @Component
@@ -43,9 +42,7 @@ public class ImportColumnTemplateRegistry {
               new ImportColumnDefinition("precio", true),
               new ImportColumnDefinition("duracion_minutos", true),
               new ImportColumnDefinition("impuesto", false),
-              new ImportColumnDefinition("activo", false),
-              new ImportColumnDefinition("tipo", false),
-              new ImportColumnDefinition("sku", false)),
+              new ImportColumnDefinition("activo", false)),
           ImportEntityType.CLIENTS,
           List.of(
               new ImportColumnDefinition("nombre_completo", true),

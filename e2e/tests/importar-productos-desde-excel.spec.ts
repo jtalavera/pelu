@@ -9,8 +9,9 @@ import { loginAsPlatformAdmin } from "../fixtures/auth";
 //
 // The Platform Admin's "/platform/import" screen gets a "Productos" tab next to "Servicios" (the
 // catalog split gives products their own screen and categories). The products file has no
-// duracion_minutos/tipo columns: every row becomes a Producto (stored with the 1-minute minimum
-// duration), in a product category auto-created when missing.
+// duracion_minutos column: every row becomes a Producto (stored with the 1-minute minimum
+// duration), in a product category auto-created when missing. No import syncs to Stock on its
+// own (covered in stock/hu-62-sincronizar-catalogo.spec.ts).
 
 const E2E_JWT_SECRET = "e2e-jwt-secret-min-32-characters-long!!";
 
@@ -55,7 +56,7 @@ const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 test.describe("Importar productos desde Excel", () => {
   // AC-1: the import screen has a Productos tab documenting its own column set — no
-  // duracion_minutos and no tipo.
+  // duracion_minutos.
   test("AC1: la solapa Productos documenta categoria, nombre, precio (obligatorias) e impuesto, activo, sku (opcionales)", async ({
     page,
   }) => {

@@ -176,23 +176,30 @@ test.describe("HU-51 · Importar catálogo de servicios desde Excel", () => {
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText("Gs. 175.000");
   });
-  // Catalog split (Servicios / Productos): a categoria created by the import takes the kind of
-  // the row that introduces it, and a categoria can never hold both kinds — the row of the other
-  // kind is rejected with its own reason while the rest of the file still imports.
-  test("Catálogo separado: la categoría nueva toma el tipo de su fila y una categoría no puede mezclar Servicio y Producto", async ({
+  // Catalog split (Servicios / Productos): the services file holds only services — every row is a
+  // Servicio (a legacy tipo/sku column is ignored), a new categoria is created as a service
+  // category, and a row pointing at an existing product category is rejected with its own reason
+  // while the rest of the file still imports.
+  test("Catálogo separado: el archivo de servicios crea solo servicios y rechaza filas en categorías de productos", async ({
     page,
     request,
   }) => {
     const platformToken = await loginPlatformAdminApi(request);
     const tenant = await createTenant(request, platformToken, `E2E Import Tipos ${Date.now()}`);
+    const forged = forgeTenantAdminToken(tenant.id, "999996", "e2e-import-tipos@e2e.test");
+    const catRes = await request.post(`${apiBaseUrl()}/api/service-categories`, {
+      headers: authHeaders(forged),
+      data: { name: "Shampoos", kind: "PRODUCT" },
+    });
+    expect(catRes.ok(), await catRes.text()).toBeTruthy();
 
     const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Servicios");
     ws.addRow(["categoria", "nombre", "precio", "duracion_minutos", "impuesto", "activo", "tipo", "sku"]);
-    ws.addRow(["Cortes", "Corte clasico", 80000, 30, "", "SI", "Servicio", ""]);
-    ws.addRow(["Shampoos", "Shampoo 300 ml", 95000, 1, "", "SI", "Producto", "SH-300"]);
-    ws.addRow(["Cortes", "Shampoo en categoria de servicios", 50000, 1, "", "SI", "Producto", ""]);
+    ws.addRow(["Cortes", "Corte clasico", 80000, 30, "", "SI", "", ""]);
+    ws.addRow(["Cortes", "Cera con tipo Producto", 50000, 15, "", "SI", "Producto", "CE-1"]);
+    ws.addRow(["Shampoos", "Lavado en categoria de productos", 30000, 15, "", "SI", "", ""]);
     const buffer = Buffer.from(await wb.xlsx.writeBuffer());
 
     await loginAsPlatformAdmin(page);
@@ -213,16 +220,15 @@ test.describe("HU-51 · Importar catálogo de servicios desde Excel", () => {
       "That category already exists as the other type",
     );
 
-    const forged = forgeTenantAdminToken(tenant.id, "999996", "e2e-import-tipos@e2e.test");
     const get = async <T>(url: string) =>
       (await (await request.get(`${apiBaseUrl()}${url}`, { headers: authHeaders(forged) })).json()) as T;
     const serviceCats = (await get<Array<{ name: string }>>("/api/service-categories?kind=SERVICE")).map((c) => c.name);
     const productCats = (await get<Array<{ name: string }>>("/api/service-categories?kind=PRODUCT")).map((c) => c.name);
     expect(serviceCats).toEqual(["Cortes"]);
     expect(productCats).toEqual(["Shampoos"]);
-    const items = await get<Array<{ name: string; kind: string }>>("/api/services");
-    expect(items.map((i) => `${i.name}:${i.kind}`).sort()).toEqual(
-      ["Corte clasico:SERVICE", "Shampoo 300 ml:PRODUCT"].sort(),
+    const items = await get<Array<{ name: string; kind: string; sku: string | null }>>("/api/services");
+    expect(items.map((i) => `${i.name}:${i.kind}:${i.sku ?? ""}`).sort()).toEqual(
+      ["Cera con tipo Producto:SERVICE:", "Corte clasico:SERVICE:"].sort(),
     );
   });
 });

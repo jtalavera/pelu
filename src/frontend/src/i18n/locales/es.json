@@ -746,7 +746,6 @@
           "ruc": "RUC (identificación tributaria).",
           "documento_identidad": "Número de documento de identidad (p. ej. cédula), para clientes sin RUC.",
           "direccion": "Dirección.",
-          "tipo": "Servicio o Producto. Si se deja vacío, es Servicio. Solo los productos se envían a Stock.",
           "sku": "Código de producto opcional (hasta 64 caracteres), visible en Stock."
         },
         "columnsByEntity": {
@@ -2162,7 +2161,6 @@
       "SIFEN_CSC_NOT_CONFIGURED": "Este negocio no tiene un código de seguridad (CSC) cargado. Cargá el que entregó la DNIT en Configuración → SIFEN → Código de seguridad.",
       "INVALID_SKU": "El código (SKU) puede tener como máximo 64 caracteres (p. ej. SH-300).",
       "IMPORT_ROW_CATEGORY_KIND_MISMATCH": "Esa categoría ya existe con el otro tipo: los servicios y los productos tienen categorías separadas.",
-      "IMPORT_ROW_KIND_INVALID": "Tipo inválido: usá Servicio o Producto (o dejalo vacío para Servicio).",
       "IMPORT_ROW_SKU_TOO_LONG": "El SKU puede tener como máximo 64 caracteres (p. ej. SH-300)."
     },
     "pagination": {

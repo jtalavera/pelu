@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { loginAs, loginAsPlatformAdmin } from "../../fixtures/auth";
-import { pelu, peluLogin, platformToken, serviciosXlsx } from "../../fixtures/stock/api";
+import { pelu, peluLogin, platformToken, productosXlsx } from "../../fixtures/stock/api";
 import { getStockWorld } from "../../fixtures/stock/world";
 
 // HU-59 · Flags de Stock y tipo Producto (Cambios 1 y 2 del plan de integración con control-stock).
@@ -102,39 +102,39 @@ test.describe("HU-59 · Flags de Stock y tipo Producto", () => {
     await expect(page.locator("tr").filter({ hasText: name })).toHaveCount(0);
   });
 
-  test("Cambio 2 · el upload de la plataforma acepta las columnas Tipo y SKU con validación por fila", async ({
+  test("Cambio 2 · el upload de la plataforma tiene su archivo de Productos con SKU (y Servicios sin Tipo ni SKU)", async ({
     page,
   }) => {
     const world = getStockWorld();
     const stamp = Date.now();
     await loginAsPlatformAdmin(page);
     await page.goto("/platform/import");
+    // Servicios no longer documents tipo/sku; Productos documents sku.
     await page.getByTestId("import-tab-services").click();
-    // The template documents both new columns.
-    await expect(page.getByText("tipo", { exact: true })).toBeVisible();
-    await expect(page.getByText("sku", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("import-column-row-services-tipo")).toHaveCount(0);
+    await expect(page.getByTestId("import-column-row-services-sku")).toHaveCount(0);
+    await page.getByTestId("import-tab-products").click();
+    await expect(page.getByTestId("import-column-row-products-sku")).toBeVisible();
 
-    const file = await serviciosXlsx([
-      { categoria: "Productos", nombre: `Tinte rubio ${stamp}`, precio: 70000, tipo: "Producto", sku: `TR-${stamp}` },
-      { categoria: "Cortes", nombre: `Corte niño ${stamp}`, precio: 40000, tipo: "" },
-      { categoria: "Productos", nombre: `Raro ${stamp}`, precio: 10000, tipo: "Gadget" },
+    const file = await productosXlsx([
+      { categoria: "Tintes", nombre: `Tinte rubio ${stamp}`, precio: 70000, sku: `TR-${stamp}` },
+      { categoria: "Tintes", nombre: `Tinte negro ${stamp}`, precio: 70000 },
+      { categoria: "Tintes", nombre: `Raro ${stamp}`, precio: 10000, sku: "X".repeat(65) },
     ]);
-    await page.locator("#import-run-tenant-services").selectOption({ value: String(world.s3.id) });
-    await page.locator("#import-run-file-services").setInputFiles({
+    await page.locator("#import-run-tenant-products").selectOption({ value: String(world.s3.id) });
+    await page.locator("#import-run-file-products").setInputFiles({
       name: "productos.xlsx",
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       buffer: file,
     });
     await page.getByRole("button", { name: "Import" }).click();
-    const summary = page.getByTestId("import-run-summary-services");
+    const summary = page.getByTestId("import-run-summary-products");
     await expect(summary).toContainText("2 of 3 rows imported. 1 failed.");
-    await expect(page.getByTestId("import-run-failed-rows-services")).toContainText(
-      "Invalid type: use Servicio or Producto",
-    );
+    await expect(page.getByTestId("import-run-failed-rows-products")).toContainText("at most 64 characters");
 
     const token = await peluLogin(world.s3.adminEmail, world.s3.adminPassword);
     const list = (await pelu<Array<{ name: string; kind: string; sku: string | null }>>("/api/services", { token })).body;
     expect(list.find((s) => s.name === `Tinte rubio ${stamp}`)).toMatchObject({ kind: "PRODUCT", sku: `TR-${stamp}` });
-    expect(list.find((s) => s.name === `Corte niño ${stamp}`)).toMatchObject({ kind: "SERVICE", sku: null });
+    expect(list.find((s) => s.name === `Tinte negro ${stamp}`)).toMatchObject({ kind: "PRODUCT", sku: null });
   });
 });
