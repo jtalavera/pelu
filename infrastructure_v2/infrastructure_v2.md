@@ -197,7 +197,8 @@ SELECT tenant_id, COUNT(*) FROM sifen_certificates GROUP BY tenant_id;
 
 Terraform sets the backend's `FEMME_SIFEN_ENVIRONMENT` from `sifen_environment` in each
 `environments/<env>/terraform.tfvars` (`TEST` default, or `PRODUCTION`). `prod` is `PRODUCTION` and `dev` (the `test` environment) is
-`TEST`. With `PRODUCTION`, documents go to `sifen.set.gov.py` and the KuDE drops the test legend. Each tenant needs its production
+`TEST`. With `PRODUCTION`, documents go to `sifen.set.gov.py`, the KuDE drops the test legend and
+`ALLOW_DUPLICATE_CLIENT_EMAIL` stops applying (TEST only). Each tenant needs its production
 certificate (uploaded in the UI, stored in Key Vault), real timbrado and CSC. Never flip this by hand
 in the Portal: the next `terraform apply` would revert it.
 

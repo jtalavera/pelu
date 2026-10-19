@@ -145,9 +145,10 @@ class ClientImportServiceTest {
     verify(clientRepository, org.mockito.Mockito.times(1)).save(any());
   }
 
-  // Client email is not unique: a row whose email matches an existing tenant client is imported.
+  // AC-3: a non-blank email duplicating an existing tenant client (case-insensitive) rejects the
+  // row.
   @Test
-  void duplicateEmailAgainstExistingClient_isImported() {
+  void duplicateEmailAgainstExistingClient_isRejected() {
     Client existing = new Client();
     existing.setId(9L);
     existing.setTenant(tenant);
@@ -160,9 +161,10 @@ class ClientImportServiceTest {
         workbook(CLIENT_HEADERS, new String[] {"Nuevo Cliente", null, "Cliente@Example.com"});
     ImportResult result = service.importClients(1L, bytes);
 
-    assertThat(result.importedCount()).isEqualTo(1);
-    assertThat(result.failedCount()).isZero();
-    verify(clientRepository).save(any());
+    assertThat(result.failedCount()).isEqualTo(1);
+    assertThat(result.rows().get(0).errorCode())
+        .isEqualTo(ClientImportService.ERROR_EMAIL_DUPLICATE);
+    verify(clientRepository, never()).save(any());
   }
 
   // AC-3: a non-blank RUC duplicating an existing tenant client rejects the row.
