@@ -1347,7 +1347,7 @@
         "unnamedInvoice": "Comprobante sin nominar",
         "clientEmailLabel": "Correo electrónico",
         "clientEmailPlaceholder": "cliente@ejemplo.com",
-        "clientEmailHint": "Se le enviará el KuDE a esta dirección y quedará guardada en la ficha del cliente.",
+        "clientEmailHint": "Se le enviará el KuDE a esta dirección. No se modifica la ficha del cliente.",
         "clientEmailRequired": "Ingresá el correo electrónico del cliente: es obligatorio para emitir un comprobante electrónico (salvo \"Sin identificar\").",
         "clientDisplayName": "Nombre o Razón social",
         "clientDisplayNamePlaceholder": "CONSUMIDOR FINAL",

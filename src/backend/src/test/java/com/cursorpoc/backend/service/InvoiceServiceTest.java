@@ -1144,11 +1144,11 @@ class InvoiceServiceTest {
   }
 
   /**
-   * Issue #173's recipient-email write-back: client emails are not unique, so an email already used
-   * by another client is written back to the linked client's profile without any lookup.
+   * Issue #173: the recipient email typed on the invoice is stored on the invoice only; the linked
+   * client's profile email is left untouched.
    */
   @Test
-  void issueInvoice_recipientEmailWriteBack_allowsEmailUsedByAnotherClient() {
+  void issueInvoice_recipientEmail_doesNotUpdateClientProfile() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
         .thenReturn(Optional.of(openSession));
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
@@ -1187,7 +1187,8 @@ class InvoiceServiceTest {
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
     assertThat(result.clientId()).isEqualTo(7L);
-    assertThat(client.getEmail()).isEqualTo("taken@b.com");
+    assertThat(result.recipientEmail()).isEqualTo("taken@b.com");
+    assertThat(client.getEmail()).isEqualTo("old@b.com");
   }
 
   /**
