@@ -1192,6 +1192,53 @@ class InvoiceServiceTest {
   }
 
   /**
+   * Issue #173: the first time (the linked client has no email yet) the recipient email typed on
+   * the invoice is also saved to the client's profile — even if another client already uses it.
+   */
+  @Test
+  void issueInvoice_recipientEmail_savedToProfileWhenClientHasNoEmail() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    Client client = new Client();
+    client.setId(7L);
+    client.setTenant(tenant);
+    client.setFullName("Ana García");
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            7L,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            null,
+            null,
+            "taken@b.com",
+            null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.clientId()).isEqualTo(7L);
+    assertThat(result.recipientEmail()).isEqualTo("taken@b.com");
+    assertThat(client.getEmail()).isEqualTo("taken@b.com");
+  }
+
+  /**
    * The linked client's profile RUC is never used as a fallback for identification: an invoice at
    * or above the threshold must be blocked unless the RUC/document is explicitly sent on this
    * invoice, even when a client with a saved RUC is linked — matches

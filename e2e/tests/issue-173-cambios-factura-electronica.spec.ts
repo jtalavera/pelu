@@ -140,7 +140,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await expect(page.locator("#billing-client-email")).toHaveValue("");
   });
 
-  test("item 1 · a new email typed on the comprobante form is not written to the client record", async ({
+  test("item 1 · a new email typed on the comprobante form is saved to the client record when the client has no email yet", async ({
     page,
     request,
   }) => {
@@ -154,8 +154,8 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await enableSifen(request, token);
     const seed = await seedCategoryServiceProfessional(request, token);
     const stamp = Date.now();
-    const name = `E2E 173 SIN GUARDAR ${stamp}`;
-    const newEmail = `recipient-${stamp}@example.com`;
+    const name = `E2E 173 WRITEBACK ${stamp}`;
+    const newEmail = `writeback-${stamp}@example.com`;
     const client = await seedClient(request, token, name);
 
     await loginAsDemo(page);
@@ -171,8 +171,8 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await page.locator("#pay-amount-0").fill("45000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
-    const unchanged = await apiGetJson<{ email: string | null }>(request, token, `/api/clients/${client.id}`);
-    expect(unchanged.email ?? null).toBeNull();
+    const updated = await apiGetJson<{ email: string }>(request, token, `/api/clients/${client.id}`);
+    expect(updated.email).toBe(newEmail);
   });
 
   test("item 1 · editing the prefilled email of a client that already has one does not change the client record", async ({

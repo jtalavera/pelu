@@ -1347,7 +1347,7 @@
         "unnamedInvoice": "Unnamed invoice (no client identified)",
         "clientEmailLabel": "Email",
         "clientEmailPlaceholder": "client@example.com",
-        "clientEmailHint": "The KuDE is emailed to this address. The client's profile is not modified.",
+        "clientEmailHint": "The KuDE is emailed to this address. It is saved to the client's profile only if the client has no email yet.",
         "clientEmailRequired": "Enter the client's email — required to issue an electronic invoice (except for \"Not identified\").",
         "clientDisplayName": "Client name / business name",
         "clientDisplayNamePlaceholder": "CONSUMIDOR FINAL",

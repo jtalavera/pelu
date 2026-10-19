@@ -71,7 +71,8 @@ test.describe("Email de cliente no único · varios clientes pueden compartir el
     expect(a.status, a.text).toBe(200);
 
     // Client B is linked to an invoice whose recipient email is the one A already has — the
-    // invoice must be issued and B's profile email must stay untouched.
+    // invoice must be issued, and since B has no email yet it is saved to B's profile even though
+    // A already uses it (emails are not unique).
     const b = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
       fullName: `E2E DUP INV B ${Date.now()}`,
     });
@@ -90,6 +91,6 @@ test.describe("Email de cliente no único · varios clientes pueden compartir el
 
     expect(invoice.status, invoice.text).toBeLessThan(300);
     const bAfter = await apiGetJson<{ email: string | null }>(request, token, `/api/clients/${b.id}`);
-    expect(bAfter.email ?? null).toBeNull();
+    expect(bAfter.email).toBe(sharedEmail);
   });
 });
