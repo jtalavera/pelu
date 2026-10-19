@@ -40,9 +40,10 @@ import org.springframework.web.server.ResponseStatusException;
  * <ul>
  *   <li>AC-2: a blank {@code nombre_completo} rejects only that row.
  *   <li>AC-3: the same per-tenant uniqueness rules manual client creation enforces ({@link
- *       ClientService#create}) — a non-blank {@code telefono}/{@code email}/{@code ruc} that
- *       duplicates either an existing client of the tenant or an earlier row of the same file
- *       rejects that row. Per the PRD's cross-cutting rule, blank values never collide.
+ *       ClientService#create}) — a non-blank {@code telefono}/{@code ruc} that duplicates either an
+ *       existing client of the tenant or an earlier row of the same file rejects that row. Per the
+ *       PRD's cross-cutting rule, blank values never collide. {@code email} is not unique: several
+ *       clients may share one.
  *   <li>AC-4: a non-blank {@code ruc} is validated with the same {@link ParaguayRucValidator} used
  *       by manual client creation; an invalid RUC rejects only that row.
  *   <li>AC-5: only {@code nombre_completo} is required — every other column may be left blank.
@@ -58,7 +59,6 @@ public class ClientImportService {
   public static final String ERROR_FULL_NAME_REQUIRED = "IMPORT_ROW_FULL_NAME_REQUIRED";
   public static final String ERROR_RUC_INVALID = "IMPORT_ROW_RUC_INVALID";
   public static final String ERROR_PHONE_DUPLICATE = "IMPORT_ROW_PHONE_DUPLICATE";
-  public static final String ERROR_EMAIL_DUPLICATE = "IMPORT_ROW_EMAIL_DUPLICATE";
   public static final String ERROR_RUC_DUPLICATE = "IMPORT_ROW_RUC_DUPLICATE";
   public static final String ERROR_ROW_FAILED = "IMPORT_ROW_FAILED";
 
@@ -106,13 +106,11 @@ public class ClientImportService {
       Map<String, Integer> headerIndex = buildHeaderIndex(headerRow);
 
       // AC-3/AC-6: existing clients of THIS tenant only — a different tenant's matching
-      // telefono/email/ruc never counts as a duplicate.
+      // telefono/ruc never counts as a duplicate.
       Set<String> seenPhones = new HashSet<>();
-      Set<String> seenEmails = new HashSet<>();
       Set<String> seenRucs = new HashSet<>();
       for (Client existing : clientRepository.findByTenant_Id(tenantId)) {
         addIfPresent(seenPhones, digitsOnly(existing.getPhone()));
-        addIfPresent(seenEmails, normalize(existing.getEmail()));
         addIfPresent(seenRucs, existing.getRuc() == null ? null : existing.getRuc().trim());
       }
 
@@ -130,14 +128,7 @@ public class ClientImportService {
         try {
           outcomes.add(
               processRow(
-                  tenant,
-                  row,
-                  excelRowNumber,
-                  headerIndex,
-                  formatter,
-                  seenPhones,
-                  seenEmails,
-                  seenRucs));
+                  tenant, row, excelRowNumber, headerIndex, formatter, seenPhones, seenRucs));
         } catch (Exception ex) {
           log.error(
               "importClients tenantId={} row={} status=REJECTED error={}",
@@ -164,7 +155,6 @@ public class ClientImportService {
       Map<String, Integer> headerIndex,
       DataFormatter formatter,
       Set<String> seenPhones,
-      Set<String> seenEmails,
       Set<String> seenRucs) {
     String nombreCompleto = textValue(row, headerIndex.get(COL_NOMBRE_COMPLETO), formatter);
     String telefono = textValue(row, headerIndex.get(COL_TELEFONO), formatter);
@@ -188,10 +178,6 @@ public class ClientImportService {
     if (phoneKey != null && seenPhones.contains(phoneKey)) {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_PHONE_DUPLICATE, fullName);
     }
-    String emailKey = normalize(email);
-    if (emailKey != null && seenEmails.contains(emailKey)) {
-      return ImportRowOutcome.rejected(excelRowNumber, ERROR_EMAIL_DUPLICATE, fullName);
-    }
     if (normalizedRuc != null && seenRucs.contains(normalizedRuc)) {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_RUC_DUPLICATE, fullName);
     }
@@ -212,7 +198,6 @@ public class ClientImportService {
     clientRepository.save(client);
 
     addIfPresent(seenPhones, phoneKey);
-    addIfPresent(seenEmails, emailKey);
     addIfPresent(seenRucs, normalizedRuc);
 
     return ImportRowOutcome.imported(excelRowNumber, fullName);
@@ -275,10 +260,6 @@ public class ClientImportService {
     if (value == null) return null;
     String digits = value.replaceAll("\\D+", "");
     return digits.isEmpty() ? null : digits;
-  }
-
-  private static String normalize(String s) {
-    return isBlank(s) ? null : s.trim().toLowerCase(Locale.ROOT);
   }
 
   private static String normalizeHeader(String s) {
