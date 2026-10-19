@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
   apiBaseUrl,
+  apiGetJson,
   apiPostJson,
   authHeaders,
   apiPostJsonStatus,
@@ -12,7 +13,7 @@ import {
 
 // HU-10 AC-3 / HU-12 AC-5 / HU-52 AC-3: client email is NOT unique — several clients of the same
 // tenant may share one email (phone and RUC uniqueness are unaffected). Covers manual create,
-// edit, and the invoice recipient-email write-back to the client's profile.
+// edit, and an invoice whose recipient email is already used by another client.
 
 async function createClient(
   request: APIRequestContext,
@@ -70,7 +71,8 @@ test.describe("Email de cliente no único · varios clientes pueden compartir el
     expect(a.status, a.text).toBe(200);
 
     // Client B is linked to an invoice whose recipient email is the one A already has — the
-    // write-back to B's profile must succeed.
+    // invoice must be issued, and since B has no email yet it is saved to B's profile even though
+    // A already uses it (emails are not unique).
     const b = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
       fullName: `E2E DUP INV B ${Date.now()}`,
     });
@@ -88,5 +90,7 @@ test.describe("Email de cliente no único · varios clientes pueden compartir el
     });
 
     expect(invoice.status, invoice.text).toBeLessThan(300);
+    const bAfter = await apiGetJson<{ email: string | null }>(request, token, `/api/clients/${b.id}`);
+    expect(bAfter.email).toBe(sharedEmail);
   });
 });

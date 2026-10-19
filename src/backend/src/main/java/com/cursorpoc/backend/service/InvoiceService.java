@@ -455,14 +455,15 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     }
 
     // Issue #173: recipient email for the KuDE / cancellation notice. Stored on the invoice
-    // (takes priority over the client's own email on file) and, when it's a new value for a
-    // linked client, written back to that client's profile.
+    // (takes priority over the client's own email on file). The client's profile is only filled in
+    // the first time, when the linked client has no email yet; an existing profile email is never
+    // overwritten from the invoice form.
     String recipientEmail =
         request.email() != null && !request.email().isBlank() ? request.email().trim() : null;
     invoice.setRecipientEmail(recipientEmail);
     if (client != null
         && recipientEmail != null
-        && !recipientEmail.equalsIgnoreCase(client.getEmail())) {
+        && (client.getEmail() == null || client.getEmail().isBlank())) {
       client.setEmail(recipientEmail);
     }
     return client;
