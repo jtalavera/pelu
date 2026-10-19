@@ -81,6 +81,7 @@ public class ImportExampleFileGenerator {
       case SERVICES -> "plantilla_ejemplo_servicios.xlsx";
       case CLIENTS -> "plantilla_ejemplo_clientes.xlsx";
       case PROFESSIONALS -> "plantilla_ejemplo_profesionales.xlsx";
+      case PRODUCTS -> "plantilla_ejemplo_productos.xlsx";
     };
   }
 
@@ -137,6 +138,22 @@ public class ImportExampleFileGenerator {
                   "email", "juan.perez@example.com",
                   "direccion", "Av. Mariscal López 789, Asunción",
                   "activo", "SI"));
+      case PRODUCTS ->
+          List.of(
+              rowOf(
+                  "categoria", "Cuidado capilar",
+                  "nombre", "Shampoo reparador 300 ml (ejemplo)",
+                  "precio", "95000",
+                  "impuesto", "IVA 10%",
+                  "activo", "SI",
+                  "sku", "SH-300"),
+              rowOf(
+                  "categoria", "Cuidado capilar",
+                  "nombre", "Acondicionador 300 ml (ejemplo)",
+                  "precio", "85000",
+                  "impuesto", "",
+                  "activo", "SI",
+                  "sku", ""));
     };
   }
 

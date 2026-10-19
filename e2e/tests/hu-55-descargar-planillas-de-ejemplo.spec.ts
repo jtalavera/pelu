@@ -20,6 +20,10 @@ const EXPECTED_COLUMNS: Record<string, { required: string[]; optional: string[] 
     required: ["categoria", "nombre", "precio", "duracion_minutos"],
     optional: ["impuesto", "activo", "tipo", "sku"],
   },
+  products: {
+    required: ["categoria", "nombre", "precio"],
+    optional: ["impuesto", "activo", "sku"],
+  },
   clients: {
     required: ["nombre_completo"],
     optional: ["telefono", "email", "ruc", "documento_identidad", "direccion", "activo"],
@@ -72,8 +76,8 @@ async function downloadExampleWorkbook(
 
 test.describe("HU-55 · Descargar planillas de ejemplo por entidad", () => {
   // AC-1: from the import screen, a "Download example" button exists on each entity tab and
-  // produces a real, non-empty .xlsx download — servicios, clientes and profesionales.
-  for (const entity of ["services", "clients", "professionals"] as const) {
+  // produces a real, non-empty .xlsx download — servicios, productos, clientes and profesionales.
+  for (const entity of ["services", "products", "clients", "professionals"] as const) {
     test(`AC1: downloads a non-empty .xlsx example file for ${entity}`, async ({ page }) => {
       await loginAsPlatformAdmin(page);
       await page.goto("/platform/import");
@@ -93,7 +97,7 @@ test.describe("HU-55 · Descargar planillas de ejemplo por entidad", () => {
     await loginAsPlatformAdmin(page);
     await page.goto("/platform/import");
 
-    for (const entity of ["services", "clients", "professionals"] as const) {
+    for (const entity of ["services", "products", "clients", "professionals"] as const) {
       const { headerRow, dataRows } = await downloadExampleWorkbook(page, entity);
 
       expect(dataRows.length).toBeGreaterThanOrEqual(1);
@@ -122,7 +126,7 @@ test.describe("HU-55 · Descargar planillas de ejemplo por entidad", () => {
   // AC-3: the downloaded headers are exactly the ones HU-50's importer requires — no divergence
   // between what is downloaded and what is validated on upload (checked via the same "Check
   // headers" flow HU-50 exposes).
-  for (const entity of ["services", "clients", "professionals"] as const) {
+  for (const entity of ["services", "products", "clients", "professionals"] as const) {
     test(`AC3: ${entity} example headers match the documented template exactly`, async ({
       page,
     }) => {
@@ -140,7 +144,7 @@ test.describe("HU-55 · Descargar planillas de ejemplo por entidad", () => {
   // AC-3/AC-4: the downloaded file's headers are accepted as-is by the "Check headers" flow (same
   // template, no divergence), and remain accepted once the sample rows are deleted — proving the
   // Platform Admin can reuse the very same file for a real import.
-  for (const entity of ["services", "clients", "professionals"] as const) {
+  for (const entity of ["services", "products", "clients", "professionals"] as const) {
     test(`AC3+AC4: ${entity} example file (with and without sample rows) passes the header check unchanged`, async ({
       page,
     }) => {

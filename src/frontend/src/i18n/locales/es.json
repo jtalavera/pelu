@@ -724,6 +724,7 @@
         "downloadingExample": "Descargando…",
         "entityTabs": {
           "services": "Servicios",
+          "products": "Productos",
           "clients": "Clientes",
           "professionals": "Profesionales"
         },
@@ -747,6 +748,13 @@
           "direccion": "Dirección.",
           "tipo": "Servicio o Producto. Si se deja vacío, es Servicio. Solo los productos se envían a Stock.",
           "sku": "Código de producto opcional (hasta 64 caracteres), visible en Stock."
+        },
+        "columnsByEntity": {
+          "products": {
+            "categoria": "Nombre de la categoría del producto. Se crea automáticamente en el tenant (como categoría de productos) si todavía no existe.",
+            "nombre": "Nombre del producto.",
+            "impuesto": "Nombre del impuesto a asociar al producto. Dejar vacío para crear el producto sin impuesto."
+          }
         },
         "checkSectionTitle": "Verificar encabezados de un archivo",
         "checkSectionLead": "Verificá los encabezados de columna de un archivo candidato contra esta plantilla antes de usarlo, sin importar ningún dato.",
@@ -2009,7 +2017,7 @@
       "CORRUPT_FILE": "No se pudo leer el archivo. Puede estar corrupto o no ser un .xlsx válido.",
       "IMPORT_ENTITY_NOT_FOUND": "Entidad de importación desconocida.",
       "IMPORT_ENTITY_NOT_SUPPORTED": "La importación de esta entidad todavía no está disponible.",
-      "IMPORT_ROW_NAME_REQUIRED": "Falta el nombre del servicio.",
+      "IMPORT_ROW_NAME_REQUIRED": "Falta el nombre del servicio o producto.",
       "IMPORT_ROW_CATEGORY_REQUIRED": "Falta la categoría.",
       "IMPORT_ROW_DUPLICATE": "Fila duplicada: otra fila anterior del archivo ya tiene el mismo nombre y categoría.",
       "IMPORT_ROW_PRICE_NOT_NUMERIC": "El precio no es un número válido.",

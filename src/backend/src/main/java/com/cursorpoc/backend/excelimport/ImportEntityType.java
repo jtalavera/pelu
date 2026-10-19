@@ -1,16 +1,18 @@
 package com.cursorpoc.backend.excelimport;
 
 /**
- * HU-50 (Épica E — Importación de datos vía Excel): the three entities a Platform Admin can import
- * for a tenant during onboarding (PRD "Alcance de la importación"). {@link #pathSegment} is the
- * literal URL segment used by {@code PlatformImportTemplateController} and the value the frontend
- * sends back — kept distinct from {@code name()} so the API contract does not silently change if
- * the enum constants are ever reordered or renamed.
+ * HU-50 (Épica E — Importación de datos vía Excel): the entities a Platform Admin can import for a
+ * tenant during onboarding (PRD "Alcance de la importación"). {@link #pathSegment} is the literal
+ * URL segment used by {@code PlatformImportTemplateController} and the value the frontend sends
+ * back — kept distinct from {@code name()} so the API contract does not silently change if the enum
+ * constants are ever reordered or renamed.
  */
 public enum ImportEntityType {
   SERVICES("services"),
   CLIENTS("clients"),
-  PROFESSIONALS("professionals");
+  PROFESSIONALS("professionals"),
+  /** Catálogo separado: products get their own file (no duracion_minutos/tipo columns). */
+  PRODUCTS("products");
 
   private final String pathSegment;
 

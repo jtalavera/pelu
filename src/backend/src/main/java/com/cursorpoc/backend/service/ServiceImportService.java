@@ -102,6 +102,9 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
   private static final String COL_TIPO = "tipo";
   private static final String COL_SKU = "sku";
 
+  /** Products have no duration; stored as the minimum, same as the Productos screen. */
+  private static final int PRODUCT_DURATION_MINUTES = 1;
+
   private final TenantRepository tenantRepository;
   private final ServiceCategoryRepository serviceCategoryRepository;
   private final SalonServiceRepository salonServiceRepository;
@@ -123,6 +126,21 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
 
   @Transactional
   public ImportResult importServices(long tenantId, byte[] fileBytes) {
+    return importCatalog(tenantId, fileBytes, ImportEntityType.SERVICES);
+  }
+
+  /**
+   * Catálogo separado: the "productos" file — same rules as {@link #importServices}, but every row
+   * is a Producto (no {@code tipo} column) and has no {@code duracion_minutos} (stored as the
+   * 1-minute minimum, like the Productos screen does).
+   */
+  @Transactional
+  public ImportResult importProducts(long tenantId, byte[] fileBytes) {
+    return importCatalog(tenantId, fileBytes, ImportEntityType.PRODUCTS);
+  }
+
+  private ImportResult importCatalog(long tenantId, byte[] fileBytes, ImportEntityType entityType) {
+    boolean productsFile = entityType == ImportEntityType.PRODUCTS;
     Tenant tenant =
         tenantRepository
             .findById(tenantId)
@@ -130,7 +148,7 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
 
     HeaderValidationResult headerResult =
-        headerValidationService.validateHeaders(fileBytes, ImportEntityType.SERVICES);
+        headerValidationService.validateHeaders(fileBytes, entityType);
     if (!headerResult.valid()) {
       if (headerResult.errorCode() != null) {
         return ImportResult.fileError(headerResult.errorCode());
@@ -176,10 +194,12 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
                   categoryByName,
                   taxByName,
                   seenKeys,
-                  productCount));
+                  productCount,
+                  productsFile));
         } catch (Exception ex) {
           log.error(
-              "importServices tenantId={} row={} status=REJECTED error={}",
+              "import{} tenantId={} row={} status=REJECTED error={}",
+              entityType.pathSegment(),
               tenantId,
               excelRowNumber,
               ERROR_ROW_FAILED,
@@ -197,7 +217,11 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
     } catch (ResponseStatusException ex) {
       throw ex;
     } catch (Exception ex) {
-      log.error("importServices tenantId={} status=REJECTED error=CORRUPT_FILE", tenantId, ex);
+      log.error(
+          "import{} tenantId={} status=REJECTED error=CORRUPT_FILE",
+          entityType.pathSegment(),
+          tenantId,
+          ex);
       return ImportResult.fileError("CORRUPT_FILE");
     }
   }
@@ -211,7 +235,8 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
       Map<String, ServiceCategory> categoryByName,
       Map<String, Tax> taxByName,
       Set<String> seenKeys,
-      int[] productCount) {
+      int[] productCount,
+      boolean productsFile) {
     String categoria = textValue(row, headerIndex.get(COL_CATEGORIA), formatter);
     String nombre = textValue(row, headerIndex.get(COL_NOMBRE), formatter);
     String impuesto = textValue(row, headerIndex.get(COL_IMPUESTO), formatter);
@@ -240,16 +265,19 @@ public class ServiceImportService implements ApplicationEventPublisherAware {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_PRICE_INVALID, nombre.trim());
     }
 
-    NumericCellValue durationValue = numericValue(row, headerIndex.get(COL_DURACION), formatter);
-    if (durationValue.blankOrInvalid()) {
-      return ImportRowOutcome.rejected(excelRowNumber, ERROR_DURATION_NOT_NUMERIC, nombre.trim());
-    }
-    int durationMinutes = durationValue.value().intValue();
-    if (durationMinutes < 1) {
-      return ImportRowOutcome.rejected(excelRowNumber, ERROR_DURATION_INVALID, nombre.trim());
+    int durationMinutes = PRODUCT_DURATION_MINUTES;
+    if (!productsFile) {
+      NumericCellValue durationValue = numericValue(row, headerIndex.get(COL_DURACION), formatter);
+      if (durationValue.blankOrInvalid()) {
+        return ImportRowOutcome.rejected(excelRowNumber, ERROR_DURATION_NOT_NUMERIC, nombre.trim());
+      }
+      durationMinutes = durationValue.value().intValue();
+      if (durationMinutes < 1) {
+        return ImportRowOutcome.rejected(excelRowNumber, ERROR_DURATION_INVALID, nombre.trim());
+      }
     }
 
-    ServiceKind kind = parseKind(tipo);
+    ServiceKind kind = productsFile ? ServiceKind.PRODUCT : parseKind(tipo);
     if (kind == null) {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_KIND_INVALID, nombre.trim());
     }

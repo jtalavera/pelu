@@ -32,6 +32,7 @@ test.describe("HU-50 · Formato estándar de planillas Excel", () => {
     await expect(page.getByRole("heading", { name: "Data import" })).toBeVisible();
 
     await expect(page.getByTestId("import-tab-services")).toBeVisible();
+    await expect(page.getByTestId("import-tab-products")).toBeVisible();
     await expect(page.getByTestId("import-tab-clients")).toBeVisible();
     await expect(page.getByTestId("import-tab-professionals")).toBeVisible();
   });

@@ -724,6 +724,7 @@
         "downloadingExample": "Downloading…",
         "entityTabs": {
           "services": "Services",
+          "products": "Products",
           "clients": "Clients",
           "professionals": "Professionals"
         },
@@ -747,6 +748,13 @@
           "direccion": "Address.",
           "tipo": "Servicio or Producto. Defaults to Servicio when left empty. Only products are sent to Stock.",
           "sku": "Optional product code (up to 64 characters), shown in Stock."
+        },
+        "columnsByEntity": {
+          "products": {
+            "categoria": "Product category name. Created automatically in the tenant (as a product category) if it doesn't exist yet.",
+            "nombre": "Product name.",
+            "impuesto": "Tax name to associate with the product. Leave empty to create the product with no tax."
+          }
         },
         "checkSectionTitle": "Check a file's headers",
         "checkSectionLead": "Verify a candidate file's column headers against this template before using it, without importing any data.",
@@ -2005,7 +2013,7 @@
       "CORRUPT_FILE": "The file could not be read. It may be corrupted or not a valid .xlsx file.",
       "IMPORT_ENTITY_NOT_FOUND": "Unknown import entity.",
       "IMPORT_ENTITY_NOT_SUPPORTED": "Importing this entity is not available yet.",
-      "IMPORT_ROW_NAME_REQUIRED": "Missing service name.",
+      "IMPORT_ROW_NAME_REQUIRED": "Missing service or product name.",
       "IMPORT_ROW_CATEGORY_REQUIRED": "Missing category.",
       "IMPORT_ROW_DUPLICATE": "Duplicate row: another row earlier in the file already has this same name and category.",
       "IMPORT_ROW_PRICE_NOT_NUMERIC": "Price is not a valid number.",

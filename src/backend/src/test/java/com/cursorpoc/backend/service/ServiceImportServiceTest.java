@@ -451,4 +451,79 @@ class ServiceImportServiceTest {
     assertThat(outcome.name()).isEqualTo("Corte de dama");
     assertThat(outcome.rowNumber()).isEqualTo(2);
   }
+
+  // Productos file: no duracion_minutos/tipo columns; every row is a Producto with duration 1.
+  @Test
+  void productsFile_createsProductsWithMinimumDurationAndPublishesOneCatalogEvent() {
+    java.util.List<Object> published = new java.util.ArrayList<>();
+    service.setApplicationEventPublisher(published::add);
+    String[] headers = {"categoria", "nombre", "precio", "impuesto", "activo", "sku"};
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Cuidado capilar", "Shampoo", "95000", "", "SI", "SH-300"},
+            new String[] {"Cuidado capilar", "Acondicionador", "85000", "", "NO", ""});
+
+    ImportResult result = service.importProducts(1L, bytes);
+
+    assertThat(result.fileAccepted()).isTrue();
+    assertThat(result.importedCount()).isEqualTo(2);
+    org.mockito.ArgumentCaptor<com.cursorpoc.backend.domain.SalonService> saved =
+        org.mockito.ArgumentCaptor.forClass(com.cursorpoc.backend.domain.SalonService.class);
+    verify(salonServiceRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+    assertThat(saved.getAllValues())
+        .extracting(
+            com.cursorpoc.backend.domain.SalonService::getKind,
+            com.cursorpoc.backend.domain.SalonService::getDurationMinutes,
+            com.cursorpoc.backend.domain.SalonService::getSku,
+            com.cursorpoc.backend.domain.SalonService::isActive)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT, 1, "SH-300", true),
+            org.assertj.core.groups.Tuple.tuple(
+                com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT, 1, null, false));
+    verify(serviceCategoryRepository)
+        .save(
+            org.mockito.ArgumentMatchers.argThat(
+                (ServiceCategory c) ->
+                    c.getName().equals("Cuidado capilar")
+                        && c.getKind() == com.cursorpoc.backend.domain.enums.ServiceKind.PRODUCT));
+    assertThat(published)
+        .singleElement()
+        .isInstanceOfSatisfying(
+            com.cursorpoc.backend.stock.CatalogStockEvent.class,
+            e -> assertThat(e.productsImported()).isEqualTo(2));
+  }
+
+  @Test
+  void productsFile_rowInAServiceCategory_isRejectedWithKindMismatch() {
+    ServiceCategory cortes = new ServiceCategory();
+    cortes.setName("Cortes");
+    cortes.setKind(com.cursorpoc.backend.domain.enums.ServiceKind.SERVICE);
+    org.mockito.Mockito.when(serviceCategoryRepository.findByTenant_IdOrderByNameAsc(1L))
+        .thenReturn(List.of(cortes));
+    String[] headers = {"categoria", "nombre", "precio"};
+    byte[] bytes = workbook(headers, new String[] {"Cortes", "Shampoo", "95000"});
+
+    ImportResult result = service.importProducts(1L, bytes);
+
+    assertThat(result.importedCount()).isZero();
+    assertThat(result.rows())
+        .singleElement()
+        .satisfies(
+            r ->
+                assertThat(r.errorCode())
+                    .isEqualTo(ServiceImportService.ERROR_CATEGORY_KIND_MISMATCH));
+    verify(salonServiceRepository, never()).save(any());
+  }
+
+  @Test
+  void productsFile_missingRequiredColumn_isRejectedWithMissingList() {
+    byte[] bytes = workbook(new String[] {"categoria", "nombre"}, new String[] {"X", "Y"});
+
+    ImportResult result = service.importProducts(1L, bytes);
+
+    assertThat(result.fileAccepted()).isFalse();
+    assertThat(result.missingRequiredColumns()).containsExactly("precio");
+  }
 }

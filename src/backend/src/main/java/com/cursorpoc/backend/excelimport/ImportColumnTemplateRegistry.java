@@ -27,6 +27,8 @@ import org.springframework.stereotype.Component;
  *   <li>AC-4 Profesionales: {@code nombre_completo} ({@code Professional.fullName}), optional
  *       {@code telefono}/{@code email}/{@code direccion}/{@code activo}. PIN and system access are
  *       deliberately excluded — configured manually per HU-22, never via Excel.
+ *   <li>Productos (catálogo separado): same as Servicios minus {@code duracion_minutos} (stored as
+ *       the 1-minute minimum) and {@code tipo} (always Producto).
  * </ul>
  */
 @Component
@@ -59,7 +61,15 @@ public class ImportColumnTemplateRegistry {
               new ImportColumnDefinition("telefono", false),
               new ImportColumnDefinition("email", false),
               new ImportColumnDefinition("direccion", false),
-              new ImportColumnDefinition("activo", false)));
+              new ImportColumnDefinition("activo", false)),
+          ImportEntityType.PRODUCTS,
+          List.of(
+              new ImportColumnDefinition("categoria", true),
+              new ImportColumnDefinition("nombre", true),
+              new ImportColumnDefinition("precio", true),
+              new ImportColumnDefinition("impuesto", false),
+              new ImportColumnDefinition("activo", false),
+              new ImportColumnDefinition("sku", false)));
 
   public List<ImportColumnDefinition> columnsFor(ImportEntityType entityType) {
     return TEMPLATES.get(entityType);
