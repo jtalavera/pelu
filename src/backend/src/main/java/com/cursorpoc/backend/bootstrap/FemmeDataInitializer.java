@@ -78,24 +78,6 @@ public class FemmeDataInitializer {
         log.info("Seeded feature flag GUIDED_TOUR (enabled=true)");
       }
 
-      // SIFEN testing: same idempotent seed as GUIDED_TOUR above — V51's Flyway INSERT only reaches
-      // dev/prod (Flyway is disabled for the `e2e` profile), so this runner is what makes the flag
-      // exist for Playwright. Keep the description in sync with V51.
-      if (featureFlagRepository.findByFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL").isEmpty()) {
-        FeatureFlag allowDuplicateClientEmail = new FeatureFlag();
-        allowDuplicateClientEmail.setFlagKey("ALLOW_DUPLICATE_CLIENT_EMAIL");
-        // Global default ON, mirroring V52 (prod). Under the conjunctive-resolution change (V53) a
-        // per-tenant OFF still enforces uniqueness for that tenant; the environment gate in
-        // DuplicateClientEmailPolicy keeps this inert outside the SIFEN TEST environment.
-        allowDuplicateClientEmail.setEnabled(true);
-        allowDuplicateClientEmail.setDescription(
-            "Test environment only: skip the per-tenant client-email uniqueness check so SIFEN"
-                + " electronic-invoicing testing can reuse the same recipient email. Ignored unless"
-                + " the SIFEN environment is TEST.");
-        featureFlagRepository.save(allowDuplicateClientEmail);
-        log.info("Seeded feature flag ALLOW_DUPLICATE_CLIENT_EMAIL (enabled=true)");
-      }
-
       // SIFEN HU-22 (Fase 5): same idempotent seed as GUIDED_TOUR above. V28's Flyway INSERT only
       // reaches dev/prod (Flyway is disabled for the `e2e` profile, JPA create-drop only builds the
       // schema, not row data), so this runner is what actually makes the flag exist for Playwright.
@@ -130,6 +112,13 @@ public class FemmeDataInitializer {
               + " STOCK_MODULE_DISABLED.");
       seedFlag("STOCK_PHYSICAL_COUNT", true, "Physical inventory (counts) available.");
       seedFlag("STOCK_TOURS", true, "Guided tours in the Stock SPA.");
+      // Módulo de comisiones (HU-COM-11): same flag as V80, OFF globally until a Platform Admin
+      // enables it (Flyway is disabled for `e2e`).
+      seedFlag(
+          "COMMISSIONS",
+          false,
+          "Commissions module (rules, accrual on invoice issue, settlements). Off -> API answers"
+              + " 403 FEATURE_NOT_ENABLED.");
 
       // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's
       // full tier CRUD hasn't landed yet). V41's Flyway INSERT only reaches dev/prod the same way

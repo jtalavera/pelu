@@ -29,10 +29,10 @@ import { listTenantsPaged, type PlatformTenant } from "../api/platformTenants";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 
-/** HU-51/HU-52/HU-53: "services", "clients" and "professionals" all have an actual upload -> import flow wired. */
-const IMPORTABLE_ENTITIES = new Set(["services", "clients", "professionals"]);
+/** HU-51/HU-52/HU-53 + catálogo separado: every entity has an actual upload -> import flow wired. */
+const IMPORTABLE_ENTITIES = new Set(["services", "products", "clients", "professionals"]);
 
-const ENTITY_ORDER = ["services", "clients", "professionals"] as const;
+const ENTITY_ORDER = ["services", "products", "clients", "professionals"] as const;
 
 function stripDataUrlPrefix(dataUrl: string): string {
   const commaIndex = dataUrl.indexOf(",");
@@ -392,7 +392,9 @@ export default function PlatformImportPage() {
                             : t("femme.platform.import.optional")}
                         </td>
                         <td style={tdStyle}>
-                          {t(`femme.platform.import.columns.${col.key}`, { defaultValue: "" })}
+                          {t(`femme.platform.import.columnsByEntity.${tpl.entity}.${col.key}`, {
+                            defaultValue: t(`femme.platform.import.columns.${col.key}`, { defaultValue: "" }),
+                          })}
                         </td>
                       </tr>
                     ))}

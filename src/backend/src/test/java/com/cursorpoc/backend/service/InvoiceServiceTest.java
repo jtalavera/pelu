@@ -7,8 +7,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -70,7 +68,6 @@ class InvoiceServiceTest {
   @Mock private SifenInvoiceHeaderService sifenInvoiceHeaderService;
   @Mock private SifenNumberVoidingService sifenNumberVoidingService;
   @Mock private SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
-  @Mock private DuplicateClientEmailPolicy duplicateClientEmailPolicy;
 
   // SIFEN HU-10: a real instance (via @Spy, not @Mock) so @InjectMocks' constructor injection
   // resolves this new dependency to something whose zoneId() actually works, same as every other
@@ -111,9 +108,6 @@ class InvoiceServiceTest {
     activeStamp.setNextEmissionNumber(1);
     activeStamp.setActive(true);
 
-    // Default: the client-email uniqueness check is enforced. The recipient-email write-back test
-    // overrides this to false to exercise the ALLOW_DUPLICATE_CLIENT_EMAIL path.
-    lenient().when(duplicateClientEmailPolicy.isUniquenessEnforced(anyLong())).thenReturn(true);
     // Issue #205 AC-1: default no-op — nothing to skip unless a test stubs an approved voided
     // range covering the candidate number.
     lenient()
@@ -1150,12 +1144,11 @@ class InvoiceServiceTest {
   }
 
   /**
-   * Issue #173's recipient-email write-back normally rejects an email already used by another
-   * client with CLIENT_EMAIL_DUPLICATE. With ALLOW_DUPLICATE_CLIENT_EMAIL lifting uniqueness (SIFEN
-   * test environment), the write-back proceeds without the lookup.
+   * Issue #173: the recipient email typed on the invoice is stored on the invoice only; the linked
+   * client's profile email is left untouched.
    */
   @Test
-  void issueInvoice_recipientEmailWriteBack_allowsDuplicate_whenPolicyLiftsUniqueness() {
+  void issueInvoice_recipientEmail_doesNotUpdateClientProfile() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
         .thenReturn(Optional.of(openSession));
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
@@ -1163,7 +1156,6 @@ class InvoiceServiceTest {
     when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
-    when(duplicateClientEmailPolicy.isUniquenessEnforced(1L)).thenReturn(false);
 
     Client client = new Client();
     client.setId(7L);
@@ -1195,8 +1187,55 @@ class InvoiceServiceTest {
     InvoiceResponse result = invoiceService.issueInvoice(1L, request);
 
     assertThat(result.clientId()).isEqualTo(7L);
+    assertThat(result.recipientEmail()).isEqualTo("taken@b.com");
+    assertThat(client.getEmail()).isEqualTo("old@b.com");
+  }
+
+  /**
+   * Issue #173: the first time (the linked client has no email yet) the recipient email typed on
+   * the invoice is also saved to the client's profile — even if another client already uses it.
+   */
+  @Test
+  void issueInvoice_recipientEmail_savedToProfileWhenClientHasNoEmail() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    Client client = new Client();
+    client.setId(7L);
+    client.setTenant(tenant);
+    client.setFullName("Ana García");
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+
+    var line = new InvoiceLineRequest(null, "Peinado", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var request =
+        new InvoiceCreateRequest(
+            7L,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(line),
+            List.of(payment),
+            null,
+            null,
+            null,
+            null,
+            "taken@b.com",
+            null);
+
+    InvoiceResponse result = invoiceService.issueInvoice(1L, request);
+
+    assertThat(result.clientId()).isEqualTo(7L);
+    assertThat(result.recipientEmail()).isEqualTo("taken@b.com");
     assertThat(client.getEmail()).isEqualTo("taken@b.com");
-    verify(clientRepository, never()).findByTenantIdAndEmail(anyLong(), any());
   }
 
   /**

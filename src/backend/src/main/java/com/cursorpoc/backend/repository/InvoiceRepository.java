@@ -36,6 +36,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
    * (QUEUED, sifenNextAttemptAt still null) and invoices due for a backoff retry
    * (PENDING_VERIFICATION, sifenNextAttemptAt elapsed), skipping anything another instance
    * currently holds the lease on.
+   *
+   * <p>Envío por lote: every consulta-lote poll counts as an attempt, so a lote's invoice passes
+   * {@code maxAttempts} within seconds of being sent. An invoice pending in a lote with a poll
+   * actually scheduled ({@code sifenNextAttemptAt} set — it is cleared once polling gives up) is
+   * therefore still recovered up to {@code maxBatchAttempts}, so a lost scheduled poll is
+   * re-enqueued for the whole polling schedule.
    */
   @Query(
       """
@@ -43,13 +49,20 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       WHERE i.sifenSubmissionStatus IN :statuses
       AND (i.sifenNextAttemptAt IS NULL OR i.sifenNextAttemptAt <= :now)
       AND (i.sifenProcessingStartedAt IS NULL OR i.sifenProcessingStartedAt < :leaseExpiry)
-      AND i.sifenAttemptCount < :maxAttempts
+      AND (i.sifenAttemptCount < :maxAttempts
+        OR (i.sifenSubmissionStatus = :pendingInBatch
+          AND i.sifenBatchNumber IS NOT NULL
+          AND i.sifenBatchNumber <> ''
+          AND i.sifenNextAttemptAt IS NOT NULL
+          AND i.sifenAttemptCount < :maxBatchAttempts))
       """)
   List<Invoice> findDueForSifenRetry(
       @Param("statuses") List<SifenSubmissionStatus> statuses,
       @Param("now") LocalDateTime now,
       @Param("leaseExpiry") LocalDateTime leaseExpiry,
-      @Param("maxAttempts") int maxAttempts);
+      @Param("maxAttempts") int maxAttempts,
+      @Param("pendingInBatch") SifenSubmissionStatus pendingInBatch,
+      @Param("maxBatchAttempts") int maxBatchAttempts);
 
   /**
    * Issue #268: the SIFEN "rejected, not yet resolved" backlog per tenant, for the {@code

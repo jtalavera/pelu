@@ -7,6 +7,7 @@ import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
+import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.CardBrand;
@@ -22,6 +23,7 @@ import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -73,6 +75,14 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   @Override
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
     this.events = applicationEventPublisher;
+  }
+
+  /** HU-COM-10: resolves the professional / seller of each line. Setter-injected (optional). */
+  private ProfessionalRepository professionalRepository;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setProfessionalRepository(ProfessionalRepository professionalRepository) {
+    this.professionalRepository = professionalRepository;
   }
 
   private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
@@ -128,7 +138,6 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
   private final SifenNumberVoidingService sifenNumberVoidingService;
   private final SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
-  private final DuplicateClientEmailPolicy duplicateClientEmailPolicy;
   private final BusinessMetrics businessMetrics;
 
   public InvoiceService(
@@ -144,7 +153,6 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       SifenInvoiceHeaderService sifenInvoiceHeaderService,
       SifenNumberVoidingService sifenNumberVoidingService,
       SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence,
-      DuplicateClientEmailPolicy duplicateClientEmailPolicy,
       BusinessMetrics businessMetrics) {
     this.invoiceRepository = invoiceRepository;
     this.cashSessionRepository = cashSessionRepository;
@@ -158,7 +166,6 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
     this.sifenSubmissionPersistence = sifenSubmissionPersistence;
-    this.duplicateClientEmailPolicy = duplicateClientEmailPolicy;
     this.businessMetrics = businessMetrics;
   }
 
@@ -448,18 +455,15 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     }
 
     // Issue #173: recipient email for the KuDE / cancellation notice. Stored on the invoice
-    // (takes priority over the client's own email on file) and, when it's a new value for a
-    // linked client, written back to that client's profile.
+    // (takes priority over the client's own email on file). The client's profile is only filled in
+    // the first time, when the linked client has no email yet; an existing profile email is never
+    // overwritten from the invoice form.
     String recipientEmail =
         request.email() != null && !request.email().isBlank() ? request.email().trim() : null;
     invoice.setRecipientEmail(recipientEmail);
     if (client != null
         && recipientEmail != null
-        && !recipientEmail.equalsIgnoreCase(client.getEmail())) {
-      if (duplicateClientEmailPolicy.isUniquenessEnforced(tenantId)
-          && clientRepository.findByTenantIdAndEmail(tenantId, recipientEmail).isPresent()) {
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_EMAIL_DUPLICATE");
-      }
+        && (client.getEmail() == null || client.getEmail().isBlank())) {
       client.setEmail(recipientEmail);
     }
     return client;
@@ -493,6 +497,21 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       line.setInvoice(invoice);
       line.setDescription(lr.description());
       line.setQuantity(lr.quantity());
+      // HU-COM-10: professional / seller of the line (commission beneficiary).
+      if (lr.professionalId() != null) {
+        Professional professional =
+            professionalRepository
+                .findByIdAndTenant_Id(lr.professionalId(), tenantId)
+                .orElseThrow(
+                    () ->
+                        new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+        if (!professional.isActive()) {
+          throw new ResponseStatusException(
+              HttpStatus.CONFLICT, "INVOICE_LINE_PROFESSIONAL_INACTIVE");
+        }
+        line.setProfessional(professional);
+      }
 
       // Issue #174 AC-01: strip the included 10% IVA for a diplomatic-exoneration receiver, so
       // subtotal/total/payments all reconcile on the net amount the client actually pays.
@@ -886,7 +905,9 @@ public class InvoiceService implements ApplicationEventPublisherAware {
                         l.getDiscountValue(),
                         l.getLineTotal(),
                         l.getTaxRate(),
-                        l.getTaxAmount()))
+                        l.getTaxAmount(),
+                        l.getProfessional() != null ? l.getProfessional().getId() : null,
+                        l.getProfessional() != null ? l.getProfessional().getFullName() : null))
             .collect(Collectors.toList());
 
     List<InvoicePaymentAllocationResponse> payments =

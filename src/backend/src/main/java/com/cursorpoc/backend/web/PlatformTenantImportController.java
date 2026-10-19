@@ -128,6 +128,7 @@ public class PlatformTenantImportController {
             case PROFESSIONALS ->
                 professionalImportService.importProfessionals(tenantId, fileBytes);
             case SERVICES -> serviceImportService.importServices(tenantId, fileBytes);
+            case PRODUCTS -> serviceImportService.importProducts(tenantId, fileBytes);
           };
       recordRun(tenantId, entityType, request.fileName(), result, principal);
       ImportResultResponse response = toResponse(result);

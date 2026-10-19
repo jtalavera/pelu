@@ -205,4 +205,40 @@ test.describe("HU-21 · Fixes varios clientes", () => {
     expect(gap).not.toBeNull();
     expect(gap as number).toBeGreaterThan(8);
   });
+  // El foco se posiciona en el cuadro de mensajes al terminar de guardar para que el usuario
+  // verifique el resultado de inmediato.
+  test("Guardar cliente nuevo posiciona el foco en el cuadro de mensajes de resultado", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/clients");
+    await page.getByRole("button", { name: "+ New client" }).first().click();
+    await page.getByLabel("Full name").fill(`E2E Focus ${Date.now()}`);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const alert = page.getByRole("alert").filter({ hasText: "The client was created successfully." });
+    await expect(alert).toBeVisible();
+    await expect(alert.locator("xpath=..")).toBeFocused();
+    await expect(alert).toBeInViewport();
+  });
+
+  test("Guardar edición en el perfil posiciona el foco en el cuadro de mensajes de resultado", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const c = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
+      fullName: `E2E Focus Edit ${Date.now()}`,
+      phone: null,
+      email: null,
+      ruc: null,
+    });
+    await loginAsDemo(page);
+    await page.goto(`/app/clients/${c.id}`);
+    await page.locator("#detail-phone").fill(`097${String(Date.now()).slice(-7)}`);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const alert = page.getByRole("alert").filter({ hasText: "Client updated successfully." });
+    await expect(alert).toBeVisible();
+    await expect(alert.locator("xpath=..")).toBeFocused();
+    await expect(alert).toBeInViewport();
+  });
 });

@@ -243,14 +243,50 @@ test.describe("SIFEN · canal de envío por feature flag (SIFEN_SYNC_SUBMISSION)
       ]);
       expect(checkResponse.ok(), await checkResponse.text()).toBeTruthy();
 
-      // consulta-lote is unreachable in e2e → "no answer" → the invoice stays pending (it is never
-      // resent while its lote may still be processing).
+      // consulta-lote is unreachable in e2e → "no answer" → the manual check then also asks by CDC
+      // (SiConsDE, unreachable too) → the invoice stays pending (it is never resent while its lote
+      // may still be processing).
       await expect(
         page
           .getByText("SIFEN has not answered yet. The invoice is still pending verification.")
           .first(),
       ).toBeVisible({ timeout: 15_000 });
       await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
+    });
+
+    test("con el lote todavía en procesamiento, si SIFEN aprueba el CDC la factura queda Aprobada", async ({
+      page,
+      request,
+    }) => {
+      test.setTimeout(60_000);
+      const { invoiceId, clientName } = await createInvoice(request, "E2E Lote CDC Aprob");
+      await supportPost(request, `/invoices/${invoiceId}/prepare-pending-in-batch/987654321`);
+      await supportPost(request, `/invoices/${invoiceId}/simulate-cdc-cross-check`, {
+        status: "APPROVED",
+        resultCode: "0422",
+        message: "CDC encontrado",
+      });
+
+      const section = await openInvoiceStatus(page, clientName);
+      await expect(section.getByText("Approved", { exact: true }).first()).toBeVisible();
+    });
+
+    test("con el lote todavía en procesamiento, un CDC 'no existe' (0420) no rechaza la factura: sigue pendiente de verificación", async ({
+      page,
+      request,
+    }) => {
+      test.setTimeout(60_000);
+      const { invoiceId, clientName } = await createInvoice(request, "E2E Lote CDC 0420");
+      await supportPost(request, `/invoices/${invoiceId}/prepare-pending-in-batch/987654321`);
+      await supportPost(request, `/invoices/${invoiceId}/simulate-cdc-cross-check`, {
+        status: "REJECTED",
+        resultCode: "0420",
+        message: "Documento No Existe en SIFEN o ha sido Rechazado",
+      });
+
+      const section = await openInvoiceStatus(page, clientName);
+      await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
+      await expect(section.getByText("Not found / Rejected", { exact: true })).toHaveCount(0);
     });
 
     test("un lote concluido que aprueba el documento deja la factura Aprobada con su número de protocolo", async ({

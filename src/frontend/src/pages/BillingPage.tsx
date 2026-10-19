@@ -76,6 +76,8 @@ type InvoiceLineForm = {
   discountEnabled: boolean;
   discountType: "FIXED" | "PERCENT";
   discountValue: string;
+  /** HU-COM-10: professional / seller of the line ("" = none). */
+  professionalId: string;
 };
 
 type PaymentForm = {
@@ -834,7 +836,13 @@ const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
   { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
 ] as const;
 
-type PrefillServiceRecordLine = { serviceId: number; description: string; unitPrice: string };
+type PrefillServiceRecordLine = {
+  serviceId: number;
+  description: string;
+  unitPrice: string;
+  /** HU-COM-10: preloaded professional of the ficha line. */
+  professionalId?: number | null;
+};
 type PrefillServiceRecord = {
   serviceRecordId: number;
   client: InitialClientForBilling;
@@ -864,6 +872,15 @@ function NewInvoiceTab({
   const navigate = useNavigate();
   /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
+  // HU-COM-10: professional / seller per line, only when the commissions module is enabled.
+  const commissionsEnabled = useFeatureFlag("COMMISSIONS");
+  const [lineProfessionals, setLineProfessionals] = useState<{ id: number; fullName: string; active: boolean }[]>([]);
+  useEffect(() => {
+    if (!commissionsEnabled) return;
+    femmeJson<{ id: number; fullName: string; active: boolean }[]>("/api/professionals")
+      .then((list) => setLineProfessionals(Array.isArray(list) ? list.filter((p) => p.active) : []))
+      .catch(() => setLineProfessionals([]));
+  }, [commissionsEnabled]);
   const effectiveInitialClient = initialClient ?? initialPrefillServiceRecord?.client ?? null;
   const initialSelection: ClientSelection = effectiveInitialClient
     ? {
@@ -946,6 +963,7 @@ function NewInvoiceTab({
           discountEnabled: false,
           discountType: "PERCENT",
           discountValue: "",
+          professionalId: l.professionalId != null ? String(l.professionalId) : "",
         }))
       : [
           {
@@ -957,6 +975,7 @@ function NewInvoiceTab({
             discountEnabled: false,
             discountType: "PERCENT",
             discountValue: "",
+            professionalId: "",
           },
         ],
   );
@@ -1151,6 +1170,7 @@ function NewInvoiceTab({
         discountEnabled: false,
         discountType: "PERCENT",
         discountValue: "",
+        professionalId: "",
       },
     ]);
   }
@@ -1521,6 +1541,7 @@ function NewInvoiceTab({
               ? parseMaskedMoney(l.discountValue)
               : parseFloat(l.discountValue.replace(",", "."))
             : null,
+        professionalId: commissionsEnabled && l.professionalId ? Number(l.professionalId) : null,
       })),
       payments: payments.map((p) => ({
         method: p.method,
@@ -1569,6 +1590,7 @@ function NewInvoiceTab({
           discountEnabled: false,
           discountType: "PERCENT",
           discountValue: "",
+          professionalId: "",
         },
       ]);
       setPayments([
@@ -1998,6 +2020,34 @@ function NewInvoiceTab({
                     </>
                   )}
                 </div>
+                {commissionsEnabled && (
+                  <div className="col-span-12 flex flex-col gap-1 sm:max-w-sm">
+                    <Label htmlFor={`line-professional-${idx}`}>
+                      {t("femme.billing.invoice.lineProfessional")}
+                    </Label>
+                    <Select
+                      id={`line-professional-${idx}`}
+                      value={line.professionalId}
+                      onChange={(e) =>
+                        setLines((prev) =>
+                          prev.map((l, i) => (i === idx ? { ...l, professionalId: e.target.value } : l)),
+                        )
+                      }
+                    >
+                      <option value="">{t("femme.billing.invoice.lineProfessionalNone")}</option>
+                      {lineProfessionals.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.fullName}
+                        </option>
+                      ))}
+                    </Select>
+                    {!line.professionalId && line.serviceId ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`line-no-commission-${idx}`}>
+                        {t("femme.billing.invoice.lineNoCommission")}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
             ))}
           </div>

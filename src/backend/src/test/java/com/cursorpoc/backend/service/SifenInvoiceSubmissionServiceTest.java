@@ -656,7 +656,123 @@ class SifenInvoiceSubmissionServiceTest {
     assertThat(service.checkPendingStatus(TENANT_ID, INVOICE_ID)).isEmpty();
     assertThat(invoice.getSifenSubmissionStatus())
         .isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    // The manual check always asks by CDC too once the lote says pending (SIFEN gives no answer
+    // here, per setUp's default).
+    verify(queryClient).query(TENANT_ID, "cdc-123");
+  }
+
+  @Test
+  void checkPendingStatus_resolvesApprovedByCdc_whileTheLoteIsStillProcessing() {
+    pendingInLote("987654321");
+    stillProcessing("987654321");
+    cdcAnswers(SifenSubmissionStatus.APPROVED, "0422", "CDC encontrado");
+
+    Optional<SifenSubmissionResult> result = service.checkPendingStatus(TENANT_ID, INVOICE_ID);
+
+    assertThat(result).isPresent();
+    assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    assertThat(invoice.getSifenSubmissionStatus()).isEqualTo(SifenSubmissionStatus.APPROVED);
+    verify(batchResultQueryClient).query(TENANT_ID, "987654321");
+  }
+
+  /** A 0420 while the lote is still 0361 only means SIFEN hasn't processed the document yet. */
+  @Test
+  void checkPendingStatus_staysPending_whenCdcSaysNotFoundWhileTheLoteIsStillProcessing() {
+    pendingInLote("987654321");
+    stillProcessing("987654321");
+    cdcAnswers(
+        SifenSubmissionStatus.REJECTED, "0420", "Documento No Existe en SIFEN o ha sido Rechazado");
+
+    assertThat(service.checkPendingStatus(TENANT_ID, INVOICE_ID)).isEmpty();
+    assertThat(invoice.getSifenSubmissionStatus())
+        .isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenSubmissionResultCode()).isNull();
+  }
+
+  @Test
+  void checkPendingStatus_doesNotAskByCdc_whenTheLoteAlreadyConcluded() {
+    pendingInLote("987654321");
+    when(batchResultQueryClient.query(TENANT_ID, "987654321"))
+        .thenReturn(
+            Optional.of(
+                new SifenBatchQueryResult(
+                    "0362",
+                    "Procesamiento de lote concluido",
+                    List.of(
+                        new SifenBatchDocumentResult(
+                            "cdc-123",
+                            SifenSubmissionStatus.REJECTED,
+                            null,
+                            "1264",
+                            "RUC no habilitado")))));
+
+    Optional<SifenSubmissionResult> result = service.checkPendingStatus(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.get().status()).isEqualTo(SifenSubmissionStatus.REJECTED);
     verify(queryClient, never()).query(anyLong(), any());
+  }
+
+  @Test
+  void transmit_doesNotAskByCdc_beforeTheLastTenPolls() {
+    pendingInLote("987654321");
+    invoice.setSifenBatchPollCount(39);
+    stillProcessing("987654321");
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenBatchPollCount()).isEqualTo(40);
+    verify(queryClient, never()).query(anyLong(), any());
+  }
+
+  @Test
+  void transmit_resolvesApprovedByCdc_inTheLastTenPolls_withoutResending() {
+    pendingInLote("987654321");
+    invoice.setSifenBatchPollCount(40);
+    stillProcessing("987654321");
+    cdcAnswers(SifenSubmissionStatus.APPROVED_WITH_OBSERVATION, "0422", "CDC encontrado");
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
+    assertThat(invoice.getSifenSubmissionStatus())
+        .isEqualTo(SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
+    assertThat(invoice.getSifenBatchPollCount()).isEqualTo(41);
+    verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
+    verify(batchReceptionClient, never()).send(anyLong(), any());
+  }
+
+  @Test
+  void transmit_staysPendingWithoutResending_whenCdcSaysNotFoundInTheLastTenPolls() {
+    pendingInLote("987654321");
+    invoice.setSifenBatchPollCount(49);
+    stillProcessing("987654321");
+    cdcAnswers(
+        SifenSubmissionStatus.REJECTED, "0420", "Documento No Existe en SIFEN o ha sido Rechazado");
+
+    SifenSubmissionResult result = service.transmit(TENANT_ID, INVOICE_ID);
+
+    assertThat(result.status()).isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenSubmissionStatus())
+        .isEqualTo(SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(invoice.getSifenBatchNumber()).isEqualTo("987654321");
+    verify(queryClient).query(TENANT_ID, "cdc-123");
+    verify(signingService, never()).signInvoice(anyLong(), anyLong(), any());
+    verify(batchReceptionClient, never()).send(anyLong(), any());
+  }
+
+  private void stillProcessing(String batchNumber) {
+    when(batchResultQueryClient.query(TENANT_ID, batchNumber))
+        .thenReturn(
+            Optional.of(new SifenBatchQueryResult("0361", "Lote en procesamiento", List.of())));
+  }
+
+  private void cdcAnswers(SifenSubmissionStatus status, String code, String message) {
+    when(queryClient.query(TENANT_ID, "cdc-123"))
+        .thenReturn(
+            Optional.of(
+                new SifenQueryResult(
+                    new SifenSubmissionResult(status, null, code, message, now()), null)));
   }
 
   private void flagOff() {

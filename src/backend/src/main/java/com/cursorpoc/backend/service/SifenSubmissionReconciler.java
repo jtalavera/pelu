@@ -22,6 +22,11 @@ import org.springframework.stereotype.Component;
  * SifenSubmissionQueue#enqueue}) — both cases are just "an invoice whose next attempt is due,"
  * covered by one query ({@code InvoiceRepository#findDueForSifenRetry}).
  *
+ * <p>Envío por lote: an invoice pending in a lote is recovered up to {@code
+ * SifenSubmissionQueueListener#MAX_BATCH_ATTEMPTS} instead of {@code MAX_ATTEMPTS} (see {@code
+ * InvoiceRepository#findDueForSifenRetry}) — otherwise a scheduled consulta-lote poll lost after
+ * the first few seconds of polling would never be re-enqueued.
+ *
  * <p>Runs in every profile, including {@code e2e} — it's pure DB polling with no Service Bus
  * dependency, and {@code LocalAsyncSifenSubmissionQueue} losing its in-memory queue on a local
  * restart is exactly the gap this closes.
@@ -53,7 +58,12 @@ public class SifenSubmissionReconciler {
     LocalDateTime leaseExpiry = now.minus(SifenSubmissionQueueListener.LEASE_TTL);
     List<Invoice> due =
         invoiceRepository.findDueForSifenRetry(
-            RETRYABLE_STATUSES, now, leaseExpiry, SifenSubmissionQueueListener.MAX_ATTEMPTS);
+            RETRYABLE_STATUSES,
+            now,
+            leaseExpiry,
+            SifenSubmissionQueueListener.MAX_ATTEMPTS,
+            SifenSubmissionStatus.PENDING_VERIFICATION,
+            SifenSubmissionQueueListener.MAX_BATCH_ATTEMPTS);
     for (Invoice invoice : due) {
       long tenantId = invoice.getTenant().getId();
       long invoiceId = invoice.getId();

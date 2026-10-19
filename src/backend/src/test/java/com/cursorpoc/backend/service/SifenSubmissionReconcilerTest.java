@@ -49,7 +49,7 @@ class SifenSubmissionReconcilerTest {
 
   @Test
   void reconcile_enqueuesEveryDueInvoice() {
-    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt()))
+    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt(), any(), anyInt()))
         .thenReturn(List.of(invoiceOf(10L, 1L, 1), invoiceOf(20L, 2L, 3)));
 
     reconciler.reconcile();
@@ -60,7 +60,7 @@ class SifenSubmissionReconcilerTest {
 
   @Test
   void reconcile_queriesForBothQueuedAndPendingVerificationStatuses() {
-    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt()))
+    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt(), any(), anyInt()))
         .thenReturn(List.of());
 
     reconciler.reconcile();
@@ -68,26 +68,32 @@ class SifenSubmissionReconcilerTest {
     ArgumentCaptor<List<SifenSubmissionStatus>> statusesCaptor =
         ArgumentCaptor.forClass(List.class);
     verify(invoiceRepository)
-        .findDueForSifenRetry(statusesCaptor.capture(), any(), any(), anyInt());
+        .findDueForSifenRetry(statusesCaptor.capture(), any(), any(), anyInt(), any(), anyInt());
     assertThat(statusesCaptor.getValue())
         .containsExactlyInAnyOrder(
             SifenSubmissionStatus.QUEUED, SifenSubmissionStatus.PENDING_VERIFICATION);
   }
 
   @Test
-  void reconcile_usesTheListenersMaxAttempts_asTheCutoff() {
-    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt()))
+  void reconcile_usesTheListenersMaxAttempts_andMaxBatchAttemptsForLotes_asTheCutoffs() {
+    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt(), any(), anyInt()))
         .thenReturn(List.of());
 
     reconciler.reconcile();
 
     verify(invoiceRepository)
-        .findDueForSifenRetry(any(), any(), any(), eq(SifenSubmissionQueueListener.MAX_ATTEMPTS));
+        .findDueForSifenRetry(
+            any(),
+            any(),
+            any(),
+            eq(SifenSubmissionQueueListener.MAX_ATTEMPTS),
+            eq(SifenSubmissionStatus.PENDING_VERIFICATION),
+            eq(SifenSubmissionQueueListener.MAX_BATCH_ATTEMPTS));
   }
 
   @Test
   void reconcile_doesNothing_whenNothingIsDue() {
-    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt()))
+    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt(), any(), anyInt()))
         .thenReturn(List.of());
 
     reconciler.reconcile();
