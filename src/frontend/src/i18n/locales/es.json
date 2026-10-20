@@ -2171,7 +2171,14 @@
       "IMPORT_ROW_SKU_TOO_LONG": "El SKU puede tener como máximo 64 caracteres (p. ej. SH-300).",
       "TENANT_SUSPENDED": "El tenant está suspendido. Reactivalo antes de acceder.",
       "IMPERSONATION_ACTION_NOT_ALLOWED": "Esta acción no está disponible mientras impersonás un tenant.",
-      "POPUP_BLOCKED": "El navegador bloqueó la pestaña nueva. Permití las ventanas emergentes para este sitio y volvé a intentarlo."
+      "POPUP_BLOCKED": "El navegador bloqueó la pestaña nueva. Permití las ventanas emergentes para este sitio y volvé a intentarlo.",
+      "APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL": "Solo podés crear y modificar tus propios turnos.",
+      "PROFESSIONAL_EMAIL_REQUIRED_FOR_ACCESS": "El acceso al sistema requiere un email: esta profesional no tiene email configurado. Agregá uno, ej. ana@salon.com.",
+      "PROFESSIONAL_EMAIL_INVALID_FOR_ACCESS": "El acceso al sistema requiere un email válido, ej. ana@salon.com.",
+      "PROFESSIONAL_EMAIL_USED_BY_ANOTHER_USER": "Ese email ya pertenece a otro usuario del negocio (un administrador u otra profesional). Cada usuario necesita un email distinto, ej. ana@salon.com.",
+      "PROFESSIONAL_ACCESS_NOT_ENABLED": "El acceso al sistema no está habilitado para esta profesional.",
+      "PROFESSIONAL_ACCESS_ALREADY_ACTIVE": "Esta profesional ya creó su contraseña: no hay invitación para reenviar.",
+      "ACTIVATION_RESEND_TOO_SOON": "Se envió una invitación hace menos de 2 minutos. Esperá un momento y volvé a intentar."
     },
     "pagination": {
       "rowsPerPage": "Filas por página:",
@@ -2428,9 +2435,20 @@
         "systemAccessAllow": "Permitir acceso al sistema",
         "systemAccessDeny": "Denegar acceso al sistema",
         "systemAccessHint": "Al habilitarlo, se enviará un email de activación a la dirección de la profesional para que pueda establecer una contraseña.",
-        "systemAccessNoEmail": "Esta profesional no tiene email configurado. Agregá un email primero.",
-        "systemAccessGranted": "Email de activación enviado. La profesional recibirá un enlace para establecer su contraseña.",
-        "systemAccessRevokeHint": "Deshabilitar el acceso bloqueará inmediatamente a la profesional para iniciar sesión."
+        "systemAccessNoEmail": "El acceso al sistema requiere un email: esta profesional no tiene email configurado. Agregá uno, ej. ana@salon.com.",
+        "systemAccessGranted": "Invitación enviada a {{email}}. La profesional recibirá un enlace (válido por 48 horas) para crear su contraseña.",
+        "systemAccessRevokeHint": "Deshabilitar el acceso bloqueará inmediatamente a la profesional para iniciar sesión.",
+        "systemAccessNeedsEmail": "Ingresá un email válido (ej. ana@salon.com) para poder habilitar el acceso al sistema.",
+        "accessStatusLabel": "Estatus del acceso al sistema:",
+        "accessStatus": {"NO_ACCESS": "Sin acceso", "PENDING_SAVE": "Se enviará una invitación al guardar", "INVITATION_SENT": "Invitación enviada, favor ingresar al link para crear contraseña", "INVITATION_EXPIRED": "La invitación venció sin que se creara la contraseña — reenviala", "ACTIVE": "Contraseña creada, el usuario está listo para acceder al sistema con el usuario {{email}} y la contraseña creada"},
+        "accessResend": "Reenviar invitación",
+        "accessResending": "Reenviando…",
+        "accessResendWait": "Podrás reenviar en {{time}}",
+        "accessResendDone": "Se envió una nueva invitación a {{email}}. El link anterior ya no funciona; el nuevo es válido por 48 horas.",
+        "emailChangeWarningAccessOn": "{{oldEmail}} es el correo con el que esta profesional accede al sistema. Al guardar, el acceso con {{oldEmail}} deja de funcionar y se envía una nueva invitación a {{newEmail}}: deberá realizar de vuelta el proceso de enrolamiento con el nuevo correo.",
+        "emailChangeWarningAccessOff": "{{oldEmail}} tiene un usuario del sistema. Al guardar, el correo cambia y el usuario del sistema asociado a {{oldEmail}} será inactivado.",
+        "emailChangeConfirmTitle": "¿Cambiar el correo de acceso?",
+        "emailChangeConfirm": "Cambiar correo"
       }
     },
     "calendar": {
@@ -2482,7 +2500,8 @@
         "edit": "Editar turno",
         "close": "Cerrar",
         "save": "Guardar",
-        "cancel": "Cancelar"
+        "cancel": "Cancelar",
+        "readOnlyOtherProfessional": "Este turno pertenece a otra profesional. Podés verlo, pero solo podés editar o cambiar el estado de los turnos asignados a vos."
       },
       "form": {
         "title": "Nuevo turno",

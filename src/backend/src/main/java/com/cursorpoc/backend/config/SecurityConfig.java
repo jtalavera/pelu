@@ -6,6 +6,7 @@ import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.CorrelationIdFilter;
 import com.cursorpoc.backend.security.JwtAuthenticationFilter;
 import com.cursorpoc.backend.security.JwtService;
+import com.cursorpoc.backend.security.ProfessionalAccessPolicy;
 import com.cursorpoc.backend.stock.IntegrationAuthenticationFilter;
 import com.cursorpoc.backend.stock.IntegrationTokenService;
 import java.util.ArrayList;
@@ -92,8 +93,9 @@ public class SecurityConfig {
                     // IntegrationAuthenticationFilter (integration tokens only).
                     .requestMatchers(IntegrationAuthenticationFilter.TOKEN_PATH)
                     .permitAll()
+                    // HU-24 / issue #38: deny-by-default for PROFESSIONAL; others: authenticated.
                     .anyRequest()
-                    .authenticated())
+                    .access(new ProfessionalAccessPolicy()))
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(integrationFilter, JwtAuthenticationFilter.class)
         .addFilterAfter(correlationIdFilter, JwtAuthenticationFilter.class)

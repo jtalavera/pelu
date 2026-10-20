@@ -16,6 +16,7 @@ import com.cursorpoc.backend.web.dto.ProfessionalScheduleRequest;
 import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ class ProfessionalDirectoryServiceTest {
   @Mock private TenantRepository tenantRepository;
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private ProfessionalScheduleRepository professionalScheduleRepository;
+  @Mock private ProfessionalAccessService professionalAccessService;
 
   @InjectMocks private ProfessionalDirectoryService service;
 
@@ -44,6 +46,11 @@ class ProfessionalDirectoryServiceTest {
     tenant.setId(1L);
     tenant.setName("Demo");
     lenient().when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    lenient()
+        .when(professionalAccessService.info(any(Professional.class)))
+        .thenReturn(
+            new ProfessionalAccessService.AccessInfo(
+                ProfessionalAccessService.AccessStatus.NO_ACCESS, null, null, null, null));
 
     lenient()
         .when(professionalRepository.save(any(Professional.class)))
@@ -77,7 +84,7 @@ class ProfessionalDirectoryServiceTest {
         new ProfessionalUpsertRequest(
             "  Ana Gomez  ", "  555  ", "  ana@example.com ", null, null, null);
 
-    var res = service.create(1L, req);
+    var res = service.create(1L, req, Locale.ENGLISH);
     assertThat(res.fullName()).isEqualTo("ANA GOMEZ");
     assertThat(res.active()).isTrue();
     assertThat(res.phone()).isEqualTo("555");
@@ -86,7 +93,8 @@ class ProfessionalDirectoryServiceTest {
   @Test
   void create_rejectsBlankName() {
     var req = new ProfessionalUpsertRequest("   ", null, null, null, null, null);
-    assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
+    assertThatThrownBy(() -> service.create(1L, req, Locale.ENGLISH))
+        .isInstanceOf(ResponseStatusException.class);
   }
 
   @Test
@@ -99,7 +107,8 @@ class ProfessionalDirectoryServiceTest {
     var req =
         new ProfessionalUpsertRequest(
             "Ana Gomez", null, null, "data:image/bmp;base64,QUFB", null, null);
-    assertThatThrownBy(() -> service.create(1L, req)).isInstanceOf(ResponseStatusException.class);
+    assertThatThrownBy(() -> service.create(1L, req, Locale.ENGLISH))
+        .isInstanceOf(ResponseStatusException.class);
   }
 
   @Test
@@ -112,7 +121,7 @@ class ProfessionalDirectoryServiceTest {
     var req =
         new ProfessionalUpsertRequest(
             "Ana Gomez", null, null, "data:image/jpeg;base64,abc", null, null);
-    var res = service.create(1L, req);
+    var res = service.create(1L, req, Locale.ENGLISH);
     assertThat(res.fullName()).isEqualTo("ANA GOMEZ");
     assertThat(res.photoDataUrl()).startsWith("data:image/jpeg;base64,");
   }

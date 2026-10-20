@@ -789,8 +789,8 @@ function AppShellInner() {
           />
         )}
 
-        {/* HU-65: outside the block hidden from professionals — they use Stock as operators. */}
-        {stockEnabled && (
+        {/* HU-65: Stock is admin-only for now (issue #38 follow-up) — professionals don't see it. */}
+        {stockEnabled && !isProfessional && (
           <StockNavButton
             theme={theme === "dark" ? "dark" : "light"}
             lang={i18n.resolvedLanguage?.startsWith("es") ? "es" : "en"}

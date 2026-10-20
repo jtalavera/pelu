@@ -45,8 +45,13 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
-    // Enable access without email
+    // Issue #38 (1): without a valid email the toggle can't be turned on at all...
+    await expect(dlg.locator("#prof-system-access")).toBeDisabled();
+    await expect(dlg.getByText(/to enable system access/i)).toBeVisible();
+    // ...and ticking it with an email that is then cleared is caught on save.
+    await dlg.locator("#prof-email").fill(`noemail${Date.now()}@test.com`);
     await dlg.locator("#prof-system-access").check();
+    await dlg.locator("#prof-email").fill("");
     await dlg.getByRole("button", { name: "Save and set schedule" }).click();
     await expect(dlg.getByText(/no email configured/i)).toBeVisible();
   });

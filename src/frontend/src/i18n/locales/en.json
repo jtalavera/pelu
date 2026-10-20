@@ -2171,7 +2171,14 @@
       "IMPORT_ROW_SKU_TOO_LONG": "The SKU can have at most 64 characters (e.g. SH-300).",
       "TENANT_SUSPENDED": "The tenant is suspended. Reactivate it before accessing it.",
       "IMPERSONATION_ACTION_NOT_ALLOWED": "This action is not available while impersonating a tenant.",
-      "POPUP_BLOCKED": "The browser blocked the new tab. Allow pop-ups for this site and try again."
+      "POPUP_BLOCKED": "The browser blocked the new tab. Allow pop-ups for this site and try again.",
+      "APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL": "You can only create and modify your own appointments.",
+      "PROFESSIONAL_EMAIL_REQUIRED_FOR_ACCESS": "System access requires an email — this professional has no email configured. Add one, e.g. ana@salon.com.",
+      "PROFESSIONAL_EMAIL_INVALID_FOR_ACCESS": "System access requires a valid email address, e.g. ana@salon.com.",
+      "PROFESSIONAL_EMAIL_USED_BY_ANOTHER_USER": "That email already belongs to another user of this business (an administrator or another professional). Each user needs a different email, e.g. ana@salon.com.",
+      "PROFESSIONAL_ACCESS_NOT_ENABLED": "System access is not enabled for this professional.",
+      "PROFESSIONAL_ACCESS_ALREADY_ACTIVE": "This professional already created their password — there is no invitation to resend.",
+      "ACTIVATION_RESEND_TOO_SOON": "An invitation was sent less than 2 minutes ago. Wait a moment and try again."
     },
     "pagination": {
       "rowsPerPage": "Rows per page:",
@@ -2428,9 +2435,20 @@
         "systemAccessAllow": "Allow system access",
         "systemAccessDeny": "Deny system access",
         "systemAccessHint": "When enabled, an activation email will be sent to the professional's email address so they can set a password.",
-        "systemAccessNoEmail": "This professional has no email configured. Add an email address first.",
-        "systemAccessGranted": "Activation email sent. The professional will receive a link to set their password.",
-        "systemAccessRevokeHint": "Disabling access will immediately block the professional from signing in."
+        "systemAccessNoEmail": "System access requires an email — this professional has no email configured. Add one, e.g. ana@salon.com.",
+        "systemAccessGranted": "Invitation sent to {{email}}. The professional will receive a link (valid for 48 hours) to create their password.",
+        "systemAccessRevokeHint": "Disabling access will immediately block the professional from signing in.",
+        "systemAccessNeedsEmail": "Enter a valid email (e.g. ana@salon.com) to enable system access.",
+        "accessStatusLabel": "System access status:",
+        "accessStatus": {"NO_ACCESS": "No access", "PENDING_SAVE": "An invitation will be sent when you save", "INVITATION_SENT": "Invitation sent, please open the link to create the password", "INVITATION_EXPIRED": "Invitation expired without a password being created — resend it", "ACTIVE": "Password created, the user is ready to sign in with {{email}} and the password they created"},
+        "accessResend": "Resend invitation",
+        "accessResending": "Resending…",
+        "accessResendWait": "You can resend in {{time}}",
+        "accessResendDone": "A new invitation was sent to {{email}}. The previous link no longer works; the new one is valid for 48 hours.",
+        "emailChangeWarningAccessOn": "{{oldEmail}} is the email this professional uses to sign in. When you save, sign-in with {{oldEmail}} stops working and a new invitation is sent to {{newEmail}}: they will have to complete the enrollment again with the new email.",
+        "emailChangeWarningAccessOff": "{{oldEmail}} has a system user. When you save, the email changes and the system user tied to {{oldEmail}} is deactivated.",
+        "emailChangeConfirmTitle": "Change the sign-in email?",
+        "emailChangeConfirm": "Change email"
       }
     },
     "calendar": {
@@ -2482,7 +2500,8 @@
         "edit": "Edit appointment",
         "close": "Close",
         "save": "Save",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "readOnlyOtherProfessional": "This appointment belongs to another professional. You can view it, but only the appointments assigned to you can be edited or have their status changed."
       },
       "form": {
         "title": "New appointment",

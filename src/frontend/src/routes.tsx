@@ -3,6 +3,7 @@ import { AppShell } from "./layout/AppShell";
 import { PlatformShell } from "./layout/PlatformShell";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PlatformAdminRoute } from "./auth/PlatformAdminRoute";
+import { AdminOnlyRoute } from "./auth/AdminOnlyRoute";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
 import DashboardsPage from "./pages/DashboardsPage";
@@ -57,28 +58,31 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route path="/app" element={<DashboardPage />} />
         <Route path="/app/calendar" element={<CalendarPage />} />
-        <Route path="/app/dashboards" element={<DashboardsPage />} />
-        <Route path="/app/services" element={<ServicesPage />} />
-        <Route path="/app/products" element={<ProductsPage />} />
-        <Route path="/app/billing" element={<BillingPage />} />
-        <Route path="/app/service-records" element={<ServiceRecordsPage />} />
-        <Route path="/app/propinas" element={<PropinasPage />} />
-        <Route path="/app/commissions" element={<CommissionsPage />} />
-        <Route path="/app/commissions/settlements/:id" element={<CommissionSettlementPage />} />
         <Route path="/app/my-commissions" element={<MyCommissionsPage />} />
-        <Route path="/app/clients" element={<ClientsPage />} />
-        <Route path="/app/clients/:id" element={<ClientDetailPage />} />
-        <Route path="/app/inactive-clients" element={<InactiveClientsPage />} />
-        <Route path="/app/professionals" element={<ProfessionalsPage />} />
-        <Route path="/app/settings" element={<SettingsLayout />}>
-          <Route index element={<Navigate to="business" replace />} />
-          <Route path="business" element={<BusinessSettingsPage />} />
-          <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
-          <Route path="taxes" element={<TaxSettingsPage />} />
-          <Route path="sifen" element={<SifenCertificatesPage />} />
-          <Route path="audit" element={<AuditSettingsPage />} />
+        {/* HU-24 AC-12/13: everything below is admin-only — professionals go to their calendar. */}
+        <Route element={<AdminOnlyRoute />}>
+          <Route path="/app" element={<DashboardPage />} />
+          <Route path="/app/dashboards" element={<DashboardsPage />} />
+          <Route path="/app/services" element={<ServicesPage />} />
+          <Route path="/app/products" element={<ProductsPage />} />
+          <Route path="/app/billing" element={<BillingPage />} />
+          <Route path="/app/service-records" element={<ServiceRecordsPage />} />
+          <Route path="/app/propinas" element={<PropinasPage />} />
+          <Route path="/app/commissions" element={<CommissionsPage />} />
+          <Route path="/app/commissions/settlements/:id" element={<CommissionSettlementPage />} />
+          <Route path="/app/clients" element={<ClientsPage />} />
+          <Route path="/app/clients/:id" element={<ClientDetailPage />} />
+          <Route path="/app/inactive-clients" element={<InactiveClientsPage />} />
+          <Route path="/app/professionals" element={<ProfessionalsPage />} />
+          <Route path="/app/settings" element={<SettingsLayout />}>
+            <Route index element={<Navigate to="business" replace />} />
+            <Route path="business" element={<BusinessSettingsPage />} />
+            <Route path="fiscal-stamp" element={<FiscalStampSettingsPage />} />
+            <Route path="taxes" element={<TaxSettingsPage />} />
+            <Route path="sifen" element={<SifenCertificatesPage />} />
+            <Route path="audit" element={<AuditSettingsPage />} />
+          </Route>
         </Route>
       </Route>
       <Route

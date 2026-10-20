@@ -24,4 +24,8 @@ public interface ProfessionalActivationTokenRepository
   void invalidateAllForProfessional(Long professionalId);
 
   long deleteByProfessional_Tenant_Id(Long tenantId);
+
+  /** Issue #38: the latest invitation sent to a professional (status line + resend cooldown). */
+  Optional<ProfessionalActivationToken> findFirstByProfessional_IdOrderByIdDesc(
+      Long professionalId);
 }

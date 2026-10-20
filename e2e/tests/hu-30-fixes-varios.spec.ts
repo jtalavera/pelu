@@ -229,7 +229,8 @@ test.describe("HU-30 · Fixes varios", () => {
   });
 
   // AC-8 — Professional access email is sent with Accept-Language header from frontend
-  test("HU-30 · 8 solicitud grant-access lleva Accept-Language del idioma activo", async ({
+  // Issue #38: the invitation is now sent by the professional save itself (PUT), atomically.
+  test("HU-30 · 8 el guardado que envía la invitación lleva Accept-Language del idioma activo", async ({
     page,
     request,
   }) => {
@@ -262,13 +263,11 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(accessToggle).toBeVisible({ timeout: 10_000 });
     await accessToggle.check();
 
-    // Saving with access enabled fires the grant-access request; assert its Accept-Language.
+    // Saving with access enabled sends the invitation (PUT /api/professionals/{id}); the email
+    // language comes from its Accept-Language.
     const [grantReq] = await Promise.all([
       page.waitForRequest(
-        (req) =>
-          req.url().includes("/api/professionals/") &&
-          req.url().includes("/grant-access") &&
-          req.method() === "POST",
+        (req) => /\/api\/professionals\/\d+$/.test(req.url()) && req.method() === "PUT",
         { timeout: 20_000 },
       ),
       dialog.getByRole("button", { name: "Save and set schedule" }).click(),
