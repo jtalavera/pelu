@@ -11,11 +11,14 @@ export async function pickServiceLine(
   lineIdx = 0,
 ): Promise<void> {
   await page.locator(`#billing-line-svc-${lineIdx}`).fill(serviceFullName.slice(0, 12));
+  // Scoped to this line's own option list: another line's list may still be open with the same
+  // service in it (two matching buttons → strict-mode violation).
   // exact: false → substring match; avoids dynamic RegExp construction flagged by semgrep
-  const option = page.getByRole("button", { name: serviceFullName, exact: false });
+  const option = page
+    .locator(`#billing-line-svc-${lineIdx}-listbox`)
+    .getByRole("button", { name: serviceFullName, exact: false });
   await option.click();
-  // Wait for the option list to close, so the next line's pick never sees this line's stale list
-  // (two matching buttons → strict-mode violation). Best effort: never fails the pick itself.
+  // Wait for the option list to close. Best effort: never fails the pick itself.
   await expect(option)
     .toHaveCount(0, { timeout: 3_000 })
     .catch(() => undefined);
