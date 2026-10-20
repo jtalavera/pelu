@@ -193,17 +193,16 @@ test.describe("Issue #310 · Impersonar un tenant admin", () => {
       ruc: null,
     });
 
-    await loginAsPlatformAdmin(page);
-    const platformToken = await loginPlatformAdminApi(request);
-    const demoTenant = (await (
-      await request.get(`${apiBaseUrl()}/api/platform/tenants?q=&size=100`, {
-        headers: authHeaders(platformToken),
-      })
-    ).json()) as { content: Tenant[] };
-    const demo = demoTenant.content.find((t) => t.id === DEMO_TENANT_ID);
-    expect(demo, "seeded DEMO tenant").toBeTruthy();
+    // The DEMO tenant's name, from its own admin's session — not from a page of the tenant list,
+    // which the rest of the suite fills with many more tenants.
+    const demoMe = (await (
+      await request.get(`${apiBaseUrl()}/api/me`, { headers: authHeaders(demoToken) })
+    ).json()) as { tenantId: number; tenantName: string };
+    expect(demoMe.tenantId).toBe(DEMO_TENANT_ID);
+    const demo = { id: demoMe.tenantId, name: demoMe.tenantName };
 
-    const { tab } = await openAsAdministrator(page, demo!);
+    await loginAsPlatformAdmin(page);
+    const { tab } = await openAsAdministrator(page, demo);
 
     // Admin-only navigation is there (a professional would not see Professionals / Settings).
     const nav = tab.getByRole("complementary", { name: "Main navigation" });
