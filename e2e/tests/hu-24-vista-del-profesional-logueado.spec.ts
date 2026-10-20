@@ -343,7 +343,8 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await loginAs(page, email, "ValidPass1!");
     await page.goto("/app/calendar");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
-    await pickCalendarFilter(page, "All professionals");
+    // Filter by the other professional (a crowded "all" grid can squeeze the block too thin to click).
+    await pickCalendarFilter(page, salon.professionalFullName);
     await page.getByTestId(`calendar-appt-${other.id}`).click();
     let dlg = page.getByRole("dialog");
     await expect(dlg.getByTestId("appointment-read-only-notice")).toBeVisible();
@@ -351,6 +352,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await expect(dlg.getByRole("button", { name: /change status/i })).toHaveCount(0);
     await dlg.getByRole("button", { name: /close/i }).first().click();
 
+    await pickCalendarFilter(page, `E2E RO ${suffix}`.toUpperCase());
     await page.getByTestId(`calendar-appt-${own.id}`).click();
     dlg = page.getByRole("dialog");
     await expect(dlg.getByTestId("appointment-read-only-notice")).toHaveCount(0);
