@@ -653,6 +653,14 @@
           "syncing": "Solicitando…",
           "syncRequested": "Sincronización solicitada. Los productos aparecerán en Stock en unos segundos.",
           "failedEvents": "{{count}} envío(s) a Stock fallido(s) — revisá el panel de integración."
+        },
+        "impersonation": {
+          "title": "Acceder como administrador",
+          "lead": "Abre este tenant en una pestaña nueva con todas las funcionalidades de un administrador del tenant. Todo lo que hagas allí queda registrado a nombre de tu propio usuario.",
+          "action": "Abrir como administrador",
+          "opening": "Abriendo…",
+          "suspendedHint": "No se puede acceder a un tenant suspendido. Reactivalo primero.",
+          "error": "No se pudo abrir el tenant como administrador."
         }
       },
       "tiers": {
@@ -1928,7 +1936,8 @@
         "stock_retry": "Reintentó un envío a Stock",
         "stock_discard": "Descartó un envío a Stock",
         "sifen_number-voiding": "Registró una numeración inutilizada",
-        "sifen_submit": "Envió una numeración inutilizada a SIFEN"
+        "sifen_submit": "Envió una numeración inutilizada a SIFEN",
+        "tenants_impersonation": "Ingresó a un negocio como su administrador"
       }
     },
     "apiErrors": {
@@ -2159,7 +2168,10 @@
       "SIFEN_CSC_NOT_CONFIGURED": "Este negocio no tiene un código de seguridad (CSC) cargado. Cargá el que entregó la DNIT en Configuración → SIFEN → Código de seguridad.",
       "INVALID_SKU": "El código (SKU) puede tener como máximo 64 caracteres (p. ej. SH-300).",
       "IMPORT_ROW_CATEGORY_KIND_MISMATCH": "Esa categoría ya existe con el otro tipo: los servicios y los productos tienen categorías separadas.",
-      "IMPORT_ROW_SKU_TOO_LONG": "El SKU puede tener como máximo 64 caracteres (p. ej. SH-300)."
+      "IMPORT_ROW_SKU_TOO_LONG": "El SKU puede tener como máximo 64 caracteres (p. ej. SH-300).",
+      "TENANT_SUSPENDED": "El tenant está suspendido. Reactivalo antes de acceder.",
+      "IMPERSONATION_ACTION_NOT_ALLOWED": "Esta acción no está disponible mientras impersonás un tenant.",
+      "POPUP_BLOCKED": "El navegador bloqueó la pestaña nueva. Permití las ventanas emergentes para este sitio y volvé a intentarlo."
     },
     "pagination": {
       "rowsPerPage": "Filas por página:",
@@ -2743,6 +2755,13 @@
         "list": { "title": "Timbrados registrados", "content": "Todos los timbrados registrados, con el activo en primer lugar. Desde aquí podés editar, activar, desactivar o borrar cualquiera de ellos." },
         "form": { "title": "Registrar nuevo timbrado", "content": "Ingresá el número de timbrado, las fechas de vigencia y el rango de numeración habilitado por la SET." }
       }
+    },
+    "impersonation": {
+      "bannerTitle": "Modo impersonación",
+      "bannerBody": "Estás trabajando en \"{{tenant}}\" como su administrador, con la sesión de {{email}}. Todo lo que hagas aquí queda registrado a nombre de tu usuario.",
+      "end": "Finalizar impersonación",
+      "invalidLink": "Este enlace de impersonación no es válido o expiró. Volvé a iniciarlo desde el listado de tenants.",
+      "backToLogin": "Ir a iniciar sesión"
     },
     "stock": {
       "openError": "No se pudo abrir Stock. Intentá de nuevo en un momento."

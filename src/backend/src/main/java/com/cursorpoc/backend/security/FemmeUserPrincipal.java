@@ -18,14 +18,27 @@ public class FemmeUserPrincipal implements UserDetails {
   private final String email;
   private final UserRole role;
   private final Long professionalId;
+  // Issue #310: true only for a Platform Admin impersonating a tenant (JwtService "imp" claim).
+  private final boolean impersonation;
 
   public FemmeUserPrincipal(
       long userId, Long tenantId, String email, UserRole role, Long professionalId) {
+    this(userId, tenantId, email, role, professionalId, false);
+  }
+
+  public FemmeUserPrincipal(
+      long userId,
+      Long tenantId,
+      String email,
+      UserRole role,
+      Long professionalId,
+      boolean impersonation) {
     this.userId = userId;
     this.tenantId = tenantId;
     this.email = email;
     this.role = role;
     this.professionalId = professionalId;
+    this.impersonation = impersonation;
   }
 
   public long getUserId() {
@@ -71,6 +84,15 @@ public class FemmeUserPrincipal implements UserDetails {
 
   public boolean isPlatformAdmin() {
     return role == UserRole.PLATFORM_ADMIN;
+  }
+
+  /**
+   * Issue #310: a Platform Admin working inside a tenant as its {@code ADMIN} (impersonation). The
+   * role is {@code ADMIN} — never {@code PLATFORM_ADMIN}, so no platform route accepts this token —
+   * while {@link #getUserId()}/{@link #getUsername()} still identify the Platform Admin.
+   */
+  public boolean isImpersonation() {
+    return impersonation;
   }
 
   @Override

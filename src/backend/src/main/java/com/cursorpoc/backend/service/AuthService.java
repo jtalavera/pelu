@@ -237,7 +237,9 @@ public class AuthService {
             principal.getUsername(),
             principal.getRole(),
             principal.getProfessionalId(),
-            now);
+            now,
+            // Issue #310: an impersonation session stays one across sliding refreshes.
+            principal.isImpersonation());
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
   }
 

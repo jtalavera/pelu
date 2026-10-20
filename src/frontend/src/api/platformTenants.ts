@@ -162,3 +162,18 @@ export function resendTenantUserInvitation(
     {},
   );
 }
+
+export type ImpersonationToken = {
+  accessToken: string;
+  expiresInSeconds: number;
+  tokenType: string;
+};
+
+/**
+ * Issue #310: the Platform Admin impersonates the tenant's administrator — returns a tenant-bound
+ * ADMIN access token (flagged as an impersonation) for the new tab opened by
+ * `openImpersonationInNewTab`.
+ */
+export function impersonateTenant(tenantId: number): Promise<ImpersonationToken> {
+  return femmePostJson<ImpersonationToken>(`/api/platform/tenants/${tenantId}/impersonation`, {});
+}

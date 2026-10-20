@@ -653,6 +653,14 @@
           "syncing": "Requesting…",
           "syncRequested": "Catalog sync requested. Products will show up in Stock in a few seconds.",
           "failedEvents": "{{count}} failed delivery(ies) to Stock — check the integration panel."
+        },
+        "impersonation": {
+          "title": "Access as administrator",
+          "lead": "Opens this tenant in a new tab with every tenant administrator feature. Everything you do there is recorded under your own user.",
+          "action": "Open as administrator",
+          "opening": "Opening…",
+          "suspendedHint": "A suspended tenant can't be accessed. Reactivate it first.",
+          "error": "Could not open the tenant as administrator."
         }
       },
       "tiers": {
@@ -1928,7 +1936,8 @@
         "stock_retry": "Retried a delivery to Stock",
         "stock_discard": "Discarded a delivery to Stock",
         "sifen_number-voiding": "Recorded a voided number",
-        "sifen_submit": "Submitted a voided number to SIFEN"
+        "sifen_submit": "Submitted a voided number to SIFEN",
+        "tenants_impersonation": "Accessed a business as its administrator"
       }
     },
     "apiErrors": {
@@ -2159,7 +2168,10 @@
       "SIFEN_CSC_NOT_CONFIGURED": "This business has no security code (CSC) loaded. Load the one the DNIT issued in Settings → SIFEN → Security code.",
       "INVALID_SKU": "The code (SKU) can have at most 64 characters (e.g. SH-300).",
       "IMPORT_ROW_CATEGORY_KIND_MISMATCH": "That category already exists as the other type: services and products have separate categories.",
-      "IMPORT_ROW_SKU_TOO_LONG": "The SKU can have at most 64 characters (e.g. SH-300)."
+      "IMPORT_ROW_SKU_TOO_LONG": "The SKU can have at most 64 characters (e.g. SH-300).",
+      "TENANT_SUSPENDED": "The tenant is suspended. Reactivate it before accessing it.",
+      "IMPERSONATION_ACTION_NOT_ALLOWED": "This action is not available while impersonating a tenant.",
+      "POPUP_BLOCKED": "The browser blocked the new tab. Allow pop-ups for this site and try again."
     },
     "pagination": {
       "rowsPerPage": "Rows per page:",
@@ -2743,6 +2755,13 @@
         "list": { "title": "Registered stamps", "content": "All registered fiscal stamps, with the active one shown first. Edit, activate, deactivate, or delete any of them from here." },
         "form": { "title": "Register new stamp", "content": "Enter the timbrado number, validity dates, and the invoice number range authorised by SET Paraguay." }
       }
+    },
+    "impersonation": {
+      "bannerTitle": "Impersonation mode",
+      "bannerBody": "You are working in \"{{tenant}}\" as its administrator, signed in as {{email}}. Everything you do here is recorded under your user.",
+      "end": "End impersonation",
+      "invalidLink": "This impersonation link is invalid or has expired. Start it again from the tenants list.",
+      "backToLogin": "Go to sign in"
     },
     "stock": {
       "openError": "Stock could not be opened. Try again in a moment."

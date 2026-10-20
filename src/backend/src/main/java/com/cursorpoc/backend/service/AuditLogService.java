@@ -3,6 +3,7 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.AuditLog;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.repository.AuditLogRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
@@ -125,7 +126,11 @@ public class AuditLogService {
       row.setTenantId(principal.getTenantIdOrNull());
       row.setUserId(principal.getUserId());
       row.setUserEmail(principal.getUsername());
-      row.setUserRole(principal.getRole() != null ? principal.getRole().name() : null);
+      // Issue #310: an impersonation session acts as ADMIN, but who did it is the Platform Admin.
+      row.setUserRole(
+          principal.isImpersonation()
+              ? UserRole.PLATFORM_ADMIN.name()
+              : principal.getRole() != null ? principal.getRole().name() : null);
       row.setHttpMethod(method.toUpperCase());
       row.setResource(truncate(ro[0], 64));
       row.setOperation(truncate(ro[1], 64));
