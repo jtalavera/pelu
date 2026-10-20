@@ -21,9 +21,12 @@ import {
 import { femmePostJson, femmePutJson } from "../api/femmeClient";
 import { listProfessionalsPaged } from "../api/professionals";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
-import { grantProfessionalAccess, revokeProfessionalAccess } from "../api/professionalAccess";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
+import {
+  ProfessionalAccessSection,
+  type ProfessionalAccessStatus,
+} from "../components/ProfessionalAccessSection";
 import { StatusBadge } from "../components/StatusBadge";
 import {
   formatParaguayPhone,
@@ -72,6 +75,12 @@ type Professional = {
   hasPinSet: boolean;
   systemAccessAllowed: boolean;
   hasUserAccount: boolean;
+  // Issue #38 (4)/(5)
+  accessStatus: ProfessionalAccessStatus | null;
+  accessLoginEmail: string | null;
+  invitationSentAt: string | null;
+  invitationExpiresAt: string | null;
+  resendAvailableAt: string | null;
 };
 
 type DetailErrors = {
@@ -169,6 +178,8 @@ export default function ProfessionalsPage() {
   const [pinTouched, setPinTouched] = useState(false);
   const [systemAccessAllowed, setSystemAccessAllowed] = useState(false);
   const [accessGrantedMessage, setAccessGrantedMessage] = useState<string | null>(null);
+  // Issue #38 (2): confirmation before saving an email change of a professional with access.
+  const [emailChangeConfirmOpen, setEmailChangeConfirmOpen] = useState(false);
   const [detailErrors, setDetailErrors] = useState<DetailErrors>(null);
   const [detailSaveError, setDetailSaveError] = useState<string | null>(null);
   const [detailSaving, setDetailSaving] = useState(false);
@@ -313,7 +324,19 @@ export default function ProfessionalsPage() {
     setSavedProfessional(null);
   }
 
-  async function saveDetails() {
+  /**
+   * Issue #38 (2): the saved email already backs a system user or a pending invitation, and the
+   * form now has a different one — saving moves the access to the new email.
+   */
+  const savedEmailHasAccess =
+    savedProfessional != null &&
+    (savedProfessional.hasUserAccount ||
+      (savedProfessional.accessStatus != null && savedProfessional.accessStatus !== "NO_ACCESS"));
+  const emailChangesAccess =
+    savedEmailHasAccess &&
+    (savedProfessional?.email ?? "").trim().toLowerCase() !== email.trim().toLowerCase();
+
+  async function saveDetails(emailChangeConfirmed = false) {
     setDetailSaveError(null);
     setAccessGrantedMessage(null);
     const nameTrim = fullName.trim();
@@ -328,6 +351,9 @@ export default function ProfessionalsPage() {
     }
     if (emailTrim && !isValidEmail(emailTrim)) {
       errs.email = t("femme.professionals.form.emailInvalid");
+    } else if (systemAccessAllowed && !emailTrim) {
+      // Issue #38 (1): access always needs a valid email — whatever the sequence of steps.
+      errs.email = t("femme.professionals.form.systemAccessNoEmail");
     }
     if (errs.fullName || errs.phone || errs.email) {
       setDetailErrors((prev) => ({
@@ -344,9 +370,14 @@ export default function ProfessionalsPage() {
     if (detailErrors?.photo) {
       return;
     }
+    if (emailChangesAccess && !emailChangeConfirmed) {
+      setEmailChangeConfirmOpen(true);
+      return;
+    }
     setDetailSaving(true);
     try {
-      const wasAllowed = savedProfessional?.systemAccessAllowed ?? false;
+      const previousStatus = savedProfessional?.accessStatus ?? "NO_ACCESS";
+      const previousEmail = (savedProfessional?.email ?? "").trim().toLowerCase();
       const payload = {
         fullName: nameTrim,
         phone: phone.trim() || null,
@@ -362,27 +393,15 @@ export default function ProfessionalsPage() {
         saved = await femmePostJson<Professional>("/api/professionals", payload);
       }
 
-      // Handle system access changes
-      if (systemAccessAllowed && !wasAllowed) {
-        if (!email.trim()) {
-          setDetailSaveError(t("femme.professionals.form.systemAccessNoEmail"));
-          setSavedProfessional(saved);
-          setProfReloadTick((n) => n + 1);
-          setDetailSaving(false);
-          return;
-        }
-        try {
-          await grantProfessionalAccess(saved.id);
-          setAccessGrantedMessage(t("femme.professionals.form.systemAccessGranted"));
-        } catch (e) {
-          setDetailSaveError(translateApiError(e, t, "femme.professionals.saveError"));
-        }
-      } else if (!systemAccessAllowed && wasAllowed) {
-        try {
-          await revokeProfessionalAccess(saved.id);
-        } catch {
-          // non-fatal
-        }
+      // Issue #38: the backend grants / revokes / re-invites atomically with the save.
+      const newInvitation =
+        saved.accessStatus === "INVITATION_SENT" &&
+        (previousStatus === "NO_ACCESS" ||
+          previousEmail !== (saved.email ?? "").trim().toLowerCase());
+      if (newInvitation) {
+        setAccessGrantedMessage(
+          t("femme.professionals.form.systemAccessGranted", { email: saved.accessLoginEmail ?? saved.email }),
+        );
       }
 
       setSavedProfessional(saved);
@@ -400,6 +419,12 @@ export default function ProfessionalsPage() {
           ...(prev ?? {}),
           email: t("femme.apiErrors.PROFESSIONAL_EMAIL_DUPLICATE"),
         }));
+      } else if (
+        rawCode === "PROFESSIONAL_EMAIL_REQUIRED_FOR_ACCESS" ||
+        rawCode === "PROFESSIONAL_EMAIL_INVALID_FOR_ACCESS" ||
+        rawCode === "PROFESSIONAL_EMAIL_USED_BY_ANOTHER_USER"
+      ) {
+        setDetailErrors((prev) => ({ ...(prev ?? {}), email: t(`femme.apiErrors.${rawCode}`) }));
       } else if (rawCode === "INVALID_PIN_FORMAT") {
         setDetailErrors((prev) => ({ ...(prev ?? {}), pin: t("femme.apiErrors.INVALID_PIN_FORMAT") }));
       } else {
@@ -1003,6 +1028,18 @@ export default function ProfessionalsPage() {
                     aria-describedby={detailErrors?.email ? "prof-email-err" : undefined}
                   />
                   <FieldValidationError id="prof-email-err">{detailErrors?.email}</FieldValidationError>
+                  {emailChangesAccess ? (
+                    <Alert variant="warning" className="mt-2" data-testid="prof-email-change-warning">
+                      {systemAccessAllowed
+                        ? t("femme.professionals.form.emailChangeWarningAccessOn", {
+                            oldEmail: savedProfessional?.email ?? "",
+                            newEmail: email.trim() || "—",
+                          })
+                        : t("femme.professionals.form.emailChangeWarningAccessOff", {
+                            oldEmail: savedProfessional?.email ?? "",
+                          })}
+                    </Alert>
+                  ) : null}
                 </div>
               </div>
 
@@ -1033,44 +1070,24 @@ export default function ProfessionalsPage() {
                 </Text>
               </div>
 
-              {/* ── System access ── */}
-              <div
-                style={{
-                  padding: 12,
-                  border: "var(--border-default)",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--color-stone)",
+              {/* ── System access (HU-23 + issue #38) ── */}
+              <ProfessionalAccessSection<Professional>
+                checked={systemAccessAllowed}
+                onCheckedChange={(checked) => {
+                  setSystemAccessAllowed(checked);
+                  if (checked) {
+                    setDetailErrors((prev) => (prev ? { ...prev, email: undefined } : prev));
+                  }
                 }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-ink)" }}>
-                      {t("femme.professionals.form.systemAccess")}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-                      {t("femme.professionals.form.systemAccessHint")}
-                    </div>
-                  </div>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flexShrink: 0 }}>
-                    <input
-                      id="prof-system-access"
-                      type="checkbox"
-                      checked={systemAccessAllowed}
-                      onChange={(e) => setSystemAccessAllowed(e.target.checked)}
-                      style={{ width: 16, height: 16, cursor: "pointer" }}
-                      aria-label={t("femme.professionals.form.systemAccessAllow")}
-                    />
-                    <span style={{ fontSize: 12, color: "var(--color-ink-2)" }}>
-                      {t("femme.professionals.form.systemAccessAllow")}
-                    </span>
-                  </label>
-                </div>
-                {accessGrantedMessage ? (
-                  <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-success)", fontWeight: 500 }}>
-                    {accessGrantedMessage}
-                  </div>
-                ) : null}
-              </div>
+                email={email}
+                emailValid={email.trim() !== "" && isValidEmail(email.trim())}
+                saved={savedProfessional}
+                onResent={(updated) => {
+                  setSavedProfessional(updated);
+                  setProfReloadTick((n) => n + 1);
+                }}
+                message={accessGrantedMessage}
+              />
 
               <div>
                 <Label htmlFor="prof-photo-file">{t("femme.professionals.form.photoDataUrl")}</Label>
@@ -1136,7 +1153,7 @@ export default function ProfessionalsPage() {
                 </Button>
                 <Button
                   type="button"
-                  onClick={saveDetails}
+                  onClick={() => void saveDetails()}
                   disabled={detailSaving}
                   className="min-h-11"
                 >
@@ -1269,6 +1286,31 @@ export default function ProfessionalsPage() {
           </TabsContent>
         </Tabs>
       </Modal>
+
+      {emailChangeConfirmOpen ? (
+        <ConfirmDialog
+          open
+          title={t("femme.professionals.form.emailChangeConfirmTitle")}
+          description={
+            systemAccessAllowed
+              ? t("femme.professionals.form.emailChangeWarningAccessOn", {
+                  oldEmail: savedProfessional?.email ?? "",
+                  newEmail: email.trim() || "—",
+                })
+              : t("femme.professionals.form.emailChangeWarningAccessOff", {
+                  oldEmail: savedProfessional?.email ?? "",
+                })
+          }
+          cancelLabel={t("femme.professionals.cancel")}
+          confirmLabel={t("femme.professionals.form.emailChangeConfirm")}
+          confirmVariant="primary"
+          onCancel={() => setEmailChangeConfirmOpen(false)}
+          onConfirm={() => {
+            setEmailChangeConfirmOpen(false);
+            void saveDetails(true);
+          }}
+        />
+      ) : null}
 
       {deactivateTarget ? (
         <ConfirmDialog

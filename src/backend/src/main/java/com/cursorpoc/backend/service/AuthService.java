@@ -20,7 +20,6 @@ import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
 import com.cursorpoc.backend.web.dto.ActivationTokenInfoResponse;
 import com.cursorpoc.backend.web.dto.ForgotPasswordRequest;
-import com.cursorpoc.backend.web.dto.GrantAccessResponse;
 import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.ResetPasswordRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
@@ -358,61 +357,6 @@ public class AuthService {
     passwordResetTokenRepository.save(token);
   }
 
-  @Transactional
-  public GrantAccessResponse grantProfessionalAccess(
-      long tenantId, long professionalId, Locale locale) {
-    Professional professional =
-        professionalRepository
-            .findByIdAndTenant_Id(professionalId, tenantId)
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
-
-    if (professional.getEmail() == null || professional.getEmail().isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "PROFESSIONAL_EMAIL_REQUIRED_FOR_ACCESS");
-    }
-
-    String email = professional.getEmail().trim().toLowerCase();
-
-    // Invalidate any existing activation tokens for this professional
-    activationTokenRepository.invalidateAllForProfessional(professionalId);
-
-    String raw = UUID.randomUUID().toString();
-    String hash = sha256Hex(raw);
-    ProfessionalActivationToken token = new ProfessionalActivationToken();
-    token.setProfessional(professional);
-    token.setTokenHash(hash);
-    token.setExpiresAt(Instant.now().plus(48, ChronoUnit.HOURS));
-    token.setUsed(false);
-    activationTokenRepository.save(token);
-
-    professional.setSystemAccessAllowed(true);
-    professionalRepository.save(professional);
-
-    String activationUrl = frontendUrl + "/activate?token=" + raw;
-    emailService.sendActivationLink(
-        email, activationUrl, professional.getTenant().getName(), locale);
-
-    return new GrantAccessResponse(true, raw);
-  }
-
-  @Transactional
-  public void revokeProfessionalAccess(long tenantId, long professionalId) {
-    Professional professional =
-        professionalRepository
-            .findByIdAndTenant_Id(professionalId, tenantId)
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
-
-    professional.setSystemAccessAllowed(false);
-    if (professional.getUser() != null) {
-      professional.getUser().setEnabled(false);
-      appUserRepository.save(professional.getUser());
-    }
-    activationTokenRepository.invalidateAllForProfessional(professionalId);
-    professionalRepository.save(professional);
-  }
-
   /**
    * HU-41: {@code ActivatePage} is shared by both flows (AC-4), so this transparently checks the
    * professional-scoped token table first, then the app-user-scoped one (Platform-Admin-invited
@@ -508,6 +452,18 @@ public class AuthService {
     Optional<AppUser> existing = appUserRepository.findByEmailAndTenant_Id(email, tenantId);
     if (existing.isPresent()) {
       user = existing.get();
+      // Issue #38 (3): only reuse a PROFESSIONAL user that is hers already or nobody's — never an
+      // admin's account (its password would be overwritten) nor another professional's.
+      boolean reusable =
+          user.getRole() == UserRole.PROFESSIONAL
+              && professionalRepository
+                  .findByUser_Id(user.getId())
+                  .map(linked -> linked.getId().equals(professional.getId()))
+                  .orElse(true);
+      if (!reusable) {
+        throw new ResponseStatusException(
+            HttpStatus.CONFLICT, "PROFESSIONAL_EMAIL_USED_BY_ANOTHER_USER");
+      }
       user.setEnabled(true);
     } else {
       user = new AppUser();

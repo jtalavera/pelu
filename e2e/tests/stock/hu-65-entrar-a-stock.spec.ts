@@ -37,25 +37,17 @@ test.describe("HU-65 · Entrar a Stock desde Femme", () => {
     await expect(stockTab.getByRole("menu")).toContainText(/Administrador|Administrator/);
   });
 
-  test("el profesional ve Stock y entra como operador", async ({ page, context }) => {
+  // Issue #38 follow-up: Stock is admin-only for now — professionals neither see it nor get an SSO token.
+  test("el profesional NO ve Stock y el SSO le responde 403", async ({ page }) => {
     const world = getStockWorld();
     await loginAs(page, world.s1.professionalEmail, world.s1.professionalPassword);
-    await expect(page.getByTestId("nav-stock")).toBeVisible();
-    const sso = await pelu<{ token: string }>("/api/sso/stock", {
+    await expect(page.getByRole("link", { name: /Calendar|Calendario/ }).first()).toBeVisible();
+    await expect(page.getByTestId("nav-stock")).toHaveCount(0);
+    const sso = await pelu("/api/sso/stock", {
       method: "POST",
       token: await peluLogin(world.s1.professionalEmail, world.s1.professionalPassword),
     });
-    expect(sso.status).toBe(200);
-    const payload = JSON.parse(Buffer.from(sso.body.token.split(".")[1], "base64url").toString());
-    expect([payload.aud].flat()).toContain("control-stock");
-    expect(payload).toMatchObject({ role: "PROFESSIONAL", tid: String(world.s1.id) });
-
-    const [stockTab] = await Promise.all([context.waitForEvent("page"), page.getByTestId("nav-stock").click()]);
-    await expect(stockTab.getByTestId("back-to-host")).toBeVisible({ timeout: 30_000 });
-    // Operator: the user menu says so, and there is no configuration entry.
-    await stockTab.getByRole("button", { name: "User menu" }).click();
-    await expect(stockTab.getByRole("menu")).toContainText("Operator");
-    await expect(stockTab.getByRole("link", { name: "Settings" })).toHaveCount(0);
+    expect(sso.status).toBe(403);
   });
 
   test("cerrar sesión en Stock también la cierra en Femme", async ({ page, context }) => {

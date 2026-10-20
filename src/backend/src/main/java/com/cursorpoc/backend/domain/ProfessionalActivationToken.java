@@ -35,6 +35,12 @@ public class ProfessionalActivationToken {
   @Column(nullable = false)
   private boolean used;
 
+  // Issue #38: when the invitation was sent (status line + resend cooldown). Nullable only for
+  // rows older than V82, which the migration backfills.
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "created_at")
+  private Instant createdAt;
+
   public Long getId() {
     return id;
   }
@@ -73,5 +79,13 @@ public class ProfessionalActivationToken {
 
   public void setUsed(boolean used) {
     this.used = used;
+  }
+
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public void setCreatedAt(Instant createdAt) {
+    this.createdAt = createdAt;
   }
 }

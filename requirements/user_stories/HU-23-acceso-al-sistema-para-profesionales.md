@@ -53,6 +53,16 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 14. **Revocación de acceso** — Al cambiar el estado a "Denegar acceso" y guardar, el usuario asociado queda deshabilitado. Cualquier sesión activa de esa profesional es invalidada o no puede renovarse.
 15. **Acceso denegado en login** — Una profesional con acceso denegado que intente iniciar sesión recibe el mensaje de error estándar de credenciales inválidas (sin revelar que la cuenta está deshabilitada).
 
+### Actualización — issue #38
+
+16. **Email válido obligatorio en todos los caminos** — El toggle "Acceso al sistema" no se puede activar mientras la profesional no tenga un email válido. Si se tilda y luego se borra el email, o se borra el email de una profesional que ya tiene acceso, el guardado se rechaza con error en el campo email. El backend valida lo mismo en alta, edición y en el endpoint de habilitación, y guarda datos y acceso en una sola transacción (si algo falla, no se guarda nada).
+17. **Cambio de email con acceso** — Al modificar el email de una profesional cuyo email tiene usuario del sistema o invitación pendiente, se muestra una advertencia y se pide confirmación al guardar:
+    - con "Acceso al sistema" activo: el acceso con el email anterior deja de funcionar (el usuario anterior se inactiva y se desvincula) y se envía una nueva invitación al nuevo email para repetir el enrolamiento;
+    - con "Acceso al sistema" inactivo: se permite el cambio y el usuario del sistema asociado queda inactivo.
+18. **Unicidad** — Un email pertenece a un solo usuario del negocio (no se puede dar acceso a una profesional con el email de un administrador u otra profesional) y un usuario está vinculado a una sola profesional a la vez (índice único en `professionals.user_id`).
+19. **Estatus del acceso al sistema** — La sección muestra "Estatus del acceso al sistema:" con: "Sin acceso" (toggle sin tildar), "Invitación enviada, favor ingresar al link para crear contraseña" (invitación vigente sin contraseña), "Contraseña creada, el usuario está listo para acceder al sistema con el usuario <email> y la contraseña creada". Además: "Se enviará una invitación al guardar" (cambio aún sin guardar) y "La invitación venció…" (pasaron 48 h sin crear la contraseña).
+20. **Reenviar invitación** — Botón visible solo con el acceso tildado y una invitación enviada sin contraseña creada (vigente o vencida). Genera un nuevo link de 48 h e invalida el anterior. Solo se habilita 2 minutos después del último envío (el botón muestra la cuenta regresiva y el backend responde `429 ACTIVATION_RESEND_TOO_SOON`).
+
 ---
 
 ## Notas para estimación y pruebas

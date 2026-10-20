@@ -354,6 +354,11 @@ export default function CalendarPage() {
     );
   };
 
+  // A professional browses every agenda but only modifies her own appointments (the backend
+  // enforces the same rule).
+  const canModify = (appt: Appointment) =>
+    !isProfessional || (me?.professionalId != null && appt.professionalId === me.professionalId);
+
   // ── Appointment click → detail ──────────────────────────────────────────────
   const openDetail = (appt: Appointment) => {
     setDetailAppt(appt);
@@ -535,23 +540,22 @@ export default function CalendarPage() {
           {t("femme.calendar.title")}
         </h1>
 
-        {/* Professional filter (hidden for professional role — they only see own agenda) */}
-        {!isProfessional && (
-          <div data-tour="calendar-prof-filter" style={{ minWidth: 0 }}>
-            <SearchableSelect<number>
-              id="prof-filter"
-              className="min-w-0 shrink"
-              labelSrOnly
-              label={t("femme.calendar.filterByProfessional")}
-              value={selectedProfessionalId ?? ""}
-              onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
-              emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
-              options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-              noResultsText={t("femme.calendar.searchable.noResults")}
-            />
-          </div>
-        )}
+        {/* Professional filter — also for the professional role (issue #38 follow-up): they can
+            browse every agenda, but only modify their own appointments. */}
+        <div data-tour="calendar-prof-filter" style={{ minWidth: 0 }}>
+          <SearchableSelect<number>
+            id="prof-filter"
+            className="min-w-0 shrink"
+            labelSrOnly
+            label={t("femme.calendar.filterByProfessional")}
+            value={selectedProfessionalId ?? ""}
+            onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
+            emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
+            options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+            filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+            noResultsText={t("femme.calendar.searchable.noResults")}
+          />
+        </div>
 
         {/* Today */}
         <button
@@ -1026,14 +1030,16 @@ export default function CalendarPage() {
         title={t("femme.calendar.detail.title")}
         footer={
           <div className="flex flex-wrap gap-2">
-            {detailAppt && EDITABLE_STATUSES.includes(detailAppt.status) && (
+            {detailAppt && canModify(detailAppt) && EDITABLE_STATUSES.includes(detailAppt.status) && (
               <Button size="sm" variant="outline" onClick={openEditForm}>
                 {t("femme.calendar.detail.edit")}
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={openStatusModal}>
-              {t("femme.calendar.detail.changeStatus")}
-            </Button>
+            {detailAppt && canModify(detailAppt) && (
+              <Button size="sm" variant="outline" onClick={openStatusModal}>
+                {t("femme.calendar.detail.changeStatus")}
+              </Button>
+            )}
             <Button size="sm" onClick={closeDetail}>
               {t("femme.calendar.detail.close")}
             </Button>
@@ -1042,6 +1048,11 @@ export default function CalendarPage() {
       >
         {detailAppt && (
           <div className="space-y-3 text-sm">
+            {!canModify(detailAppt) && (
+              <Alert variant="info" data-testid="appointment-read-only-notice">
+                {t("femme.calendar.detail.readOnlyOtherProfessional")}
+              </Alert>
+            )}
             {detailError && (
               <Alert variant="destructive">
                 <p>{detailError}</p>

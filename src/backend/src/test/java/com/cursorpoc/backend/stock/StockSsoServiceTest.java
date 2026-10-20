@@ -67,14 +67,14 @@ class StockSsoServiceTest {
   }
 
   @Test
-  void professionalTokenCarriesItsProfessionalId() {
-    Claims claims =
-        verifyLikeStock(
-            service
-                .issue(new FemmeUserPrincipal(6L, 17L, "pro@salon.py", UserRole.PROFESSIONAL, 44L))
-                .token());
-    assertThat(claims.get("role", String.class)).isEqualTo("PROFESSIONAL");
-    assertThat(claims.get("pid", String.class)).isEqualTo("44");
+  void professionalIsRejected() {
+    // Issue #38 follow-up: professionals don't get Stock access for now.
+    assertThatThrownBy(
+            () ->
+                service.issue(
+                    new FemmeUserPrincipal(6L, 17L, "pro@salon.py", UserRole.PROFESSIONAL, 44L)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("FORBIDDEN");
   }
 
   @Test

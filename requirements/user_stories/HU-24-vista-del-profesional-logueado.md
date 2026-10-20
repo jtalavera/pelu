@@ -32,8 +32,8 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 ### Calendario
 
 3. **Calendario visible** — Tras iniciar sesión, la profesional accede al calendario de turnos.
-4. **Solo su propia agenda** — El calendario muestra únicamente los turnos asignados a la profesional logueada. No se muestran turnos de otras profesionales.
-5. **Sin filtro manual de profesional** — El selector o filtro de profesional no está disponible para el rol profesional (o está fijo en su propia identidad y no puede modificarse).
+4. **Ve todos los turnos** *(actualizado — issue #38)* — La profesional puede ver los turnos de todas las profesionales del negocio. El calendario abre mostrando su propia agenda.
+5. **Filtro por profesional** *(actualizado — issue #38)* — El filtro de profesional está disponible para el rol profesional ("Todas las profesionales" o una en particular), igual que para el administrador.
 6. **Navegación temporal completa** — La profesional puede navegar entre días, semanas y meses en el calendario para ver sus turnos pasados y futuros.
 
 ### Agendamiento de turnos
@@ -45,9 +45,10 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ### Restricciones de acceso
 
-11. **Sin acceso a turnos de otras profesionales** — Intentar acceder directamente (por URL u otro medio) a un turno perteneciente a otra profesional resulta en un error de acceso denegado (403 o equivalente).
+11. **Solo modifica sus propios turnos** *(actualizado — issue #38)* — Los turnos de otras profesionales se ven en modo solo lectura (sin "Editar turno" ni "Cambiar estado"). Cualquier intento de modificarlos por API (editar, tomarlos para sí o cambiar su estado) responde 403 `APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL`.
 12. **Sin acceso a gestión de profesionales** — La profesional no tiene acceso al módulo de gestión de profesionales (ABM de profesionales, asignación de PINs, habilitación de acceso).
-13. **Sin acceso a configuración del negocio** — La profesional no tiene acceso a la configuración del tenant (HU-02), caja (HU-13/18), comprobantes (HU-14), ni otros módulos administrativos.
+13. **Sin acceso a configuración del negocio** — La profesional no tiene acceso a la configuración del tenant (HU-02), caja (HU-13/18), comprobantes (HU-14), ni otros módulos administrativos. Se aplica en el menú, en las rutas (una URL de administración redirige a su calendario) y en el backend (política *deny-by-default* para el rol `PROFESSIONAL`: solo calendario, catálogos de lectura, su perfil y sus comisiones; todo lo demás responde 403).
+14. **Sin Stock** *(issue #38)* — Por el momento la profesional no ve nada relacionado a Stock (sin botón en el menú; el SSO a Stock responde 403).
 
 ---
 

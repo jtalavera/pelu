@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.web.dto.GrantAccessResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalScheduleRequest;
@@ -31,20 +32,34 @@ public class ProfessionalDirectoryService {
   private final TenantRepository tenantRepository;
   private final ProfessionalRepository professionalRepository;
   private final ProfessionalScheduleRepository professionalScheduleRepository;
+  private final ProfessionalAccessService professionalAccessService;
 
   public ProfessionalDirectoryService(
       TenantRepository tenantRepository,
       ProfessionalRepository professionalRepository,
-      ProfessionalScheduleRepository professionalScheduleRepository) {
+      ProfessionalScheduleRepository professionalScheduleRepository,
+      ProfessionalAccessService professionalAccessService) {
     this.tenantRepository = tenantRepository;
     this.professionalRepository = professionalRepository;
     this.professionalScheduleRepository = professionalScheduleRepository;
+    this.professionalAccessService = professionalAccessService;
   }
 
   @Transactional(readOnly = true)
   public List<ProfessionalResponse> list(long tenantId) {
     return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
         .map(p -> toResponse(p, schedulesFor(p.getId())))
+        .toList();
+  }
+
+  /**
+   * Issue #38 follow-up: the professional filter / appointment form a logged-in professional sees —
+   * names, photo and schedules only; contact data and access/PIN details stay admin-only.
+   */
+  @Transactional(readOnly = true)
+  public List<ProfessionalResponse> listDirectory(long tenantId) {
+    return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
+        .map(p -> toDirectoryResponse(p, schedulesFor(p.getId())))
         .toList();
   }
 
@@ -67,23 +82,76 @@ public class ProfessionalDirectoryService {
   }
 
   @Transactional
-  public ProfessionalResponse create(long tenantId, ProfessionalUpsertRequest request) {
+  public ProfessionalResponse create(
+      long tenantId, ProfessionalUpsertRequest request, Locale locale) {
     Tenant tenant = loadTenantOrThrow(tenantId);
     Professional p = new Professional();
     p.setTenant(tenant);
     applyUpsert(p, request, tenantId);
     p.setActive(true);
+    boolean wantsAccess = Boolean.TRUE.equals(request.systemAccessAllowed());
+    if (wantsAccess) {
+      professionalAccessService.requireEligibleForAccess(p);
+    }
     professionalRepository.save(p);
+    if (wantsAccess) {
+      professionalAccessService.invite(p, locale);
+    }
     return toResponse(p, schedulesFor(p.getId()));
   }
 
+  /**
+   * Issue #38: details and "Acceso al sistema" are saved together, in one transaction — a request
+   * that turns access on without a valid, free email is rejected before anything is stored (1)(3),
+   * and an email change detaches the old-email user, re-inviting the new email when access stays on
+   * (2). {@code systemAccessAllowed == null} keeps the current access setting.
+   */
   @Transactional
   public ProfessionalResponse update(
-      long tenantId, long professionalId, ProfessionalUpsertRequest request) {
+      long tenantId, long professionalId, ProfessionalUpsertRequest request, Locale locale) {
     Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    String previousEmail = ProfessionalAccessService.normalize(p.getEmail());
+    boolean hadAccess = p.isSystemAccessAllowed();
     applyUpsert(p, request, tenantId);
+    boolean wantsAccess =
+        request.systemAccessAllowed() == null ? hadAccess : request.systemAccessAllowed();
+    boolean emailChanged =
+        !Objects.equals(previousEmail, ProfessionalAccessService.normalize(p.getEmail()));
+    boolean issuesInvitation = wantsAccess && (!hadAccess || emailChanged);
+    if (issuesInvitation) {
+      professionalAccessService.requireEligibleForAccess(p);
+    }
     professionalRepository.save(p);
+    if (emailChanged) {
+      professionalAccessService.detachForEmailChange(p);
+    }
+    if (issuesInvitation) {
+      professionalAccessService.invite(p, locale);
+    } else if (!wantsAccess && hadAccess) {
+      professionalAccessService.revoke(p);
+    }
     return toResponse(p, schedulesFor(p.getId()));
+  }
+
+  /** HU-23 AC-4/13: (re)issue the invitation, no cooldown — the explicit "grant" action. */
+  @Transactional
+  public GrantAccessResponse grantAccess(long tenantId, long professionalId, Locale locale) {
+    return professionalAccessService.invite(
+        loadProfessionalOrThrow(tenantId, professionalId), locale);
+  }
+
+  /** Issue #38 (5): the "Reenviar invitación" button — pending invitations only, with cooldown. */
+  @Transactional
+  public ProfessionalResponse resendAccess(long tenantId, long professionalId, Locale locale) {
+    Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    professionalAccessService.resend(p, locale);
+    return toResponse(p, schedulesFor(p.getId()));
+  }
+
+  /** HU-23 AC-14. */
+  @Transactional
+  public void revokeAccess(long tenantId, long professionalId) {
+    professionalAccessService.revoke(loadProfessionalOrThrow(tenantId, professionalId));
   }
 
   @Transactional
@@ -242,7 +310,8 @@ public class ProfessionalDirectoryService {
             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
   }
 
-  static ProfessionalResponse toResponse(Professional p, List<ProfessionalSchedule> schedules) {
+  private ProfessionalResponse toResponse(Professional p, List<ProfessionalSchedule> schedules) {
+    ProfessionalAccessService.AccessInfo access = professionalAccessService.info(p);
     return new ProfessionalResponse(
         p.getId(),
         p.getFullName(),
@@ -250,15 +319,45 @@ public class ProfessionalDirectoryService {
         p.getEmail(),
         p.getPhotoDataUrl(),
         p.isActive(),
-        schedules.stream()
-            .map(
-                s ->
-                    new ProfessionalResponse.Schedule(
-                        s.getDayOfWeek(), s.getStartTime(), s.getEndTime()))
-            .toList(),
+        toScheduleResponses(schedules),
         p.getPinFingerprint() != null,
         p.isSystemAccessAllowed(),
-        p.getUser() != null);
+        p.getUser() != null,
+        access.status().name(),
+        access.loginEmail(),
+        access.invitationSentAt(),
+        access.invitationExpiresAt(),
+        access.resendAvailableAt());
+  }
+
+  private static ProfessionalResponse toDirectoryResponse(
+      Professional p, List<ProfessionalSchedule> schedules) {
+    return new ProfessionalResponse(
+        p.getId(),
+        p.getFullName(),
+        null,
+        null,
+        p.getPhotoDataUrl(),
+        p.isActive(),
+        toScheduleResponses(schedules),
+        false,
+        false,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  private static List<ProfessionalResponse.Schedule> toScheduleResponses(
+      List<ProfessionalSchedule> schedules) {
+    return schedules.stream()
+        .map(
+            s ->
+                new ProfessionalResponse.Schedule(
+                    s.getDayOfWeek(), s.getStartTime(), s.getEndTime()))
+        .toList();
   }
 
   private static void validatePhotoDataUrl(String dataUrl) {

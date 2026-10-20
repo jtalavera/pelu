@@ -1,6 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAs } from "../fixtures/auth";
-import { apiBaseUrl } from "../fixtures/api";
+import {
+  apiBaseUrl,
+  apiGetJson,
+  calendarVisibleWeekSlotIso,
+  createAppointmentApi,
+  seedCategoryServiceProfessional,
+} from "../fixtures/api";
 
 /** Gets an admin JWT for direct API calls. */
 async function adminToken(baseUrl: string): Promise<string> {
@@ -50,6 +56,24 @@ async function setupProfessionalWithAccess(
   return profId;
 }
 
+/** Picks an option of the calendar's professional filter (a searchable combobox). */
+async function pickCalendarFilter(page: Page, label: string): Promise<void> {
+  const filter = page.locator("#prof-filter");
+  await filter.click();
+  await filter.fill(label);
+  await page.getByRole("option", { name: label, exact: true }).click();
+  await expect(filter).toHaveValue(label);
+}
+
+/** Logs a professional in through the API and returns her JWT. */
+async function professionalToken(request: APIRequestContext, email: string): Promise<string> {
+  const res = await request.post(`${apiBaseUrl()}/api/auth/login`, {
+    data: { email, password: "ValidPass1!" },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return ((await res.json()) as { accessToken: string }).accessToken;
+}
+
 test.describe("HU-24 · Vista del profesional logueado", () => {
   test("HU-24 · 1+2 profesional puede iniciar sesión y el sistema detecta su rol", async ({ page }) => {
     const base = apiBaseUrl();
@@ -72,32 +96,104 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
   });
 
-  test("HU-24 · 5 selector de profesional no disponible para rol profesional", async ({ page }) => {
+  // Issue #38 follow-up: professionals browse every agenda and may filter by professional;
+  // the calendar opens on their own agenda.
+  test("HU-24 · 4+5 la profesional ve todos los turnos y puede filtrar por profesional (abre en su agenda)", async ({
+    page,
+    request,
+  }) => {
     const base = apiBaseUrl();
-    const email = `hu24nofilt${Date.now()}@test.com`;
-    await setupProfessionalWithAccess(base, `E2E NoFilt ${Date.now()}`, email, "ValidPass1!");
+    const suffix = Date.now();
+    const email = `hu24filt${suffix}@test.com`;
+    const ownName = `E2E Filt Own ${suffix}`;
+    const ownId = await setupProfessionalWithAccess(base, ownName, email, "ValidPass1!");
+    const admin = await adminToken(base);
+    const salon = await seedCategoryServiceProfessional(request, admin);
+    const own = await createAppointmentApi(request, admin, {
+      clientId: null,
+      professionalId: ownId,
+      serviceId: salon.serviceId,
+      startAt: calendarVisibleWeekSlotIso(9, 0),
+    });
+    const other = await createAppointmentApi(request, admin, {
+      clientId: null,
+      professionalId: salon.professionalId,
+      serviceId: salon.serviceId,
+      startAt: calendarVisibleWeekSlotIso(11, 0),
+    });
 
     await loginAs(page, email, "ValidPass1!");
     await page.goto("/app/calendar");
-    // Wait for calendar page to fully load
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
-    // The professional filter select (#prof-filter) should not be in the DOM for professional role
-    await expect(page.locator("#prof-filter")).not.toBeVisible();
+    // The filter is there, preselected on her own agenda.
+    const filter = page.locator("#prof-filter");
+    await expect(filter).toBeVisible();
+    await expect(filter).toHaveValue(ownName.toUpperCase());
+    await expect(page.getByTestId(`calendar-appt-${own.id}`)).toBeVisible();
+    await expect(page.getByTestId(`calendar-appt-${other.id}`)).toHaveCount(0);
+
+    // "All professionals" shows the other professional's appointment too.
+    await pickCalendarFilter(page, "All professionals");
+    await expect(page.getByTestId(`calendar-appt-${own.id}`)).toBeVisible();
+    await expect(page.getByTestId(`calendar-appt-${other.id}`)).toBeVisible();
+
+    // Filtering by the other professional shows only hers.
+    await pickCalendarFilter(page, salon.professionalFullName);
+    await expect(page.getByTestId(`calendar-appt-${other.id}`)).toBeVisible();
+    await expect(page.getByTestId(`calendar-appt-${own.id}`)).toHaveCount(0);
+
+    // Same through the API: no forced filter, any professionalId filter works.
+    const profToken = await professionalToken(request, email);
+    const from = new Date(Date.now() - 14 * 86400000).toISOString();
+    const to = new Date(Date.now() + 21 * 86400000).toISOString();
+    const all = await apiGetJson<Array<{ id: number }>>(
+      request,
+      profToken,
+      `/api/appointments?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    );
+    expect(all.map((x) => x.id)).toEqual(expect.arrayContaining([own.id, other.id]));
+    const onlyOther = await apiGetJson<Array<{ id: number; professionalId: number }>>(
+      request,
+      profToken,
+      `/api/appointments?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&professionalId=${salon.professionalId}`,
+    );
+    expect(onlyOther.length).toBeGreaterThan(0);
+    expect(onlyOther.every((x) => x.professionalId === salon.professionalId)).toBeTruthy();
   });
 
-  test("HU-24 · 12 sin acceso al módulo de gestión de profesionales", async ({ page }) => {
+  test("HU-24 · 12 sin acceso al módulo de gestión de profesionales (menú, URL y API)", async ({ page, request }) => {
     const base = apiBaseUrl();
     const email = `hu24noprof${Date.now()}@test.com`;
-    await setupProfessionalWithAccess(base, `E2E NoProf ${Date.now()}`, email, "ValidPass1!");
+    const profId = await setupProfessionalWithAccess(base, `E2E NoProf ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
     // Wait for AppShell to render with role loaded
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // Professionals nav link should not be in the DOM for professional role
     await expect(page.getByRole("link", { name: /^professionals$/i })).not.toBeVisible();
+    // Typing the URL sends her back to the calendar.
+    await page.goto("/app/professionals");
+    await expect(page).toHaveURL(/\/app\/calendar/);
+
+    // The API refuses the management endpoints (PIN, access, ABM) to a professional token.
+    const profToken = await professionalToken(request, email);
+    const headers = { Authorization: `Bearer ${profToken}`, "Content-Type": "application/json" };
+    expect((await request.get(`${base}/api/professionals/page`, { headers })).status()).toBe(403);
+    expect(
+      (await request.put(`${base}/api/professionals/${profId}`, { headers, data: { fullName: "X" } })).status(),
+    ).toBe(403);
+    expect((await request.post(`${base}/api/professionals/${profId}/grant-access`, { headers })).status()).toBe(403);
+    // The read-only list she gets (calendar filter) carries no colleagues' contact or access data.
+    const list = await apiGetJson<Array<{ id: number; email: string | null; phone: string | null; systemAccessAllowed: boolean }>>(
+      request,
+      profToken,
+      "/api/professionals",
+    );
+    expect(list.length).toBeGreaterThan(0);
+    expect(list.every((p) => p.email === null && p.phone === null && p.systemAccessAllowed === false)).toBeTruthy();
   });
 
-  test("HU-24 · 13 sin acceso a módulos administrativos (dashboard, configuración)", async ({ page }) => {
+  test("HU-24 · 13 sin acceso a módulos administrativos (menú, URL y API) ni a Stock", async ({ page, request }) => {
     const base = apiBaseUrl();
     const email = `hu24noadmin${Date.now()}@test.com`;
     await setupProfessionalWithAccess(base, `E2E NoAdmin ${Date.now()}`, email, "ValidPass1!");
@@ -108,6 +204,32 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     // Dashboard and Settings nav items should not be in the DOM for professional role
     await expect(page.getByRole("link", { name: /^dashboard$/i })).not.toBeVisible();
     await expect(page.getByRole("link", { name: /^(settings|business settings)$/i })).not.toBeVisible();
+    await expect(page.getByRole("link", { name: /^billing$/i })).not.toBeVisible();
+    // Issue #38 follow-up: no Stock for professionals.
+    await expect(page.getByTestId("nav-stock")).toHaveCount(0);
+
+    // Typing an admin URL redirects to the calendar.
+    for (const path of ["/app", "/app/billing", "/app/settings/business", "/app/dashboards", "/app/clients"]) {
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/app\/calendar/);
+    }
+
+    // And the API answers 403 for business settings, cash, invoices, dashboards, tips and Stock.
+    const profToken = await professionalToken(request, email);
+    const headers = { Authorization: `Bearer ${profToken}`, "Content-Type": "application/json" };
+    for (const path of [
+      "/api/business-profile",
+      "/api/cash-sessions/current",
+      "/api/invoices",
+      "/api/dashboard",
+      "/api/propinas/balance",
+      "/api/service-records",
+      "/api/fiscal-stamps",
+    ]) {
+      expect((await request.get(`${base}${path}`, { headers })).status(), path).toBe(403);
+    }
+    expect((await request.post(`${base}/api/cash-sessions/open`, { headers, data: {} })).status()).toBe(403);
+    expect((await request.post(`${base}/api/sso/stock`, { headers })).status()).toBe(403);
   });
 
   test("HU-24 · 7+8 profesional puede agendar turno con campo profesional fijo", async ({ page }) => {
@@ -167,33 +289,71 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     expect(apptRes.status()).toBe(403);
   });
 
-  test("HU-24 · 11 acceso directo a turno de otra profesional devuelve 403", async ({ request }) => {
+  // Issue #38 follow-up: another professional's appointment is visible (read-only) but any
+  // modification is rejected with 403.
+  test("HU-24 · 11 la profesional ve el turno de otra pero no puede modificarlo (UI + 403)", async ({
+    page,
+    request,
+  }) => {
     const base = apiBaseUrl();
-    const token = await adminToken(base);
     const suffix = Date.now();
-
-    // Create two professionals
-    const email1 = `hu24p1${suffix}@test.com`;
-    const profId1 = await setupProfessionalWithAccess(base, `E2E P1 ${suffix}`, email1, "ValidPass1!");
-
-    // Get prof1's JWT
-    const loginRes = await request.post(`${base}/api/auth/login`, {
-      data: { email: email1, password: "ValidPass1!" },
+    const email = `hu24ro${suffix}@test.com`;
+    const ownId = await setupProfessionalWithAccess(base, `E2E RO ${suffix}`, email, "ValidPass1!");
+    const admin = await adminToken(base);
+    const salon = await seedCategoryServiceProfessional(request, admin);
+    const startAt = calendarVisibleWeekSlotIso(14, 0);
+    const other = await createAppointmentApi(request, admin, {
+      clientId: null,
+      professionalId: salon.professionalId,
+      serviceId: salon.serviceId,
+      startAt,
     });
-    const { accessToken: profToken } = (await loginRes.json()) as { accessToken: string };
+    const own = await createAppointmentApi(request, admin, {
+      clientId: null,
+      professionalId: ownId,
+      serviceId: salon.serviceId,
+      startAt: calendarVisibleWeekSlotIso(16, 0),
+    });
 
-    // Try to list appointments with the professional's token — result is filtered to their own
-    // Verify the professional can call the endpoint (200) but it's filtered (not 403 for own data)
-    const from = new Date().toISOString();
-    const to = new Date(Date.now() + 7 * 86400000).toISOString();
-    const listRes = await request.get(
-      `${base}/api/appointments?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-      { headers: { Authorization: `Bearer ${profToken}` } },
-    );
-    // Professional can list (own) appointments — endpoint returns 200 with filtered data
-    expect(listRes.ok()).toBeTruthy();
-    const appts = (await listRes.json()) as unknown[];
-    // All appointments in the result should be for profId1 (or empty)
-    expect(Array.isArray(appts)).toBeTruthy();
+    const profToken = await professionalToken(request, email);
+    const headers = { Authorization: `Bearer ${profToken}`, "Content-Type": "application/json" };
+    // Reading it is fine...
+    const getRes = await request.get(`${base}/api/appointments/${other.id}`, { headers });
+    expect(getRes.status()).toBe(200);
+    // ...editing it (even taking it over), or changing its status, is not.
+    const putRes = await request.put(`${base}/api/appointments/${other.id}`, {
+      headers,
+      data: { clientId: null, professionalId: ownId, serviceId: salon.serviceId, startAt },
+    });
+    expect(putRes.status()).toBe(403);
+    expect(await putRes.text()).toContain("APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL");
+    const statusRes = await request.patch(`${base}/api/appointments/${other.id}/status`, {
+      headers,
+      data: { status: "CANCELLED", cancelReason: null },
+    });
+    expect(statusRes.status()).toBe(403);
+    // Her own appointment's status she can change.
+    const ownStatus = await request.patch(`${base}/api/appointments/${own.id}/status`, {
+      headers,
+      data: { status: "CONFIRMED", cancelReason: null },
+    });
+    expect(ownStatus.ok()).toBeTruthy();
+
+    // UI: the other's appointment opens read-only (no edit / change status), hers does not.
+    await loginAs(page, email, "ValidPass1!");
+    await page.goto("/app/calendar");
+    await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
+    await pickCalendarFilter(page, "All professionals");
+    await page.getByTestId(`calendar-appt-${other.id}`).click();
+    let dlg = page.getByRole("dialog");
+    await expect(dlg.getByTestId("appointment-read-only-notice")).toBeVisible();
+    await expect(dlg.getByRole("button", { name: /edit appointment/i })).toHaveCount(0);
+    await expect(dlg.getByRole("button", { name: /change status/i })).toHaveCount(0);
+    await dlg.getByRole("button", { name: /close/i }).first().click();
+
+    await page.getByTestId(`calendar-appt-${own.id}`).click();
+    dlg = page.getByRole("dialog");
+    await expect(dlg.getByTestId("appointment-read-only-notice")).toHaveCount(0);
+    await expect(dlg.getByRole("button", { name: /change status/i })).toBeVisible();
   });
 });
