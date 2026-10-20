@@ -98,7 +98,8 @@ public class MeController {
             fullName,
             principal.getRole().name(),
             principal.getProfessionalId(),
-            profile);
+            profile,
+            principal.isImpersonation());
     log.info("GET /api/me tenantId={} status=200", principal.getTenantIdOrNull());
     return resp;
   }
@@ -167,6 +168,15 @@ public class MeController {
         principal == null ? "null" : principal.getTenantIdOrNull());
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+
+    if (principal.isImpersonation()) {
+      // Issue #310: the impersonation token's user is the Platform Admin — changing "my" password
+      // from inside a tenant would silently change the Platform Admin's own credentials.
+      log.error(
+          "POST /api/me/change-password tenantId={} status=403 - impersonation session",
+          principal.getTenantIdOrNull());
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "IMPERSONATION_ACTION_NOT_ALLOWED");
     }
 
     String newPassword = request.newPassword();

@@ -77,6 +77,8 @@ class AuditLogServiceTest {
         .containsExactly("cash-sessions", "open");
     assertThat(AuditLogService.resourceAndOperation("/api/platform/tenants/{id}/status"))
         .containsExactly("tenants", "status");
+    assertThat(AuditLogService.resourceAndOperation("/api/platform/tenants/{id}/impersonation"))
+        .containsExactly("tenants", "impersonation");
     assertThat(AuditLogService.resourceAndOperation("/api/platform/tiers"))
         .containsExactly("tiers", null);
     assertThat(AuditLogService.resourceAndOperation("/api/admin/feature-flags/{flagKey}"))
@@ -122,6 +124,22 @@ class AuditLogServiceTest {
     ArgumentCaptor<AuditLog> saved = ArgumentCaptor.forClass(AuditLog.class);
     verify(repository).save(saved.capture());
     assertThat(saved.getValue().getTenantId()).isNull();
+    assertThat(saved.getValue().getUserRole()).isEqualTo("PLATFORM_ADMIN");
+  }
+
+  @Test
+  void record_impersonationIsAttributedToTheRootUser_insideTheTenant() {
+    // Issue #310: root impersonating tenant 7 acts as ADMIN, but the trail says who really did it.
+    FemmeUserPrincipal impersonation =
+        new FemmeUserPrincipal(1L, 7L, "root@pelu", UserRole.ADMIN, null, true);
+
+    service().record(impersonation, "POST", "/api/clients", null, 201);
+
+    ArgumentCaptor<AuditLog> saved = ArgumentCaptor.forClass(AuditLog.class);
+    verify(repository).save(saved.capture());
+    assertThat(saved.getValue().getTenantId()).isEqualTo(7L);
+    assertThat(saved.getValue().getUserId()).isEqualTo(1L);
+    assertThat(saved.getValue().getUserEmail()).isEqualTo("root@pelu");
     assertThat(saved.getValue().getUserRole()).isEqualTo("PLATFORM_ADMIN");
   }
 

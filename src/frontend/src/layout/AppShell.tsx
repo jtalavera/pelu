@@ -14,6 +14,7 @@ import { TourJoyride } from "../tour/TourJoyride";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { onBroadcastLogout } from "../auth/sessionBroadcast";
 import { openStockInNewTab, stockSpaBaseUrl } from "../stock/openStock";
+import { Alert, Button } from "@design-system";
 
 function getInitials(email: string): string {
   const parts = email.split("@")[0].split(/[._-]/);
@@ -358,6 +359,16 @@ function AppShellInner() {
     navigate("/login", { replace: true, state: reason ? { reason } : undefined });
   }
 
+  /**
+   * Issue #310: closes the impersonation tab (it was opened by script, so the browser allows it);
+   * if it stays open anyway, the impersonation session is still ended and the tab goes to /login.
+   */
+  function endImpersonation() {
+    sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    window.close();
+    navigate("/login", { replace: true });
+  }
+
   function switchLang(lang: SupportedLanguage) {
     persistLanguage(lang);
     void i18n.changeLanguage(lang);
@@ -372,6 +383,7 @@ function AppShellInner() {
       ? getInitials(email)
       : "?";
   const isProfessional = me?.role === "PROFESSIONAL";
+  const isImpersonation = me?.impersonation === true;
   return (
     <div>
       {/* ── TOPBAR ── */}
@@ -683,6 +695,9 @@ function AppShellInner() {
                   label={t("femme.topbar.userMenuUserSettings")}
                 />
 
+                {/* Issue #310: the impersonation session's user is the Platform Admin — their own
+                    password is never changed from inside a tenant. */}
+                {!isImpersonation && (
                 <MenuItem
                   onClick={() => {
                     setUserMenuOpen(false);
@@ -699,6 +714,7 @@ function AppShellInner() {
                   }
                   label={t("femme.topbar.userMenuChangePassword")}
                 />
+                )}
 
                 <div
                   style={{
@@ -899,6 +915,32 @@ function AppShellInner() {
           background: "var(--color-stone)",
         }}
       >
+        {isImpersonation && me && (
+          <Alert
+            role="status"
+            variant="warning"
+            data-testid="impersonation-banner"
+            title={t("femme.impersonation.bannerTitle")}
+            className="mb-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="min-w-0">
+                {t("femme.impersonation.bannerBody", {
+                  tenant: me.tenantName ?? "",
+                  email: me.email,
+                })}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                onClick={endImpersonation}
+              >
+                {t("femme.impersonation.end")}
+              </Button>
+            </div>
+          </Alert>
+        )}
         <Outlet />
       </main>
 

@@ -20,4 +20,9 @@ public record MeResponse(
      * Profile data from the linked Professional; null for admin users without a linked
      * Professional.
      */
-    MeProfileResponse profile) {}
+    MeProfileResponse profile,
+    /**
+     * Issue #310: true when this session is the Platform Admin impersonating the tenant's
+     * administrator ({@code role} is then {@code ADMIN} and {@code email} the Platform Admin's).
+     */
+    boolean impersonation) {}

@@ -23,6 +23,7 @@ import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
 import com.cursorpoc.backend.web.dto.ForgotPasswordRequest;
@@ -368,5 +369,24 @@ class AuthServiceTest {
     return telemetry.counterValue(
         "femme.auth.login",
         Attributes.of(BusinessMetrics.OUTCOME, outcome, BusinessMetrics.TENANT_ID, tenant));
+  }
+
+  @Test
+  void refresh_keepsAnImpersonationSessionAnImpersonation() {
+    // Issue #310: the sliding refresh must not turn root's impersonation token into a plain ADMIN
+    // one (nor drop the tenant).
+    FemmeJwtProperties props = new FemmeJwtProperties();
+    props.setSecret("unit-test-jwt-secret-min-32-characters-long!!");
+    JwtService jwt = new JwtService(props);
+    FemmeUserPrincipal impersonation =
+        new FemmeUserPrincipal(1L, 7L, "root@pelu", UserRole.ADMIN, null, true);
+
+    FemmeUserPrincipal refreshed =
+        jwt.parseAndValidate(service.refresh(impersonation).accessToken()).orElseThrow();
+
+    assertThat(refreshed.isImpersonation()).isTrue();
+    assertThat(refreshed.getTenantId()).isEqualTo(7L);
+    assertThat(refreshed.getUserId()).isEqualTo(1L);
+    assertThat(refreshed.getRole()).isEqualTo(UserRole.ADMIN);
   }
 }

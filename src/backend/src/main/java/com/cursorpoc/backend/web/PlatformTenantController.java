@@ -2,6 +2,7 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.PlatformImpersonationService;
 import com.cursorpoc.backend.service.PlatformUserAdminService;
 import com.cursorpoc.backend.service.TenantAdminService;
 import com.cursorpoc.backend.web.dto.AppUserStatusUpdateRequest;
@@ -15,6 +16,7 @@ import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUserResponse;
 import com.cursorpoc.backend.web.dto.TierOptionResponse;
+import com.cursorpoc.backend.web.dto.TokenResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Locale;
@@ -50,11 +52,15 @@ public class PlatformTenantController {
 
   private final TenantAdminService tenantAdminService;
   private final PlatformUserAdminService platformUserAdminService;
+  private final PlatformImpersonationService platformImpersonationService;
 
   public PlatformTenantController(
-      TenantAdminService tenantAdminService, PlatformUserAdminService platformUserAdminService) {
+      TenantAdminService tenantAdminService,
+      PlatformUserAdminService platformUserAdminService,
+      PlatformImpersonationService platformImpersonationService) {
     this.tenantAdminService = tenantAdminService;
     this.platformUserAdminService = platformUserAdminService;
+    this.platformImpersonationService = platformImpersonationService;
   }
 
   @GetMapping
@@ -330,6 +336,40 @@ public class PlatformTenantController {
           principal.getUserId(),
           id,
           userId,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /**
+   * Issue #310: Platform Admin impersonates the tenant's administrator — returns a tenant-bound
+   * {@code ADMIN} access token flagged as an impersonation, which the SPA opens in a new tab.
+   */
+  @PostMapping("/{id}/impersonation")
+  public TokenResponse impersonate(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") Long id) {
+    requirePlatformAdmin(principal, "POST /api/platform/tenants/{id}/impersonation");
+    log.info(
+        "POST /api/platform/tenants/{}/impersonation adminUserId={} tenantId={}",
+        id,
+        principal.getUserId(),
+        id);
+    try {
+      TokenResponse response = platformImpersonationService.impersonateTenantAdmin(principal, id);
+      log.info(
+          "POST /api/platform/tenants/{}/impersonation adminUserId={} tenantId={} status=200",
+          id,
+          principal.getUserId(),
+          id);
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/platform/tenants/{}/impersonation adminUserId={} tenantId={} status={}"
+              + " error={}",
+          id,
+          principal.getUserId(),
+          id,
           ex.getStatusCode().value(),
           ex.getReason());
       throw ex;

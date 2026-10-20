@@ -34,6 +34,7 @@ import { FieldValidationError } from "../components/FieldValidationError";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { TenantStockSection } from "../components/TenantStockSection";
+import { openImpersonationInNewTab } from "../auth/impersonation";
 
 type FormErrors = {
   name?: string;
@@ -100,6 +101,9 @@ export default function PlatformTenantsPage() {
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
   const [statusActionSaving, setStatusActionSaving] = useState(false);
   const [statusActionError, setStatusActionError] = useState<string | null>(null);
+  // Issue #310: "Open as administrator" (impersonation in a new tab).
+  const [impersonating, setImpersonating] = useState(false);
+  const [impersonationError, setImpersonationError] = useState<string | null>(null);
   const [suspendSuccess, setSuspendSuccess] = useState(false);
   const [reactivateSuccess, setReactivateSuccess] = useState(false);
 
@@ -271,6 +275,7 @@ export default function PlatformTenantsPage() {
     setSuspendSuccess(false);
     setReactivateSuccess(false);
     setStatusActionError(null);
+    setImpersonationError(null);
     setAdminEmail("");
     setAdminFormError(null);
     setAdminSaveError(null);
@@ -347,6 +352,23 @@ export default function PlatformTenantsPage() {
       }
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  // Issue #310: the tenant opens in a new tab as its administrator; this tab (and the Platform
+  // Admin's own session in it) stays exactly as it is.
+  async function handleImpersonate() {
+    if (!editingTenant) {
+      return;
+    }
+    setImpersonationError(null);
+    setImpersonating(true);
+    try {
+      await openImpersonationInNewTab({ tenantId: editingTenant.id });
+    } catch (err) {
+      setImpersonationError(translateApiError(err, t, "femme.platform.tenants.impersonation.error"));
+    } finally {
+      setImpersonating(false);
     }
   }
 
@@ -926,6 +948,54 @@ export default function PlatformTenantsPage() {
               >
                 {t("femme.platform.sifen.dialogLink")}
               </Link>
+            </div>
+          ) : null}
+
+          {/* Issue #310: the Platform Admin works inside the tenant with every tenant-admin feature,
+              in a new tab, without picking one of its admins. */}
+          {editingTenant ? (
+            <div
+              className="rounded-md border border-[var(--color-stone-md)] p-3"
+              data-testid="platform-tenant-impersonation"
+            >
+              <Text variant="small" className="font-medium text-[var(--color-ink)]">
+                {t("femme.platform.tenants.impersonation.title")}
+              </Text>
+              <Text variant="small" className="mb-2 text-[var(--color-ink-2)]">
+                {t("femme.platform.tenants.impersonation.lead")}
+              </Text>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                onClick={() => void handleImpersonate()}
+                disabled={impersonating || editingTenant.status === "SUSPENDED"}
+                aria-describedby={
+                  editingTenant.status === "SUSPENDED" ? "tenant-impersonation-suspended-hint" : undefined
+                }
+              >
+                {impersonating
+                  ? t("femme.platform.tenants.impersonation.opening")
+                  : t("femme.platform.tenants.impersonation.action")}
+              </Button>
+              {editingTenant.status === "SUSPENDED" ? (
+                <Text
+                  id="tenant-impersonation-suspended-hint"
+                  variant="small"
+                  className="mt-2 text-[var(--color-ink-3)]"
+                >
+                  {t("femme.platform.tenants.impersonation.suspendedHint")}
+                </Text>
+              ) : null}
+              {impersonationError ? (
+                <Alert
+                  variant="destructive"
+                  title={t("femme.platform.tenants.errorTitle")}
+                  className="mt-2"
+                >
+                  {impersonationError}
+                </Alert>
+              ) : null}
             </div>
           ) : null}
 

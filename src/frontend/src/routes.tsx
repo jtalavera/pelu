@@ -28,6 +28,8 @@ import AuditSettingsPage from "./pages/settings/AuditSettingsPage";
 import PlatformAuditPage from "./pages/PlatformAuditPage";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
+import ImpersonatePage from "./pages/ImpersonatePage";
+import { IMPERSONATION_PATH } from "./auth/impersonation";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FeatureFlagsPage from "./pages/FeatureFlagsPage";
 import PlatformGlobalFeatureFlagsPage from "./pages/PlatformGlobalFeatureFlagsPage";
@@ -47,6 +49,7 @@ export function AppRoutes() {
       <Route path="/activate" element={<ActivatePage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/design-system" element={<DesignSystemShowcasePage />} />
+      <Route path={IMPERSONATION_PATH} element={<ImpersonatePage />} />
       <Route
         element={
           <ProtectedRoute>

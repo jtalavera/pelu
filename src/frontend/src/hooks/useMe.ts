@@ -26,6 +26,11 @@ export type Me = {
   professionalId: number | null;
   /** Profile data from linked Professional; null for admin without linked Professional. */
   profile: MeProfile | null;
+  /**
+   * Issue #310: true when the Platform Admin is impersonating this tenant's administrator (role is
+   * then ADMIN and email the Platform Admin's own).
+   */
+  impersonation?: boolean;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {

@@ -18,6 +18,13 @@ public class JwtService {
   public static final String CLAIM_ROLE = "role";
   public static final String CLAIM_PROFESSIONAL_ID = "pid";
 
+  /**
+   * Issue #310: present (and {@code true}) only on a token the Platform Admin obtained by
+   * impersonating a tenant — a tenant-bound {@code ADMIN} token whose subject is still the Platform
+   * Admin's own user, so every action taken with it is attributed to them, never to a tenant user.
+   */
+  public static final String CLAIM_IMPERSONATION = "imp";
+
   private final FemmeJwtProperties properties;
   private final SecretKey key;
 
@@ -48,6 +55,21 @@ public class JwtService {
       UserRole role,
       Long professionalId,
       Instant issuedAt) {
+    return createAccessToken(userId, tenantId, email, role, professionalId, issuedAt, false);
+  }
+
+  /**
+   * @param impersonation issue #310 — marks a Platform Admin's impersonation token (see {@link
+   *     #CLAIM_IMPERSONATION}); the claim is omitted entirely for a regular session.
+   */
+  public String createAccessToken(
+      long userId,
+      Long tenantId,
+      String email,
+      UserRole role,
+      Long professionalId,
+      Instant issuedAt,
+      boolean impersonation) {
     Instant exp = issuedAt.plusSeconds(properties.getAccessTokenTtlSeconds());
     var builder =
         Jwts.builder()
@@ -61,6 +83,9 @@ public class JwtService {
     }
     if (professionalId != null) {
       builder.claim(CLAIM_PROFESSIONAL_ID, professionalId);
+    }
+    if (impersonation) {
+      builder.claim(CLAIM_IMPERSONATION, true);
     }
     return builder.signWith(key).compact();
   }
@@ -88,7 +113,9 @@ public class JwtService {
       }
       Number pidClaim = claims.get(CLAIM_PROFESSIONAL_ID, Number.class);
       Long professionalId = pidClaim != null ? pidClaim.longValue() : null;
-      return Optional.of(new FemmeUserPrincipal(userId, tenantId, email, role, professionalId));
+      boolean impersonation = Boolean.TRUE.equals(claims.get(CLAIM_IMPERSONATION, Boolean.class));
+      return Optional.of(
+          new FemmeUserPrincipal(userId, tenantId, email, role, professionalId, impersonation));
     } catch (RuntimeException ex) {
       return Optional.empty();
     }
