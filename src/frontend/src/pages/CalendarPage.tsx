@@ -35,6 +35,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useLocation, useNavigate } from "react-router-dom";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
@@ -221,6 +222,8 @@ export default function CalendarPage() {
   }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Phones and tablets: the header wraps and its controls grow to 44px touch targets.
+  const isTouchLayout = !useMediaQuery("(min-width: 1024px)");
 
   // ── Availability warning (non-blocking) ────────────────────────────────────
   // dayOfWeek: JS Date.getDay() returns 0=Sun; schedule uses 1=Mon..7=Sun
@@ -506,6 +509,8 @@ export default function CalendarPage() {
 
   const navBtnStyle: React.CSSProperties = {
     padding: "6px 10px",
+    minWidth: isTouchLayout ? 44 : undefined,
+    minHeight: isTouchLayout ? 44 : undefined,
     border: "var(--border-default)",
     borderRadius: "var(--radius-md)",
     fontSize: 14,
@@ -522,8 +527,9 @@ export default function CalendarPage() {
         data-tour="calendar-header"
         style={{
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
-          gap: 12,
+          gap: isMobile ? 8 : 12,
           paddingBottom: 16,
           borderBottom: "var(--border-default)",
         }}
@@ -542,10 +548,13 @@ export default function CalendarPage() {
 
         {/* Professional filter — also for the professional role (issue #38 follow-up): they can
             browse every agenda, but only modify their own appointments. */}
-        <div data-tour="calendar-prof-filter" style={{ minWidth: 0 }}>
+        <div
+          data-tour="calendar-prof-filter"
+          style={{ flex: isMobile ? "1 1 100%" : "0 1 240px", minWidth: isMobile ? 0 : 180 }}
+        >
           <SearchableSelect<number>
             id="prof-filter"
-            className="min-w-0 shrink"
+            className="w-full min-w-0"
             labelSrOnly
             label={t("femme.calendar.filterByProfessional")}
             value={selectedProfessionalId ?? ""}
@@ -564,6 +573,7 @@ export default function CalendarPage() {
           onClick={goToday}
           style={{
             padding: "6px 14px",
+            minHeight: isTouchLayout ? 44 : undefined,
             border: "var(--border-default)",
             borderRadius: "var(--radius-md)",
             fontSize: 12,
@@ -576,7 +586,16 @@ export default function CalendarPage() {
         </button>
 
         {/* Week / Day navigation */}
-        <div data-tour="calendar-week-nav" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div
+          data-tour="calendar-week-nav"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            flex: isMobile ? "1 1 auto" : undefined,
+            minWidth: 0,
+          }}
+        >
           {isMobile ? (
             <>
               <button type="button" onClick={goPrevDay} aria-label={t("femme.calendar.prevDay")} style={navBtnStyle}>
@@ -587,9 +606,9 @@ export default function CalendarPage() {
                   fontSize: 12,
                   fontWeight: 500,
                   color: "var(--color-ink)",
-                  minWidth: 140,
+                  minWidth: 0,
+                  flex: 1,
                   textAlign: "center",
-                  flexShrink: 0,
                 }}
               >
                 {mobileDayLabel}
@@ -634,6 +653,9 @@ export default function CalendarPage() {
             border: "none",
             borderRadius: "var(--radius-md)",
             padding: "8px 16px",
+            minHeight: isTouchLayout ? 44 : undefined,
+            justifyContent: "center",
+            width: isMobile ? "100%" : undefined,
             fontSize: 12,
             fontWeight: 500,
             cursor: "pointer",
