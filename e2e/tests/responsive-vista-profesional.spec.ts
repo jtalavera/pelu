@@ -208,6 +208,19 @@ test.describe("Sin zoom automático de iPhone al tocar campos", () => {
       await expect(page.getByRole("dialog")).toBeVisible();
       await expectAllAtLeast16px(page, "appointment form");
       await expectNoHorizontalScroll(page);
+
+      // The service list fits the screen and long names wrap left-aligned (readable on a phone).
+      await page.locator("#form-service").click();
+      const list = page.locator("#form-service-listbox, [role='listbox']").first();
+      await expect(list).toBeVisible();
+      const listBox = await list.boundingBox();
+      expect(listBox!.x).toBeGreaterThanOrEqual(0);
+      expect(listBox!.x + listBox!.width).toBeLessThanOrEqual(390);
+      expect(listBox!.y).toBeGreaterThanOrEqual(0);
+      expect(listBox!.y + listBox!.height).toBeLessThanOrEqual(844);
+      const option = list.getByRole("option").nth(1).getByRole("button");
+      expect(await option.evaluate((el) => getComputedStyle(el).textAlign)).toBe("left");
+      await page.keyboard.press("Escape");
       await page.keyboard.press("Escape");
 
       await page.getByRole("button", { name: /user menu/i }).click();
