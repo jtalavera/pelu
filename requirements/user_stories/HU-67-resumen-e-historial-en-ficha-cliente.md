@@ -4,7 +4,7 @@
 | ---------- | -------------- |
 | **ID**     | HU-67          |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog`      |
+| **Estado** | `In Progress`  |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -56,7 +56,7 @@ Hoy la ficha (`/app/clients/:id`, HU-12) muestra datos básicos, turnos y compro
 
 ### Reglas generales
 
-12. **Anulaciones** — Si un registro de servicio se anula (`VOIDED`), sus servicios y productos dejan de aparecer en el resumen y en los listados, y dejan de contar para la estilista habitual, el gasto y el ticket promedio.
+12. **Anulaciones** — Los registros de servicio abiertos (`OPEN`) o anulados (`VOIDED`) no aparecen en el resumen ni en los listados, y no cuentan para la estilista habitual, el gasto ni el ticket promedio. (Hoy solo se puede anular un registro abierto; anular el comprobante no reabre ni anula el registro, que sigue contando porque el servicio se realizó.)
 13. **Aislamiento** — El resumen solo considera registros del tenant actual; pedir el resumen de una cliente de otro tenant responde 404.
 14. **Acceso** — El resumen solo es visible para el administrador (el rol profesional no accede a la ficha completa; ver HU-68).
 
@@ -65,5 +65,6 @@ Hoy la ficha (`/app/clients/:id`, HU-12) muestra datos básicos, turnos y compro
 ## Notas para estimación y pruebas
 
 - **API sugerida:** `GET /api/clients/{id}/summary` → `{ usualProfessionals: [{id, name, active, serviceCount}], lastVisitAt, spentLast12Months, averageTicketLast12Months, lastServices: [...], lastProducts: [...] }`. Un solo endpoint para no multiplicar llamadas desde la ficha.
-- Sin migración de base de datos (solo consultas). Revisar índices por `client_id` + `status` en `service_record`.
+- Sin migración de base de datos (solo consultas).
+- **Soporte E2E:** `POST /api/admin/service-record-test-support/{id}/backdate/{daysAgo}` (solo perfil `e2e`) para sembrar servicios fuera de la ventana de 12 meses.
 - **E2E:** `e2e/tests/hu-67-resumen-ficha-cliente.spec.ts` — cliente sin historial; cliente con una profesional habitual clara; empate; servicio fuera de la ventana de 12 meses (no cuenta para habitual pero sí para últimos servicios); registro anulado excluido; productos; aislamiento multi-tenant (agregar caso a `tests/mt-isolation/`).

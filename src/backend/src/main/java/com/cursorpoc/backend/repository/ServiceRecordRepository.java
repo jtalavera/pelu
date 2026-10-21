@@ -3,6 +3,7 @@ package com.cursorpoc.backend.repository;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,4 +36,20 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
       @Param("status") ServiceRecordStatus status,
       @Param("q") String q,
       Pageable pageable);
+
+  /** HU-67: a client's records in one status, with lines, item and professional fetched. */
+  @Query(
+      """
+      SELECT DISTINCT r FROM ServiceRecord r
+      LEFT JOIN FETCH r.lines l
+      LEFT JOIN FETCH l.salonService
+      LEFT JOIN FETCH l.professional
+      WHERE r.tenant.id = :tenantId
+      AND r.client.id = :clientId
+      AND r.status = :status
+      """)
+  List<ServiceRecord> findByTenantAndClientAndStatusWithLines(
+      @Param("tenantId") Long tenantId,
+      @Param("clientId") Long clientId,
+      @Param("status") ServiceRecordStatus status);
 }

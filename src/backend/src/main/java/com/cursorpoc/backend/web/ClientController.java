@@ -2,8 +2,10 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ClientService;
+import com.cursorpoc.backend.service.ClientSummaryService;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
+import com.cursorpoc.backend.web.dto.ClientSummaryResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -28,9 +30,11 @@ public class ClientController {
   private static final Logger log = LoggerFactory.getLogger(ClientController.class);
 
   private final ClientService clientService;
+  private final ClientSummaryService clientSummaryService;
 
-  public ClientController(ClientService clientService) {
+  public ClientController(ClientService clientService, ClientSummaryService clientSummaryService) {
     this.clientService = clientService;
+    this.clientSummaryService = clientSummaryService;
   }
 
   @GetMapping
@@ -91,6 +95,28 @@ public class ClientController {
     ClientResponse result = clientService.getById(principal.getTenantId(), id);
     log.info("GET /api/clients/{} tenantId={} status=200", id, principal.getTenantId());
     return result;
+  }
+
+  /** HU-67: profile summary (usual professional, last services/products, spend). Admin only. */
+  @GetMapping("/{id}/summary")
+  public ClientSummaryResponse getSummary(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("GET /api/clients/{}/summary tenantId={}", id, principal.getTenantId());
+    try {
+      ClientSummaryResponse result = clientSummaryService.getSummary(principal.getTenantId(), id);
+      log.info("GET /api/clients/{}/summary tenantId={} status=200", id, principal.getTenantId());
+      return result;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/clients/{}/summary tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 
   @PostMapping

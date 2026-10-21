@@ -32,6 +32,7 @@ import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { focusMessageBox } from "../util/focusMessageBox";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { ClientSummaryCard } from "../components/ClientSummaryCard";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
@@ -463,6 +464,8 @@ export default function ClientDetailPage() {
           {t("femme.clients.visits", { count: client.visitCount })}
         </Text>
       </div>
+
+      <ClientSummaryCard clientId={client.id} />
 
       <Tabs data-tour="client-detail-tabs" value={tab} onValueChange={setTab}>
         <TabsList>

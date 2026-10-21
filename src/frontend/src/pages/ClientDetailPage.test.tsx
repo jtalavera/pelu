@@ -64,9 +64,21 @@ const emptyPagedAppointments = {
   totalPages: 0,
 };
 
+const emptySummary = {
+  usualProfessionals: [],
+  lastVisitAt: null,
+  spentLast12Months: null,
+  averageTicketLast12Months: null,
+  lastServices: [],
+  lastProducts: [],
+};
+
 function defaultFemmeJsonImpl(url: unknown) {
   const s = String(url);
-  if (s.startsWith("/api/clients/") && !s.includes("?")) {
+  if (s.endsWith("/summary")) {
+    return Promise.resolve(emptySummary);
+  }
+  if (s.startsWith("/api/clients/") && !s.includes("?") && !s.endsWith("/summary")) {
     return Promise.resolve({
       id: 1,
       fullName: "Ana García",
@@ -201,7 +213,7 @@ describe("ClientDetailPage", () => {
 
   it("inactive client shows inactive badge, reactivate button, and no deactivate button", async () => {
     femmeJson.mockImplementation((url) => {
-      if (String(url).startsWith("/api/clients/") && !String(url).includes("?")) {
+      if (String(url).startsWith("/api/clients/") && !String(url).includes("?") && !String(url).endsWith("/summary")) {
         return Promise.resolve({ ...sampleClient, active: false });
       }
       return defaultFemmeJsonImpl(url);
@@ -243,7 +255,7 @@ describe("ClientDetailPage", () => {
     future.setFullYear(future.getFullYear() + 1);
     femmeJson.mockImplementation((url) => {
       const s = String(url);
-      if (s.startsWith("/api/clients/") && !s.includes("?")) {
+      if (s.startsWith("/api/clients/") && !s.includes("?") && !s.endsWith("/summary")) {
         return Promise.resolve(sampleClient);
       }
       if (s.startsWith("/api/appointments?")) {
