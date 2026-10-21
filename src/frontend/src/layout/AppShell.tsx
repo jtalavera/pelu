@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { useSessionRefresh } from "../auth/useSessionRefresh";
 import { useIdleLogout } from "../auth/useIdleLogout";
@@ -8,6 +8,7 @@ import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { UserProfileModal } from "../components/UserProfileModal";
 import { useTourContext } from "../tour/TourContext";
 import { TourJoyride } from "../tour/TourJoyride";
@@ -50,6 +51,12 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
+/**
+ * Below the `lg` breakpoint (phones and tablets) the sidebar is an off-canvas drawer used by touch:
+ * its items grow to the 44px minimum touch target.
+ */
+const DrawerNavContext = createContext(false);
+
 function SideNavItem({
   to,
   end,
@@ -63,6 +70,7 @@ function SideNavItem({
   icon: React.ReactNode;
   tourId?: string;
 }) {
+  const inDrawer = useContext(DrawerNavContext);
   return (
     <div data-tour={tourId}>
     <NavLink
@@ -70,8 +78,9 @@ function SideNavItem({
       end={end}
       style={({ isActive }) => ({
         padding: "8px 10px",
+        minHeight: inDrawer ? 44 : undefined,
+        fontSize: inDrawer ? 14 : 12,
         borderRadius: "var(--radius-md)",
-        fontSize: 12,
         color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
         fontWeight: isActive ? 500 : 400,
         background: isActive ? "var(--color-rose-lt)" : "transparent",
@@ -326,6 +335,11 @@ function AppShellInner() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalTab, setProfileModalTab] = useState<"profile" | "password">("profile");
+  // Phones and tablets (< 1024px): the sidebar becomes a drawer opened from the topbar.
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const isPhone = !useMediaQuery("(min-width: 640px)");
+  const [navOpen, setNavOpen] = useState(false);
+  const location = useLocation();
   useSessionRefresh(true, () => logout("expired"));
   useIdleLogout(true, () => logout("idle"));
 
@@ -337,6 +351,20 @@ function AppShellInner() {
       clearTour();
     };
   }, [clearTour]);
+
+  // Close the drawer after navigating, and whenever the layout goes back to desktop.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname, isDesktop]);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setNavOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [navOpen]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -384,6 +412,78 @@ function AppShellInner() {
       : "?";
   const isProfessional = me?.role === "PROFESSIONAL";
   const isImpersonation = me?.impersonation === true;
+  // Theme + language: in the topbar on tablets/desktop, inside the drawer on phones (room for 44px targets).
+  const themeToggle = (
+    <button
+      data-tour="topbar-theme"
+      type="button"
+      onClick={toggle}
+      title={
+        theme === "dark"
+          ? t("designSystem.theme.switchToLight")
+          : t("designSystem.theme.switchToDark")
+      }
+      aria-label={
+        theme === "dark"
+          ? t("designSystem.theme.switchToLight")
+          : t("designSystem.theme.switchToDark")
+      }
+      style={{
+        width: isPhone ? 44 : 32,
+        height: isPhone ? 44 : 32,
+        borderRadius: "var(--radius-md)",
+        border: "var(--border-default)",
+        background: "var(--color-stone)",
+        color: "var(--color-ink-2)",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 15,
+        flexShrink: 0,
+        transition: "background 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "var(--color-stone-md)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "var(--color-stone)";
+      }}
+    >
+      {theme === "dark" ? "☀️" : "🌙"}
+    </button>
+  );
+  const languageSwitch = (
+    <div data-tour="topbar-lang" role="group" aria-label={t("language.label")} style={{ display: "flex", gap: 4 }}>
+      {(["en", "es"] as SupportedLanguage[]).map((lang) => (
+        <button
+          key={lang}
+          type="button"
+          onClick={() => switchLang(lang)}
+          aria-pressed={currentLang === lang}
+          style={{
+            padding: isPhone ? "0 14px" : "2px 8px",
+            minHeight: isPhone ? 44 : undefined,
+            borderRadius: "var(--radius-pill)",
+            fontSize: isPhone ? 13 : 11,
+            fontWeight: 500,
+            cursor: "pointer",
+            border:
+              currentLang === lang
+                ? "1px solid var(--color-rose-md)"
+                : "var(--border-default)",
+            background:
+              currentLang === lang ? "var(--color-rose-lt)" : "transparent",
+            color:
+              currentLang === lang ? "var(--color-rose-dk)" : "var(--color-ink-3)",
+          }}
+        >
+          {lang.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div>
       {/* ── TOPBAR ── */}
@@ -399,15 +499,57 @@ function AppShellInner() {
           borderBottom: "var(--border-default)",
           display: "flex",
           alignItems: "center",
-          padding: "0 20px",
-          gap: 12,
+          padding: isPhone ? "0 8px" : "0 20px",
+          gap: isPhone ? 6 : 12,
         }}
       >
+        {!isDesktop && (
+          <button
+            type="button"
+            data-testid="nav-drawer-toggle"
+            onClick={() => setNavOpen((open) => !open)}
+            aria-label={navOpen ? t("femme.nav.closeMenu") : t("femme.nav.openMenu")}
+            aria-expanded={navOpen}
+            aria-controls="app-sidebar"
+            style={{
+              width: 44,
+              height: 44,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "none",
+              borderRadius: "var(--radius-md)",
+              background: "transparent",
+              color: "var(--color-ink)",
+              cursor: "pointer",
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              {navOpen ? (
+                <>
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="4" y1="7" x2="20" y2="7" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="17" x2="20" y2="17" />
+                </>
+              )}
+            </svg>
+          </button>
+        )}
         {/* Logo */}
         <span
           style={{
-            width: 220,
-            flexShrink: 0,
+            width: isDesktop ? 220 : undefined,
+            flexShrink: isDesktop ? 0 : 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
             fontSize: 15,
             fontWeight: 500,
             color: "var(--color-rose)",
@@ -419,7 +561,15 @@ function AppShellInner() {
 
 
         {/* Right zone */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            gap: isPhone ? 6 : 14,
+            alignItems: "center",
+            flexShrink: 0,
+          }}
+        >
           {/* Help tour button — before dark-mode toggle (HU-30 AC-6) */}
           {guidedTourEnabled && tourKey && (
             <button
@@ -429,8 +579,8 @@ function AppShellInner() {
               title={t("femme.tour.helpButton.aria")}
               aria-label={t("femme.tour.helpButton.aria")}
               style={{
-                width: 32,
-                height: 32,
+                width: isPhone ? 44 : 32,
+                height: isPhone ? 44 : 32,
                 borderRadius: "var(--radius-md)",
                 border: "var(--border-default)",
                 background: !hasSeenTour(tourKey) ? "var(--color-rose-lt)" : "var(--color-stone)",
@@ -459,74 +609,12 @@ function AppShellInner() {
               ?
             </button>
           )}
-          <button
-            data-tour="topbar-theme"
-            type="button"
-            onClick={toggle}
-            title={
-              theme === "dark"
-                ? t("designSystem.theme.switchToLight")
-                : t("designSystem.theme.switchToDark")
-            }
-            aria-label={
-              theme === "dark"
-                ? t("designSystem.theme.switchToLight")
-                : t("designSystem.theme.switchToDark")
-            }
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "var(--radius-md)",
-              border: "var(--border-default)",
-              background: "var(--color-stone)",
-              color: "var(--color-ink-2)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 15,
-              flexShrink: 0,
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--color-stone-md)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "var(--color-stone)";
-            }}
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
+          {!isPhone && themeToggle}
           {/* Language switcher */}
-          <div data-tour="topbar-lang" role="group" aria-label={t("language.label")} style={{ display: "flex", gap: 4 }}>
-            {(["en", "es"] as SupportedLanguage[]).map((lang) => (
-              <button
-                key={lang}
-                type="button"
-                onClick={() => switchLang(lang)}
-                aria-pressed={currentLang === lang}
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "var(--radius-pill)",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  border:
-                    currentLang === lang
-                      ? "1px solid var(--color-rose-md)"
-                      : "var(--border-default)",
-                  background:
-                    currentLang === lang ? "var(--color-rose-lt)" : "transparent",
-                  color:
-                    currentLang === lang ? "var(--color-rose-dk)" : "var(--color-ink-3)",
-                }}
-              >
-                {lang.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          {!isPhone && languageSwitch}
 
-          {/* Notifications */}
+          {/* Notifications (no panel behind it yet — dropped on phones to make room) */}
+          {!isPhone && (
           <button
             data-tour="topbar-notifications"
             type="button"
@@ -547,6 +635,7 @@ function AppShellInner() {
           >
             <BellIcon />
           </button>
+          )}
 
           {/* User profile */}
           <div data-tour="topbar-user-menu" ref={userMenuRef} style={{ position: "relative" }}>
@@ -569,6 +658,7 @@ function AppShellInner() {
                 alignItems: "center",
                 gap: 8,
                 padding: "4px 8px",
+                minHeight: 44,
                 borderRadius: "var(--radius-md)",
                 cursor: "pointer",
                 background: userMenuOpen ? "var(--color-stone)" : "transparent",
@@ -598,6 +688,7 @@ function AppShellInner() {
               >
                 {initials}
               </div>
+              {!isPhone && (
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
                 <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-ink)" }}>
                   {displayName}
@@ -606,6 +697,7 @@ function AppShellInner() {
                   {isProfessional ? t("femme.nav.professionalRole") : t("femme.nav.adminRole")}
                 </span>
               </div>
+              )}
               <svg
                 width="10"
                 height="6"
@@ -756,24 +848,47 @@ function AppShellInner() {
         </div>
       </header>
 
-      {/* ── SIDEBAR ── */}
+      {/* ── SIDEBAR (drawer below 1024px) ── */}
+      {!isDesktop && navOpen && (
+        <div
+          data-testid="nav-drawer-backdrop"
+          aria-hidden
+          onClick={() => setNavOpen(false)}
+          style={{
+            position: "fixed",
+            inset: "48px 0 0 0",
+            background: "rgba(0, 0, 0, 0.35)",
+            zIndex: 90,
+          }}
+        />
+      )}
+      <DrawerNavContext.Provider value={!isDesktop}>
       <aside
+        id="app-sidebar"
         data-tour="nav-sidebar"
+        data-testid="app-sidebar"
         style={{
           position: "fixed",
           top: 48,
           left: 0,
           bottom: 0,
-          width: 220,
+          width: isDesktop ? 220 : "min(280px, 85vw)",
+          zIndex: isDesktop ? undefined : 95,
+          boxShadow: isDesktop ? undefined : "4px 0 24px rgba(0, 0, 0, 0.15)",
           background: "var(--color-white)",
           borderRight: "var(--border-default)",
           padding: "16px 10px",
-          display: "flex",
+          paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+          display: !isDesktop && !navOpen ? "none" : "flex",
           flexDirection: "column",
           gap: 2,
           overflowY: "auto",
         }}
         aria-label={t("femme.nav.mainLabel")}
+        onClick={(e) => {
+          // Tapping a link closes the drawer — also the current page's, whose path doesn't change.
+          if (!isDesktop && (e.target as HTMLElement).closest("a")) setNavOpen(false);
+        }}
       >
         <SectionLabel label={t("femme.nav.sectionMain")} />
         {!isProfessional && (
@@ -848,6 +963,16 @@ function AppShellInner() {
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
+        {isPhone && (
+          <div
+            data-testid="drawer-preferences"
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px" }}
+          >
+            {themeToggle}
+            {languageSwitch}
+          </div>
+        )}
+
         {!isProfessional && (
           <SideNavItem
             to="/app/settings"
@@ -864,6 +989,7 @@ function AppShellInner() {
           aria-label={t("femme.nav.logout")}
           style={{
             paddingTop: 10,
+            minHeight: 44,
             borderTop: "var(--border-default)",
             borderLeft: "none",
             borderRight: "none",
@@ -904,13 +1030,15 @@ function AppShellInner() {
           </div>
         </button>
       </aside>
+      </DrawerNavContext.Provider>
 
       {/* ── MAIN ── */}
       <main
         style={{
-          marginLeft: 220,
+          marginLeft: isDesktop ? 220 : 0,
           marginTop: 48,
-          padding: 24,
+          padding: isPhone ? 12 : isDesktop ? 24 : 16,
+          minWidth: 0,
           minHeight: "calc(100vh - 48px)",
           background: "var(--color-stone)",
         }}

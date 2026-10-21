@@ -473,7 +473,9 @@
       "sectionManagement": "Gestión",
       "sectionFinance": "Finanzas",
       "stock": "Stock",
-      "stockAria": "Abrir Stock en una pestaña nueva"
+      "stockAria": "Abrir Stock en una pestaña nueva",
+      "openMenu": "Abrir menú",
+      "closeMenu": "Cerrar menú"
     },
     "activate": {
       "title": "Establecer contraseña",

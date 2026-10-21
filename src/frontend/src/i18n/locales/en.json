@@ -473,7 +473,9 @@
       "sectionManagement": "Management",
       "sectionFinance": "Finance",
       "stock": "Stock",
-      "stockAria": "Open Stock in a new tab"
+      "stockAria": "Open Stock in a new tab",
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu"
     },
     "activate": {
       "title": "Set your password",
