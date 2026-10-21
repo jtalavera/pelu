@@ -50,7 +50,7 @@ class AppointmentControllerOwnershipTest {
 
   private static AppointmentResponse appointmentOf(long id, long professionalId) {
     return new AppointmentResponse(
-        id, null, null, professionalId, "P", 1L, "S", 30, FROM, TO, "PENDING", null, null);
+        id, null, null, professionalId, "P", 1L, "S", 30, FROM, TO, "PENDING", null, null, false);
   }
 
   private static void assertNotOwned(Runnable call) {

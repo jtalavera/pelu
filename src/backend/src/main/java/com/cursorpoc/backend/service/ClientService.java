@@ -1,7 +1,10 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
+import com.cursorpoc.backend.domain.ClientBirthday;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ClientAcquisitionChannel;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import com.cursorpoc.backend.repository.ClientRepository;
@@ -10,6 +13,7 @@ import com.cursorpoc.backend.util.ParaguayRucValidator;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.data.domain.Page;
@@ -25,8 +29,15 @@ public class ClientService {
 
   private final ClientRepository clientRepository;
   private final TenantRepository tenantRepository;
+  private final FemmeTimeProperties timeProperties;
 
-  public ClientService(ClientRepository clientRepository, TenantRepository tenantRepository) {
+  static final int ACQUISITION_CHANNEL_OTHER_MAX = 100;
+
+  public ClientService(
+      ClientRepository clientRepository,
+      TenantRepository tenantRepository,
+      FemmeTimeProperties timeProperties) {
+    this.timeProperties = timeProperties;
     this.clientRepository = clientRepository;
     this.tenantRepository = tenantRepository;
   }
@@ -85,6 +96,11 @@ public class ClientService {
                     null,
                     null,
                     null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
                     null))
         .toList();
   }
@@ -116,6 +132,10 @@ public class ClientService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
     }
 
+    ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
+    validateBirthday(request);
+    String channelOther = acquisitionChannelOther(channel, request.acquisitionChannelOther());
+
     Tenant tenant =
         tenantRepository
             .findById(tenantId)
@@ -138,6 +158,7 @@ public class ClientService {
     client.setDepartmentName(blankToNull(request.departmentName()));
     client.setCityCode(blankToNull(request.cityCode()));
     client.setCityName(blankToNull(request.cityName()));
+    applyProfileExtras(client, request, channel, channelOther);
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -184,6 +205,10 @@ public class ClientService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
     }
 
+    ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
+    validateBirthday(request);
+    String channelOther = acquisitionChannelOther(channel, request.acquisitionChannelOther());
+
     client.setFullName(fullName);
     client.setPhone(phone);
     client.setEmail(email);
@@ -196,6 +221,7 @@ public class ClientService {
     client.setDepartmentName(blankToNull(request.departmentName()));
     client.setCityCode(blankToNull(request.cityCode()));
     client.setCityName(blankToNull(request.cityName()));
+    applyProfileExtras(client, request, channel, channelOther);
     clientRepository.save(client);
     return toResponse(client);
   }
@@ -236,6 +262,43 @@ public class ClientService {
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
     }
+  }
+
+  /** HU-69: day + month together, optional year, real date, not in the future. */
+  private void validateBirthday(ClientRequest request) {
+    LocalDate today = LocalDate.now(timeProperties.zoneId());
+    if (!ClientBirthday.isValid(
+        request.birthdayDay(), request.birthdayMonth(), request.birthdayYear(), today)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_BIRTHDAY");
+    }
+  }
+
+  private static ClientAcquisitionChannel parseAcquisitionChannel(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return ClientAcquisitionChannel.valueOf(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_ACQUISITION_CHANNEL");
+    }
+  }
+
+  /** The free-text detail only exists for OTRO, and is capped at 100 characters. */
+  private static String acquisitionChannelOther(ClientAcquisitionChannel channel, String raw) {
+    String other = channel == ClientAcquisitionChannel.OTRO ? blankToNull(raw) : null;
+    if (other != null && other.length() > ACQUISITION_CHANNEL_OTHER_MAX) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "ACQUISITION_CHANNEL_OTHER_TOO_LONG");
+    }
+    return other;
+  }
+
+  private static void applyProfileExtras(
+      Client client, ClientRequest request, ClientAcquisitionChannel channel, String channelOther) {
+    client.setBirthdayDay(request.birthdayDay());
+    client.setBirthdayMonth(request.birthdayMonth());
+    client.setBirthdayYear(request.birthdayYear());
+    client.setAcquisitionChannel(channel);
+    client.setAcquisitionChannelOther(channelOther);
   }
 
   private static ClientTaxpayerType parseTaxpayerType(String raw) {
@@ -306,6 +369,11 @@ public class ClientService {
         c.getCityCode(),
         c.getCityName(),
         c.getIdentityDocumentType() == null ? null : c.getIdentityDocumentType().name(),
-        c.getTaxpayerType() == null ? null : c.getTaxpayerType().name());
+        c.getTaxpayerType() == null ? null : c.getTaxpayerType().name(),
+        c.getBirthdayDay(),
+        c.getBirthdayMonth(),
+        c.getBirthdayYear(),
+        c.getAcquisitionChannel() == null ? null : c.getAcquisitionChannel().name(),
+        c.getAcquisitionChannelOther());
   }
 }

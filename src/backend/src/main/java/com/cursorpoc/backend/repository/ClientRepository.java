@@ -73,4 +73,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
   List<InactiveClientRow> findActiveClientsWithLastCompletedVisit(
       @Param("tenantId") Long tenantId,
       @Param("completedStatus") AppointmentStatus completedStatus);
+
+  /** HU-69: active clients with a birthday on file (dashboard alerts). */
+  List<Client> findByTenant_IdAndActiveTrueAndBirthdayMonthIsNotNull(Long tenantId);
 }

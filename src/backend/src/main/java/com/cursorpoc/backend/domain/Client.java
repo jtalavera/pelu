@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.ClientAcquisitionChannel;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import jakarta.persistence.Column;
@@ -109,6 +110,25 @@ public class Client {
 
   @Column(name = "color_formula_updated_by", length = 200)
   private String colorFormulaUpdatedBy;
+
+  /** HU-69: birthday — day and month together, year optional. */
+  @Column(name = "birthday_day")
+  private Integer birthdayDay;
+
+  @Column(name = "birthday_month")
+  private Integer birthdayMonth;
+
+  @Column(name = "birthday_year")
+  private Integer birthdayYear;
+
+  /** HU-69: "¿Cómo nos conoció?". */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "acquisition_channel", length = 30)
+  private ClientAcquisitionChannel acquisitionChannel;
+
+  /** Free-text detail, only when {@link #acquisitionChannel} is OTRO. */
+  @Column(name = "acquisition_channel_other", length = 100)
+  private String acquisitionChannelOther;
 
   public Long getId() {
     return id;
@@ -284,5 +304,45 @@ public class Client {
 
   public void setColorFormulaUpdatedBy(String colorFormulaUpdatedBy) {
     this.colorFormulaUpdatedBy = colorFormulaUpdatedBy;
+  }
+
+  public Integer getBirthdayDay() {
+    return birthdayDay;
+  }
+
+  public void setBirthdayDay(Integer birthdayDay) {
+    this.birthdayDay = birthdayDay;
+  }
+
+  public Integer getBirthdayMonth() {
+    return birthdayMonth;
+  }
+
+  public void setBirthdayMonth(Integer birthdayMonth) {
+    this.birthdayMonth = birthdayMonth;
+  }
+
+  public Integer getBirthdayYear() {
+    return birthdayYear;
+  }
+
+  public void setBirthdayYear(Integer birthdayYear) {
+    this.birthdayYear = birthdayYear;
+  }
+
+  public ClientAcquisitionChannel getAcquisitionChannel() {
+    return acquisitionChannel;
+  }
+
+  public void setAcquisitionChannel(ClientAcquisitionChannel acquisitionChannel) {
+    this.acquisitionChannel = acquisitionChannel;
+  }
+
+  public String getAcquisitionChannelOther() {
+    return acquisitionChannelOther;
+  }
+
+  public void setAcquisitionChannelOther(String acquisitionChannelOther) {
+    this.acquisitionChannelOther = acquisitionChannelOther;
   }
 }

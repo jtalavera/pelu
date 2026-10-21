@@ -4,7 +4,7 @@
 | ---------- | -------------- |
 | **ID**     | HU-69          |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog`      |
+| **Estado** | `In Progress`  |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -57,6 +57,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ## Notas para estimación y pruebas
 
-- **Migración:** `birthday_day TINYINT`, `birthday_month TINYINT`, `birthday_year SMALLINT NULL`, `acquisition_channel VARCHAR(30) NULL`, `acquisition_channel_other NVARCHAR(100) NULL` en `client`. Día y mes separados (en vez de `DATE`) permiten año opcional y consultar "cumple hoy" sin funciones de fecha.
-- **API:** extender `POST/PUT /api/clients` y `GET /api/clients/{id}`; agregar `birthdays` a `GET /api/dashboard`; agregar `clientBirthdayToday` (o similar) a la respuesta de turnos.
+- **Migración:** `V85__client_birthday_acquisition_channel.sql` — `birthday_day TINYINT`, `birthday_month TINYINT`, `birthday_year SMALLINT NULL`, `acquisition_channel VARCHAR(30) NULL`, `acquisition_channel_other NVARCHAR(100) NULL` en `client`. Día y mes separados (en vez de `DATE`) permiten año opcional y consultar "cumple hoy" sin funciones de fecha.
+- **API:** extender `POST/PUT /api/clients` y `GET /api/clients/{id}` (`birthdayDay/Month/Year`, `acquisitionChannel`, `acquisitionChannelOther`); nuevo `GET /api/dashboard/birthdays` (solo admin) para la tarjeta; `clientBirthdayOnDay` en la respuesta de turnos. Errores: `INVALID_BIRTHDAY`, `INVALID_ACQUISITION_CHANNEL`, `ACQUISITION_CHANNEL_OTHER_TOO_LONG`.
 - **E2E:** `e2e/tests/hu-69-cumpleanos-y-como-nos-conocio.spec.ts` — alta con y sin año; fecha inválida; 29/02; etiqueta en ficha; tarjeta del dashboard (hoy / próximos 7 días / vacío / inactiva excluida); ícono en calendario (admin y profesional); "Otro" con detalle; aislamiento multi-tenant. Para "hoy" en E2E, crear clientes con cumpleaños relativo a la fecha actual del servidor.
+- **Cobertura del criterio 3 (29/02 → 28/02):** depende del reloj real, así que la regla se prueba con tests unitarios (`ClientBirthdayTest`, `clientBirthday.test.ts`); el E2E verifica que 29/02 se acepta.

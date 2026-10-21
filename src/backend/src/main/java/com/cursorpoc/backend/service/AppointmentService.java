@@ -1,7 +1,9 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.Client;
+import com.cursorpoc.backend.domain.ClientBirthday;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.Tenant;
@@ -42,13 +44,17 @@ public class AppointmentService {
   private final ClientRepository clientRepository;
   private final BusinessMetrics businessMetrics;
 
+  private final FemmeTimeProperties timeProperties;
+
   public AppointmentService(
       AppointmentRepository appointmentRepository,
       TenantRepository tenantRepository,
       ProfessionalRepository professionalRepository,
       SalonServiceRepository salonServiceRepository,
       ClientRepository clientRepository,
-      BusinessMetrics businessMetrics) {
+      BusinessMetrics businessMetrics,
+      FemmeTimeProperties timeProperties) {
+    this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
     this.tenantRepository = tenantRepository;
     this.professionalRepository = professionalRepository;
@@ -293,6 +299,11 @@ public class AppointmentService {
         a.getEndAt().toString(),
         a.getStatus().name(),
         a.getCancelReason(),
-        a.getReminderSentAt() != null ? a.getReminderSentAt().toString() : null);
+        a.getReminderSentAt() != null ? a.getReminderSentAt().toString() : null,
+        a.getClient() != null
+            && ClientBirthday.isBirthdayOn(
+                a.getClient().getBirthdayDay(),
+                a.getClient().getBirthdayMonth(),
+                a.getStartAt().atZone(timeProperties.zoneId()).toLocalDate()));
   }
 }

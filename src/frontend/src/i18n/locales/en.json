@@ -869,6 +869,16 @@
       }
     },
     "dashboard": {
+      "birthdays": {
+        "title": "Birthdays",
+        "subtitle": "Active clients with a birthday today and in the next {{days}} days",
+        "loadError": "Could not load birthdays.",
+        "empty": "No birthdays in the next {{days}} days.",
+        "today": "Today",
+        "upcoming": "Next {{days}} days",
+        "turns": "turns {{count}}",
+        "turns_other": "turns {{count}}"
+      },
       "title": "Dashboard",
       "loading": "Loading…",
       "error": "Could not load dashboard.",
@@ -1738,6 +1748,35 @@
       }
     },
     "clients": {
+      "birthday": {
+        "label": "Birthday",
+        "day": "Day",
+        "month": "Month",
+        "yearOptional": "Year (optional)",
+        "yearPlaceholder": "e.g. 1990",
+        "invalid": "Enter a valid date with day and month (the year is optional and can't be in the future), e.g. 15/08 or 15/08/1990.",
+        "today": "🎂 Birthday today",
+        "display": "Birthday: {{date}}",
+        "age": "{{count}} year old",
+        "age_other": "{{count}} years old"
+      },
+      "acquisitionChannel": {
+        "label": "How did they find us?",
+        "none": "Not specified",
+        "options": {
+          "INSTAGRAM": "Instagram",
+          "FACEBOOK": "Facebook",
+          "TIKTOK": "TikTok",
+          "GOOGLE": "Google",
+          "RECOMENDACION": "Referred by another client",
+          "PASO_POR_EL_LOCAL": "Walked by the salon",
+          "OTRO": "Other"
+        },
+        "otherLabel": "Details (optional)",
+        "otherPlaceholder": "e.g. beauty fair",
+        "otherTooLong": "Maximum {{max}} characters, e.g. beauty fair.",
+        "display": "Found us through: {{channel}}"
+      },
       "title": "Clients",
       "lead": "Manage your client directory. Create clients and link them to appointments.",
       "loading": "Loading…",
@@ -1986,6 +2025,9 @@
       }
     },
     "apiErrors": {
+      "INVALID_BIRTHDAY": "Enter a valid birthday, e.g. 15/08 or 15/08/1990.",
+      "INVALID_ACQUISITION_CHANNEL": "The \"How did they find us?\" option is not valid.",
+      "ACQUISITION_CHANNEL_OTHER_TOO_LONG": "The \"How did they find us?\" details can't be longer than 100 characters.",
       "CLIENT_NOTES_TOO_LONG": "Notes can't be longer than 2000 characters.",
       "CLIENT_COLOR_FORMULA_TOO_LONG": "The color formula can't be longer than 2000 characters.",
       "CLIENT_INACTIVE": "This client is inactive: reactivate the client to edit.",
@@ -2512,6 +2554,7 @@
       }
     },
     "calendar": {
+      "clientBirthday": "Client's birthday",
       "title": "Appointments",
       "today": "Today",
       "prev": "Previous week",

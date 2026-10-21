@@ -45,3 +45,36 @@ test("HU-68 AC14 · B no puede leer ni editar la ficha técnica de una cliente d
   });
   expect(await after.json()).toEqual(before);
 });
+
+test("HU-69 AC13 · los cumpleaños del dashboard de B no incluyen clientes de A", async ({
+  request,
+}) => {
+  const tokenA = await mtLoginToken(request, world.tenantA);
+  const tokenB = await mtLoginToken(request, world.tenantB);
+  const now = new Date();
+  // A client of A with a birthday today: shows for A, never for B.
+  const name = `MT Cumple A ${Date.now()}`;
+  const created = await request.post(`${process.env.MT_API_BASE}/api/clients`, {
+    headers: { Authorization: `Bearer ${tokenA}` },
+    data: {
+      fullName: name,
+      birthdayDay: Number(
+        new Intl.DateTimeFormat("en-CA", { timeZone: "America/Asuncion", day: "2-digit" }).format(now),
+      ),
+      birthdayMonth: Number(
+        new Intl.DateTimeFormat("en-CA", { timeZone: "America/Asuncion", month: "2-digit" }).format(now),
+      ),
+    },
+  });
+  expect(created.status(), await created.text()).toBe(200);
+
+  const forA = await request.get(`${process.env.MT_API_BASE}/api/dashboard/birthdays`, {
+    headers: { Authorization: `Bearer ${tokenA}` },
+  });
+  expect(JSON.stringify(await forA.json())).toContain(name.toUpperCase());
+  const forB = await request.get(`${process.env.MT_API_BASE}/api/dashboard/birthdays`, {
+    headers: { Authorization: `Bearer ${tokenB}` },
+  });
+  expect(forB.status()).toBe(200);
+  expect(JSON.stringify(await forB.json())).not.toContain(name.toUpperCase());
+});

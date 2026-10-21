@@ -17,6 +17,13 @@ import {
   type Locality,
 } from "@design-system";
 import { femmePostJson } from "../api/femmeClient";
+import {
+  ClientProfileExtrasFields,
+  EMPTY_PROFILE_EXTRAS,
+  profileExtrasPayload,
+  validateProfileExtras,
+  type ClientProfileExtras,
+} from "../components/ClientProfileExtrasFields";
 import { listClientsAll, listClientsPaged, type ClientListFilterParams } from "../api/clients";
 import type { PageResponse } from "../api/pagination";
 import { translateApiError } from "../api/parseApiErrorMessage";
@@ -151,12 +158,15 @@ export default function ClientsPage() {
   const [taxpayerType, setTaxpayerType] = useState("PERSONA_FISICA");
   const [address, setAddress]       = useState("");
   const [locality, setLocality]     = useState<Locality | null>(null);
+  const [extras, setExtras]         = useState<ClientProfileExtras>(EMPTY_PROFILE_EXTRAS);
   const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
     identityDocumentNumber?: string;
     phone?: string;
     email?: string;
+    birthday?: string;
+    acquisitionOther?: string;
   } | null>(null);
   const [saveError, setSaveError]   = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -246,6 +256,7 @@ export default function ClientsPage() {
     setTaxpayerType("PERSONA_FISICA");
     setAddress("");
     setLocality(null);
+    setExtras(EMPTY_PROFILE_EXTRAS);
     setFieldError(null);
     setSaveError(null);
     setSaveSuccess(false);
@@ -270,6 +281,9 @@ export default function ClientsPage() {
       nextErr.phone = t("femme.clients.phoneInvalid");
     if (email.trim() && !isValidEmail(email.trim()))
       nextErr.email = t("femme.clients.emailInvalid");
+    const extrasErr = validateProfileExtras(extras, t);
+    if (extrasErr.birthday) nextErr.birthday = extrasErr.birthday;
+    if (extrasErr.other) nextErr.acquisitionOther = extrasErr.other;
     if (Object.keys(nextErr).length > 0) {
       setFieldError(nextErr);
       return;
@@ -289,6 +303,7 @@ export default function ClientsPage() {
         departmentName: locality?.departmentName ?? null,
         cityCode: locality?.cityCode ?? null,
         cityName: locality?.cityName ?? null,
+        ...profileExtrasPayload(extras),
       });
       setModalOpen(false);
       if (returnAfterCreate) {
@@ -951,6 +966,14 @@ export default function ClientsPage() {
               {t("femme.clients.localityHint")}
             </Text>
           </div>
+
+          <ClientProfileExtrasFields
+            idPrefix="client"
+            value={extras}
+            onChange={setExtras}
+            birthdayError={fieldError?.birthday}
+            otherError={fieldError?.acquisitionOther}
+          />
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button

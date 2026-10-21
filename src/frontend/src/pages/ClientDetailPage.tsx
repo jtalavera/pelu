@@ -32,6 +32,14 @@ import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { focusMessageBox } from "../util/focusMessageBox";
 import { FieldValidationError } from "../components/FieldValidationError";
+import {
+  ClientProfileExtrasFields,
+  EMPTY_PROFILE_EXTRAS,
+  profileExtrasFromClient,
+  profileExtrasPayload,
+  validateProfileExtras,
+  type ClientProfileExtras,
+} from "../components/ClientProfileExtrasFields";
 import { ClientSummaryCard } from "../components/ClientSummaryCard";
 import { ClientTechnicalSheetForm } from "../components/ClientTechnicalSheetForm";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -40,6 +48,7 @@ import { SifenStatusBadge } from "../components/SifenStatusBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { useLocalitySearch } from "../hooks/useLocalitySearch";
+import { ageOn, formatBirthday, isBirthdayOn } from "../lib/clientBirthday";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
 import { isValidEmail } from "../lib/validateEmail";
@@ -64,6 +73,11 @@ type Client = {
   identityDocumentNumber?: string | null;
   identityDocumentType?: string | null;
   taxpayerType?: string | null;
+  birthdayDay?: number | null;
+  birthdayMonth?: number | null;
+  birthdayYear?: number | null;
+  acquisitionChannel?: string | null;
+  acquisitionChannelOther?: string | null;
 };
 
 const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
@@ -170,12 +184,15 @@ export default function ClientDetailPage() {
   const [taxpayerType, setTaxpayerType] = useState("PERSONA_FISICA");
   const [address, setAddress] = useState("");
   const [locality, setLocality] = useState<Locality | null>(null);
+  const [extras, setExtras] = useState<ClientProfileExtras>(EMPTY_PROFILE_EXTRAS);
   const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
     identityDocumentNumber?: string;
     phone?: string;
     email?: string;
+    birthday?: string;
+    acquisitionOther?: string;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -220,6 +237,7 @@ export default function ClientDetailPage() {
       setTaxpayerType(data.taxpayerType ?? "PERSONA_FISICA");
       setAddress(data.address ?? "");
       setLocality(localityFromClient(data));
+      setExtras(profileExtrasFromClient(data));
     } catch {
       setLoadError(t("femme.clients.profileLoadError"));
     } finally {
@@ -341,6 +359,9 @@ export default function ClientDetailPage() {
     if (email.trim() && !isValidEmail(email.trim())) {
       nextErr.email = t("femme.clients.emailInvalid");
     }
+    const extrasErr = validateProfileExtras(extras, t);
+    if (extrasErr.birthday) nextErr.birthday = extrasErr.birthday;
+    if (extrasErr.other) nextErr.acquisitionOther = extrasErr.other;
     if (Object.keys(nextErr).length > 0) {
       setFieldError(nextErr);
       return;
@@ -361,6 +382,7 @@ export default function ClientDetailPage() {
         departmentName: locality?.departmentName ?? null,
         cityCode: locality?.cityCode ?? null,
         cityName: locality?.cityName ?? null,
+        ...profileExtrasPayload(extras),
       });
       setClient(updated);
       setFullName(updated.fullName);
@@ -372,6 +394,7 @@ export default function ClientDetailPage() {
       setTaxpayerType(updated.taxpayerType ?? "PERSONA_FISICA");
       setAddress(updated.address ?? "");
       setLocality(localityFromClient(updated));
+      setExtras(profileExtrasFromClient(updated));
       setSaveSuccess(true);
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
@@ -441,6 +464,13 @@ export default function ClientDetailPage() {
     );
   }
 
+  const birthdayParts = {
+    day: client.birthdayDay ?? null,
+    month: client.birthdayMonth ?? null,
+    year: client.birthdayYear ?? null,
+  };
+  const age = ageOn(birthdayParts);
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <div data-tour="client-detail-header" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -460,10 +490,31 @@ export default function ClientDetailPage() {
           {!client.active ? (
             <Badge variant="secondary">{t("femme.clients.inactive")}</Badge>
           ) : null}
+          {isBirthdayOn(client.birthdayDay ?? null, client.birthdayMonth ?? null, new Date()) ? (
+            <Badge data-testid="client-birthday-today">{t("femme.clients.birthday.today")}</Badge>
+          ) : null}
         </div>
         <Text variant="muted">
           {t("femme.clients.visits", { count: client.visitCount })}
         </Text>
+        {client.birthdayDay != null && client.birthdayMonth != null ? (
+          <Text variant="muted" data-testid="client-birthday-display">
+            {t("femme.clients.birthday.display", {
+              date: formatBirthday(birthdayParts, dateLocale),
+            })}
+            {age != null ? ` · ${t("femme.clients.birthday.age", { count: age })}` : ""}
+          </Text>
+        ) : null}
+        {client.acquisitionChannel ? (
+          <Text variant="muted" data-testid="client-acquisition-display">
+            {t("femme.clients.acquisitionChannel.display", {
+              channel: t(`femme.clients.acquisitionChannel.options.${client.acquisitionChannel}`),
+            })}
+            {client.acquisitionChannel === "OTRO" && client.acquisitionChannelOther
+              ? ` (${client.acquisitionChannelOther})`
+              : ""}
+          </Text>
+        ) : null}
       </div>
 
       <ClientSummaryCard clientId={client.id} />
@@ -673,6 +724,17 @@ export default function ClientDetailPage() {
                   {t("femme.clients.localityHint")}
                 </Text>
               </div>
+
+              <ClientProfileExtrasFields
+                idPrefix="detail"
+                value={extras}
+                onChange={(next) => {
+                  setExtras(next);
+                  setSaveSuccess(false);
+                }}
+                birthdayError={fieldError?.birthday}
+                otherError={fieldError?.acquisitionOther}
+              />
 
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button

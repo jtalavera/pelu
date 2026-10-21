@@ -944,9 +944,9 @@ export default function CalendarPage() {
                               ? "0 10px 28px rgba(0, 0, 0, 0.18)"
                               : undefined,
                           }}
-                          aria-label={`${appt.clientName ?? t("femme.calendar.detail.occasionalClient")} – ${appt.serviceName}`}
+                          aria-label={`${appt.clientName ?? t("femme.calendar.detail.occasionalClient")} – ${appt.serviceName}${appt.clientBirthdayOnDay ? ` – ${t("femme.calendar.clientBirthday")}` : ""}`}
                         >
-                          {(appt.status === "CONFIRMED" || appt.reminderSentAt) && (
+                          {(appt.status === "CONFIRMED" || appt.reminderSentAt || appt.clientBirthdayOnDay) && (
                             <span
                               style={{
                                 position: "absolute",
@@ -957,6 +957,17 @@ export default function CalendarPage() {
                                 gap: 3,
                               }}
                             >
+                              {appt.clientBirthdayOnDay && (
+                                <span
+                                  role="img"
+                                  data-testid={`birthday-badge-${appt.id}`}
+                                  aria-label={t("femme.calendar.clientBirthday")}
+                                  title={t("femme.calendar.clientBirthday")}
+                                  style={{ fontSize: 11, lineHeight: "12px" }}
+                                >
+                                  🎂
+                                </span>
+                              )}
                               {appt.reminderSentAt && (
                                 <span
                                   data-testid={`reminder-sent-badge-${appt.id}`}
@@ -1100,6 +1111,11 @@ export default function CalendarPage() {
               {detailAppt.clientName ?? (
                 <span className="italic text-slate-500 dark:text-slate-400">
                   {t("femme.calendar.detail.occasionalClient")}
+                </span>
+              )}
+              {detailAppt.clientBirthdayOnDay && (
+                <span data-testid="appointment-detail-birthday" className="ml-2">
+                  🎂 {t("femme.calendar.clientBirthday")}
                 </span>
               )}
             </Row>

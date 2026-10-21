@@ -869,6 +869,16 @@
       }
     },
     "dashboard": {
+      "birthdays": {
+        "title": "Cumpleaños",
+        "subtitle": "Clientes activas que cumplen años hoy y en los próximos {{days}} días",
+        "loadError": "No se pudieron cargar los cumpleaños.",
+        "empty": "No hay cumpleaños en los próximos {{days}} días.",
+        "today": "Hoy",
+        "upcoming": "Próximos {{days}} días",
+        "turns": "cumple {{count}} año",
+        "turns_other": "cumple {{count}} años"
+      },
       "title": "Panel",
       "loading": "Cargando…",
       "error": "No se pudo cargar el panel.",
@@ -1738,6 +1748,35 @@
       }
     },
     "clients": {
+      "birthday": {
+        "label": "Cumpleaños",
+        "day": "Día",
+        "month": "Mes",
+        "yearOptional": "Año (opcional)",
+        "yearPlaceholder": "ej.: 1990",
+        "invalid": "Ingresá una fecha válida con día y mes (el año es opcional y no puede ser futuro), ej.: 15/08 o 15/08/1990.",
+        "today": "🎂 Hoy cumple años",
+        "display": "Cumpleaños: {{date}}",
+        "age": "{{count}} año",
+        "age_other": "{{count}} años"
+      },
+      "acquisitionChannel": {
+        "label": "¿Cómo nos conoció?",
+        "none": "Sin especificar",
+        "options": {
+          "INSTAGRAM": "Instagram",
+          "FACEBOOK": "Facebook",
+          "TIKTOK": "TikTok",
+          "GOOGLE": "Google",
+          "RECOMENDACION": "Recomendación de otra cliente",
+          "PASO_POR_EL_LOCAL": "Pasó por el local",
+          "OTRO": "Otro"
+        },
+        "otherLabel": "Detalle (opcional)",
+        "otherPlaceholder": "ej.: feria de belleza",
+        "otherTooLong": "Máximo {{max}} caracteres, ej.: feria de belleza.",
+        "display": "Nos conoció por: {{channel}}"
+      },
       "title": "Clientes",
       "lead": "Gestioná tu directorio de clientes. Creá clientes y vinculalos a turnos.",
       "loading": "Cargando…",
@@ -1986,6 +2025,9 @@
       }
     },
     "apiErrors": {
+      "INVALID_BIRTHDAY": "Ingresá una fecha de cumpleaños válida, ej.: 15/08 o 15/08/1990.",
+      "INVALID_ACQUISITION_CHANNEL": "La opción de \"¿Cómo nos conoció?\" no es válida.",
+      "ACQUISITION_CHANNEL_OTHER_TOO_LONG": "El detalle de \"¿Cómo nos conoció?\" no puede superar los 100 caracteres.",
       "CLIENT_NOTES_TOO_LONG": "Las notas no pueden superar los 2000 caracteres.",
       "CLIENT_COLOR_FORMULA_TOO_LONG": "La fórmula de color no puede superar los 2000 caracteres.",
       "CLIENT_INACTIVE": "La cliente está inactiva: reactivala para poder editarla.",
@@ -2512,6 +2554,7 @@
       }
     },
     "calendar": {
+      "clientBirthday": "Cumpleaños de la cliente",
       "title": "Turnos",
       "today": "Hoy",
       "prev": "Semana anterior",
