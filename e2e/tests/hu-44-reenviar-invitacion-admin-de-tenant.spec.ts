@@ -285,6 +285,19 @@ test.describe("HU-44 · Reenviar invitación / reseteo de contraseña para un ad
 
     await page.goto(`/reset-password?token=${rawToken}`);
     await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+    // A too-short password gets a field error naming the rule, not "invalid link" (and the API
+    // answers PASSWORD_TOO_WEAK rather than the generic INVALID_REQUEST).
+    await page.getByLabel("New password", { exact: true }).fill("Abc1@xy");
+    await page.getByLabel("Confirm new password").fill("Abc1@xy");
+    await page.getByRole("button", { name: "Reset password" }).click();
+    await expect(page.locator("#reset-password-err")).toContainText("at least 8 characters long");
+    await expect(page.getByText(/invalid or has already been used/i)).toHaveCount(0);
+    const apiWeak = await request.post(`${apiBaseUrl()}/api/auth/reset-password`, {
+      data: { token: rawToken, newPassword: "Abc1@xy" },
+    });
+    expect(apiWeak.status()).toBe(400);
+    expect(await apiWeak.json()).toEqual({ error: "PASSWORD_TOO_WEAK" });
+
     await page.getByLabel("New password", { exact: true }).fill("BrandNewPagePass1!");
     await page.getByLabel("Confirm new password").fill("BrandNewPagePass1!");
     await page.getByRole("button", { name: "Reset password" }).click();

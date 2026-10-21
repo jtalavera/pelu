@@ -28,6 +28,7 @@ import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
 import com.cursorpoc.backend.web.dto.ForgotPasswordRequest;
 import com.cursorpoc.backend.web.dto.LoginRequest;
+import com.cursorpoc.backend.web.dto.ResetPasswordRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
 import io.opentelemetry.api.common.Attributes;
 import java.util.List;
@@ -363,6 +364,32 @@ class AuthServiceTest {
     assertThat(ex.getStatusCode().value()).isEqualTo(400);
     assertThat(ex.getReason()).isEqualTo("FULL_NAME_REQUIRED");
     assertThat(user.isEnabled()).isFalse();
+  }
+
+  @Test
+  void activateAccount_withSevenCharPassword_answersPasswordTooWeak_notAGenericError() {
+    // Issue #38 follow-up: a 7-character password used to die in bean validation as
+    // INVALID_REQUEST, which the activation page showed as "invalid or already used link".
+    ResponseStatusException ex =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () ->
+                service.activateAccount(
+                    new ActivateProfessionalRequest("tok", "Abc1@xy", "Abc1@xy", null)));
+
+    assertThat(ex.getStatusCode().value()).isEqualTo(400);
+    assertThat(ex.getReason()).isEqualTo("PASSWORD_TOO_WEAK");
+  }
+
+  @Test
+  void resetPassword_withSevenCharPassword_answersPasswordTooWeak() {
+    ResponseStatusException ex =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () -> service.resetPassword(new ResetPasswordRequest("tok", "Abc1@xy")));
+
+    assertThat(ex.getStatusCode().value()).isEqualTo(400);
+    assertThat(ex.getReason()).isEqualTo("PASSWORD_TOO_WEAK");
   }
 
   private long loginCount(String outcome, String tenant) {

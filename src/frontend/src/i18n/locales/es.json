@@ -491,7 +491,7 @@
       "errorExpired": "Este enlace de activación ha expirado. Solicitá al administrador que envíe uno nuevo.",
       "errorFullNameRequired": "Ingresá tu nombre completo.",
       "errorPasswordMismatch": "Las contraseñas no coinciden.",
-      "errorPasswordWeak": "La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula, dígito y carácter especial.",
+      "errorPasswordWeak": "La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula, dígito y carácter especial, ej.: Abc1@xyz.",
       "errorNetwork": "Error de red. Verificá que el servicio esté en ejecución.",
       "loading": "Validando enlace…"
     },
@@ -508,7 +508,8 @@
       "errorInvalid": "Este enlace de restablecimiento es inválido o ya fue utilizado.",
       "errorExpired": "Este enlace de restablecimiento ha expirado. Solicitá uno nuevo.",
       "errorPasswordMismatch": "Las contraseñas no coinciden.",
-      "errorNetwork": "Error de red. Verificá que el servicio esté en ejecución."
+      "errorNetwork": "Error de red. Verificá que el servicio esté en ejecución.",
+      "errorPasswordWeak": "La contraseña debe tener al menos 8 caracteres, ej.: Abc1@xyz."
     },
     "topbar": {
       "notifications": "Notificaciones",

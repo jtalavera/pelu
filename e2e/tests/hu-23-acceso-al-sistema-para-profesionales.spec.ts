@@ -126,10 +126,30 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     const { rawToken } = await grantRes.json() as { rawToken: string };
 
     await page.goto(`/activate?token=${rawToken}`);
-    await page.locator("#activate-password").fill("weak");
-    await page.locator("#activate-confirm-password").fill("weak");
+    const passwordErr = page.locator("#activate-password-err");
+    // Each rule is enforced; the error sits on the password field (not the generic "invalid link").
+    // "Abc1@xy" is the 7-character case reported from production (issue #38 follow-up).
+    for (const weak of ["weak", "Abc1@xy", "abc1@xyz", "Abcd@xyz", "Abc12xyz"]) {
+      await page.locator("#activate-password").fill(weak);
+      await page.locator("#activate-confirm-password").fill(weak);
+      await page.getByRole("button", { name: "Set password" }).click();
+      await expect(passwordErr).toContainText(/at least 8 characters long and include an uppercase/i);
+      await expect(page.locator("#activate-password")).toHaveAttribute("aria-invalid", "true");
+      await expect(page.getByText(/invalid or has already been used/i)).toHaveCount(0);
+    }
+
+    // The backend answers the same rule with its own code (not the generic INVALID_REQUEST)...
+    const apiWeak = await request.post(`${base}/api/auth/activate`, {
+      data: { token: rawToken, password: "Abc1@xy", confirmPassword: "Abc1@xy" },
+    });
+    expect(apiWeak.status()).toBe(400);
+    expect(await apiWeak.json()).toEqual({ error: "PASSWORD_TOO_WEAK" });
+
+    // ...and the link is still usable afterwards with a valid password.
+    await page.locator("#activate-password").fill("ValidPass1!");
+    await page.locator("#activate-confirm-password").fill("ValidPass1!");
     await page.getByRole("button", { name: "Set password" }).click();
-    await expect(page.getByText(/at least 8 characters/i)).toBeVisible();
+    await expect(page.getByText(/Password set successfully/i)).toBeVisible();
   });
 
   test("HU-23 · 9 contraseñas que no coinciden son rechazadas", async ({ page, request }) => {

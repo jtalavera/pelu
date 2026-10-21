@@ -341,6 +341,11 @@ public class AuthService {
 
   @Transactional
   public void resetPassword(ResetPasswordRequest request) {
+    // Same minimum length the request DTO used to enforce, but answered with a code the reset page
+    // can explain instead of the generic INVALID_REQUEST.
+    if (request.newPassword().length() < 8) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_WEAK");
+    }
     String hash = sha256Hex(request.token());
     PasswordResetToken token =
         passwordResetTokenRepository
