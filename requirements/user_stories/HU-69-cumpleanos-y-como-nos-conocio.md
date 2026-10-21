@@ -50,7 +50,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ### Privacidad
 
-12. **Profesional** — Cumpleaños y "cómo nos conoció" son datos personales: la profesional no los ve (HU-68, criterio 8), salvo el ícono 🎂 del calendario.
+12. **Profesional** — Cumpleaños y "cómo nos conoció" son datos personales: la profesional no los ve (HU-68, criterio 10), salvo el ícono 🎂 del calendario.
 13. **Aislamiento** — Las alertas del dashboard solo incluyen clientes del tenant actual.
 
 ---
