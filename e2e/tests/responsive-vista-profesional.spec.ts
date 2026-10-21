@@ -158,3 +158,91 @@ for (const vp of VIEWPORTS) {
     });
   });
 }
+
+/**
+ * iPhone Safari zooms in (and stays zoomed) when a field with a font under 16px gets focus. On
+ * phones every text-entry control the professional uses must be at least 16px; wider screens keep
+ * the compact 14px design.
+ */
+async function textControlFontSizes(page: Page): Promise<Array<{ id: string; px: number }>> {
+  return page.evaluate(() =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(
+        "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=hidden]), select, textarea",
+      ),
+    )
+      .filter((el) => el.offsetParent !== null)
+      .map((el) => ({
+        id: el.id || el.getAttribute("name") || el.tagName,
+        px: parseFloat(getComputedStyle(el).fontSize),
+      })),
+  );
+}
+
+async function expectAllAtLeast16px(page: Page, where: string) {
+  const sizes = await textControlFontSizes(page);
+  expect(sizes.length, `${where}: text controls found`).toBeGreaterThan(0);
+  for (const { id, px } of sizes) {
+    expect(px, `${where}: #${id} font-size`).toBeGreaterThanOrEqual(16);
+  }
+}
+
+test.describe("Sin zoom automático de iPhone al tocar campos", () => {
+  test.describe("celular 390×844", () => {
+    test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+    test("login, calendario, formulario de turno, perfil y activación usan letra de 16px", async ({
+      page,
+      request,
+    }) => {
+      const { email } = await setupProfessional(request);
+
+      await page.goto("/login");
+      await expectAllAtLeast16px(page, "login");
+
+      await loginAs(page, email, PASSWORD);
+      await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
+      await expectAllAtLeast16px(page, "calendar");
+
+      await page.locator("[data-tour='calendar-new-appointment']").click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expectAllAtLeast16px(page, "appointment form");
+      await expectNoHorizontalScroll(page);
+      await page.keyboard.press("Escape");
+
+      await page.getByRole("button", { name: /user menu/i }).click();
+      await page.getByRole("menuitem").first().click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expectAllAtLeast16px(page, "profile");
+      await page.keyboard.press("Escape");
+
+      // The activation page (first thing a new professional opens on her phone).
+      const admin = await loginAsDemoApi(request);
+      const prof = await apiPostJson<{ id: number }>(request, admin, "/api/professionals", {
+        fullName: `E2E Zoom ${Date.now()}`,
+        email: `zoom${Date.now()}@test.com`,
+      });
+      const { rawToken } = await apiPostJson<{ rawToken: string }>(
+        request,
+        admin,
+        `/api/professionals/${prof.id}/grant-access`,
+        {},
+      );
+      await page.goto(`/activate?token=${rawToken}`);
+      await expect(page.locator("#activate-password")).toBeVisible();
+      await expectAllAtLeast16px(page, "activate");
+    });
+  });
+
+  test.describe("escritorio 1280×800", () => {
+    test.use({ viewport: { width: 1280, height: 800 } });
+
+    test("los campos mantienen el tamaño compacto de 14px", async ({ page }) => {
+      await page.goto("/login");
+      const size = await page
+        .getByLabel("Email")
+        .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      expect(size).toBe(14);
+    });
+  });
+});

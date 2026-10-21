@@ -19,3 +19,18 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/*
+ * iPhone Safari zooms the page in when a field with a font smaller than 16px gets focus, and it
+ * doesn't zoom back out (e.g. after signing in, the calendar stays enlarged). On phones every
+ * text-entry control uses 16px so that never happens; pinch-zoom stays available (no
+ * `maximum-scale` in the viewport meta, which would also block it on Android). `!important` also
+ * covers controls sized with inline styles; tablets and desktop keep their own sizes.
+ */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
