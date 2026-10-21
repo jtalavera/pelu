@@ -22,6 +22,7 @@ import { femmePostJson, femmePutJson } from "../api/femmeClient";
 import { listProfessionalsPaged } from "../api/professionals";
 import { translateApiError, parseApiErrorMessage } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { unlockProfessionalPin } from "../api/sharedDevices";
 import { FieldValidationError } from "../components/FieldValidationError";
 import {
   ProfessionalAccessSection,
@@ -81,6 +82,8 @@ type Professional = {
   invitationSentAt: string | null;
   invitationExpiresAt: string | null;
   resendAvailableAt: string | null;
+  // HU-66: shared devices where her PIN login is locked right now
+  pinLocks?: Array<{ deviceId: number; deviceName: string; lockedUntil: string }>;
 };
 
 type DetailErrors = {
@@ -147,7 +150,7 @@ function normalizeTime(s: string): string | null {
 }
 
 export default function ProfessionalsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   useTour("professionals", professionalsSteps, undefined, guidedTourEnabled);
 
@@ -180,6 +183,7 @@ export default function ProfessionalsPage() {
   const [accessGrantedMessage, setAccessGrantedMessage] = useState<string | null>(null);
   // Issue #38 (2): confirmation before saving an email change of a professional with access.
   const [emailChangeConfirmOpen, setEmailChangeConfirmOpen] = useState(false);
+  const [pinUnlockedMessage, setPinUnlockedMessage] = useState<string | null>(null);
   const [detailErrors, setDetailErrors] = useState<DetailErrors>(null);
   const [detailSaveError, setDetailSaveError] = useState<string | null>(null);
   const [detailSaving, setDetailSaving] = useState(false);
@@ -260,6 +264,7 @@ export default function ProfessionalsPage() {
     setPinTouched(false);
     setSystemAccessAllowed(p?.systemAccessAllowed ?? false);
     setAccessGrantedMessage(null);
+    setPinUnlockedMessage(null);
     setDetailErrors(null);
     setDetailSaveError(null);
     if (photoFileInputRef.current) {
@@ -432,6 +437,19 @@ export default function ProfessionalsPage() {
       }
     } finally {
       setDetailSaving(false);
+    }
+  }
+
+  /** HU-66: "Desbloquear PIN" — lifts her PIN lock on every shared device. */
+  async function unlockPin() {
+    if (!savedProfessional) return;
+    try {
+      const updated = await unlockProfessionalPin<Professional>(savedProfessional.id);
+      setSavedProfessional(updated);
+      setPinUnlockedMessage(t("femme.professionals.form.pinUnlocked"));
+      setProfReloadTick((n) => n + 1);
+    } catch (e) {
+      setDetailSaveError(translateApiError(e, t, "femme.apiErrors.GENERIC"));
     }
   }
 
@@ -1068,6 +1086,44 @@ export default function ProfessionalsPage() {
                 <Text variant="muted" className="mt-1 text-xs" id="prof-pin-help">
                   {t("femme.professionals.form.pinHelp")}
                 </Text>
+                {/* HU-66: PIN locked on shared devices → the administrator can lift it now. */}
+                {savedProfessional?.pinLocks && savedProfessional.pinLocks.length > 0 ? (
+                  <Alert variant="warning" className="mt-2" data-testid="prof-pin-locked">
+                    <div className="flex flex-col gap-2">
+                      <span>
+                        {t("femme.professionals.form.pinLocked", {
+                          devices: savedProfessional.pinLocks
+                            .map((l) =>
+                              t("femme.professionals.form.pinLockedDevice", {
+                                name: l.deviceName,
+                                time: new Date(l.lockedUntil).toLocaleTimeString(
+                                  i18n.resolvedLanguage ?? "es",
+                                  { hour: "2-digit", minute: "2-digit" },
+                                ),
+                              }),
+                            )
+                            .join(", "),
+                        })}
+                      </span>
+                      <div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="min-h-11"
+                          data-testid="prof-pin-unlock"
+                          onClick={() => void unlockPin()}
+                        >
+                          {t("femme.professionals.form.pinUnlock")}
+                        </Button>
+                      </div>
+                    </div>
+                  </Alert>
+                ) : null}
+                {pinUnlockedMessage ? (
+                  <Text className="mt-2 text-xs" style={{ color: "var(--color-success)" }} data-testid="prof-pin-unlocked">
+                    {pinUnlockedMessage}
+                  </Text>
+                ) : null}
               </div>
 
               {/* ── System access (HU-23 + issue #38) ── */}

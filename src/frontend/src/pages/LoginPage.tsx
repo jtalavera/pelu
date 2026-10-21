@@ -8,6 +8,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { broadcastLogout } from "../auth/sessionBroadcast";
+import { getSharedDevice, markRegularSession, SHARED_DEVICE_PATH } from "../auth/sharedDevice";
 import { useTour } from "../tour/useTour";
 import { loginSteps } from "../tour/steps/login";
 
@@ -53,6 +54,7 @@ export default function LoginPage() {
       }
       const data = (await res.json()) as { accessToken: string };
       sessionStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, data.accessToken);
+      markRegularSession();
       // Decode JWT payload to get role without an extra API call
       const payloadBase64 = data.accessToken.split(".")[1] ?? "";
       let role = "ADMIN";
@@ -191,6 +193,18 @@ export default function LoginPage() {
               {t("femme.login.forgotPassword")}
             </Link>
           </div>
+          {/* HU-66: on a shared salon device, back to the professional picker. */}
+          {getSharedDevice() ? (
+            <div className="mt-2 text-center">
+              <Link
+                to={SHARED_DEVICE_PATH}
+                data-testid="login-back-to-shared-device"
+                className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--color-rose)] underline-offset-4 hover:underline"
+              >
+                {t("femme.sharedDevice.backToPicker")}
+              </Link>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

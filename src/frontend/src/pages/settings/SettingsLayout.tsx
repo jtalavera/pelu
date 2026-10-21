@@ -74,6 +74,11 @@ export default function SettingsLayout() {
               {t("femme.settings.tabAudit")}
             </NavLink>
           ) : null}
+          {isTenantAdmin ? (
+            <NavLink to="/app/settings/devices" className={navClass} data-testid="settings-tab-devices">
+              {t("femme.settings.tabSharedDevices")}
+            </NavLink>
+          ) : null}
         </nav>
         <div style={{ padding: 20, minWidth: 0 }}>
           <Outlet />

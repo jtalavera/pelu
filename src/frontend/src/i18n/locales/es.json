@@ -980,7 +980,8 @@
       "tabTaxes": "Impuestos",
       "tabFeatureFlags": "Funcionalidades",
       "tabSifen": "SIFEN",
-      "tabAudit": "Auditoría"
+      "tabAudit": "Auditoría",
+      "tabSharedDevices": "Dispositivos compartidos"
     },
     "sifenSettings": {
       "tablistLabel": "Secciones de configuración SIFEN",
@@ -2181,7 +2182,15 @@
       "PROFESSIONAL_EMAIL_USED_BY_ANOTHER_USER": "Ese email ya pertenece a otro usuario del negocio (un administrador u otra profesional). Cada usuario necesita un email distinto, ej. ana@salon.com.",
       "PROFESSIONAL_ACCESS_NOT_ENABLED": "El acceso al sistema no está habilitado para esta profesional.",
       "PROFESSIONAL_ACCESS_ALREADY_ACTIVE": "Esta profesional ya creó su contraseña: no hay invitación para reenviar.",
-      "ACTIVATION_RESEND_TOO_SOON": "Se envió una invitación hace menos de 2 minutos. Esperá un momento y volvé a intentar."
+      "ACTIVATION_RESEND_TOO_SOON": "Se envió una invitación hace menos de 2 minutos. Esperá un momento y volvé a intentar.",
+      "SHARED_DEVICE_PASSWORD_INVALID": "Contraseña incorrecta. Ingresá la contraseña con la que iniciás sesión.",
+      "SHARED_DEVICE_NAME_REQUIRED": "Ingresá un nombre para el dispositivo, ej. Tablet de recepción.",
+      "SHARED_DEVICE_NAME_TOO_LONG": "El nombre del dispositivo puede tener como máximo 100 caracteres.",
+      "SHARED_DEVICE_NOT_FOUND": "Ese dispositivo compartido ya no existe.",
+      "SHARED_DEVICE_INVALID": "Este dispositivo ya no es un dispositivo compartido.",
+      "PIN_INVALID": "PIN incorrecto.",
+      "PIN_LOCKED": "El ingreso con PIN está bloqueado por demasiados PIN incorrectos.",
+      "SHARED_DEVICE_PIN_LOCKED": "El ingreso con PIN está bloqueado en este dispositivo por demasiados PIN incorrectos."
     },
     "pagination": {
       "rowsPerPage": "Filas por página:",
@@ -2451,7 +2460,11 @@
         "emailChangeWarningAccessOn": "{{oldEmail}} es el correo con el que esta profesional accede al sistema. Al guardar, el acceso con {{oldEmail}} deja de funcionar y se envía una nueva invitación a {{newEmail}}: deberá realizar de vuelta el proceso de enrolamiento con el nuevo correo.",
         "emailChangeWarningAccessOff": "{{oldEmail}} tiene un usuario del sistema. Al guardar, el correo cambia y el usuario del sistema asociado a {{oldEmail}} será inactivado.",
         "emailChangeConfirmTitle": "¿Cambiar el correo de acceso?",
-        "emailChangeConfirm": "Cambiar correo"
+        "emailChangeConfirm": "Cambiar correo",
+        "pinLocked": "El ingreso con PIN está bloqueado por demasiados PIN incorrectos: {{devices}}.",
+        "pinLockedDevice": "{{name}} hasta las {{time}}",
+        "pinUnlock": "Desbloquear PIN",
+        "pinUnlocked": "PIN desbloqueado: ya puede volver a ingresar en los dispositivos compartidos."
       }
     },
     "calendar": {
@@ -2787,6 +2800,52 @@
     },
     "stock": {
       "openError": "No se pudo abrir Stock. Intentá de nuevo en un momento."
+    },
+    "sharedDevice": {
+      "title": "¿Quién usa el dispositivo?",
+      "deviceLabel": "Dispositivo compartido: {{name}}",
+      "loadError": "No se pudieron cargar las profesionales. Revisá la conexión y volvé a intentar.",
+      "empty": "Todavía ninguna profesional activa tiene PIN. Un administrador puede asignarlo en la ficha de cada profesional.",
+      "professionalLocked": "Bloqueada hasta las {{time}}",
+      "deviceLocked": "El ingreso con PIN está bloqueado en este dispositivo hasta las {{time}} por demasiados PIN incorrectos. Un administrador puede desbloquearlo desde Configuración del negocio.",
+      "pinTitle": "Ingresá tu PIN, {{name}}",
+      "pinDigits_one": "{{count}} dígito ingresado",
+      "pinDigits_other": "{{count}} dígitos ingresados",
+      "pinInvalid_one": "PIN incorrecto. Te queda {{count}} intento antes de que se bloquee por 15 minutos.",
+      "pinInvalid_other": "PIN incorrecto. Te quedan {{count}} intentos antes de que se bloquee por 15 minutos.",
+      "pinLocked": "Demasiados PIN incorrectos: bloqueado hasta las {{time}}. Un administrador puede desbloquearlo desde tu ficha.",
+      "backspace": "Borrar último dígito",
+      "enter": "Ingresar",
+      "emailLogin": "Ingresar con email y contraseña",
+      "switchProfessional": "Cambiar de profesional",
+      "backToPicker": "Volver a la selección de profesional",
+      "settings": {
+        "lead": "Un dispositivo compartido (por ejemplo, la tablet de recepción) permite que cada profesional abra su calendario con su PIN, sin email ni contraseña.",
+        "activateTitle": "Usar este dispositivo como dispositivo compartido",
+        "activateHint": "Confirmá tu contraseña para habilitarlo. Solo pueden ingresar las profesionales activas con PIN, y solo ven el calendario.",
+        "name": "Nombre del dispositivo",
+        "namePlaceholder": "ej. Tablet de recepción",
+        "password": "Tu contraseña",
+        "nameRequired": "Ingresá un nombre para el dispositivo, ej. Tablet de recepción.",
+        "passwordRequired": "Ingresá tu contraseña para confirmar.",
+        "activate": "Habilitar dispositivo compartido",
+        "activated": "\"{{name}}\" ahora es un dispositivo compartido.",
+        "thisDeviceActive": "Este dispositivo es el dispositivo compartido \"{{name}}\".",
+        "openPicker": "Abrir selección de profesional",
+        "listTitle": "Dispositivos compartidos",
+        "empty": "Todavía no hay dispositivos compartidos.",
+        "thisDevice": "(este dispositivo)",
+        "createdAt": "Habilitado {{date}}",
+        "lastUsedAt": "último uso {{date}}",
+        "neverUsed": "sin uso todavía",
+        "lockedUntil": "Ingreso con PIN bloqueado hasta las {{time}}",
+        "unlock": "Desbloquear",
+        "unlocked": "\"{{name}}\" quedó desbloqueado.",
+        "revoke": "Revocar",
+        "revoked": "\"{{name}}\" ya no es un dispositivo compartido.",
+        "revokeTitle": "¿Revocar el dispositivo compartido?",
+        "revokeDescription": "\"{{name}}\" vuelve a la pantalla de inicio de sesión normal y se cierran sus sesiones con PIN."
+      }
     }
   },
   "language": {

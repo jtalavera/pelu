@@ -29,6 +29,10 @@ import AuditSettingsPage from "./pages/settings/AuditSettingsPage";
 import PlatformAuditPage from "./pages/PlatformAuditPage";
 import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
+import SharedDevicePage from "./pages/SharedDevicePage";
+import SharedDevicesSettingsPage from "./pages/settings/SharedDevicesSettingsPage";
+import { SHARED_DEVICE_PATH } from "./auth/sharedDevice";
+import { NotInPinSessionRoute } from "./auth/NotInPinSessionRoute";
 import ImpersonatePage from "./pages/ImpersonatePage";
 import { IMPERSONATION_PATH } from "./auth/impersonation";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -48,6 +52,7 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/activate" element={<ActivatePage />} />
+      <Route path={SHARED_DEVICE_PATH} element={<SharedDevicePage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/design-system" element={<DesignSystemShowcasePage />} />
       <Route path={IMPERSONATION_PATH} element={<ImpersonatePage />} />
@@ -59,7 +64,9 @@ export function AppRoutes() {
         }
       >
         <Route path="/app/calendar" element={<CalendarPage />} />
-        <Route path="/app/my-commissions" element={<MyCommissionsPage />} />
+        <Route element={<NotInPinSessionRoute />}>
+          <Route path="/app/my-commissions" element={<MyCommissionsPage />} />
+        </Route>
         {/* HU-24 AC-12/13: everything below is admin-only — professionals go to their calendar. */}
         <Route element={<AdminOnlyRoute />}>
           <Route path="/app" element={<DashboardPage />} />
@@ -82,6 +89,7 @@ export function AppRoutes() {
             <Route path="taxes" element={<TaxSettingsPage />} />
             <Route path="sifen" element={<SifenCertificatesPage />} />
             <Route path="audit" element={<AuditSettingsPage />} />
+            <Route path="devices" element={<SharedDevicesSettingsPage />} />
           </Route>
         </Route>
       </Route>
