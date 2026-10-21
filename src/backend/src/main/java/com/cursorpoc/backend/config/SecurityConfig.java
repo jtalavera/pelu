@@ -2,6 +2,7 @@ package com.cursorpoc.backend.config;
 
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.SharedDeviceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.CorrelationIdFilter;
 import com.cursorpoc.backend.security.JwtAuthenticationFilter;
@@ -43,9 +44,14 @@ public class SecurityConfig {
       JwtService jwtService,
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
-      ProfessionalRepository professionalRepository) {
+      ProfessionalRepository professionalRepository,
+      SharedDeviceRepository sharedDeviceRepository) {
     return new JwtAuthenticationFilter(
-        jwtService, tenantRepository, appUserRepository, professionalRepository);
+        jwtService,
+        tenantRepository,
+        appUserRepository,
+        professionalRepository,
+        sharedDeviceRepository);
   }
 
   /** RT-21 (Hardening_SIFEN.md): see the filter's own javadoc for why it runs after JWT auth. */
@@ -78,6 +84,10 @@ public class SecurityConfig {
                         "/swagger-ui.html")
                     .permitAll()
                     .requestMatchers("/api/auth/**")
+                    .permitAll()
+                    // HU-66: the shared device's PIN picker and PIN login authenticate with the
+                    // device credential header (checked by SharedDeviceService), not a JWT.
+                    .requestMatchers("/api/shared-device/**")
                     .permitAll()
                     .requestMatchers("/api/admin/seed/reset")
                     .permitAll()

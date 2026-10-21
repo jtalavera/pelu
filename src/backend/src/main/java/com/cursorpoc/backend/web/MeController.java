@@ -99,7 +99,8 @@ public class MeController {
             principal.getRole().name(),
             principal.getProfessionalId(),
             profile,
-            principal.isImpersonation());
+            principal.isImpersonation(),
+            principal.isPinSession());
     log.info("GET /api/me tenantId={} status=200", principal.getTenantIdOrNull());
     return resp;
   }

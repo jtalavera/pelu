@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -33,16 +34,22 @@ public class ProfessionalDirectoryService {
   private final ProfessionalRepository professionalRepository;
   private final ProfessionalScheduleRepository professionalScheduleRepository;
   private final ProfessionalAccessService professionalAccessService;
+  private final SharedDeviceService sharedDeviceService;
+  private final PasswordEncoder passwordEncoder;
 
   public ProfessionalDirectoryService(
       TenantRepository tenantRepository,
       ProfessionalRepository professionalRepository,
       ProfessionalScheduleRepository professionalScheduleRepository,
-      ProfessionalAccessService professionalAccessService) {
+      ProfessionalAccessService professionalAccessService,
+      SharedDeviceService sharedDeviceService,
+      PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
     this.professionalRepository = professionalRepository;
     this.professionalScheduleRepository = professionalScheduleRepository;
     this.professionalAccessService = professionalAccessService;
+    this.sharedDeviceService = sharedDeviceService;
+    this.passwordEncoder = passwordEncoder;
   }
 
   @Transactional(readOnly = true)
@@ -148,6 +155,14 @@ public class ProfessionalDirectoryService {
     return toResponse(p, schedulesFor(p.getId()));
   }
 
+  /** HU-66: lifts the professional's PIN lock on every shared device. */
+  @Transactional
+  public ProfessionalResponse unlockPin(long tenantId, long professionalId) {
+    Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    sharedDeviceService.unlockProfessional(tenantId, professionalId);
+    return toResponse(p, schedulesFor(p.getId()));
+  }
+
   /** HU-23 AC-14. */
   @Transactional
   public void revokeAccess(long tenantId, long professionalId) {
@@ -216,7 +231,12 @@ public class ProfessionalDirectoryService {
     }
     String trimmed = rawPin.trim();
     if (trimmed.isEmpty()) {
+      if (p.hasPin()) {
+        // HU-66: clearing the PIN ends any PIN session she has open.
+        p.setPinVersion(p.getPinVersion() + 1);
+      }
       p.setPinFingerprint(null);
+      p.setPinHash(null);
       return;
     }
     if (!trimmed.matches("\\d{4,7}")) {
@@ -235,7 +255,13 @@ public class ProfessionalDirectoryService {
     if (duplicate) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "PIN_ALREADY_IN_USE");
     }
+    if (!fingerprint.equals(p.getPinFingerprint())) {
+      // HU-66: a new PIN ends any PIN session opened with the previous one.
+      p.setPinVersion(p.getPinVersion() + 1);
+    }
     p.setPinFingerprint(fingerprint);
+    // HU-66: the PIN is a credential on shared devices — salted hash, like a password.
+    p.setPinHash(passwordEncoder.encode(trimmed));
   }
 
   private void validateSchedules(List<ProfessionalScheduleRequest> schedules) {
@@ -327,7 +353,8 @@ public class ProfessionalDirectoryService {
         access.loginEmail(),
         access.invitationSentAt(),
         access.invitationExpiresAt(),
-        access.resendAvailableAt());
+        access.resendAvailableAt(),
+        p.getId() == null ? List.of() : sharedDeviceService.activeLocks(p.getId()));
   }
 
   private static ProfessionalResponse toDirectoryResponse(
@@ -347,7 +374,8 @@ public class ProfessionalDirectoryService {
         null,
         null,
         null,
-        null);
+        null,
+        List.of());
   }
 
   private static List<ProfessionalResponse.Schedule> toScheduleResponses(

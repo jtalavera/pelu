@@ -980,7 +980,8 @@
       "tabTaxes": "Taxes",
       "tabFeatureFlags": "Feature flags",
       "tabSifen": "SIFEN",
-      "tabAudit": "Audit"
+      "tabAudit": "Audit",
+      "tabSharedDevices": "Shared devices"
     },
     "sifenSettings": {
       "tablistLabel": "SIFEN settings sections",
@@ -2181,7 +2182,15 @@
       "PROFESSIONAL_EMAIL_USED_BY_ANOTHER_USER": "That email already belongs to another user of this business (an administrator or another professional). Each user needs a different email, e.g. ana@salon.com.",
       "PROFESSIONAL_ACCESS_NOT_ENABLED": "System access is not enabled for this professional.",
       "PROFESSIONAL_ACCESS_ALREADY_ACTIVE": "This professional already created their password — there is no invitation to resend.",
-      "ACTIVATION_RESEND_TOO_SOON": "An invitation was sent less than 2 minutes ago. Wait a moment and try again."
+      "ACTIVATION_RESEND_TOO_SOON": "An invitation was sent less than 2 minutes ago. Wait a moment and try again.",
+      "SHARED_DEVICE_PASSWORD_INVALID": "Wrong password. Enter the password you use to sign in.",
+      "SHARED_DEVICE_NAME_REQUIRED": "Enter a name for the device, e.g. Reception tablet.",
+      "SHARED_DEVICE_NAME_TOO_LONG": "The device name can have at most 100 characters.",
+      "SHARED_DEVICE_NOT_FOUND": "That shared device no longer exists.",
+      "SHARED_DEVICE_INVALID": "This device is no longer a shared device.",
+      "PIN_INVALID": "Wrong PIN.",
+      "PIN_LOCKED": "PIN sign-in is locked after too many wrong PINs.",
+      "SHARED_DEVICE_PIN_LOCKED": "PIN sign-in is locked on this device after too many wrong PINs."
     },
     "pagination": {
       "rowsPerPage": "Rows per page:",
@@ -2451,7 +2460,11 @@
         "emailChangeWarningAccessOn": "{{oldEmail}} is the email this professional uses to sign in. When you save, sign-in with {{oldEmail}} stops working and a new invitation is sent to {{newEmail}}: they will have to complete the enrollment again with the new email.",
         "emailChangeWarningAccessOff": "{{oldEmail}} has a system user. When you save, the email changes and the system user tied to {{oldEmail}} is deactivated.",
         "emailChangeConfirmTitle": "Change the sign-in email?",
-        "emailChangeConfirm": "Change email"
+        "emailChangeConfirm": "Change email",
+        "pinLocked": "PIN sign-in is locked after too many wrong PINs: {{devices}}.",
+        "pinLockedDevice": "{{name}} until {{time}}",
+        "pinUnlock": "Unlock PIN",
+        "pinUnlocked": "PIN unlocked: they can sign in on the shared devices again."
       }
     },
     "calendar": {
@@ -2787,6 +2800,52 @@
     },
     "stock": {
       "openError": "Stock could not be opened. Try again in a moment."
+    },
+    "sharedDevice": {
+      "title": "Who's using the device?",
+      "deviceLabel": "Shared device: {{name}}",
+      "loadError": "Could not load the professionals. Check the connection and try again.",
+      "empty": "No active professional has a PIN yet. An administrator can set one in each professional's profile.",
+      "professionalLocked": "Locked until {{time}}",
+      "deviceLocked": "PIN sign-in is locked on this device until {{time}} after too many wrong PINs. An administrator can unlock it from Business settings.",
+      "pinTitle": "Enter your PIN, {{name}}",
+      "pinDigits_one": "{{count}} digit entered",
+      "pinDigits_other": "{{count}} digits entered",
+      "pinInvalid_one": "Wrong PIN. {{count}} attempt left before it locks for 15 minutes.",
+      "pinInvalid_other": "Wrong PIN. {{count}} attempts left before it locks for 15 minutes.",
+      "pinLocked": "Too many wrong PINs: locked until {{time}}. An administrator can unlock it from your profile.",
+      "backspace": "Delete last digit",
+      "enter": "Enter",
+      "emailLogin": "Sign in with email and password",
+      "switchProfessional": "Switch professional",
+      "backToPicker": "Back to the professional picker",
+      "settings": {
+        "lead": "A shared device (for example the reception tablet) lets each professional open their calendar with their PIN, without email and password.",
+        "activateTitle": "Use this device as a shared device",
+        "activateHint": "Confirm your password to enable it. Only professionals that are active and have a PIN can sign in on it, and they only see the calendar.",
+        "name": "Device name",
+        "namePlaceholder": "e.g. Reception tablet",
+        "password": "Your password",
+        "nameRequired": "Enter a name for the device, e.g. Reception tablet.",
+        "passwordRequired": "Enter your password to confirm.",
+        "activate": "Enable shared device",
+        "activated": "\"{{name}}\" is now a shared device.",
+        "thisDeviceActive": "This device is the shared device \"{{name}}\".",
+        "openPicker": "Open professional picker",
+        "listTitle": "Shared devices",
+        "empty": "There are no shared devices yet.",
+        "thisDevice": "(this device)",
+        "createdAt": "Enabled {{date}}",
+        "lastUsedAt": "last used {{date}}",
+        "neverUsed": "not used yet",
+        "lockedUntil": "PIN sign-in locked until {{time}}",
+        "unlock": "Unlock",
+        "unlocked": "\"{{name}}\" was unlocked.",
+        "revoke": "Revoke",
+        "revoked": "\"{{name}}\" is no longer a shared device.",
+        "revokeTitle": "Revoke shared device?",
+        "revokeDescription": "\"{{name}}\" will go back to the normal sign-in screen and its PIN sessions will end."
+      }
     }
   },
   "language": {

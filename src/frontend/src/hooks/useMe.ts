@@ -31,6 +31,8 @@ export type Me = {
    * then ADMIN and email the Platform Admin's own).
    */
   impersonation?: boolean;
+  /** HU-66: a professional session opened with her PIN on a shared device (calendar only). */
+  pinSession?: boolean;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {

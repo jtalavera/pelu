@@ -25,4 +25,6 @@ public record MeResponse(
      * Issue #310: true when this session is the Platform Admin impersonating the tenant's
      * administrator ({@code role} is then {@code ADMIN} and {@code email} the Platform Admin's).
      */
-    boolean impersonation) {}
+    boolean impersonation,
+    /** HU-66: true for a professional session opened with her PIN on a shared device. */
+    boolean pinSession) {}

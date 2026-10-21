@@ -36,6 +36,7 @@ import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { isPinSession } from "../auth/sharedDevice";
 import { useLocation, useNavigate } from "react-router-dom";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
@@ -146,7 +147,8 @@ export default function CalendarPage() {
   const locale = getDateLocale(i18n);
   const { me } = useMe();
   const isProfessional = me?.role === "PROFESSIONAL";
-  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  // HU-66: no guided tour on a shared device's PIN session (it keeps no per-user state).
+  const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR") && !isPinSession();
   const tourRole =
     !guidedTourEnabled
       ? undefined

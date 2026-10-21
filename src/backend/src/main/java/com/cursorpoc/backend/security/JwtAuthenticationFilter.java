@@ -3,6 +3,7 @@ package com.cursorpoc.backend.security;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.SharedDeviceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -46,16 +47,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   private final TenantRepository tenantRepository;
   private final AppUserRepository appUserRepository;
   private final ProfessionalRepository professionalRepository;
+  private final SharedDeviceRepository sharedDeviceRepository;
 
   public JwtAuthenticationFilter(
       JwtService jwtService,
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       ProfessionalRepository professionalRepository) {
+    this(jwtService, tenantRepository, appUserRepository, professionalRepository, null);
+  }
+
+  /** HU-66: with {@code sharedDeviceRepository} PIN sessions are accepted (else always refused). */
+  public JwtAuthenticationFilter(
+      JwtService jwtService,
+      TenantRepository tenantRepository,
+      AppUserRepository appUserRepository,
+      ProfessionalRepository professionalRepository,
+      SharedDeviceRepository sharedDeviceRepository) {
     this.jwtService = jwtService;
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.professionalRepository = professionalRepository;
+    this.sharedDeviceRepository = sharedDeviceRepository;
   }
 
   /**
@@ -124,6 +137,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                       request.getRequestURI());
                   return;
                 }
+                // HU-66: a PIN session only works on the shared device that issued it (the device
+                // credential travels in its own header), while that device is enabled and the
+                // professional still has the PIN version the session was opened with.
+                if (principal.isPinSession() && !isPinSessionValid(principal, request)) {
+                  log.warn(
+                      "request rejected: PIN session no longer valid professionalId={} path={}",
+                      principal.getProfessionalId(),
+                      request.getRequestURI());
+                  return;
+                }
                 UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(
                         principal, null, principal.getAuthorities());
@@ -143,6 +166,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private boolean isUserDisabled(long userId) {
     return appUserRepository.findById(userId).map(u -> !u.isEnabled()).orElse(false);
+  }
+
+  private boolean isPinSessionValid(FemmeUserPrincipal principal, HttpServletRequest request) {
+    if (sharedDeviceRepository == null) {
+      return false;
+    }
+    String rawDeviceToken = request.getHeader(DeviceTokens.HEADER);
+    if (rawDeviceToken == null || rawDeviceToken.isBlank()) {
+      return false;
+    }
+    boolean deviceOk =
+        sharedDeviceRepository
+            .findByTokenHash(DeviceTokens.hash(rawDeviceToken))
+            .filter(d -> d.getId().equals(principal.getPinDeviceId()))
+            .filter(d -> !d.isRevoked())
+            .filter(d -> d.getTenant().getId().equals(principal.getTenantId()))
+            .isPresent();
+    if (!deviceOk) {
+      return false;
+    }
+    return professionalRepository
+        .findByIdAndTenant_Id(principal.getProfessionalId(), principal.getTenantId())
+        .filter(p -> p.isActive() && p.hasPin())
+        .filter(p -> p.getPinVersion() == principal.getPinVersion())
+        .isPresent();
   }
 
   private boolean isProfessionalInactive(long professionalId) {

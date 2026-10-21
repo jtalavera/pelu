@@ -25,6 +25,15 @@ public class JwtService {
    */
   public static final String CLAIM_IMPERSONATION = "imp";
 
+  /** HU-66: shared device that issued a PIN session (absent on every other token). */
+  public static final String CLAIM_PIN_DEVICE = "pin";
+
+  /** HU-66: PIN version the PIN session was issued for. */
+  public static final String CLAIM_PIN_VERSION = "pv";
+
+  /** HU-66: PIN sessions are short-lived; the frontend refreshes them while in use. */
+  public static final long PIN_SESSION_TTL_SECONDS = 15 * 60;
+
   private final FemmeJwtProperties properties;
   private final SecretKey key;
 
@@ -90,6 +99,23 @@ public class JwtService {
     return builder.signWith(key).compact();
   }
 
+  /** HU-66: token for a professional who entered her PIN on a shared device (calendar only). */
+  public String createPinSessionToken(FemmeUserPrincipal pinPrincipal, Instant issuedAt) {
+    Instant exp = issuedAt.plusSeconds(PIN_SESSION_TTL_SECONDS);
+    return Jwts.builder()
+        .subject(String.valueOf(pinPrincipal.getUserId()))
+        .claim("email", pinPrincipal.getUsername())
+        .claim(CLAIM_ROLE, pinPrincipal.getRole().name())
+        .claim(CLAIM_TENANT_ID, pinPrincipal.getTenantId())
+        .claim(CLAIM_PROFESSIONAL_ID, pinPrincipal.getProfessionalId())
+        .claim(CLAIM_PIN_DEVICE, pinPrincipal.getPinDeviceId())
+        .claim(CLAIM_PIN_VERSION, pinPrincipal.getPinVersion())
+        .issuedAt(Date.from(issuedAt))
+        .expiration(Date.from(exp))
+        .signWith(key)
+        .compact();
+  }
+
   public Optional<FemmeUserPrincipal> parseAndValidate(String token) {
     try {
       Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
@@ -114,6 +140,20 @@ public class JwtService {
       Number pidClaim = claims.get(CLAIM_PROFESSIONAL_ID, Number.class);
       Long professionalId = pidClaim != null ? pidClaim.longValue() : null;
       boolean impersonation = Boolean.TRUE.equals(claims.get(CLAIM_IMPERSONATION, Boolean.class));
+      Number pinDevice = claims.get(CLAIM_PIN_DEVICE, Number.class);
+      Number pinVersion = claims.get(CLAIM_PIN_VERSION, Number.class);
+      if (pinDevice != null) {
+        // HU-66: a PIN session is always a tenant-bound PROFESSIONAL session.
+        if (tenantId == null || professionalId == null || role != UserRole.PROFESSIONAL) {
+          return Optional.empty();
+        }
+        return Optional.of(
+            FemmeUserPrincipal.pinSession(
+                tenantId,
+                professionalId,
+                pinDevice.longValue(),
+                pinVersion == null ? 0 : pinVersion.intValue()));
+      }
       return Optional.of(
           new FemmeUserPrincipal(userId, tenantId, email, role, professionalId, impersonation));
     } catch (RuntimeException ex) {

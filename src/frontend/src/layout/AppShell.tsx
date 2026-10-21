@@ -9,6 +9,7 @@ import { persistLanguage, type SupportedLanguage } from "../i18n/languagePrefere
 import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { endSession, isPinSession, signedOutPath } from "../auth/sharedDevice";
 import { UserProfileModal } from "../components/UserProfileModal";
 import { useTourContext } from "../tour/TourContext";
 import { TourJoyride } from "../tour/TourJoyride";
@@ -311,6 +312,9 @@ function MenuItem({ onClick, icon, label, color, hoverBg }: MenuItemProps) {
   );
 }
 
+/** HU-66 criterion 20: a PIN session goes back to the picker after 5 minutes without activity. */
+const PIN_SESSION_IDLE_MS = 5 * 60 * 1000;
+
 export function AppShell() {
   return (
     <FeatureFlagProvider>
@@ -341,7 +345,9 @@ function AppShellInner() {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   useSessionRefresh(true, () => logout("expired"));
-  useIdleLogout(true, () => logout("idle"));
+  // HU-66: a PIN session on a shared device is calendar-only and ends after 5 idle minutes.
+  const pinMode = isPinSession();
+  useIdleLogout(true, () => logout("idle"), pinMode ? PIN_SESSION_IDLE_MS : undefined);
 
   // HU-65: signing out of Stock signs out of Femme too (broadcast by /login?reason=stock_logout).
   useEffect(() => onBroadcastLogout(() => logout("stock_logout")), []);
@@ -383,8 +389,9 @@ function AppShellInner() {
   const currentLang: SupportedLanguage = i18n.resolvedLanguage?.startsWith("es") ? "es" : "en";
 
   function logout(reason?: "idle" | "expired" | "stock_logout") {
-    sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    navigate("/login", { replace: true, state: reason ? { reason } : undefined });
+    endSession();
+    // HU-66: on a shared device, signing out (or "Cambiar de profesional") returns to the picker.
+    navigate(signedOutPath(), { replace: true, state: reason ? { reason } : undefined });
   }
 
   /**
@@ -556,7 +563,14 @@ function AppShellInner() {
             letterSpacing: "-0.01em",
           }}
         >
-          {me?.tenantName ?? t("femme.appName")}
+          {/* HU-66: on a phone, a PIN session shows who is signed in instead of the salon. */}
+          {pinMode && isPhone ? (
+            <span data-testid="pin-session-name" style={{ color: "var(--color-ink)", fontSize: 14 }}>
+              {displayName}
+            </span>
+          ) : (
+            (me?.tenantName ?? t("femme.appName"))
+          )}
         </span>
 
 
@@ -571,7 +585,7 @@ function AppShellInner() {
           }}
         >
           {/* Help tour button — before dark-mode toggle (HU-30 AC-6) */}
-          {guidedTourEnabled && tourKey && (
+          {guidedTourEnabled && !pinMode && tourKey && (
             <button
               data-tour="topbar-help-tour"
               type="button"
@@ -638,6 +652,35 @@ function AppShellInner() {
           )}
 
           {/* User profile */}
+          {pinMode ? (
+            <div data-testid="pin-session-bar" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              {!isPhone && (
+                <span
+                  data-testid="pin-session-name"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "var(--color-ink)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: 220,
+                  }}
+                >
+                  {displayName}
+                </span>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11 sm:h-11 sm:min-h-11"
+                data-testid="switch-professional"
+                onClick={() => logout()}
+              >
+                {t("femme.sharedDevice.switchProfessional")}
+              </Button>
+            </div>
+          ) : (
           <div data-tour="topbar-user-menu" ref={userMenuRef} style={{ position: "relative" }}>
             {/* ── Trigger ── */}
             <div
@@ -845,6 +888,7 @@ function AppShellInner() {
               </div>
             )}
           </div>
+          )}
         </div>
       </header>
 
@@ -951,7 +995,7 @@ function AppShellInner() {
         )}
 
         {/* HU-COM-07: the professional's own (read-only) commissions. */}
-        {isProfessional && commissionsEnabled && (
+        {isProfessional && commissionsEnabled && !pinMode && (
           <SideNavItem
             to="/app/my-commissions"
             label={t("femme.nav.myCommissions")}
@@ -1025,7 +1069,7 @@ function AppShellInner() {
               {displayName}
             </span>
             <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
-              {t("femme.nav.logout")}
+              {pinMode ? t("femme.sharedDevice.switchProfessional") : t("femme.nav.logout")}
             </span>
           </div>
         </button>
@@ -1079,7 +1123,7 @@ function AppShellInner() {
           onClose={() => setProfileModalOpen(false)}
         />
       )}
-      <TourJoyride enabled={guidedTourEnabled} />
+      <TourJoyride enabled={guidedTourEnabled && !pinMode} />
     </div>
   );
 }

@@ -89,6 +89,9 @@ class SeedResetServiceTest {
             professionalRepository,
             professionalScheduleRepository,
             professionalActivationTokenRepository,
+            org.mockito.Mockito.mock(
+                com.cursorpoc.backend.repository.ProfessionalPinLockRepository.class),
+            org.mockito.Mockito.mock(com.cursorpoc.backend.repository.SharedDeviceRepository.class),
             appUserActivationTokenRepository,
             clientRepository,
             appointmentRepository,

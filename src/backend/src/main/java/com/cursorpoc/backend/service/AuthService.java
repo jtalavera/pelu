@@ -227,6 +227,13 @@ public class AuthService {
 
   public TokenResponse refresh(FemmeUserPrincipal principal) {
     Instant now = Instant.now();
+    if (principal.isPinSession()) {
+      // HU-66: a PIN session stays a (short, device-bound) PIN session across refreshes.
+      return new TokenResponse(
+          jwtService.createPinSessionToken(principal, now),
+          JwtService.PIN_SESSION_TTL_SECONDS,
+          "Bearer");
+    }
     String token =
         jwtService.createAccessToken(
             principal.getUserId(),
