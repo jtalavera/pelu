@@ -185,7 +185,7 @@ export function SearchableSelect<T extends string | number>({
                     type="button"
                     variant="ghost"
                     className={cn(
-                      "w-full justify-start rounded-none px-3 py-2 text-sm",
+                      "h-auto w-full justify-start whitespace-normal rounded-none px-3 py-2 text-left text-sm",
                       isOnlyMatch &&
                         "bg-slate-100 ring-1 ring-inset ring-slate-200 dark:bg-slate-800 dark:ring-slate-600",
                     )}
