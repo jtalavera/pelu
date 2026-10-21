@@ -5,7 +5,9 @@ import jakarta.validation.constraints.Size;
 
 public record ActivateProfessionalRequest(
     @NotBlank String token,
-    @NotBlank @Size(min = 8) String password,
+    // No @Size(min) here: AuthService#validatePasswordStrength answers PASSWORD_TOO_WEAK, which the
+    // activation page can explain — a bean-validation failure only yields INVALID_REQUEST.
+    @NotBlank String password,
     @NotBlank String confirmPassword,
     // HU-41 follow-up: only sent (and only required) by the Platform-Admin-invited tenant ADMIN
     // flow — a professional's name already lives on Professional#fullName. Enforced in

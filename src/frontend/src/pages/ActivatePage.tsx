@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button, Heading, Input, Label, Spinner, Text } from "@design-system";
 import { apiBaseUrl } from "../api/baseUrl";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { isStrongPassword } from "../lib/passwordPolicy";
 
 type TokenInfo = {
   // HU-41: null when this token belongs to a Platform-Admin-invited tenant ADMIN user rather than
@@ -27,6 +28,7 @@ export default function ActivatePage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -70,9 +72,17 @@ export default function ActivatePage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+    setPasswordError(null);
 
     if (isAdminInvite && !fullName.trim()) {
       setFormError(t("femme.activate.errorFullNameRequired"));
+      return;
+    }
+
+    // Checked here so a weak password gets its own message instead of the server's generic
+    // INVALID_REQUEST (which this page used to show as "invalid or already used link").
+    if (!isStrongPassword(password)) {
+      setPasswordError(t("femme.activate.errorPasswordWeak"));
       return;
     }
 
@@ -100,11 +110,18 @@ export default function ActivatePage() {
         } else if (data.error === "PASSWORDS_DO_NOT_MATCH") {
           setFormError(t("femme.activate.errorPasswordMismatch"));
         } else if (data.error === "PASSWORD_TOO_WEAK") {
-          setFormError(t("femme.activate.errorPasswordWeak"));
+          setPasswordError(t("femme.activate.errorPasswordWeak"));
         } else if (data.error === "TOKEN_EXPIRED") {
           setFormError(t("femme.activate.errorExpired"));
-        } else {
+        } else if (data.error === "INVALID_TOKEN") {
           setFormError(t("femme.activate.errorInvalid"));
+        } else {
+          // Any other failure is not about the link — say so instead of blaming it.
+          setFormError(
+            t(`femme.apiErrors.${data.error ?? "GENERIC"}`, {
+              defaultValue: t("femme.apiErrors.GENERIC"),
+            }),
+          );
         }
         return;
       }
@@ -221,8 +238,14 @@ export default function ActivatePage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className={inputClassName}
-                    aria-describedby="activate-password-help"
+                    aria-invalid={passwordError ? true : undefined}
+                    aria-describedby={
+                      passwordError
+                        ? "activate-password-err activate-password-help"
+                        : "activate-password-help"
+                    }
                   />
+                  <FieldValidationError id="activate-password-err">{passwordError}</FieldValidationError>
                   <Text variant="muted" className="mt-1 text-xs" id="activate-password-help">
                     {t("femme.activate.passwordHelp")}
                   </Text>

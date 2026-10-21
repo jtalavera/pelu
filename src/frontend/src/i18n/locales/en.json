@@ -491,7 +491,7 @@
       "errorExpired": "This activation link has expired. Ask the administrator to send a new one.",
       "errorFullNameRequired": "Enter your full name.",
       "errorPasswordMismatch": "Passwords do not match.",
-      "errorPasswordWeak": "Password must be at least 8 characters and include an uppercase letter, lowercase letter, digit, and special character.",
+      "errorPasswordWeak": "The password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a digit and a special character, e.g. Abc1@xyz.",
       "errorNetwork": "Network error. Check that the service is running.",
       "loading": "Validating link…"
     },
@@ -508,7 +508,8 @@
       "errorInvalid": "This password reset link is invalid or has already been used.",
       "errorExpired": "This password reset link has expired. Request a new one.",
       "errorPasswordMismatch": "Passwords do not match.",
-      "errorNetwork": "Network error. Check that the service is running."
+      "errorNetwork": "Network error. Check that the service is running.",
+      "errorPasswordWeak": "The password must be at least 8 characters long, e.g. Abc1@xyz."
     },
     "topbar": {
       "notifications": "Notifications",
