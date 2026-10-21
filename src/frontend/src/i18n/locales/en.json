@@ -1828,6 +1828,24 @@
       "backToList": "Back to clients",
       "basicInfo": "Basic information",
       "history": "History",
+      "technicalSheet": {
+        "title": "Technical sheet",
+        "open": "Technical sheet",
+        "view": "View technical sheet",
+        "notes": "Notes",
+        "colorFormula": "Color formula",
+        "charCount": "{{count}} / {{max}} characters",
+        "maxLength": "Maximum {{max}} characters. Shorten the text to save it.",
+        "editedBy": "Edited by {{name}} · {{date}}",
+        "save": "Save technical sheet",
+        "cancel": "Cancel",
+        "saved": "Technical sheet saved.",
+        "inactiveReadOnly": "This client is inactive: the technical sheet can be viewed but not edited.",
+        "searchLabel": "Search by name",
+        "searchPlaceholder": "Client name",
+        "searchButton": "Search",
+        "noResults": "No clients match the search."
+      },
       "summary": {
         "title": "Summary",
         "usualProfessional": "Usual stylist (last 12 months)",
@@ -1968,6 +1986,9 @@
       }
     },
     "apiErrors": {
+      "CLIENT_NOTES_TOO_LONG": "Notes can't be longer than 2000 characters.",
+      "CLIENT_COLOR_FORMULA_TOO_LONG": "The color formula can't be longer than 2000 characters.",
+      "CLIENT_INACTIVE": "This client is inactive: reactivate the client to edit.",
       "INVOICE_LINE_NOT_FOUND": "Invoice line not found.",
       "COMMISSION_LINE_NOT_ASSIGNABLE": "This line can't be assigned: it already has a professional, the invoice is voided or it isn't a catalog item.",
       "COMMISSION_ENTRY_NOT_FOUND": "Commission not found.",

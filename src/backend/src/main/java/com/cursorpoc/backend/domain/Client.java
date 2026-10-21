@@ -13,6 +13,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "clients")
@@ -83,6 +86,29 @@ public class Client {
   /** SIFEN HU-02 AC-07 — D224/dDesCiuRec, nombre correspondiente a {@link #cityCode}. */
   @Column(name = "city", length = 120)
   private String cityName;
+
+  /** HU-68: ficha técnica — notas libres (una sola nota editable). */
+  @Column(length = 2000)
+  private String notes;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "notes_updated_at")
+  private Instant notesUpdatedAt;
+
+  /** Snapshot of the editor's display name (admin user or professional) at save time. */
+  @Column(name = "notes_updated_by", length = 200)
+  private String notesUpdatedBy;
+
+  /** HU-68: ficha técnica — fórmula de color (texto libre). */
+  @Column(name = "color_formula", length = 2000)
+  private String colorFormula;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "color_formula_updated_at")
+  private Instant colorFormulaUpdatedAt;
+
+  @Column(name = "color_formula_updated_by", length = 200)
+  private String colorFormulaUpdatedBy;
 
   public Long getId() {
     return id;
@@ -210,5 +236,53 @@ public class Client {
 
   public void setCityName(String cityName) {
     this.cityName = cityName;
+  }
+
+  public String getNotes() {
+    return notes;
+  }
+
+  public void setNotes(String notes) {
+    this.notes = notes;
+  }
+
+  public Instant getNotesUpdatedAt() {
+    return notesUpdatedAt;
+  }
+
+  public void setNotesUpdatedAt(Instant notesUpdatedAt) {
+    this.notesUpdatedAt = notesUpdatedAt;
+  }
+
+  public String getNotesUpdatedBy() {
+    return notesUpdatedBy;
+  }
+
+  public void setNotesUpdatedBy(String notesUpdatedBy) {
+    this.notesUpdatedBy = notesUpdatedBy;
+  }
+
+  public String getColorFormula() {
+    return colorFormula;
+  }
+
+  public void setColorFormula(String colorFormula) {
+    this.colorFormula = colorFormula;
+  }
+
+  public Instant getColorFormulaUpdatedAt() {
+    return colorFormulaUpdatedAt;
+  }
+
+  public void setColorFormulaUpdatedAt(Instant colorFormulaUpdatedAt) {
+    this.colorFormulaUpdatedAt = colorFormulaUpdatedAt;
+  }
+
+  public String getColorFormulaUpdatedBy() {
+    return colorFormulaUpdatedBy;
+  }
+
+  public void setColorFormulaUpdatedBy(String colorFormulaUpdatedBy) {
+    this.colorFormulaUpdatedBy = colorFormulaUpdatedBy;
   }
 }

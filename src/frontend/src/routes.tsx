@@ -4,6 +4,7 @@ import { PlatformShell } from "./layout/PlatformShell";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PlatformAdminRoute } from "./auth/PlatformAdminRoute";
 import { AdminOnlyRoute } from "./auth/AdminOnlyRoute";
+import { ProfessionalOrAdminRoute, RedirectToTechnicalSheet } from "./auth/ProfessionalOrAdminRoute";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
 import DashboardsPage from "./pages/DashboardsPage";
@@ -16,6 +17,8 @@ import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import TaxSettingsPage from "./pages/TaxSettingsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
+import ClientTechnicalSheetPage from "./pages/ClientTechnicalSheetPage";
+import ProfessionalClientsPage from "./pages/ProfessionalClientsPage";
 import InactiveClientsPage from "./pages/InactiveClientsPage";
 import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
@@ -66,6 +69,27 @@ export function AppRoutes() {
         <Route path="/app/calendar" element={<CalendarPage />} />
         <Route element={<NotInPinSessionRoute />}>
           <Route path="/app/my-commissions" element={<MyCommissionsPage />} />
+          {/* HU-68 AC9: admins get the full client screens, professionals a name list + the
+              technical sheet. Not reachable in a PIN session (calendar-only, HU-66). */}
+          <Route
+            path="/app/clients"
+            element={
+              <ProfessionalOrAdminRoute
+                admin={<ClientsPage />}
+                professional={<ProfessionalClientsPage />}
+              />
+            }
+          />
+          <Route
+            path="/app/clients/:id"
+            element={
+              <ProfessionalOrAdminRoute
+                admin={<ClientDetailPage />}
+                professional={<RedirectToTechnicalSheet />}
+              />
+            }
+          />
+          <Route path="/app/clients/:id/technical-sheet" element={<ClientTechnicalSheetPage />} />
         </Route>
         {/* HU-24 AC-12/13: everything below is admin-only — professionals go to their calendar. */}
         <Route element={<AdminOnlyRoute />}>
@@ -78,8 +102,6 @@ export function AppRoutes() {
           <Route path="/app/propinas" element={<PropinasPage />} />
           <Route path="/app/commissions" element={<CommissionsPage />} />
           <Route path="/app/commissions/settlements/:id" element={<CommissionSettlementPage />} />
-          <Route path="/app/clients" element={<ClientsPage />} />
-          <Route path="/app/clients/:id" element={<ClientDetailPage />} />
           <Route path="/app/inactive-clients" element={<InactiveClientsPage />} />
           <Route path="/app/professionals" element={<ProfessionalsPage />} />
           <Route path="/app/settings" element={<SettingsLayout />}>

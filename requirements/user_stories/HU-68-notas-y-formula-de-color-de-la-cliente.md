@@ -4,7 +4,7 @@
 | ---------- | -------------- |
 | **ID**     | HU-68          |
 | **Módulo** | Cliente básico |
-| **Estado** | `Backlog`      |
+| **Estado** | `In Progress`  |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
@@ -63,6 +63,6 @@ A diferencia del resto de la ficha, la profesional (HU-24) **sí** puede ver y e
 
 ## Notas para estimación y pruebas
 
-- **Migración:** columnas `notes NVARCHAR(2000)`, `color_formula NVARCHAR(2000)`, más `notes_updated_at/by`, `color_formula_updated_at/by` en `client` (o tabla `client_technical_sheet` 1:1 si se prefiere separar datos sensibles de datos técnicos).
+- **Migración:** `V84__client_technical_sheet.sql` — columnas `notes`, `color_formula` (`NVARCHAR(2000)`) y `notes_updated_at/by`, `color_formula_updated_at/by` en `clients`. "Editado por" guarda el nombre (de la usuaria admin o de la profesional) al momento de guardar; solo se actualiza para el campo que cambió.
 - **API sugerida:** `GET /api/clients/{id}/technical-sheet` y `PUT /api/clients/{id}/technical-sheet` → `{ clientId, clientName, notes, colorFormula, notesUpdatedAt, notesUpdatedBy, colorFormulaUpdatedAt, colorFormulaUpdatedBy }`. Agregar ambos a `ProfessionalAccessPolicy` (rol profesional y sesión por PIN).
 - **E2E:** `e2e/tests/hu-68-notas-y-formula-de-color.spec.ts` — admin edita y ve "Editado por"; límite de 2000 caracteres; profesional abre ficha técnica desde turno propio, turno ajeno, formulario de turno y menú Clientes, edita, y no ve datos personales; listado de clientes como profesional sin teléfono/email/RUC; profesional llamando a `GET /api/clients/{id}` → 403; sesión PIN; cliente inactiva no editable; aislamiento multi-tenant.

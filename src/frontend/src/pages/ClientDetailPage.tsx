@@ -33,6 +33,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { focusMessageBox } from "../util/focusMessageBox";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { ClientSummaryCard } from "../components/ClientSummaryCard";
+import { ClientTechnicalSheetForm } from "../components/ClientTechnicalSheetForm";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { SifenStatusBadge } from "../components/SifenStatusBadge";
@@ -719,6 +720,13 @@ export default function ClientDetailPage() {
                 </Button>
               </div>
             </div>
+          </Card>
+          {/* HU-68 AC5: technical sheet, saved independently of the basic data form. */}
+          <Card className="mt-6 p-4 sm:p-6">
+            <Heading as="h2" className="mb-3 text-base">
+              {t("femme.clients.technicalSheet.title")}
+            </Heading>
+            <ClientTechnicalSheetForm clientId={client.id} />
           </Card>
         </TabsContent>
 

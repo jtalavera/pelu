@@ -59,6 +59,36 @@ public class ClientService {
         result.getTotalPages());
   }
 
+  /**
+   * HU-68 AC12: the professional's view of the client list — id, name and active flag only, and the
+   * query matches the name alone (never phone, email or RUC).
+   */
+  public static List<ClientResponse> nameOnlyForProfessional(List<ClientResponse> rows, String q) {
+    String needle = normalizeQuery(q);
+    String lowered = needle == null ? null : needle.toLowerCase(Locale.ROOT);
+    return rows.stream()
+        .filter(r -> lowered == null || r.fullName().toLowerCase(Locale.ROOT).contains(lowered))
+        .map(
+            r ->
+                new ClientResponse(
+                    r.id(),
+                    r.fullName(),
+                    null,
+                    null,
+                    null,
+                    r.active(),
+                    0,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null))
+        .toList();
+  }
+
   private static String normalizeQuery(String q) {
     return (q != null && !q.isBlank()) ? q.trim() : null;
   }

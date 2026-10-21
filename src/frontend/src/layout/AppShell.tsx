@@ -994,6 +994,11 @@ function AppShellInner() {
           </>
         )}
 
+        {/* HU-68 AC9: restricted client list (names → technical sheet); not in PIN sessions. */}
+        {isProfessional && !pinMode && (
+          <SideNavItem to="/app/clients" label={t("femme.nav.clients")} icon={<ClientsIcon />} tourId="nav-clients" />
+        )}
+
         {/* HU-COM-07: the professional's own (read-only) commissions. */}
         {isProfessional && commissionsEnabled && !pinMode && (
           <SideNavItem

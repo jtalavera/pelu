@@ -1828,6 +1828,24 @@
       "backToList": "Volver a clientes",
       "basicInfo": "Información básica",
       "history": "Historial",
+      "technicalSheet": {
+        "title": "Ficha técnica",
+        "open": "Ficha técnica",
+        "view": "Ver ficha técnica",
+        "notes": "Notas",
+        "colorFormula": "Fórmula de color",
+        "charCount": "{{count}} / {{max}} caracteres",
+        "maxLength": "Máximo {{max}} caracteres. Acortá el texto para poder guardarlo.",
+        "editedBy": "Editado por {{name}} · {{date}}",
+        "save": "Guardar ficha técnica",
+        "cancel": "Cancelar",
+        "saved": "Ficha técnica guardada.",
+        "inactiveReadOnly": "La cliente está inactiva: la ficha técnica se puede ver pero no editar.",
+        "searchLabel": "Buscar por nombre",
+        "searchPlaceholder": "Nombre de la cliente",
+        "searchButton": "Buscar",
+        "noResults": "No hay clientes que coincidan con la búsqueda."
+      },
       "summary": {
         "title": "Resumen",
         "usualProfessional": "Estilista habitual (últimos 12 meses)",
@@ -1968,6 +1986,9 @@
       }
     },
     "apiErrors": {
+      "CLIENT_NOTES_TOO_LONG": "Las notas no pueden superar los 2000 caracteres.",
+      "CLIENT_COLOR_FORMULA_TOO_LONG": "La fórmula de color no puede superar los 2000 caracteres.",
+      "CLIENT_INACTIVE": "La cliente está inactiva: reactivala para poder editarla.",
       "INVOICE_LINE_NOT_FOUND": "No se encontró la línea del comprobante.",
       "COMMISSION_LINE_NOT_ASSIGNABLE": "Esta línea no se puede asignar: ya tiene profesional, el comprobante está anulado o no es un ítem del catálogo.",
       "COMMISSION_ENTRY_NOT_FOUND": "No se encontró la comisión.",

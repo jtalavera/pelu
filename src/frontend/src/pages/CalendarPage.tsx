@@ -31,6 +31,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { LocalizedDateInput } from "../components/LocalizedDateInput";
 import { SearchableSelect } from "../components/SearchableSelect";
+import { ClientTechnicalSheetModal } from "../components/ClientTechnicalSheetModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -180,6 +181,8 @@ export default function CalendarPage() {
 
   // Detail modal
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
+  /** HU-68 AC6–8: client whose technical sheet is open on top of the detail / form modal. */
+  const [technicalSheetClientId, setTechnicalSheetClientId] = useState<number | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
 
   // New/Edit appointment modal
@@ -1050,10 +1053,21 @@ export default function CalendarPage() {
       {/* ── Appointment detail modal ── */}
       <Modal
         open={detailAppt !== null}
-        onClose={closeDetail}
+        onClose={() => {
+          if (technicalSheetClientId === null) closeDetail();
+        }}
         title={t("femme.calendar.detail.title")}
         footer={
           <div className="flex flex-wrap gap-2">
+            {detailAppt?.clientId != null && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setTechnicalSheetClientId(detailAppt.clientId as number)}
+              >
+                {t("femme.clients.technicalSheet.open")}
+              </Button>
+            )}
             {detailAppt && canModify(detailAppt) && EDITABLE_STATUSES.includes(detailAppt.status) && (
               <Button size="sm" variant="outline" onClick={openEditForm}>
                 {t("femme.calendar.detail.edit")}
@@ -1177,7 +1191,9 @@ export default function CalendarPage() {
       {/* ── New / Edit appointment modal ── */}
       <Modal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          if (technicalSheetClientId === null) setFormOpen(false);
+        }}
         title={editAppt ? t("femme.calendar.form.editTitle") : t("femme.calendar.form.title")}
         footer={
           <div className="flex gap-2">
@@ -1327,9 +1343,25 @@ export default function CalendarPage() {
               filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
               noResultsText={t("femme.calendar.searchable.noResults")}
             />
+            {formClientId !== "" && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-11"
+                onClick={() => setTechnicalSheetClientId(formClientId as number)}
+              >
+                {t("femme.clients.technicalSheet.view")}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
+
+      <ClientTechnicalSheetModal
+        clientId={technicalSheetClientId}
+        onClose={() => setTechnicalSheetClientId(null)}
+      />
     </div>
   );
 }
