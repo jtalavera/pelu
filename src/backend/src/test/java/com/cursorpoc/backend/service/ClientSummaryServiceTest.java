@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -54,8 +55,10 @@ class ClientSummaryServiceTest {
             clientRepository, serviceRecordRepository, time, Clock.fixed(NOW, ZoneOffset.UTC));
     when(clientRepository.findByIdAndTenant_Id(CLIENT, TENANT))
         .thenReturn(Optional.of(new Client()));
-    when(serviceRecordRepository.findByTenantAndClientAndStatusWithLines(
-            TENANT, CLIENT, ServiceRecordStatus.CLOSED))
+    lenient()
+        .when(
+            serviceRecordRepository.findByTenantAndClientAndStatusWithLines(
+                TENANT, CLIENT, ServiceRecordStatus.CLOSED))
         .thenReturn(records);
   }
 
