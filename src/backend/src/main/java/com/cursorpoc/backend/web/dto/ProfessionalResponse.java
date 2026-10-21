@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.web.dto;
 
+import com.cursorpoc.backend.service.SharedDeviceService;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -21,6 +22,8 @@ public record ProfessionalResponse(
     String accessLoginEmail,
     Instant invitationSentAt,
     Instant invitationExpiresAt,
-    Instant resendAvailableAt) {
+    Instant resendAvailableAt,
+    // HU-66: shared devices where her PIN login is locked right now (empty in the directory view).
+    List<SharedDeviceService.PinLockResponse> pinLocks) {
   public record Schedule(short dayOfWeek, LocalTime startTime, LocalTime endTime) {}
 }

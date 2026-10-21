@@ -43,6 +43,16 @@ public class Professional {
   @Column(name = "pin_fingerprint", length = 64)
   private String pinFingerprint;
 
+  // HU-66: BCrypt hash of the PIN, used to verify PIN logins (pinFingerprint above only backs the
+  // per-tenant uniqueness check). Null for PINs set before HU-66 until their first PIN login.
+  @Column(name = "pin_hash", length = 100)
+  private String pinHash;
+
+  // HU-66: bumped whenever the PIN changes or is cleared — open PIN sessions carry the version they
+  // were issued with and stop working on mismatch.
+  @Column(name = "pin_version", nullable = false)
+  private int pinVersion;
+
   @Column(name = "system_access_allowed", nullable = false)
   private boolean systemAccessAllowed = false;
 
@@ -136,5 +146,26 @@ public class Professional {
 
   public void setUser(AppUser user) {
     this.user = user;
+  }
+
+  public String getPinHash() {
+    return pinHash;
+  }
+
+  public void setPinHash(String pinHash) {
+    this.pinHash = pinHash;
+  }
+
+  public int getPinVersion() {
+    return pinVersion;
+  }
+
+  public void setPinVersion(int pinVersion) {
+    this.pinVersion = pinVersion;
+  }
+
+  /** HU-66: whether a PIN is set (it can be used to log in on a shared device). */
+  public boolean hasPin() {
+    return pinFingerprint != null;
   }
 }

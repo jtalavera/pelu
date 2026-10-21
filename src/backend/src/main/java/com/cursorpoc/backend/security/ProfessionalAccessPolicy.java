@@ -52,6 +52,23 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.GET, "/api/commissions/me"),
           PATHS.matcher(HttpMethod.GET, "/api/commissions/me/settlements/{id:\\d+}"));
 
+  /**
+   * HU-66: a PIN session on a shared device is calendar-only — no profile, password, commissions or
+   * guided-tour state, even though the same professional reaches those with email + password.
+   */
+  static final List<RequestMatcher> PIN_SESSION_ALLOWED =
+      List.of(
+          PATHS.matcher(HttpMethod.GET, "/api/me"),
+          PATHS.matcher(HttpMethod.GET, "/api/feature-flags"),
+          PATHS.matcher(HttpMethod.GET, "/api/appointments"),
+          PATHS.matcher(HttpMethod.GET, "/api/appointments/{id:\\d+}"),
+          PATHS.matcher(HttpMethod.POST, "/api/appointments"),
+          PATHS.matcher(HttpMethod.PUT, "/api/appointments/{id:\\d+}"),
+          PATHS.matcher(HttpMethod.PATCH, "/api/appointments/{id:\\d+}/status"),
+          PATHS.matcher(HttpMethod.GET, "/api/professionals"),
+          PATHS.matcher(HttpMethod.GET, "/api/services"),
+          PATHS.matcher(HttpMethod.GET, "/api/clients"));
+
   @Override
   public AuthorizationResult authorize(
       Supplier<? extends Authentication> authentication, RequestAuthorizationContext context) {
@@ -63,13 +80,20 @@ public final class ProfessionalAccessPolicy
     // plain "authenticated" rule.
     if (auth.getPrincipal() instanceof FemmeUserPrincipal principal
         && principal.getRole() == UserRole.PROFESSIONAL) {
-      return new AuthorizationDecision(isAllowedForProfessional(context.getRequest()));
+      return new AuthorizationDecision(
+          principal.isPinSession()
+              ? matchesAny(PIN_SESSION_ALLOWED, context.getRequest())
+              : isAllowedForProfessional(context.getRequest()));
     }
     return new AuthorizationDecision(true);
   }
 
   static boolean isAllowedForProfessional(HttpServletRequest request) {
-    for (RequestMatcher matcher : PROFESSIONAL_ALLOWED) {
+    return matchesAny(PROFESSIONAL_ALLOWED, request);
+  }
+
+  private static boolean matchesAny(List<RequestMatcher> matchers, HttpServletRequest request) {
+    for (RequestMatcher matcher : matchers) {
       if (matcher.matches(request)) {
         return true;
       }

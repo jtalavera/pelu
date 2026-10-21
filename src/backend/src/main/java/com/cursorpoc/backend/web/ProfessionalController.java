@@ -129,6 +129,21 @@ public class ProfessionalController {
     return professionalDirectoryService.grantAccess(principal.getTenantId(), id, locale);
   }
 
+  /** HU-66: "Desbloquear PIN" — lifts her PIN lock on every shared device. */
+  @PostMapping("/{id}/unlock-pin")
+  public ProfessionalResponse unlockPin(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
+    requireAdmin(principal);
+    log.info("POST /api/professionals/{}/unlock-pin tenantId={}", id, principal.getTenantId());
+    ProfessionalResponse response =
+        professionalDirectoryService.unlockPin(principal.getTenantId(), id);
+    log.info(
+        "POST /api/professionals/{}/unlock-pin tenantId={} status=200",
+        id,
+        principal.getTenantId());
+    return response;
+  }
+
   /** Issue #38 (5): "Reenviar invitación" — pending invitations only, 2-minute cooldown. */
   @PostMapping("/{id}/resend-access")
   public ProfessionalResponse resendAccess(

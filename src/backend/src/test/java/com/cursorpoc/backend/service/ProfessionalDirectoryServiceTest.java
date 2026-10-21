@@ -34,6 +34,8 @@ class ProfessionalDirectoryServiceTest {
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private ProfessionalScheduleRepository professionalScheduleRepository;
   @Mock private ProfessionalAccessService professionalAccessService;
+  @Mock private SharedDeviceService sharedDeviceService;
+  @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
   @InjectMocks private ProfessionalDirectoryService service;
 
