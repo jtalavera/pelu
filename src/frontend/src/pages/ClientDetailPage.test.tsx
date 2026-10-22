@@ -27,9 +27,9 @@ const sampleClient = {
   visitCount: 3,
 };
 
-function renderPage(clientId = "1") {
+function renderPage(clientId = "1", search = "") {
   return render(
-    <MemoryRouter initialEntries={[`/app/clients/${clientId}`]}>
+    <MemoryRouter initialEntries={[`/app/clients/${clientId}${search}`]}>
       <Routes>
         <Route
           path="/app/clients/:id"
@@ -254,15 +254,42 @@ describe("ClientDetailPage", () => {
     expect(successNodes).toHaveLength(1);
   });
 
-  it("shows history tab with appointments and invoices sections", async () => {
+  it("HU-70: five tabs in order, Details selected by default, history not loaded yet", async () => {
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
-    await userEvent.click(screen.getByRole("tab", { name: /history/i }));
+    const tabs = screen.getAllByRole("tab").map((el) => el.textContent);
+    expect(tabs).toEqual(["Details", "Summary", "Technical sheet", "Appointments", "Invoices"]);
+    expect(screen.getByRole("tab", { name: "Details" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("heading", { name: "Contact" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Tax details" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Profile" })).toBeTruthy();
+    const urls = femmeJson.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.startsWith("/api/appointments"))).toBe(false);
+    expect(urls.some((u) => u.startsWith("/api/invoices"))).toBe(false);
+  });
+
+  it("HU-70: appointments and invoices tabs show their own sections", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    await userEvent.click(screen.getByRole("tab", { name: "Appointments" }));
     expect(await screen.findByText(/upcoming/i)).toBeTruthy();
     expect(
       (await screen.findAllByText(/no appointments on record/i)).length,
     ).toBe(2);
-    expect(screen.getByText(/no invoices on record/i)).toBeTruthy();
+    await userEvent.click(screen.getByRole("tab", { name: "Invoices" }));
+    expect(await screen.findByText(/no invoices on record/i)).toBeTruthy();
+  });
+
+  it("HU-70: ?tab= in the URL opens that tab; unknown values fall back to Details", async () => {
+    renderPage("1", "?tab=sheet");
+    await screen.findByRole("heading", { name: /Ana García/i });
+    expect(screen.getByRole("tab", { name: "Technical sheet" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    cleanup();
+    renderPage("1", "?tab=nope");
+    await screen.findByRole("heading", { name: /Ana García/i });
+    expect(screen.getByRole("tab", { name: "Details" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("history tab shows upcoming future appointment in Upcoming", async () => {
@@ -301,7 +328,7 @@ describe("ClientDetailPage", () => {
     });
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
-    await userEvent.click(screen.getByRole("tab", { name: /history/i }));
+    await userEvent.click(screen.getByRole("tab", { name: "Appointments" }));
     expect(await screen.findByText("Cut")).toBeTruthy();
   });
 

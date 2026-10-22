@@ -50,11 +50,13 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
     await page.goto(`/app/clients/${c.id}`);
     // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
     await expect(page.getByRole("heading", { name: /E2E Tabs/i })).toBeVisible();
-    await page.getByRole("tab", { name: "History" }).click();
+    // HU-70: appointments and invoices live in their own tabs.
+    await page.getByRole("tab", { name: "Appointments" }).click();
     await expect(page.getByText("Upcoming", { exact: true })).toBeVisible();
     await expect(page.getByText("Past", { exact: true })).toBeVisible();
     const emptyApt = page.getByText("No appointments on record.", { exact: true });
     await expect(emptyApt).toHaveCount(2);
+    await page.getByRole("tab", { name: "Invoices" }).click();
     await expect(page.getByText("No invoices on record.", { exact: true })).toBeVisible();
   });
 
@@ -97,8 +99,9 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${c.id}`);
-    await page.getByRole("tab", { name: "History" }).click();
+    await page.getByRole("tab", { name: "Appointments" }).click();
     await expect(page.getByText(seed.serviceFullName, { exact: true }).first()).toBeVisible();
+    await page.getByRole("tab", { name: "Invoices" }).click();
     await expect(
       page.getByRole("table").getByText(inv.invoiceNumberFormatted, { exact: true }),
     ).toBeVisible();

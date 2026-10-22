@@ -131,9 +131,11 @@ test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
     const client = await seedClient(request, token, `E2E67 Vacia ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}`);
+    // HU-70: stats strip always visible; the lists live in the "Summary" tab.
+    await page.goto(`/app/clients/${client.id}?tab=summary`);
     const summary = page.getByTestId("client-summary");
-    await expect(summary.getByRole("heading", { name: "Summary" })).toBeVisible();
+    await expect(summary).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("client-summary-usual")).toContainText(
       "No services in the last 12 months",
     );
@@ -146,9 +148,9 @@ test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
     await expect(page.getByTestId("client-summary-products")).toContainText(
       "No products purchased yet",
     );
-    // The summary sits above the existing tabs.
+    // The stats strip sits above the tabs.
     const summaryBox = await summary.boundingBox();
-    const tabsBox = await page.getByRole("tab", { name: "Basic information" }).boundingBox();
+    const tabsBox = await page.getByRole("tab", { name: "Details" }).boundingBox();
     expect(summaryBox && tabsBox && summaryBox.y < tabsBox.y).toBeTruthy();
   });
 
@@ -227,7 +229,7 @@ test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
     expect(deact.ok(), await deact.text()).toBeTruthy();
 
     await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}`);
+    await page.goto(`/app/clients/${client.id}?tab=summary`);
 
     // AC2 + AC3: both tied professionals, alphabetical, with their counts; Charlie excluded.
     const usual = page.getByTestId("client-summary-usual").getByRole("listitem");

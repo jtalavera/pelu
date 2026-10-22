@@ -445,7 +445,7 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
 
   await loginAsDemo(page);
   await page.goto(`/app/clients/${client.id}`);
-  await page.getByRole("tab", { name: "History" }).click();
+  await page.getByRole("tab", { name: "Invoices" }).click();
 
   // The comprobantes section should show the "View" (femme.billing.history.viewDetail) button
   const verBtn = page.getByRole("button", { name: /view/i }).first();

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import {
   API_BASE,
+  apiGetJson,
   apiPostJson,
   authHeaders,
   calendarVisibleWeekSlotIso,
@@ -8,7 +9,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
-import { DEMO_FULL_NAME, DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
+import { DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
 import { pickSearchableOption } from "../fixtures/ui";
 
@@ -78,9 +79,14 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
   }) => {
     const token = await loginAsDemoApi(request);
     const client = await seedClientWithPhone(request, token, `E2E68 Admin ${uniq()}`);
+    // "Edited by" shows the admin's full name, or the email when the user has none — other specs
+    // may change the shared demo admin, so read what the backend will stamp.
+    const me = await apiGetJson<{ fullName: string | null; email: string }>(request, token, "/api/me");
+    const editorName = me.fullName ?? me.email;
 
     await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}`);
+    // HU-70: the technical sheet has its own tab in the client profile.
+    await page.goto(`/app/clients/${client.id}?tab=sheet`);
     const sheet = page.getByTestId("client-technical-sheet");
     await expect(page.getByRole("heading", { name: "Technical sheet" })).toBeVisible();
 
@@ -96,10 +102,10 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     await expect(sheet.getByText("Technical sheet saved.")).toBeVisible();
     // AC4: who and when.
     await expect(sheet.getByTestId("technical-sheet-notes-edited")).toContainText(
-      `Edited by ${DEMO_FULL_NAME} · `,
+      `Edited by ${editorName} · `,
     );
     await expect(sheet.getByTestId("technical-sheet-color-formula-edited")).toContainText(
-      `Edited by ${DEMO_FULL_NAME} · `,
+      `Edited by ${editorName} · `,
     );
 
     // AC5: saved independently of the basic-data form, persisted after reload.
@@ -128,7 +134,8 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     const client = await seedClientWithPhone(request, token, `E2E68 Largo ${uniq()}`);
 
     await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}`);
+    // HU-70: the technical sheet has its own tab in the client profile.
+    await page.goto(`/app/clients/${client.id}?tab=sheet`);
     const sheet = page.getByTestId("client-technical-sheet");
     await sheet.getByLabel("Notes").fill("x".repeat(2001));
     const err = sheet.locator("#technical-sheet-notes-err");
@@ -399,7 +406,8 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     expect(await put.text()).toContain("CLIENT_INACTIVE");
 
     await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}`);
+    // HU-70: the technical sheet has its own tab in the client profile.
+    await page.goto(`/app/clients/${client.id}?tab=sheet`);
     const sheet = page.getByTestId("client-technical-sheet");
     await expect(
       sheet.getByText("This client is inactive: the technical sheet can be viewed but not edited."),

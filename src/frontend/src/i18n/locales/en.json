@@ -1885,6 +1885,18 @@
         "searchButton": "Search",
         "noResults": "No clients match the search."
       },
+      "tabs": {
+        "info": "Details",
+        "summary": "Summary",
+        "sheet": "Technical sheet",
+        "appointments": "Appointments",
+        "invoices": "Invoices"
+      },
+      "sections": {
+        "contact": "Contact",
+        "fiscal": "Tax details",
+        "profile": "Profile"
+      },
       "summary": {
         "title": "Summary",
         "usualProfessional": "Usual stylist (last 12 months)",
@@ -2856,7 +2868,7 @@
       },
       "clientDetail": {
         "header": { "title": "Client header", "content": "Shows the client's name, visit count, and a back button to return to the full list." },
-        "tabs": { "title": "Info tabs", "content": "Switch between the client's basic info (name, phone, email, RUC) and their appointment history." },
+        "tabs": { "title": "Info tabs", "content": "Details to edit contact, tax and profile data; Summary with the latest services and products; Technical sheet with notes and color formula; and the client's Appointments and Invoices." },
         "editInfo": { "title": "Edit client info", "content": "Update the client's contact details here and click Save to confirm the changes." },
         "status": { "title": "Activate / deactivate", "content": "Deactivate a client to hide them from booking, or reactivate them when they return." }
       },
