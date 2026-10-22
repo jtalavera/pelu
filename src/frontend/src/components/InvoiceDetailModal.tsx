@@ -36,6 +36,12 @@ import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { toWhatsAppPhone } from "../lib/paraguayPhone";
+import {
+  WHATSAPP_WINDOW_NAME,
+  buildWhatsAppUrl,
+  isMobileDevice,
+  shareFileViaOs,
+} from "../lib/whatsappShare";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../hooks/useSifenStatusLiveRefresh";
 
 export type InvoiceLine = {
@@ -461,12 +467,16 @@ export function InvoiceDetailModal({
   }
 
   /**
-   * Issue #215: "Enviar por WhatsApp". Downloads the KuDE PDF (same fetch the email/download flow
-   * already uses), then opens a `wa.me` chat with a prefilled text message, inviting the user to
-   * manually attach the file that was just downloaded. When the linked client has a phone number
-   * on file, the chat opens directly against that contact; otherwise it opens the generic wa.me
-   * composer with no contact preselected.
-   * A `wa.me` link alone can never carry the PDF: `GET /sifen/kude` requires Bearer auth, so the
+   * Issue #215: "Enviar por WhatsApp". Fetches the KuDE PDF (same fetch the email/download flow
+   * already uses), then:
+   * - on phones/tablets, opens the OS share sheet with the PDF already attached (the user picks
+   *   WhatsApp there); if the browser can't share files, falls back to the download + chat link;
+   * - otherwise downloads the PDF and opens the chat with a prefilled text message, inviting the
+   *   user to attach the file manually. Desktop goes straight to WhatsApp Web (no "app or web"
+   *   chooser page) in a named window, so repeated sends reuse the same WhatsApp tab.
+   * When the linked client has a phone number on file, the chat opens directly against that
+   * contact; otherwise it opens the composer with no contact preselected.
+   * A chat link alone can never carry the PDF: `GET /sifen/kude` requires Bearer auth, so the
    * end client can't fetch it directly from a link — the file always has to move through this
    * browser first.
    */
@@ -485,12 +495,21 @@ export function InvoiceDetailModal({
         amount: formatGuaraniesGs(invoice.total),
       });
       const whatsappPhone = toWhatsAppPhone(invoice.clientPhone);
+      const mobile = isMobileDevice();
+
+      if (mobile) {
+        const file = new File([blob], filename, { type: "application/pdf" });
+        const result = await shareFileViaOs(file, message);
+        if (result !== "unsupported") return;
+      }
 
       triggerBrowserDownload(blob, filename);
+      // No `noopener` on desktop: it would make the browser ignore the window name and open a
+      // fresh WhatsApp Web tab on every send.
       window.open(
-        `https://wa.me/${whatsappPhone ?? ""}?text=${encodeURIComponent(message)}`,
-        "_blank",
-        "noopener,noreferrer",
+        buildWhatsAppUrl(whatsappPhone, message, mobile),
+        mobile ? "_blank" : WHATSAPP_WINDOW_NAME,
+        mobile ? "noopener,noreferrer" : undefined,
       );
     } catch (err) {
       setKudeWhatsappError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
