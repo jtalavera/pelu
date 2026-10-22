@@ -8,6 +8,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Professional;
@@ -47,6 +48,7 @@ class AppointmentServiceTest {
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private ClientRepository clientRepository;
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   private final InMemoryTelemetry telemetry = new InMemoryTelemetry();
   @Spy private BusinessMetrics businessMetrics = new BusinessMetrics(telemetry.openTelemetry());

@@ -869,6 +869,16 @@
       }
     },
     "dashboard": {
+      "birthdays": {
+        "title": "Cumpleaños",
+        "subtitle": "Clientes activas que cumplen años hoy y en los próximos {{days}} días",
+        "loadError": "No se pudieron cargar los cumpleaños.",
+        "empty": "No hay cumpleaños en los próximos {{days}} días.",
+        "today": "Hoy",
+        "upcoming": "Próximos {{days}} días",
+        "turns": "cumple {{count}} año",
+        "turns_other": "cumple {{count}} años"
+      },
       "title": "Panel",
       "loading": "Cargando…",
       "error": "No se pudo cargar el panel.",
@@ -1738,6 +1748,35 @@
       }
     },
     "clients": {
+      "birthday": {
+        "label": "Cumpleaños",
+        "day": "Día",
+        "month": "Mes",
+        "yearOptional": "Año (opcional)",
+        "yearPlaceholder": "ej.: 1990",
+        "invalid": "Ingresá una fecha válida con día y mes (el año es opcional y no puede ser futuro), ej.: 15/08 o 15/08/1990.",
+        "today": "🎂 Hoy cumple años",
+        "display": "Cumpleaños: {{date}}",
+        "age": "{{count}} año",
+        "age_other": "{{count}} años"
+      },
+      "acquisitionChannel": {
+        "label": "¿Cómo nos conoció?",
+        "none": "Sin especificar",
+        "options": {
+          "INSTAGRAM": "Instagram",
+          "FACEBOOK": "Facebook",
+          "TIKTOK": "TikTok",
+          "GOOGLE": "Google",
+          "RECOMENDACION": "Recomendación de otra cliente",
+          "PASO_POR_EL_LOCAL": "Pasó por el local",
+          "OTRO": "Otro"
+        },
+        "otherLabel": "Detalle (opcional)",
+        "otherPlaceholder": "ej.: feria de belleza",
+        "otherTooLong": "Máximo {{max}} caracteres, ej.: feria de belleza.",
+        "display": "Nos conoció por: {{channel}}"
+      },
       "title": "Clientes",
       "lead": "Gestioná tu directorio de clientes. Creá clientes y vinculalos a turnos.",
       "loading": "Cargando…",
@@ -1828,6 +1867,47 @@
       "backToList": "Volver a clientes",
       "basicInfo": "Información básica",
       "history": "Historial",
+      "technicalSheet": {
+        "title": "Ficha técnica",
+        "open": "Ficha técnica",
+        "view": "Ver ficha técnica",
+        "notes": "Notas",
+        "colorFormula": "Fórmula de color",
+        "charCount": "{{count}} / {{max}} caracteres",
+        "maxLength": "Máximo {{max}} caracteres. Acortá el texto para poder guardarlo.",
+        "editedBy": "Editado por {{name}} · {{date}}",
+        "save": "Guardar ficha técnica",
+        "cancel": "Cancelar",
+        "saved": "Ficha técnica guardada.",
+        "inactiveReadOnly": "La cliente está inactiva: la ficha técnica se puede ver pero no editar.",
+        "searchLabel": "Buscar por nombre",
+        "searchPlaceholder": "Nombre de la cliente",
+        "searchButton": "Buscar",
+        "noResults": "No hay clientes que coincidan con la búsqueda."
+      },
+      "summary": {
+        "title": "Resumen",
+        "usualProfessional": "Estilista habitual (últimos 12 meses)",
+        "noServicesLast12Months": "Sin servicios en los últimos 12 meses",
+        "inactiveProfessional": "(inactiva)",
+        "serviceCount": "{{count}} servicio",
+        "serviceCount_other": "{{count}} servicios",
+        "lastVisit": "Última visita",
+        "noVisits": "Sin visitas",
+        "spentLast12Months": "Gasto en los últimos 12 meses",
+        "averageTicket": "Ticket promedio (últimos 12 meses)",
+        "lastServices": "Últimos servicios",
+        "noServices": "Todavía no tiene servicios realizados",
+        "lastProducts": "Últimos productos comprados",
+        "noProducts": "Todavía no compró productos",
+        "colDate": "Fecha",
+        "colService": "Servicio",
+        "colProfessional": "Profesional",
+        "colPrice": "Precio",
+        "colProduct": "Producto",
+        "colQuantity": "Cantidad",
+        "colUnitPrice": "Precio unitario"
+      },
       "historyUpcoming": "Próximos",
       "historyPast": "Anteriores",
       "historyLoadError": "No se pudieron cargar turnos ni comprobantes.",
@@ -1945,6 +2025,12 @@
       }
     },
     "apiErrors": {
+      "INVALID_BIRTHDAY": "Ingresá una fecha de cumpleaños válida, ej.: 15/08 o 15/08/1990.",
+      "INVALID_ACQUISITION_CHANNEL": "La opción de \"¿Cómo nos conoció?\" no es válida.",
+      "ACQUISITION_CHANNEL_OTHER_TOO_LONG": "El detalle de \"¿Cómo nos conoció?\" no puede superar los 100 caracteres.",
+      "CLIENT_NOTES_TOO_LONG": "Las notas no pueden superar los 2000 caracteres.",
+      "CLIENT_COLOR_FORMULA_TOO_LONG": "La fórmula de color no puede superar los 2000 caracteres.",
+      "CLIENT_INACTIVE": "La cliente está inactiva: reactivala para poder editarla.",
       "INVOICE_LINE_NOT_FOUND": "No se encontró la línea del comprobante.",
       "COMMISSION_LINE_NOT_ASSIGNABLE": "Esta línea no se puede asignar: ya tiene profesional, el comprobante está anulado o no es un ítem del catálogo.",
       "COMMISSION_ENTRY_NOT_FOUND": "No se encontró la comisión.",
@@ -2468,6 +2554,7 @@
       }
     },
     "calendar": {
+      "clientBirthday": "Cumpleaños de la cliente",
       "title": "Turnos",
       "today": "Hoy",
       "prev": "Semana anterior",

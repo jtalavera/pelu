@@ -208,8 +208,9 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     // Issue #38 follow-up: no Stock for professionals.
     await expect(page.getByTestId("nav-stock")).toHaveCount(0);
 
-    // Typing an admin URL redirects to the calendar.
-    for (const path of ["/app", "/app/billing", "/app/settings/business", "/app/dashboards", "/app/clients"]) {
+    // Typing an admin URL redirects to the calendar. (/app/clients is no longer one: since HU-68
+    // professionals get a restricted name list there — covered by hu-68's spec.)
+    for (const path of ["/app", "/app/billing", "/app/settings/business", "/app/dashboards", "/app/inactive-clients"]) {
       await page.goto(path);
       await expect(page).toHaveURL(/\/app\/calendar/);
     }

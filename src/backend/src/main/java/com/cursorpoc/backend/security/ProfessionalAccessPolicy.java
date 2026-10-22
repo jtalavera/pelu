@@ -48,6 +48,9 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.GET, "/api/professionals"),
           PATHS.matcher(HttpMethod.GET, "/api/services"),
           PATHS.matcher(HttpMethod.GET, "/api/clients"),
+          // HU-68: the client's technical sheet (notes + color formula) — never the full profile.
+          PATHS.matcher(HttpMethod.GET, "/api/clients/{id:\\d+}/technical-sheet"),
+          PATHS.matcher(HttpMethod.PUT, "/api/clients/{id:\\d+}/technical-sheet"),
           // HU-COM-07: own commissions (CommissionAccess still enforces own-data-only).
           PATHS.matcher(HttpMethod.GET, "/api/commissions/me"),
           PATHS.matcher(HttpMethod.GET, "/api/commissions/me/settlements/{id:\\d+}"));
@@ -67,7 +70,10 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.PATCH, "/api/appointments/{id:\\d+}/status"),
           PATHS.matcher(HttpMethod.GET, "/api/professionals"),
           PATHS.matcher(HttpMethod.GET, "/api/services"),
-          PATHS.matcher(HttpMethod.GET, "/api/clients"));
+          PATHS.matcher(HttpMethod.GET, "/api/clients"),
+          // HU-68: the client's technical sheet (notes + color formula) — never the full profile.
+          PATHS.matcher(HttpMethod.GET, "/api/clients/{id:\\d+}/technical-sheet"),
+          PATHS.matcher(HttpMethod.PUT, "/api/clients/{id:\\d+}/technical-sheet"));
 
   @Override
   public AuthorizationResult authorize(

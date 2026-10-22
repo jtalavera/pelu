@@ -50,6 +50,8 @@ class ProfessionalAccessPolicyTest {
     "GET, /api/professionals",
     "GET, /api/services",
     "GET, /api/clients",
+    "GET, /api/clients/3/technical-sheet",
+    "PUT, /api/clients/3/technical-sheet",
     "GET, /api/commissions/me",
     "GET, /api/commissions/me/settlements/5",
   })
@@ -66,6 +68,8 @@ class ProfessionalAccessPolicyTest {
     "POST, /api/clients",
     "PUT, /api/clients/3",
     "GET, /api/clients/3",
+    "GET, /api/clients/3/summary",
+    "POST, /api/clients/3/technical-sheet",
     "POST, /api/services",
     "GET, /api/services/price-list/pdf",
     "GET, /api/business-profile",
@@ -107,5 +111,15 @@ class ProfessionalAccessPolicyTest {
             "key", "anonymousUser", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS")));
     assertThat(allowed(anonymous, "GET", "/api/me")).isFalse();
     assertThat(allowed(null, "GET", "/api/me")).isFalse();
+  }
+
+  @Test
+  void pinSession_reachesTechnicalSheetButNotTheFullProfile() {
+    FemmeUserPrincipal pin =
+        new FemmeUserPrincipal(3L, 7L, "pro@salon.test", UserRole.PROFESSIONAL, 9L, false, 4L, 1);
+    assertThat(allowed(auth(pin), "GET", "/api/clients/3/technical-sheet")).isTrue();
+    assertThat(allowed(auth(pin), "PUT", "/api/clients/3/technical-sheet")).isTrue();
+    assertThat(allowed(auth(pin), "GET", "/api/clients/3")).isFalse();
+    assertThat(allowed(auth(pin), "GET", "/api/clients/3/summary")).isFalse();
   }
 }

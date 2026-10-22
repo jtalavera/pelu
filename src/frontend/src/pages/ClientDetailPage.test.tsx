@@ -64,9 +64,36 @@ const emptyPagedAppointments = {
   totalPages: 0,
 };
 
+const emptySummary = {
+  usualProfessionals: [],
+  lastVisitAt: null,
+  spentLast12Months: null,
+  averageTicketLast12Months: null,
+  lastServices: [],
+  lastProducts: [],
+};
+
+const emptyTechnicalSheet = {
+  clientId: 1,
+  clientName: "Ana García",
+  active: true,
+  notes: null,
+  notesUpdatedAt: null,
+  notesUpdatedBy: null,
+  colorFormula: null,
+  colorFormulaUpdatedAt: null,
+  colorFormulaUpdatedBy: null,
+};
+
 function defaultFemmeJsonImpl(url: unknown) {
   const s = String(url);
-  if (s.startsWith("/api/clients/") && !s.includes("?")) {
+  if (s.endsWith("/summary")) {
+    return Promise.resolve(emptySummary);
+  }
+  if (s.endsWith("/technical-sheet")) {
+    return Promise.resolve(emptyTechnicalSheet);
+  }
+  if (s.startsWith("/api/clients/") && !s.includes("?") && !s.endsWith("/summary") && !s.endsWith("/technical-sheet")) {
     return Promise.resolve({
       id: 1,
       fullName: "Ana García",
@@ -201,7 +228,7 @@ describe("ClientDetailPage", () => {
 
   it("inactive client shows inactive badge, reactivate button, and no deactivate button", async () => {
     femmeJson.mockImplementation((url) => {
-      if (String(url).startsWith("/api/clients/") && !String(url).includes("?")) {
+      if (String(url).startsWith("/api/clients/") && !String(url).includes("?") && !String(url).endsWith("/summary") && !String(url).endsWith("/technical-sheet")) {
         return Promise.resolve({ ...sampleClient, active: false });
       }
       return defaultFemmeJsonImpl(url);
@@ -243,7 +270,7 @@ describe("ClientDetailPage", () => {
     future.setFullYear(future.getFullYear() + 1);
     femmeJson.mockImplementation((url) => {
       const s = String(url);
-      if (s.startsWith("/api/clients/") && !s.includes("?")) {
+      if (s.startsWith("/api/clients/") && !s.includes("?") && !s.endsWith("/summary") && !s.endsWith("/technical-sheet")) {
         return Promise.resolve(sampleClient);
       }
       if (s.startsWith("/api/appointments?")) {

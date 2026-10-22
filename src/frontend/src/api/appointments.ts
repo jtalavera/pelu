@@ -31,6 +31,8 @@ export type Appointment = {
   cancelReason: string | null;
   /** Issue #218 follow-up: null until the ~24h-ahead reminder email was sent for this appointment. */
   reminderSentAt: string | null;
+  /** HU-69: the client's birthday falls on this appointment's day (never reveals date or age). */
+  clientBirthdayOnDay?: boolean;
 };
 
 export type AppointmentCreateRequest = {

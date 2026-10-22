@@ -8,6 +8,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.ClientRepository;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +35,7 @@ class ClientServiceTest {
 
   @Mock private ClientRepository clientRepository;
   @Mock private TenantRepository tenantRepository;
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private ClientService clientService;
 
@@ -560,5 +563,43 @@ class ClientServiceTest {
     c.setActive(true);
     c.setVisitCount(0);
     return c;
+  }
+
+  private static ClientRequest withExtras(
+      Integer day, Integer month, Integer year, String channel, String other) {
+    return new ClientRequest(
+        "Ana", null, null, null, null, null, null, null, null, null, null, null, day, month, year,
+        channel, other);
+  }
+
+  @Test
+  void create_storesBirthdayAndAcquisitionChannel() {
+    var response = clientService.create(1L, withExtras(29, 2, null, "OTRO", "  Feria  "));
+    assertThat(response.birthdayDay()).isEqualTo(29);
+    assertThat(response.birthdayMonth()).isEqualTo(2);
+    assertThat(response.birthdayYear()).isNull();
+    assertThat(response.acquisitionChannel()).isEqualTo("OTRO");
+    assertThat(response.acquisitionChannelOther()).isEqualTo("Feria");
+  }
+
+  @Test
+  void create_dropsTheDetailUnlessChannelIsOtro() {
+    var response = clientService.create(1L, withExtras(null, null, null, "INSTAGRAM", "ignored"));
+    assertThat(response.acquisitionChannelOther()).isNull();
+  }
+
+  @Test
+  void create_rejectsInvalidBirthdayAndChannel() {
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(31, 4, null, null, null)))
+        .hasMessageContaining("INVALID_BIRTHDAY");
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(15, null, null, null, null)))
+        .hasMessageContaining("INVALID_BIRTHDAY");
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(1, 1, 3000, null, null)))
+        .hasMessageContaining("INVALID_BIRTHDAY");
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(null, null, null, "TV", null)))
+        .hasMessageContaining("INVALID_ACQUISITION_CHANNEL");
+    assertThatThrownBy(
+            () -> clientService.create(1L, withExtras(null, null, null, "OTRO", "x".repeat(101))))
+        .hasMessageContaining("ACQUISITION_CHANNEL_OTHER_TOO_LONG");
   }
 }

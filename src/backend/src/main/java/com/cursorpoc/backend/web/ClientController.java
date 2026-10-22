@@ -1,9 +1,15 @@
 package com.cursorpoc.backend.web;
 
+import com.cursorpoc.backend.domain.enums.UserRole;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ClientService;
+import com.cursorpoc.backend.service.ClientSummaryService;
+import com.cursorpoc.backend.service.ClientTechnicalSheetService;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
+import com.cursorpoc.backend.web.dto.ClientSummaryResponse;
+import com.cursorpoc.backend.web.dto.ClientTechnicalSheetRequest;
+import com.cursorpoc.backend.web.dto.ClientTechnicalSheetResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -28,9 +34,16 @@ public class ClientController {
   private static final Logger log = LoggerFactory.getLogger(ClientController.class);
 
   private final ClientService clientService;
+  private final ClientSummaryService clientSummaryService;
+  private final ClientTechnicalSheetService clientTechnicalSheetService;
 
-  public ClientController(ClientService clientService) {
+  public ClientController(
+      ClientService clientService,
+      ClientSummaryService clientSummaryService,
+      ClientTechnicalSheetService clientTechnicalSheetService) {
     this.clientService = clientService;
+    this.clientSummaryService = clientSummaryService;
+    this.clientTechnicalSheetService = clientTechnicalSheetService;
   }
 
   @GetMapping
@@ -46,6 +59,10 @@ public class ClientController {
     log.info("GET /api/clients tenantId={}", principal.getTenantId());
     List<ClientResponse> result =
         clientService.search(principal.getTenantId(), q, active, withRuc, isNew);
+    if (principal.getRole() == UserRole.PROFESSIONAL) {
+      // HU-68 AC12: professionals search by name only and never see personal data.
+      result = ClientService.nameOnlyForProfessional(result, q);
+    }
     log.info("GET /api/clients tenantId={} status=200", principal.getTenantId());
     return result;
   }
@@ -91,6 +108,81 @@ public class ClientController {
     ClientResponse result = clientService.getById(principal.getTenantId(), id);
     log.info("GET /api/clients/{} tenantId={} status=200", id, principal.getTenantId());
     return result;
+  }
+
+  /** HU-67: profile summary (usual professional, last services/products, spend). Admin only. */
+  @GetMapping("/{id}/summary")
+  public ClientSummaryResponse getSummary(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("GET /api/clients/{}/summary tenantId={}", id, principal.getTenantId());
+    try {
+      ClientSummaryResponse result = clientSummaryService.getSummary(principal.getTenantId(), id);
+      log.info("GET /api/clients/{}/summary tenantId={} status=200", id, principal.getTenantId());
+      return result;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/clients/{}/summary tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
+  /** HU-68: technical sheet (notes + color formula) — admins and professionals. */
+  @GetMapping("/{id}/technical-sheet")
+  public ClientTechnicalSheetResponse getTechnicalSheet(
+      @AuthenticationPrincipal FemmeUserPrincipal principal, @PathVariable("id") long id) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("GET /api/clients/{}/technical-sheet tenantId={}", id, principal.getTenantId());
+    try {
+      ClientTechnicalSheetResponse result =
+          clientTechnicalSheetService.get(principal.getTenantId(), id);
+      log.info(
+          "GET /api/clients/{}/technical-sheet tenantId={} status=200",
+          id,
+          principal.getTenantId());
+      return result;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "GET /api/clients/{}/technical-sheet tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
+  @PutMapping("/{id}/technical-sheet")
+  public ClientTechnicalSheetResponse updateTechnicalSheet(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") long id,
+      @RequestBody ClientTechnicalSheetRequest request) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("PUT /api/clients/{}/technical-sheet tenantId={}", id, principal.getTenantId());
+    try {
+      ClientTechnicalSheetResponse result =
+          clientTechnicalSheetService.update(principal, id, request);
+      log.info(
+          "PUT /api/clients/{}/technical-sheet tenantId={} status=200",
+          id,
+          principal.getTenantId());
+      return result;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PUT /api/clients/{}/technical-sheet tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
   }
 
   @PostMapping

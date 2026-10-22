@@ -6,6 +6,7 @@ import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
+import { BirthdaysCard } from "../components/BirthdaysCard";
 import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
@@ -1054,6 +1055,9 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* ── HU-69: BIRTHDAYS ── */}
+      <BirthdaysCard />
 
       {/* ── 6. INACTIVE CLIENTS ── */}
       <div data-testid="dashboard-inactive-clients" style={{ ...cardStyle, marginTop: 16 }}>

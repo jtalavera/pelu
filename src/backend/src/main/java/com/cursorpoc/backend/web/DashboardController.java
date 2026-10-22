@@ -1,7 +1,9 @@
 package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.ClientBirthdayService;
 import com.cursorpoc.backend.service.DashboardService;
+import com.cursorpoc.backend.web.dto.ClientBirthdaysResponse;
 import com.cursorpoc.backend.web.dto.DashboardResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import org.slf4j.Logger;
@@ -21,9 +23,25 @@ public class DashboardController {
   private static final Logger log = LoggerFactory.getLogger(DashboardController.class);
 
   private final DashboardService dashboardService;
+  private final ClientBirthdayService clientBirthdayService;
 
-  public DashboardController(DashboardService dashboardService) {
+  public DashboardController(
+      DashboardService dashboardService, ClientBirthdayService clientBirthdayService) {
     this.dashboardService = dashboardService;
+    this.clientBirthdayService = clientBirthdayService;
+  }
+
+  /** HU-69: active clients with a birthday today or in the next days. */
+  @GetMapping("/birthdays")
+  public ClientBirthdaysResponse birthdays(@AuthenticationPrincipal FemmeUserPrincipal principal) {
+    if (principal == null) {
+      log.error("GET /api/dashboard/birthdays tenantId=unknown status=401");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("GET /api/dashboard/birthdays tenantId={}", principal.getTenantId());
+    ClientBirthdaysResponse response = clientBirthdayService.birthdays(principal.getTenantId());
+    log.info("GET /api/dashboard/birthdays tenantId={} status=200", principal.getTenantId());
+    return response;
   }
 
   @GetMapping
