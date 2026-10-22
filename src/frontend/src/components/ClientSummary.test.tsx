@@ -3,7 +3,22 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
-import { ClientSummaryCard, type ClientSummary } from "./ClientSummaryCard";
+import {
+  ClientSummaryLists,
+  ClientSummaryStats,
+  useClientSummary,
+  type ClientSummary,
+} from "./ClientSummary";
+
+function SummaryHarness() {
+  const state = useClientSummary(7);
+  return (
+    <>
+      <ClientSummaryStats {...state} />
+      <ClientSummaryLists {...state} />
+    </>
+  );
+}
 
 const femmeJson = vi.fn();
 
@@ -15,13 +30,13 @@ function renderCard() {
   return render(
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
-        <ClientSummaryCard clientId={7} />
+        <SummaryHarness />
       </ThemeProvider>
     </I18nextProvider>,
   );
 }
 
-describe("ClientSummaryCard (HU-67)", () => {
+describe("ClientSummary (HU-67 / HU-70)", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
     femmeJson.mockReset();
@@ -42,6 +57,8 @@ describe("ClientSummaryCard (HU-67)", () => {
     expect(screen.getByText("Sin visitas")).toBeTruthy();
     expect(screen.getByText("Todavía no tiene servicios realizados")).toBeTruthy();
     expect(screen.getByText("Todavía no compró productos")).toBeTruthy();
+    // One request feeds both the stats strip and the lists.
+    expect(femmeJson).toHaveBeenCalledTimes(1);
     expect(femmeJson).toHaveBeenCalledWith("/api/clients/7/summary");
   });
 

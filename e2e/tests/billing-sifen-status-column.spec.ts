@@ -194,7 +194,7 @@ test.describe("Estado SIFEN column on invoice tables", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    await page.getByRole("tab", { name: "Invoices" }).click();
 
     await expect(page.getByRole("columnheader", { name: "SIFEN status", exact: true })).toBeVisible({
       timeout: 30_000,
