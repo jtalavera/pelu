@@ -56,7 +56,7 @@ public class ClientService {
         tenantId,
         clientRepository
             .findByTenantFilteredPaged(
-                tenantId, normalizeQuery(q), active, withRuc, isNew, Pageable.unpaged())
+                tenantId, normalizeQuery(q), active, withRuc, newSince(isNew), Pageable.unpaged())
             .getContent());
   }
 
@@ -66,7 +66,7 @@ public class ClientService {
     PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Client> result =
         clientRepository.findByTenantFilteredPaged(
-            tenantId, normalizeQuery(q), active, withRuc, isNew, pageable);
+            tenantId, normalizeQuery(q), active, withRuc, newSince(isNew), pageable);
     List<ClientResponse> content = withVisits(tenantId, result.getContent());
     return new PageResponse<>(
         content,
@@ -110,6 +110,13 @@ public class ClientService {
                     null,
                     null))
         .toList();
+  }
+
+  /** "Nuevos este mes": registered since the 1st of the current month (business zone). */
+  private Instant newSince(Boolean isNew) {
+    if (!Boolean.TRUE.equals(isNew)) return null;
+    var zone = timeProperties.zoneId();
+    return LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone).toInstant();
   }
 
   private static String normalizeQuery(String q) {

@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
+  API_BASE,
   apiPostJson,
+  authHeaders,
   ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
   loginAsDemoApi,
@@ -13,7 +15,8 @@ import { loginAsDemo } from "../fixtures/auth";
  * Bugfix · "0 visitas": the stored `clients.visit_count` was never incremented, so every client
  * showed 0 visits, the list's "Last visit" was always "—" and the "New this month" filter matched
  * every client. Visits are now the client's CLOSED service records (same rule as the profile
- * summary, HU-67): OPEN and VOIDED records never count.
+ * summary, HU-67): OPEN and VOIDED records never count. "New this month" now filters by the
+ * client's registration date (`clients.created_at`, V87) since the 1st of the current month.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -63,7 +66,7 @@ async function closedServiceRecord(
 }
 
 test.describe("Visitas de la cliente", () => {
-  test("cuenta solo los servicios cerrados en la ficha y en el listado; 'Nuevos este mes' excluye a quien ya vino", async ({
+  test("cuenta solo los servicios cerrados en la ficha y en el listado; 'Nuevos este mes' filtra por fecha de alta", async ({
     page,
     request,
   }) => {
@@ -107,11 +110,25 @@ test.describe("Visitas de la cliente", () => {
     // "Last visit" shows a date (e.g. "Oct 22, 2026") instead of "—".
     await expect(row).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{4}/);
 
-    // "New this month" = clients without visits: the fresh one shows, the regular one doesn't.
-    await page.locator("#clients-inline-search").fill(`E2E Visitas ${suffix}`);
-    await expect(page.locator("tbody tr").filter({ hasText: fresh.fullName })).toBeVisible();
+    // "New this month" = registered since the 1st of this month — visits don't matter. A client
+    // registered 40 days ago (always last month or earlier) is excluded.
+    const old = (await seedClient(request, token, `E2E Visitas Antigua ${suffix}`)) as {
+      id: number;
+      fullName: string;
+    };
+    const backdate = await request.post(
+      `${API_BASE}/api/admin/client-test-support/${old.id}/backdate-created/40`,
+      { headers: authHeaders(token) },
+    );
+    expect(backdate.ok(), await backdate.text()).toBeTruthy();
+
+    await page.reload();
+    // All three share the run suffix in their names.
+    await page.locator("#clients-inline-search").fill(String(suffix));
+    await expect(page.locator("tbody tr").filter({ hasText: old.fullName })).toBeVisible();
     await page.getByRole("button", { name: "New this month" }).click();
     await expect(page.locator("tbody tr").filter({ hasText: fresh.fullName })).toBeVisible();
-    await expect(page.locator("tbody tr").filter({ hasText: regular.fullName })).toHaveCount(0);
+    await expect(page.locator("tbody tr").filter({ hasText: regular.fullName })).toBeVisible();
+    await expect(page.locator("tbody tr").filter({ hasText: old.fullName })).toHaveCount(0);
   });
 });

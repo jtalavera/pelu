@@ -645,4 +645,23 @@ class ClientServiceTest {
     assertThat(rows).extracting(r -> r.visitCount()).containsExactly(5, 0);
     assertThat(rows.get(1).lastVisitAt()).isNull();
   }
+
+  @Test
+  void newThisMonthFiltersByCreationSinceTheFirstOfTheMonth() {
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), any(), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    clientService.search(1L, null, null, null, true);
+    clientService.search(1L, null, null, null, null);
+
+    var captor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+    org.mockito.Mockito.verify(clientRepository, org.mockito.Mockito.times(2))
+        .findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), captor.capture(), any(Pageable.class));
+    var zone = java.time.ZoneId.of("America/Asuncion");
+    Instant firstOfMonth =
+        java.time.LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone).toInstant();
+    assertThat(captor.getAllValues()).containsExactly(firstOfMonth, null);
+  }
 }

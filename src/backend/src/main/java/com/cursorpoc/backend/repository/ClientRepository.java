@@ -27,10 +27,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
            OR (c.ruc IS NOT NULL AND c.ruc LIKE CONCAT('%', :q, '%')))
       AND (:active IS NULL OR c.active = :active)
       AND (:withRuc IS NULL OR c.ruc IS NOT NULL)
-      AND (:isNew IS NULL OR NOT EXISTS (
-           SELECT 1 FROM ServiceRecord r
-           WHERE r.client = c
-           AND r.status = com.cursorpoc.backend.domain.enums.ServiceRecordStatus.CLOSED))
+      AND (:createdSince IS NULL OR c.createdAt >= :createdSince)
       ORDER BY c.fullName ASC
       """)
   Page<Client> findByTenantFilteredPaged(
@@ -38,7 +35,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
       @Param("q") String q,
       @Param("active") Boolean active,
       @Param("withRuc") Boolean withRuc,
-      @Param("isNew") Boolean isNew,
+      @Param("createdSince") Instant createdSince,
       Pageable pageable);
 
   @Query(
