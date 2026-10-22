@@ -784,6 +784,7 @@ export default function ClientDetailPage() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <ClientProfileExtrasFields
                 idPrefix="detail"
+                alignColumns
                 value={extras}
                 onChange={(next) => {
                   setExtras(next);
