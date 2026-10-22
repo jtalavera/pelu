@@ -556,7 +556,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     ) {
       const token = await loginAsDemoApi(request);
       const seed = await seedCategoryServiceProfessional(request, token);
-      const client = await seedClient(request, token, `${clientLabel} ${Date.now()}`, "0981123456");
+      // Phones are unique per tenant — random 09xx number so reruns never collide.
+      const phone = `098${String(Math.floor(Math.random() * 10_000_000)).padStart(7, "0")}`;
+      const client = await seedClient(request, token, `${clientLabel} ${Date.now()}`, phone);
       const invoice = await apiPostJson<{ id: number; invoiceNumberFormatted: string }>(
         request,
         token,
@@ -590,7 +592,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
       await expect(row).toBeVisible({ timeout: 30_000 });
       await row.click();
       await page.getByTestId("sifen-tab-email").click();
-      return { client, invoice };
+      return { client, invoice, phone };
     }
 
     test("comparte el PDF del KuDE ya adjunto con el menú de compartir del sistema (sin descarga ni pestaña nueva)", async ({
@@ -673,7 +675,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
         }) as typeof window.open;
       });
 
-      await openApprovedInvoiceShareTab(page, request, "E2E HU08waFallback");
+      const { phone } = await openApprovedInvoiceShareTab(page, request, "E2E HU08waFallback");
 
       const [download] = await Promise.all([
         page.waitForEvent("download"),
@@ -693,7 +695,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
         return { calls: w.__whatsappOpenCalls, targets: w.__whatsappOpenTargets };
       });
       // On a phone wa.me hands off to the installed WhatsApp app.
-      expect(calls[0]).toContain("https://wa.me/595981123456?text=");
+      expect(calls[0]).toContain(`https://wa.me/595${phone.slice(1)}?text=`);
       expect(targets[0]).toBe("_blank");
     });
   });
