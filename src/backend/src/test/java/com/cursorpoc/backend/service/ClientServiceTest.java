@@ -11,9 +11,12 @@ import static org.mockito.Mockito.when;
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.ClientRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.ClientRequest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,6 +38,7 @@ class ClientServiceTest {
 
   @Mock private ClientRepository clientRepository;
   @Mock private TenantRepository tenantRepository;
+  @Mock private ServiceRecordRepository serviceRecordRepository;
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private ClientService clientService;
@@ -601,5 +605,63 @@ class ClientServiceTest {
     assertThatThrownBy(
             () -> clientService.create(1L, withExtras(null, null, null, "OTRO", "x".repeat(101))))
         .hasMessageContaining("ACQUISITION_CHANNEL_OTHER_TOO_LONG");
+  }
+
+  @Test
+  void visitsAreCountedFromClosedServiceRecords() {
+    Client c = new Client();
+    c.setId(7L);
+    c.setFullName("ANA");
+    c.setActive(true);
+    c.setVisitCount(0); // legacy column, never maintained
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(c));
+    Instant last = Instant.parse("2026-10-20T15:00:00Z");
+    when(serviceRecordRepository.countByClientIds(1L, ServiceRecordStatus.CLOSED, List.of(7L)))
+        .thenReturn(List.<Object[]>of(new Object[] {7L, 3L, last}));
+
+    var res = clientService.getById(1L, 7L);
+    assertThat(res.visitCount()).isEqualTo(3);
+    assertThat(res.lastVisitAt()).isEqualTo("2026-10-20T15:00:00Z");
+  }
+
+  @Test
+  void searchCountsVisitsForEveryClientInOneQuery() {
+    Client a = new Client();
+    a.setId(1L);
+    a.setFullName("ANA");
+    Client b = new Client();
+    b.setId(2L);
+    b.setFullName("BEA");
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), any(), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of(a, b)));
+    when(serviceRecordRepository.countByClientIds(
+            eq(1L), eq(ServiceRecordStatus.CLOSED), eq(List.of(1L, 2L))))
+        .thenReturn(
+            List.<Object[]>of(new Object[] {1L, 5L, Instant.parse("2026-10-01T12:00:00Z")}));
+
+    var rows = clientService.search(1L, null, null, null, null);
+
+    assertThat(rows).extracting(r -> r.visitCount()).containsExactly(5, 0);
+    assertThat(rows.get(1).lastVisitAt()).isNull();
+  }
+
+  @Test
+  void newThisMonthFiltersByCreationSinceTheFirstOfTheMonth() {
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), any(), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    clientService.search(1L, null, null, null, true);
+    clientService.search(1L, null, null, null, null);
+
+    var captor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+    org.mockito.Mockito.verify(clientRepository, org.mockito.Mockito.times(2))
+        .findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), captor.capture(), any(Pageable.class));
+    var zone = java.time.ZoneId.of("America/Asuncion");
+    Instant firstOfMonth =
+        java.time.LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone).toInstant();
+    assertThat(captor.getAllValues()).containsExactly(firstOfMonth, null);
   }
 }

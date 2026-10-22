@@ -70,6 +70,11 @@ test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
     const profile = page.getByRole("region", { name: "Profile" });
     await expect(profile.getByLabel("Day")).toHaveValue("15");
     await expect(profile.getByLabel("How did they find us?")).toHaveValue("INSTAGRAM");
+    // Side by side, the channel select lines up with the day/month/year inputs (not their labels).
+    const dayBox = (await profile.getByLabel("Day").boundingBox())!;
+    const channelBox = (await profile.getByLabel("How did they find us?").boundingBox())!;
+    expect(Math.abs(channelBox.y - dayBox.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(channelBox.height - dayBox.height)).toBeLessThanOrEqual(1);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
     await expect(page.getByTestId("client-edit-deactivate")).toBeVisible();
   });

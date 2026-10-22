@@ -7,15 +7,20 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.ClientAcquisitionChannel;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.ClientRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -30,27 +35,29 @@ public class ClientService {
   private final ClientRepository clientRepository;
   private final TenantRepository tenantRepository;
   private final FemmeTimeProperties timeProperties;
+  private final ServiceRecordRepository serviceRecordRepository;
 
   static final int ACQUISITION_CHANNEL_OTHER_MAX = 100;
 
   public ClientService(
       ClientRepository clientRepository,
       TenantRepository tenantRepository,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      ServiceRecordRepository serviceRecordRepository) {
     this.timeProperties = timeProperties;
+    this.serviceRecordRepository = serviceRecordRepository;
     this.clientRepository = clientRepository;
     this.tenantRepository = tenantRepository;
   }
 
   public List<ClientResponse> search(
       long tenantId, String q, Boolean active, Boolean withRuc, Boolean isNew) {
-    return clientRepository
-        .findByTenantFilteredPaged(
-            tenantId, normalizeQuery(q), active, withRuc, isNew, Pageable.unpaged())
-        .getContent()
-        .stream()
-        .map(ClientService::toResponse)
-        .toList();
+    return withVisits(
+        tenantId,
+        clientRepository
+            .findByTenantFilteredPaged(
+                tenantId, normalizeQuery(q), active, withRuc, newSince(isNew), Pageable.unpaged())
+            .getContent());
   }
 
   @Transactional(readOnly = true)
@@ -59,9 +66,8 @@ public class ClientService {
     PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Client> result =
         clientRepository.findByTenantFilteredPaged(
-            tenantId, normalizeQuery(q), active, withRuc, isNew, pageable);
-    List<ClientResponse> content =
-        result.getContent().stream().map(ClientService::toResponse).toList();
+            tenantId, normalizeQuery(q), active, withRuc, newSince(isNew), pageable);
+    List<ClientResponse> content = withVisits(tenantId, result.getContent());
     return new PageResponse<>(
         content,
         result.getNumber(),
@@ -101,8 +107,16 @@ public class ClientService {
                     null,
                     null,
                     null,
+                    null,
                     null))
         .toList();
+  }
+
+  /** "Nuevos este mes": registered since the 1st of the current month (business zone). */
+  private Instant newSince(Boolean isNew) {
+    if (!Boolean.TRUE.equals(isNew)) return null;
+    var zone = timeProperties.zoneId();
+    return LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone).toInstant();
   }
 
   private static String normalizeQuery(String q) {
@@ -160,7 +174,7 @@ public class ClientService {
     client.setCityName(blankToNull(request.cityName()));
     applyProfileExtras(client, request, channel, channelOther);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   public ClientResponse getById(long tenantId, long clientId) {
@@ -169,7 +183,7 @@ public class ClientService {
             .findByIdAndTenant_Id(clientId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   @Transactional
@@ -223,7 +237,7 @@ public class ClientService {
     client.setCityName(blankToNull(request.cityName()));
     applyProfileExtras(client, request, channel, channelOther);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   @Transactional
@@ -235,7 +249,7 @@ public class ClientService {
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
     client.setActive(false);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   @Transactional
@@ -247,7 +261,7 @@ public class ClientService {
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
     client.setActive(true);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   private static String blankToNull(String value) {
@@ -353,7 +367,39 @@ public class ClientService {
     return digits.isEmpty() ? null : digits;
   }
 
-  static ClientResponse toResponse(Client c) {
+  /**
+   * Visits = CLOSED service records, counted on read. The stored {@code clients.visit_count} was
+   * never incremented anywhere (always 0), so it is no longer used.
+   */
+  record Visits(int count, Instant lastVisitAt) {
+    static final Visits NONE = new Visits(0, null);
+  }
+
+  private Visits visits(long tenantId, Client client) {
+    if (client.getId() == null) return Visits.NONE;
+    return visitsByClient(tenantId, List.of(client.getId()))
+        .getOrDefault(client.getId(), Visits.NONE);
+  }
+
+  private Map<Long, Visits> visitsByClient(long tenantId, List<Long> clientIds) {
+    Map<Long, Visits> visits = new HashMap<>();
+    for (Object[] row :
+        serviceRecordRepository.countByClientIds(tenantId, ServiceRecordStatus.CLOSED, clientIds)) {
+      visits.put((Long) row[0], new Visits(((Number) row[1]).intValue(), (Instant) row[2]));
+    }
+    return visits;
+  }
+
+  private List<ClientResponse> withVisits(long tenantId, List<Client> clients) {
+    if (clients.isEmpty()) return List.of();
+    Map<Long, Visits> visits =
+        visitsByClient(tenantId, clients.stream().map(Client::getId).toList());
+    return clients.stream()
+        .map(c -> toResponse(c, visits.getOrDefault(c.getId(), Visits.NONE)))
+        .toList();
+  }
+
+  static ClientResponse toResponse(Client c, Visits visits) {
     return new ClientResponse(
         c.getId(),
         c.getFullName(),
@@ -361,7 +407,7 @@ public class ClientService {
         c.getEmail(),
         c.getRuc(),
         c.isActive(),
-        c.getVisitCount(),
+        visits.count(),
         c.getIdentityDocumentNumber(),
         c.getAddress(),
         c.getDepartmentCode(),
@@ -374,6 +420,7 @@ public class ClientService {
         c.getBirthdayMonth(),
         c.getBirthdayYear(),
         c.getAcquisitionChannel() == null ? null : c.getAcquisitionChannel().name(),
-        c.getAcquisitionChannelOther());
+        c.getAcquisitionChannelOther(),
+        visits.lastVisitAt() == null ? null : visits.lastVisitAt().toString());
   }
 }

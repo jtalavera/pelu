@@ -67,6 +67,11 @@ type Props = {
   onChange: (next: ClientProfileExtras) => void;
   birthdayError?: string | null;
   otherError?: string | null;
+  /**
+   * The two blocks sit side by side from `md` up (client profile "Perfil" grid): line the channel
+   * select up with the day/month/year inputs instead of with their small labels.
+   */
+  alignColumns?: boolean;
 };
 
 /**
@@ -79,6 +84,7 @@ export function ClientProfileExtrasFields({
   onChange,
   birthdayError,
   otherError,
+  alignColumns = false,
 }: Props) {
   const { t } = useTranslation();
   const locale = useDateLocale();
@@ -150,9 +156,18 @@ export function ClientProfileExtrasFields({
       </fieldset>
 
       <div className="min-w-0">
-        <Label htmlFor={`${idPrefix}-acquisition-channel`}>
+        <Label
+          htmlFor={`${idPrefix}-acquisition-channel`}
+          className={alignColumns ? "mb-1 block" : undefined}
+        >
           {t("femme.clients.acquisitionChannel.label")}
         </Label>
+        {alignColumns ? (
+          // Same height as the "Día / Mes / Año" label row of the birthday block.
+          <div aria-hidden="true" className="invisible hidden md:block">
+            <span className="text-xs">&nbsp;</span>
+          </div>
+        ) : null}
         <Select
           id={`${idPrefix}-acquisition-channel`}
           value={value.acquisitionChannel}

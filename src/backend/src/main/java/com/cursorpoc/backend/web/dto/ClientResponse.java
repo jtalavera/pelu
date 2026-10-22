@@ -23,4 +23,6 @@ public record ClientResponse(
     Integer birthdayMonth,
     Integer birthdayYear,
     String acquisitionChannel,
-    String acquisitionChannelOther) {}
+    String acquisitionChannelOther,
+    /** Last CLOSED service record (same rule as the visit count), ISO instant, or null. */
+    String lastVisitAt) {}

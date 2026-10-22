@@ -3,6 +3,7 @@ package com.cursorpoc.backend.repository;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -52,4 +53,21 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
       @Param("tenantId") Long tenantId,
       @Param("clientId") Long clientId,
       @Param("status") ServiceRecordStatus status);
+
+  /**
+   * Visits per client — CLOSED service records, same rule as the profile summary (HU-67): rows of
+   * {@code [clientId, count, lastClosedAt]}.
+   */
+  @Query(
+      """
+      SELECT r.client.id, COUNT(r), MAX(r.closedAt) FROM ServiceRecord r
+      WHERE r.tenant.id = :tenantId
+      AND r.status = :status
+      AND r.client.id IN :clientIds
+      GROUP BY r.client.id
+      """)
+  List<Object[]> countByClientIds(
+      @Param("tenantId") Long tenantId,
+      @Param("status") ServiceRecordStatus status,
+      @Param("clientIds") Collection<Long> clientIds);
 }
