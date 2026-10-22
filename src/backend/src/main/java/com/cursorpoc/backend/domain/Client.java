@@ -45,6 +45,10 @@ public class Client {
   @Column(nullable = false)
   private boolean active;
 
+  /**
+   * Legacy counter, never incremented anywhere (always 0). Visits are counted from CLOSED service
+   * records instead ({@code ClientService}); kept only because the column is NOT NULL.
+   */
   @Column(name = "visit_count", nullable = false)
   private int visitCount;
 

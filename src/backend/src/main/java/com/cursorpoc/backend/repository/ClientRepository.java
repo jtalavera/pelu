@@ -27,7 +27,10 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
            OR (c.ruc IS NOT NULL AND c.ruc LIKE CONCAT('%', :q, '%')))
       AND (:active IS NULL OR c.active = :active)
       AND (:withRuc IS NULL OR c.ruc IS NOT NULL)
-      AND (:isNew IS NULL OR c.visitCount = 0)
+      AND (:isNew IS NULL OR NOT EXISTS (
+           SELECT 1 FROM ServiceRecord r
+           WHERE r.client = c
+           AND r.status = com.cursorpoc.backend.domain.enums.ServiceRecordStatus.CLOSED))
       ORDER BY c.fullName ASC
       """)
   Page<Client> findByTenantFilteredPaged(
