@@ -4,7 +4,7 @@
 | ---------- | -------------- |
 | **ID**     | HU-67          |
 | **Módulo** | Cliente básico |
-| **Estado** | `In Progress`  |
+| **Estado** | `Done`         |
 
 **Valores de estado sugeridos:** `Backlog` · `Ready` · `In Progress` · `Done`
 
