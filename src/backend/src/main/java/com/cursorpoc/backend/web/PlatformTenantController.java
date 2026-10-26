@@ -12,6 +12,7 @@ import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.ResendInvitationResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
+import com.cursorpoc.backend.web.dto.TenantSkinUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUserResponse;
@@ -139,6 +140,43 @@ public class PlatformTenantController {
     } catch (ResponseStatusException ex) {
       log.error(
           "PUT /api/platform/tenants/{} adminUserId={} tenantId={} status={} error={}",
+          id,
+          principal.getUserId(),
+          id,
+          ex.getStatusCode().value(),
+          ex.getReason());
+      throw ex;
+    }
+  }
+
+  /**
+   * Flowbit rebrand: Platform Admin picks the tenant's accent skin (DURAZNO, CELESTE or ROSA). A
+   * dedicated endpoint, so the contract of {@code PUT /api/platform/tenants/{id}} is untouched.
+   */
+  @PutMapping("/{id}/skin")
+  public TenantResponse updateSkin(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") Long id,
+      @RequestBody TenantSkinUpdateRequest request) {
+    requirePlatformAdmin(principal, "PUT /api/platform/tenants/{id}/skin");
+    log.info(
+        "PUT /api/platform/tenants/{}/skin adminUserId={} tenantId={} skin={}",
+        id,
+        principal.getUserId(),
+        id,
+        request.skin());
+    try {
+      TenantResponse response = tenantAdminService.updateSkin(id, request);
+      log.info(
+          "PUT /api/platform/tenants/{}/skin adminUserId={} tenantId={} status=200 skin={}",
+          id,
+          principal.getUserId(),
+          id,
+          response.skin());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PUT /api/platform/tenants/{}/skin adminUserId={} tenantId={} status={} error={}",
           id,
           principal.getUserId(),
           id,

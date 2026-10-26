@@ -33,6 +33,8 @@ export type Me = {
   impersonation?: boolean;
   /** HU-66: a professional session opened with her PIN on a shared device (calendar only). */
   pinSession?: boolean;
+  /** The tenant's accent skin (DURAZNO, CELESTE, ROSA); null for the tenant-less PLATFORM_ADMIN. */
+  skin?: string | null;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {

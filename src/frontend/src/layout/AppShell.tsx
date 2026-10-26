@@ -8,6 +8,7 @@ import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+import { useTenantSkin } from "../hooks/useTenantSkin";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { endSession, isPinSession, signedOutPath } from "../auth/sharedDevice";
 import { UserProfileModal } from "../components/UserProfileModal";
@@ -330,6 +331,7 @@ function AppShellInner() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { me } = useMe();
+  useTenantSkin(me?.skin);
   const { theme, toggle } = useThemeContext();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   // HU-65: the first sidebar item driven by a flag — only when the tenant has Stock and this build

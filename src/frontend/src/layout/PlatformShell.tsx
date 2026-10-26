@@ -13,6 +13,7 @@ const NAV_ITEMS: { to: string; end?: boolean; labelKey: string }[] = [
   { to: "/platform", end: true, labelKey: "femme.platform.nav.dashboard" },
   { to: "/platform/tenants", labelKey: "femme.platform.nav.tenants" },
   { to: "/platform/tiers", labelKey: "femme.platform.nav.tiers" },
+  { to: "/platform/skin", labelKey: "femme.platform.nav.skin" },
   { to: "/platform/global-feature-flags", labelKey: "femme.platform.nav.globalFeatureFlags" },
   { to: "/platform/feature-flags", labelKey: "femme.platform.nav.featureFlags" },
   { to: "/platform/import", labelKey: "femme.platform.nav.import" },

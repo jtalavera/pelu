@@ -81,7 +81,7 @@ export default function ForgotPasswordPage() {
               <Button
                 type="submit"
                 variant="primary"
-                className="min-h-11 w-full rounded-[var(--radius-md)]"
+                className="min-h-11 w-full"
                 style={{
                   background: "var(--color-rose)",
                   color: "var(--color-on-primary)",

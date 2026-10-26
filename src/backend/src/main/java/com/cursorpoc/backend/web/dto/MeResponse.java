@@ -27,4 +27,9 @@ public record MeResponse(
      */
     boolean impersonation,
     /** HU-66: true for a professional session opened with her PIN on a shared device. */
-    boolean pinSession) {}
+    boolean pinSession,
+    /**
+     * Flowbit rebrand: the tenant's skin name ({@code DURAZNO}, {@code CELESTE}, {@code ROSA});
+     * null only for the tenant-less {@code PLATFORM_ADMIN}, which always uses the default look.
+     */
+    String skin) {}

@@ -2,6 +2,7 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.Professional;
+import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -71,13 +72,12 @@ public class MeController {
               .orElse(null);
     }
 
-    String tenantName =
+    Tenant tenant =
         principal.getTenantIdOrNull() == null
             ? null
-            : tenantRepository
-                .findById(principal.getTenantIdOrNull())
-                .map(t -> t.getName())
-                .orElse(null);
+            : tenantRepository.findById(principal.getTenantIdOrNull()).orElse(null);
+    String tenantName = tenant == null ? null : tenant.getName();
+    String skin = tenant == null ? null : tenant.getSkin().name();
 
     // HU-41 follow-up: unified human name — the linked Professional's name when there is one,
     // otherwise the AppUser's own full name (set by an invited ADMIN at activation).
@@ -100,7 +100,8 @@ public class MeController {
             principal.getProfessionalId(),
             profile,
             principal.isImpersonation(),
-            principal.isPinSession());
+            principal.isPinSession(),
+            skin);
     log.info("GET /api/me tenantId={} status=200", principal.getTenantIdOrNull());
     return resp;
   }
