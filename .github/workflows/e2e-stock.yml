@@ -21,7 +21,10 @@ permissions:
 jobs:
   stock:
     name: Stock cross-system suite
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which Playwright 1.58 can't install browsers on
+    # ("Playwright does not support chromium on ubuntu26.04-x64"). Move back once Playwright is
+    # upgraded to a release that supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       HAS_STOCK_TOKEN: ${{ secrets.CONTROL_STOCK_READ_TOKEN != '' }}
