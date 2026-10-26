@@ -742,6 +742,7 @@
         "colColumn": "Column",
         "colRequirement": "Requirement",
         "colDescription": "Description",
+        "colValidations": "Validations",
         "required": "Required",
         "optional": "Optional",
         "columns": {
@@ -766,6 +767,41 @@
             "impuesto": "Tax name to associate with the product. Leave empty to create the product with no tax."
           }
         },
+          "noValidations": "No validations.",
+          "validationsByEntity": {
+            "services": {
+              "categoria": "Cannot be empty. If it already exists in the tenant as a product category, the row is rejected.",
+              "nombre": "Cannot be empty. Must not repeat another row of the file with the same categoria (not case-sensitive): only the first one is imported.",
+              "precio": "Cannot be empty. Must be a whole number (dots as thousands separators are accepted, e.g. 150.000). Cannot be negative; 0 is allowed.",
+              "duracion_minutos": "Cannot be empty. Must be a whole number of at least 1 (e.g. 45).",
+              "impuesto": "If filled in, it must match the name of a tax that already exists in the tenant (not case-sensitive, e.g. IVA 10%).",
+              "activo": "No validation: only NO creates the record as inactive; any other value (or empty) creates it as active."
+            },
+            "products": {
+              "categoria": "Cannot be empty. If it already exists in the tenant as a service category, the row is rejected.",
+              "nombre": "Cannot be empty. Must not repeat another row of the file with the same categoria (not case-sensitive): only the first one is imported.",
+              "precio": "Cannot be empty. Must be a whole number (dots as thousands separators are accepted, e.g. 95.000). Cannot be negative; 0 is allowed.",
+              "impuesto": "If filled in, it must match the name of a tax that already exists in the tenant (not case-sensitive, e.g. IVA 10%).",
+              "activo": "No validation: only NO creates the record as inactive; any other value (or empty) creates it as active.",
+              "sku": "If filled in, up to 64 characters (e.g. SH-300)."
+            },
+            "clients": {
+              "nombre_completo": "Cannot be empty.",
+              "telefono": "If filled in, it must not match (comparing digits only) the phone of an existing client of the tenant or of an earlier row of the file.",
+              "email": "No validation. Several clients may share the same email.",
+              "ruc": "If filled in, it must have the format digits-hyphen-check digit (e.g. 80000005-6) and must not repeat the RUC of an existing client of the tenant or of an earlier row of the file.",
+              "documento_identidad": "No validation.",
+              "direccion": "No validation.",
+              "activo": "No validation: only NO creates the record as inactive; any other value (or empty) creates it as active."
+            },
+            "professionals": {
+              "nombre_completo": "Cannot be empty.",
+              "telefono": "If filled in, it must have 10 digits: 4-digit area code + 6-digit number (spaces, parentheses and hyphens are ignored, e.g. 0981 123456).",
+              "email": "If filled in, it must be a valid email (e.g. ana@salon.com) and must not repeat (not case-sensitive) the email of an existing professional of the tenant or of an earlier row of the file.",
+              "direccion": "No validation.",
+              "activo": "No validation: only NO creates the record as inactive; any other value (or empty) creates it as active."
+            }
+          },
         "checkSectionTitle": "Check a file's headers",
         "checkSectionLead": "Verify a candidate file's column headers against this template before using it, without importing any data.",
         "fileLabel": "File (.xlsx)",
@@ -2151,7 +2187,7 @@
       "IMPORT_ROW_CATEGORY_REQUIRED": "Missing category.",
       "IMPORT_ROW_DUPLICATE": "Duplicate row: another row earlier in the file already has this same name and category.",
       "IMPORT_ROW_PRICE_NOT_NUMERIC": "Price is not a valid number.",
-      "IMPORT_ROW_PRICE_INVALID": "Price must be greater than zero.",
+      "IMPORT_ROW_PRICE_INVALID": "Price cannot be negative.",
       "IMPORT_ROW_DURATION_NOT_NUMERIC": "Duration is not a valid number.",
       "IMPORT_ROW_DURATION_INVALID": "Duration must be at least 1 minute.",
       "IMPORT_ROW_TAX_NOT_FOUND": "The tax named in this row does not exist for this tenant.",

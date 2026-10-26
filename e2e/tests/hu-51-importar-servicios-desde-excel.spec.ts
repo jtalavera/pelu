@@ -95,7 +95,7 @@ test.describe("HU-51 · Importar catálogo de servicios desde Excel", () => {
     expect(categories.map((c) => c.name).sort()).toEqual(["Color", "Corte"].sort());
   });
 
-  // AC-3: non-numeric/negative/zero precio, or non-numeric/<1-minute duracion_minutos, rejects
+  // AC-3: non-numeric/negative precio, or non-numeric/<1-minute duracion_minutos, rejects
   // only that row without stopping the rest of the file. AC-4: an impuesto naming a tax that
   // doesn't exist in the tenant rejects the row with a clear reason; a valid tax name is
   // associated with the created service. AC-5: two rows sharing the same nombre+categoria — only
@@ -128,7 +128,7 @@ test.describe("HU-51 · Importar catálogo de servicios desde Excel", () => {
 
     const failedList = page.getByTestId("import-run-failed-rows-services");
     await expect(failedList).toContainText("Price is not a valid number");
-    await expect(failedList).toContainText("Price must be greater than zero");
+    await expect(failedList).toContainText("Price cannot be negative");
     await expect(failedList).toContainText("Duration must be at least 1 minute");
     await expect(failedList).toContainText("does not exist for this tenant");
     await expect(failedList).toContainText("Duplicate row");
