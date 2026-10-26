@@ -1,280 +1,213 @@
-html, html.light {
-  /* Colores primarios */
-  --color-rose:        #D94F6E;
-  --color-rose-lt:     #FCEEF2;
-  --color-rose-md:     #F0A8B8;
-  --color-rose-dk:     #7D3347;
+/*
+ * Flowbit design tokens.
+ *
+ * Source of truth: the `--fb-*` variables, stored as space-separated RGB triplets so Tailwind can
+ * apply opacity (`bg-primary/10`, see tailwind.config.js). Light values live on `:root`, dark values
+ * on `html.dark` (the theme is class-based, see useTheme; the OS preference is deliberately ignored).
+ *
+ * The legacy `--color-*` names (rose, mauve, stone, ink, …) are kept as aliases because ~1,000
+ * call sites and several tests use them. `--color-rose` is the brand primary (teal in light mode,
+ * durazno in dark mode), `--color-mauve` the secondary (celeste family), `--color-stone` the page
+ * background (lino / tinta noche), `--color-white` the card surface.
+ *
+ * Brand palette (manual de marca): teal #0E767E, tinta noche #0A1F33, durazno #F3C6AE,
+ * lino #F6F4EF, acentos por tipo de negocio celeste #C9D9E6 y rosa #F1AFC2.
+ */
+:root {
+  /* Marca */
+  --fb-teal:      14 118 126;
+  --fb-tinta:     10 31 51;
+  --fb-durazno:   243 198 174;
+  --fb-lino:      246 244 239;
+  --fb-celeste:   201 217 230;
+  --fb-rosa:      241 175 194;
 
-  /* Colores secundarios */
-  --color-mauve:       #8B5CF6;
-  --color-mauve-lt:    #EDE9FE;
-  --color-mauve-md:    #C4B5FD;
-  --color-mauve-dk:    #5B21B6;
+  /* Primario: teal. En fondos claros el texto sobre él es blanco (5.4:1). */
+  --fb-primary:       14 118 126;
+  --fb-primary-lt:    225 240 241;
+  --fb-primary-md:    143 193 197;
+  --fb-primary-dk:    8 84 91;
+  --fb-on-primary:    255 255 255;
 
-  /* Neutros */
-  --color-stone:       #F5F2EF;
-  --color-stone-md:    #E8E3DC;
-  --color-ink:         #2A2421;
-  --color-ink-2:       #6B5F59;
-  --color-ink-3:       #A0968F;
-  --color-white:       #FDFCFB;
+  /* Secundario: familia celeste (el manual no define un segundo color de UI). */
+  --fb-secondary:     79 115 145;
+  --fb-secondary-lt:  232 239 245;
+  --fb-secondary-md:  201 217 230;
+  --fb-secondary-dk:  10 31 51;
 
-  /* Semánticos */
-  --color-success:     #16A34A;
-  --color-success-lt:  #DCFCE7;
-  --color-warning:     #D97706;
-  --color-warning-lt:  #FEF3C7;
-  --color-danger:      #DC2626;
-  --color-danger-lt:   #FEE2E2;
+  /* Superficies y texto */
+  --fb-bg:        246 244 239;
+  --fb-border:    227 223 214;
+  --fb-surface:   255 255 255;
+  --fb-ink:       10 31 51;
+  --fb-ink-2:     58 73 88;
+  --fb-ink-3:     95 107 120;
 
-  /* Acentos de categoría */
-  --color-coral:       #F05035;
-  --color-coral-lt:    #FEF0ED;
-  --color-coral-md:    #F8B0A4;
-  --color-fuchsia:     #D946EF;
-  --color-fuchsia-lt:  #FDF4FF;
-  --color-fuchsia-md:  #EEACF8;
-  --color-violet:      #7C3AED;
-  --color-violet-lt:   #EDE9FE;
-  --color-violet-md:   #C4A6F7;
-  --color-indigo:      #4338CA;
-  --color-indigo-lt:   #EEF2FF;
-  --color-indigo-md:   #AAA5E7;
-  --color-sky:         #0284C7;
-  --color-sky-lt:      #E0F2FE;
-  --color-sky-md:      #8DC8E6;
-  --color-teal:        #0D9488;
-  --color-teal-lt:     #CCFBF1;
-  --color-teal-md:     #92CFC9;
-  --color-lime:        #65A30D;
-  --color-lime-lt:     #ECFCCB;
-  --color-lime-md:     #BAD692;
-  --color-amber:       #D97706;
-  --color-amber-lt:    #FEF3C7;
-  --color-amber-md:    #EEC28F;
+  /* Semánticos (funcionales; no están en el manual) */
+  --fb-success:     23 116 74;
+  --fb-success-lt:  221 242 231;
+  --fb-warning:     150 82 10;
+  --fb-warning-lt:  251 235 208;
+  --fb-danger:      185 48 48;
+  --fb-danger-lt:   252 228 226;
 
-  /* Tipografía */
-  --font-sans: 'Inter', system-ui, sans-serif;
+  /* Acento del skin del tenant (peine y punto de la "i"); ver skins.css */
+  --fb-accent:      243 198 174;
+  --fb-accent-ink:  10 31 51;
 
-  /* Radios */
-  --radius-sm:   6px;
-  --radius-md:   8px;
-  --radius-lg:  10px;
-  --radius-xl:  12px;
-  --radius-2xl: 16px;
+  /* Alias heredados (valores completos, listos para usar con var()) */
+  --color-rose:        rgb(var(--fb-primary));
+  --color-rose-lt:     rgb(var(--fb-primary-lt));
+  --color-rose-md:     rgb(var(--fb-primary-md));
+  --color-rose-dk:     rgb(var(--fb-primary-dk));
+  --color-mauve:       rgb(var(--fb-secondary));
+  --color-mauve-lt:    rgb(var(--fb-secondary-lt));
+  --color-mauve-md:    rgb(var(--fb-secondary-md));
+  --color-mauve-dk:    rgb(var(--fb-secondary-dk));
+  --color-stone:       rgb(var(--fb-bg));
+  --color-stone-md:    rgb(var(--fb-border));
+  --color-ink:         rgb(var(--fb-ink));
+  --color-ink-2:       rgb(var(--fb-ink-2));
+  --color-ink-3:       rgb(var(--fb-ink-3));
+  --color-white:       rgb(var(--fb-surface));
+  --color-success:     rgb(var(--fb-success));
+  --color-success-lt:  rgb(var(--fb-success-lt));
+  --color-warning:     rgb(var(--fb-warning));
+  --color-warning-lt:  rgb(var(--fb-warning-lt));
+  --color-danger:      rgb(var(--fb-danger));
+  --color-danger-lt:   rgb(var(--fb-danger-lt));
+  --color-on-primary:  rgb(var(--fb-on-primary));
+
+  /*
+   * Tripletas RGB usadas como `rgb(var(--color-border))` en clases Tailwind arbitrarias. Antes no
+   * estaban definidas (esos estilos eran CSS inválido y se ignoraban); ahora apuntan a la marca.
+   */
+  --color-border:            var(--fb-border);
+  --color-muted:             var(--fb-bg);
+  --color-muted-foreground:  var(--fb-ink-2);
+
+  /* Acentos de categoría: tintes de la paleta de marca (base = texto/ícono, lt = fondo, md = borde) */
+  --color-coral:       #B8663A;
+  --color-coral-lt:    #FCEEE5;
+  --color-coral-md:    #F3C6AE;
+  --color-fuchsia:     #C2587A;
+  --color-fuchsia-lt:  #FCE9EF;
+  --color-fuchsia-md:  #F1AFC2;
+  --color-violet:      #4F7391;
+  --color-violet-lt:   #E8EFF5;
+  --color-violet-md:   #C9D9E6;
+  --color-indigo:      #2C4A6B;
+  --color-indigo-lt:   #E2E8EF;
+  --color-indigo-md:   #A9B9CB;
+  --color-sky:         #3F7FA6;
+  --color-sky-lt:      #E3F0F8;
+  --color-sky-md:      #B2D3E6;
+  --color-teal:        #0E767E;
+  --color-teal-lt:     #E1F0F1;
+  --color-teal-md:     #8FC1C5;
+  --color-lime:        #4C8A5B;
+  --color-lime-lt:     #E6F2E8;
+  --color-lime-md:     #A8D0B0;
+  --color-amber:       #A8691A;
+  --color-amber-lt:    #FBEFD9;
+  --color-amber-md:    #E8C98F;
+
+  /* Tipografía: Nunito (títulos) y Nunito Sans (texto), autohospedadas vía @fontsource-variable */
+  --font-sans:    'Nunito Sans Variable', 'Nunito Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: 'Nunito Variable', 'Nunito', 'Nunito Sans Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Radios (formas redondeadas) */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   14px;
+  --radius-xl:   16px;
+  --radius-2xl:  24px;
   --radius-pill: 9999px;
 
   /* Bordes */
   --border-default: 0.5px solid var(--color-stone-md);
-  --border-focus:   1px solid var(--color-rose);
+  --border-focus:   2px solid var(--color-rose);
 
-  --color-on-primary: #ffffff;
-}
-
-:root {
-  /* Colores primarios */
-  --color-rose:        #D94F6E;
-  --color-rose-lt:     #FCEEF2;
-  --color-rose-md:     #F0A8B8;
-  --color-rose-dk:     #7D3347;
-
-  /* Colores secundarios */
-  --color-mauve:       #8B5CF6;
-  --color-mauve-lt:    #EDE9FE;
-  --color-mauve-md:    #C4B5FD;
-  --color-mauve-dk:    #5B21B6;
-
-  /* Neutros */
-  --color-stone:       #F5F2EF;
-  --color-stone-md:    #E8E3DC;
-  --color-ink:         #2A2421;
-  --color-ink-2:       #6B5F59;
-  --color-ink-3:       #A0968F;
-  --color-white:       #FDFCFB;
-
-  /* Semánticos */
-  --color-success:     #16A34A;
-  --color-success-lt:  #DCFCE7;
-  --color-warning:     #D97706;
-  --color-warning-lt:  #FEF3C7;
-  --color-danger:      #DC2626;
-  --color-danger-lt:   #FEE2E2;
-
-  /* Acentos de categoría */
-  --color-coral:       #F05035;
-  --color-coral-lt:    #FEF0ED;
-  --color-coral-md:    #F8B0A4;
-  --color-fuchsia:     #D946EF;
-  --color-fuchsia-lt:  #FDF4FF;
-  --color-fuchsia-md:  #EEACF8;
-  --color-violet:      #7C3AED;
-  --color-violet-lt:   #EDE9FE;
-  --color-violet-md:   #C4A6F7;
-  --color-indigo:      #4338CA;
-  --color-indigo-lt:   #EEF2FF;
-  --color-indigo-md:   #AAA5E7;
-  --color-sky:         #0284C7;
-  --color-sky-lt:      #E0F2FE;
-  --color-sky-md:      #8DC8E6;
-  --color-teal:        #0D9488;
-  --color-teal-lt:     #CCFBF1;
-  --color-teal-md:     #92CFC9;
-  --color-lime:        #65A30D;
-  --color-lime-lt:     #ECFCCB;
-  --color-lime-md:     #BAD692;
-  --color-amber:       #D97706;
-  --color-amber-lt:    #FEF3C7;
-  --color-amber-md:    #EEC28F;
-
-  /* Tipografía */
-  --font-sans: 'Inter', system-ui, sans-serif;
-
-  /* Radios */
-  --radius-sm:   6px;
-  --radius-md:   8px;
-  --radius-lg:  10px;
-  --radius-xl:  12px;
-  --radius-2xl: 16px;
-  --radius-pill: 9999px;
-
-  /* Bordes */
-  --border-default: 0.5px solid var(--color-stone-md);
-  --border-focus:   1px solid var(--color-rose);
-}
-
-body {
-  background-color: var(--color-stone);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-:root {
-  --color-on-primary: #ffffff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-rose:        #F472B6;
-    --color-rose-lt:     #3B1229;
-    --color-rose-md:     #831843;
-    --color-rose-dk:     #FBCFE8;
-
-    --color-mauve:       #A78BFA;
-    --color-mauve-lt:    #1E1540;
-    --color-mauve-md:    #4C1D95;
-    --color-mauve-dk:    #DDD6FE;
-
-    --color-stone:       #1C1917;
-    --color-stone-md:    #2C2825;
-    --color-ink:         #F0EDE8;
-    --color-ink-2:       #B8AFA8;
-    --color-ink-3:       #7A7068;
-    --color-white:       #242019;
-
-    --color-success:     #4ADE80;
-    --color-success-lt:  #052E16;
-    --color-warning:     #FCD34D;
-    --color-warning-lt:  #1C1000;
-    --color-danger:      #F87171;
-    --color-danger-lt:   #1F0A0A;
-
-    --color-coral:       #FC8873;
-    --color-coral-lt:    #3D1208;
-    --color-fuchsia:     #E879F9;
-    --color-fuchsia-lt:  #2E0A3A;
-    --color-violet:      #A78BFA;
-    --color-violet-lt:   #1E1540;
-    --color-indigo:      #818CF8;
-    --color-indigo-lt:   #1E1B4B;
-    --color-sky:         #38BDF8;
-    --color-sky-lt:      #082F49;
-    --color-teal:        #2DD4BF;
-    --color-teal-lt:     #042F2E;
-    --color-lime:        #A3E635;
-    --color-lime-lt:     #1A2E05;
-    --color-amber:       #FCD34D;
-    --color-amber-lt:    #1C1000;
-
-    --color-on-primary:  #ffffff;
-
-    --border-default: 0.5px solid var(--color-stone-md);
-  }
-
-  body {
-    background-color: var(--color-stone);
-    color: var(--color-ink);
-  }
-}
-
-html.dark {
-  --color-rose:        #F472B6;
-  --color-rose-lt:     #3B1229;
-  --color-rose-md:     #831843;
-  --color-rose-dk:     #FBCFE8;
-
-  --color-mauve:       #A78BFA;
-  --color-mauve-lt:    #1E1540;
-  --color-mauve-md:    #4C1D95;
-  --color-mauve-dk:    #DDD6FE;
-
-  --color-stone:       #1C1917;
-  --color-stone-md:    #2C2825;
-  --color-ink:         #F0EDE8;
-  --color-ink-2:       #B8AFA8;
-  --color-ink-3:       #7A7068;
-  --color-white:       #242019;
-
-  --color-success:     #4ADE80;
-  --color-success-lt:  #052E16;
-  --color-warning:     #FCD34D;
-  --color-warning-lt:  #1C1000;
-  --color-danger:      #F87171;
-  --color-danger-lt:   #1F0A0A;
-
-  --color-coral:       #FC8873;
-  --color-coral-lt:    #3D1208;
-  --color-fuchsia:     #E879F9;
-  --color-fuchsia-lt:  #2E0A3A;
-  --color-violet:      #A78BFA;
-  --color-violet-lt:   #1E1540;
-  --color-indigo:      #818CF8;
-  --color-indigo-lt:   #1E1B4B;
-  --color-sky:         #38BDF8;
-  --color-sky-lt:      #082F49;
-  --color-teal:        #2DD4BF;
-  --color-teal-lt:     #042F2E;
-  --color-lime:        #A3E635;
-  --color-lime-lt:     #1A2E05;
-  --color-amber:       #FCD34D;
-  --color-amber-lt:    #1C1000;
-
-  --border-default: 0.5px solid var(--color-stone-md);
-
-  /* Fiscal stamp — “vigente” (higher contrast than generic success) */
-  --color-timbrado-valid-fg: #bbf7d0;
-  --color-timbrado-valid-bg: #14532d;
-  --color-timbrado-valid-meter: #4ade80;
-  --color-timbrado-valid-icon: #166534;
-}
-
-/* Light theme: timbrado “vigente” */
-html,
-html.light {
+  /* Fiscal stamp — “vigente” */
   --color-timbrado-valid-fg: #14532d;
   --color-timbrado-valid-bg: #bbf7d0;
   --color-timbrado-valid-meter: #16a34a;
   --color-timbrado-valid-icon: #bbf7d0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-timbrado-valid-fg: #bbf7d0;
-    --color-timbrado-valid-bg: #14532d;
-    --color-timbrado-valid-meter: #4ade80;
-    --color-timbrado-valid-icon: #166534;
-  }
+/*
+ * Modo oscuro: fondo tinta noche, texto lino. El primario pasa a durazno porque el teal sobre
+ * tinta solo da 3.1:1 (el manual también lo marca como uso incorrecto del logo).
+ */
+html.dark {
+  --fb-primary:       243 198 174;
+  --fb-primary-lt:    43 58 72;
+  --fb-primary-md:    140 122 116;
+  --fb-primary-dk:    248 220 203;
+  --fb-on-primary:    10 31 51;
+
+  --fb-secondary:     157 187 212;
+  --fb-secondary-lt:  27 51 71;
+  --fb-secondary-md:  63 92 118;
+  --fb-secondary-dk:  201 217 230;
+
+  --fb-bg:        10 31 51;
+  --fb-border:    31 58 82;
+  --fb-surface:   17 42 66;
+  --fb-ink:       246 244 239;
+  --fb-ink-2:     197 207 216;
+  --fb-ink-3:     147 163 179;
+
+  --fb-success:     95 211 154;
+  --fb-success-lt:  14 58 42;
+  --fb-warning:     242 179 92;
+  --fb-warning-lt:  58 42 14;
+  --fb-danger:      255 143 138;
+  --fb-danger-lt:   62 26 28;
+
+  --color-coral:       #F3A67F;
+  --color-coral-lt:    #3A2C2C;
+  --color-coral-md:    #7A5A4A;
+  --color-fuchsia:     #F1AFC2;
+  --color-fuchsia-lt:  #3A2733;
+  --color-fuchsia-md:  #7A4A5E;
+  --color-violet:      #9DBBD4;
+  --color-violet-lt:   #1E3347;
+  --color-violet-md:   #3F5C76;
+  --color-indigo:      #8FA9C6;
+  --color-indigo-lt:   #1B2F47;
+  --color-indigo-md:   #3B5575;
+  --color-sky:         #8CC4E4;
+  --color-sky-lt:      #12334A;
+  --color-sky-md:      #2F6485;
+  --color-teal:        #5EC4CC;
+  --color-teal-lt:     #0F3A44;
+  --color-teal-md:     #2A6F78;
+  --color-lime:        #8FCB9C;
+  --color-lime-lt:     #153A2B;
+  --color-lime-md:     #3D7A55;
+  --color-amber:       #E8B565;
+  --color-amber-lt:    #3A2E14;
+  --color-amber-md:    #7A6030;
+
+  /* Fiscal stamp — “vigente” (más contraste que success genérico) */
+  --color-timbrado-valid-fg: #bbf7d0;
+  --color-timbrado-valid-bg: #14532d;
+  --color-timbrado-valid-meter: #4ade80;
+  --color-timbrado-valid-icon: #166534;
+}
+
+body {
+  background-color: var(--color-stone);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Títulos en Nunito (manual de marca: "títulos y destacados") */
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
 }
 
 /* Servicios / Categorías — filas y cards inactivas */

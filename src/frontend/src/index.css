@@ -1,4 +1,7 @@
+@import "@fontsource-variable/nunito";
+@import "@fontsource-variable/nunito-sans";
 @import "./styles/tokens.css";
+@import "./styles/skins.css";
 
 @tailwind base;
 @tailwind components;
@@ -12,7 +15,7 @@
     color-scheme: dark;
   }
   body {
-    @apply min-h-screen overflow-x-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    @apply min-h-screen overflow-x-hidden bg-page text-ink;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     padding-top: env(safe-area-inset-top);
