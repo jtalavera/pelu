@@ -241,7 +241,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.getByTestId("service-record-status")).toHaveText("Open");
     // Issue #119 AC8: "Generate invoice" uses the dark-green design-system success variant.
     const generateInvoiceButton = page.getByRole("button", { name: "Generate invoice" });
-    await expect(generateInvoiceButton).toHaveClass(/bg-green-600/);
+    await expect(generateInvoiceButton).toHaveClass(/bg-success/);
     await generateInvoiceButton.click();
 
     // Lands on Billing → New Invoice, prefilled with the ficha's client, RUC, service and tips.

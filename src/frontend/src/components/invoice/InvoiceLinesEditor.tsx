@@ -120,7 +120,7 @@ export function InvoiceLinesEditor({
               {line.discountEnabled && line.discountValue && (
                 <p
                   data-testid={`line-discounted-total-${idx}`}
-                  className="mt-1 text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
+                  className="mt-1 text-sm font-medium tabular-nums text-success"
                 >
                   {t("femme.billing.invoice.lineDiscountedTotal")}:{" "}
                   {formatDecimalGs(
@@ -134,7 +134,7 @@ export function InvoiceLinesEditor({
               )}
             </div>
             <div className="col-span-9 sm:col-span-1 flex min-h-9 w-full items-end justify-center">
-              <span className="w-full text-center text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
+              <span className="w-full text-center text-sm font-medium tabular-nums text-ink">
                 {formatDecimalGs(
                   Math.max(
                     0,
@@ -180,7 +180,7 @@ export function InvoiceLinesEditor({
                       })
                     }
                     aria-label={t("femme.billing.invoice.lineDiscountType")}
-                    className="rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] px-2 py-1 text-xs"
+                    className="rounded border border-[rgb(var(--color-border))] bg-surface px-2 py-1 text-xs"
                   >
                     <option value="PERCENT">{t("femme.billing.invoice.discountTypePercent")}</option>
                     <option value="FIXED">{t("femme.billing.invoice.discountTypeFixed")}</option>

@@ -190,7 +190,7 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
           <p
             id="audit-range-err"
             role="alert"
-            className="w-full text-sm text-red-600 dark:text-red-400"
+            className="w-full text-sm text-danger"
           >
             {rangeError}
           </p>

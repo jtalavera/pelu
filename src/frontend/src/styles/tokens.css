@@ -130,6 +130,15 @@
   --border-default: 0.5px solid var(--color-stone-md);
   --border-focus:   2px solid var(--color-rose);
 
+  /* Series de gráficos (paleta de marca; las variantes -soft son para barras sin leyenda) */
+  --chart-1: #0E767E;
+  --chart-2: #E39A74;
+  --chart-3: #7FA3C0;
+  --chart-4: #E07A9B;
+  --chart-5: #3A4958;
+  --chart-1-soft: #8FC1C5;
+  --chart-2-soft: #F3C6AE;
+
   /* Barra superior: teal en claro, superficie oscura en oscuro (el logo va en tono "dark") */
   --topbar-bg:        rgb(var(--fb-teal));
   --topbar-fg:        rgb(var(--fb-lino));
@@ -201,6 +210,14 @@ html.dark {
   --color-amber-md:    #7A6030;
 
   --fb-logo-accent: var(--fb-accent);
+
+  --chart-1: #5EC4CC;
+  --chart-2: #F3C6AE;
+  --chart-3: #9DBBD4;
+  --chart-4: #F1AFC2;
+  --chart-5: #C5CFD8;
+  --chart-1-soft: #2A6F78;
+  --chart-2-soft: #7A5A4A;
 
   --topbar-bg:        rgb(var(--fb-surface));
   --topbar-sel-fg:    rgb(var(--fb-surface));

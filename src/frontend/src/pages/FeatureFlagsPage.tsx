@@ -250,7 +250,7 @@ export default function FeatureFlagsPage() {
           return (
             <li
               key={row.flagKey}
-              className="rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] bg-[var(--color-white)] p-4 dark:border-slate-600 dark:bg-slate-900/30"
+              className="rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] bg-[var(--color-white)] p-4"
             >
               <div className="mb-1 font-mono text-xs font-medium text-[var(--color-ink)]">
                 {row.flagKey}
@@ -392,7 +392,7 @@ export default function FeatureFlagsPage() {
               ) : null}
 
               {row.flagKey === SIFEN_FLAG_KEY && homologation ? (
-                <div className="mt-4 border-t border-[var(--color-stone-md)] pt-3 dark:border-slate-700">
+                <div className="mt-4 border-t border-[var(--color-stone-md)] pt-3">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-3)]">
                       {t("femme.featureFlags.sifenHomologation.title")}

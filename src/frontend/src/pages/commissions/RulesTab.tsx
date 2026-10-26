@@ -134,7 +134,7 @@ export function RulesTab() {
         <div className="flex flex-wrap items-center gap-2">
           {pendingList.length > 0 && (
             <>
-              <span className="text-xs text-amber-700 dark:text-amber-300" data-testid="rules-pending-count">
+              <span className="text-xs text-warning" data-testid="rules-pending-count">
                 {t("femme.commissions.rules.pendingCount", { count: pendingList.length })}
               </span>
               <Button type="button" variant="secondary" onClick={() => setPending({})} data-testid="rules-discard">
@@ -398,7 +398,7 @@ function KindRules({
           {t(isProduct ? "femme.commissions.rules.countProducts" : "femme.commissions.rules.countServices", { count: view.itemCount })}
         </span>
         <span
-          className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+          className="rounded-full border border-warning bg-warning-lt px-3 py-1 text-xs text-warning"
           data-testid="rules-count-exceptions"
         >
           {t("femme.commissions.rules.countWithExceptions", { count: withExceptions })}
@@ -465,7 +465,7 @@ function KindRules({
                           key={i.serviceId}
                           className={
                             "cursor-pointer border-t " +
-                            (selected === i.serviceId ? "bg-emerald-50 dark:bg-emerald-900/20" : "hover:bg-[var(--color-stone)]")
+                            (selected === i.serviceId ? "bg-success-lt" : "hover:bg-[var(--color-stone)]")
                           }
                           onClick={() => onSelect(i.serviceId)}
                           data-testid={`rules-row-${i.serviceId}`}
@@ -475,7 +475,7 @@ function KindRules({
                               {i.name}
                             </button>
                             {e.dirty && (
-                              <span className="ml-2 text-[10px] text-amber-700 dark:text-amber-300">
+                              <span className="ml-2 text-[10px] text-warning">
                                 ● {t("femme.commissions.rules.unsaved")}
                               </span>
                             )}
@@ -502,7 +502,7 @@ function KindRules({
                                     return (
                                       <span
                                         key={p.id}
-                                        className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+                                        className="rounded-full border border-warning bg-warning-lt px-2 py-0.5 text-xs text-warning"
                                       >
                                         {p.fullName.split(" ")[0]} <strong>{formatPercent(x.percent)}</strong>{" "}
                                         <span className="text-[10px]">{deltaLabel(x.percent - e.standard)}</span>
@@ -652,7 +652,7 @@ function ItemPanel({
       }
     >
       <div className="flex flex-col gap-3" data-testid="rules-panel">
-        <div className="rounded-md bg-emerald-50 p-3 dark:bg-emerald-900/20">
+        <div className="rounded-md bg-success-lt p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs">{t("femme.commissions.rules.itemStandard")}</div>
@@ -715,7 +715,7 @@ function ItemPanel({
                   <span className="min-w-0 break-words text-sm font-medium">{p.fullName}</span>
                   <span className="shrink-0 text-right">
                     {exc ? (
-                      <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                      <span className="rounded-full border border-warning bg-warning-lt px-2 py-0.5 text-xs font-semibold text-warning">
                         {formatPercent(exc.percent)} <span className="text-[10px] font-normal">{deltaLabel(exc.percent - effective.standard)}</span>
                       </span>
                     ) : (
@@ -809,7 +809,7 @@ function ItemPanel({
           </div>
         )}
         {Object.keys(pending).some((k) => k.startsWith(`RULE|${item.serviceId}|`)) && (
-          <Text variant="small" className="text-amber-700 dark:text-amber-300">
+          <Text variant="small" className="text-warning">
             {t("femme.commissions.rules.panelPending")}
           </Text>
         )}

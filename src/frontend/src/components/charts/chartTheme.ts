@@ -14,18 +14,18 @@ import type { CSSProperties } from "react";
 
 /**
  * Categorical palette for multi-series charts (e.g. a pie/bar chart with one slice per payment
- * method or per professional). Restricted to the muted teal (green) and dusty-rose tokens rather
- * than the full "Acentos de categoría" set — a deliberate toning-down so dashboard charts read as
- * calm/analytical rather than a rainbow of bright accents. Alternates hue (green/rose) at each step
- * for adjacent-category contrast; 5 entries covers every current use (max 5 `PaymentMethod` values).
+ * method or per professional). Uses the Flowbit brand hues (teal, durazno, celeste, rosa, tinta —
+ * `--chart-1..5` in tokens.css, tuned per theme) rather than the full "Acentos de categoría" set,
+ * so dashboard charts stay on-brand and calm; 5 entries covers every current use (max 5
+ * `PaymentMethod` values).
  * Single-series charts (like the revenue-trend bar chart below) use `CHART_PRIMARY_COLOR` instead.
  */
 export const CHART_SERIES_COLORS = [
-  "var(--color-teal)",
-  "var(--color-rose)",
-  "var(--color-teal-md)",
-  "var(--color-rose-md)",
-  "var(--color-rose-dk)",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ] as const;
 
 /** Picks a stable categorical color by series index, wrapping around the palette. */
@@ -38,14 +38,14 @@ export function chartSeriesColor(index: number): string {
  * better than `CHART_SERIES_COLORS`, such as `TopServicesChart`'s bars (no color-matched legend, so
  * fewer distinct tones is fine).
  */
-export const CHART_SERIES_COLORS_PASTEL = ["var(--color-rose-md)", "var(--color-teal-md)"] as const;
+export const CHART_SERIES_COLORS_PASTEL = ["var(--chart-2-soft)", "var(--chart-1-soft)"] as const;
 
 /** Picks a stable pastel categorical color by series index, wrapping around the palette. */
 export function chartSeriesColorPastel(index: number): string {
   return CHART_SERIES_COLORS_PASTEL[index % CHART_SERIES_COLORS_PASTEL.length];
 }
 
-/** Primary accent for a single-series chart (muted green — calmer than the bold brand pink). */
+/** Primary accent for a single-series chart (brand teal). */
 export const CHART_PRIMARY_COLOR = "var(--color-teal)";
 export const CHART_PRIMARY_COLOR_LIGHT = "var(--color-teal-lt)";
 

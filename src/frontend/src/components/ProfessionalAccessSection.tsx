@@ -202,7 +202,7 @@ export function ProfessionalAccessSection<T extends ProfessionalAccessState>({
       ) : null}
 
       {resendError ? (
-        <div role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">
+        <div role="alert" className="mt-2 text-xs text-danger">
           {resendError}
         </div>
       ) : null}

@@ -153,7 +153,7 @@ export function AssignInvoiceProfessionalsDialog({
           <>
             <Text
               variant="small"
-              className="text-amber-700 dark:text-amber-300"
+              className="text-warning"
               data-testid="assign-professionals-reassign-note"
             >
               {t("femme.billing.history.detail.assignProfessionals.reassignNote")}

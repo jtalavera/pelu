@@ -982,7 +982,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
                                   {s.name}
                                   {commissionsEnabled && s.active && itemsWithoutRule.has(s.id) ? (
                                     <span
-                                      className="ml-2 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                                      className="ml-2 inline-block rounded bg-warning-lt px-1.5 py-0.5 text-[10px] font-medium text-warning"
                                       data-testid={`svc-no-commission-${s.id}`}
                                       title={t("femme.commissions.rules.noGeneralWarning")}
                                     >
@@ -1408,7 +1408,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           ) : null}
 
           {serviceEditing ? (
-            <div className="flex flex-col gap-2 rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))]/30 p-3 dark:bg-[rgb(var(--color-muted))]/20">
+            <div className="flex flex-col gap-2 rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))]/30 p-3))]/20">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-[rgb(var(--color-muted-foreground))]">
                   {t("femme.services.services.statusLabel")}
@@ -1423,7 +1423,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-fit min-h-11 border-[rgb(var(--color-success))] text-[rgb(var(--color-success))] hover:bg-[rgb(var(--color-success))]/10"
+                    className="w-fit min-h-11 border-success text-success hover:bg-success/10"
                     disabled={serviceReactivating}
                     onClick={() => void activateSalonServiceFromModal()}
                   >

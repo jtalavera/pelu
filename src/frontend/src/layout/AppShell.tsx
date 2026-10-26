@@ -263,7 +263,7 @@ function StockNavButton({ theme, lang }: { theme: "light" | "dark"; lang: string
         <p
           role="alert"
           data-testid="nav-stock-error"
-          className="text-red-600 dark:text-red-400"
+          className="text-danger"
           style={{ fontSize: 11, padding: "2px 10px" }}
         >
           {error}

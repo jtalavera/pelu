@@ -74,7 +74,7 @@ export function InlineEditActions({
             style={{
               ...btnBase,
               background: saving ? "var(--color-rose-md)" : "var(--color-rose)",
-              color: "#fff",
+              color: "var(--color-on-primary)",
               border: "none",
             }}
           >

@@ -192,7 +192,7 @@ export function ClientSearchField({
           id={`${inputId}-listbox`}
           role="listbox"
           aria-label={labelText}
-          className="w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded-md border border-line bg-surface shadow-lg max-h-72 overflow-y-auto"
         >
           {onCreateNew ? (
             <li className="border-b border-[rgb(var(--color-border))]">

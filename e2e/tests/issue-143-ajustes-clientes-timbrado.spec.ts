@@ -64,7 +64,7 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     const alert = page.getByRole("alert").filter({ hasText: "Client updated successfully." });
     await expect(alert).toBeVisible();
-    await expect(alert).toHaveClass(/emerald/);
+    await expect(alert).toHaveClass(/success/);
   });
 
   test("AC3-4 · tabla de timbrados: activo primero, columnas visibles y acciones según estado", async ({

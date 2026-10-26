@@ -44,7 +44,7 @@ describe("SearchableSelect", () => {
     });
 
     const alphaBtn = screen.getByRole("button", { name: /^alpha$/i });
-    expect(alphaBtn.className).toMatch(/bg-slate-100/);
+    expect(alphaBtn.className).toMatch(/bg-page/);
 
     const combo = screen.getByRole("combobox", { name: /pick one/i });
     expect(combo.getAttribute("aria-activedescendant")).toBe("test-sel-option-0");

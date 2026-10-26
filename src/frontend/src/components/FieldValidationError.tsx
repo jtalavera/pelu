@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-/** Use for every field-level validation message (Tailwind reds; design tokens --color-* are not defined globally). */
+/** Use for every field-level validation message (`text-danger`: the theme-aware functional red token). */
 export const FIELD_VALIDATION_ERROR_CLASS =
-  "mt-1 text-sm font-medium text-red-600 dark:text-red-400";
+  "mt-1 text-sm font-medium text-danger";
 
 type Props = {
   id?: string;

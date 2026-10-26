@@ -242,7 +242,7 @@ export default function SharedDevicesSettingsPage() {
                   </div>
                   {d.lockedUntil ? (
                     <div
-                      className="text-xs font-medium text-red-600 dark:text-red-400"
+                      className="text-xs font-medium text-danger"
                       data-testid={`shared-device-row-locked-${d.id}`}
                     >
                       {t("femme.sharedDevice.settings.lockedUntil", { time: formatTime(d.lockedUntil) })}

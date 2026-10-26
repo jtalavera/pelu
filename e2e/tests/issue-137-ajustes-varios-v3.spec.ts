@@ -209,7 +209,7 @@ test.describe("Issue #137 · Ajustes varios v3", () => {
       hasText: `Manual withdrawal — ${profA.fullName}`,
     });
     await expect(withdrawalRowA.getByText(/^Gs\. 1\.000$/)).toBeVisible();
-    await expect(withdrawalRowA).toHaveClass(/text-red-600/);
+    await expect(withdrawalRowA).toHaveClass(/text-danger/);
     const subtotalRowA = reportRows.filter({ hasText: `Subtotal — ${profA.fullName}` });
     await expect(subtotalRowA.getByText(/^Gs\. 1\.000$/)).toBeVisible();
 
@@ -217,7 +217,7 @@ test.describe("Issue #137 · Ajustes varios v3", () => {
       hasText: `Manual withdrawal — ${profB.fullName}`,
     });
     await expect(withdrawalRowB.getByText(/^Gs\. 2\.000$/)).toBeVisible();
-    await expect(withdrawalRowB).toHaveClass(/text-red-600/);
+    await expect(withdrawalRowB).toHaveClass(/text-danger/);
     const subtotalRowB = reportRows.filter({ hasText: `Subtotal — ${profB.fullName}` });
     await expect(subtotalRowB.getByText(/^Gs\. 8\.000$/)).toBeVisible();
 

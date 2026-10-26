@@ -51,7 +51,7 @@ export function AdminRoute({ children }: Props) {
   }
   if (state === "loading") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-slate-50 p-4 dark:bg-slate-950">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-page p-4">
         <Spinner size="lg" label={t("admin.loading")} />
         <Text variant="muted">{t("admin.loading")}</Text>
       </div>

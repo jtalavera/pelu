@@ -459,7 +459,7 @@ export function InvoiceCorrectionForm({
                     setDiscountType(e.target.value);
                     setDiscountValue("");
                   }}
-                  className="rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] px-2 py-2"
+                  className="rounded border border-[rgb(var(--color-border))] bg-surface px-2 py-2"
                 >
                   <option value="NONE">{t("femme.billing.invoice.discountTypeNone")}</option>
                   <option value="FIXED">{t("femme.billing.invoice.discountTypeFixed")}</option>
@@ -479,7 +479,7 @@ export function InvoiceCorrectionForm({
                       )
                     }
                     placeholder="0"
-                    className="rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] px-2 py-2"
+                    className="rounded border border-[rgb(var(--color-border))] bg-surface px-2 py-2"
                   />
                 </label>
               )}

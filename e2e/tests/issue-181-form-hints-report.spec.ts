@@ -19,7 +19,7 @@ import { pickServiceLine } from "../fixtures/invoice";
 //  1. The helper comments under the comprobante-form fields (issue date, email, first payment
 //     "Monto", tax-exempt note) must share the "look and feel" of the muted text shown under the
 //     client search when a client is selected — i.e. `<Text variant="muted">` → text-sm /
-//     text-slate-500. Two of them also get new copy.
+//     text-ink-3. Two of them also get new copy.
 //  2. Optimise the first Historial report download (a startup warm-up + a header-only projection
 //     query). The observable, non-flaky part: the report still downloads correctly.
 
@@ -68,13 +68,13 @@ test.describe("Issue #181 · form hints + report", () => {
       "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
     );
     await expect(legend).toBeVisible();
-    await expect(legend).toHaveClass(/text-slate-500/);
+    await expect(legend).toHaveClass(/text-ink-3/);
     await expect(legend).toHaveClass(/text-sm/);
 
     // Email hint: muted styling.
     const emailHint = page.locator("#billing-client-email-hint");
     await expect(emailHint).toBeVisible();
-    await expect(emailHint).toHaveClass(/text-slate-500/);
+    await expect(emailHint).toHaveClass(/text-ink-3/);
     await expect(emailHint).toHaveClass(/text-sm/);
 
     // First payment "Monto" hint: new copy + muted styling.
@@ -82,7 +82,7 @@ test.describe("Issue #181 · form hints + report", () => {
     await expect(payHint).toHaveText(
       "This field is auto-filled with the total, but you can edit it for partial payments",
     );
-    await expect(payHint).toHaveClass(/text-slate-500/);
+    await expect(payHint).toHaveClass(/text-ink-3/);
     await expect(payHint).toHaveClass(/text-sm/);
 
     // Tax-exempt note (a diplomatic receiver): muted styling.
@@ -90,7 +90,7 @@ test.describe("Issue #181 · form hints + report", () => {
     await page.locator("#client-identity-document-number").fill("DIP-181");
     const taxNote = page.getByTestId("billing-tax-exempt-note");
     await expect(taxNote).toBeVisible();
-    await expect(taxNote).toHaveClass(/text-slate-500/);
+    await expect(taxNote).toHaveClass(/text-ink-3/);
     await expect(taxNote).toHaveClass(/text-sm/);
   });
 

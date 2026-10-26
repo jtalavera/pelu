@@ -132,12 +132,12 @@ test("Issue #49 · paleta de categorías tiene más colores y el swatch refleja 
   const row = page.locator(`[data-testid^="cat-row-"]`).filter({ hasText: catName });
   await expect(row).toBeVisible();
 
-  // The outer tile (.cat-ic) background should NOT be the stone gray (#F5F2EF)
+  // The outer tile (.cat-ic) background should NOT be the page background (lino, #F6F4EF)
   const tileColor = await row.locator(".cat-ic").evaluate((el) => {
     return window.getComputedStyle(el).backgroundColor;
   });
-  // Stone defaults to rgb(245, 242, 239) — coral should be different
-  expect(tileColor).not.toBe("rgb(245, 242, 239)");
+  // The page background (lino) is rgb(246, 244, 239) — coral (durazno tint) should be different
+  expect(tileColor).not.toBe("rgb(246, 244, 239)");
 });
 
 test("Issue #49 · servicio hereda el color de su categoría en la tabla", async ({
@@ -175,8 +175,8 @@ test("Issue #49 · servicio hereda el color de su categoría en la tabla", async
   const iconBg = await card.locator(".cat-ic").evaluate((el) => {
     return window.getComputedStyle(el).backgroundColor;
   });
-  // Stone-lt defaults to rgb(245, 242, 239) — teal-lt (#CCFBF1) = rgb(204, 251, 241)
-  expect(iconBg).not.toBe("rgb(245, 242, 239)");
+  // The page background (lino) is rgb(246, 244, 239) — teal-lt (#E1F0F1) = rgb(225, 240, 241)
+  expect(iconBg).not.toBe("rgb(246, 244, 239)");
 });
 
 // ─── Issue #37 ────────────────────────────────────────────────────────────────
