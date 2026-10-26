@@ -3,14 +3,14 @@ import { cn } from "../lib/cn";
 
 const variants = {
   default:
-    "border-slate-200 bg-slate-50 text-slate-900 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-100",
-  info: "border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100",
+    "border-line bg-page text-ink",
+  info: "border-primary bg-primary-lt text-primary-dk",
   success:
-    "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100",
+    "border-success bg-success-lt text-success",
   warning:
-    "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100",
+    "border-warning bg-warning-lt text-warning",
   destructive:
-    "border-red-200 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100",
+    "border-danger bg-danger-lt text-danger",
 } as const;
 
 export type AlertProps = HTMLAttributes<HTMLDivElement> & {
@@ -31,7 +31,7 @@ export function Alert({
     <div
       role="alert"
       className={cn(
-        "relative w-full rounded-lg border px-4 py-3 text-sm",
+        "relative w-full rounded-xl border px-4 py-3 text-sm",
         variants[variant],
         className,
       )}

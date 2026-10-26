@@ -11,13 +11,13 @@ export function Sidebar({ className, header, children, ...props }: SidebarProps)
   return (
     <aside
       className={cn(
-        "flex h-full w-full shrink-0 flex-col border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/80 md:w-56 md:border-b-0 md:border-r",
+        "flex h-full w-full shrink-0 flex-col border-b border-line bg-page md:w-56 md:border-b-0 md:border-r",
         className,
       )}
       {...props}
     >
       {header ? (
-        <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <div className="border-b border-line px-4 py-3">
           {header}
         </div>
       ) : null}
@@ -44,8 +44,8 @@ export function SidebarLink({
     <a
       href={href}
       className={cn(
-        "flex min-h-[44px] items-center rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 sm:min-h-0",
-        active && "bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300",
+        "flex min-h-[44px] items-center rounded-full px-4 py-2 text-sm font-semibold text-ink-2 transition-colors hover:bg-primary-lt hover:text-ink sm:min-h-0",
+        active && "bg-primary text-primary-fg hover:bg-primary hover:text-primary-fg",
         className,
       )}
       aria-current={active ? "page" : undefined}

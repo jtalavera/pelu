@@ -29,7 +29,7 @@ export function Spinner({
     >
       <span
         className={cn(
-          "block animate-spin rounded-full border-slate-200 border-t-indigo-600 dark:border-slate-600 dark:border-t-indigo-400",
+          "block animate-spin rounded-full border-line border-t-primary",
           sizes[size],
         )}
       />

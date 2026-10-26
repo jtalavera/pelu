@@ -34,7 +34,7 @@ export function Avatar({
         src={src}
         alt={alt}
         className={cn(
-          "aspect-square rounded-full object-cover ring-2 ring-white dark:ring-slate-900",
+          "aspect-square rounded-full object-cover ring-2 ring-surface",
           sizes[size],
           className,
         )}
@@ -46,7 +46,7 @@ export function Avatar({
   return (
     <span
       className={cn(
-        "inline-flex aspect-square items-center justify-center rounded-full bg-slate-200 font-medium text-slate-600 ring-2 ring-white dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-900",
+        "inline-flex aspect-square items-center justify-center rounded-full bg-line font-medium text-ink-2 ring-2 ring-surface",
         sizes[size],
         className,
       )}

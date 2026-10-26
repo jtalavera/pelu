@@ -23,22 +23,22 @@ export function InputGroup({
   return (
     <div
       className={cn(
-        "flex min-h-[44px] w-full min-w-0 items-stretch overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm transition-colors dark:border-slate-600 dark:bg-slate-900 sm:h-9 sm:min-h-0",
-        "focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 dark:focus-within:border-indigo-400 dark:focus-within:ring-indigo-400/25",
+        "flex min-h-[44px] w-full min-w-0 items-stretch overflow-hidden rounded-xl border border-line bg-surface transition-colors sm:h-9 sm:min-h-0",
+        "focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20",
         invalid &&
-          "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/20 dark:border-red-500 dark:focus-within:ring-red-500/30",
+          "border-danger focus-within:border-danger focus-within:ring-danger/20",
         className,
       )}
       {...props}
     >
       {start ? (
-        <span className="flex shrink-0 items-center border-r border-slate-200 bg-slate-50 px-2.5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-400">
+        <span className="flex shrink-0 items-center border-r border-line bg-page px-2.5 text-sm text-ink-3">
           {start}
         </span>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 items-center">{children}</div>
       {end ? (
-        <span className="flex shrink-0 items-center border-l border-slate-200 bg-slate-50 px-2.5 dark:border-slate-700 dark:bg-slate-800/80">
+        <span className="flex shrink-0 items-center border-l border-line bg-page px-2.5">
           {end}
         </span>
       ) : null}

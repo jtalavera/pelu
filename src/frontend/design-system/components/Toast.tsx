@@ -4,11 +4,11 @@ import { cn } from "../lib/cn";
 
 const variants = {
   default:
-    "border-slate-200 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100",
+    "border-line bg-surface text-ink",
   success:
-    "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100",
+    "border-success bg-success-lt text-success",
   error:
-    "border-red-200 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/50 dark:text-red-100",
+    "border-danger bg-danger-lt text-danger",
 } as const;
 
 export type ToastProps = HTMLAttributes<HTMLDivElement> & {
@@ -47,7 +47,7 @@ export function Toast({
       <div
         role="status"
         className={cn(
-          "pointer-events-auto w-full max-w-sm rounded-lg border px-4 py-3 text-sm shadow-lg",
+          "pointer-events-auto w-full max-w-sm rounded-xl border px-4 py-3 text-sm shadow-lg",
           variants[variant],
           className,
         )}

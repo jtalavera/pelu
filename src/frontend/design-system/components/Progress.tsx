@@ -26,7 +26,7 @@ export function Progress({
       {label ? (
         <div
           id={labelId}
-          className="flex justify-between text-xs text-slate-500 dark:text-slate-400"
+          className="flex justify-between text-xs text-ink-3"
         >
           <span>{label}</span>
           <span aria-hidden>{pct}%</span>
@@ -39,10 +39,10 @@ export function Progress({
         aria-valuenow={clamped}
         aria-labelledby={label ? labelId : undefined}
         aria-label={label ? undefined : "Progress"}
-        className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+        className="h-2 w-full overflow-hidden rounded-full bg-line"
       >
         <div
-          className="h-full rounded-full bg-indigo-600 transition-[width] duration-300 dark:bg-indigo-500"
+          className="h-full rounded-full bg-primary transition-[width] duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>
