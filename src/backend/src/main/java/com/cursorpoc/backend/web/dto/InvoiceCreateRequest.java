@@ -37,7 +37,47 @@ public record InvoiceCreateRequest(
      * Issue #174 AC-04: optional ISO-8601 instant overriding the emission date. Only honoured when
      * the form's "editar fecha" checkbox was ticked; must sit within SIFEN's -720h/+120h window.
      */
-    String issuedAt) {
+    String issuedAt,
+    /**
+     * Optional per-professional tips entered in the comprobante's "Propinas" section. Each
+     * professional must be on one of the invoice lines. When present it supersedes {@code
+     * tipsAmount} (which becomes their sum); for an invoice generated from a ficha the ficha's own
+     * tips are replaced by these.
+     */
+    @Valid List<InvoiceTipRequest> tips) {
+
+  public InvoiceCreateRequest(
+      Long clientId,
+      String clientDisplayName,
+      String clientRucOverride,
+      String clientIdentityDocumentOverride,
+      String discountType,
+      BigDecimal discountValue,
+      List<InvoiceLineRequest> lines,
+      List<InvoicePaymentAllocationRequest> payments,
+      Long serviceRecordId,
+      BigDecimal tipsAmount,
+      String clientIdentityDocumentTypeOverride,
+      String clientTaxpayerTypeOverride,
+      String email,
+      String issuedAt) {
+    this(
+        clientId,
+        clientDisplayName,
+        clientRucOverride,
+        clientIdentityDocumentOverride,
+        discountType,
+        discountValue,
+        lines,
+        payments,
+        serviceRecordId,
+        tipsAmount,
+        clientIdentityDocumentTypeOverride,
+        clientTaxpayerTypeOverride,
+        email,
+        issuedAt,
+        null);
+  }
 
   public InvoiceCreateRequest(
       Long clientId,
@@ -60,6 +100,7 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
         null,
         null,
         null,
@@ -88,6 +129,7 @@ public record InvoiceCreateRequest(
         payments,
         serviceRecordId,
         tipsAmount,
+        null,
         null,
         null,
         null,
@@ -118,6 +160,7 @@ public record InvoiceCreateRequest(
         serviceRecordId,
         tipsAmount,
         clientIdentityDocumentTypeOverride,
+        null,
         null,
         null,
         null);

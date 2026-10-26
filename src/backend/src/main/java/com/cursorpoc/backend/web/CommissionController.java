@@ -12,6 +12,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.AdjustmentRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyModeOptions;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AssignInvoiceLinesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignLineRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.EntryView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GenerateSettlementsRequest;
@@ -198,6 +199,27 @@ public class CommissionController {
               reassignmentService.assignLine(p.getTenantId(), lineId, p.getUsername(), request);
           return queryService.entryView(
               saved, configService.professionalNames(p.getTenantId()), null, java.util.Set.of());
+        });
+  }
+
+  /** "Asignar profesional" from the comprobante detail: several lines of one invoice at once. */
+  @PostMapping("/invoices/{invoiceId}/assign-lines")
+  public List<EntryView> assignInvoiceLines(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @PathVariable long invoiceId,
+      @RequestBody AssignInvoiceLinesRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/invoices/" + invoiceId + "/assign-lines",
+        () -> {
+          var saved =
+              reassignmentService.assignInvoiceLines(
+                  p.getTenantId(), invoiceId, p.getUsername(), request);
+          var names = configService.professionalNames(p.getTenantId());
+          return saved.stream()
+              .map(e -> queryService.entryView(e, names, null, java.util.Set.of()))
+              .toList();
         });
   }
 

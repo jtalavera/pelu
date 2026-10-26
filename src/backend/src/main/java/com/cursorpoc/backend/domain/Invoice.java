@@ -327,6 +327,14 @@ public class Invoice {
       fetch = FetchType.LAZY)
   private List<InvoicePaymentAllocation> paymentAllocations = new ArrayList<>();
 
+  /** Tips entered on the comprobante form itself (invoices not generated from a ficha). */
+  @OneToMany(
+      mappedBy = "invoice",
+      cascade = CascadeType.ALL,
+      orphanRemoval = true,
+      fetch = FetchType.LAZY)
+  private List<InvoiceTip> tips = new ArrayList<>();
+
   public Long getId() {
     return id;
   }
@@ -807,6 +815,10 @@ public class Invoice {
 
   public List<InvoicePaymentAllocation> getPaymentAllocations() {
     return paymentAllocations;
+  }
+
+  public List<InvoiceTip> getTips() {
+    return tips;
   }
 
   public void setPaymentAllocations(List<InvoicePaymentAllocation> paymentAllocations) {

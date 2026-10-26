@@ -7,8 +7,10 @@ import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
+import com.cursorpoc.backend.domain.InvoiceTip;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecord;
+import com.cursorpoc.backend.domain.ServiceRecordTip;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
@@ -36,6 +38,7 @@ import com.cursorpoc.backend.web.dto.InvoiceListItemResponse;
 import com.cursorpoc.backend.web.dto.InvoicePaymentAllocationRequest;
 import com.cursorpoc.backend.web.dto.InvoicePaymentAllocationResponse;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
+import com.cursorpoc.backend.web.dto.InvoiceTipRequest;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import java.math.BigDecimal;
@@ -47,7 +50,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
@@ -271,6 +277,11 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     // 5. Lines · 6. Discount · 6b. Gs. 7M identification guard · 7/8. Payments — all shared with
     // issue #175's correction flow.
     BigDecimal subtotal = rebuildLines(tenantId, invoice, request.lines(), taxExemptReceiver);
+    // 5b. Per-professional tips from the comprobante's "Propinas" section (needs the lines'
+    // professionals, so it runs after rebuildLines).
+    if (request.tips() != null) {
+      applyTips(invoice, serviceRecord, request.tips());
+    }
     BigDecimal total =
         applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
     requireClientIdentificationForThreshold(invoice, total);
@@ -362,6 +373,73 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     Hibernate.initialize(invoice.getLines());
     Hibernate.initialize(invoice.getPaymentAllocations());
     return toDetailDto(invoice);
+  }
+
+  /**
+   * Stores the tips entered per professional on the comprobante form. Tips never touch the fiscal
+   * totals; {@code invoice.tipsAmount} becomes their sum. Each professional must have served one of
+   * the invoice lines ({@code INVOICE_TIP_PROFESSIONAL_NOT_IN_LINES}). For an invoice generated
+   * from a ficha the ficha's own tips are replaced by these (the ficha closes with this invoice),
+   * so a tip is never counted twice; otherwise they are kept as {@link InvoiceTip} rows.
+   */
+  private void applyTips(
+      Invoice invoice, ServiceRecord serviceRecord, List<InvoiceTipRequest> requestTips) {
+    Map<Long, Professional> lineProfessionals = new LinkedHashMap<>();
+    for (InvoiceLine line : invoice.getLines()) {
+      if (line.getProfessional() != null) {
+        lineProfessionals.put(line.getProfessional().getId(), line.getProfessional());
+      }
+    }
+    Map<Long, BigDecimal> amounts = new LinkedHashMap<>();
+    for (InvoiceTipRequest tr : requestTips) {
+      if (tr == null || tr.professionalId() == null || tr.amount() == null) {
+        continue;
+      }
+      if (tr.amount().signum() < 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_TIP_AMOUNT_INVALID");
+      }
+      if (tr.amount().signum() == 0) {
+        continue;
+      }
+      if (!lineProfessionals.containsKey(tr.professionalId())) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "INVOICE_TIP_PROFESSIONAL_NOT_IN_LINES");
+      }
+      amounts.merge(
+          tr.professionalId(), tr.amount().setScale(2, RoundingMode.HALF_UP), BigDecimal::add);
+    }
+
+    if (serviceRecord != null) {
+      // Reuse existing rows (unique service_record_id + professional_id) instead of delete+insert.
+      Map<Long, ServiceRecordTip> existing = new HashMap<>();
+      serviceRecord.getTips().forEach(t -> existing.put(t.getProfessional().getId(), t));
+      amounts.forEach(
+          (professionalId, amount) -> {
+            ServiceRecordTip tip = existing.get(professionalId);
+            if (tip == null) {
+              tip = new ServiceRecordTip();
+              tip.setServiceRecord(serviceRecord);
+              tip.setProfessional(lineProfessionals.get(professionalId));
+              serviceRecord.getTips().add(tip);
+            }
+            tip.setAmount(amount);
+          });
+      serviceRecord.getTips().removeIf(t -> !amounts.containsKey(t.getProfessional().getId()));
+    } else {
+      invoice.getTips().clear();
+      amounts.forEach(
+          (professionalId, amount) -> {
+            InvoiceTip tip = new InvoiceTip();
+            tip.setInvoice(invoice);
+            tip.setProfessional(lineProfessionals.get(professionalId));
+            tip.setAmount(amount);
+            invoice.getTips().add(tip);
+          });
+    }
+    invoice.setTipsAmount(
+        amounts.values().stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP));
   }
 
   // ── Shared building blocks (issueInvoice + correctAndResendInvoice) ──────────────────────────

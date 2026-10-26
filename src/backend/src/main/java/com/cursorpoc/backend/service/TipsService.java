@@ -2,15 +2,18 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.CashMovement;
+import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecordTip;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TipWithdrawal;
 import com.cursorpoc.backend.domain.enums.CashMovementType;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.InvoiceTipRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ServiceRecordTipRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -26,9 +29,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -40,6 +46,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class TipsService {
 
   private final ServiceRecordTipRepository serviceRecordTipRepository;
+  private final InvoiceTipRepository invoiceTipRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
   private final ProfessionalRepository professionalRepository;
   private final TenantRepository tenantRepository;
@@ -49,6 +56,7 @@ public class TipsService {
 
   public TipsService(
       ServiceRecordTipRepository serviceRecordTipRepository,
+      InvoiceTipRepository invoiceTipRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
       ProfessionalRepository professionalRepository,
       TenantRepository tenantRepository,
@@ -56,6 +64,7 @@ public class TipsService {
       CashSessionRepository cashSessionRepository,
       CashMovementRepository cashMovementRepository) {
     this.serviceRecordTipRepository = serviceRecordTipRepository;
+    this.invoiceTipRepository = invoiceTipRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
     this.professionalRepository = professionalRepository;
     this.tenantRepository = tenantRepository;
@@ -86,7 +95,27 @@ public class TipsService {
                         t.getAmount(),
                         t.getServiceRecord().getClient().getFullName(),
                         t.getServiceRecord().getClosedAt()))
-            .toList();
+            .collect(Collectors.toCollection(ArrayList::new));
+    // Tips entered directly on a comprobante (not generated from a ficha) — voided invoices
+    // excluded.
+    invoiceTipRepository
+        .findForReport(tenantId, InvoiceStatus.ISSUED, fromDate, toDate, resolvedProfessionalIds)
+        .forEach(
+            t ->
+                rows.add(
+                    new TipReportRowResponse(
+                        t.getProfessional().getId(),
+                        t.getProfessional().getFullName(),
+                        t.getAmount(),
+                        invoiceClientName(t.getInvoice()),
+                        t.getInvoice().getIssuedAt())));
+    rows.sort(
+        Comparator.comparing(
+                TipReportRowResponse::professionalName,
+                Comparator.nullsLast(Comparator.<String>naturalOrder()))
+            .thenComparing(
+                TipReportRowResponse::serviceDateTime,
+                Comparator.nullsLast(Comparator.<Instant>naturalOrder())));
 
     Map<Long, TipReportProfessionalTotalResponse> totalsByProfessional = new LinkedHashMap<>();
     BigDecimal grandTotal = BigDecimal.ZERO;
@@ -238,11 +267,21 @@ public class TipsService {
 
   private BigDecimal computeBalance(long tenantId, long professionalId) {
     BigDecimal tipsTotal =
-        serviceRecordTipRepository.sumForProfessional(
-            tenantId, professionalId, ServiceRecordStatus.CLOSED);
+        serviceRecordTipRepository
+            .sumForProfessional(tenantId, professionalId, ServiceRecordStatus.CLOSED)
+            .add(
+                invoiceTipRepository.sumForProfessional(
+                    tenantId, professionalId, InvoiceStatus.ISSUED));
     BigDecimal withdrawalsTotal =
         tipWithdrawalRepository.sumForProfessional(tenantId, professionalId);
     return tipsTotal.subtract(withdrawalsTotal);
+  }
+
+  private static String invoiceClientName(Invoice invoice) {
+    if (invoice.getClientDisplayName() != null && !invoice.getClientDisplayName().isBlank()) {
+      return invoice.getClientDisplayName();
+    }
+    return invoice.getClient() != null ? invoice.getClient().getFullName() : null;
   }
 
   private Professional requireProfessional(long tenantId, long professionalId) {

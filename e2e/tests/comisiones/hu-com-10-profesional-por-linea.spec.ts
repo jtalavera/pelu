@@ -120,13 +120,19 @@ test("un profesional inactivo o de otro tenant se rechaza", async ({ request }) 
   expect(await foreign.text()).toContain("PROFESSIONAL_NOT_FOUND");
 });
 
-test("con la flag deshabilitada el campo no se muestra y el flujo de HU-14 no cambia", async ({ page, request }) => {
+// The professional of each line is also who receives the tip of the comprobante's "Propinas"
+// section, so it stays selectable (optional) with the module off — but without the commission
+// hint, and no commission is generated.
+test("con la flag deshabilitada el campo es opcional, sin aviso de comisión, y el flujo de HU-14 no cambia", async ({
+  page,
+  request,
+}) => {
   await setTenantFlag(request, w.tenantId, "COMMISSIONS", false);
   try {
     await loginAdminUi(page, w);
     await openNewInvoice(page);
     await pickServiceLine(page, w.service.name, 0);
-    await expect(page.locator("#line-professional-0")).toHaveCount(0);
+    await expect(page.locator("#line-professional-0")).toHaveValue("");
     await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
     await page.locator("#pay-amount-0").fill("110000");
     await clickIssueInvoiceAndExpectSuccess(page);

@@ -29,6 +29,8 @@ import {
 } from "../api/downloadSifenKude";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { useMe } from "../hooks/useMe";
+import { AssignInvoiceProfessionalsDialog } from "./invoice/AssignInvoiceProfessionalsDialog";
 import { FieldValidationError } from "./FieldValidationError";
 import { InvoiceCorrectionForm } from "./InvoiceCorrectionForm";
 import { SifenStatusBadge } from "./SifenStatusBadge";
@@ -244,6 +246,12 @@ export function InvoiceDetailModal({
   /** HU-33 AC-01/AC-03: once SIFEN is active, the traditional PDF format is retired — only the
    * KuDE download (already gated on the invoice's own Approved status further below) remains. */
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
+  // "Asignar profesional": assigning a professional accrues a commission, so it needs the
+  // commissions module and an ADMIN (same as HU-COM-13).
+  const commissionsEnabled = useFeatureFlag("COMMISSIONS");
+  const { me } = useMe();
+  const [showAssignProfessionals, setShowAssignProfessionals] = useState(false);
+  const [assignProfessionalsSuccess, setAssignProfessionalsSuccess] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -684,6 +692,32 @@ export function InvoiceDetailModal({
     );
   }
 
+  const canAssignProfessionals =
+    invoice != null &&
+    invoice.status === "ISSUED" &&
+    commissionsEnabled &&
+    me?.role === "ADMIN" &&
+    invoice.lines.some((l) => l.serviceId != null);
+  // The button sits next to "Descargar KuDE" when that one is shown, else in the actions row.
+  const kudeRowShown =
+    invoice?.sifenSubmissionStatus === "APPROVED" ||
+    invoice?.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION" ||
+    invoice?.sifenSubmissionStatus === "QUEUED" ||
+    invoice?.sifenSubmissionStatus === "PENDING_VERIFICATION";
+  const assignProfessionalsButton = canAssignProfessionals ? (
+    <Button
+      variant="outline"
+      size="sm"
+      data-testid="invoice-assign-professionals-button"
+      onClick={() => {
+        setAssignProfessionalsSuccess(false);
+        setShowAssignProfessionals(true);
+      }}
+    >
+      {t("femme.billing.history.detail.assignProfessionals.button")}
+    </Button>
+  ) : null;
+
   return (
     <>
     <Modal
@@ -908,6 +942,7 @@ export function InvoiceDetailModal({
                             ? t("femme.billing.history.detail.sifen.kudeDownloading")
                             : t("femme.billing.history.detail.sifen.kudeDownloadButton")}
                         </Button>
+                        {assignProfessionalsButton}
                         {sifenEnvironment === "TEST" && (
                           <Button
                             variant="outline"
@@ -1762,6 +1797,12 @@ export function InvoiceDetailModal({
               );
             })()}
 
+            {assignProfessionalsSuccess && (
+              <Alert variant="success" data-testid="invoice-assign-professionals-success">
+                {t("femme.billing.history.detail.assignProfessionals.success")}
+              </Alert>
+            )}
+
             {/* Actions */}
             <div className="flex flex-wrap gap-3 pt-2">
               {invoice.status === "ISSUED" && !sifenEnabled && (
@@ -1773,6 +1814,7 @@ export function InvoiceDetailModal({
                   {t("femme.billing.history.detail.downloadPdf")}
                 </Button>
               )}
+              {!kudeRowShown && assignProfessionalsButton}
               {allowVoid &&
                 invoice.status === "ISSUED" &&
                 !showVoidForm &&
@@ -1844,6 +1886,18 @@ export function InvoiceDetailModal({
         )}
       </div>
     </Modal>
+    {showAssignProfessionals && invoice && (
+      <AssignInvoiceProfessionalsDialog
+        invoiceId={invoice.id}
+        lines={invoice.lines}
+        onClose={() => setShowAssignProfessionals(false)}
+        onAssigned={() => {
+          setShowAssignProfessionals(false);
+          setAssignProfessionalsSuccess(true);
+          refreshInvoiceSilently();
+        }}
+      />
+    )}
     {showSifenHistory && (
       <Modal
         open
