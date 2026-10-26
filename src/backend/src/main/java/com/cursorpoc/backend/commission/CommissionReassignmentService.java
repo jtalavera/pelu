@@ -9,10 +9,16 @@ import com.cursorpoc.backend.domain.enums.CommissionEntrySource;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.repository.CommissionEntryRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AssignInvoiceLinesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignLineRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.LineAssignment;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -175,6 +181,41 @@ public class CommissionReassignmentService {
     }
     CommissionEntry saved = ledger.save(entry, null, actorEmail);
     line.setProfessional(target);
+    return saved;
+  }
+
+  /**
+   * "Asignar profesional" from the comprobante detail: applies {@link #assignLine} to several lines
+   * of the same invoice in one transaction — if any line can't be assigned, none is.
+   */
+  @Transactional
+  public List<CommissionEntry> assignInvoiceLines(
+      long tenantId, long invoiceId, String actorEmail, AssignInvoiceLinesRequest request) {
+    if (request == null || request.assignments() == null || request.assignments().isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_ASSIGNMENTS_REQUIRED");
+    }
+    Set<Long> seen = new HashSet<>();
+    List<CommissionEntry> saved = new ArrayList<>();
+    for (LineAssignment a : request.assignments()) {
+      if (a == null || a.invoiceLineId() == null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_LINE_NOT_FOUND");
+      }
+      if (!seen.add(a.invoiceLineId())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_DUPLICATE_LINE");
+      }
+      InvoiceLine line = entityManager.find(InvoiceLine.class, a.invoiceLineId());
+      if (line == null
+          || line.getInvoice().getTenant().getId() != tenantId
+          || line.getInvoice().getId() != invoiceId) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_LINE_NOT_FOUND");
+      }
+      saved.add(
+          assignLine(
+              tenantId,
+              a.invoiceLineId(),
+              actorEmail,
+              new AssignLineRequest(a.professionalId(), request.note())));
+    }
     return saved;
   }
 

@@ -162,6 +162,15 @@ public final class CommissionDtos {
   /** HU-COM-13: assign a professional to an issued line billed without one. */
   public record AssignLineRequest(Long professionalId, String note) {}
 
+  /** One line → professional pair of {@link AssignInvoiceLinesRequest}. */
+  public record LineAssignment(Long invoiceLineId, Long professionalId) {}
+
+  /**
+   * "Asignar profesional" from the comprobante detail: several lines of one issued invoice at once
+   * (each one billed without a professional), all-or-nothing.
+   */
+  public record AssignInvoiceLinesRequest(List<LineAssignment> assignments, String note) {}
+
   /** What the professional would be paid today for an open period (replaces the simulator). */
   public record SettlementPreview(
       Long professionalId,

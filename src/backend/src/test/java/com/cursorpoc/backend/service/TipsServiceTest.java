@@ -13,10 +13,12 @@ import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TipWithdrawal;
 import com.cursorpoc.backend.domain.enums.CashMovementType;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.InvoiceTipRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ServiceRecordTipRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -37,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class TipsServiceTest {
 
   @Mock private ServiceRecordTipRepository serviceRecordTipRepository;
+  @Mock private InvoiceTipRepository invoiceTipRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private TenantRepository tenantRepository;
@@ -69,6 +72,8 @@ class TipsServiceTest {
         .thenReturn(Optional.of(professional));
     when(serviceRecordTipRepository.sumForProfessional(1L, 20L, ServiceRecordStatus.CLOSED))
         .thenReturn(new BigDecimal("50000.00"));
+    when(invoiceTipRepository.sumForProfessional(1L, 20L, InvoiceStatus.ISSUED))
+        .thenReturn(BigDecimal.ZERO);
     when(tipWithdrawalRepository.sumForProfessional(1L, 20L)).thenReturn(BigDecimal.ZERO);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));

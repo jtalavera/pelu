@@ -1689,4 +1689,164 @@ class InvoiceServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
   }
+
+  // ── Propinas on the comprobante form ─────────────────────────────────────────────────────────
+
+  private com.cursorpoc.backend.domain.Professional stubProfessional(long id, String name) {
+    com.cursorpoc.backend.domain.Professional p = new com.cursorpoc.backend.domain.Professional();
+    p.setId(id);
+    p.setFullName(name);
+    p.setActive(true);
+    return p;
+  }
+
+  private void stubIssuePrerequisites() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+  }
+
+  private InvoiceCreateRequest requestWithTips(
+      Long serviceRecordId,
+      List<InvoiceLineRequest> lines,
+      List<com.cursorpoc.backend.web.dto.InvoiceTipRequest> tips) {
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    return new InvoiceCreateRequest(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        lines,
+        List.of(payment),
+        serviceRecordId,
+        null,
+        null,
+        null,
+        null,
+        null,
+        tips);
+  }
+
+  @Test
+  void issueInvoice_withTipsPerProfessional_storesInvoiceTipsAndNeverTouchesTotal() {
+    stubIssuePrerequisites();
+    var professionalRepository =
+        org.mockito.Mockito.mock(com.cursorpoc.backend.repository.ProfessionalRepository.class);
+    invoiceService.setProfessionalRepository(professionalRepository);
+    var ana = stubProfessional(20L, "Ana");
+    when(professionalRepository.findByIdAndTenant_Id(20L, 1L)).thenReturn(Optional.of(ana));
+
+    var line =
+        new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null, 20L);
+    var captured = new java.util.concurrent.atomic.AtomicReference<Invoice>();
+    when(invoiceRepository.save(any(Invoice.class)))
+        .thenAnswer(
+            inv -> {
+              captured.set(inv.getArgument(0));
+              return inv.getArgument(0);
+            });
+
+    InvoiceResponse result =
+        invoiceService.issueInvoice(
+            1L,
+            requestWithTips(
+                null,
+                List.of(line),
+                List.of(
+                    new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                        20L, new BigDecimal("7000")))));
+
+    assertThat(result.total()).isEqualByComparingTo(new BigDecimal("50000.00"));
+    assertThat(result.tipsAmount()).isEqualByComparingTo(new BigDecimal("7000.00"));
+    assertThat(captured.get().getTips()).hasSize(1);
+    assertThat(captured.get().getTips().get(0).getProfessional()).isSameAs(ana);
+    assertThat(captured.get().getTips().get(0).getAmount())
+        .isEqualByComparingTo(new BigDecimal("7000.00"));
+  }
+
+  @Test
+  void issueInvoice_tipForProfessionalNotOnAnyLine_isRejected() {
+    stubIssuePrerequisites();
+    var professionalRepository =
+        org.mockito.Mockito.mock(com.cursorpoc.backend.repository.ProfessionalRepository.class);
+    invoiceService.setProfessionalRepository(professionalRepository);
+    when(professionalRepository.findByIdAndTenant_Id(20L, 1L))
+        .thenReturn(Optional.of(stubProfessional(20L, "Ana")));
+
+    var line =
+        new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null, 20L);
+
+    assertThatThrownBy(
+            () ->
+                invoiceService.issueInvoice(
+                    1L,
+                    requestWithTips(
+                        null,
+                        List.of(line),
+                        List.of(
+                            new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                                99L, new BigDecimal("5000"))))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVOICE_TIP_PROFESSIONAL_NOT_IN_LINES");
+  }
+
+  @Test
+  void issueInvoice_fromFicha_tipsReplaceTheFichaTipsInsteadOfDuplicatingThem() {
+    stubIssuePrerequisites();
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+    var professionalRepository =
+        org.mockito.Mockito.mock(com.cursorpoc.backend.repository.ProfessionalRepository.class);
+    invoiceService.setProfessionalRepository(professionalRepository);
+    var ana = stubProfessional(20L, "Ana");
+    var bea = stubProfessional(21L, "Bea");
+    when(professionalRepository.findByIdAndTenant_Id(20L, 1L)).thenReturn(Optional.of(ana));
+    when(professionalRepository.findByIdAndTenant_Id(21L, 1L)).thenReturn(Optional.of(bea));
+
+    com.cursorpoc.backend.domain.ServiceRecord serviceRecord =
+        new com.cursorpoc.backend.domain.ServiceRecord();
+    serviceRecord.setId(300L);
+    serviceRecord.setTenant(tenant);
+    serviceRecord.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    var fichaTip = new com.cursorpoc.backend.domain.ServiceRecordTip();
+    fichaTip.setServiceRecord(serviceRecord);
+    fichaTip.setProfessional(ana);
+    fichaTip.setAmount(new BigDecimal("4000.00"));
+    serviceRecord.getTips().add(fichaTip);
+    when(serviceRecordRepository.findByIdAndTenant_Id(300L, 1L))
+        .thenReturn(Optional.of(serviceRecord));
+    when(invoiceRepository.existsByServiceRecord_Id(300L)).thenReturn(false);
+
+    var lineAna =
+        new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("30000.00"), null, null, 20L);
+    var lineBea =
+        new InvoiceLineRequest(null, "Color", 1, new BigDecimal("20000.00"), null, null, 21L);
+
+    InvoiceResponse result =
+        invoiceService.issueInvoice(
+            1L,
+            requestWithTips(
+                300L,
+                List.of(lineAna, lineBea),
+                List.of(
+                    new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                        20L, new BigDecimal("6000")),
+                    new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                        21L, new BigDecimal("3000")))));
+
+    assertThat(result.tipsAmount()).isEqualByComparingTo(new BigDecimal("9000.00"));
+    assertThat(serviceRecord.getTips()).hasSize(2);
+    assertThat(fichaTip.getAmount()).isEqualByComparingTo(new BigDecimal("6000.00"));
+    assertThat(serviceRecord.getTips())
+        .anySatisfy(
+            t -> {
+              assertThat(t.getProfessional()).isSameAs(bea);
+              assertThat(t.getAmount()).isEqualByComparingTo(new BigDecimal("3000.00"));
+            });
+  }
 }

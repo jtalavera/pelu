@@ -848,6 +848,8 @@ type PrefillServiceRecord = {
   client: InitialClientForBilling;
   lines: PrefillServiceRecordLine[];
   tipsAmount: string | number;
+  /** Per-professional tips of the ficha — prefill the comprobante's "Propinas" section. */
+  tips?: { professionalId: number; amount: string | number }[];
 };
 
 function NewInvoiceTab({
@@ -872,15 +874,11 @@ function NewInvoiceTab({
   const navigate = useNavigate();
   /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
-  // HU-COM-10: professional / seller per line, only when the commissions module is enabled.
+  // HU-COM-10: professional / seller per line. The commission only accrues when the commissions
+  // module is enabled, but the professional is always selectable: the "Propinas" section tips the
+  // professionals who served the lines.
   const commissionsEnabled = useFeatureFlag("COMMISSIONS");
   const [lineProfessionals, setLineProfessionals] = useState<{ id: number; fullName: string; active: boolean }[]>([]);
-  useEffect(() => {
-    if (!commissionsEnabled) return;
-    femmeJson<{ id: number; fullName: string; active: boolean }[]>("/api/professionals")
-      .then((list) => setLineProfessionals(Array.isArray(list) ? list.filter((p) => p.active) : []))
-      .catch(() => setLineProfessionals([]));
-  }, [commissionsEnabled]);
   const effectiveInitialClient = initialClient ?? initialPrefillServiceRecord?.client ?? null;
   const initialSelection: ClientSelection = effectiveInitialClient
     ? {
@@ -925,11 +923,16 @@ function NewInvoiceTab({
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
   );
-  const [tipsAmount, setTipsAmount] = useState(
-    initialPrefillServiceRecord?.tipsAmount
-      ? maskMoneyInput(String(Math.round(Number(initialPrefillServiceRecord.tipsAmount))))
-      : "",
-  );
+  // Tips per professional ("Propinas" section), keyed by professional id. Prefilled from the ficha.
+  const [tips, setTips] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    initialPrefillServiceRecord?.tips?.forEach((tp) => {
+      if (Number(tp.amount) > 0) {
+        map[String(tp.professionalId)] = maskMoneyInput(String(Math.round(Number(tp.amount))));
+      }
+    });
+    return map;
+  });
 
   useEffect(() => {
     if (initialClient && onInitialClientConsumed) {
@@ -979,6 +982,15 @@ function NewInvoiceTab({
           },
         ],
   );
+  // Loaded once an item is picked (or right away with the commissions module, as before).
+  const needsLineProfessionals = commissionsEnabled || lines.some((l) => l.pickedService != null);
+  useEffect(() => {
+    if (!needsLineProfessionals || lineProfessionals.length > 0) return;
+    femmeJson<{ id: number; fullName: string; active: boolean }[]>("/api/professionals")
+      .then((list) => setLineProfessionals(Array.isArray(list) ? list.filter((p) => p.active) : []))
+      .catch(() => setLineProfessionals([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsLineProfessionals]);
   // Issue #284: the payment method starts EMPTY so the user has to choose it on purpose (a silent
   // "Cash" default let invoices go out with the wrong method).
   const [payments, setPayments] = useState<PaymentForm[]>([
@@ -1104,8 +1116,21 @@ function NewInvoiceTab({
   // Tips are collected alongside the invoice but never affect subtotal/discount/total
   // (fiscal fields), the printed comprobante, the amount to collect, or the default
   // cash payment fill — they're shown separately and settled outside the invoice math.
-  const tipsAmountNum = parseMaskedMoney(tipsAmount);
-  const showTips = serviceRecordId != null || tipsAmount !== "";
+  // One tip per distinct professional who served a service line (same as the ficha de servicio).
+  const tipProfessionalIds = Array.from(
+    new Set(
+      lines
+        .filter((l) => l.pickedService && l.pickedService.kind !== "PRODUCT" && l.professionalId)
+        .map((l) => l.professionalId),
+    ),
+  );
+  const tipProfessionalName = (id: string) =>
+    lineProfessionals.find((p) => String(p.id) === id)?.fullName ?? id;
+  const tipsTotal = tipProfessionalIds.reduce(
+    (acc, id) => acc + parseMaskedMoney(tips[id] ?? ""),
+    0,
+  );
+  const showTips = serviceRecordId != null || tipsTotal > 0;
   const amountToCollect = total;
 
   const assignedPayments = payments.reduce(
@@ -1541,7 +1566,7 @@ function NewInvoiceTab({
               ? parseMaskedMoney(l.discountValue)
               : parseFloat(l.discountValue.replace(",", "."))
             : null,
-        professionalId: commissionsEnabled && l.professionalId ? Number(l.professionalId) : null,
+        professionalId: l.professionalId ? Number(l.professionalId) : null,
       })),
       payments: payments.map((p) => ({
         method: p.method,
@@ -1553,7 +1578,10 @@ function NewInvoiceTab({
             : null,
       })),
       serviceRecordId: serviceRecordId,
-      tipsAmount: tipsAmount.trim() !== "" ? tipsAmountNum : null,
+      tipsAmount: tipsTotal,
+      tips: tipProfessionalIds
+        .map((id) => ({ professionalId: Number(id), amount: parseMaskedMoney(tips[id] ?? "") }))
+        .filter((tp) => tp.amount > 0),
     };
 
     setSubmitting(true);
@@ -1596,7 +1624,7 @@ function NewInvoiceTab({
       setPayments([
         { method: "", amount: "", cardBrand: "", cardBrandOtherDescription: "" },
       ]);
-      setTipsAmount("");
+      setTips({});
       setServiceRecordId(null);
       setLineErrors({});
       setPaymentErrors({});
@@ -2020,34 +2048,32 @@ function NewInvoiceTab({
                     </>
                   )}
                 </div>
-                {commissionsEnabled && (
-                  <div className="col-span-12 flex flex-col gap-1 sm:max-w-sm">
-                    <Label htmlFor={`line-professional-${idx}`}>
-                      {t("femme.billing.invoice.lineProfessional")}
-                    </Label>
-                    <Select
-                      id={`line-professional-${idx}`}
-                      value={line.professionalId}
-                      onChange={(e) =>
-                        setLines((prev) =>
-                          prev.map((l, i) => (i === idx ? { ...l, professionalId: e.target.value } : l)),
-                        )
-                      }
-                    >
-                      <option value="">{t("femme.billing.invoice.lineProfessionalNone")}</option>
-                      {lineProfessionals.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.fullName}
-                        </option>
-                      ))}
-                    </Select>
-                    {!line.professionalId && line.serviceId ? (
-                      <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`line-no-commission-${idx}`}>
-                        {t("femme.billing.invoice.lineNoCommission")}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
+                <div className="col-span-12 flex flex-col gap-1 sm:max-w-sm">
+                  <Label htmlFor={`line-professional-${idx}`}>
+                    {t("femme.billing.invoice.lineProfessional")}
+                  </Label>
+                  <Select
+                    id={`line-professional-${idx}`}
+                    value={line.professionalId}
+                    onChange={(e) =>
+                      setLines((prev) =>
+                        prev.map((l, i) => (i === idx ? { ...l, professionalId: e.target.value } : l)),
+                      )
+                    }
+                  >
+                    <option value="">{t("femme.billing.invoice.lineProfessionalNone")}</option>
+                    {lineProfessionals.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName}
+                      </option>
+                    ))}
+                  </Select>
+                  {commissionsEnabled && !line.professionalId && line.serviceId ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`line-no-commission-${idx}`}>
+                      {t("femme.billing.invoice.lineNoCommission")}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
@@ -2151,7 +2177,9 @@ function NewInvoiceTab({
                 <span className="text-red-600 dark:text-red-400">
                   {t("femme.billing.invoice.tips")}
                 </span>
-                <span id="billing-tips-amount">{formatAmountDecimal(tipsAmountNum.toFixed(2))}</span>
+                <span id="billing-tips-amount" className="text-red-600 dark:text-red-400">
+                  {formatAmountDecimal(tipsTotal.toFixed(2))}
+                </span>
               </div>
             )}
             <div
@@ -2307,6 +2335,46 @@ function NewInvoiceTab({
           >
             {t("femme.billing.invoice.addPayment")}
           </Button>
+        </Card>
+
+        {/* Tips section — same behaviour as the ficha de servicio: one tip per professional who
+            served a service line; never added to the invoice total. */}
+        <Card className="p-4 sm:p-6 flex flex-col gap-4" data-testid="billing-tips-section">
+          <Heading as="h3" className="text-base">
+            {t("femme.billing.invoice.tipsSection")}
+          </Heading>
+          {tipProfessionalIds.length === 0 ? (
+            <Text variant="muted" className="text-sm" data-testid="billing-tips-empty">
+              {t("femme.billing.invoice.tipsEmpty")}
+            </Text>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {tipProfessionalIds.map((id) => (
+                <div key={id} className="flex flex-wrap items-center gap-3">
+                  <Label htmlFor={`billing-tip-${id}`} className="min-w-[160px] text-sm font-medium">
+                    {tipProfessionalName(id)}
+                  </Label>
+                  <Input
+                    id={`billing-tip-${id}`}
+                    inputMode="numeric"
+                    value={tips[id] ?? ""}
+                    onChange={(e) =>
+                      setTips((prev) => ({ ...prev, [id]: maskMoneyInput(e.target.value) }))
+                    }
+                    placeholder="0"
+                    aria-label={`${t("femme.billing.invoice.tipsAmountLabel")} — ${tipProfessionalName(id)}`}
+                    className="w-32"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {tipsTotal > 0 && (
+            <div className="flex justify-between text-sm font-semibold text-red-600 dark:text-red-400">
+              <span>{t("femme.billing.invoice.tipsTotal")}</span>
+              <span data-testid="billing-tips-total">{formatAmountDecimal(tipsTotal.toFixed(2))}</span>
+            </div>
+          )}
         </Card>
 
         <Button

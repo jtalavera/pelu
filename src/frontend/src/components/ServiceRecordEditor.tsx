@@ -365,6 +365,7 @@ export function ServiceRecordEditor({
             professionalId: l.professionalId,
           })),
           tipsAmount: record.tipsTotal,
+          tips: record.tips.map((tp) => ({ professionalId: tp.professionalId, amount: tp.amount })),
         },
       },
     });
