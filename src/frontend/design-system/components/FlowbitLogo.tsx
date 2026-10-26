@@ -7,14 +7,17 @@ import { cn } from "../lib/cn";
  *   tone="light"  -> for light backgrounds: letters tinta noche, comb and dot teal.
  *   tone="dark"   -> for teal / tinta noche backgrounds: letters lino, comb and dot in the tenant's
  *                    skin accent (`--fb-accent`, see styles/skins.css).
+ *   tone="auto"   -> for the themed page background: "light" in light mode, "dark" in dark mode.
  * The shape never changes; only those colors do. Never place the "dark" tone on a light surface
  * (the manual lists light-on-light and teal-on-tinta as incorrect uses).
  */
-export type FlowbitLogoTone = "light" | "dark";
+export type FlowbitLogoTone = "light" | "dark" | "auto";
 
 const TONES: Record<FlowbitLogoTone, { letters: string; accent: string }> = {
   light: { letters: "rgb(var(--fb-tinta))", accent: "rgb(var(--fb-teal))" },
   dark: { letters: "rgb(var(--fb-lino))", accent: "rgb(var(--fb-accent))" },
+  // Follows the page theme: tinta + teal in light mode, lino + skin accent in dark mode.
+  auto: { letters: "rgb(var(--fb-ink))", accent: "rgb(var(--fb-logo-accent))" },
 };
 
 export type FlowbitLogoProps = Omit<SVGProps<SVGSVGElement>, "children"> & {

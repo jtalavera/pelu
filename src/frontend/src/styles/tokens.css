@@ -54,6 +54,8 @@
   /* Acento del skin del tenant (peine y punto de la "i"); ver skins.css */
   --fb-accent:      243 198 174;
   --fb-accent-ink:  10 31 51;
+  /* Peine/punto del logo sobre el fondo de la página: teal en claro, acento en oscuro */
+  --fb-logo-accent: 14 118 126;
 
   /* Alias heredados (valores completos, listos para usar con var()) */
   --color-rose:        rgb(var(--fb-primary));
@@ -128,6 +130,14 @@
   --border-default: 0.5px solid var(--color-stone-md);
   --border-focus:   2px solid var(--color-rose);
 
+  /* Barra superior: teal en claro, superficie oscura en oscuro (el logo va en tono "dark") */
+  --topbar-bg:        rgb(var(--fb-teal));
+  --topbar-fg:        rgb(var(--fb-lino));
+  --topbar-ctl:       rgb(var(--fb-lino) / 0.16);
+  --topbar-ctl-hover: rgb(var(--fb-lino) / 0.3);
+  --topbar-sel-fg:    rgb(var(--fb-teal));
+  --topbar-border:    none;
+
   /* Fiscal stamp — “vigente” */
   --color-timbrado-valid-fg: #14532d;
   --color-timbrado-valid-bg: #bbf7d0;
@@ -189,6 +199,12 @@ html.dark {
   --color-amber:       #E8B565;
   --color-amber-lt:    #3A2E14;
   --color-amber-md:    #7A6030;
+
+  --fb-logo-accent: var(--fb-accent);
+
+  --topbar-bg:        rgb(var(--fb-surface));
+  --topbar-sel-fg:    rgb(var(--fb-surface));
+  --topbar-border:    var(--border-default);
 
   /* Fiscal stamp — “vigente” (más contraste que success genérico) */
   --color-timbrado-valid-fg: #bbf7d0;

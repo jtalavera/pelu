@@ -32,9 +32,9 @@ export function TourJoyride({ enabled = true }: TourJoyrideProps) {
         showProgress: true,
         buttons: ["back", "skip", "primary"],
         skipBeacon: true,
-        primaryColor: "#e11d48",
-        textColor: "#111827",
-        overlayColor: "rgba(0,0,0,0.4)",
+        primaryColor: "rgb(var(--fb-primary))",
+        textColor: "rgb(var(--fb-ink))",
+        overlayColor: "rgba(10,31,51,0.55)",
         zIndex: 10000,
         scrollOffset: 80,
       }}
@@ -43,19 +43,20 @@ export function TourJoyride({ enabled = true }: TourJoyrideProps) {
           borderRadius: 12,
           padding: "20px 24px 18px",
           maxWidth: 340,
-          backgroundColor: "#ffffff",
-          boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+          backgroundColor: "rgb(var(--fb-surface))",
+          boxShadow: "0 8px 30px rgba(10,31,51,0.18)",
         },
         tooltipTitle: {
           fontSize: 14,
           fontWeight: 600,
           marginBottom: 8,
-          color: "#111827",
+          fontFamily: "var(--font-heading)",
+          color: "rgb(var(--fb-ink))",
         },
         tooltipContent: {
           fontSize: 13,
           lineHeight: 1.65,
-          color: "#374151",
+          color: "rgb(var(--fb-ink-2))",
           padding: 0,
         },
         tooltipFooter: {
@@ -70,11 +71,11 @@ export function TourJoyride({ enabled = true }: TourJoyrideProps) {
         buttonBack: {
           fontSize: 12,
           padding: "7px 12px",
-          color: "#6b7280",
+          color: "rgb(var(--fb-ink-3))",
         },
         buttonSkip: {
           fontSize: 11,
-          color: "#9ca3af",
+          color: "rgb(var(--fb-ink-3))",
         },
       }}
     />

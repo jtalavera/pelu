@@ -376,7 +376,7 @@
         "settlementsTitle": "My settlements"
       }
     },
-    "appTitle": "Saloon Management",
+    "appTitle": "Flowbit",
     "listFilter": {
       "label": "Filter list",
       "placeholder": "Type to filter…",
@@ -427,7 +427,10 @@
       "emailInvalid": "Enter a valid email (must include @ and text before @, e.g. name@domain.com).",
       "phoneIncomplete": "Enter the 10 digits of the phone number (e.g. (0981) 123-456)."
     },
-    "appName": "Salon Management",
+    "appName": "Flowbit",
+    "brand": {
+      "slogan": "Your salon, tangle-free"
+    },
     "login": {
       "title": "Sign in",
       "subtitle": "Enter your system email and password.",
