@@ -1514,16 +1514,18 @@
           "assignProfessionals": {
             "button": "Asignar profesional",
             "title": "Asignar profesional a los servicios",
-            "hint": "La factura no se modifica. Cada servicio queda asignado al profesional que lo atendió y genera su comisión con las reglas vigentes a la fecha de la factura.",
+            "hint": "La factura no se modifica. Elegí el profesional que atendió cada servicio: se genera su comisión con las reglas vigentes a la fecha de la factura. Si cambiás un profesional ya asignado, se revierte su comisión y se genera la del nuevo.",
             "professional": "Profesional que atendió",
             "choose": "Seleccioná un profesional",
-            "alreadyAssigned": "Atendido por {{professional}}",
-            "nonePending": "Todos los servicios de este comprobante ya tienen un profesional asignado.",
-            "selectionRequired": "Elegí un profesional para al menos un servicio (ej.: Ana para «Corte de cabello»).",
+            "alreadyAssigned": "Asignado actualmente: {{professional}}",
+            "selectionRequired": "Elegí o cambiá el profesional de al menos un servicio (ej.: Ana para «Corte de cabello»).",
             "save": "Guardar",
             "saving": "Guardando…",
             "cancel": "Cancelar",
-            "success": "Profesionales asignados. Se calcularon sus comisiones."
+            "success": "Profesionales actualizados. Se calcularon sus comisiones.",
+            "reassignNote": "Al cambiar un profesional se revierte su comisión y se genera la del nuevo. Si esa comisión ya está en una liquidación aprobada o pagada, esa liquidación no cambia: la corrección entra en la próxima.",
+            "reason": "Motivo del cambio (opcional)",
+            "reasonPlaceholder": "Ej.: el servicio lo realizó Ana, no Laura"
           },
           "voidButton": "Anular comprobante",
           "voidTitle": "Anular comprobante",

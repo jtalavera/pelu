@@ -49,6 +49,9 @@ test.beforeEach(async ({ request }) => {
 const invoiceDetail = (request: import("@playwright/test").APIRequestContext) =>
   apiGetJson<InvoiceDetail>(request, w.adminToken, `/api/invoices/${invoiceId}`);
 
+const sumOf = (es: { professionalId: number; commissionAmount: number }[], professionalId: number) =>
+  es.filter((e) => e.professionalId === professionalId).reduce((s, e) => s + Number(e.commissionAmount), 0);
+
 const ofInvoice = async (request: import("@playwright/test").APIRequestContext) =>
   (await entries(request, w.adminToken)).filter((e) => e.invoiceId === invoiceId);
 
@@ -63,7 +66,7 @@ async function openInvoiceDetail(page: Page, invoiceNumber: string) {
     .click();
 }
 
-test("el botón abre un pop up, asigna profesionales a los servicios emitidos y calcula sus comisiones", async ({
+test("el botón abre un pop up, asigna o cambia profesionales de los servicios emitidos y recalcula sus comisiones", async ({
   page,
   request,
 }) => {
@@ -84,11 +87,13 @@ test("el botón abre un pop up, asigna profesionales a los servicios emitidos y 
   // Saving with nothing chosen explains the rule with an example.
   await page.getByTestId("assign-professionals-save").click();
   await expect(page.getByTestId("assign-professionals-error")).toContainText(
-    "Choose a professional for at least one service",
+    "Choose or change the professional of at least one service",
   );
 
   // Only the first service gets a professional; the second one stays pending.
   await page.locator(`#assign-professional-${line1.id}`).selectOption({ label: w.bea.name });
+  // Assigning a pending line isn't a change: no reason field.
+  await expect(page.locator("#assign-professionals-reason")).toHaveCount(0);
   await page.getByTestId("assign-professionals-save").click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("invoice-assign-professionals-success")).toContainText(
@@ -103,27 +108,40 @@ test("el botón abre un pop up, asigna profesionales a los servicios emitidos y 
   expect(Number(entry.commissionAmount)).toBe(40000);
   expect(entry.settlementId).toBeNull();
 
-  // Re-opening: the assigned line is read-only, the other one can still be assigned.
+  // Re-opening: the assigned line can be changed too (with an optional reason), and the pending
+  // one assigned, in the same save.
   await page.getByTestId("invoice-assign-professionals-button").click();
   await expect(page.getByTestId(`assign-professionals-line-${line1.id}`)).toContainText(
-    `Performed by ${w.bea.name}`,
+    `Currently assigned: ${w.bea.name}`,
   );
-  await expect(page.locator(`#assign-professional-${line1.id}`)).toHaveCount(0);
-  await page.locator(`#assign-professional-${line2.id}`).selectOption({ label: w.ana.name });
+  await expect(page.locator(`#assign-professional-${line1.id}`)).toHaveValue(String(w.bea.id));
+  await page.locator(`#assign-professional-${line1.id}`).selectOption({ label: w.ana.name });
+  await expect(page.getByTestId("assign-professionals-reassign-note")).toContainText(
+    "the correction goes into the next one",
+  );
+  await page.locator("#assign-professionals-reason").fill("Lo atendió Ana, no Bea");
+  await page.locator(`#assign-professional-${line2.id}`).selectOption({ label: w.bea.name });
   await page.getByTestId("assign-professionals-save").click();
   await expect(dialog).toHaveCount(0);
-  await expect.poll(async () => (await ofInvoice(request)).length, { timeout: 15_000 }).toBe(2);
-  const anaEntry = (await ofInvoice(request)).find((e) => e.professionalId === w.ana.id)!;
-  expect(Number(anaEntry.commissionAmount)).toBe(20000);
 
-  // With every service assigned the pop up says so and has nothing to save.
+  // Bea's first commission is reversed; Ana earns line 1 (40 %) and Bea line 2 (20 %).
+  await expect.poll(async () => (await ofInvoice(request)).length, { timeout: 15_000 }).toBe(4);
+  expect(sumOf(await ofInvoice(request), w.ana.id)).toBe(40000);
+  expect(sumOf(await ofInvoice(request), w.bea.id)).toBe(20000);
+
+  // The reason is optional: change line 1 back to Bea without one.
   await page.getByTestId("invoice-assign-professionals-button").click();
-  await expect(page.getByTestId("assign-professionals-none-pending")).toBeVisible();
-  await expect(page.getByTestId("assign-professionals-save")).toBeDisabled();
+  await expect(page.locator(`#assign-professional-${line1.id}`)).toHaveValue(String(w.ana.id));
+  await page.locator(`#assign-professional-${line1.id}`).selectOption({ label: w.bea.name });
+  await page.getByTestId("assign-professionals-save").click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(async () => (await ofInvoice(request)).length, { timeout: 15_000 }).toBe(6);
+  expect(sumOf(await ofInvoice(request), w.ana.id)).toBe(0);
+  expect(sumOf(await ofInvoice(request), w.bea.id)).toBe(60000);
 
   const after = await invoiceDetail(request);
   expect(after.lines.find((l) => l.id === line1.id)!.professionalId).toBe(w.bea.id);
-  expect(after.lines.find((l) => l.id === line2.id)!.professionalId).toBe(w.ana.id);
+  expect(after.lines.find((l) => l.id === line2.id)!.professionalId).toBe(w.bea.id);
 });
 
 test("API: la asignación por lote es todo o nada y valida las líneas", async ({ request }) => {
@@ -164,9 +182,39 @@ test("API: la asignación por lote es todo o nada y valida las líneas", async (
 
   res = await post(invoiceId, { assignments: [{ invoiceLineId: line2.id, professionalId: w.bea.id }] });
   expect(res.ok(), await res.text()).toBeTruthy();
+  res = await post(invoiceId, { assignments: [{ invoiceLineId: line2.id, professionalId: w.bea.id }] });
+  expect(res.status()).toBe(400);
+  expect(await res.text()).toContain("COMMISSION_REASSIGN_SAME_PROFESSIONAL");
+  // Changing an assigned line works without a reason.
   res = await post(invoiceId, { assignments: [{ invoiceLineId: line2.id, professionalId: w.ana.id }] });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  await expect.poll(async () => sumOf(await ofInvoice(request), w.ana.id), { timeout: 15_000 }).toBe(20000);
+  expect(sumOf(await ofInvoice(request), w.bea.id)).toBe(0);
+
+  // A voided invoice can't be changed.
+  await voidInvoice(request, w.adminToken, invoiceId);
+  res = await post(invoiceId, { assignments: [{ invoiceLineId: line2.id, professionalId: w.bea.id }] });
   expect(res.status()).toBe(409);
   expect(await res.text()).toContain("COMMISSION_LINE_NOT_ASSIGNABLE");
+});
+
+test("una línea con profesional pero sin comisión (módulo apagado al facturar) solo cambia de profesional", async ({
+  request,
+}) => {
+  await setTenantFlag(request, w.tenantId, "COMMISSIONS", false);
+  const inv = await issueInvoice(request, w.adminToken, [
+    { serviceId: w.service.id, name: w.service.name, professionalId: w.ana.id },
+  ]);
+  await setTenantFlag(request, w.tenantId, "COMMISSIONS", true);
+  const before = await apiGetJson<InvoiceDetail>(request, w.adminToken, `/api/invoices/${inv.id}`);
+  const res = await request.post(`${API_BASE}/api/commissions/invoices/${inv.id}/assign-lines`, {
+    headers: authHeaders(w.adminToken),
+    data: { assignments: [{ invoiceLineId: before.lines[0].id, professionalId: w.bea.id }], note: null },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  const after = await apiGetJson<InvoiceDetail>(request, w.adminToken, `/api/invoices/${inv.id}`);
+  expect(after.lines[0].professionalId).toBe(w.bea.id);
+  expect((await entries(request, w.adminToken)).filter((e) => e.invoiceId === inv.id)).toHaveLength(0);
 });
 
 test("el botón no se muestra en un comprobante anulado ni con el módulo de comisiones deshabilitado", async ({

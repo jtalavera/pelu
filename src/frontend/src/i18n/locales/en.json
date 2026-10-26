@@ -1514,16 +1514,18 @@
           "assignProfessionals": {
             "button": "Assign professional",
             "title": "Assign professionals to the services",
-            "hint": "The invoice is not modified. Each service is assigned to the professional who performed it and earns its commission with the rules in force on the invoice date.",
+            "hint": "The invoice is not modified. Choose the professional who performed each service: their commission is generated with the rules in force on the invoice date. Changing an already assigned professional reverses their commission and generates the new one's.",
             "professional": "Professional who performed it",
             "choose": "Select a professional",
-            "alreadyAssigned": "Performed by {{professional}}",
-            "nonePending": "Every service on this invoice already has a professional assigned.",
-            "selectionRequired": "Choose a professional for at least one service (e.g. Ana for \"Haircut\").",
+            "alreadyAssigned": "Currently assigned: {{professional}}",
+            "selectionRequired": "Choose or change the professional of at least one service (e.g. Ana for \"Haircut\").",
             "save": "Save",
             "saving": "Saving…",
             "cancel": "Cancel",
-            "success": "Professionals assigned. Their commissions were calculated."
+            "success": "Professionals updated. Their commissions were calculated.",
+            "reassignNote": "Changing a professional reverses their commission and generates the new one's. If that commission is already in an approved or paid settlement, that settlement doesn't change: the correction goes into the next one.",
+            "reason": "Reason for the change (optional)",
+            "reasonPlaceholder": "E.g. Ana performed the service, not Laura"
           },
           "voidButton": "Void invoice",
           "voidTitle": "Void invoice",

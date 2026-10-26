@@ -278,14 +278,15 @@ export const assignLineProfessional = (invoiceLineId: number, professionalId: nu
     professionalId,
     note: note || null,
   });
-/** "Asignar profesional" from the comprobante detail: several lines of one invoice at once. */
+/** "Asignar profesional" from the comprobante detail: assign or change several lines of one invoice. */
 export const assignInvoiceLinesProfessionals = (
   invoiceId: number,
   assignments: { invoiceLineId: number; professionalId: number }[],
+  note: string,
 ) =>
   femmePostJson<EntryView[]>(`/api/commissions/invoices/${invoiceId}/assign-lines`, {
     assignments,
-    note: null,
+    note: note || null,
   });
 export const getEntries = (f: EntryFilters) => femmeJson<EntryView[]>(`/api/commissions/entries${qs(f)}`);
 export const getReport = (f: EntryFilters) => femmeJson<ReportResponse>(`/api/commissions/reports${qs(f)}`);

@@ -78,8 +78,20 @@ public class CommissionReassignmentService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "COMMISSION_REASSIGN_SAME_PROFESSIONAL");
     }
-    String reason = request.reason().trim();
+    return reassignEntry(tenantId, original, target, request.reason().trim(), actorEmail);
+  }
 
+  /**
+   * Core of a reassignment: reverses {@code original} and accrues a replacement for {@code target}
+   * with the rules in force at the sale; the invoice line follows the new professional. {@code
+   * reason} may be null (the comprobante's "Asignar profesional" makes it optional).
+   */
+  private CommissionEntry reassignEntry(
+      long tenantId,
+      CommissionEntry original,
+      Professional target,
+      String reason,
+      String actorEmail) {
     // Same placement rule as a void: inside an open (Draft / unsettled) settlement the pair cancels
     // out where it is; a closed (Approved / Paid) one is never touched — the correction goes to the
     // next settlement.
@@ -185,8 +197,17 @@ public class CommissionReassignmentService {
   }
 
   /**
-   * "Asignar profesional" from the comprobante detail: applies {@link #assignLine} to several lines
-   * of the same invoice in one transaction — if any line can't be assigned, none is.
+   * "Asignar profesional" from the comprobante detail, several lines of the same invoice in one
+   * transaction — if any line can't be changed, none is:
+   *
+   * <ul>
+   *   <li>a line without professional gets one ({@link #assignLine}, accrues its commission);
+   *   <li>a line whose professional already earned a live commission is reassigned (the entry is
+   *       reversed and a new one accrued for the new professional, as HU-COM-12) — the reason is
+   *       optional here;
+   *   <li>a line with a professional but no commission (billed while the module was off) only
+   *       changes its professional.
+   * </ul>
    */
   @Transactional
   public List<CommissionEntry> assignInvoiceLines(
@@ -194,6 +215,12 @@ public class CommissionReassignmentService {
     if (request == null || request.assignments() == null || request.assignments().isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_ASSIGNMENTS_REQUIRED");
     }
+    String note =
+        request.note() == null || request.note().isBlank()
+            ? null
+            : request.note().trim().length() > 500
+                ? request.note().trim().substring(0, 500)
+                : request.note().trim();
     Set<Long> seen = new HashSet<>();
     List<CommissionEntry> saved = new ArrayList<>();
     for (LineAssignment a : request.assignments()) {
@@ -209,12 +236,36 @@ public class CommissionReassignmentService {
           || line.getInvoice().getId() != invoiceId) {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "INVOICE_LINE_NOT_FOUND");
       }
-      saved.add(
-          assignLine(
-              tenantId,
-              a.invoiceLineId(),
-              actorEmail,
-              new AssignLineRequest(a.professionalId(), request.note())));
+      if (line.getProfessional() == null) {
+        saved.add(
+            assignLine(
+                tenantId,
+                a.invoiceLineId(),
+                actorEmail,
+                new AssignLineRequest(a.professionalId(), request.note())));
+        continue;
+      }
+      Invoice invoice = line.getInvoice();
+      if (invoice.getStatus() == InvoiceStatus.VOIDED || line.getSalonService() == null) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "COMMISSION_LINE_NOT_ASSIGNABLE");
+      }
+      Professional target = activeProfessional(tenantId, a.professionalId());
+      if (target.getId().equals(line.getProfessional().getId())) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "COMMISSION_REASSIGN_SAME_PROFESSIONAL");
+      }
+      CommissionEntry live =
+          entryRepository.findLiveLineEntriesOfInvoice(tenantId, invoiceId).stream()
+              .filter(e -> line.getId().equals(e.getInvoiceLineId()))
+              .findFirst()
+              .orElse(null);
+      if (live != null) {
+        saved.add(reassignEntry(tenantId, live, target, note, actorEmail));
+      } else {
+        // No commission to move (billed while the module was off, or accrual still pending — it
+        // reads the line's professional when it runs, so it will follow the new one).
+        line.setProfessional(target);
+      }
     }
     return saved;
   }

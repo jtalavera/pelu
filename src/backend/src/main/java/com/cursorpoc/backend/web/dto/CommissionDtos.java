@@ -166,8 +166,9 @@ public final class CommissionDtos {
   public record LineAssignment(Long invoiceLineId, Long professionalId) {}
 
   /**
-   * "Asignar profesional" from the comprobante detail: several lines of one issued invoice at once
-   * (each one billed without a professional), all-or-nothing.
+   * "Asignar profesional" from the comprobante detail: several lines of one issued invoice at once,
+   * all-or-nothing. A line without professional gets one; a line that has one is reassigned. {@code
+   * note} is optional (the reason of a reassignment).
    */
   public record AssignInvoiceLinesRequest(List<LineAssignment> assignments, String note) {}
 
