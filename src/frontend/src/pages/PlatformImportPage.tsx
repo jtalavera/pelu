@@ -378,6 +378,7 @@ export default function PlatformImportPage() {
                       <th style={thStyle}>{t("femme.platform.import.colColumn")}</th>
                       <th style={thStyle}>{t("femme.platform.import.colRequirement")}</th>
                       <th style={thStyle}>{t("femme.platform.import.colDescription")}</th>
+                      <th style={thStyle}>{t("femme.platform.import.colValidations")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -394,6 +395,14 @@ export default function PlatformImportPage() {
                         <td style={tdStyle}>
                           {t(`femme.platform.import.columnsByEntity.${tpl.entity}.${col.key}`, {
                             defaultValue: t(`femme.platform.import.columns.${col.key}`, { defaultValue: "" }),
+                          })}
+                        </td>
+                        <td
+                          style={{ ...tdStyle, minWidth: 220 }}
+                          data-testid={`import-column-validations-${tpl.entity}-${col.key}`}
+                        >
+                          {t(`femme.platform.import.validationsByEntity.${tpl.entity}.${col.key}`, {
+                            defaultValue: t("femme.platform.import.noValidations"),
                           })}
                         </td>
                       </tr>

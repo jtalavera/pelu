@@ -189,19 +189,28 @@ class ServiceImportServiceTest {
     verify(salonServiceRepository, never()).save(any());
   }
 
-  // AC-3: zero/negative price rejects the row.
+  // AC-3: a negative price rejects the row.
   @Test
-  void zeroOrNegativePrice_isRejected() {
-    byte[] bytes =
-        workbook(
-            SERVICE_HEADERS,
-            new String[] {"Corte", "Corte de dama", "0", "45"},
-            new String[] {"Corte", "Otro corte", "-100", "45"});
+  void negativePrice_isRejected() {
+    byte[] bytes = workbook(SERVICE_HEADERS, new String[] {"Corte", "Otro corte", "-100", "45"});
     ImportResult result = service.importServices(1L, bytes);
 
-    assertThat(result.failedCount()).isEqualTo(2);
-    assertThat(result.rows())
-        .allMatch(r -> r.errorCode().equals(ServiceImportService.ERROR_PRICE_INVALID));
+    assertThat(result.failedCount()).isEqualTo(1);
+    assertThat(result.rows().get(0).errorCode())
+        .isEqualTo(ServiceImportService.ERROR_PRICE_INVALID);
+    verify(salonServiceRepository, never()).save(any());
+  }
+
+  // A zero price is allowed (no "greater than zero" rule), same as the manual catalog screens.
+  @Test
+  void zeroPrice_isImported() {
+    byte[] bytes =
+        workbook(SERVICE_HEADERS, new String[] {"Corte", "Corte de cortesia", "0", "45"});
+    ImportResult result = service.importServices(1L, bytes);
+
+    assertThat(result.importedCount()).isEqualTo(1);
+    assertThat(result.failedCount()).isEqualTo(0);
+    verify(salonServiceRepository).save(any());
   }
 
   // AC-3: non-numeric or <1-minute duration rejects only that row.
@@ -464,6 +473,24 @@ class ServiceImportServiceTest {
                 assertThat(r.errorCode())
                     .isEqualTo(ServiceImportService.ERROR_CATEGORY_KIND_MISMATCH));
     verify(salonServiceRepository, never()).save(any());
+  }
+
+  // Productos file: a zero price is allowed, a negative one is still rejected.
+  @Test
+  void productsFile_zeroPriceIsImported_negativePriceIsRejected() {
+    String[] headers = {"categoria", "nombre", "precio"};
+    byte[] bytes =
+        workbook(
+            headers,
+            new String[] {"Muestras", "Muestra gratis", "0"},
+            new String[] {"Muestras", "Precio negativo", "-1"});
+
+    ImportResult result = service.importProducts(1L, bytes);
+
+    assertThat(result.importedCount()).isEqualTo(1);
+    assertThat(result.failedCount()).isEqualTo(1);
+    assertThat(result.rows().get(1).errorCode())
+        .isEqualTo(ServiceImportService.ERROR_PRICE_INVALID);
   }
 
   @Test
