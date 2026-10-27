@@ -498,7 +498,7 @@ export default function PlatformTiersPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={closeModal} className="min-h-11">
+            <Button type="button" variant="secondary" onClick={closeModal} className="min-h-11">
               {t("femme.platform.tiers.cancel")}
             </Button>
             <Button type="button" onClick={submitCreate} disabled={saving} className="min-h-11">
@@ -676,7 +676,7 @@ export default function PlatformTiersPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={closeEditModal} className="min-h-11">
+            <Button type="button" variant="secondary" onClick={closeEditModal} className="min-h-11">
               {t("femme.platform.tiers.cancel")}
             </Button>
             <Button type="button" onClick={submitEdit} disabled={editSaving} className="min-h-11">

@@ -978,7 +978,7 @@ export default function ClientsPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               onClick={() => setModalOpen(false)}
               className="min-h-11"
             >

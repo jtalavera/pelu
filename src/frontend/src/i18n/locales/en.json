@@ -93,6 +93,11 @@
         "to": "To",
         "professional": "Professional",
         "allProfessionals": "All professionals",
+        "professionals": "Professionals",
+        "filterProfessionals": "Filter professionals…",
+        "noProfessionals": "No professional matches",
+        "professionalsSelected": "{count} selected",
+        "clearFilters": "Clear filters",
         "status": "Status",
         "allStatuses": "All statuses",
         "total": "Total",
@@ -270,7 +275,13 @@
         "percentAndCommission": "% and estimated commission",
         "inherits": "Inherits {{value}}",
         "viewHistory": "View change history",
-        "panelPending": "There are unsaved changes. Use \"Save changes\" above to apply them.",
+        "panelPending": "There are unsaved changes (marked with ●). Use \"Save changes\" to apply them.",
+        "useStandard": "Use the standard",
+        "excludeProfessional": "No commission on this item",
+        "includeProfessional": "Include again",
+        "excludedTitle_one": "No commission ({{count}})",
+        "excludedTitle_other": "No commission ({{count}})",
+        "excludedChip": "no commission",
         "panelFootnote": "The estimated commission is computed on the list price base. Changes apply when saved and do not modify commissions already settled.",
         "subtabs": {
           "SERVICE": "Services",
@@ -319,7 +330,17 @@
         "noneGenerated": "There are no pending commissions to settle in that period.",
         "empty": "No settlements.",
         "period": "Period",
-        "open": "View"
+        "open": "View",
+        "conflict": {
+          "title": "Settlements already exist in that period",
+          "intro": "These professionals already have a settlement overlapping the chosen period, so another one can't be generated for them:",
+          "question_one": "Do you want to generate the settlement for the remaining professional who doesn't have one yet, or generate none?",
+          "question_other": "Do you want to generate settlements for the {{count}} remaining professionals who don't have one yet, or generate none?",
+          "nothingElse": "No other professional has pending commissions to settle in that period.",
+          "remaining_one": "Generate for the remaining one",
+          "remaining_other": "Generate for the {{count}} remaining",
+          "none": "Generate none"
+        }
       },
       "settlement": {
         "title": "Settlement #{{id}} · {{name}}",

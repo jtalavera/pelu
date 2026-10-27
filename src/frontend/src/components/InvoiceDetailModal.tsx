@@ -1194,6 +1194,19 @@ export function InvoiceDetailModal({
                           </div>
                           <div className="flex gap-2">
                             <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setShowNullifyForm(false);
+                                setNullifyReason("");
+                                setNullifyReasonError(null);
+                                setNullifyError(null);
+                              }}
+                            >
+                              {t("femme.billing.history.detail.voidCancel")}
+                            </Button>
+                            <Button
                               type="submit"
                               variant="danger"
                               size="sm"
@@ -1207,19 +1220,6 @@ export function InvoiceDetailModal({
                                 : t(
                                     "femme.billing.history.detail.sifen.nullifyNumberConfirm",
                                   )}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => {
-                                setShowNullifyForm(false);
-                                setNullifyReason("");
-                                setNullifyReasonError(null);
-                                setNullifyError(null);
-                              }}
-                            >
-                              {t("femme.billing.history.detail.voidCancel")}
                             </Button>
                           </div>
                         </form>
@@ -1460,6 +1460,14 @@ export function InvoiceDetailModal({
                           </div>
                           <div className="flex gap-2">
                             <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setShowCancelForm(false)}
+                            >
+                              {t("femme.billing.history.detail.sifen.cancelDismiss")}
+                            </Button>
+                            <Button
                               type="submit"
                               variant="danger"
                               size="sm"
@@ -1469,14 +1477,6 @@ export function InvoiceDetailModal({
                               {cancelling
                                 ? t("femme.billing.history.detail.sifen.cancelling")
                                 : t("femme.billing.history.detail.sifen.cancelConfirm")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setShowCancelForm(false)}
-                            >
-                              {t("femme.billing.history.detail.sifen.cancelDismiss")}
                             </Button>
                           </div>
                         </form>
@@ -1886,6 +1886,9 @@ export function InvoiceDetailModal({
           <>
             {/* Actions — shared by both tabs */}
             <div className="flex flex-wrap gap-3 border-t border-[rgb(var(--color-border))] pt-4">
+              <Button variant="secondary" size="sm" onClick={onClose}>
+                {t("femme.billing.history.detail.close")}
+              </Button>
               {invoice.status === "ISSUED" && !sifenEnabled && (
                 <Button
                   variant="outline"
@@ -1909,9 +1912,6 @@ export function InvoiceDetailModal({
                     {t("femme.billing.history.detail.voidButton")}
                   </Button>
                 )}
-              <Button variant="secondary" size="sm" onClick={onClose}>
-                {t("femme.billing.history.detail.close")}
-              </Button>
             </div>
 
             {/* Void form — rejected invoices are anulados from the "Resolver factura rechazada"
@@ -1947,11 +1947,6 @@ export function InvoiceDetailModal({
                   <FieldValidationError id="void-reason-err">{voidReasonError}</FieldValidationError>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="submit" variant="danger" size="sm" disabled={voiding}>
-                    {voiding
-                      ? t("femme.billing.history.detail.voiding")
-                      : t("femme.billing.history.detail.voidConfirm")}
-                  </Button>
                   <Button
                     type="button"
                     variant="secondary"
@@ -1959,6 +1954,11 @@ export function InvoiceDetailModal({
                     onClick={() => setShowVoidForm(false)}
                   >
                     {t("femme.billing.history.detail.voidCancel")}
+                  </Button>
+                  <Button type="submit" variant="danger" size="sm" disabled={voiding}>
+                    {voiding
+                      ? t("femme.billing.history.detail.voiding")
+                      : t("femme.billing.history.detail.voidConfirm")}
                   </Button>
                 </div>
               </form>

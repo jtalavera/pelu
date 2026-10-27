@@ -201,7 +201,7 @@ export function ClientTechnicalSheetForm({ clientId, showClientName, onCancel, o
       )}
       {!readOnly ? (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancelClick} disabled={saving}>
+          <Button type="button" variant="secondary" onClick={onCancelClick} disabled={saving}>
             {t("femme.clients.technicalSheet.cancel")}
           </Button>
           <Button type="submit" disabled={saving || notesTooLong || formulaTooLong}>

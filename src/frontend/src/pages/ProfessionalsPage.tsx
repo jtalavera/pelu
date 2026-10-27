@@ -1201,7 +1201,7 @@ export default function ProfessionalsPage() {
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="secondary"
                   onClick={closeModal}
                   className="min-h-11"
                 >

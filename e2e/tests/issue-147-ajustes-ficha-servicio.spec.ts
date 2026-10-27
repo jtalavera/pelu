@@ -57,8 +57,8 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     expect(closeBox).not.toBeNull();
     // "aligned to" — both sit in the same action row, so their tops line up.
     expect(Math.abs(voidBox!.y - closeBox!.y)).toBeLessThan(5);
-    // "right next to" — Close sits immediately to the right of Anular ficha in the row.
-    expect(closeBox!.x).toBeGreaterThan(voidBox!.x);
+    // Cancel-type buttons always go leftmost: Close now sits to the left of Anular ficha.
+    expect(closeBox!.x).toBeLessThan(voidBox!.x);
   });
 
   test("AC1b · desde el Panel, Cerrar aparece junto y alineado a Anular ficha", async ({
@@ -104,7 +104,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     expect(voidBox).not.toBeNull();
     expect(closeBox).not.toBeNull();
     expect(Math.abs(voidBox!.y - closeBox!.y)).toBeLessThan(5);
-    expect(closeBox!.x).toBeGreaterThan(voidBox!.x);
+    expect(closeBox!.x).toBeLessThan(voidBox!.x);
   });
 
   test("AC2 · cliente inactivo no aparece en el buscador de clientes de Ficha de servicio", async ({

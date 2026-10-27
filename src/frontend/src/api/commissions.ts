@@ -241,14 +241,17 @@ export type EntryFilters = {
   from?: string;
   to?: string;
   professionalId?: number | null;
+  /** Several professionals at once (empty = all). */
+  professionalIds?: number[];
   kind?: string;
   state?: string;
 };
 
-function qs(params: Record<string, string | number | null | undefined>): string {
+function qs(params: Record<string, string | number | number[] | null | undefined>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    if (Array.isArray(v)) for (const item of v) q.append(k, String(item));
+    else if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   }
   const s = q.toString();
   return s ? `?${s}` : "";
@@ -294,14 +297,36 @@ export const getLinesWithoutBeneficiary = (from?: string, to?: string) =>
   femmeJson<LineWithoutBeneficiary[]>(`/api/commissions/lines-without-beneficiary${qs({ from, to })}`);
 export const listSettlements = (p: {
   professionalId?: number | null;
+  /** Several professionals at once (empty = all). */
+  professionalIds?: number[];
   status?: string;
   from?: string;
   to?: string;
   page: number;
   size: number;
 }) => femmeJson<PagedSettlements>(`/api/commissions/settlements${qs(p)}`);
-export const generateSettlements = (body: { periodFrom: string; periodTo: string; professionalIds: number[] }) =>
+export type GenerateSettlementsBody = {
+  periodFrom: string;
+  periodTo: string;
+  /** Empty = every professional with unsettled commissions. */
+  professionalIds: number[];
+  /** Skip professionals that already have a settlement overlapping the period. */
+  skipOverlapping?: boolean;
+};
+export type SettlementConflict = {
+  professionalId: number;
+  professionalName: string | null;
+  settlementId: number;
+  status: SettlementStatus;
+  periodFrom: string;
+  periodTo: string;
+};
+export type SettlementGenerationCheck = { conflicts: SettlementConflict[]; generatable: number };
+export const generateSettlements = (body: GenerateSettlementsBody) =>
   femmePostJson<SettlementView[]>("/api/commissions/settlements/generate", body);
+/** Dry run of «Generar»: who already has an overlapping settlement and how many could be created. */
+export const checkSettlementGeneration = (body: GenerateSettlementsBody) =>
+  femmePostJson<SettlementGenerationCheck>("/api/commissions/settlements/generate/check", body);
 export const getSettlement = (id: number) => femmeJson<SettlementDetail>(`/api/commissions/settlements/${id}`);
 export const addAdjustment = (id: number, amount: number, reason: string) =>
   femmePostJson<SettlementDetail>(`/api/commissions/settlements/${id}/adjustments`, { amount, reason });
@@ -332,6 +357,8 @@ export async function downloadCommissionFile(path: string, fallbackName: string)
   URL.revokeObjectURL(blobUrl);
 }
 
-export const entriesCsvPath = (f: EntryFilters) => `/api/commissions/entries.csv${qs(f)}`;
-export const settlementsCsvPath = (status?: string) => `/api/commissions/settlements.csv${qs({ status })}`;
-export const settlementPdfPath = (id: number) => `/api/commissions/settlements/${id}/pdf`;
+/** `lang` = the UI language, so the export's column headers and labels match what the user reads. */
+export const entriesCsvPath = (f: EntryFilters, lang: string) => `/api/commissions/entries.csv${qs({ ...f, lang })}`;
+export const settlementsCsvPath = (f: { status?: string; professionalIds?: number[] }, lang: string) =>
+  `/api/commissions/settlements.csv${qs({ status: f.status, professionalIds: f.professionalIds, lang })}`;
+export const settlementPdfPath = (id: number, lang: string) => `/api/commissions/settlements/${id}/pdf${qs({ lang })}`;

@@ -261,6 +261,75 @@ class CommissionFlowIntegrationTest {
   }
 
   @Test
+  void generateForAllWithAPaidSettlementAsksAndCanSkipTheOverlappingOnes() {
+    change("IMMEDIATE", rule(corte, null, "40"));
+    accrue(invoice(corte, ana, "110000"));
+    LocalDate today = LocalDate.now(configService.zone());
+    CommissionSettlement paid =
+        settlementService
+            .generate(
+                tenant.getId(),
+                "a",
+                new GenerateSettlementsRequest(today, today, List.of(ana.getId())))
+            .get(0);
+    settlementService.approve(tenant.getId(), paid.getId(), "a");
+    settlementService.pay(tenant.getId(), paid.getId(), "a", new PayRequest("CASH", today, ""));
+    // New commissions for both after Ana was already paid for the period.
+    accrue(invoice(corte, ana, "110000"));
+    accrue(invoice(corte, bea, "110000"));
+
+    GenerateSettlementsRequest all = new GenerateSettlementsRequest(today, today, null);
+    assertThatThrownBy(() -> settlementService.generate(tenant.getId(), "a", all))
+        .hasMessageContaining("COMMISSION_PERIOD_OVERLAP");
+
+    var check = settlementService.checkGeneration(tenant.getId(), all);
+    assertThat(check.conflicts()).hasSize(1);
+    assertThat(check.conflicts().get(0).professionalId()).isEqualTo(ana.getId());
+    assertThat(check.conflicts().get(0).status()).isEqualTo("PAID");
+    assertThat(check.conflicts().get(0).settlementId()).isEqualTo(paid.getId());
+    assertThat(check.generatable()).isEqualTo(1);
+
+    List<CommissionSettlement> created =
+        settlementService.generate(
+            tenant.getId(), "a", new GenerateSettlementsRequest(today, today, null, true));
+    assertThat(created).hasSize(1);
+    assertThat(created.get(0).getProfessionalId()).isEqualTo(bea.getId());
+    // Nothing left: the remaining one now has its settlement too.
+    assertThat(settlementService.checkGeneration(tenant.getId(), all).generatable()).isZero();
+  }
+
+  @Test
+  void entriesAndSettlementsFilterBySeveralProfessionals() {
+    change("IMMEDIATE", rule(corte, null, "40"));
+    accrue(invoice(corte, ana, "110000"));
+    accrue(invoice(corte, bea, "110000"));
+    LocalDate today = LocalDate.now(configService.zone());
+    settlementService.generate(
+        tenant.getId(), "a", new GenerateSettlementsRequest(today, today, null));
+
+    assertThat(queryService.entries(tenant.getId(), today, today, List.of(ana.getId()), null, null))
+        .extracting(e -> e.professionalId())
+        .containsOnly(ana.getId());
+    assertThat(
+            queryService.entries(
+                tenant.getId(), today, today, List.of(ana.getId(), bea.getId()), null, null))
+        .extracting(e -> e.professionalId())
+        .containsExactlyInAnyOrder(ana.getId(), bea.getId());
+    assertThat(
+            queryService
+                .listSettlements(tenant.getId(), List.of(bea.getId()), null, null, null, 0, 20)
+                .items())
+        .extracting(v -> v.professionalId())
+        .containsOnly(bea.getId());
+    assertThat(
+            queryService
+                .listSettlements(
+                    tenant.getId(), List.of(ana.getId(), bea.getId()), null, null, null, 0, 20)
+                .total())
+        .isEqualTo(2);
+  }
+
+  @Test
   void settlementLifecycleWithAdjustmentsAndNegativeCarry() {
     change("IMMEDIATE", rule(corte, null, "40"));
     accrue(invoice(corte, ana, "110000"));

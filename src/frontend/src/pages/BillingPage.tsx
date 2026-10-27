@@ -3021,11 +3021,6 @@ function CashSessionTab({
               </Text>
             </div>
             <div className="flex gap-3">
-              <Button type="submit" variant="primary" className="min-h-11" disabled={movementSubmitting}>
-                {movementSubmitting
-                  ? t("femme.billing.movements.form.submitting")
-                  : t("femme.billing.movements.form.submit")}
-              </Button>
               <Button
                 type="button"
                 variant="secondary"
@@ -3033,6 +3028,11 @@ function CashSessionTab({
                 onClick={() => setShowMovementModal(false)}
               >
                 {t("femme.billing.movements.form.closeButton")}
+              </Button>
+              <Button type="submit" variant="primary" className="min-h-11" disabled={movementSubmitting}>
+                {movementSubmitting
+                  ? t("femme.billing.movements.form.submitting")
+                  : t("femme.billing.movements.form.submit")}
               </Button>
             </div>
           </form>
@@ -3086,6 +3086,14 @@ function CashSessionTab({
             </div>
             <div className="flex gap-3">
               <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                onClick={() => setShowCloseForm(false)}
+              >
+                {t("femme.billing.history.detail.voidCancel")}
+              </Button>
+              <Button
                 type="submit"
                 variant="primary"
                 className="min-h-11"
@@ -3094,14 +3102,6 @@ function CashSessionTab({
                 {closing
                   ? t("femme.billing.close.closing")
                   : t("femme.billing.close.confirmClose")}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-11"
-                onClick={() => setShowCloseForm(false)}
-              >
-                {t("femme.billing.history.detail.voidCancel")}
               </Button>
             </div>
           </form>

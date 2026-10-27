@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, Label, Select, Text } from "@design-system";
-import { getEntries, type EntryView } from "../../api/commissions";
+import { Alert, Button, Input, Label, MultiSelect, Text } from "@design-system";
+import { getEntries, type EntryFilters, type EntryView } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { useDateLocale } from "../../i18n/dateLocale";
@@ -17,7 +17,7 @@ export function MovementsTab() {
   const professionals = useProfessionals();
   const [from, setFrom] = useState(firstOfMonthYmd());
   const [to, setTo] = useState(todayYmd());
-  const [professionalId, setProfessionalId] = useState("");
+  const [professionalIds, setProfessionalIds] = useState<number[]>([]);
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [entries, setEntries] = useState<EntryView[] | null>(null);
@@ -25,14 +25,28 @@ export function MovementsTab() {
   const [toReassign, setToReassign] = useState<EntryView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setEntries(await getEntries({ from, to, professionalId: professionalId ? Number(professionalId) : null }));
-      setError(null);
-    } catch (err) {
-      setError(translateApiError(err, t));
-    }
-  }, [from, to, professionalId, t]);
+  const load = useCallback(
+    async (filters?: EntryFilters) => {
+      try {
+        setEntries(await getEntries(filters ?? { from, to, professionalIds }));
+        setError(null);
+      } catch (err) {
+        setError(translateApiError(err, t));
+      }
+    },
+    [from, to, professionalIds, t],
+  );
+
+  /** Back to the defaults (this month, every professional, no text) and search again. */
+  function clearFilters() {
+    const defaults = { from: firstOfMonthYmd(), to: todayYmd(), professionalIds: [] as number[] };
+    setFrom(defaults.from);
+    setTo(defaults.to);
+    setProfessionalIds(defaults.professionalIds);
+    setQuery("");
+    setAppliedQuery("");
+    void load(defaults);
+  }
 
   useEffect(() => {
     void load();
@@ -72,17 +86,18 @@ export function MovementsTab() {
           <Label htmlFor="mov-to">{t("femme.commissions.common.to")}</Label>
           <LocalizedDateInput id="mov-to" value={to} onChange={setTo} />
         </div>
-        <div className="flex min-w-[12rem] flex-col gap-1">
-          <Label htmlFor="mov-professional">{t("femme.commissions.common.professional")}</Label>
-          <Select id="mov-professional" value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
-            <option value="">{t("femme.commissions.common.allProfessionals")}</option>
-            {professionals.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.fullName}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <MultiSelect
+          id="mov-professional"
+          className="min-w-[14rem]"
+          label={t("femme.commissions.common.professionals")}
+          value={professionalIds}
+          onChange={setProfessionalIds}
+          options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+          placeholder={t("femme.commissions.common.allProfessionals")}
+          filterPlaceholder={t("femme.commissions.common.filterProfessionals")}
+          noResultsText={t("femme.commissions.common.noProfessionals")}
+          summaryTemplate={t("femme.commissions.common.professionalsSelected")}
+        />
         <div className="flex min-w-[12rem] flex-col gap-1">
           <Label htmlFor="mov-query">{t("femme.commissions.movements.search")}</Label>
           <Input
@@ -92,6 +107,9 @@ export function MovementsTab() {
             placeholder={t("femme.commissions.movements.searchPlaceholder")}
           />
         </div>
+        <Button type="button" variant="secondary" onClick={clearFilters} data-testid="movements-clear-filters">
+          {t("femme.commissions.common.clearFilters")}
+        </Button>
         <Button type="submit" data-testid="movements-search">
           {t("femme.commissions.common.search")}
         </Button>

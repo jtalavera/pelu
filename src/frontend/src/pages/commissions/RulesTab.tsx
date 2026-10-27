@@ -504,8 +504,15 @@ function KindRules({
                                         key={p.id}
                                         className="rounded-full border border-warning bg-warning-lt px-2 py-0.5 text-xs text-warning"
                                       >
-                                        {p.fullName.split(" ")[0]} <strong>{formatPercent(x.percent)}</strong>{" "}
-                                        <span className="text-[10px]">{deltaLabel(x.percent - e.standard)}</span>
+                                        {p.fullName.split(" ")[0]}{" "}
+                                        {x.percent === 0 ? (
+                                          <strong>{t("femme.commissions.rules.excludedChip")}</strong>
+                                        ) : (
+                                          <>
+                                            <strong>{formatPercent(x.percent)}</strong>{" "}
+                                            <span className="text-[10px]">{deltaLabel(x.percent - e.standard)}</span>
+                                          </>
+                                        )}
                                       </span>
                                     );
                                   })}
@@ -538,6 +545,8 @@ function KindRules({
   );
 }
 
+type PanelMode = { type: "standard" } | { type: "edit"; professionalId: number } | { type: "add" } | null;
+
 function ItemPanel({
   item,
   category,
@@ -565,17 +574,30 @@ function ItemPanel({
 }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
-  const [editingStandard, setEditingStandard] = useState(false);
-  const [standardInput, setStandardInput] = useState(String(effective.standard).replace(".", ","));
-  const [editing, setEditing] = useState<number | null>(null);
+  // One edit at a time (the standard %, one professional's %, or a new exception), each with its own
+  // input — so typing in one never changes another (and «Cancelar» leaves each without staging).
+  const [mode, setMode] = useState<PanelMode>(null);
+  const [standardInput, setStandardInput] = useState("");
   const [editValue, setEditValue] = useState("");
-  const [adding, setAdding] = useState(false);
   const [addProfessional, setAddProfessional] = useState("");
+  const [addValue, setAddValue] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [history, setHistory] = useState<ItemRules | null>(null);
   const baseAmount = Number(item.baseAmount);
   const commission = (pct: number) => Math.round((baseAmount * pct) / 100);
   const savedException = (pid: number) => item.exceptions.find((e) => e.professionalId === pid);
+  const isPending = (pid: number | null) =>
+    !!pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: pid })];
+
+  function open(next: PanelMode) {
+    setFieldError(null);
+    setMode(next);
+  }
+
+  function cancelEdit() {
+    setFieldError(null);
+    setMode(null);
+  }
 
   function applyStandard() {
     const parsed = parsePercentInput(standardInput);
@@ -585,20 +607,21 @@ function ItemPanel({
     }
     setFieldError(null);
     const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: null };
-    if (item.ownStandard && Number(parsed) === Number(item.standardPercent)) unstage(change);
+    // Back to what is already saved (own % or the inherited general) → nothing left to save.
+    if (item.ownStandard ? Number(parsed) === Number(item.standardPercent) : Number(parsed) === general) unstage(change);
     else stage({ ...change, value: parsed });
-    setEditingStandard(false);
+    setMode(null);
   }
 
   function useGeneral() {
     const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: null };
     if (!item.ownStandard) unstage(change);
     else stage({ ...change, value: null });
-    setEditingStandard(false);
+    setMode(null);
   }
 
-  function applyException(pid: number) {
-    const parsed = parsePercentInput(editValue);
+  function applyException(pid: number, raw: string) {
+    const parsed = parsePercentInput(raw);
     if (parsed === null) {
       setFieldError(t("femme.commissions.validation.percent"));
       return;
@@ -606,10 +629,17 @@ function ItemPanel({
     setFieldError(null);
     const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: pid };
     const saved = savedException(pid);
-    if (saved && Number(saved.percent) === Number(parsed)) unstage(change);
-    else stage({ ...change, value: parsed });
-    setEditing(null);
-    setAdding(false);
+    if (saved) {
+      if (Number(saved.percent) === Number(parsed)) unstage(change);
+      else stage({ ...change, value: parsed });
+    } else if (Number(parsed) === effective.standard) {
+      // Same % the professional already inherits: not an exception, so nothing to save (it used to
+      // stage a «20 % ±0» exception that showed up as an unsaved change nobody could see).
+      unstage(change);
+    } else {
+      stage({ ...change, value: parsed });
+    }
+    setMode(null);
     setAddProfessional("");
   }
 
@@ -617,10 +647,26 @@ function ItemPanel({
     const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: pid };
     if (savedException(pid)) stage({ ...change, value: null });
     else unstage(change);
-    setEditing(null);
+    setMode(null);
   }
 
+  /** «No comisiona»: a 0 % exception — the professional earns nothing on this item. */
+  function excludeProfessional(pid: number) {
+    const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: pid };
+    const saved = savedException(pid);
+    if (saved && Number(saved.percent) === 0) unstage(change);
+    else stage({ ...change, value: "0" });
+    setMode(null);
+  }
+
+  const excluded = professionals.filter((p) => effective.exceptions.get(p.id)?.percent === 0);
+  const commissioning = professionals.filter((p) => effective.exceptions.get(p.id)?.percent !== 0);
   const inheriting = professionals.filter((p) => !effective.exceptions.has(p.id));
+  const unsavedMark = (
+    <span className="ml-1 text-[10px] font-normal text-warning" data-testid="rules-panel-unsaved">
+      ● {t("femme.commissions.rules.unsaved")}
+    </span>
+  );
 
   return (
     <Modal
@@ -658,6 +704,7 @@ function ItemPanel({
               <div className="text-xs">{t("femme.commissions.rules.itemStandard")}</div>
               <div className="text-2xl font-semibold" data-testid="rules-panel-standard">
                 {formatPercent(effective.standard)}
+                {isPending(null) && unsavedMark}
               </div>
               <div className="text-[10px] text-[var(--color-ink-3)]">
                 {effective.ownStandard
@@ -665,13 +712,21 @@ function ItemPanel({
                   : t("femme.commissions.rules.inheritsGeneral", { value: formatPercent(general) })}
               </div>
             </div>
-            {!editingStandard && (
-              <Button type="button" variant="secondary" onClick={() => setEditingStandard(true)} data-testid="rules-change-standard">
+            {mode?.type !== "standard" && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setStandardInput(String(effective.standard).replace(".", ","));
+                  open({ type: "standard" });
+                }}
+                data-testid="rules-change-standard"
+              >
                 {t("femme.commissions.rules.change")}
               </Button>
             )}
           </div>
-          {editingStandard && (
+          {mode?.type === "standard" && (
             <div className="mt-2 flex flex-wrap items-end gap-2">
               <Input
                 aria-label={t("femme.commissions.rules.itemStandard")}
@@ -681,11 +736,14 @@ function ItemPanel({
                 className="max-w-[6rem]"
                 data-testid="rules-standard-input"
               />
+              <Button type="button" size="sm" variant="secondary" onClick={cancelEdit} data-testid="rules-standard-cancel">
+                {t("femme.commissions.common.cancel")}
+              </Button>
               <Button type="button" size="sm" onClick={applyStandard} data-testid="rules-standard-apply">
                 {t("femme.commissions.rules.apply")}
               </Button>
               {effective.ownStandard && (
-                <Button type="button" size="sm" variant="secondary" onClick={useGeneral}>
+                <Button type="button" size="sm" variant="outline" onClick={useGeneral}>
                   {t("femme.commissions.rules.useGeneral", { value: formatPercent(general) })}
                 </Button>
               )}
@@ -698,21 +756,24 @@ function ItemPanel({
           <span>{t("femme.commissions.rules.percentAndCommission")}</span>
         </div>
         <ul className="flex flex-col divide-y" data-testid="rules-panel-professionals">
-          {professionals.map((p) => {
+          {commissioning.map((p) => {
             const exc = effective.exceptions.get(p.id);
             const pct = exc ? exc.percent : effective.standard;
+            const editing = mode?.type === "edit" && mode.professionalId === p.id;
             return (
               <li key={p.id} className="py-2" data-testid={`rules-panel-prof-${p.id}`}>
                 <button
                   type="button"
                   className="flex min-h-11 w-full items-start justify-between gap-2 text-left"
                   onClick={() => {
-                    setEditing(p.id);
                     setEditValue(String(pct).replace(".", ","));
-                    setFieldError(null);
+                    open({ type: "edit", professionalId: p.id });
                   }}
                 >
-                  <span className="min-w-0 break-words text-sm font-medium">{p.fullName}</span>
+                  <span className="min-w-0 break-words text-sm font-medium">
+                    {p.fullName}
+                    {isPending(p.id) && unsavedMark}
+                  </span>
                   <span className="shrink-0 text-right">
                     {exc ? (
                       <span className="rounded-full border border-warning bg-warning-lt px-2 py-0.5 text-xs font-semibold text-warning">
@@ -726,7 +787,7 @@ function ItemPanel({
                     <span className="block text-xs">{formatGuaraniesGs(commission(pct))}</span>
                   </span>
                 </button>
-                {editing === p.id && (
+                {editing && (
                   <div className="mt-1 flex flex-wrap items-end gap-2">
                     <Input
                       aria-label={t("femme.commissions.rules.exceptionFor", { name: p.fullName })}
@@ -734,24 +795,71 @@ function ItemPanel({
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
                       className="max-w-[6rem]"
+                      data-testid="rules-edit-percent"
                     />
-                    <Button type="button" size="sm" onClick={() => applyException(p.id)}>
+                    <Button type="button" size="sm" variant="secondary" onClick={cancelEdit} data-testid="rules-edit-cancel">
+                      {t("femme.commissions.common.cancel")}
+                    </Button>
+                    <Button type="button" size="sm" onClick={() => applyException(p.id, editValue)} data-testid="rules-edit-apply">
                       {t("femme.commissions.rules.apply")}
                     </Button>
                     {exc && (
-                      <Button type="button" size="sm" variant="secondary" onClick={() => removeException(p.id)}>
-                        {t("femme.commissions.rules.removeException")}
+                      <Button type="button" size="sm" variant="outline" onClick={() => removeException(p.id)}>
+                        {t("femme.commissions.rules.useStandard")}
                       </Button>
                     )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="text-danger"
+                      onClick={() => excludeProfessional(p.id)}
+                      data-testid="rules-exclude-professional"
+                    >
+                      {t("femme.commissions.rules.excludeProfessional")}
+                    </Button>
                   </div>
                 )}
               </li>
             );
           })}
         </ul>
+
+        {excluded.length > 0 && (
+          <div className="flex flex-col gap-1" data-testid="rules-panel-excluded">
+            <div className="text-[10px] font-medium uppercase text-[var(--color-ink-3)]">
+              {t("femme.commissions.rules.excludedTitle", { count: excluded.length })}
+            </div>
+            <ul className="flex flex-col divide-y">
+              {excluded.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex min-h-11 flex-wrap items-center justify-between gap-2 py-1"
+                  data-testid={`rules-panel-excluded-${p.id}`}
+                >
+                  <span className="min-w-0 break-words text-sm text-[var(--color-ink-3)] line-through">
+                    {p.fullName}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {isPending(p.id) && unsavedMark}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => removeException(p.id)}
+                      data-testid="rules-include-professional"
+                    >
+                      {t("femme.commissions.rules.includeProfessional")}
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <FieldValidationError>{fieldError}</FieldValidationError>
 
-        {adding ? (
+        {mode?.type === "add" ? (
           <div className="flex flex-wrap items-end gap-2">
             <Select
               aria-label={t("femme.commissions.common.professional")}
@@ -769,16 +877,19 @@ function ItemPanel({
             <Input
               aria-label={t("femme.commissions.rules.percent")}
               inputMode="decimal"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
+              value={addValue}
+              onChange={(e) => setAddValue(e.target.value)}
               className="max-w-[6rem]"
               data-testid="rules-add-percent"
             />
+            <Button type="button" size="sm" variant="secondary" onClick={cancelEdit} data-testid="rules-add-cancel">
+              {t("femme.commissions.common.cancel")}
+            </Button>
             <Button
               type="button"
               size="sm"
               disabled={!addProfessional}
-              onClick={() => applyException(Number(addProfessional))}
+              onClick={() => applyException(Number(addProfessional), addValue)}
               data-testid="rules-add-apply"
             >
               {t("femme.commissions.rules.apply")}
@@ -790,9 +901,9 @@ function ItemPanel({
               type="button"
               disabled={inheriting.length === 0}
               onClick={() => {
-                setAdding(true);
-                setEditValue("");
-                setFieldError(null);
+                setAddProfessional("");
+                setAddValue("");
+                open({ type: "add" });
               }}
               data-testid="rules-add-exception"
             >
@@ -809,7 +920,7 @@ function ItemPanel({
           </div>
         )}
         {Object.keys(pending).some((k) => k.startsWith(`RULE|${item.serviceId}|`)) && (
-          <Text variant="small" className="text-warning">
+          <Text variant="small" className="text-warning" data-testid="rules-panel-pending">
             {t("femme.commissions.rules.panelPending")}
           </Text>
         )}

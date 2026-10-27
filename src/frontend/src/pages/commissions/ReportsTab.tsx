@@ -46,7 +46,7 @@ function RowsTable({ rows, testId, labelOf }: { rows: ReportRow[]; testId: strin
 
 /** HU-COM-08: reports by professional, item, item kind and period, plus data-quality lists. */
 export function ReportsTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dateLocale = useDateLocale();
   const professionals = useProfessionals();
   const [from, setFrom] = useState(firstOfMonthYmd());
@@ -141,7 +141,7 @@ export function ReportsTab() {
           type="button"
           variant="secondary"
           onClick={() =>
-            void downloadCommissionFile(entriesCsvPath(filters), "comisiones.csv").catch((err) =>
+            void downloadCommissionFile(entriesCsvPath(filters, i18n.language), "comisiones.csv").catch((err) =>
               setError(translateApiError(err, t)),
             )
           }

@@ -171,7 +171,10 @@ test("listado paginado y filtrable por profesional, estado y periodo; exportaci√
   await page.locator("#settle-filter-status").selectOption("APPROVED");
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
   await page.locator("#settle-filter-status").selectOption("");
-  await page.locator("#settle-filter-professional").selectOption({ label: w.bea.name });
+  // The professional filter is a multi-select (several professionals at once).
+  await page.locator("#settle-filter-professional").click();
+  await page.getByRole("listbox").getByRole("button", { name: w.bea.name }).click();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
   const [download] = await Promise.all([
     page.waitForEvent("download"),

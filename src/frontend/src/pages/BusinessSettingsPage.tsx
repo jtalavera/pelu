@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
+  Button,
   Heading,
   Label,
   LocalityCombobox,
@@ -322,17 +323,6 @@ export default function BusinessSettingsPage() {
     borderRadius: "var(--radius-md)",
     padding: "7px 14px",
     fontSize: 12,
-    cursor: "pointer",
-  };
-
-  const primaryBtn: React.CSSProperties = {
-    background: "var(--color-rose)",
-    color: "var(--color-on-primary)",
-    border: "none",
-    borderRadius: "var(--radius-md)",
-    padding: "8px 16px",
-    fontSize: 12,
-    fontWeight: 500,
     cursor: "pointer",
   };
 
@@ -803,21 +793,12 @@ export default function BusinessSettingsPage() {
             borderTop: "var(--border-default)",
           }}
         >
-          <button
-            type="button"
-            onClick={() => void onCancel()}
-            disabled={saving}
-            style={{
-              ...ghostBtn,
-              opacity: saving ? 0.6 : 1,
-              cursor: saving ? "not-allowed" : "pointer",
-            }}
-          >
+          <Button type="button" variant="secondary" onClick={() => void onCancel()} disabled={saving}>
             {t("femme.businessSettings.cancel")}
-          </button>
-          <button type="submit" style={primaryBtn} disabled={saving}>
+          </Button>
+          <Button type="submit" disabled={saving}>
             {saving ? t("femme.businessSettings.saving") : t("femme.businessSettings.saveChanges")}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

@@ -799,7 +799,7 @@ export default function ClientDetailPage() {
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="secondary"
                   onClick={() => navigate("/app/clients")}
                   disabled={saving}
                   className="min-h-11"

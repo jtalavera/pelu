@@ -186,8 +186,36 @@ public final class CommissionDtos {
       List<EntryView> entries,
       List<SettlementView> draftSettlements) {}
 
+  /**
+   * {@code skipOverlapping}: professionals that already have a (non-voided) settlement overlapping
+   * the period are skipped instead of failing the whole request with {@code
+   * COMMISSION_PERIOD_OVERLAP}.
+   */
   public record GenerateSettlementsRequest(
-      LocalDate periodFrom, LocalDate periodTo, List<Long> professionalIds) {}
+      LocalDate periodFrom,
+      LocalDate periodTo,
+      List<Long> professionalIds,
+      Boolean skipOverlapping) {
+    public GenerateSettlementsRequest(
+        LocalDate periodFrom, LocalDate periodTo, List<Long> professionalIds) {
+      this(periodFrom, periodTo, professionalIds, false);
+    }
+  }
+
+  /** A professional that already has a settlement overlapping the period to generate. */
+  public record SettlementConflict(
+      long professionalId,
+      String professionalName,
+      long settlementId,
+      String status,
+      LocalDate periodFrom,
+      LocalDate periodTo) {}
+
+  /**
+   * What «Generar» would do: the overlapping settlements that block it, and how many settlements it
+   * can still create for the remaining professionals (those with unsettled commissions).
+   */
+  public record SettlementGenerationCheck(List<SettlementConflict> conflicts, int generatable) {}
 
   public record AdjustmentRequest(BigDecimal amount, String reason) {}
 

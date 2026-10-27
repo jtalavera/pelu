@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Button } from "@design-system";
 
 interface InlineEditActionsProps {
   isEditing: boolean;
@@ -59,27 +60,12 @@ export function InlineEditActions({
         }}
       >
         <div style={{ display: "flex", gap: 6 }}>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={saving}
-            style={{ ...btnBase, color: "var(--color-ink-2)" }}
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={saving}>
             {t("femme.inlineActions.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            style={{
-              ...btnBase,
-              background: saving ? "var(--color-rose-md)" : "var(--color-rose)",
-              color: "var(--color-on-primary)",
-              border: "none",
-            }}
-          >
+          </Button>
+          <Button type="button" size="sm" onClick={onSave} disabled={saving}>
             {saving ? t("femme.inlineActions.saving") : t("femme.inlineActions.save")}
-          </button>
+          </Button>
         </div>
         {saveError ? (
           <span

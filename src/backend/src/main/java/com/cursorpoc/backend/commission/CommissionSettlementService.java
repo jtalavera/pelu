@@ -12,11 +12,14 @@ import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AdjustmentRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GenerateSettlementsRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PayRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementConflict;
+import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementGenerationCheck;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -54,43 +57,27 @@ public class CommissionSettlementService {
   /**
    * Creates one Draft per beneficiary with unsettled entries accrued up to the end of the period.
    * Beneficiaries without entries get no settlement; an overlap with a non-voided settlement of the
-   * same beneficiary is rejected ({@code COMMISSION_PERIOD_OVERLAP}).
+   * same beneficiary is rejected ({@code COMMISSION_PERIOD_OVERLAP}), unless {@code
+   * skipOverlapping} asks to generate only for the others.
    */
   @Transactional
   public List<CommissionSettlement> generate(
       long tenantId, String actorEmail, GenerateSettlementsRequest request) {
-    if (request == null
-        || request.periodFrom() == null
-        || request.periodTo() == null
-        || request.periodTo().isBefore(request.periodFrom())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERIOD_INVALID");
-    }
-    ZoneId zone = configService.zone();
-    Instant end = request.periodTo().plusDays(1).atStartOfDay(zone).toInstant();
-    List<Long> targets =
-        request.professionalIds() == null || request.professionalIds().isEmpty()
-            ? entryRepository.findProfessionalsWithUnsettled(tenantId, end)
-            : request.professionalIds();
+    validatePeriod(request);
+    Instant end = periodEnd(request);
+    List<Long> targets = targets(tenantId, request, end);
+    List<Long> toGenerate = new ArrayList<>();
     for (Long pid : targets) {
-      professionalRepository
-          .findByIdAndTenant_Id(pid, tenantId)
-          .orElseThrow(
-              () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
-      boolean overlap =
-          settlementRepository
-              .findByTenantIdAndProfessionalIdOrderByPeriodFromDescIdDesc(tenantId, pid)
-              .stream()
-              .filter(s -> s.getStatus() != CommissionSettlementStatus.VOIDED)
-              .anyMatch(
-                  s ->
-                      !s.getPeriodFrom().isAfter(request.periodTo())
-                          && !s.getPeriodTo().isBefore(request.periodFrom()));
-      if (overlap) {
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "COMMISSION_PERIOD_OVERLAP");
+      if (overlapping(tenantId, pid, request).isPresent()) {
+        if (!Boolean.TRUE.equals(request.skipOverlapping())) {
+          throw new ResponseStatusException(HttpStatus.CONFLICT, "COMMISSION_PERIOD_OVERLAP");
+        }
+      } else {
+        toGenerate.add(pid);
       }
     }
     List<CommissionSettlement> created = new ArrayList<>();
-    for (Long pid : targets) {
+    for (Long pid : toGenerate) {
       List<CommissionEntry> entries = entryRepository.findUnsettled(tenantId, pid, end);
       if (entries.isEmpty()) {
         continue;
@@ -114,6 +101,79 @@ public class CommissionSettlementService {
       created.add(s);
     }
     return created;
+  }
+
+  /**
+   * Dry run of {@link #generate}: which targeted professionals already have a non-voided settlement
+   * overlapping the period (they block a plain «Generar»), and how many Drafts the rest would get.
+   */
+  @Transactional(readOnly = true)
+  public SettlementGenerationCheck checkGeneration(
+      long tenantId, GenerateSettlementsRequest request) {
+    validatePeriod(request);
+    Instant end = periodEnd(request);
+    List<SettlementConflict> conflicts = new ArrayList<>();
+    int generatable = 0;
+    for (Long pid : targets(tenantId, request, end)) {
+      Optional<CommissionSettlement> overlap = overlapping(tenantId, pid, request);
+      if (overlap.isPresent()) {
+        CommissionSettlement s = overlap.get();
+        String name =
+            professionalRepository
+                .findByIdAndTenant_Id(pid, tenantId)
+                .map(pr -> pr.getFullName())
+                .orElse(null);
+        conflicts.add(
+            new SettlementConflict(
+                pid, name, s.getId(), s.getStatus().name(), s.getPeriodFrom(), s.getPeriodTo()));
+      } else if (!entryRepository.findUnsettled(tenantId, pid, end).isEmpty()) {
+        generatable++;
+      }
+    }
+    return new SettlementGenerationCheck(conflicts, generatable);
+  }
+
+  private static void validatePeriod(GenerateSettlementsRequest request) {
+    if (request == null
+        || request.periodFrom() == null
+        || request.periodTo() == null
+        || request.periodTo().isBefore(request.periodFrom())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERIOD_INVALID");
+    }
+  }
+
+  private Instant periodEnd(GenerateSettlementsRequest request) {
+    ZoneId zone = configService.zone();
+    return request.periodTo().plusDays(1).atStartOfDay(zone).toInstant();
+  }
+
+  /** The requested professionals (each must exist), or everyone with unsettled commissions. */
+  private List<Long> targets(long tenantId, GenerateSettlementsRequest request, Instant end) {
+    List<Long> targets =
+        request.professionalIds() == null || request.professionalIds().isEmpty()
+            ? entryRepository.findProfessionalsWithUnsettled(tenantId, end)
+            : request.professionalIds();
+    for (Long pid : targets) {
+      professionalRepository
+          .findByIdAndTenant_Id(pid, tenantId)
+          .orElseThrow(
+              () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+    }
+    return targets;
+  }
+
+  /** The professional's latest non-voided settlement overlapping the requested period, if any. */
+  private Optional<CommissionSettlement> overlapping(
+      long tenantId, long professionalId, GenerateSettlementsRequest request) {
+    return settlementRepository
+        .findByTenantIdAndProfessionalIdOrderByPeriodFromDescIdDesc(tenantId, professionalId)
+        .stream()
+        .filter(s -> s.getStatus() != CommissionSettlementStatus.VOIDED)
+        .filter(
+            s ->
+                !s.getPeriodFrom().isAfter(request.periodTo())
+                    && !s.getPeriodTo().isBefore(request.periodFrom()))
+        .findFirst();
   }
 
   @Transactional
