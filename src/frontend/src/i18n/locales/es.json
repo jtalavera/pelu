@@ -376,7 +376,7 @@
         "settlementsTitle": "Mis liquidaciones"
       }
     },
-    "appTitle": "Gestión Peluquería",
+    "appTitle": "Flowbit",
     "listFilter": {
       "label": "Filtrar lista",
       "placeholder": "Escriba para filtrar…",
@@ -427,7 +427,10 @@
       "emailInvalid": "Ingresá un email válido (debe contener @ y texto antes del @, ej. nombre@dominio.com).",
       "phoneIncomplete": "Ingresá los 10 dígitos del teléfono (ej. (0981) 123-456)."
     },
-    "appName": "Gestión Peluquería",
+    "appName": "Flowbit",
+    "brand": {
+      "slogan": "Tu salón, sin enredos"
+    },
     "login": {
       "title": "Iniciar sesión",
       "subtitle": "Ingresa tu correo y contraseña del sistema.",
@@ -548,11 +551,33 @@
         "dashboard": "Panel",
         "tenants": "Tenants",
         "tiers": "Tiers",
+        "skin": "Skin",
         "globalFeatureFlags": "Funcionalidades Globales",
         "featureFlags": "Funcionalidades Tenants",
         "import": "Importación de datos",
         "stock": "Integración con Stock",
         "audit": "Auditoría"
+      },
+      "skin": {
+        "title": "Skin",
+        "lead": "Elegí el acento que viste la interfaz de un negocio, según su tipo de salón. El skin solo cambia el color del peine y del punto de la \"i\" en el logo y algunos detalles de acento; el resto de la interfaz mantiene la paleta de Flowbit. El negocio lo ve la próxima vez que abra la app.",
+        "tenantLabel": "Negocio",
+        "tenantPlaceholder": "Buscá un negocio por nombre o dominio",
+        "changeTenant": "Cambiar de negocio",
+        "selectTenantFirst": "Elegí un negocio para definir su skin. Mientras tanto, acá están todas las variaciones.",
+        "currentSkin": "Skin actual de {{name}}: {{skin}}",
+        "optionsLegend": "Variaciones de skin",
+        "accentLabel": "Acento {{hex}}",
+        "previewAvatar": "Iniciales",
+        "options": {
+          "DURAZNO": { "name": "Durazno", "hint": "Sugerido para spas · por defecto" },
+          "CELESTE": { "name": "Celeste", "hint": "Sugerido para barberías" },
+          "ROSA": { "name": "Rosa", "hint": "Sugerido para peluquerías" }
+        },
+        "save": "Guardar skin",
+        "saving": "Guardando…",
+        "saved": "Skin guardado. {{name}} lo verá la próxima vez que abra la app.",
+        "loadError": "No se pudo guardar el skin."
       },
       "dashboard": {
         "title": "Platform Admin",
@@ -1315,6 +1340,7 @@
       "activate": "Activar",
       "deactivate": "Desactivar",
       "edit": "Editar timbrado",
+      "editShort": "Editar",
       "editTitle": "Editar timbrado",
       "editLead": "Mientras este timbrado no tenga facturas, se puede cambiar cualquier campo. Una vez que tiene facturas, solo se pueden cambiar el fin de vigencia, el número “hasta” y el número de inicio de emisión (solo hacia adelante).",
       "optionalHint": "Opcional — no es requerido para facturación electrónica.",
@@ -2147,6 +2173,7 @@
       "TENANT_NAME_REQUIRED": "Ingresá un nombre para el tenant.",
       "TENANT_DOMAIN_DUPLICATE": "Ese dominio ya está en uso por otro tenant.",
       "TENANT_TIER_REQUIRED": "Seleccioná un tier inicial.",
+      "TENANT_SKIN_INVALID": "El skin elegido no es válido. Elegí Durazno, Celeste o Rosa.",
       "TENANT_ADMIN_EMAIL_REQUIRED": "Ingresá el email del nuevo administrador.",
     "TENANT_ADMIN_EMAIL_DUPLICATE": "Ya existe un usuario con ese email para este tenant.",
     "TENANT_STATUS_INVALID": "Estado de tenant inválido.",

@@ -204,11 +204,11 @@ describe("PlatformStockIntegrationPage", () => {
         }[id]!,
       ).className;
 
-    expect(classOf(100)).toContain("bg-amber-100");
-    expect(classOf(101)).toContain("bg-indigo-100");
-    expect(classOf(102)).toContain("bg-red-100");
-    expect(classOf(103)).toContain("bg-emerald-100");
-    expect(classOf(104)).toContain("bg-slate-100");
+    expect(classOf(100)).toContain("bg-warning-lt");
+    expect(classOf(101)).toContain("bg-primary-lt");
+    expect(classOf(102)).toContain("bg-danger-lt");
+    expect(classOf(103)).toContain("bg-success-lt");
+    expect(classOf(104)).toContain("bg-page");
     expect(new Set([100, 101, 102, 103, 104].map(classOf)).size).toBe(5);
   });
 });

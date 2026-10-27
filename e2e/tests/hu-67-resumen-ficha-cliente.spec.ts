@@ -161,7 +161,7 @@ test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
     const token = await loginAsDemoApi(request);
     const client = await seedClient(request, token, `E2E67 Mobile ${Date.now()}`);
     await page.setViewportSize({ width: 375, height: 800 });
-    await page.emulateMedia({ colorScheme: "dark" });
+    await page.addInitScript(() => localStorage.setItem("femme-theme", "dark"));
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
     await expect(page.getByTestId("client-summary")).toBeVisible();

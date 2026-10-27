@@ -65,12 +65,12 @@ export function CashSessionSummaryCard({ detail }: { detail: CashSessionDetail }
         {diff !== null && (
           <>
             <span
-              className={`font-semibold ${diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
+              className={`font-semibold ${diff < 0 ? "text-danger" : "text-success"}`}
             >
               {t("femme.billing.close.difference")}
             </span>
             <span
-              className={`text-right font-semibold ${diff < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
+              className={`text-right font-semibold ${diff < 0 ? "text-danger" : "text-success"}`}
             >
               {diff >= 0 ? "+" : ""}
               {formatAmountDecimal(detail.cashDifference as string)}

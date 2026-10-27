@@ -17,7 +17,7 @@ export function PlatformAdminRoute({ children }: Props) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-slate-50 p-4 dark:bg-slate-950">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-page p-4">
         <Spinner size="lg" label={t("femme.platform.loading")} />
         <Text variant="muted">{t("femme.platform.loading")}</Text>
       </div>

@@ -76,10 +76,10 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
 
   // The sum of tips is shown in red, in the section and in the summary — never in the total.
   await expect(page.getByTestId("billing-tips-total")).toHaveText("8.000");
-  await expect(page.getByTestId("billing-tips-total").locator("xpath=..")).toHaveClass(/text-red-600/);
+  await expect(page.getByTestId("billing-tips-total").locator("xpath=..")).toHaveClass(/text-danger/);
   await expect(page.locator("#billing-tips-amount")).toHaveText("8.000");
-  await expect(page.locator("#billing-tips-amount")).toHaveClass(/text-red-600/);
-  await expect(page.getByText("Tip (non-invoiceable)", { exact: true })).toHaveClass(/text-red-600/);
+  await expect(page.locator("#billing-tips-amount")).toHaveClass(/text-danger/);
+  await expect(page.getByText("Tip (non-invoiceable)", { exact: true })).toHaveClass(/text-danger/);
   await expect(page.locator("#pay-amount-0")).toHaveValue("330.000");
 
   const inv = await clickIssueInvoiceAndExpectSuccess(page);

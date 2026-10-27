@@ -89,7 +89,7 @@ export function InvoicePaymentsEditor({
         </div>
         <div
           className={`flex justify-between ${
-            Math.abs(remaining) > 0.01 ? "text-red-600 dark:text-red-400" : "text-emerald-600"
+            Math.abs(remaining) > 0.01 ? "text-danger" : "text-success"
           }`}
         >
           <span>{t("femme.billing.invoice.remaining")}</span>

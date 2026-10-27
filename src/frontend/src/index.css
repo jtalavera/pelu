@@ -1,4 +1,7 @@
+@import "@fontsource-variable/nunito";
+@import "@fontsource-variable/nunito-sans";
 @import "./styles/tokens.css";
+@import "./styles/skins.css";
 
 @tailwind base;
 @tailwind components;
@@ -12,11 +15,60 @@
     color-scheme: dark;
   }
   body {
-    @apply min-h-screen overflow-x-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    @apply min-h-screen overflow-x-hidden bg-page text-ink;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/*
+ * Full-bleed background for the pre-login screens: teal (tinta noche in dark mode) with solid
+ * circles at low opacity (manual de marca: círculos de fondo al 15-40 %, sin degradados). The text
+ * color is lino; cards placed on it bring their own surface.
+ */
+@layer components {
+  .fb-auth-bg {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: rgb(var(--fb-teal));
+    color: rgb(var(--fb-lino));
+  }
+  html.dark .fb-auth-bg {
+    background: rgb(var(--fb-bg));
+  }
+  .fb-auth-bg::before,
+  .fb-auth-bg::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    border-radius: 9999px;
+    pointer-events: none;
+  }
+  .fb-auth-bg::before {
+    width: 38rem;
+    height: 38rem;
+    right: -13rem;
+    top: -15rem;
+    background: rgb(var(--fb-lino));
+    opacity: 0.12;
+  }
+  .fb-auth-bg::after {
+    width: 22rem;
+    height: 22rem;
+    left: -8rem;
+    bottom: -9rem;
+    background: rgb(var(--fb-accent));
+    opacity: 0.3;
+  }
+  html.dark .fb-auth-bg::before {
+    background: rgb(var(--fb-teal));
+    opacity: 0.3;
+  }
+  html.dark .fb-auth-bg::after {
+    opacity: 0.18;
   }
 }
 

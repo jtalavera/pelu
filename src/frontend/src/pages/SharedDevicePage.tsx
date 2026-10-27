@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Heading, Modal, Spinner, Text } from "@design-system";
+import { Alert, Button, FlowbitLogo, Heading, Modal, Spinner, Text } from "@design-system";
 import {
   fetchPicker,
   pinLogin,
@@ -158,7 +158,8 @@ export default function SharedDevicePage() {
       <div className="mx-auto flex max-w-4xl flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-lg font-medium text-[var(--color-rose)]">
+            <FlowbitLogo tone="auto" className="h-8 w-auto" />
+            <div className="mt-1 truncate text-lg font-bold text-[var(--color-ink)]">
               {picker?.tenantName ?? device?.tenantName ?? t("femme.appName")}
             </div>
             <Text variant="muted" className="text-xs" data-testid="shared-device-name">
@@ -219,7 +220,7 @@ export default function SharedDevicePage() {
                     <span className="break-words text-sm font-medium">{p.fullName}</span>
                     {p.lockedUntil ? (
                       <span
-                        className="text-xs font-medium text-red-600 dark:text-red-400"
+                        className="text-xs font-medium text-danger"
                         data-testid={`shared-device-locked-${p.id}`}
                       >
                         {t("femme.sharedDevice.professionalLocked", { time: formatTime(p.lockedUntil) })}
@@ -266,7 +267,7 @@ export default function SharedDevicePage() {
             ))}
           </div>
           {pinError ? (
-            <p role="alert" className="text-center text-sm font-medium text-red-600 dark:text-red-400" data-testid="pin-error">
+            <p role="alert" className="text-center text-sm font-medium text-danger" data-testid="pin-error">
               {pinError}
             </p>
           ) : null}

@@ -377,6 +377,71 @@ test.describe("mt-isolation · platform config stays tenant-scoped", () => {
   });
 });
 
+/**
+ * HU-71 AC-7 — a tenant's skin is tenant-scoped: changing A's skin moves A's own `/api/me`, and
+ * nothing about B's (nor C's, which is suspended) — neither in their own session nor in the platform
+ * listing. The mutation is restored in `finally` and the restore is asserted past it (T-A's skin is
+ * shared world state: leaving it ROSA would leak into later specs).
+ */
+test.describe("mt-platform-config · skin por tenant (HU-71 AC7)", () => {
+  async function ownSkin(request: APIRequestContext, tenantToken: string): Promise<string> {
+    const me = await apiGetJson<{ skin: string | null }>(request, tenantToken, "/api/me");
+    return me.skin as string;
+  }
+
+  async function listedSkin(
+    request: APIRequestContext,
+    platformToken: string,
+    tenantId: number,
+  ): Promise<string> {
+    const page = await apiGetJson<{ content: Array<{ id: number; skin: string }> }>(
+      request,
+      platformToken,
+      "/api/platform/tenants?page=0&size=200",
+    );
+    const row = page.content.find((t) => t.id === tenantId);
+    expect(row, `platform tenant listing has no tenant ${tenantId}`).toBeTruthy();
+    return (row as { skin: string }).skin;
+  }
+
+  test("changing A's skin does not change B's or C's", async ({ request }) => {
+    const platformToken = await mtPlatformToken(request);
+    const tokenA = await mtLoginToken(request, world.tenantA);
+    const tokenB = await mtLoginToken(request, world.tenantB);
+
+    // Baseline: every tenant of the world starts on the default skin.
+    expect(await ownSkin(request, tokenA)).toBe("DURAZNO");
+    expect(await ownSkin(request, tokenB)).toBe("DURAZNO");
+    expect(await listedSkin(request, platformToken, world.tenantC.id)).toBe("DURAZNO");
+
+    try {
+      const put = await request.put(`${API_BASE}/api/platform/tenants/${world.tenantA.id}/skin`, {
+        headers: authHeaders(platformToken),
+        data: { skin: "ROSA" },
+      });
+      expect(put.ok(), await put.text()).toBeTruthy();
+
+      expect(await ownSkin(request, tokenA)).toBe("ROSA");
+      expect(await ownSkin(request, tokenB)).toBe("DURAZNO");
+      expect(await listedSkin(request, platformToken, world.tenantA.id)).toBe("ROSA");
+      expect(await listedSkin(request, platformToken, world.tenantB.id)).toBe("DURAZNO");
+      expect(await listedSkin(request, platformToken, world.tenantC.id)).toBe("DURAZNO");
+    } finally {
+      const restore = await request.put(
+        `${API_BASE}/api/platform/tenants/${world.tenantA.id}/skin`,
+        { headers: authHeaders(platformToken), data: { skin: "DURAZNO" } },
+      );
+      expect(
+        restore.ok(),
+        `BLOCKER: could not restore T-A's skin (${restore.status()}): ${await restore.text()}`,
+      ).toBeTruthy();
+    }
+
+    // Restoration proof (past the finally).
+    expect(await ownSkin(request, tokenA)).toBe("DURAZNO");
+  });
+});
+
 async function createTier(
   request: APIRequestContext,
   platformToken: string,

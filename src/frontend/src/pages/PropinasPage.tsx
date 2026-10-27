@@ -300,7 +300,7 @@ function ReportTab({ professionals, active }: { professionals: Professional[]; a
                     {group.withdrawal && (
                       <tr
                         key={`${group.total.professionalId}-withdrawal`}
-                        className="text-red-600 dark:text-red-400"
+                        className="text-danger"
                         style={{ borderTop: "var(--border-default)", fontWeight: 600 }}
                       >
                         <td style={{ padding: "10px 12px" }}>

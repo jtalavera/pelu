@@ -4,7 +4,7 @@ import { type SVGAttributes } from "react";
 const stroke = { strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
 const base =
-  "inline-block shrink-0 size-5 text-slate-500 dark:text-slate-400";
+  "inline-block shrink-0 size-5 text-ink-3";
 
 export function IconSearch({
   className,

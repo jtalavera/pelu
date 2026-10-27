@@ -376,7 +376,7 @@
         "settlementsTitle": "My settlements"
       }
     },
-    "appTitle": "Saloon Management",
+    "appTitle": "Flowbit",
     "listFilter": {
       "label": "Filter list",
       "placeholder": "Type to filter…",
@@ -427,7 +427,10 @@
       "emailInvalid": "Enter a valid email (must include @ and text before @, e.g. name@domain.com).",
       "phoneIncomplete": "Enter the 10 digits of the phone number (e.g. (0981) 123-456)."
     },
-    "appName": "Salon Management",
+    "appName": "Flowbit",
+    "brand": {
+      "slogan": "Your salon, tangle-free"
+    },
     "login": {
       "title": "Sign in",
       "subtitle": "Enter your system email and password.",
@@ -548,11 +551,33 @@
         "dashboard": "Dashboard",
         "tenants": "Tenants",
         "tiers": "Tiers",
+        "skin": "Skin",
         "globalFeatureFlags": "Global feature flags",
         "featureFlags": "Tenant feature flags",
         "import": "Data import",
         "stock": "Stock integration",
         "audit": "Audit"
+      },
+      "skin": {
+        "title": "Skin",
+        "lead": "Pick the accent that dresses a business's interface, according to its type of salon. The skin only changes the color of the comb and the dot of the \"i\" in the logo and a few accent details; the rest of the interface keeps the Flowbit palette. The business sees it the next time it opens the app.",
+        "tenantLabel": "Business",
+        "tenantPlaceholder": "Search a business by name or domain",
+        "changeTenant": "Change business",
+        "selectTenantFirst": "Choose a business to set its skin. Meanwhile, here are all the variations.",
+        "currentSkin": "Current skin of {{name}}: {{skin}}",
+        "optionsLegend": "Skin variations",
+        "accentLabel": "Accent {{hex}}",
+        "previewAvatar": "Initials",
+        "options": {
+          "DURAZNO": { "name": "Peach", "hint": "Suggested for spas · default" },
+          "CELESTE": { "name": "Sky blue", "hint": "Suggested for barbershops" },
+          "ROSA": { "name": "Pink", "hint": "Suggested for hair salons" }
+        },
+        "save": "Save skin",
+        "saving": "Saving…",
+        "saved": "Skin saved. {{name}} will see it the next time it opens the app.",
+        "loadError": "Could not save the skin."
       },
       "dashboard": {
         "title": "Platform Admin",
@@ -1315,6 +1340,7 @@
       "activate": "Activate",
       "deactivate": "Deactivate",
       "edit": "Edit stamp",
+      "editShort": "Edit",
       "editTitle": "Edit stamp",
       "editLead": "While this stamp has no invoices, every field can be changed. Once it has invoices, only the validity end, the “to” number and the starting invoice number (forward only) can change.",
       "optionalHint": "Optional — not required for electronic invoicing.",
@@ -2147,6 +2173,7 @@
       "TENANT_NAME_REQUIRED": "Enter a name for the tenant.",
       "TENANT_DOMAIN_DUPLICATE": "That domain is already used by another tenant.",
       "TENANT_TIER_REQUIRED": "Select an initial tier.",
+      "TENANT_SKIN_INVALID": "The selected skin is not valid. Choose Peach, Sky blue or Pink.",
       "TENANT_ADMIN_EMAIL_REQUIRED": "Enter the new administrator's email.",
     "TENANT_ADMIN_EMAIL_DUPLICATE": "A user with that email already exists for this tenant.",
     "TENANT_STATUS_INVALID": "Invalid tenant status.",

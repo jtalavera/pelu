@@ -9,7 +9,7 @@ export function Label({ className, children, required, ...props }: LabelProps) {
   return (
     <label
       className={cn(
-        "text-sm font-medium text-slate-700 dark:text-slate-200",
+        "text-sm font-medium text-ink-2",
         className,
       )}
       {...props}
@@ -17,7 +17,7 @@ export function Label({ className, children, required, ...props }: LabelProps) {
       {children}
       {required ? (
         <span
-          className="ml-0.5 inline font-semibold text-red-600 dark:text-red-400"
+          className="ml-0.5 inline font-semibold text-danger"
           aria-hidden="true"
         >
           *

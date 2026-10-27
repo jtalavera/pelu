@@ -185,7 +185,7 @@ export function ServiceSearchField({
           id={`${inputId}-listbox`}
           role="listbox"
           aria-label={labelText}
-          className="w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded-md border border-line bg-surface shadow-lg max-h-72 overflow-y-auto"
         >
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">

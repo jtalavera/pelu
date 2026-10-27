@@ -34,7 +34,7 @@ export default function ImpersonatePage() {
   }, [navigate]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 p-4 dark:bg-slate-950">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-page p-4">
       {invalid ? (
         <div className="w-full max-w-md space-y-3">
           <Alert variant="destructive" title={t("femme.impersonation.bannerTitle")}>

@@ -60,7 +60,7 @@ test.describe("HU-29 · Fixes varios", () => {
     const discounted = page.getByTestId("line-discounted-total-0");
     await expect(discounted).toBeVisible();
     await expect(discounted).toContainText("9.000");
-    await expect(discounted).toHaveClass(/text-emerald-600/);
+    await expect(discounted).toHaveClass(/text-success/);
   });
 
   // AC3 — combined discount (per-item + global) shown in the payment summary.

@@ -1188,7 +1188,7 @@ export default function ProfessionalsPage() {
                     <img
                       src={photoDataUrl}
                       alt={t("femme.professionals.form.photoPreviewAlt")}
-                      className="h-24 w-24 max-h-32 max-w-32 rounded-md border border-slate-200 object-cover object-center dark:border-slate-600"
+                      className="h-24 w-24 max-h-32 max-w-32 rounded-md border border-line object-cover object-center"
                     />
                   </div>
                 ) : null}

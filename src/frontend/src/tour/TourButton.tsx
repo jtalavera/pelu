@@ -10,9 +10,9 @@ function ensureKeyframes() {
   el.id = STYLE_ID;
   el.textContent = `
     @keyframes femme-tour-pulse {
-      0%   { box-shadow: 0 4px 14px rgba(225,29,72,.35), 0 0 0 0 rgba(225,29,72,.45); }
-      70%  { box-shadow: 0 4px 14px rgba(225,29,72,.35), 0 0 0 12px rgba(225,29,72,0); }
-      100% { box-shadow: 0 4px 14px rgba(225,29,72,.35), 0 0 0 0 rgba(225,29,72,0); }
+      0%   { box-shadow: 0 4px 14px rgb(var(--fb-primary) / .35), 0 0 0 0 rgb(var(--fb-primary) / .45); }
+      70%  { box-shadow: 0 4px 14px rgb(var(--fb-primary) / .35), 0 0 0 12px rgb(var(--fb-primary) / 0); }
+      100% { box-shadow: 0 4px 14px rgb(var(--fb-primary) / .35), 0 0 0 0 rgb(var(--fb-primary) / 0); }
     }
     .femme-tour-fab-pulse {
       animation: femme-tour-pulse 2.2s ease-out infinite;
@@ -66,7 +66,7 @@ export function TourButton({ enabled = true }: { enabled?: boolean }) {
         justifyContent: "center",
         flexDirection: "column",
         gap: 1,
-        boxShadow: "0 4px 14px rgba(225,29,72,.35)",
+        boxShadow: "0 4px 14px rgb(var(--fb-primary) / .35)",
         zIndex: 998,
         fontFamily: "inherit",
         lineHeight: 1,
@@ -84,7 +84,7 @@ export function TourButton({ enabled = true }: { enabled?: boolean }) {
         style={{
           fontSize: 22,
           fontWeight: 700,
-          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontFamily: "var(--font-heading)",
           display: "block",
           marginTop: -1,
           color: "var(--color-on-primary)",

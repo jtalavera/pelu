@@ -43,7 +43,7 @@ test.describe("HU-66 · Disponible al facturar", () => {
     const warning = page.getByTestId("line-stock-0-warning");
     await expect(warning).toContainText("Available: 3 — stock will go negative");
     // Amber, not blocking.
-    await expect(warning).toHaveClass(/amber/);
+    await expect(warning).toHaveClass(/warning/);
     await clickIssueInvoiceAndExpectSuccess(page);
 
     await expect.poll(() => onHand(stockToken, itemId), { timeout: 30_000 }).toBe(-2);

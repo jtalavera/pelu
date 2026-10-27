@@ -91,7 +91,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await dlg.getByRole("button", { name: "Save" }).click();
     const alert = page.getByRole("alert").filter({ hasText: "Client created" });
     await expect(alert).toBeVisible({ timeout: 10_000 });
-    await expect(alert).toHaveClass(/emerald/);
+    await expect(alert).toHaveClass(/success/);
   });
 
   test("AC4+AC5 · la propina se muestra en rojo y no se incluye en Pendiente ni en el Monto por defecto", async ({
@@ -122,7 +122,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     // AC4: the tip label reads "Tip (non-invoiceable)" and renders in red.
     const tipLabel = page.getByText("Tip (non-invoiceable)", { exact: true });
     await expect(tipLabel).toBeVisible();
-    await expect(tipLabel).toHaveClass(/text-red-600/);
+    await expect(tipLabel).toHaveClass(/text-danger/);
     await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
 
     // AC5: the default Efectivo (CASH) amount and "Remaining" both exclude the tip —

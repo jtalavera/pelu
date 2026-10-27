@@ -9,7 +9,7 @@ export function List({ className, children, ...props }: ListProps) {
   return (
     <ul
       className={cn(
-        "divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900",
+        "divide-y divide-line rounded-lg border border-line bg-surface",
         className,
       )}
       {...props}
@@ -38,19 +38,19 @@ export function ListItem({
   return (
     <li
       className={cn(
-        "flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200",
+        "flex items-center gap-3 px-4 py-3 text-sm text-ink-2",
         className,
       )}
       {...props}
     >
       {media ? <div className="shrink-0">{media}</div> : null}
       <div className="min-w-0 flex-1">
-        <div className="font-medium text-slate-900 dark:text-slate-100">{title}</div>
+        <div className="font-medium text-ink">{title}</div>
         {description ? (
-          <div className="text-slate-500 dark:text-slate-400">{description}</div>
+          <div className="text-ink-3">{description}</div>
         ) : null}
       </div>
-      {end ? <div className="shrink-0 text-slate-500 dark:text-slate-400">{end}</div> : null}
+      {end ? <div className="shrink-0 text-ink-3">{end}</div> : null}
     </li>
   );
 }

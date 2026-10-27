@@ -115,10 +115,14 @@ function toUtcIsoString(localDatetime: string): string {
 }
 
 // ── Professional color palette for calendar blocks ────────────────────────────
+// Solid blocks in the four brand colors (teal, durazno, celeste, rosa), as in the brand's agenda
+// mockups; the left border is a darker shade of the fill (dotted when the appointment is PENDING).
+// Same values in light and dark mode: the pastels and the teal all hold their contrast on both.
 const PROF_COLORS = [
-  { bg: "var(--color-rose-lt)",    border: "var(--color-rose)",    color: "var(--color-rose-dk)"  },
-  { bg: "var(--color-mauve-lt)",   border: "var(--color-mauve)",   color: "var(--color-mauve-dk)" },
-  { bg: "var(--color-success-lt)", border: "var(--color-success)", color: "var(--color-success)"  },
+  { bg: "rgb(var(--fb-teal))",    border: "#0A545B", color: "rgb(var(--fb-lino))"  },
+  { bg: "rgb(var(--fb-durazno))", border: "#D9976F", color: "rgb(var(--fb-tinta))" },
+  { bg: "rgb(var(--fb-celeste))", border: "#7FA3C0", color: "rgb(var(--fb-tinta))" },
+  { bg: "rgb(var(--fb-rosa))",    border: "#D9708F", color: "rgb(var(--fb-tinta))" },
 ] as const;
 
 type ProfColor = (typeof PROF_COLORS)[number];
@@ -1109,7 +1113,7 @@ export default function CalendarPage() {
             )}
             <Row label={t("femme.calendar.detail.client")}>
               {detailAppt.clientName ?? (
-                <span className="italic text-slate-500 dark:text-slate-400">
+                <span className="italic text-ink-3">
                   {t("femme.calendar.detail.occasionalClient")}
                 </span>
               )}

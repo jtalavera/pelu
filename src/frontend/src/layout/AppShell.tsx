@@ -8,6 +8,7 @@ import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 import { FeatureFlagProvider, useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
+import { useTenantSkin } from "../hooks/useTenantSkin";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { endSession, isPinSession, signedOutPath } from "../auth/sharedDevice";
 import { UserProfileModal } from "../components/UserProfileModal";
@@ -16,7 +17,7 @@ import { TourJoyride } from "../tour/TourJoyride";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { onBroadcastLogout } from "../auth/sessionBroadcast";
 import { openStockInNewTab, stockSpaBaseUrl } from "../stock/openStock";
-import { Alert, Button } from "@design-system";
+import { Alert, Button, FlowbitLogo } from "@design-system";
 
 function getInitials(email: string): string {
   const parts = email.split("@")[0].split(/[._-]/);
@@ -58,6 +59,9 @@ function SectionLabel({ label }: { label: string }) {
  */
 const DrawerNavContext = createContext(false);
 
+/** Fixed topbar height (px); the sidebar and main content are offset by it. */
+const TOPBAR_HEIGHT = 56;
+
 function SideNavItem({
   to,
   end,
@@ -80,11 +84,11 @@ function SideNavItem({
       style={({ isActive }) => ({
         padding: "8px 10px",
         minHeight: inDrawer ? 44 : undefined,
-        fontSize: inDrawer ? 14 : 12,
-        borderRadius: "var(--radius-md)",
-        color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-        fontWeight: isActive ? 500 : 400,
-        background: isActive ? "var(--color-rose-lt)" : "transparent",
+        fontSize: inDrawer ? 14 : 13,
+        borderRadius: "var(--radius-pill)",
+        color: isActive ? "var(--color-on-primary)" : "var(--color-ink-2)",
+        fontWeight: isActive ? 700 : 600,
+        background: isActive ? "var(--color-rose)" : "transparent",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -93,11 +97,11 @@ function SideNavItem({
       })}
       onMouseEnter={(e) => {
         const el = e.currentTarget as HTMLAnchorElement;
-        if (!el.dataset.active) el.style.background = "var(--color-stone)";
+        if (el.getAttribute("aria-current") !== "page") el.style.background = "var(--color-rose-lt)";
       }}
       onMouseLeave={(e) => {
         const el = e.currentTarget as HTMLAnchorElement;
-        if (!el.dataset.active) el.style.background = "";
+        if (el.getAttribute("aria-current") !== "page") el.style.background = "";
       }}
     >
       {icon}
@@ -260,7 +264,7 @@ function StockNavButton({ theme, lang }: { theme: "light" | "dark"; lang: string
         <p
           role="alert"
           data-testid="nav-stock-error"
-          className="text-red-600 dark:text-red-400"
+          className="text-danger"
           style={{ fontSize: 11, padding: "2px 10px" }}
         >
           {error}
@@ -327,6 +331,7 @@ function AppShellInner() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { me } = useMe();
+  useTenantSkin(me?.skin);
   const { theme, toggle } = useThemeContext();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   // HU-65: the first sidebar item driven by a flag — only when the tenant has Stock and this build
@@ -420,7 +425,8 @@ function AppShellInner() {
   const isProfessional = me?.role === "PROFESSIONAL";
   const isImpersonation = me?.impersonation === true;
   // Theme + language: in the topbar on tablets/desktop, inside the drawer on phones (room for 44px targets).
-  const themeToggle = (
+  // `onBar` = rendered on the (teal / tinta) topbar vs. on the sidebar surface.
+  const themeToggleFor = (onBar: boolean) => (
     <button
       data-tour="topbar-theme"
       type="button"
@@ -438,10 +444,10 @@ function AppShellInner() {
       style={{
         width: isPhone ? 44 : 32,
         height: isPhone ? 44 : 32,
-        borderRadius: "var(--radius-md)",
-        border: "var(--border-default)",
-        background: "var(--color-stone)",
-        color: "var(--color-ink-2)",
+        borderRadius: "var(--radius-pill)",
+        border: onBar ? "1px solid transparent" : "var(--border-default)",
+        background: onBar ? "var(--topbar-ctl)" : "var(--color-stone)",
+        color: onBar ? "var(--topbar-fg)" : "var(--color-ink-2)",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -451,43 +457,59 @@ function AppShellInner() {
         transition: "background 0.15s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = "var(--color-stone-md)";
+        e.currentTarget.style.background = onBar ? "var(--topbar-ctl-hover)" : "var(--color-stone-md)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = "var(--color-stone)";
+        e.currentTarget.style.background = onBar ? "var(--topbar-ctl)" : "var(--color-stone)";
       }}
     >
       {theme === "dark" ? "☀️" : "🌙"}
     </button>
   );
-  const languageSwitch = (
+  const languageSwitchFor = (onBar: boolean) => (
     <div data-tour="topbar-lang" role="group" aria-label={t("language.label")} style={{ display: "flex", gap: 4 }}>
-      {(["en", "es"] as SupportedLanguage[]).map((lang) => (
-        <button
-          key={lang}
-          type="button"
-          onClick={() => switchLang(lang)}
-          aria-pressed={currentLang === lang}
-          style={{
-            padding: isPhone ? "0 14px" : "2px 8px",
-            minHeight: isPhone ? 44 : undefined,
-            borderRadius: "var(--radius-pill)",
-            fontSize: isPhone ? 13 : 11,
-            fontWeight: 500,
-            cursor: "pointer",
-            border:
-              currentLang === lang
-                ? "1px solid var(--color-rose-md)"
-                : "var(--border-default)",
-            background:
-              currentLang === lang ? "var(--color-rose-lt)" : "transparent",
-            color:
-              currentLang === lang ? "var(--color-rose-dk)" : "var(--color-ink-3)",
-          }}
-        >
-          {lang.toUpperCase()}
-        </button>
-      ))}
+      {(["en", "es"] as SupportedLanguage[]).map((lang) => {
+        const selected = currentLang === lang;
+        return (
+          <button
+            key={lang}
+            type="button"
+            onClick={() => switchLang(lang)}
+            aria-pressed={selected}
+            style={{
+              padding: isPhone ? "0 14px" : "2px 10px",
+              minHeight: isPhone ? 44 : undefined,
+              borderRadius: "var(--radius-pill)",
+              fontSize: isPhone ? 13 : 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              border: onBar
+                ? selected
+                  ? "1px solid transparent"
+                  : "1px solid var(--topbar-ctl-hover)"
+                : selected
+                  ? "1px solid var(--color-rose-md)"
+                  : "var(--border-default)",
+              background: onBar
+                ? selected
+                  ? "var(--topbar-fg)"
+                  : "transparent"
+                : selected
+                  ? "var(--color-rose-lt)"
+                  : "transparent",
+              color: onBar
+                ? selected
+                  ? "var(--topbar-sel-fg)"
+                  : "var(--topbar-fg)"
+                : selected
+                  ? "var(--color-rose-dk)"
+                  : "var(--color-ink-3)",
+            }}
+          >
+            {lang.toUpperCase()}
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -500,10 +522,11 @@ function AppShellInner() {
           top: 0,
           left: 0,
           right: 0,
-          height: 48,
+          height: TOPBAR_HEIGHT,
           zIndex: 100,
-          background: "var(--color-white)",
-          borderBottom: "var(--border-default)",
+          background: "var(--topbar-bg)",
+          color: "var(--topbar-fg)",
+          borderBottom: "var(--topbar-border)",
           display: "flex",
           alignItems: "center",
           padding: isPhone ? "0 8px" : "0 20px",
@@ -526,9 +549,9 @@ function AppShellInner() {
               alignItems: "center",
               justifyContent: "center",
               border: "none",
-              borderRadius: "var(--radius-md)",
+              borderRadius: "var(--radius-pill)",
               background: "transparent",
-              color: "var(--color-ink)",
+              color: "var(--topbar-fg)",
               cursor: "pointer",
             }}
           >
@@ -548,30 +571,52 @@ function AppShellInner() {
             </svg>
           </button>
         )}
-        {/* Logo */}
-        <span
+        {/* Brand: Flowbit logo (accent = tenant skin) + the salon's name */}
+        <div
           style={{
-            width: isDesktop ? 220 : undefined,
-            flexShrink: isDesktop ? 0 : 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
             minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: 15,
-            fontWeight: 500,
-            color: "var(--color-rose)",
-            letterSpacing: "-0.01em",
+            flexShrink: isDesktop ? 0 : 1,
+            width: isDesktop ? 220 : undefined,
           }}
         >
+          <FlowbitLogo tone="dark" className="h-6 w-auto shrink-0" />
           {/* HU-66: on a phone, a PIN session shows who is signed in instead of the salon. */}
-          {pinMode && isPhone ? (
-            <span data-testid="pin-session-name" style={{ color: "var(--color-ink)", fontSize: 14 }}>
+          <span
+            data-testid="topbar-tenant-name"
+            style={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--topbar-fg)",
+              opacity: 0.85,
+              display: isPhone ? "none" : undefined,
+            }}
+          >
+            {me?.tenantName ?? t("femme.appName")}
+          </span>
+          {pinMode && isPhone && (
+            <span
+              data-testid="pin-session-name"
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "var(--topbar-fg)",
+              }}
+            >
               {displayName}
             </span>
-          ) : (
-            (me?.tenantName ?? t("femme.appName"))
           )}
-        </span>
+        </div>
 
 
         {/* Right zone */}
@@ -595,10 +640,10 @@ function AppShellInner() {
               style={{
                 width: isPhone ? 44 : 32,
                 height: isPhone ? 44 : 32,
-                borderRadius: "var(--radius-md)",
-                border: "var(--border-default)",
-                background: !hasSeenTour(tourKey) ? "var(--color-rose-lt)" : "var(--color-stone)",
-                color: !hasSeenTour(tourKey) ? "var(--color-rose-dk)" : "var(--color-ink-2)",
+                borderRadius: "var(--radius-pill)",
+                border: "1px solid transparent",
+                background: !hasSeenTour(tourKey) ? "var(--topbar-fg)" : "var(--topbar-ctl)",
+                color: !hasSeenTour(tourKey) ? "var(--topbar-sel-fg)" : "var(--topbar-fg)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -607,25 +652,25 @@ function AppShellInner() {
                 fontWeight: 700,
                 flexShrink: 0,
                 transition: "background 0.15s",
-                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontFamily: "var(--font-heading)",
                 // seenVersion keeps the derived color reactive
                 outline: seenVersion >= 0 ? undefined : undefined,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--color-stone-md)";
+                e.currentTarget.style.background = "var(--topbar-ctl-hover)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = !hasSeenTour(tourKey)
-                  ? "var(--color-rose-lt)"
-                  : "var(--color-stone)";
+                  ? "var(--topbar-fg)"
+                  : "var(--topbar-ctl)";
               }}
             >
               ?
             </button>
           )}
-          {!isPhone && themeToggle}
+          {!isPhone && themeToggleFor(true)}
           {/* Language switcher */}
-          {!isPhone && languageSwitch}
+          {!isPhone && languageSwitchFor(true)}
 
           {/* Notifications (no panel behind it yet — dropped on phones to make room) */}
           {!isPhone && (
@@ -634,11 +679,12 @@ function AppShellInner() {
             type="button"
             aria-label={t("femme.topbar.notifications")}
             style={{
-              width: 28,
-              height: 28,
-              borderRadius: "var(--radius-md)",
-              background: "var(--color-stone)",
-              border: "var(--border-default)",
+              width: 32,
+              height: 32,
+              borderRadius: "var(--radius-pill)",
+              background: "var(--topbar-ctl)",
+              color: "var(--topbar-fg)",
+              border: "1px solid transparent",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -659,8 +705,8 @@ function AppShellInner() {
                   data-testid="pin-session-name"
                   style={{
                     fontSize: 13,
-                    fontWeight: 500,
-                    color: "var(--color-ink)",
+                    fontWeight: 700,
+                    color: "var(--topbar-fg)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -702,13 +748,13 @@ function AppShellInner() {
                 gap: 8,
                 padding: "4px 8px",
                 minHeight: 44,
-                borderRadius: "var(--radius-md)",
+                borderRadius: "var(--radius-pill)",
                 cursor: "pointer",
-                background: userMenuOpen ? "var(--color-stone)" : "transparent",
+                background: userMenuOpen ? "var(--topbar-ctl)" : "transparent",
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => {
-                if (!userMenuOpen) e.currentTarget.style.background = "var(--color-stone)";
+                if (!userMenuOpen) e.currentTarget.style.background = "var(--topbar-ctl)";
               }}
               onMouseLeave={(e) => {
                 if (!userMenuOpen) e.currentTarget.style.background = "transparent";
@@ -719,10 +765,10 @@ function AppShellInner() {
                   width: 28,
                   height: 28,
                   borderRadius: "var(--radius-pill)",
-                  background: "var(--color-rose-md)",
-                  color: "var(--color-rose-dk)",
+                  background: "rgb(var(--fb-accent))",
+                  color: "rgb(var(--fb-accent-ink))",
                   fontSize: 10,
-                  fontWeight: 500,
+                  fontWeight: 700,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -733,10 +779,10 @@ function AppShellInner() {
               </div>
               {!isPhone && (
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
-                <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-ink)" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--topbar-fg)" }}>
                   {displayName}
                 </span>
-                <span style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
+                <span style={{ fontSize: 10, color: "var(--topbar-fg)", opacity: 0.75 }}>
                   {isProfessional ? t("femme.nav.professionalRole") : t("femme.nav.adminRole")}
                 </span>
               </div>
@@ -756,7 +802,7 @@ function AppShellInner() {
               >
                 <path
                   d="M1 1L5 5L9 1"
-                  stroke="var(--color-ink-3)"
+                  stroke="var(--topbar-fg)"
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -900,7 +946,7 @@ function AppShellInner() {
           onClick={() => setNavOpen(false)}
           style={{
             position: "fixed",
-            inset: "48px 0 0 0",
+            inset: `${TOPBAR_HEIGHT}px 0 0 0`,
             background: "rgba(0, 0, 0, 0.35)",
             zIndex: 90,
           }}
@@ -913,7 +959,7 @@ function AppShellInner() {
         data-testid="app-sidebar"
         style={{
           position: "fixed",
-          top: 48,
+          top: TOPBAR_HEIGHT,
           left: 0,
           bottom: 0,
           width: isDesktop ? 220 : "min(280px, 85vw)",
@@ -1017,8 +1063,8 @@ function AppShellInner() {
             data-testid="drawer-preferences"
             style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px" }}
           >
-            {themeToggle}
-            {languageSwitch}
+            {themeToggleFor(false)}
+            {languageSwitchFor(false)}
           </div>
         )}
 
@@ -1085,10 +1131,10 @@ function AppShellInner() {
       <main
         style={{
           marginLeft: isDesktop ? 220 : 0,
-          marginTop: 48,
+          marginTop: TOPBAR_HEIGHT,
           padding: isPhone ? 12 : isDesktop ? 24 : 16,
           minWidth: 0,
-          minHeight: "calc(100vh - 48px)",
+          minHeight: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
           background: "var(--color-stone)",
         }}
       >

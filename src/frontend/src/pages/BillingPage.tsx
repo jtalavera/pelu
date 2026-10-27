@@ -1975,7 +1975,7 @@ function NewInvoiceTab({
                   {line.discountEnabled && line.discountValue && (
                     <p
                       data-testid={`line-discounted-total-${idx}`}
-                      className="mt-1 text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
+                      className="mt-1 text-sm font-medium tabular-nums text-success"
                     >
                       {t("femme.billing.invoice.lineDiscountedTotal")}:{" "}
                       {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
@@ -1983,7 +1983,7 @@ function NewInvoiceTab({
                   )}
                 </div>
                 <div className="col-span-9 sm:col-span-1 flex min-h-9 w-full items-end justify-center">
-                  <span className="w-full text-center text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
+                  <span className="w-full text-center text-sm font-medium tabular-nums text-ink">
                     {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
                   </span>
                 </div>
@@ -2027,7 +2027,7 @@ function NewInvoiceTab({
                         value={line.discountType}
                         onChange={(e) => setLineDiscountType(idx, e.target.value as "FIXED" | "PERCENT")}
                         aria-label={t("femme.billing.invoice.lineDiscountType")}
-                        className="rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] px-2 py-1 text-xs"
+                        className="rounded border border-[rgb(var(--color-border))] bg-surface px-2 py-1 text-xs"
                       >
                         <option value="PERCENT">{t("femme.billing.invoice.discountTypePercent")}</option>
                         <option value="FIXED">{t("femme.billing.invoice.discountTypeFixed")}</option>
@@ -2069,7 +2069,7 @@ function NewInvoiceTab({
                     ))}
                   </Select>
                   {commissionsEnabled && !line.professionalId && line.serviceId ? (
-                    <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`line-no-commission-${idx}`}>
+                    <p className="text-xs text-warning" data-testid={`line-no-commission-${idx}`}>
                       {t("femme.billing.invoice.lineNoCommission")}
                     </p>
                   ) : null}
@@ -2174,16 +2174,16 @@ function NewInvoiceTab({
             </div>
             {showTips && (
               <div className="flex justify-between">
-                <span className="text-red-600 dark:text-red-400">
+                <span className="text-danger">
                   {t("femme.billing.invoice.tips")}
                 </span>
-                <span id="billing-tips-amount" className="text-red-600 dark:text-red-400">
+                <span id="billing-tips-amount" className="text-danger">
                   {formatAmountDecimal(tipsTotal.toFixed(2))}
                 </span>
               </div>
             )}
             <div
-              className={`flex justify-between ${Math.abs(remaining) > 0.01 ? "text-red-600 dark:text-red-400" : "text-emerald-600"}`}
+              className={`flex justify-between ${Math.abs(remaining) > 0.01 ? "text-danger" : "text-success"}`}
             >
               <span>{t("femme.billing.invoice.remaining")}</span>
               <span>{formatAmountDecimal(remaining.toFixed(2))}</span>
@@ -2370,7 +2370,7 @@ function NewInvoiceTab({
             </div>
           )}
           {tipsTotal > 0 && (
-            <div className="flex justify-between text-sm font-semibold text-red-600 dark:text-red-400">
+            <div className="flex justify-between text-sm font-semibold text-danger">
               <span>{t("femme.billing.invoice.tipsTotal")}</span>
               <span data-testid="billing-tips-total">{formatAmountDecimal(tipsTotal.toFixed(2))}</span>
             </div>

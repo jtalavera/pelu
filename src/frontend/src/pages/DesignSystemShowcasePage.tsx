@@ -146,7 +146,7 @@ export default function DesignSystemShowcasePage() {
         sortable: true,
         sortFn: (a, b) => a.updated.localeCompare(b.updated),
         cell: (r) => (
-          <span className="text-slate-500 dark:text-slate-400">{r.updated}</span>
+          <span className="text-ink-3">{r.updated}</span>
         ),
         defaultHidden: true,
       },
@@ -199,7 +199,7 @@ export default function DesignSystemShowcasePage() {
 
         <section className="space-y-4">
           <Heading as="h2">{t("app.sections.typography")}</Heading>
-          <div className="space-y-3 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <div className="space-y-3 rounded-lg border border-line p-4">
             <Heading as="h1">H1</Heading>
             <Heading as="h2">H2</Heading>
             <Heading as="h3">H3</Heading>
@@ -217,17 +217,17 @@ export default function DesignSystemShowcasePage() {
         <section className="space-y-4">
           <Heading as="h2">{t("app.sections.icons")}</Heading>
           <Text variant="muted">{t("app.icons.hint")}</Text>
-          <div className="flex flex-wrap items-center gap-8 text-slate-700 dark:text-slate-200">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+          <div className="flex flex-wrap items-center gap-8 text-ink-2">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line">
               <IconSearch />
             </span>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line">
               <IconMenu />
             </span>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line">
               <IconUser />
             </span>
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 dark:border-slate-600">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line">
               <IconChevronRight />
             </span>
           </div>
@@ -263,7 +263,7 @@ export default function DesignSystemShowcasePage() {
                     end={
                       <button
                         type="button"
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                        className="text-xs font-medium text-primary hover:text-primary"
                         onClick={() => setShowPassword((v) => !v)}
                       >
                         {showPassword ? t("app.form.hide") : t("app.form.show")}
@@ -307,15 +307,15 @@ export default function DesignSystemShowcasePage() {
                   aria-labelledby="plan-label"
                   className="flex flex-row flex-wrap gap-4"
                 >
-                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="flex items-center gap-2 text-sm text-ink-2">
                     <Radio value="starter" />
                     {t("app.form.planStarter")}
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="flex items-center gap-2 text-sm text-ink-2">
                     <Radio value="pro" />
                     {t("app.form.planPro")}
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="flex items-center gap-2 text-sm text-ink-2">
                     <Radio value="team" />
                     {t("app.form.planTeam")}
                   </label>
@@ -330,7 +330,7 @@ export default function DesignSystemShowcasePage() {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-6">
-                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <label className="flex items-center gap-2 text-sm text-ink-2">
                   <Checkbox defaultChecked />
                   {t("app.form.subscribe")}
                 </label>
@@ -386,10 +386,10 @@ export default function DesignSystemShowcasePage() {
             previousLabel={t("app.pagination.previous")}
             nextLabel={t("app.pagination.next")}
           />
-          <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="overflow-hidden rounded-lg border border-line">
             <Navbar
               brand={
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-sm font-semibold text-ink">
                   {t("app.navbar.brand")}
                 </span>
               }
@@ -422,10 +422,10 @@ export default function DesignSystemShowcasePage() {
 
         <section className="space-y-4">
           <Heading as="h2">{t("app.sections.layout")}</Heading>
-          <div className="flex min-h-[min(50vh,280px)] flex-col overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 md:min-h-[220px] md:flex-row">
+          <div className="flex min-h-[min(50vh,280px)] flex-col overflow-hidden rounded-lg border border-line md:min-h-[220px] md:flex-row">
             <Sidebar
               header={
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-sm font-semibold text-ink">
                   {t("app.sidebar.product")}
                 </span>
               }
@@ -435,8 +435,8 @@ export default function DesignSystemShowcasePage() {
               </SidebarLink>
               <SidebarLink href="#">{t("app.sidebar.reports")}</SidebarLink>
             </Sidebar>
-            <div className="flex min-h-0 flex-1 flex-col bg-slate-50 p-4 dark:bg-slate-950">
-              <Text className="font-medium text-slate-900 dark:text-slate-100">
+            <div className="flex min-h-0 flex-1 flex-col bg-page p-4">
+              <Text className="font-medium text-ink">
                 {t("app.sidebar.contentTitle")}
               </Text>
               <Text variant="muted" className="mt-1">

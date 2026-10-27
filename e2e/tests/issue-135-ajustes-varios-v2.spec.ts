@@ -303,14 +303,14 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     });
     await expect(withdrawalRowA).toBeVisible({ timeout: 15_000 });
     await expect(withdrawalRowA.getByText(/^Gs\. 4\.000$/)).toBeVisible();
-    await expect(withdrawalRowA).toHaveClass(/text-red-600/);
+    await expect(withdrawalRowA).toHaveClass(/text-danger/);
 
     const withdrawalRowB = reportRows.filter({
       hasText: "Manual withdrawal — E2E135 Prof B",
     });
     await expect(withdrawalRowB).toBeVisible({ timeout: 15_000 });
     await expect(withdrawalRowB.getByText(/^Gs\. 2\.000$/)).toBeVisible();
-    await expect(withdrawalRowB).toHaveClass(/text-red-600/);
+    await expect(withdrawalRowB).toHaveClass(/text-danger/);
 
     // Issue #137: the aggregate "Total manual withdrawals" row was removed — each withdrawal now
     // lives only inside its professional's own group.

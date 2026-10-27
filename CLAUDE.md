@@ -151,7 +151,7 @@ src/backend/src/main/java/com/cursorpoc/backend/
 
 ### Form validation
 
-- Show field-level errors in red using `FieldValidationError` (`text-red-600 dark:text-red-400`). Do **not** use `--color-destructive` CSS var (undefined).
+- Show field-level errors in red using `FieldValidationError` (`text-danger`, the theme-aware red token from the Flowbit palette). Do **not** use `--color-destructive` CSS var (undefined).
 - Error messages must state the failing rule and include a concrete format example (e.g. RUC: `80000005-6`). Copy must be in both `en.json` and `es.json`.
 - Use `role="alert"` on inline error text; associate controls with `aria-invalid` and `aria-describedby`.
 - Non-validation failures (network errors) use `Alert variant="destructive"`.

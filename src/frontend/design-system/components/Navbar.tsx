@@ -14,7 +14,7 @@ export function Navbar({ className, brand, center, end, ...props }: NavbarProps)
   return (
     <header
       className={cn(
-        "flex min-h-14 w-full flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-900 sm:h-14 sm:flex-nowrap sm:gap-4 sm:py-0",
+        "flex min-h-14 w-full flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2 sm:h-14 sm:flex-nowrap sm:gap-4 sm:py-0",
         className,
       )}
       {...props}
@@ -56,8 +56,8 @@ export function NavbarLink({
     <a
       href={href}
       className={cn(
-        "inline-flex min-h-[44px] items-center text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 sm:min-h-0",
-        current && "text-indigo-600 dark:text-indigo-400",
+        "inline-flex min-h-[44px] items-center text-sm font-medium text-ink-2 transition-colors hover:text-ink sm:min-h-0",
+        current && "text-primary",
         className,
       )}
       aria-current={current ? "page" : undefined}

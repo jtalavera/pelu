@@ -189,26 +189,26 @@ export const LocalizedDateInput = forwardRef<HTMLInputElement, LocalizedDateInpu
           }}
           onKeyDown={handleKeyDown}
           className={cn(
-            "flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400",
-            "focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20",
-            "dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus-visible:border-indigo-400 dark:focus-visible:ring-indigo-400/25",
-            "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60 dark:disabled:bg-slate-800",
+            "flex min-h-[44px] w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-ink-3",
+            "focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+            "",
+            "disabled:cursor-not-allowed disabled:bg-page disabled:opacity-60",
             invalid &&
-              "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/20 dark:border-red-500 dark:focus-visible:ring-red-500/30",
+              "border-danger focus-visible:border-danger focus-visible:ring-danger/20",
           )}
         />
         <FloatingDropdown anchorRef={containerRef} open={open && !disabled} ref={panelRef} width={288}>
           <div
             role="dialog"
             aria-label={t("femme.localizedDateInput.dialogLabel")}
-            className="rounded-md border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+            className="rounded-md border border-line bg-surface p-3 shadow-lg"
           >
             <div className="mb-2 flex items-center justify-between">
               <button
                 type="button"
                 aria-label={t("femme.localizedDateInput.prevMonth")}
                 onClick={() => navigateMonth(-1)}
-                className="rounded px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded px-2 py-1 text-sm hover:bg-page"
               >
                 ‹
               </button>
@@ -217,12 +217,12 @@ export const LocalizedDateInput = forwardRef<HTMLInputElement, LocalizedDateInpu
                 type="button"
                 aria-label={t("femme.localizedDateInput.nextMonth")}
                 onClick={() => navigateMonth(1)}
-                className="rounded px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded px-2 py-1 text-sm hover:bg-page"
               >
                 ›
               </button>
             </div>
-            <div className="grid grid-cols-7 gap-0.5 text-center text-xs text-slate-500 dark:text-slate-400">
+            <div className="grid grid-cols-7 gap-0.5 text-center text-xs text-ink-3">
               {weekdays.map((w) => (
                 <div key={w} className="py-1">
                   {w}
@@ -243,10 +243,10 @@ export const LocalizedDateInput = forwardRef<HTMLInputElement, LocalizedDateInpu
                     onClick={() => pickDay(cell)}
                     className={cn(
                       "rounded px-2 py-1 text-sm",
-                      "hover:bg-indigo-50 dark:hover:bg-indigo-950",
+                      "hover:bg-primary-lt",
                       selected
-                        ? "bg-indigo-600 text-white hover:bg-indigo-600"
-                        : "text-slate-900 dark:text-slate-100",
+                        ? "bg-primary text-primary-fg hover:bg-primary"
+                        : "text-ink",
                     )}
                   >
                     {cell}

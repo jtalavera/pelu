@@ -91,7 +91,7 @@ export function TabsList({
       ref={listRef}
       role="tablist"
       className={cn(
-        "inline-flex max-w-full min-h-[44px] items-center justify-start gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-slate-600 [scrollbar-width:thin] dark:bg-slate-800 dark:text-slate-400 sm:h-9 sm:min-h-0 sm:justify-center",
+        "inline-flex max-w-full min-h-[44px] items-center justify-start gap-1 overflow-x-auto rounded-full bg-primary-lt p-1 text-ink-2 [scrollbar-width:thin] sm:h-9 sm:min-h-0 sm:justify-center",
         className,
       )}
       onKeyDown={handleKeyDown}
@@ -127,12 +127,12 @@ export function TabsTrigger({
       tabIndex={selected ? 0 : -1}
       disabled={disabled}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors sm:py-1",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:focus-visible:outline-indigo-400",
+        "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors sm:py-1",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         "disabled:pointer-events-none disabled:opacity-50",
         selected
-          ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
-          : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
+          ? "bg-primary text-primary-fg"
+          : "text-primary-dk hover:bg-primary-md/30",
         className,
       )}
       onClick={() => setValue(triggerValue)}

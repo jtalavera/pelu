@@ -166,9 +166,9 @@ export function KebabMenu({
         onClick={() => setOpen((v) => !v)}
         onKeyDown={handleTriggerKeyDown}
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-slate-600 transition-colors",
-          "hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30",
-          "dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+          "flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-ink-2 transition-colors",
+          "hover:bg-page hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+          "",
         )}
       >
         <svg
@@ -192,8 +192,8 @@ export function KebabMenu({
               aria-label={triggerAriaLabel}
               style={{ top: position.top, right: position.right }}
               className={cn(
-                "fixed z-50 min-w-[12rem] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg",
-                "dark:border-slate-700 dark:bg-slate-900",
+                "fixed z-50 min-w-[12rem] overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg",
+                "",
               )}
             >
           {items.map((item, idx) => (
@@ -213,12 +213,12 @@ export function KebabMenu({
                 }}
                 className={cn(
                   "flex w-full items-center gap-2 px-3 py-2 text-left text-sm",
-                  "hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none",
+                  "hover:bg-page focus-visible:bg-page focus-visible:outline-none",
                   "disabled:cursor-not-allowed disabled:opacity-50",
-                  "dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800",
+                  "",
                   item.destructive
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-slate-900 dark:text-slate-100",
+                    ? "text-danger"
+                    : "text-ink",
                 )}
               >
                 {item.icon ? <span aria-hidden>{item.icon}</span> : null}

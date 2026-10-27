@@ -114,7 +114,7 @@ export default function PlatformGlobalFeatureFlagsPage() {
               <li
                 key={flag.flagKey}
                 data-testid={`global-flag-row-${flag.flagKey}`}
-                className="flex items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] bg-[var(--color-white)] p-4 dark:border-slate-600 dark:bg-slate-900/30"
+                className="flex items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] bg-[var(--color-white)] p-4"
               >
                 <div className="min-w-0">
                   <div className="font-mono text-xs font-medium text-[var(--color-ink)]">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { AuthBrandHeader } from "../components/AuthBrandHeader";
 import { Button, Heading, Input, Label, Text } from "@design-system";
 import { apiBaseUrl } from "../api/baseUrl";
 import { FieldValidationError } from "../components/FieldValidationError";
@@ -76,7 +77,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--color-stone)] px-4 py-10 text-[var(--color-ink)]"
+      className="min-h-screen fb-auth-bg px-4 py-10 text-[var(--color-ink)]"
       style={{
         paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))",
         paddingLeft: "max(1rem, env(safe-area-inset-left))",
@@ -85,19 +86,14 @@ export default function ResetPasswordPage() {
       }}
     >
       <div className="mx-auto flex max-w-md flex-col gap-6">
-        <span
-          className="text-lg font-medium text-[var(--color-rose)]"
-          style={{ letterSpacing: "-0.01em" }}
-        >
-          {t("femme.appName")}
-        </span>
+        <AuthBrandHeader />
 
         <div
-          className="rounded-[var(--radius-xl)] p-6 md:p-8"
+          className="rounded-[var(--radius-2xl)] p-6 md:p-8"
           style={{
             background: "var(--color-white)",
             border: "var(--border-default)",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            boxShadow: "none",
           }}
         >
           {done ? (
@@ -179,7 +175,7 @@ export default function ResetPasswordPage() {
                 <Button
                   type="submit"
                   variant="primary"
-                  className="min-h-11 w-full rounded-[var(--radius-md)]"
+                  className="min-h-11 w-full"
                   style={{
                     background: "var(--color-rose)",
                     color: "var(--color-on-primary)",

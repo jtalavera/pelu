@@ -46,6 +46,13 @@ export {
   IconMenu,
 } from "./components/Icon";
 export { Heading, Text, type HeadingProps, type TextProps } from "./components/Typography";
+export {
+  FlowbitLogo,
+  FlowbitMark,
+  type FlowbitLogoProps,
+  type FlowbitLogoTone,
+  type FlowbitMarkProps,
+} from "./components/FlowbitLogo";
 export { Input, type InputProps } from "./components/Input";
 export { InputGroup, type InputGroupProps } from "./components/InputGroup";
 export {

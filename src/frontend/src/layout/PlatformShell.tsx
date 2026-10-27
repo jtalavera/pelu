@@ -7,6 +7,19 @@ import { useIdleLogout } from "../auth/useIdleLogout";
 import { useThemeContext } from "../context/ThemeContext";
 import { persistLanguage, type SupportedLanguage } from "../i18n/languagePreference";
 import { useMe } from "../hooks/useMe";
+import { FlowbitLogo } from "@design-system";
+
+const NAV_ITEMS: { to: string; end?: boolean; labelKey: string }[] = [
+  { to: "/platform", end: true, labelKey: "femme.platform.nav.dashboard" },
+  { to: "/platform/tenants", labelKey: "femme.platform.nav.tenants" },
+  { to: "/platform/tiers", labelKey: "femme.platform.nav.tiers" },
+  { to: "/platform/skin", labelKey: "femme.platform.nav.skin" },
+  { to: "/platform/global-feature-flags", labelKey: "femme.platform.nav.globalFeatureFlags" },
+  { to: "/platform/feature-flags", labelKey: "femme.platform.nav.featureFlags" },
+  { to: "/platform/import", labelKey: "femme.platform.nav.import" },
+  { to: "/platform/stock", labelKey: "femme.platform.nav.stock" },
+  { to: "/platform/audit", labelKey: "femme.platform.nav.audit" },
+];
 
 /**
  * HU-35: dedicated shell for the `/platform/**` area (Platform Admin). Deliberately does NOT
@@ -40,14 +53,17 @@ export function PlatformShell() {
   return (
     <div className="min-h-screen bg-[var(--color-stone)] text-[var(--color-ink)]">
       <header
-        className="fixed inset-x-0 top-0 z-[100] flex h-12 items-center gap-3 px-4 sm:px-5"
-        style={{ background: "var(--color-white)", borderBottom: "var(--border-default)" }}
+        className="fixed inset-x-0 top-0 z-[100] flex h-14 items-center gap-3 px-4 sm:px-5"
+        style={{
+          background: "var(--topbar-bg)",
+          color: "var(--topbar-fg)",
+          borderBottom: "var(--topbar-border)",
+        }}
       >
-        <span
-          className="text-[15px] font-medium"
-          style={{ color: "var(--color-rose)", letterSpacing: "-0.01em" }}
-        >
-          {t("femme.appName")} · {t("femme.platform.brandSuffix")}
+        {/* The platform area is not tenant-scoped, so it always wears the default (durazno) skin. */}
+        <FlowbitLogo tone="dark" className="h-6 w-auto shrink-0" />
+        <span className="text-[12px] font-bold opacity-85">
+          {t("femme.platform.brandSuffix")}
         </span>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
@@ -64,8 +80,8 @@ export function PlatformShell() {
                 ? t("designSystem.theme.switchToLight")
                 : t("designSystem.theme.switchToDark")
             }
-            className="flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-md)] sm:min-h-8 sm:min-w-8"
-            style={{ background: "var(--color-stone)", border: "var(--border-default)" }}
+            className="flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-full sm:min-h-8 sm:min-w-8"
+            style={{ background: "var(--topbar-ctl)", color: "var(--topbar-fg)" }}
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
@@ -77,8 +93,8 @@ export function PlatformShell() {
               aria-expanded={langMenuOpen}
               aria-label={t("language.label")}
               onClick={() => setLangMenuOpen((v) => !v)}
-              className="flex h-8 min-h-11 items-center rounded-[var(--radius-md)] px-2 text-[11px] font-medium sm:min-h-8"
-              style={{ background: "var(--color-stone)", border: "var(--border-default)" }}
+              className="flex h-8 min-h-11 items-center rounded-full px-3 text-[11px] font-bold sm:min-h-8"
+              style={{ background: "var(--topbar-ctl)", color: "var(--topbar-fg)" }}
             >
               {currentLang.toUpperCase()}
             </button>
@@ -89,7 +105,7 @@ export function PlatformShell() {
                 style={{
                   background: "var(--color-white)",
                   border: "var(--border-default)",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                  boxShadow: "0 4px 20px rgba(10,31,51,0.12)",
                 }}
               >
                 {(["en", "es"] as SupportedLanguage[]).map((lang) => (
@@ -114,8 +130,8 @@ export function PlatformShell() {
           </div>
 
           <span
-            className="hidden max-w-[160px] truncate text-[11px] sm:inline"
-            style={{ color: "var(--color-ink-3)" }}
+            className="hidden max-w-[160px] truncate text-[11px] opacity-85 sm:inline"
+            style={{ color: "var(--topbar-fg)" }}
           >
             {me?.email}
           </span>
@@ -124,12 +140,8 @@ export function PlatformShell() {
             type="button"
             onClick={() => logout()}
             aria-label={t("femme.nav.logout")}
-            className="min-h-11 rounded-[var(--radius-md)] px-3 text-[12px] font-medium sm:min-h-8"
-            style={{
-              background: "var(--color-stone)",
-              border: "var(--border-default)",
-              color: "var(--color-ink-2)",
-            }}
+            className="min-h-11 rounded-full px-4 text-[12px] font-bold sm:min-h-8"
+            style={{ background: "var(--topbar-ctl)", color: "var(--topbar-fg)" }}
           >
             {t("femme.nav.logout")}
           </button>
@@ -138,101 +150,27 @@ export function PlatformShell() {
 
       <aside
         aria-label={t("femme.platform.navLabel")}
-        className="fixed bottom-0 left-0 top-12 flex w-[200px] flex-col gap-1 overflow-y-auto p-3"
+        className="fixed bottom-0 left-0 top-14 flex w-[200px] flex-col gap-1 overflow-y-auto p-3"
         style={{ background: "var(--color-white)", borderRight: "var(--border-default)" }}
       >
-        <NavLink
-          to="/platform"
-          end
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.dashboard")}
-        </NavLink>
-        <NavLink
-          to="/platform/tenants"
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.tenants")}
-        </NavLink>
-        <NavLink
-          to="/platform/tiers"
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.tiers")}
-        </NavLink>
-        <NavLink
-          to="/platform/global-feature-flags"
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.globalFeatureFlags")}
-        </NavLink>
-        <NavLink
-          to="/platform/feature-flags"
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.featureFlags")}
-        </NavLink>
-        <NavLink
-          to="/platform/import"
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.import")}
-        </NavLink>
-        <NavLink
-          to="/platform/stock"
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.stock")}
-        </NavLink>
-        <NavLink
-          to="/platform/audit"
-          className="block rounded-[var(--radius-md)] px-2.5 py-2 text-[12px]"
-          style={({ isActive }) => ({
-            color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-            fontWeight: isActive ? 500 : 400,
-            background: isActive ? "var(--color-rose-lt)" : "transparent",
-          })}
-        >
-          {t("femme.platform.nav.audit")}
-        </NavLink>
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className="block rounded-full px-3.5 py-2 text-[13px]"
+            style={({ isActive }) => ({
+              color: isActive ? "var(--color-on-primary)" : "var(--color-ink-2)",
+              fontWeight: isActive ? 700 : 600,
+              background: isActive ? "var(--color-rose)" : "transparent",
+            })}
+          >
+            {t(item.labelKey)}
+          </NavLink>
+        ))}
       </aside>
 
-      <main className="ml-[200px] mt-12 min-h-[calc(100vh-3rem)] p-4 sm:p-6">
+      <main className="ml-[200px] mt-14 min-h-[calc(100vh-3.5rem)] p-4 sm:p-6">
         <Outlet />
       </main>
     </div>
