@@ -44,7 +44,10 @@ test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subt
 
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.locator("#settle-professional").selectOption({ label: w.ana.name });
+  // «Profesionales» is a multi-select: pick Ana only.
+  await page.locator("#settle-professional").click();
+  await page.getByRole("listbox").getByRole("button", { name: w.ana.name }).click();
+  await page.keyboard.press("Escape");
   await page.getByTestId("commission-generate-settlements").click();
   await expect(page.getByRole("status").filter({ hasText: "1 settlement generated." })).toBeVisible();
   const row = page.getByTestId("commission-settlement-row").first();

@@ -702,8 +702,10 @@ function ItemPanel({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs">{t("femme.commissions.rules.itemStandard")}</div>
-              <div className="text-2xl font-semibold" data-testid="rules-panel-standard">
-                {formatPercent(effective.standard)}
+              <div className="flex flex-wrap items-baseline gap-1">
+                <span className="text-2xl font-semibold" data-testid="rules-panel-standard">
+                  {formatPercent(effective.standard)}
+                </span>
                 {isPending(null) && unsavedMark}
               </div>
               <div className="text-[10px] text-[var(--color-ink-3)]">
