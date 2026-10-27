@@ -21,6 +21,12 @@
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
+  /* Every table sits on the card surface (white in light mode), never on the cream page
+     background — same look as the tables already inside a Card. A utility class or inline style on
+     a specific table still wins over this base rule. */
+  table {
+    @apply bg-surface;
+  }
 }
 
 /*
