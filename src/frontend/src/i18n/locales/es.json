@@ -767,6 +767,7 @@
         "colColumn": "Columna",
         "colRequirement": "Requerimiento",
         "colDescription": "Descripción",
+        "colValidations": "Validaciones",
         "required": "Obligatoria",
         "optional": "Opcional",
         "columns": {
@@ -791,6 +792,41 @@
             "impuesto": "Nombre del impuesto a asociar al producto. Dejar vacío para crear el producto sin impuesto."
           }
         },
+          "noValidations": "Sin validaciones.",
+          "validationsByEntity": {
+            "services": {
+              "categoria": "No puede estar vacía. Si ya existe en el tenant como categoría de productos, la fila se rechaza.",
+              "nombre": "No puede estar vacío. No debe repetirse en otra fila del archivo con la misma categoria (sin distinguir mayúsculas): solo se importa la primera.",
+              "precio": "No puede estar vacío. Debe ser un número entero (se aceptan puntos como separador de miles, p. ej. 150.000). No puede ser negativo; se permite 0.",
+              "duracion_minutos": "No puede estar vacía. Debe ser un número entero mayor o igual a 1 (p. ej. 45).",
+              "impuesto": "Si se completa, debe coincidir con el nombre de un impuesto que ya exista en el tenant (sin distinguir mayúsculas, p. ej. IVA 10%).",
+              "activo": "Sin validación: solo NO crea el registro inactivo; cualquier otro valor (o vacío) lo crea activo."
+            },
+            "products": {
+              "categoria": "No puede estar vacía. Si ya existe en el tenant como categoría de servicios, la fila se rechaza.",
+              "nombre": "No puede estar vacío. No debe repetirse en otra fila del archivo con la misma categoria (sin distinguir mayúsculas): solo se importa la primera.",
+              "precio": "No puede estar vacío. Debe ser un número entero (se aceptan puntos como separador de miles, p. ej. 95.000). No puede ser negativo; se permite 0.",
+              "impuesto": "Si se completa, debe coincidir con el nombre de un impuesto que ya exista en el tenant (sin distinguir mayúsculas, p. ej. IVA 10%).",
+              "activo": "Sin validación: solo NO crea el registro inactivo; cualquier otro valor (o vacío) lo crea activo.",
+              "sku": "Si se completa, hasta 64 caracteres (p. ej. SH-300)."
+            },
+            "clients": {
+              "nombre_completo": "No puede estar vacío.",
+              "telefono": "Si se completa, no debe coincidir (comparando solo los dígitos) con el teléfono de un cliente existente del tenant ni de una fila anterior del archivo.",
+              "email": "Sin validación. Varios clientes pueden compartir el mismo email.",
+              "ruc": "Si se completa, debe tener el formato dígitos-guion-dígito verificador (p. ej. 80000005-6) y no debe repetir el RUC de un cliente existente del tenant ni de una fila anterior del archivo.",
+              "documento_identidad": "Sin validación.",
+              "direccion": "Sin validación.",
+              "activo": "Sin validación: solo NO crea el registro inactivo; cualquier otro valor (o vacío) lo crea activo."
+            },
+            "professionals": {
+              "nombre_completo": "No puede estar vacío.",
+              "telefono": "Si se completa, debe tener 10 dígitos: código de área de 4 dígitos + número de 6 dígitos (se ignoran espacios, paréntesis y guiones, p. ej. 0981 123456).",
+              "email": "Si se completa, debe ser un email válido (p. ej. ana@salon.com) y no debe repetir (sin distinguir mayúsculas) el email de un profesional existente del tenant ni de una fila anterior del archivo.",
+              "direccion": "Sin validación.",
+              "activo": "Sin validación: solo NO crea el registro inactivo; cualquier otro valor (o vacío) lo crea activo."
+            }
+          },
         "checkSectionTitle": "Verificar encabezados de un archivo",
         "checkSectionLead": "Verificá los encabezados de columna de un archivo candidato contra esta plantilla antes de usarlo, sin importar ningún dato.",
         "fileLabel": "Archivo (.xlsx)",
@@ -2181,7 +2217,7 @@
       "IMPORT_ROW_CATEGORY_REQUIRED": "Falta la categoría.",
       "IMPORT_ROW_DUPLICATE": "Fila duplicada: otra fila anterior del archivo ya tiene el mismo nombre y categoría.",
       "IMPORT_ROW_PRICE_NOT_NUMERIC": "El precio no es un número válido.",
-      "IMPORT_ROW_PRICE_INVALID": "El precio debe ser mayor a cero.",
+      "IMPORT_ROW_PRICE_INVALID": "El precio no puede ser negativo.",
       "IMPORT_ROW_DURATION_NOT_NUMERIC": "La duración no es un número válido.",
       "IMPORT_ROW_DURATION_INVALID": "La duración debe ser de al menos 1 minuto.",
       "IMPORT_ROW_TAX_NOT_FOUND": "El impuesto indicado en esta fila no existe para este tenant.",
