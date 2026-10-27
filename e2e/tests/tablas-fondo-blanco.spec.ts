@@ -1,5 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { loginAsDemoApi, seedClient } from "../fixtures/api";
+import {
+  apiPostJson,
+  ensureActiveFiscalStampForInvoices,
+  ensureCashSessionOpenApi,
+  loginAsDemoApi,
+  seedCategoryServiceProfessional,
+  seedClient,
+} from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import {
   enableCommissionsGlobally,
@@ -77,20 +84,37 @@ test.describe("Tablas con fondo blanco", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    await seedClient(request, token, `E2E Tabla ${Date.now()}`);
+    const client = await seedClient(request, token, `E2E Tabla ${Date.now()}`);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    // One service record and one invoice, so their history tables have rows to render.
+    await apiPostJson(request, token, "/api/service-records", {
+      clientId: client.id,
+      lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId, quantity: 1, unitPrice: 50_000 }],
+      tips: [{ professionalId: seed.professionalId, amount: 0 }],
+    });
+    await ensureCashSessionOpenApi(request, token);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await apiPostJson(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [{ serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 50_000 }],
+      payments: [{ method: "CASH", amount: 50_000 }],
+    });
     await loginAsDemo(page);
 
     for (const path of ["/app/clients", "/app/professionals", "/app/services"]) {
       await page.goto(path);
-      await expectWhiteTable(page, page.locator("table").first());
+      await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
     }
 
     await page.goto("/app/service-records");
     await page.getByRole("tab", { name: "History", exact: true }).click();
-    await expectWhiteTable(page, page.locator("table").first());
+    await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
 
     await page.goto("/app/billing");
     await page.getByRole("tab", { name: "History" }).click();
-    await expectWhiteTable(page, page.locator("table").first());
+    await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
   });
 });
