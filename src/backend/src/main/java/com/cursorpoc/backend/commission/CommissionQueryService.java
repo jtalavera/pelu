@@ -132,9 +132,10 @@ public class CommissionQueryService {
 
   // ── Settlements ───────────────────────────────────────────────────────────────────────────
 
+  /** {@code professionalIds} null or empty = every professional. */
   public PagedSettlements listSettlements(
       long tenantId,
-      Long professionalId,
+      List<Long> professionalIds,
       String status,
       LocalDate from,
       LocalDate to,
@@ -143,7 +144,11 @@ public class CommissionQueryService {
     Map<Long, String> names = configService.professionalNames(tenantId);
     List<CommissionSettlement> all =
         settlementRepository.findByTenantIdOrderByPeriodFromDescIdDesc(tenantId).stream()
-            .filter(s -> professionalId == null || s.getProfessionalId().equals(professionalId))
+            .filter(
+                s ->
+                    professionalIds == null
+                        || professionalIds.isEmpty()
+                        || professionalIds.contains(s.getProfessionalId()))
             .filter(s -> status == null || status.isBlank() || s.getStatus().name().equals(status))
             .filter(s -> from == null || !s.getPeriodTo().isBefore(from))
             .filter(s -> to == null || !s.getPeriodFrom().isAfter(to))
@@ -284,13 +289,17 @@ public class CommissionQueryService {
 
   // ── Entries & reports (HU-COM-08) ─────────────────────────────────────────────────────────
 
+  /** {@code professionalIds} null or empty = every professional. */
   public List<EntryView> entries(
       long tenantId,
       LocalDate from,
       LocalDate to,
-      Long professionalId,
+      List<Long> professionalIds,
       String kind,
       String settlementState) {
+    List<Long> ids = professionalIds == null ? List.of() : professionalIds;
+    // A single professional filters in the query; several are filtered below.
+    Long single = ids.size() == 1 ? ids.get(0) : null;
     ZoneId zone = configService.zone();
     Instant fromI =
         (from != null ? from : LocalDate.now(zone).withDayOfMonth(1))
@@ -302,7 +311,10 @@ public class CommissionQueryService {
     Map<Long, CommissionSettlementStatus> statuses = new HashMap<>();
     List<EntryView> out = new ArrayList<>();
     java.util.Set<Long> reversed = entryRepository.findReversedIds(tenantId);
-    for (CommissionEntry e : entryRepository.findForReport(tenantId, fromI, toI, professionalId)) {
+    for (CommissionEntry e : entryRepository.findForReport(tenantId, fromI, toI, single)) {
+      if (ids.size() > 1 && !ids.contains(e.getProfessionalId())) {
+        continue;
+      }
       if (kind != null
           && !kind.isBlank()
           && (e.getItemKind() == null || !e.getItemKind().name().equals(kind))) {
@@ -331,7 +343,14 @@ public class CommissionQueryService {
     ZoneId zone = configService.zone();
     LocalDate f = from != null ? from : LocalDate.now(zone).withDayOfMonth(1);
     LocalDate t = to != null ? to : LocalDate.now(zone);
-    List<EntryView> entries = entries(tenantId, f, t, professionalId, kind, settlementState);
+    List<EntryView> entries =
+        entries(
+            tenantId,
+            f,
+            t,
+            professionalId == null ? List.of() : List.of(professionalId),
+            kind,
+            settlementState);
     BigDecimal total =
         entries.stream().map(EntryView::commissionAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
     return new ReportResponse(

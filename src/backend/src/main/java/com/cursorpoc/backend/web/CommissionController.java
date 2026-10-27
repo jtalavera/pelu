@@ -28,6 +28,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.ReportResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RulesView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettingsResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementDetail;
+import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementGenerationCheck;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementPreview;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.VoidSettlementRequest;
@@ -231,13 +232,16 @@ public class CommissionController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
       @RequestParam(required = false) Long professionalId,
+      @RequestParam(required = false) List<Long> professionalIds,
       @RequestParam(required = false) String kind,
       @RequestParam(required = false) String state) {
     return admin(
         p,
         "GET",
         "/api/commissions/entries",
-        () -> queryService.entries(p.getTenantId(), from, to, professionalId, kind, state));
+        () ->
+            queryService.entries(
+                p.getTenantId(), from, to, ids(professionalId, professionalIds), kind, state));
   }
 
   @GetMapping(value = "/entries.csv", produces = "text/csv")
@@ -246,8 +250,10 @@ public class CommissionController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
       @RequestParam(required = false) Long professionalId,
+      @RequestParam(required = false) List<Long> professionalIds,
       @RequestParam(required = false) String kind,
-      @RequestParam(required = false) String state) {
+      @RequestParam(required = false) String state,
+      @RequestParam(required = false) String lang) {
     return admin(
         p,
         "GET",
@@ -256,7 +262,14 @@ public class CommissionController {
             csv(
                 "comisiones.csv",
                 exportService.entriesCsv(
-                    queryService.entries(p.getTenantId(), from, to, professionalId, kind, state))));
+                    queryService.entries(
+                        p.getTenantId(),
+                        from,
+                        to,
+                        ids(professionalId, professionalIds),
+                        kind,
+                        state),
+                    lang)));
   }
 
   @GetMapping("/reports")
@@ -292,6 +305,7 @@ public class CommissionController {
   public PagedSettlements settlements(
       @AuthenticationPrincipal FemmeUserPrincipal p,
       @RequestParam(required = false) Long professionalId,
+      @RequestParam(required = false) List<Long> professionalIds,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -303,14 +317,22 @@ public class CommissionController {
         "/api/commissions/settlements",
         () ->
             queryService.listSettlements(
-                p.getTenantId(), professionalId, status, from, to, page, size));
+                p.getTenantId(),
+                ids(professionalId, professionalIds),
+                status,
+                from,
+                to,
+                page,
+                size));
   }
 
   @GetMapping(value = "/settlements.csv", produces = "text/csv")
   public ResponseEntity<byte[]> settlementsCsv(
       @AuthenticationPrincipal FemmeUserPrincipal p,
       @RequestParam(required = false) Long professionalId,
-      @RequestParam(required = false) String status) {
+      @RequestParam(required = false) List<Long> professionalIds,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String lang) {
     return admin(
         p,
         "GET",
@@ -321,8 +343,15 @@ public class CommissionController {
                 exportService.settlementsCsv(
                     queryService
                         .listSettlements(
-                            p.getTenantId(), professionalId, status, null, null, 0, 100)
-                        .items())));
+                            p.getTenantId(),
+                            ids(professionalId, professionalIds),
+                            status,
+                            null,
+                            null,
+                            0,
+                            100)
+                        .items(),
+                    lang)));
   }
 
   @PostMapping("/settlements/generate")
@@ -334,6 +363,17 @@ public class CommissionController {
         "POST",
         "/api/commissions/settlements/generate",
         () -> views(p, settlementService.generate(p.getTenantId(), p.getUsername(), request)));
+  }
+
+  @PostMapping("/settlements/generate/check")
+  public SettlementGenerationCheck checkGeneration(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestBody GenerateSettlementsRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/settlements/generate/check",
+        () -> settlementService.checkGeneration(p.getTenantId(), request));
   }
 
   @GetMapping("/settlements/{id}")
@@ -348,7 +388,9 @@ public class CommissionController {
 
   @GetMapping(value = "/settlements/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
   public ResponseEntity<byte[]> settlementPdf(
-      @AuthenticationPrincipal FemmeUserPrincipal p, @PathVariable long id) {
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @PathVariable long id,
+      @RequestParam(required = false) String lang) {
     return admin(
         p,
         "GET",
@@ -361,7 +403,9 @@ public class CommissionController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(
                     exportService.settlementPdf(
-                        p.getTenantId(), queryService.settlementDetail(p.getTenantId(), id))));
+                        p.getTenantId(),
+                        queryService.settlementDetail(p.getTenantId(), id),
+                        lang)));
   }
 
   @PostMapping("/settlements/{id}/adjustments")
@@ -449,6 +493,18 @@ public class CommissionController {
   private List<SettlementView> views(FemmeUserPrincipal p, List<CommissionSettlement> settlements) {
     Map<Long, String> names = configService.professionalNames(p.getTenantId());
     return settlements.stream().map(s -> queryService.view(s, names)).toList();
+  }
+
+  /** {@code professionalId} (single, legacy) and {@code professionalIds} (multi) merged. */
+  private static List<Long> ids(Long professionalId, List<Long> professionalIds) {
+    List<Long> out = new java.util.ArrayList<>();
+    if (professionalId != null) {
+      out.add(professionalId);
+    }
+    if (professionalIds != null) {
+      professionalIds.stream().filter(id -> id != null && !out.contains(id)).forEach(out::add);
+    }
+    return out;
   }
 
   private static ResponseEntity<byte[]> csv(String filename, byte[] body) {

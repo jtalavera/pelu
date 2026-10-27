@@ -25,7 +25,7 @@ import { SettlementStatusBadge, TableWrap, formatPercent, tdClass, thClass, toda
 
 /** HU-COM-06: settlement detail, adjustments (Draft), approve, pay, void, PDF. */
 export default function CommissionSettlementPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dateLocale = useDateLocale();
   const { id } = useParams();
   const settlementId = Number(id);
@@ -150,7 +150,7 @@ export default function CommissionSettlementPage() {
           type="button"
           variant="secondary"
           onClick={() =>
-            void downloadCommissionFile(settlementPdfPath(s.id), `liquidacion-${s.id}.pdf`).catch((err) =>
+            void downloadCommissionFile(settlementPdfPath(s.id, i18n.language), `liquidacion-${s.id}.pdf`).catch((err) =>
               setError(translateApiError(err, t)),
             )
           }

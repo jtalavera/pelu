@@ -497,6 +497,9 @@ export function InvoiceCorrectionForm({
             </Card>
 
             <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                {t("femme.billing.history.detail.close")}
+              </Button>
               <Button
                 type="submit"
                 variant="primary"
@@ -506,9 +509,6 @@ export function InvoiceCorrectionForm({
                 {submitting
                   ? t("femme.billing.history.detail.sifen.correctResendSubmitting")
                   : t("femme.billing.history.detail.sifen.correctResendSubmit")}
-              </Button>
-              <Button type="button" variant="secondary" onClick={onClose}>
-                {t("femme.billing.history.detail.close")}
               </Button>
             </div>
           </form>

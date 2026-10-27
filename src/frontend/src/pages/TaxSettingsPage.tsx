@@ -323,7 +323,7 @@ export default function TaxSettingsPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 className="min-h-11"
                 onClick={() => setModalOpen(false)}
               >

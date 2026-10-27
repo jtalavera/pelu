@@ -1378,7 +1378,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
             </div>
           </fieldset>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => setCategoryModalOpen(false)} className="min-h-11">
+            <Button type="button" variant="secondary" onClick={() => setCategoryModalOpen(false)} className="min-h-11">
               {t("femme.services.cancel")}
             </Button>
             <Button type="button" onClick={saveCategory} disabled={categorySaving} className="min-h-11">
@@ -1528,7 +1528,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => setServiceModalOpen(false)} className="min-h-11">
+            <Button type="button" variant="secondary" onClick={() => setServiceModalOpen(false)} className="min-h-11">
               {t("femme.services.cancel")}
             </Button>
             <Button type="button" onClick={saveService} disabled={serviceSaving} className="min-h-11">

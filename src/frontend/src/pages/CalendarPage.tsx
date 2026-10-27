@@ -1074,6 +1074,9 @@ export default function CalendarPage() {
         title={t("femme.calendar.detail.title")}
         footer={
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={closeDetail}>
+              {t("femme.calendar.detail.close")}
+            </Button>
             {detailAppt?.clientId != null && (
               <Button
                 size="sm"
@@ -1093,9 +1096,6 @@ export default function CalendarPage() {
                 {t("femme.calendar.detail.changeStatus")}
               </Button>
             )}
-            <Button size="sm" onClick={closeDetail}>
-              {t("femme.calendar.detail.close")}
-            </Button>
           </div>
         }
       >
@@ -1161,7 +1161,7 @@ export default function CalendarPage() {
           <div className="flex gap-2">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() => setStatusModalOpen(false)}
               disabled={statusSaving}
             >
@@ -1219,7 +1219,7 @@ export default function CalendarPage() {
           <div className="flex gap-2">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() => setFormOpen(false)}
               disabled={formSaving}
             >

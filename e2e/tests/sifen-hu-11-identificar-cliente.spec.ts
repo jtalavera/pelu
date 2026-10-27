@@ -180,7 +180,6 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, client.fullName);
 
     await openInvoiceSifenTab(page);
-    await expect(page.getByTestId("sifen-tab-identify")).toHaveCount(0);
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
   });
 

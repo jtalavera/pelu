@@ -110,6 +110,12 @@ export function MultiSelect<T extends string | number>({
           setQuery("");
           setOpen(true);
         }}
+        // Already focused (e.g. closed with Escape): a click must reopen it too.
+        onClick={() => {
+          if (disabled || open) return;
+          setQuery("");
+          setOpen(true);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.preventDefault();

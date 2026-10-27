@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { Alert, Button, Card, Label, PageSizeSelect, Pagination, Select, Text } from "@design-system";
+import { Alert, Button, Card, Label, Modal, MultiSelect, PageSizeSelect, Pagination, Select, Text } from "@design-system";
 import {
+  checkSettlementGeneration,
   downloadCommissionFile,
   generateSettlements,
   listSettlements,
   settlementsCsvPath,
+  type GenerateSettlementsBody,
   type PagedSettlements,
+  type SettlementGenerationCheck,
 } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
@@ -18,25 +21,31 @@ import { SettlementStatusBadge, TableWrap, firstOfMonthYmd, tdClass, thClass, to
 
 /** HU-COM-06: generate per-period settlements and list them (paginated, filterable). */
 export function SettlementsTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dateLocale = useDateLocale();
   const professionals = useProfessionals();
   const [genFrom, setGenFrom] = useState(firstOfMonthYmd());
   const [genTo, setGenTo] = useState(todayYmd());
-  const [genProfessional, setGenProfessional] = useState("");
-  const [filterProfessional, setFilterProfessional] = useState("");
+  const [genProfessionals, setGenProfessionals] = useState<number[]>([]);
+  const [filterProfessionals, setFilterProfessionals] = useState<number[]>([]);
   const [filterStatus, setFilterStatus] = useState("");
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(20);
   const [data, setData] = useState<PagedSettlements | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Generation blocked by existing settlements: the user picks «only the rest» or «none». */
+  const [conflict, setConflict] = useState<{ body: GenerateSettlementsBody; check: SettlementGenerationCheck } | null>(
+    null,
+  );
+  const [generating, setGenerating] = useState(false);
+  const professionalOptions = professionals.map((p) => ({ value: p.id, label: p.fullName }));
 
   const load = useCallback(async () => {
     try {
       setData(
         await listSettlements({
-          professionalId: filterProfessional ? Number(filterProfessional) : null,
+          professionalIds: filterProfessionals,
           status: filterStatus,
           page,
           size,
@@ -45,7 +54,7 @@ export function SettlementsTab() {
     } catch (err) {
       setError(translateApiError(err, t));
     }
-  }, [filterProfessional, filterStatus, page, size, t]);
+  }, [filterProfessionals, filterStatus, page, size, t]);
 
   useEffect(() => {
     void load();
@@ -55,22 +64,52 @@ export function SettlementsTab() {
     e.preventDefault();
     setError(null);
     setNotice(null);
+    const body: GenerateSettlementsBody = { periodFrom: genFrom, periodTo: genTo, professionalIds: genProfessionals };
+    setGenerating(true);
     try {
-      const created = await generateSettlements({
-        periodFrom: genFrom,
-        periodTo: genTo,
-        professionalIds: genProfessional ? [Number(genProfessional)] : [],
-      });
-      setNotice(
-        created.length === 0
-          ? t("femme.commissions.settlements.noneGenerated")
-          : t("femme.commissions.settlements.generated", { count: created.length }),
-      );
-      setPage(0);
-      await load();
+      // Someone already settled in the period (e.g. a Paid one) → ask instead of failing for everyone.
+      const check = await checkSettlementGeneration(body);
+      if (check.conflicts.length > 0) {
+        setConflict({ body, check });
+        return;
+      }
+      await runGeneration(body);
     } catch (err) {
       setError(translateApiError(err, t));
+    } finally {
+      setGenerating(false);
     }
+  }
+
+  async function runGeneration(body: GenerateSettlementsBody) {
+    const created = await generateSettlements(body);
+    setNotice(
+      created.length === 0
+        ? t("femme.commissions.settlements.noneGenerated")
+        : t("femme.commissions.settlements.generated", { count: created.length }),
+    );
+    setPage(0);
+    await load();
+  }
+
+  async function generateRemaining() {
+    if (!conflict) return;
+    const body = { ...conflict.body, skipOverlapping: true };
+    setConflict(null);
+    setGenerating(true);
+    try {
+      await runGeneration(body);
+    } catch (err) {
+      setError(translateApiError(err, t));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function clearFilters() {
+    setFilterProfessionals([]);
+    setFilterStatus("");
+    setPage(0);
   }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.size)) : 1;
@@ -88,18 +127,19 @@ export function SettlementsTab() {
             <Label htmlFor="settle-to">{t("femme.commissions.common.to")}</Label>
             <LocalizedDateInput id="settle-to" value={genTo} onChange={setGenTo} />
           </div>
-          <div className="flex min-w-[12rem] flex-col gap-1">
-            <Label htmlFor="settle-professional">{t("femme.commissions.common.professional")}</Label>
-            <Select id="settle-professional" value={genProfessional} onChange={(e) => setGenProfessional(e.target.value)}>
-              <option value="">{t("femme.commissions.common.allProfessionals")}</option>
-              {professionals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.fullName}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <Button type="submit" data-testid="commission-generate-settlements">
+          <MultiSelect
+            id="settle-professional"
+            className="min-w-[14rem]"
+            label={t("femme.commissions.common.professionals")}
+            value={genProfessionals}
+            onChange={setGenProfessionals}
+            options={professionalOptions}
+            placeholder={t("femme.commissions.common.allProfessionals")}
+            filterPlaceholder={t("femme.commissions.common.filterProfessionals")}
+            noResultsText={t("femme.commissions.common.noProfessionals")}
+            summaryTemplate={t("femme.commissions.common.professionalsSelected")}
+          />
+          <Button type="submit" disabled={generating} data-testid="commission-generate-settlements">
             {t("femme.commissions.settlements.generate")}
           </Button>
         </form>
@@ -115,24 +155,21 @@ export function SettlementsTab() {
       {error && <Alert variant="destructive">{error}</Alert>}
 
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex min-w-[12rem] flex-col gap-1">
-          <Label htmlFor="settle-filter-professional">{t("femme.commissions.common.professional")}</Label>
-          <Select
-            id="settle-filter-professional"
-            value={filterProfessional}
-            onChange={(e) => {
-              setFilterProfessional(e.target.value);
-              setPage(0);
-            }}
-          >
-            <option value="">{t("femme.commissions.common.allProfessionals")}</option>
-            {professionals.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.fullName}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <MultiSelect
+          id="settle-filter-professional"
+          className="min-w-[14rem]"
+          label={t("femme.commissions.common.professionals")}
+          value={filterProfessionals}
+          onChange={(ids) => {
+            setFilterProfessionals(ids);
+            setPage(0);
+          }}
+          options={professionalOptions}
+          placeholder={t("femme.commissions.common.allProfessionals")}
+          filterPlaceholder={t("femme.commissions.common.filterProfessionals")}
+          noResultsText={t("femme.commissions.common.noProfessionals")}
+          summaryTemplate={t("femme.commissions.common.professionalsSelected")}
+        />
         <div className="flex flex-col gap-1">
           <Label htmlFor="settle-filter-status">{t("femme.commissions.common.status")}</Label>
           <Select
@@ -154,8 +191,20 @@ export function SettlementsTab() {
         <Button
           type="button"
           variant="secondary"
+          disabled={filterProfessionals.length === 0 && !filterStatus}
+          onClick={clearFilters}
+          data-testid="settlements-clear-filters"
+        >
+          {t("femme.commissions.common.clearFilters")}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
           onClick={() =>
-            void downloadCommissionFile(settlementsCsvPath(filterStatus), "liquidaciones.csv").catch((err) =>
+            void downloadCommissionFile(
+              settlementsCsvPath({ status: filterStatus, professionalIds: filterProfessionals }, i18n.language),
+              "liquidaciones.csv",
+            ).catch((err) =>
               setError(translateApiError(err, t)),
             )
           }
@@ -226,6 +275,60 @@ export function SettlementsTab() {
           />
         </div>
       )}
+      <Modal
+        open={conflict !== null}
+        onClose={() => setConflict(null)}
+        title={t("femme.commissions.settlements.conflict.title")}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => setConflict(null)}
+              data-testid="settlements-conflict-none"
+            >
+              {t("femme.commissions.settlements.conflict.none")}
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={!conflict || conflict.check.generatable === 0}
+              onClick={() => void generateRemaining()}
+              data-testid="settlements-conflict-remaining"
+            >
+              {t("femme.commissions.settlements.conflict.remaining", { count: conflict?.check.generatable ?? 0 })}
+            </Button>
+          </>
+        }
+      >
+        {conflict && (
+          <div className="flex flex-col gap-3" data-testid="settlements-conflict">
+            <Text>{t("femme.commissions.settlements.conflict.intro")}</Text>
+            <ul className="flex flex-col divide-y rounded-md border text-sm">
+              {conflict.check.conflicts.map((c) => (
+                <li
+                  key={c.professionalId}
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                  data-testid="settlements-conflict-row"
+                >
+                  <span className="min-w-0 break-words font-medium">{c.professionalName}</span>
+                  <span className="flex items-center gap-2 text-xs text-[var(--color-ink-3)]">
+                    #{c.settlementId} · {formatParaguayDate(c.periodFrom + "T12:00:00", dateLocale)} –{" "}
+                    {formatParaguayDate(c.periodTo + "T12:00:00", dateLocale)}
+                    <SettlementStatusBadge status={c.status} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Text variant="small" className="text-[var(--color-ink-3)]">
+              {conflict.check.generatable === 0
+                ? t("femme.commissions.settlements.conflict.nothingElse")
+                : t("femme.commissions.settlements.conflict.question", { count: conflict.check.generatable })}
+            </Text>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

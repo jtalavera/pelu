@@ -1041,11 +1041,11 @@ export default function FiscalStampSettingsPage() {
                 ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" variant="primary" className="min-h-11" disabled={editSaving}>
-                  {editSaving ? t("femme.fiscalStamp.saving") : t("femme.fiscalStamp.save")}
-                </Button>
                 <Button type="button" variant="secondary" className="min-h-11" disabled={editSaving} onClick={closeEdit}>
                   {t("femme.fiscalStamp.cancel")}
+                </Button>
+                <Button type="submit" variant="primary" className="min-h-11" disabled={editSaving}>
+                  {editSaving ? t("femme.fiscalStamp.saving") : t("femme.fiscalStamp.save")}
                 </Button>
               </div>
             </form>

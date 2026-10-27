@@ -93,6 +93,11 @@
         "to": "Hasta",
         "professional": "Profesional",
         "allProfessionals": "Todos los profesionales",
+        "professionals": "Profesionales",
+        "filterProfessionals": "Filtrar profesionales…",
+        "noProfessionals": "Ningún profesional coincide",
+        "professionalsSelected": "{count} seleccionados",
+        "clearFilters": "Limpiar filtros",
         "status": "Estado",
         "allStatuses": "Todos los estados",
         "total": "Total",
@@ -270,7 +275,13 @@
         "percentAndCommission": "% y comisión estimada",
         "inherits": "Hereda {{value}}",
         "viewHistory": "Ver historial de cambios",
-        "panelPending": "Hay cambios sin guardar. Usá «Guardar cambios» arriba para aplicarlos.",
+        "panelPending": "Hay cambios sin guardar (marcados con ●). Usá «Guardar cambios» para aplicarlos.",
+        "useStandard": "Usar el estándar",
+        "excludeProfessional": "No comisiona en este ítem",
+        "includeProfessional": "Volver a incluir",
+        "excludedTitle_one": "No comisiona ({{count}})",
+        "excludedTitle_other": "No comisionan ({{count}})",
+        "excludedChip": "no comisiona",
         "panelFootnote": "La comisión estimada se calcula sobre la base del precio de lista. Los cambios se aplican al guardar y no modifican comisiones ya liquidadas.",
         "subtabs": {
           "SERVICE": "Servicios",
@@ -319,7 +330,17 @@
         "noneGenerated": "No hay comisiones pendientes para liquidar en ese periodo.",
         "empty": "No hay liquidaciones.",
         "period": "Periodo",
-        "open": "Ver"
+        "open": "Ver",
+        "conflict": {
+          "title": "Ya hay liquidaciones en ese periodo",
+          "intro": "Estos profesionales ya tienen una liquidación que se superpone con el periodo elegido, así que no se les puede generar otra:",
+          "question_one": "¿Querés generar la liquidación para el profesional restante que todavía no la tiene, o no generar ninguna?",
+          "question_other": "¿Querés generar las liquidaciones para los {{count}} profesionales restantes que todavía no la tienen, o no generar ninguna?",
+          "nothingElse": "No queda ningún otro profesional con comisiones pendientes para liquidar en ese periodo.",
+          "remaining_one": "Generar para el restante",
+          "remaining_other": "Generar para los {{count}} restantes",
+          "none": "No generar ninguna"
+        }
       },
       "settlement": {
         "title": "Liquidación #{{id}} · {{name}}",

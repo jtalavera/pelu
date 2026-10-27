@@ -71,8 +71,9 @@ test("exportación CSV de entradas (tipo, base y %) y comprobante PDF de liquida
   });
   expect(csv.ok()).toBeTruthy();
   const text = await csv.text();
-  expect(text).toContain("item_kind,base_type");
-  expect(text).toContain("PRODUCT,NET_OF_TAX");
+  // Without `lang` the export is in Spanish (the app default): localized headers and labels.
+  expect(text).toContain("Tipo de ítem,Base de cálculo");
+  expect(text).toContain("Producto,Sin IVA");
   expect(text).toContain(",40,40000,");
 
   const pdf = await request.get(`${API_BASE}/api/commissions/settlements/${settlementId}/pdf`, {

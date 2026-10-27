@@ -131,11 +131,11 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByTestId("invoice-detail-tab-invoice")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("sifen-tab-status")).toBeHidden();
-    await expect(page.getByText("SIFEN message", { exact: true })).toBeHidden();
+    await expect(page.getByTestId("sifen-history-button")).toBeHidden();
 
     await openInvoiceSifenTab(page);
     await expect(page.getByTestId("sifen-tab-status")).toBeVisible();
-    await expect(page.getByText("SIFEN message", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("sifen-history-button")).toBeVisible();
   });
 
   test("AC2 · el historial de mensajes SIFEN muestra todas las respuestas registradas", async ({

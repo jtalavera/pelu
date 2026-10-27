@@ -672,6 +672,22 @@ export function ServiceRecordEditor({
 
         {!isReadOnly && (
           <div className="flex flex-wrap gap-3">
+            {/* Cancel-type buttons first (leftmost), same secondary style everywhere. */}
+            {onClose && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onClose}
+                data-testid="service-record-close"
+              >
+                {t("femme.serviceRecords.close")}
+              </Button>
+            )}
+            {record && isOpen && showVoidForm && (
+              <Button type="button" variant="secondary" onClick={() => setShowVoidForm(false)}>
+                {t("femme.serviceRecords.voidCancel")}
+              </Button>
+            )}
             <Button
               type="submit"
               variant="primary"
@@ -704,22 +720,6 @@ export function ServiceRecordEditor({
                 {t("femme.serviceRecords.voidButton")}
               </Button>
             )}
-            {record && isOpen && showVoidForm && (
-              <Button type="button" variant="secondary" onClick={() => setShowVoidForm(false)}>
-                {t("femme.serviceRecords.voidCancel")}
-              </Button>
-            )}
-            {onClose && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={onClose}
-                data-testid="service-record-close"
-              >
-                {t("femme.serviceRecords.close")}
-              </Button>
-            )}
           </div>
         )}
         {isReadOnly && onClose && (
@@ -727,7 +727,6 @@ export function ServiceRecordEditor({
             <Button
               type="button"
               variant="secondary"
-              size="sm"
               onClick={onClose}
               data-testid="service-record-close"
             >
