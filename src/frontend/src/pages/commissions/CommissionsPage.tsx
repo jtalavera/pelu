@@ -42,7 +42,7 @@ export default function CommissionsPage() {
             aria-selected={tab === key}
             onClick={() => setTab(key)}
             className={
-              "min-h-11 rounded-md border px-3.5 text-xs " +
+              "rounded-[var(--radius-md)] border px-3.5 py-1.5 text-xs leading-normal " +
               (tab === key
                 ? "border-[var(--color-rose-md)] bg-[var(--color-rose-lt)] font-medium text-[var(--color-rose-dk)]"
                 : "bg-[var(--color-white)] text-[var(--color-ink-2)]")

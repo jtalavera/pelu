@@ -81,6 +81,9 @@ const hintStyle: React.CSSProperties = {
   marginTop: 3,
 };
 
+/** Compact row buttons: keep the 44px touch target on mobile, shrink on desktop. */
+const ROW_ACTION_CLASS = "sm:h-7 sm:px-2.5 text-[11px]";
+
 const sectionTitleStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 500,
@@ -527,6 +530,8 @@ export default function FiscalStampSettingsPage() {
     );
   }
 
+  const hasMessage = Boolean(loadError || saveError || successMessage);
+
   return (
     <div>
       {loadError ? (
@@ -547,14 +552,14 @@ export default function FiscalStampSettingsPage() {
 
       {rows.length === 0 ? (
         <section data-testid="fiscal-stamp-current-section" style={sectionCardStyle}>
-          <div style={{ ...sectionTitleStyle, marginTop: 0 }}>
+          <div style={{ ...sectionTitleStyle, marginTop: hasMessage ? 24 : 0 }}>
             {t("femme.fiscalStamp.registeredTitle")}
           </div>
           <Text variant="muted">{t("femme.fiscalStamp.empty")}</Text>
         </section>
       ) : (
         <div data-tour="fiscal-stamp-list" style={{ marginBottom: 16 }}>
-          <div style={{ ...sectionTitleStyle, marginTop: 0 }}>
+          <div style={{ ...sectionTitleStyle, marginTop: hasMessage ? 24 : 0 }}>
             {t("femme.fiscalStamp.registeredTitle")}
           </div>
           <div style={{ marginBottom: 12 }}>
@@ -628,19 +633,22 @@ export default function FiscalStampSettingsPage() {
                           <td style={tdStyle}>{String(row.establishment).padStart(3, "0")}</td>
                           <td style={tdStyle}>{String(row.expeditionPoint).padStart(3, "0")}</td>
                           <td style={tdStyle}>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            <div className="grid w-max grid-cols-2 gap-1">
                               <Button
                                 type="button"
                                 variant="secondary"
                                 size="sm"
+                                className={ROW_ACTION_CLASS}
+                                aria-label={t("femme.fiscalStamp.edit")}
                                 onClick={() => openEdit(row)}
                               >
-                                {t("femme.fiscalStamp.edit")}
+                                {t("femme.fiscalStamp.editShort")}
                               </Button>
                               <Button
                                 type="button"
                                 variant="secondary"
                                 size="sm"
+                                className={ROW_ACTION_CLASS}
                                 disabled={!row.active}
                                 onClick={() => void onDeactivate(row.id)}
                               >
@@ -650,6 +658,7 @@ export default function FiscalStampSettingsPage() {
                                 type="button"
                                 variant="primary"
                                 size="sm"
+                                className={ROW_ACTION_CLASS}
                                 disabled={row.active}
                                 onClick={() => void onActivate(row.id)}
                               >
@@ -660,6 +669,7 @@ export default function FiscalStampSettingsPage() {
                                   type="button"
                                   variant="danger"
                                   size="sm"
+                                  className={ROW_ACTION_CLASS}
                                   disabled={deleting}
                                   onClick={() => setDeleteTarget(row)}
                                 >

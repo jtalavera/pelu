@@ -153,7 +153,7 @@ export function RulesTab() {
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b" role="tablist" aria-label={t("femme.commissions.tabs.rules")}>
+      <div className="flex flex-wrap gap-1 overflow-x-auto" role="tablist" aria-label={t("femme.commissions.tabs.rules")}>
         {(["SERVICE", "PRODUCT", "GENERAL"] as const).map((k) => (
           <button
             key={k}
@@ -165,10 +165,10 @@ export function RulesTab() {
               setSelected(null);
             }}
             className={
-              "min-h-11 border-b-2 px-3 text-sm " +
+              "rounded-[var(--radius-md)] border px-3.5 py-1.5 text-xs leading-normal " +
               (tab === k
-                ? "border-[var(--color-rose)] font-medium text-[var(--color-ink)]"
-                : "border-transparent text-[var(--color-ink-2)]")
+                ? "border-[var(--color-rose-md)] bg-[var(--color-rose-lt)] font-medium text-[var(--color-rose-dk)]"
+                : "bg-[var(--color-white)] text-[var(--color-ink-2)]")
             }
           >
             {t(`femme.commissions.rules.subtabs.${k}`)}

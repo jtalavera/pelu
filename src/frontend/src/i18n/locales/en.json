@@ -1340,6 +1340,7 @@
       "activate": "Activate",
       "deactivate": "Deactivate",
       "edit": "Edit stamp",
+      "editShort": "Edit",
       "editTitle": "Edit stamp",
       "editLead": "While this stamp has no invoices, every field can be changed. Once it has invoices, only the validity end, the “to” number and the starting invoice number (forward only) can change.",
       "optionalHint": "Optional — not required for electronic invoicing.",

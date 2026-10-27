@@ -1340,6 +1340,7 @@
       "activate": "Activar",
       "deactivate": "Desactivar",
       "edit": "Editar timbrado",
+      "editShort": "Editar",
       "editTitle": "Editar timbrado",
       "editLead": "Mientras este timbrado no tenga facturas, se puede cambiar cualquier campo. Una vez que tiene facturas, solo se pueden cambiar el fin de vigencia, el número “hasta” y el número de inicio de emisión (solo hacia adelante).",
       "optionalHint": "Opcional — no es requerido para facturación electrónica.",
