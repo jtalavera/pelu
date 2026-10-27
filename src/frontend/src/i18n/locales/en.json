@@ -1616,6 +1616,12 @@
           "total": "Total",
           "payments": "Payments",
           "voidReason2": "Void reason",
+          "tabs": {
+            "ariaLabel": "Invoice detail sections",
+            "invoice": "Invoice",
+            "sifen": "SIFEN",
+            "sifenNeedsAttention": "Needs attention"
+          },
           "status": "Status",
           "sifen": {
             "title": "SIFEN status",

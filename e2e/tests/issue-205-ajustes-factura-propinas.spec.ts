@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { openInvoiceSifenTab } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -107,7 +108,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("AC5 · el acordeón \"Estado en SIFEN\" aparece cerrado al abrir el detalle del comprobante", async ({
+  test("AC5 · el detalle del comprobante abre en la solapa Factura; el estado SIFEN está en la solapa SIFEN", async ({
     page,
     request,
   }) => {
@@ -125,13 +126,16 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await loginAsDemo(page);
     await openInvoiceDetail(page, clientDisplayName);
 
-    // The section (its own <details>/<summary>) is visible, but its body content is collapsed —
-    // native <details> keeps the content in the DOM (just hidden), so check visibility, not count.
-    await expect(page.getByTestId("sifen-tab-status")).toBeVisible();
-    await expect(page.getByText(/SIFEN message/)).toBeHidden();
+    // The detail opens on its "Invoice" tab: the SIFEN status (and its message) lives in the
+    // "SIFEN" tab, rendered but hidden until that tab is selected.
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByTestId("invoice-detail-tab-invoice")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("sifen-tab-status")).toBeHidden();
+    await expect(page.getByText("SIFEN message", { exact: true })).toBeHidden();
 
-    await page.getByTestId("sifen-tab-status").locator("summary").click();
-    await expect(page.getByText(/SIFEN message/)).toBeVisible();
+    await openInvoiceSifenTab(page);
+    await expect(page.getByTestId("sifen-tab-status")).toBeVisible();
+    await expect(page.getByText("SIFEN message", { exact: true })).toBeVisible();
   });
 
   test("AC2 · el historial de mensajes SIFEN muestra todas las respuestas registradas", async ({
@@ -155,7 +159,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
 
     await loginAsDemo(page);
     await openInvoiceDetail(page, clientDisplayName);
-    await page.getByTestId("sifen-tab-status").locator("summary").click();
+    await openInvoiceSifenTab(page);
     await page.getByTestId("sifen-history-button").click();
 
     const entries = page.getByTestId("sifen-history-entry");

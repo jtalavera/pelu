@@ -1616,6 +1616,12 @@
           "total": "Total",
           "payments": "Pagos",
           "voidReason2": "Razón de anulación",
+          "tabs": {
+            "ariaLabel": "Secciones del detalle de factura",
+            "invoice": "Factura",
+            "sifen": "SIFEN",
+            "sifenNeedsAttention": "Requiere atención"
+          },
           "status": "Estado",
           "sifen": {
             "title": "Estado en SIFEN",

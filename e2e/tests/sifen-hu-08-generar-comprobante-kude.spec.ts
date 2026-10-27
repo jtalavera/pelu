@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openInvoiceMainTab, openInvoiceSifenTab } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -103,10 +104,12 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
     await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
 
+    // The KuDE download lives on the detail's "Invoice" tab.
+    await openInvoiceMainTab(page);
     // RT-28: the pending-validation note renders alongside the download button.
     await expect(page.getByTestId("sifen-kude-pending-validation-note")).toBeVisible();
 
@@ -221,14 +224,14 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
     await expect(section.getByText("Queued", { exact: true })).toBeVisible();
-    // Issue #205 AC-5: "Estado en SIFEN" now starts closed — open it to reach its body content.
-    await page.getByTestId("sifen-tab-status").locator("summary").click();
     await expect(page.getByTestId("sifen-submission-in-progress-note")).toBeVisible();
     await expect(page.getByTestId("sifen-check-status-button")).toHaveCount(0);
 
+    // The KuDE download lives on the detail's "Invoice" tab.
+    await openInvoiceMainTab(page);
     await expect(page.getByTestId("sifen-kude-pending-validation-note")).toBeVisible();
     const downloadButton = page.getByTestId("sifen-kude-download-button");
     await expect(downloadButton).toBeVisible();
@@ -326,8 +329,8 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 
-    // Issue #161: KuDE-by-email now lives under its own solapa in the invoice detail modal.
-    await page.getByTestId("sifen-tab-email").click();
+    // KuDE-by-email lives in the invoice detail's "SIFEN" tab.
+    await openInvoiceSifenTab(page);
     await page.getByLabel("Email address").fill("cliente-e2e@example.com");
     const sendButton = page.getByTestId("sifen-kude-send-email-button");
 
@@ -404,11 +407,11 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 
-    // Same solapa as the email action — the WhatsApp button sits right next to "Send" there.
+    // Same section as the email action (SIFEN tab) — the WhatsApp button sits right next to "Send".
     // Playwright runs the app in English (see playwright.config.ts `locale: "en-US"`).
-    const shareTab = page.getByTestId("sifen-tab-email");
-    await expect(shareTab).toContainText("Share KuDE by email or WhatsApp");
-    await shareTab.click();
+    await openInvoiceSifenTab(page);
+    const shareSection = page.getByTestId("sifen-tab-email");
+    await expect(shareSection.getByRole("heading", { name: "Share KuDE by email or WhatsApp" })).toBeVisible();
     await expect(page.getByTestId("sifen-kude-send-email-button")).toBeVisible();
     const whatsappButton = page.getByTestId("sifen-kude-send-whatsapp-button");
     await expect(whatsappButton).toBeVisible();
@@ -516,7 +519,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await page.getByTestId("sifen-tab-email").click();
+    await openInvoiceSifenTab(page);
     const whatsappButton = page.getByTestId("sifen-kude-send-whatsapp-button");
     await expect(whatsappButton).toBeVisible();
 
@@ -591,7 +594,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
       const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
       await expect(row).toBeVisible({ timeout: 30_000 });
       await row.click();
-      await page.getByTestId("sifen-tab-email").click();
+      await openInvoiceSifenTab(page);
       return { client, invoice, phone };
     }
 
@@ -743,7 +746,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await page.getByTestId("sifen-tab-email").click();
+    await openInvoiceSifenTab(page);
     await expect(page.getByLabel("Email address")).toHaveValue(clientEmail);
   });
 
@@ -784,7 +787,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await page.getByTestId("sifen-tab-email").click();
+    await openInvoiceSifenTab(page);
     await expect(page.getByLabel("Email address")).toHaveValue("");
   });
 });

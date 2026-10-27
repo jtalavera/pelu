@@ -9,7 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, openInvoiceSifenTab } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog, fillTimeComboboxField } from "../fixtures/ui";
 
@@ -85,7 +85,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(errorBox).toBeInViewport();
   });
 
-  test("AC3 · las funciones de SIFEN (revalidar, correo, cancelar, identificar) están en solapas; estado/KuDE quedan informativos [issue #163: ahora son acordeones independientes]", async ({
+  test("AC3 · el detalle se divide en solapas Factura / SIFEN; todas las funciones de SIFEN (estado, correo, revalidar, cancelar, identificar) se ven juntas en la solapa SIFEN, sin acordeón", async ({
     page,
     request,
   }) => {
@@ -125,39 +125,38 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    // Estado/KuDE stay informational — visible up top without touching any solapa.
-    const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
-    await expect(section.getByText("Approved", { exact: true })).toBeVisible();
+    // The detail is split in two tabs: "Invoice" (the invoice data, down to the KuDE download)
+    // opens first; everything SIFEN lives in the second, "SIFEN" tab.
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByTestId("invoice-detail-tab-invoice")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-status-section")).toBeHidden();
 
-    // All four solapas (now independent accordion items) exist for this invoice (approved,
-    // verification URL, client-identification eligible), all collapsed by default — only
-    // "Estado en SIFEN" is expanded on open (issue #163).
-    await expect(page.getByTestId("sifen-tab-revalidate")).toBeVisible();
-    await expect(page.getByTestId("sifen-tab-email")).toBeVisible();
-    await expect(page.getByTestId("sifen-tab-cancel")).toBeVisible();
-    await expect(page.getByTestId("sifen-tab-identify")).toBeVisible();
+    await openInvoiceSifenTab(page);
+    const section = page.getByTestId("sifen-status-section");
+    await expect(section.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("sifen-kude-download-button")).toBeHidden();
 
-    await expect(page.getByTestId("sifen-revalidate-button")).not.toBeVisible();
-    await expect(page.getByTestId("sifen-identify-client-confirm-button")).not.toBeVisible();
-
-    // Issue #163: opening one accordion section no longer closes the others — expanding
-    // Revalidate, then Identify, then Cancel keeps every previously-opened section's content visible.
-    await page.getByTestId("sifen-tab-revalidate").click();
+    // No accordion anymore: every SIFEN section for this invoice (approved, verification URL,
+    // client-identification eligible) is laid out at once, its content visible without any click.
+    await expect(section.locator("details")).toHaveCount(0);
+    for (const id of [
+      "sifen-tab-status",
+      "sifen-tab-email",
+      "sifen-tab-revalidate",
+      "sifen-tab-cancel",
+      "sifen-tab-identify",
+    ]) {
+      await expect(section.getByTestId(id)).toBeVisible();
+    }
+    await expect(page.getByTestId("sifen-history-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-kude-send-email-button")).toBeVisible();
     await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
-
-    await page.getByTestId("sifen-tab-identify").click();
-    await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
-    await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
-
-    await page.getByTestId("sifen-tab-cancel").click();
     await expect(page.getByTestId("sifen-cancel-button")).toBeVisible();
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
-    await expect(page.getByTestId("sifen-revalidate-button")).toBeVisible();
   });
 
-  test("Issue #165 · AC4 las secciones abiertas del acordeón SIFEN usan el mismo beige que el hover del menú lateral", async ({
+  test("Solapa SIFEN · las secciones se ordenan estado → compartir → revalidar → cancelar → identificar, cada una con su título", async ({
     page,
     request,
   }) => {
@@ -165,7 +164,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
     const seed = await seedCategoryServiceProfessional(request, token);
-    const client = await seedClient(request, token, `E2E165 Accordion ${Date.now()}-${Math.random()}`);
+    const client = await seedClient(request, token, `E2E SIFEN tab ${Date.now()}-${Math.random()}`);
     const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
       clientId: client.id,
       clientDisplayName: client.fullName,
@@ -197,43 +196,29 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    // Reference: the same beige used by the left-nav item hover (AppShell.tsx uses
-    // var(--color-stone) for that hover, e.g. on the "Calendar" link).
-    const navHoverColor = await page.evaluate(() => {
-      const probe = document.createElement("div");
-      probe.style.background = "var(--color-stone)";
-      document.body.appendChild(probe);
-      const color = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return color;
-    });
+    await openInvoiceSifenTab(page);
+    const section = page.getByTestId("sifen-status-section");
 
-    // The testid sits on the <details> element; the beige background lives on its
-    // clickable <summary> header bar.
-    const statusHeader = page.getByTestId("sifen-tab-status").locator("summary");
-    const revalidateHeader = page.getByTestId("sifen-tab-revalidate").locator("summary");
-
-    // Issue #205 AC-5: every accordion section — including "Estado en SIFEN" — now starts
-    // closed, so neither header is beige until clicked.
-    await expect(statusHeader).toBeVisible();
-    const statusClosedColor = await statusHeader.evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
-    );
-    expect(statusClosedColor).not.toBe(navHoverColor);
-    const revalidateClosedColor = await revalidateHeader.evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
-    );
-    expect(revalidateClosedColor).not.toBe(navHoverColor);
-
-    // Opening either one must turn its header beige — the body content style is unaffected.
-    await statusHeader.click();
-    await expect
-      .poll(() => statusHeader.evaluate((el) => getComputedStyle(el).backgroundColor))
-      .toBe(navHoverColor);
-    await revalidateHeader.click();
-    await expect
-      .poll(() => revalidateHeader.evaluate((el) => getComputedStyle(el).backgroundColor))
-      .toBe(navHoverColor);
+    // Each section is a titled block: status first (with its badge), then the actions, in this order.
+    const order = [
+      ["sifen-tab-status", "SIFEN status"],
+      ["sifen-tab-email", "Share KuDE by email or WhatsApp"],
+      ["sifen-tab-revalidate", "Revalidate in SIFEN"],
+      ["sifen-tab-cancel", "Cancel invoice in SIFEN"],
+      ["sifen-tab-identify", "Identify client"],
+    ] as const;
+    let previousY = -1;
+    for (const [id, title] of order) {
+      const block = section.getByTestId(id);
+      await expect(block.getByRole("heading", { name: title, exact: true })).toBeVisible();
+      const box = await block.boundingBox();
+      expect(box, id).not.toBeNull();
+      expect(box!.y, `${id} below the previous section`).toBeGreaterThan(previousY);
+      previousY = box!.y;
+    }
+    await expect(section.getByTestId("sifen-tab-status").getByText("Approved", { exact: true })).toBeVisible();
+    // The control number (CDC) is shown as a labelled value of the status summary.
+    await expect(section.getByTestId("sifen-tab-status").getByText("Control number (CDC)")).toBeVisible();
   });
 
   test("AC4 · la solapa de Horario del profesional es compacta (cada día ocupa una fila reducida)", async ({

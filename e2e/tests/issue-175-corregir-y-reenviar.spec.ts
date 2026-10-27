@@ -12,6 +12,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openInvoiceSifenTab } from "../fixtures/billing";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -98,11 +99,14 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
       .filter({ visible: true });
     await expect(rejectedRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toBeVisible();
     await rejectedRow.click();
+    // An unresolved rejection flags the "SIFEN" tab, where the "resolve" section lives.
+    await expect(page.getByTestId("invoice-detail-tab-sifen-attention")).toBeVisible();
+    await openInvoiceSifenTab(page);
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    // Approved → no accordion, no row button.
+    // Approved → no "resolve" section, no row button.
     await page.locator("#invoice-history-text-filter").fill(okName);
     const okRow = page
       .locator('tbody tr[role="button"]', { hasText: okName })
@@ -111,6 +115,8 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await expect(okRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(0);
     await okRow.click();
     await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByTestId("invoice-detail-tab-sifen-attention")).toHaveCount(0);
+    await openInvoiceSifenTab(page);
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toHaveCount(0);
   });
 
@@ -297,8 +303,8 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await row.click();
 
     const dialog = page.getByRole("dialog");
+    await openInvoiceSifenTab(page);
     const resolve = dialog.getByTestId("sifen-tab-correct-resend");
-    await resolve.locator("summary").click();
     await expect(resolve.getByTestId("sifen-correct-resend-button")).toBeVisible();
     await expect(resolve.getByTestId("sifen-nullify-number-button")).toBeVisible();
     // The only "Void invoice" affordance is inside this section — no generic footer button.
@@ -340,8 +346,10 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
 
     // Detail: the section shows the "resolved" note instead of the actions.
     await row2.click();
+    // Resolved (number inutilizado) → the SIFEN tab is no longer flagged.
+    await expect(page.getByTestId("invoice-detail-tab-sifen-attention")).toHaveCount(0);
+    await openInvoiceSifenTab(page);
     const resolve2 = page.getByRole("dialog").getByTestId("sifen-tab-correct-resend");
-    await resolve2.locator("summary").click();
     await expect(resolve2.getByTestId("sifen-rejected-resolved-note")).toBeVisible();
     await expect(resolve2.getByTestId("sifen-correct-resend-button")).toHaveCount(0);
     await page.keyboard.press("Escape");

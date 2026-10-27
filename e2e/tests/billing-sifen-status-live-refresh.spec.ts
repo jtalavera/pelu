@@ -10,6 +10,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openInvoiceMainTab, openInvoiceSifenTab } from "../fixtures/billing";
 
 // Billing tables (Caja → today's invoices, and Historial) and the invoice detail dialog refresh an invoice's SIFEN status on
 // their own as soon as the backend records it — no reload, no click. SIFEN statuses change in the
@@ -166,8 +167,8 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
     await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
 
     await supportPost(request, `/invoices/${invoiceId}/simulate-batch-result`, {
@@ -182,7 +183,8 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
       timeout: LIVE_UPDATE_TIMEOUT,
     });
     await expect(section.getByText("Pending verification", { exact: true })).toHaveCount(0);
-    // Once approved, the dialog offers the KuDE download — no reopen needed.
+    // Once approved, the dialog offers the KuDE download (on its "Invoice" tab) — no reopen needed.
+    await openInvoiceMainTab(page);
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
   });
 });

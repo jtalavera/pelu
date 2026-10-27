@@ -167,9 +167,9 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
-
+    // The detail is split in tabs (SIFEN data in its own tab); the KuDE download is on the
+    // default "Invoice" tab.
+    await expect(page.getByTestId("invoice-detail-tab-sifen")).toBeVisible();
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
     await expect(
       page.getByRole("dialog").getByRole("button", { name: "Download PDF" }),
