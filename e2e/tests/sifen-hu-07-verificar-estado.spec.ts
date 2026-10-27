@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openInvoiceSifenTab } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -90,12 +91,11 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
+    // The SIFEN status and its "check status" button live in the invoice detail's "SIFEN" tab.
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
     await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
 
-    // Issue #205 AC-5: "Estado en SIFEN" now starts closed — open it to reach the button.
-    await page.getByTestId("sifen-tab-status").locator("summary").click();
     const checkButton = page.getByTestId("sifen-check-status-button");
     await expect(checkButton).toBeVisible();
 
@@ -153,5 +153,7 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await expect(page.getByRole("heading", { name: /Invoice #/ })).toBeVisible();
     await expect(page.getByTestId("sifen-status-section")).toHaveCount(0);
+    // Without SIFEN data there is nothing to split: no "Invoice" / "SIFEN" tabs at all.
+    await expect(page.getByTestId("invoice-detail-tab-sifen")).toHaveCount(0);
   });
 });

@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { openInvoiceSifenTab } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -153,10 +154,8 @@ async function openInvoiceStatus(page: Page, clientName: string) {
     .filter({ visible: true });
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
-  const section = page.getByTestId("sifen-status-section");
-  await expect(section).toBeVisible();
-  await page.getByTestId("sifen-tab-status").locator("summary").click();
-  return section;
+  await openInvoiceSifenTab(page);
+  return page.getByTestId("sifen-status-section");
 }
 
 test.describe("SIFEN · canal de envío por feature flag (SIFEN_SYNC_SUBMISSION)", () => {

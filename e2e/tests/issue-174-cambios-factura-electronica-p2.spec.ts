@@ -19,7 +19,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, openInvoiceSifenTab } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #174 "Cambios en factura electrónica (Parte 2)":
@@ -393,12 +393,12 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await row.click();
 
     const modal = page.getByRole("dialog");
-    await modal.getByTestId("sifen-tab-identify").click();
-    // The client-identification form is now open, but there is no inner <h3> repeating the
-    // accordion's own "Identify client" label.
+    await openInvoiceSifenTab(page);
+    // The client-identification form is shown, and the section's own "Identify client" title is
+    // the only heading with that label — no inner heading repeating it.
     await expect(
       modal.getByTestId("sifen-identify-client-confirm-button"),
     ).toBeVisible();
-    await expect(modal.getByRole("heading", { name: "Identify client" })).toHaveCount(0);
+    await expect(modal.getByRole("heading", { name: "Identify client" })).toHaveCount(1);
   });
 });

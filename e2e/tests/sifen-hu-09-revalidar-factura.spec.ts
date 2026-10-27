@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { openInvoiceSifenTab } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -113,8 +114,8 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    // Issue #163: the revalidate button lives inside its own accordion section — expand it first.
-    await page.getByTestId("sifen-tab-revalidate").click();
+    // The revalidate button lives in the invoice detail's "SIFEN" tab.
+    await openInvoiceSifenTab(page);
     const button = page.getByTestId("sifen-revalidate-button");
     await expect(button).toBeVisible();
 
@@ -148,12 +149,11 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    // The revalidate button lives in the invoice detail's "SIFEN" tab.
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
     await expect(section.getByText("Not found / Rejected", { exact: true })).toBeVisible();
 
-    // Issue #163: the revalidate button lives inside its own accordion section — expand it first.
-    await page.getByTestId("sifen-tab-revalidate").click();
     const button = page.getByTestId("sifen-revalidate-button");
     await expect(button).toBeVisible();
 
@@ -178,7 +178,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await page.getByTestId("sifen-tab-revalidate").click();
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-tab-revalidate");
     await expect(
       section.getByText(

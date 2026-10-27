@@ -11,3 +11,20 @@ export async function ensureCashSessionOpen(page: Page) {
     await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 30_000 });
   }
 }
+
+/**
+ * Switches the open invoice detail modal to its "SIFEN" tab, where every SIFEN detail and action
+ * lives (status, message history, KuDE sharing, revalidate, cancel, identify client…). The
+ * "Invoice" tab — shown first — holds the invoice data plus the KuDE download / assign-professional
+ * buttons.
+ */
+export async function openInvoiceSifenTab(page: Page) {
+  await page.getByRole("dialog").getByTestId("invoice-detail-tab-sifen").click();
+  await expect(page.getByTestId("sifen-status-section")).toBeVisible();
+}
+
+/** Switches the open invoice detail modal back to its first ("Invoice") tab. */
+export async function openInvoiceMainTab(page: Page) {
+  await page.getByRole("dialog").getByTestId("invoice-detail-tab-invoice").click();
+  await expect(page.getByTestId("invoice-detail-panel-invoice")).toBeVisible();
+}
