@@ -2521,6 +2521,7 @@
         "activateShort": "Reactivar",
         "inactiveHint": "La categoría debe estar activa para reactivar este servicio. Elegí una categoría activa o reactivá la categoría primero.",
         "activeHint": "Disponible para agendar turnos y facturar.",
+        "tabs": {"ariaLabel": "Secciones del servicio", "details": "Datos", "commission": "Comisión"},
         "inactiveTitle": "Servicio inactivo: no aparece en nuevos turnos.",
         "statusLabel": "Estado",
         "inactive": "(inactivo)",
