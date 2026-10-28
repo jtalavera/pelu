@@ -139,6 +139,100 @@ function formatHistoryDateTime(iso: string, locale: string): string {
 }
 
 
+type ClientApptVariant = "upcoming" | "past";
+
+function ClientApptSectionHeader({
+  id,
+  variant,
+  title,
+  count,
+}: {
+  id: string;
+  variant: ClientApptVariant;
+  title: string;
+  count: number;
+}) {
+  const upcoming = variant === "upcoming";
+  return (
+    <h3
+      id={id}
+      className={`mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide ${
+        upcoming ? "text-primary" : "text-ink-3"
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`inline-block size-2.5 rounded-full ${upcoming ? "bg-primary" : "bg-ink-3/60"}`}
+      />
+      <span>{title}</span>
+      <span
+        className={`rounded-full px-2 py-0.5 text-xs font-semibold normal-case tracking-normal ${
+          upcoming ? "bg-primary/15 text-primary" : "bg-line text-ink-2"
+        }`}
+      >
+        {count}
+      </span>
+    </h3>
+  );
+}
+
+function ClientApptItem({
+  appt,
+  variant,
+  locale,
+}: {
+  appt: Appointment;
+  variant: ClientApptVariant;
+  locale: string;
+}) {
+  const upcoming = variant === "upcoming";
+  const start = new Date(appt.startAt);
+  let day = "";
+  let month = "";
+  try {
+    day = new Intl.DateTimeFormat(locale, { day: "2-digit" }).format(start);
+    month = new Intl.DateTimeFormat(locale, { month: "short" }).format(start).replace(".", "");
+  } catch {
+    /* fall back to the full date line only */
+  }
+  return (
+    <li
+      data-testid="client-appt-item"
+      data-variant={variant}
+      className={`flex items-center gap-3 rounded-lg border border-l-4 p-3 ${
+        upcoming
+          ? "border-primary/30 border-l-primary bg-primary/5 shadow-sm"
+          : "border-line border-l-ink-3/40 bg-page/60"
+      }`}
+    >
+      {day ? (
+        <div
+          aria-hidden
+          className={`flex w-12 shrink-0 flex-col items-center rounded-md py-1 leading-tight ${
+            upcoming ? "bg-primary text-primary-fg" : "bg-line/70 text-ink-2"
+          }`}
+        >
+          <span className="text-lg font-bold">{day}</span>
+          <span className="text-[11px] font-semibold uppercase">{month}</span>
+        </div>
+      ) : null}
+      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <Text className={upcoming ? "font-semibold text-ink" : "font-medium text-ink-2"}>
+            {appt.serviceName}
+          </Text>
+          <Text variant="muted" className="text-sm">
+            {formatHistoryDateTime(appt.startAt, locale)} · {appt.professionalName}
+          </Text>
+        </div>
+        <div className="self-start sm:self-center">
+          <StatusBadge status={appt.status} />
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function HistoryInvoiceStatusPill({ status }: { status: string }) {
   const { t } = useTranslation();
   let bg = "var(--color-warning-lt)";
@@ -879,10 +973,13 @@ export default function ClientDetailPage() {
                 </Heading>
                 {upcomingAppointments == null && pastApptPage == null ? null : (
                   <div className="flex flex-col gap-4">
-                    <div>
-                      <Text className="mb-2 text-sm font-medium">
-                        {t("femme.clients.historyUpcoming")}
-                      </Text>
+                    <section data-testid="client-appts-upcoming" aria-labelledby="client-appts-upcoming-title">
+                      <ClientApptSectionHeader
+                        id="client-appts-upcoming-title"
+                        variant="upcoming"
+                        title={t("femme.clients.historyUpcoming")}
+                        count={upcomingAppointments?.length ?? 0}
+                      />
                       {!upcomingAppointments || upcomingAppointments.length === 0 ? (
                         <Text variant="muted" className="text-sm">
                           {t("femme.clients.noAppointments")}
@@ -890,31 +987,22 @@ export default function ClientDetailPage() {
                       ) : (
                         <ul className="flex flex-col gap-2" role="list">
                           {upcomingAppointments.map((a) => (
-                            <li
-                              key={a.id}
-                              className="flex flex-col gap-1 rounded-md border border-[var(--color-border)]/60 p-3 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                              <div>
-                                <Text className="font-medium">
-                                  {a.serviceName}
-                                </Text>
-                                <Text variant="muted" className="text-sm">
-                                  {formatHistoryDateTime(a.startAt, dateLocale)} ·{" "}
-                                  {a.professionalName}
-                                </Text>
-                              </div>
-                              <div className="self-start sm:self-center">
-                                <StatusBadge status={a.status} />
-                              </div>
-                            </li>
+                            <ClientApptItem key={a.id} appt={a} variant="upcoming" locale={dateLocale} />
                           ))}
                         </ul>
                       )}
-                    </div>
-                    <div>
-                      <Text className="mb-2 text-sm font-medium">
-                        {t("femme.clients.historyPast")}
-                      </Text>
+                    </section>
+                    <section
+                      data-testid="client-appts-past"
+                      aria-labelledby="client-appts-past-title"
+                      className="border-t border-line pt-4"
+                    >
+                      <ClientApptSectionHeader
+                        id="client-appts-past-title"
+                        variant="past"
+                        title={t("femme.clients.historyPast")}
+                        count={pastApptPage?.totalElements ?? 0}
+                      />
                       {pastApptLoading ? (
                         <Spinner size="sm" />
                       ) : pastApptPage == null || pastApptPage.totalElements === 0 ? (
@@ -925,23 +1013,7 @@ export default function ClientDetailPage() {
                         <>
                           <ul className="flex flex-col gap-2" role="list">
                             {pastApptPage.content.map((a) => (
-                              <li
-                                key={a.id}
-                                className="flex flex-col gap-1 rounded-md border border-[var(--color-border)]/60 p-3 sm:flex-row sm:items-center sm:justify-between"
-                              >
-                                <div>
-                                  <Text className="font-medium">
-                                    {a.serviceName}
-                                  </Text>
-                                  <Text variant="muted" className="text-sm">
-                                    {formatHistoryDateTime(a.startAt, dateLocale)} ·{" "}
-                                    {a.professionalName}
-                                  </Text>
-                                </div>
-                                <div className="self-start sm:self-center">
-                                  <StatusBadge status={a.status} />
-                                </div>
-                              </li>
+                              <ClientApptItem key={a.id} appt={a} variant="past" locale={dateLocale} />
                             ))}
                           </ul>
                           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -969,7 +1041,7 @@ export default function ClientDetailPage() {
                           </div>
                         </>
                       )}
-                    </div>
+                    </section>
                   </div>
                 )}
               </Card>
