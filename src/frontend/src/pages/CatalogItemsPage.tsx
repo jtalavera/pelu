@@ -18,6 +18,10 @@ import {
   PageSizeSelect,
   Select,
   Spinner,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Text,
 } from "@design-system";
 import { downloadPriceListPdf } from "../api/downloadPriceListPdf";
@@ -127,6 +131,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
   const [categorySaving, setCategorySaving] = useState(false);
 
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [serviceTab, setServiceTab] = useState<"details" | "commission">("details");
   // HU-COM-02: «Comisión» section + warning on items without a general percent (ADMIN only).
   const commissionsEnabled = useFeatureFlag("COMMISSIONS");
   const [itemsWithoutRule, setItemsWithoutRule] = useState<Set<number>>(new Set());
@@ -364,6 +369,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     setServiceSaveError(null);
     setEditSuccess(false);
     dismissServicePageSuccess();
+    setServiceTab("details");
     setServiceModalOpen(true);
   }
 
@@ -570,6 +576,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     setServiceSaveError(null);
     setEditSuccess(false);
     dismissServicePageSuccess();
+    setServiceTab("details");
     setServiceModalOpen(true);
   }
 
@@ -1453,114 +1460,138 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
             )
           ) : null}
 
-          <div>
-            <Label htmlFor="svc-name">{t("femme.services.services.name")}</Label>
-            <Input
-              id="svc-name"
-              value={serviceName}
-              onChange={(e) => setServiceName(e.target.value)}
-              aria-invalid={serviceFieldError?.name ? "true" : "false"}
-              aria-describedby={serviceFieldError?.name ? "svc-name-err" : undefined}
-            />
-            <FieldValidationError id="svc-name-err">{serviceFieldError?.name}</FieldValidationError>
-          </div>
+          {(() => {
+            const detailsPanel = (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <Label htmlFor="svc-name">{t("femme.services.services.name")}</Label>
+                  <Input
+                    id="svc-name"
+                    value={serviceName}
+                    onChange={(e) => setServiceName(e.target.value)}
+                    aria-invalid={serviceFieldError?.name ? "true" : "false"}
+                    aria-describedby={serviceFieldError?.name ? "svc-name-err" : undefined}
+                  />
+                  <FieldValidationError id="svc-name-err">{serviceFieldError?.name}</FieldValidationError>
+                </div>
 
-          {/* HU-59: optional SKU (products only — only products go to Stock). */}
-          {isProduct ? (
-            <div>
-              <Label htmlFor="svc-sku">{t("femme.services.services.sku")}</Label>
-              <Input
-                id="svc-sku"
-                value={serviceSku}
-                maxLength={64}
-                placeholder={t("femme.services.services.skuPlaceholder")}
-                onChange={(e) => setServiceSku(e.target.value)}
-              />
-            </div>
-          ) : null}
+                {/* HU-59: optional SKU (products only — only products go to Stock). */}
+                {isProduct ? (
+                  <div>
+                    <Label htmlFor="svc-sku">{t("femme.services.services.sku")}</Label>
+                    <Input
+                      id="svc-sku"
+                      value={serviceSku}
+                      maxLength={64}
+                      placeholder={t("femme.services.services.skuPlaceholder")}
+                      onChange={(e) => setServiceSku(e.target.value)}
+                    />
+                  </div>
+                ) : null}
 
-          <div>
-            <Label htmlFor="svc-cat">{t("femme.services.services.category")}</Label>
-            <Select
-              id="svc-cat"
-              value={serviceCategoryId}
-              onChange={(e) => setServiceCategoryId(e.target.value)}
-              aria-invalid={serviceFieldError?.categoryId ? "true" : "false"}
-              aria-describedby={serviceFieldError?.categoryId ? "svc-cat-err" : undefined}
-            >
-              <option value="">{t("femme.services.services.categoryPlaceholder")}</option>
-              {serviceCategorySelectOptions.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                  {!c.active ? ` ${t("femme.services.categories.inactive")}` : ""}
-                </option>
-              ))}
-            </Select>
-            <FieldValidationError id="svc-cat-err">{serviceFieldError?.categoryId}</FieldValidationError>
-          </div>
+                <div>
+                  <Label htmlFor="svc-cat">{t("femme.services.services.category")}</Label>
+                  <Select
+                    id="svc-cat"
+                    value={serviceCategoryId}
+                    onChange={(e) => setServiceCategoryId(e.target.value)}
+                    aria-invalid={serviceFieldError?.categoryId ? "true" : "false"}
+                    aria-describedby={serviceFieldError?.categoryId ? "svc-cat-err" : undefined}
+                  >
+                    <option value="">{t("femme.services.services.categoryPlaceholder")}</option>
+                    {serviceCategorySelectOptions.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.name}
+                        {!c.active ? ` ${t("femme.services.categories.inactive")}` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                  <FieldValidationError id="svc-cat-err">{serviceFieldError?.categoryId}</FieldValidationError>
+                </div>
 
-          <div>
-            <Label htmlFor="svc-tax">{t("femme.services.services.tax")}</Label>
-            <Select
-              id="svc-tax"
-              value={serviceTaxId}
-              onChange={(e) => setServiceTaxId(e.target.value)}
-            >
-              <option value="">{t("femme.services.services.taxPlaceholder")}</option>
-              {serviceTaxSelectOptions.map((tx) => (
-                <option key={tx.id} value={String(tx.id)}>
-                  {tx.name} ({tx.rate}%)
-                </option>
-              ))}
-            </Select>
-          </div>
+                <div>
+                  <Label htmlFor="svc-tax">{t("femme.services.services.tax")}</Label>
+                  <Select
+                    id="svc-tax"
+                    value={serviceTaxId}
+                    onChange={(e) => setServiceTaxId(e.target.value)}
+                  >
+                    <option value="">{t("femme.services.services.taxPlaceholder")}</option>
+                    {serviceTaxSelectOptions.map((tx) => (
+                      <option key={tx.id} value={String(tx.id)}>
+                        {tx.name} ({tx.rate}%)
+                      </option>
+                    ))}
+                  </Select>
+                </div>
 
-          <div className={isProduct ? undefined : "grid gap-4 sm:grid-cols-2"}>
-            <div>
-              <Label htmlFor="svc-price">{t("femme.services.services.price")}</Label>
-              <Input
-                id="svc-price"
-                inputMode="numeric"
-                value={servicePrice}
-                onChange={(e) => setServicePrice(maskMoneyInput(e.target.value))}
-                aria-invalid={serviceFieldError?.price ? "true" : "false"}
-                aria-describedby={serviceFieldError?.price ? "svc-price-err" : undefined}
-              />
-              <FieldValidationError id="svc-price-err">{serviceFieldError?.price}</FieldValidationError>
-            </div>
-            {isProduct ? null : (
-              <div>
-                <Label htmlFor="svc-duration">{t("femme.services.services.duration")}</Label>
-                <Input
-                  id="svc-duration"
-                  inputMode="numeric"
-                  value={serviceDuration}
-                  onChange={(e) => setServiceDuration(e.target.value)}
-                  aria-invalid={serviceFieldError?.duration ? "true" : "false"}
-                  aria-describedby={serviceFieldError?.duration ? "svc-duration-err" : undefined}
-                />
-                <FieldValidationError id="svc-duration-err">{serviceFieldError?.duration}</FieldValidationError>
+                <div className={isProduct ? undefined : "grid gap-4 sm:grid-cols-2"}>
+                  <div>
+                    <Label htmlFor="svc-price">{t("femme.services.services.price")}</Label>
+                    <Input
+                      id="svc-price"
+                      inputMode="numeric"
+                      value={servicePrice}
+                      onChange={(e) => setServicePrice(maskMoneyInput(e.target.value))}
+                      aria-invalid={serviceFieldError?.price ? "true" : "false"}
+                      aria-describedby={serviceFieldError?.price ? "svc-price-err" : undefined}
+                    />
+                    <FieldValidationError id="svc-price-err">{serviceFieldError?.price}</FieldValidationError>
+                  </div>
+                  {isProduct ? null : (
+                    <div>
+                      <Label htmlFor="svc-duration">{t("femme.services.services.duration")}</Label>
+                      <Input
+                        id="svc-duration"
+                        inputMode="numeric"
+                        value={serviceDuration}
+                        onChange={(e) => setServiceDuration(e.target.value)}
+                        aria-invalid={serviceFieldError?.duration ? "true" : "false"}
+                        aria-describedby={serviceFieldError?.duration ? "svc-duration-err" : undefined}
+                      />
+                      <FieldValidationError id="svc-duration-err">{serviceFieldError?.duration}</FieldValidationError>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="secondary" onClick={() => setServiceModalOpen(false)} className="min-h-11">
+                    {t("femme.services.cancel")}
+                  </Button>
+                  <Button type="button" onClick={saveService} disabled={serviceSaving} className="min-h-11">
+                    {serviceSaving ? t("femme.services.saving") : t("femme.services.save")}
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" onClick={() => setServiceModalOpen(false)} className="min-h-11">
-              {t("femme.services.cancel")}
-            </Button>
-            <Button type="button" onClick={saveService} disabled={serviceSaving} className="min-h-11">
-              {serviceSaving ? t("femme.services.saving") : t("femme.services.save")}
-            </Button>
-          </div>
-
-          {serviceEditing && commissionsEnabled ? (
-            <section className="flex flex-col gap-2 border-t pt-4" aria-labelledby="svc-commission-title">
-              <h3 id="svc-commission-title" className="text-sm font-semibold">
-                {t("femme.commissions.rules.sectionTitle")}
-              </h3>
-              <ItemRulesEditor serviceId={serviceEditing.id} />
-            </section>
-          ) : null}
+            );
+            if (!(serviceEditing && commissionsEnabled)) return detailsPanel;
+            return (
+              <Tabs
+                value={serviceTab}
+                onValueChange={(v) => setServiceTab(v as "details" | "commission")}
+              >
+                <TabsList aria-label={t("femme.services.services.tabs.ariaLabel")}>
+                  <TabsTrigger value="details" data-testid="svc-tab-details">
+                    {t("femme.services.services.tabs.details")}
+                  </TabsTrigger>
+                  <TabsTrigger value="commission" data-testid="svc-tab-commission">
+                    {t("femme.services.services.tabs.commission")}
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="details" data-testid="svc-panel-details">
+                  {detailsPanel}
+                </TabsContent>
+                <TabsContent value="commission" data-testid="svc-panel-commission">
+                  <section aria-labelledby="svc-commission-title" className="flex flex-col gap-2">
+                    <h3 id="svc-commission-title" className="sr-only">
+                      {t("femme.commissions.rules.sectionTitle")}
+                    </h3>
+                    <ItemRulesEditor serviceId={serviceEditing.id} />
+                  </section>
+                </TabsContent>
+              </Tabs>
+            );
+          })()}
         </div>
       </Modal>
 

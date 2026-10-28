@@ -39,6 +39,7 @@ test("% general y excepciones por profesional desde la sección «Comisión» de
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Services" }).click();
   await page.getByTestId(`svc-row-${w.service.id}`).click();
+  await page.getByTestId("svc-tab-commission").click();
   const section = page.getByTestId("item-commission-section");
   await expect(section).toBeVisible();
   await expect(section.getByTestId("item-commission-no-general")).toBeVisible();
@@ -90,9 +91,10 @@ test("productos: reglas desde la pantalla Productos; sin regla se aplica el % po
 
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Products" }).click();
-  // Warning badge on items without a general % (shortcut: the row opens its «Comisión» section).
+  // Warning badge on items without a general % (shortcut: the row opens the item; its «Commission» tab holds the rules).
   await expect(page.getByTestId(`svc-no-commission-${w.product.id}`)).toBeVisible();
   await page.getByTestId(`svc-row-${w.product.id}`).click();
+  await page.getByTestId("svc-tab-commission").click();
   await page.locator(`#commission-general-${w.product.id}`).fill("12");
   await page.getByTestId("commission-save-general").click();
   await confirmImmediate(page);
@@ -133,6 +135,7 @@ test("historial de cambios por regla (quién, valor anterior y nuevo, vigencia)"
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Services" }).click();
   await page.getByTestId(`svc-row-${w.service.id}`).click();
+  await page.getByTestId("svc-tab-commission").click();
   await page.getByText("Rule history").click();
   const history = page.getByTestId("commission-rule-history");
   const firstRow = history.locator("tbody tr").first();

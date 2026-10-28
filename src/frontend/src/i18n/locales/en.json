@@ -2521,6 +2521,7 @@
         "activateShort": "Reactivate",
         "inactiveHint": "The category must be active to reactivate this service. Select an active category or reactivate the category first.",
         "activeHint": "Available for new appointments and invoices.",
+        "tabs": {"ariaLabel": "Service sections", "details": "Details", "commission": "Commission"},
         "inactiveTitle": "Inactive service: it does not appear in new appointments.",
         "statusLabel": "Status",
         "inactive": "(inactive)",
