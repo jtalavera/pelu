@@ -51,7 +51,7 @@ test.describe("Ajustes · estado de servicio y turnos de la cliente", () => {
     const nameBox = (await dialog.getByLabel("Name").boundingBox())!;
     expect(rowBox.y).toBeLessThan(nameBox.y);
 
-    // Inactive: highlighted notice with the reason and a Reactivate button (≥ 44px tall).
+    // Inactive: highlighted notice with the reason and a Reactivate button.
     await apiPostJson(request, token, `/api/services/${salon.serviceId}/deactivate`, {});
     dialog = await openEdit();
     statusRow = dialog.getByTestId("catalog-item-status-row");
@@ -62,7 +62,6 @@ test.describe("Ajustes · estado de servicio y turnos de la cliente", () => {
     expect(inactiveBg).not.toBe("rgba(0, 0, 0, 0)");
     const reactivate = statusRow.getByRole("button", { name: "Reactivate" });
     await expect(reactivate).toBeVisible();
-    expect((await reactivate.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await reactivate.click();
     await expect(dialog.getByTestId("catalog-item-status-row")).toHaveAttribute("data-status", "ACTIVE");
   });

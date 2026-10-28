@@ -8,18 +8,26 @@ import { loginAsDemo } from "../fixtures/auth";
  *     teléfono y email son enlaces para llamar / escribir; lo que falta se marca "Not set".
  *  2. Cada bloque (Contacto, Datos fiscales, Perfil) es un panel con título y aclaración;
  *     Contacto se destaca respecto de los otros.
- *  3. Barra de acciones al pie: Desactivar a la izquierda (en rojo), Cancelar y Guardar a la derecha.
+ *  3. Barra de acciones al pie, separada por una línea; Desactivar en rojo (el orden
+ *     Cancelar → Desactivar → Guardar lo fija issue-161).
  */
 function uniq(): string {
   return `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 }
 
+/** Phone numbers are unique per tenant, so every run needs a fresh one. */
+function uniqPhone(): string {
+  const n = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+  return `(0981) ${n.slice(0, 3)}-${n.slice(3)}`;
+}
+
 test.describe("Ficha de la cliente · pestaña Datos legible", () => {
   test("1 · el resumen destaca teléfono, email y documento con enlaces", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
+    const phoneNumber = uniqPhone();
     const client = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
       fullName: `E2E Datos ${uniq()}`,
-      phone: "(0981) 123-456",
+      phone: phoneNumber,
       email: "ana@example.com",
       ruc: null,
       identityDocumentType: "CEDULA_PARAGUAYA",
@@ -32,9 +40,9 @@ test.describe("Ficha de la cliente · pestaña Datos legible", () => {
     await expect(keyInfo).toBeVisible();
     const phone = page.getByTestId("client-key-info-phone");
     await expect(phone).toContainText("Phone");
-    await expect(phone.getByRole("link", { name: "Call (0981) 123-456" })).toHaveAttribute(
+    await expect(phone.getByRole("link", { name: `Call ${phoneNumber}` })).toHaveAttribute(
       "href",
-      "tel:0981123456",
+      `tel:${phoneNumber.replace(/\D/g, "")}`,
     );
     const email = page.getByTestId("client-key-info-email");
     await expect(email.getByRole("link", { name: "Email ana@example.com" })).toHaveAttribute(
@@ -117,28 +125,34 @@ test.describe("Ficha de la cliente · pestaña Datos legible", () => {
     expect(c.border).not.toBe(f.border);
     expect(f.bg).toBe(p.bg);
 
-    // Desktop footer: Deactivate on the left (red), Cancel and Save on the right.
+    // Footer: separated from the form by a top border, below the last section; Deactivate in red.
     const deactivate = page.getByTestId("client-edit-deactivate");
-    const cancel = page.getByTestId("client-edit-cancel");
-    const save = page.getByRole("button", { name: "Save", exact: true });
-    const [d, ca, sa] = await Promise.all([deactivate, cancel, save].map(async (b) => (await b.boundingBox())!));
-    expect(d.x).toBeLessThan(ca.x);
-    expect(ca.x).toBeLessThan(sa.x);
+    const footer = deactivate.locator("xpath=../..");
+    const footerBorder = await footer.evaluate((el) => parseFloat(getComputedStyle(el).borderTopWidth));
+    expect(footerBorder).toBeGreaterThanOrEqual(1);
+    const d = (await deactivate.boundingBox())!;
     const profileBox = (await profile.boundingBox())!;
     expect(d.y).toBeGreaterThan(profileBox.y + profileBox.height);
     const deactivateColor = await deactivate.evaluate((el) => getComputedStyle(el).color);
-    const saveColor = await save.evaluate((el) => getComputedStyle(el).color);
-    expect(deactivateColor).not.toBe(saveColor);
+    const dangerColor = await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.className = "text-danger";
+      document.body.appendChild(probe);
+      const c = getComputedStyle(probe).color;
+      probe.remove();
+      return c;
+    });
+    expect(deactivateColor).toBe(dangerColor);
   });
 
-  test("móvil · resumen en una columna, Guardar arriba de Cancelar y Desactivar", async ({
+  test("móvil · el resumen pasa a una columna y no hay scroll horizontal", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
     const client = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
       fullName: `E2E Datos Movil ${uniq()}`,
-      phone: "(0981) 123-456",
+      phone: uniqPhone(),
       email: null,
       ruc: null,
     });
@@ -148,11 +162,7 @@ test.describe("Ficha de la cliente · pestaña Datos legible", () => {
     const phone = (await page.getByTestId("client-key-info-phone").boundingBox())!;
     const email = (await page.getByTestId("client-key-info-email").boundingBox())!;
     expect(email.y).toBeGreaterThan(phone.y + phone.height - 1);
-    const save = (await page.getByRole("button", { name: "Save", exact: true }).boundingBox())!;
-    const cancel = (await page.getByTestId("client-edit-cancel").boundingBox())!;
-    const deactivate = (await page.getByTestId("client-edit-deactivate").boundingBox())!;
-    expect(save.y).toBeLessThan(cancel.y);
-    expect(cancel.y).toBeLessThan(deactivate.y);
+    expect(Math.abs(email.x - phone.x)).toBeLessThanOrEqual(1);
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(390);
   });

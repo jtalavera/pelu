@@ -1015,8 +1015,18 @@ export default function ClientDetailPage() {
               </div>
               </section>
 
-              <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:items-center">
-                <div data-tour="client-detail-status" className="sm:mr-auto">
+              <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => navigate("/app/clients")}
+                  disabled={saving}
+                  className="min-h-11"
+                  data-testid="client-edit-cancel"
+                >
+                  {t("femme.clients.cancel")}
+                </Button>
+                <div data-tour="client-detail-status">
                   {client.active ? (
                     <Button
                       type="button"
@@ -1041,16 +1051,6 @@ export default function ClientDetailPage() {
                     </Button>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => navigate("/app/clients")}
-                  disabled={saving}
-                  className="min-h-11"
-                  data-testid="client-edit-cancel"
-                >
-                  {t("femme.clients.cancel")}
-                </Button>
                 <Button
                   type="button"
                   onClick={() => void saveClient()}
