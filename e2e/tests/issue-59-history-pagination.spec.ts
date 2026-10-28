@@ -2,8 +2,8 @@
  * Issue #59 — Límite en tablas de historial (pagination + 6-month window)
  *
  * Covers all four history tables:
- *   1. Clientes → Historial → Turnos → Anteriores
- *   2. Clientes → Historial → Comprobantes
+ *   1. Clientes → Turnos → Anteriores
+ *   2. Clientes → Comprobantes
  *   3. Facturación → Comprobantes de Hoy (pagination only)
  *   4. Facturación → Historial (6-month window + pagination)
  */
@@ -252,9 +252,9 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tables 1 & 2 — Client → History
+// Tables 1 & 2 — Client → Appointments / Invoices tabs (HU-70)
 // ---------------------------------------------------------------------------
-test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
+test.describe("Issue #59 · Tables 1 & 2 — Client appointments & invoices", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
@@ -270,14 +270,17 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: appointments live in their own "Appointments" tab (no more "History" tab).
+    await page.getByRole("tab", { name: "Appointments" }).click();
 
     // The past-appointments section heading ("Past" / "Anteriores") should be visible
-    await expect(page.getByText(/past|anteriores/i).first()).toBeVisible({ timeout: 20_000 });
+    const past = page.getByTestId("client-appts-past");
+    await expect(past.getByRole("heading", { name: /past|anteriores/i })).toBeVisible({
+      timeout: 20_000,
+    });
 
-    // Even with 0 records, the pagination controls appear after the initial load
-    // (empty state renders instead of table — just verify the section heading is visible)
-    await expect(page.getByText(/no appointments on record/i).first()).toBeVisible({
+    // With 0 records the empty state renders instead of the list + pagination controls
+    await expect(past.getByText(/no appointments on record/i)).toBeVisible({
       timeout: 20_000,
     });
   });
@@ -295,7 +298,8 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: invoices live in their own "Invoices" tab.
+    await page.getByRole("tab", { name: "Invoices" }).click();
 
     // Invoice table should show at least one row
     const tbody = page.locator("table tbody");
@@ -327,7 +331,8 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: invoices live in their own "Invoices" tab.
+    await page.getByRole("tab", { name: "Invoices" }).click();
 
     // Wait for invoice section to load
     await page.waitForTimeout(2000);
@@ -352,7 +357,8 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: invoices live in their own "Invoices" tab.
+    await page.getByRole("tab", { name: "Invoices" }).click();
 
     const tbody = page.locator("table tbody");
     await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });

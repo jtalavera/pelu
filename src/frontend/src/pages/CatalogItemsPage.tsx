@@ -1408,9 +1408,12 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           ) : null}
 
           {serviceEditing ? (
-            <div className="flex flex-col gap-2 rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))]/30 p-3))]/20">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-[rgb(var(--color-muted-foreground))]">
+            <div
+              data-testid="catalog-item-status-row"
+              className="flex flex-col gap-3 rounded-lg border border-line bg-page/60 px-4 py-3"
+            >
+              <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
+                <span className="text-sm font-medium text-ink-2">
                   {t("femme.services.services.statusLabel")}
                 </span>
                 <StatusBadge status={serviceEditing.active ? "ACTIVE" : "INACTIVE"} />
