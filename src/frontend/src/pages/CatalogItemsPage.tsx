@@ -1408,35 +1408,49 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           ) : null}
 
           {serviceEditing ? (
-            <div
-              data-testid="catalog-item-status-row"
-              className="flex flex-col gap-3 rounded-lg border border-line bg-page/60 px-4 py-3"
-            >
-              <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
-                <span className="text-sm font-medium text-ink-2">
-                  {t("femme.services.services.statusLabel")}
+            serviceEditing.active ? (
+              <div
+                data-testid="catalog-item-status-row"
+                data-status="ACTIVE"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1"
+              >
+                <span className="inline-flex min-h-8 items-center gap-2 rounded-full bg-success-lt px-3 py-1 text-sm font-semibold text-success">
+                  <span aria-hidden className="size-2 rounded-full bg-success" />
+                  <span className="sr-only">{t("femme.services.services.statusLabel")}:</span>
+                  {t("femme.status.ACTIVE")}
                 </span>
-                <StatusBadge status={serviceEditing.active ? "ACTIVE" : "INACTIVE"} />
+                <Text variant="muted" className="text-sm">
+                  {t("femme.services.services.activeHint")}
+                </Text>
               </div>
-              {!serviceEditing.active ? (
-                <>
+            ) : (
+              <div
+                data-testid="catalog-item-status-row"
+                data-status="INACTIVE"
+                className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning-lt px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-sm font-semibold text-ink">
+                    <span className="sr-only">{t("femme.services.services.statusLabel")}:</span>
+                    {t("femme.services.services.inactiveTitle")}
+                  </span>
                   <Text variant="muted" className="text-sm">
                     {t("femme.services.services.inactiveHint")}
                   </Text>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-fit min-h-11 border-success text-success hover:bg-success/10"
-                    disabled={serviceReactivating}
-                    onClick={() => void activateSalonServiceFromModal()}
-                  >
-                    {serviceReactivating
-                      ? t("femme.services.saving")
-                      : t("femme.services.services.activate")}
-                  </Button>
-                </>
-              ) : null}
-            </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-fit shrink-0 min-h-11 border-success text-success hover:bg-success/10"
+                  disabled={serviceReactivating}
+                  onClick={() => void activateSalonServiceFromModal()}
+                >
+                  {serviceReactivating
+                    ? t("femme.services.saving")
+                    : t("femme.services.services.activate")}
+                </Button>
+              </div>
+            )
           ) : null}
 
           <div>

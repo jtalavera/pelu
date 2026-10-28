@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -138,6 +138,110 @@ function formatHistoryDateTime(iso: string, locale: string): string {
   }
 }
 
+
+const SECTION_CLASS = "flex flex-col gap-4 rounded-xl border p-4 sm:p-5";
+
+function ClientSectionHeader({
+  id,
+  title,
+  hint,
+  emphasis = false,
+}: {
+  id: string;
+  title: string;
+  hint: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span
+        aria-hidden
+        className={`mt-0.5 h-9 w-1 shrink-0 rounded-full ${emphasis ? "bg-primary" : "bg-line"}`}
+      />
+      <div className="min-w-0">
+        <Heading as="h2" id={id} className="text-base">
+          {title}
+        </Heading>
+        <Text variant="muted" className="text-sm">
+          {hint}
+        </Text>
+      </div>
+    </div>
+  );
+}
+
+/** Read-only "at a glance" strip with the client's most-used data (saved values). */
+function ClientKeyInfo({ client }: { client: Client }) {
+  const { t } = useTranslation();
+  const notSet = (
+    <span className="text-base font-normal text-ink-3">{t("femme.clients.keyInfo.notSet")}</span>
+  );
+  const docType = client.identityDocumentType ?? null;
+  const docNumber = client.identityDocumentNumber ?? client.ruc ?? null;
+  const hasDocNumber = Boolean(docNumber) && docType !== "INNOMINADO";
+  const docTypeLabel =
+    docType === "INNOMINADO"
+      ? t("femme.clients.identityDocumentTypeInnominado")
+      : docType
+        ? t(
+            IDENTITY_DOCUMENT_TYPE_OPTIONS.find((o) => o.value === docType)?.labelKey ??
+              "femme.clients.identityDocumentTypeOtro",
+          )
+        : null;
+  const tiles: Array<{ key: string; label: string; value: ReactNode; sub?: string | null }> = [
+    {
+      key: "phone",
+      label: t("femme.clients.phone"),
+      value: client.phone ? (
+        <a
+          href={`tel:${client.phone.replace(/[^\d+]/g, "")}`}
+          className="text-primary hover:underline"
+          aria-label={t("femme.clients.keyInfo.call", { phone: client.phone })}
+        >
+          {client.phone}
+        </a>
+      ) : (
+        notSet
+      ),
+    },
+    {
+      key: "email",
+      label: t("femme.clients.email"),
+      value: client.email ? (
+        <a
+          href={`mailto:${client.email}`}
+          className="break-all text-primary hover:underline"
+          aria-label={t("femme.clients.keyInfo.sendEmail", { email: client.email })}
+        >
+          {client.email}
+        </a>
+      ) : (
+        notSet
+      ),
+    },
+    {
+      key: "document",
+      label: t("femme.clients.keyInfo.document"),
+      value: hasDocNumber ? docNumber : docType === "INNOMINADO" ? docTypeLabel : notSet,
+      sub: hasDocNumber ? docTypeLabel : null,
+    },
+  ];
+  return (
+    <dl data-testid="client-key-info" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {tiles.map((tile) => (
+        <div
+          key={tile.key}
+          data-testid={`client-key-info-${tile.key}`}
+          className="flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface p-3 sm:p-4"
+        >
+          <dt className="text-xs font-semibold uppercase tracking-wide text-ink-3">{tile.label}</dt>
+          <dd className="min-w-0 text-lg font-semibold leading-snug text-ink">{tile.value}</dd>
+          {tile.sub ? <dd className="text-sm text-ink-3">{tile.sub}</dd> : null}
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 type ClientApptVariant = "upcoming" | "past";
 
@@ -658,7 +762,7 @@ export default function ClientDetailPage() {
         </TabsList>
 
         <TabsContent value="info">
-          <Card data-tour="client-detail-edit" className="p-6">
+          <Card data-tour="client-detail-edit" className="p-4 sm:p-6">
             <div ref={saveMessagesRef} tabIndex={-1} className="outline-none">
             {saveSuccess ? (
               <Alert variant="success" title={t("femme.clients.editSuccess")} className="mb-4" />
@@ -681,11 +785,20 @@ export default function ClientDetailPage() {
             ) : null}
             </div>
 
-            <div className="flex flex-col gap-6">
-              <section aria-labelledby="detail-section-contact" className="flex flex-col gap-3">
-              <Heading as="h2" id="detail-section-contact" className="text-base">
-                {t("femme.clients.sections.contact")}
-              </Heading>
+            <div className="flex flex-col gap-5">
+              <ClientKeyInfo client={client} />
+
+              <section
+                aria-labelledby="detail-section-contact"
+                data-testid="client-section-contact"
+                className={`${SECTION_CLASS} border-primary/30 bg-primary/5`}
+              >
+              <ClientSectionHeader
+                id="detail-section-contact"
+                title={t("femme.clients.sections.contact")}
+                hint={t("femme.clients.sectionHints.contact")}
+                emphasis
+              />
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label htmlFor="detail-fullname">{t("femme.clients.fullName")}</Label>
@@ -760,10 +873,16 @@ export default function ClientDetailPage() {
               </div>
               </section>
 
-              <section aria-labelledby="detail-section-fiscal" className="flex flex-col gap-3">
-              <Heading as="h2" id="detail-section-fiscal" className="text-base">
-                {t("femme.clients.sections.fiscal")}
-              </Heading>
+              <section
+                aria-labelledby="detail-section-fiscal"
+                data-testid="client-section-fiscal"
+                className={`${SECTION_CLASS} border-line`}
+              >
+              <ClientSectionHeader
+                id="detail-section-fiscal"
+                title={t("femme.clients.sections.fiscal")}
+                hint={t("femme.clients.sectionHints.fiscal")}
+              />
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="detail-identity-document-type">
@@ -871,10 +990,16 @@ export default function ClientDetailPage() {
               </div>
               </section>
 
-              <section aria-labelledby="detail-section-profile" className="flex flex-col gap-3">
-              <Heading as="h2" id="detail-section-profile" className="text-base">
-                {t("femme.clients.sections.profile")}
-              </Heading>
+              <section
+                aria-labelledby="detail-section-profile"
+                data-testid="client-section-profile"
+                className={`${SECTION_CLASS} border-line`}
+              >
+              <ClientSectionHeader
+                id="detail-section-profile"
+                title={t("femme.clients.sections.profile")}
+                hint={t("femme.clients.sectionHints.profile")}
+              />
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <ClientProfileExtrasFields
                 idPrefix="detail"
@@ -890,25 +1015,15 @@ export default function ClientDetailPage() {
               </div>
               </section>
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => navigate("/app/clients")}
-                  disabled={saving}
-                  className="min-h-11"
-                  data-testid="client-edit-cancel"
-                >
-                  {t("femme.clients.cancel")}
-                </Button>
-                <div data-tour="client-detail-status">
+              <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:items-center">
+                <div data-tour="client-detail-status" className="sm:mr-auto">
                   {client.active ? (
                     <Button
                       type="button"
                       variant="ghost"
                       onClick={() => setDeactivateTarget(client)}
                       disabled={deactivating}
-                      className="min-h-11 w-full sm:w-auto"
+                      className="min-h-11 w-full text-danger hover:bg-danger/10 sm:w-auto"
                       data-testid="client-edit-deactivate"
                     >
                       {t("femme.clients.deactivate")}
@@ -926,6 +1041,16 @@ export default function ClientDetailPage() {
                     </Button>
                   )}
                 </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => navigate("/app/clients")}
+                  disabled={saving}
+                  className="min-h-11"
+                  data-testid="client-edit-cancel"
+                >
+                  {t("femme.clients.cancel")}
+                </Button>
                 <Button
                   type="button"
                   onClick={() => void saveClient()}
