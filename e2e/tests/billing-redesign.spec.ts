@@ -423,6 +423,47 @@ test.describe("Facturación rediseñada · historial", () => {
     await expect(rows).toHaveCount(1);
   });
 
+  test("RD-19 el chip 'Needs attention' lista solo las facturas rechazadas por SIFEN", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(90_000);
+    const token = await prepare(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const stamp = Date.now();
+    const okName = `E2E RD19 OK ${stamp}`;
+    const rejectedName = `E2E RD19 RECHAZADA ${stamp}`;
+    await seedInvoice(request, token, seed.serviceId, seed.serviceFullName, okName);
+    const rejected = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: null,
+      clientDisplayName: rejectedName,
+      email: "rd19@example.com",
+      lines: [{ serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 55_000 }],
+      payments: [{ method: "CASH", amount: 55_000 }],
+    });
+    const rej = await request.post(
+      `${API_BASE}/api/admin/sifen-test-support/invoices/${rejected.id}/simulate-sifen-rejection`,
+    );
+    expect(rej.ok(), await rej.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, "E2E RD19");
+    const rows = page.locator('[data-testid^="invoice-history-row-"]');
+    await expect(rows).toHaveCount(2);
+
+    await page.getByTestId("invoice-history-status-ATTENTION").click();
+    await expect(page.getByTestId("invoice-history-status-ATTENTION")).toHaveAttribute("aria-pressed", "true");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(rejectedName);
+    await expect(rows.first().locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "attention");
+    await expect(page.getByTestId(`invoice-row-correct-resend-${rejected.id}`)).toBeVisible();
+
+    await page.getByTestId("invoice-history-status-all").click();
+    await expect(rows).toHaveCount(2);
+  });
+
   test("RD-16 fechas bajo 'Filtros' y reporte bajo el menú '⋯'", async ({ page, request }) => {
     await prepare(request);
     await loginAsDemo(page);

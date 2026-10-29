@@ -31,7 +31,12 @@ versión *lite* de smartphones y tablets.
 | Requiere atención | SIFEN rechazada (muestra **Corregir y reenviar**) |
 | Anulada | `VOIDED` o SIFEN cancelada |
 
-El detalle técnico de SIFEN sigue en el diálogo de la factura (`InvoiceDetailModal`, sin cambios).
+El historial filtra por estado con chips (**Todas / Emitidas / Requieren atención / Anuladas**). Para el chip
+**Requieren atención**, `GET /api/invoices` y `GET /api/invoices/report` aceptan `status=ATTENTION`: una
+factura emitida (`ISSUED`) que SIFEN rechazó (`REJECTED`). La traducción vive en
+`InvoiceService.resolveStatusFilter`, que usan el listado y el reporte.
+
+El detalle técnico de SIFEN sigue en el diálogo de la factura (`InvoiceDetailModal`, sin cambios por ahora).
 
 ## Reglas de negocio que se conservan
 
@@ -53,10 +58,6 @@ El detalle técnico de SIFEN sigue en el diálogo de la factura (`InvoiceDetailM
 
 ## Diferencias respecto a la maqueta aprobada
 
-- El historial no tiene el chip **Requieren atención**: el listado del backend filtra solo por
-  `ISSUED` / `VOIDED`. Las facturas rechazadas se distinguen por su estado y por el botón
-  **Corregir y reenviar**, y el inicio cuenta cuántas de hoy requieren atención. Filtrar por ese
-  estado necesita un parámetro nuevo en `GET /api/invoices`.
 - La pantalla de éxito ofrece **Descargar PDF**, **+ Nueva factura** y **Volver al inicio**. El envío
   por email no está: hoy solo existe dentro del diálogo de la factura.
 - El correo del cliente se muestra en el paso 2 (no en "Más opciones") porque es obligatorio con SIFEN.

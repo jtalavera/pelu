@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -935,7 +936,7 @@ class InvoiceServiceTest {
     neverSubmitted.setIssuedAt(Instant.now());
 
     when(invoiceRepository.findByTenantWithFiltersPaged(
-            eq(1L), any(), any(), any(), any(), any(), any(), any()))
+            eq(1L), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of(submitted, neverSubmitted)));
     when(invoiceRepository.sumIssuedTotalWithFilters(eq(1L), any(), any(), any(), any(), any()))
         .thenReturn(BigDecimal.ZERO);
@@ -966,12 +967,75 @@ class InvoiceServiceTest {
             SifenSubmissionStatus.APPROVED,
             1,
             1);
-    when(invoiceRepository.findReportRows(eq(1L), any(), any(), any(), any(), any(), any(), any()))
+    when(invoiceRepository.findReportRows(
+            eq(1L), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(List.of(row));
 
     var result = invoiceService.listInvoicesForReport(1L, null, null, null, "ISSUED", null);
 
     assertThat(result).containsExactly(row);
+  }
+
+  @Test
+  void resolveStatusFilter_mapsEachFilterValueToItsStatuses() {
+    assertThat(InvoiceService.resolveStatusFilter("ISSUED"))
+        .isEqualTo(new InvoiceService.StatusFilter(InvoiceStatus.ISSUED, null));
+    assertThat(InvoiceService.resolveStatusFilter(" voided "))
+        .isEqualTo(new InvoiceService.StatusFilter(InvoiceStatus.VOIDED, null));
+    // "Needs attention": an issued invoice SIFEN rejected.
+    assertThat(InvoiceService.resolveStatusFilter("attention"))
+        .isEqualTo(
+            new InvoiceService.StatusFilter(InvoiceStatus.ISSUED, SifenSubmissionStatus.REJECTED));
+    assertThat(InvoiceService.resolveStatusFilter(null))
+        .isEqualTo(new InvoiceService.StatusFilter(null, null));
+    assertThat(InvoiceService.resolveStatusFilter(""))
+        .isEqualTo(new InvoiceService.StatusFilter(null, null));
+    assertThat(InvoiceService.resolveStatusFilter("NOPE"))
+        .isEqualTo(new InvoiceService.StatusFilter(null, null));
+  }
+
+  @Test
+  void listInvoices_attentionFilterQueriesIssuedInvoicesSifenRejected() {
+    when(invoiceRepository.findByTenantWithFiltersPaged(
+            eq(1L), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(invoiceRepository.sumIssuedTotalWithFilters(eq(1L), any(), any(), any(), any(), any()))
+        .thenReturn(BigDecimal.ZERO);
+
+    invoiceService.listInvoices(1L, null, null, null, "ATTENTION", null, 0, 10);
+
+    verify(invoiceRepository)
+        .findByTenantWithFiltersPaged(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            eq(InvoiceStatus.ISSUED),
+            eq(SifenSubmissionStatus.REJECTED),
+            any(),
+            any(),
+            any());
+  }
+
+  @Test
+  void listInvoicesForReport_attentionFilterMatchesTheListFilter() {
+    when(invoiceRepository.findReportRows(
+            eq(1L), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(List.of());
+
+    invoiceService.listInvoicesForReport(1L, null, null, null, "ATTENTION", null);
+
+    verify(invoiceRepository)
+        .findReportRows(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            eq(InvoiceStatus.ISSUED),
+            eq(SifenSubmissionStatus.REJECTED),
+            any(),
+            any(),
+            any());
   }
 
   @Test
