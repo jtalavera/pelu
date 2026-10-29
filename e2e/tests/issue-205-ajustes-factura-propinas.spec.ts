@@ -108,7 +108,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("AC5 · el detalle del comprobante abre en la solapa Factura; el estado SIFEN está en la solapa SIFEN", async ({
+  test("AC5 · el detalle del comprobante es una sola vista; el estado SIFEN está en «Detalle técnico»", async ({
     page,
     request,
   }) => {
@@ -126,10 +126,11 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await loginAsDemo(page);
     await openInvoiceDetail(page, clientDisplayName);
 
-    // The detail opens on its "Invoice" tab: the SIFEN status (and its message) lives in the
-    // "SIFEN" tab, rendered but hidden until that tab is selected.
+    // Redesign: the detail is one view. The SIFEN status (and its message history) lives in the
+    // "Technical detail" panel behind "⋯", closed until the user opens it.
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByTestId("invoice-detail-tab-invoice")).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByTestId("invoice-detail-view")).toBeVisible();
+    await expect(dialog.getByRole("tab")).toHaveCount(0);
     await expect(page.getByTestId("sifen-tab-status")).toBeHidden();
     await expect(page.getByTestId("sifen-history-button")).toBeHidden();
 

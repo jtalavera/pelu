@@ -36,7 +36,23 @@ El historial filtra por estado con chips (**Todas / Aprobadas / Requieren atenci
 factura emitida (`ISSUED`) que SIFEN rechazó (`REJECTED`). La traducción vive en
 `InvoiceService.resolveStatusFilter`, que usan el listado y el reporte.
 
-El detalle técnico de SIFEN sigue en el diálogo de la factura (`InvoiceDetailModal`, sin cambios por ahora).
+## Detalle de la factura (`components/InvoiceDetailModal.tsx`)
+
+Una sola vista, sin pestañas:
+
+1. Encabezado: cliente, fecha, total y el estado simple.
+2. Si SIFEN rechazó la factura, la sección **Resolver factura rechazada** (motivo, **Corregir y reenviar**,
+   **Anular**) va arriba. Si está en proceso, una nota avisa que se actualiza sola.
+3. Ítems (con su descuento debajo, si lo hay), totales y pagos.
+4. Acciones: la principal (**Descargar KuDE** o **Descargar PDF**), **Compartir** (correo / WhatsApp) como
+   botón propio y **⋯ Más acciones**.
+5. En **⋯**: Anular factura, Cancelar en SIFEN, Revalidar en SIFEN, Identificar cliente, Asignar
+   profesionales, Descargar muestra (estilo producción, solo en el ambiente de prueba) y **Detalle técnico**
+   (timbrado, estado SIFEN real, CDC, protocolo, mensajes y contenido del documento).
+
+Cada opción abre su panel debajo de las acciones (pueden estar varios abiertos). Los formularios y las reglas de
+SIFEN son los de siempre; solo cambió dónde viven. Un helper de e2e abre todos los paneles a la vez
+(`openInvoiceSifenTab`) y `clickInvoiceMenuItem` elige una opción del menú.
 
 ## Reglas de negocio que se conservan
 

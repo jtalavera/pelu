@@ -125,19 +125,33 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    // The detail is split in two tabs: "Invoice" (the invoice data, down to the KuDE download)
-    // opens first; everything SIFEN lives in the second, "SIFEN" tab.
+    // Redesign: the detail is one view — no tabs. The KuDE download is its primary action, "Share"
+    // is its own button and every other SIFEN function is behind "⋯" (nothing is open by default).
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByTestId("invoice-detail-tab-invoice")).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByTestId("invoice-detail-view")).toBeVisible();
+    await expect(dialog.getByRole("tab")).toHaveCount(0);
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
-    await expect(page.getByTestId("sifen-status-section")).toBeHidden();
+    await expect(page.getByTestId("invoice-share-button")).toBeVisible();
+    await expect(page.getByTestId("sifen-tab-status")).toBeHidden();
+
+    await dialog.getByTestId("invoice-more-actions-button").click();
+    for (const id of [
+      "invoice-menu-technical-detail",
+      "invoice-menu-revalidate",
+      "invoice-menu-cancel-sifen",
+      "invoice-menu-identify",
+    ]) {
+      await expect(dialog.getByTestId(id)).toBeVisible();
+    }
+    await dialog.getByTestId("invoice-more-actions-button").click(); // close the menu
 
     await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
     await expect(section.getByText("Approved", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("sifen-kude-download-button")).toBeHidden();
+    // The primary action stays available while the panels are open.
+    await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 
-    // No accordion anymore: every SIFEN section for this invoice (approved, verification URL,
+    // No accordion: every SIFEN section for this invoice (approved, verification URL,
     // client-identification eligible) is laid out at once, its content visible without any click.
     await expect(section.locator("details")).toHaveCount(0);
     for (const id of [
@@ -156,7 +170,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
   });
 
-  test("Solapa SIFEN · las secciones se ordenan estado → compartir → revalidar → cancelar → identificar, cada una con su título", async ({
+  test("Paneles SIFEN · se ordenan compartir → revalidar → cancelar → identificar → detalle técnico (estado), cada uno con su título", async ({
     page,
     request,
   }) => {
@@ -201,11 +215,11 @@ test.describe("Issue #161 · Ajustes varios", () => {
 
     // Each section is a titled block: status first (with its badge), then the actions, in this order.
     const order = [
-      ["sifen-tab-status", "SIFEN status"],
       ["sifen-tab-email", "Share KuDE by email or WhatsApp"],
       ["sifen-tab-revalidate", "Revalidate in SIFEN"],
       ["sifen-tab-cancel", "Cancel invoice in SIFEN"],
       ["sifen-tab-identify", "Identify client"],
+      ["sifen-tab-status", "SIFEN status"],
     ] as const;
     let previousY = -1;
     for (const [id, title] of order) {

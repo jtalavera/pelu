@@ -123,24 +123,17 @@ test.describe("HU-30 · Fixes varios", () => {
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible({ timeout: 15_000 });
 
-    // AC-3: Two new split column headers replace the old "Item Discount" single column
-    await expect(modal.getByText("Discount Type")).toBeVisible();
-    await expect(modal.getByText("Discount Value")).toBeVisible();
-    // Old unified header should no longer exist
-    await expect(modal.getByText("Item Discount", { exact: true })).toHaveCount(0);
-
-    // PERCENT line: Tipo Dto. = "10%", Valor Dto. = "1.000" (dot-separator, no decimals)
-    await expect(modal.getByText("10%")).toBeVisible();
-    await expect(modal.getByText("1.000")).toBeVisible();
-
-    // FIXED line: Tipo Dto. = "Fixed amount", Valor Dto. = "500" (no thousands sep needed).
-    // Exact match avoids also matching "4.500" / "13.500" elsewhere in the modal.
-    await expect(modal.getByText("Fixed amount")).toBeVisible();
-    await expect(modal.getByText("500", { exact: true })).toBeVisible();
+    // AC-3 (redesign): the item list has no column headers; each discounted line states its
+    // discount type and amount under its name — percent and fixed are told apart.
+    await expect(modal.getByRole("columnheader")).toHaveCount(0);
+    // PERCENT line: "Discount: 10% (−1.000)"
+    await expect(modal.getByText(/Discount: 10% \(−1\.000\)/)).toBeVisible();
+    // FIXED line: "Discount: Fixed amount (−500)"
+    await expect(modal.getByText(/Discount: Fixed amount \(−500\)/)).toBeVisible();
 
     // AC-4: "Invoice discount" label (not plain "Discount")
     await expect(modal.getByText("Invoice discount")).toBeVisible();
-    // "Discount" alone should NOT appear as a standalone label
+    // "Discount" alone should NOT appear as a standalone label for the invoice-level discount
     const discountRows = modal.getByText("Discount", { exact: true });
     await expect(discountRows).toHaveCount(0);
   });

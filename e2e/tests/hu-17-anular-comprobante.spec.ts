@@ -7,7 +7,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
+import { clickInvoiceMenuItem, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe("HU-17 · Anular comprobante", () => {
@@ -47,7 +47,7 @@ test.describe("HU-17 · Anular comprobante", () => {
 
     await goToInvoiceHistory(page);
     await page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first().click();
-    await page.getByRole("button", { name: "Void invoice" }).click();
+    await clickInvoiceMenuItem(page, "invoice-menu-void");
     await expect(page.locator("#void-reason")).toBeVisible();
     await page.getByRole("button", { name: "Confirm void" }).click();
     await expect(page.getByText("Enter a reason.", { exact: true })).toBeVisible();
@@ -102,7 +102,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     // Total in history table must use dot separator, no decimals
     await expect(clientRow).toContainText("3.000");
     await clientRow.click();
-    await page.getByRole("button", { name: "Void invoice" }).click();
+    await clickInvoiceMenuItem(page, "invoice-menu-void");
     await page.locator("#void-reason").fill("Wrong amount");
     const [voidRes2] = await Promise.all([
       page.waitForResponse(

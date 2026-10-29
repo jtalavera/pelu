@@ -99,10 +99,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
       .filter({ visible: true });
     await expect(rejectedRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toBeVisible();
     await rejectedRow.click();
-    // An unresolved rejection flags the "SIFEN" tab, where the "resolve" section lives.
-    await expect(page.getByTestId("invoice-detail-tab-sifen-attention")).toBeVisible();
-    await openInvoiceSifenTab(page);
+    // Redesign: an unresolved rejection puts the "resolve" section on top of the detail, no menu needed.
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toBeVisible();
+    await expect(page.getByRole("dialog").getByTestId("invoice-detail-processing-note")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
@@ -115,7 +114,6 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await expect(okRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(0);
     await okRow.click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByTestId("invoice-detail-tab-sifen-attention")).toHaveCount(0);
     await openInvoiceSifenTab(page);
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toHaveCount(0);
   });

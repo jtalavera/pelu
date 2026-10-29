@@ -1792,7 +1792,7 @@ export function InvoiceDetailModal({
                         <span className="text-ink-3">× {l.quantity}</span>
                         {off && (
                           <span className="block text-xs text-ink-3">
-                            {t("femme.billing.history.detail.discount")}:{" "}
+                            {t("femme.billing.history.detail.lineDiscount")}:{" "}
                             {discountTypeLabel(l.discountType ?? "", l.discountValue ?? null) === "FIXED"
                               ? t("femme.billing.history.detail.fixedAmount")
                               : discountTypeLabel(l.discountType ?? "", l.discountValue ?? null)}{" "}
@@ -1924,45 +1924,46 @@ export function InvoiceDetailModal({
                 >
                   ⋯
                 </Button>
-                {menuOpen && (
-                  <ul
-                    role="menu"
-                    data-testid="invoice-more-actions-menu"
-                    className="absolute left-0 top-full z-20 mt-1 min-w-64 rounded-md border border-line bg-surface py-1 shadow-lg"
-                  >
-                    {menuItems.map((item) => (
-                      <li key={item.key} role="none">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          data-testid={item.testId}
-                          aria-pressed={item.active === undefined ? undefined : item.active}
-                          disabled={item.disabled}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            item.onSelect();
-                          }}
-                          className="block min-h-11 w-full px-3 py-2 text-left text-sm hover:bg-primary-lt disabled:opacity-50"
-                        >
-                          {item.label}
-                          {item.hint && (
-                            <span
-                              data-testid="sifen-kude-sample-hint"
-                              className="block text-xs text-ink-3"
-                            >
-                              {item.hint}
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
               <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
                 {t("femme.billing.history.detail.close")}
               </Button>
             </div>
+
+            {menuOpen && (
+              <ul
+                role="menu"
+                data-testid="invoice-more-actions-menu"
+                className="rounded-md border border-line bg-surface py-1"
+              >
+                {menuItems.map((item) => (
+                  <li key={item.key} role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid={item.testId}
+                      aria-pressed={item.active === undefined ? undefined : item.active}
+                      disabled={item.disabled}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        item.onSelect();
+                      }}
+                      className="block min-h-11 w-full px-3 py-2 text-left text-sm hover:bg-primary-lt disabled:opacity-50"
+                    >
+                      {item.label}
+                      {item.hint && (
+                        <span
+                          data-testid="sifen-kude-sample-hint"
+                          className="block text-xs text-ink-3"
+                        >
+                          {item.hint}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {/* Panels (the container keeps the testid the SIFEN specs already use) */}
             {wrapPanels(
@@ -2008,8 +2009,8 @@ export function InvoiceDetailModal({
               </form>
             )}
 
-            {openPanels.has("cancel") && cancelAvailable && sifenSections?.cancel}
             {openPanels.has("revalidate") && revalidateAvailable && sifenSections?.revalidate}
+            {openPanels.has("cancel") && cancelAvailable && sifenSections?.cancel}
             {openPanels.has("identify") && identifyAvailable && sifenSections?.identify}
 
             {openPanels.has("tech") && (

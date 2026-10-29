@@ -1631,6 +1631,7 @@
         "viewDetail": "Ver",
         "openDetail": "Abrir comprobante #{{invoiceNumber}}",
         "detail": {
+          "lineDiscount": "Descuento",
           "share": "Compartir",
           "moreActions": "Más acciones",
           "technicalDetail": "Detalle técnico",

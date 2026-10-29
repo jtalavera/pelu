@@ -167,9 +167,13 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    // The detail is split in tabs (SIFEN data in its own tab); the KuDE download is on the
-    // default "Invoice" tab.
-    await expect(page.getByTestId("invoice-detail-tab-sifen")).toBeVisible();
+    // Redesign: one view — the KuDE download is its primary action, and the SIFEN data lives in
+    // the "Technical detail" panel behind "⋯".
+    await expect(page.getByTestId("invoice-detail-view")).toBeVisible();
+    await expect(page.getByTestId("invoice-menu-technical-detail")).toHaveCount(0);
+    await page.getByTestId("invoice-more-actions-button").click();
+    await expect(page.getByTestId("invoice-menu-technical-detail")).toBeVisible();
+    await page.getByTestId("invoice-more-actions-button").click(); // close the menu again
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
     await expect(
       page.getByRole("dialog").getByRole("button", { name: "Download PDF" }),

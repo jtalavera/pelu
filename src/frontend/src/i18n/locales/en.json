@@ -1631,6 +1631,7 @@
         "viewDetail": "View",
         "openDetail": "Open invoice #{{invoiceNumber}}",
         "detail": {
+          "lineDiscount": "Discount",
           "share": "Share",
           "moreActions": "More actions",
           "technicalDetail": "Technical detail",
