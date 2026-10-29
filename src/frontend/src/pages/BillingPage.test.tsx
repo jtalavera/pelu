@@ -323,7 +323,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
 
       expect(await screen.findByText("0000001")).toBeTruthy();
       expect(screen.getAllByText("0000002").length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/^issued$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^approved$/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/^voided$/i).length).toBeGreaterThan(0);
     });
   });

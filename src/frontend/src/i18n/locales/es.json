@@ -1411,7 +1411,7 @@
         "closedTitle": "La caja está cerrada"
       },
       "state": {
-        "issued": "Emitida",
+        "issued": "Aprobada",
         "processing": "En proceso",
         "attention": "Requiere atención",
         "voided": "Anulada"
@@ -1631,6 +1631,10 @@
         "viewDetail": "Ver",
         "openDetail": "Abrir comprobante #{{invoiceNumber}}",
         "detail": {
+          "share": "Compartir",
+          "moreActions": "Más acciones",
+          "technicalDetail": "Detalle técnico",
+          "processingNote": "Se está enviando a SIFEN. Esta pantalla se actualiza sola.",
           "title": "Comprobante #{{number}}",
           "loading": "Cargando…",
           "loadError": "No se pudo cargar el comprobante.",

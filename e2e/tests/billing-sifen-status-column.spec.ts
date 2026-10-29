@@ -15,7 +15,7 @@ import { goToBillingHome, goToInvoiceHistory, searchInvoiceHistory } from "../fi
 // sifen-hu-07/08/09/10 specs). The lists also carry that information: the client detail page's
 // invoice list keeps its "SIFEN status" column, while the redesigned Billing lists (today's
 // invoices on the home, and the History) fold the invoice status and the SIFEN status into one
-// plain-language state (Issued / In progress / Needs attention / Voided).
+// plain-language state (Approved / In progress / Needs attention / Voided).
 //
 // Reuses the same test-only /api/admin/sifen-test-support fabrication pattern those specs already
 // established (gated behind femme.data-init.enabled, only active in the e2e profile) to put an
@@ -87,7 +87,7 @@ test.describe("Estado SIFEN en las listas de facturas", () => {
       .filter({ visible: true });
     await expect(todayRow).toBeVisible({ timeout: 30_000 });
     await expect(todayRow.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "issued");
-    await expect(todayRow.getByText("Issued", { exact: true })).toBeVisible();
+    await expect(todayRow.getByText("Approved", { exact: true })).toBeVisible();
 
     // History — same invoice, same state.
     await goToInvoiceHistory(page);
@@ -97,7 +97,7 @@ test.describe("Estado SIFEN en las listas de facturas", () => {
       .filter({ visible: true });
     await expect(historyRow).toBeVisible({ timeout: 30_000 });
     await expect(historyRow.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "issued");
-    await expect(historyRow.getByText("Issued", { exact: true })).toBeVisible();
+    await expect(historyRow.getByText("Approved", { exact: true })).toBeVisible();
   });
 
   test("an invoice queued for SIFEN submission shows as In progress", async ({
@@ -138,7 +138,7 @@ test.describe("Estado SIFEN en las listas de facturas", () => {
     await expect(row.getByText("In progress", { exact: true })).toBeVisible();
   });
 
-  test("an invoice never submitted to SIFEN shows as Issued, with no SIFEN sent date", async ({
+  test("an invoice never submitted to SIFEN shows as Approved, with no SIFEN sent date", async ({
     page,
     request,
   }) => {

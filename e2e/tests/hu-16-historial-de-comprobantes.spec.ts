@@ -99,7 +99,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await expect(row.getByTestId("invoice-row-client")).toContainText(client.fullName);
     await expect(row.getByTestId("invoice-row-total")).toHaveText("5.000");
     await expect(row.getByTestId("invoice-row-method")).toHaveText("Cash");
-    await expect(row.locator("[data-invoice-state]")).toHaveText("Issued");
+    await expect(row.locator("[data-invoice-state]")).toHaveText("Approved");
   });
 
   test("HU-16 · 4 abrir la pestaña Historial siempre refresca la lista, sin recargar la página", async ({

@@ -167,6 +167,8 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await row.click();
 
     // The e2e backend connects to SIFEN's test environment, so the sample button is offered.
+    // Redesign: it lives in the "⋯" menu of the invoice detail.
+    await page.getByTestId("invoice-more-actions-button").click();
     const sampleButton = page.getByTestId("sifen-kude-sample-download-button");
     await expect(sampleButton).toBeVisible();
     await expect(page.getByTestId("sifen-kude-sample-hint")).toBeVisible();

@@ -153,7 +153,11 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await expect(page.getByRole("heading", { name: /Invoice #/ })).toBeVisible();
     await expect(page.getByTestId("sifen-status-section")).toHaveCount(0);
-    // Without SIFEN data there is nothing to split: no "Invoice" / "SIFEN" tabs at all.
-    await expect(page.getByTestId("invoice-detail-tab-sifen")).toHaveCount(0);
+    // Without SIFEN data there is nothing SIFEN to offer: no share panel, no SIFEN-only menu items.
+    await expect(page.getByTestId("invoice-share-button")).toHaveCount(0);
+    await page.getByTestId("invoice-more-actions-button").click();
+    await expect(page.getByTestId("invoice-menu-revalidate")).toHaveCount(0);
+    await expect(page.getByTestId("invoice-menu-cancel-sifen")).toHaveCount(0);
+    await expect(page.getByTestId("invoice-menu-technical-detail")).toBeVisible();
   });
 });

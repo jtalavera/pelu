@@ -26,12 +26,12 @@ versión *lite* de smartphones y tablets.
 
 | Estado | Cuándo |
 | --- | --- |
-| Emitida | `ISSUED` sin SIFEN, o SIFEN aprobada / aprobada con observación |
+| Aprobada | `ISSUED` sin SIFEN, o SIFEN aprobada / aprobada con observación |
 | En proceso | SIFEN en cola o pendiente de verificación |
 | Requiere atención | SIFEN rechazada (muestra **Corregir y reenviar**) |
 | Anulada | `VOIDED` o SIFEN cancelada |
 
-El historial filtra por estado con chips (**Todas / Emitidas / Requieren atención / Anuladas**). Para el chip
+El historial filtra por estado con chips (**Todas / Aprobadas / Requieren atención / Anuladas**). Para el chip
 **Requieren atención**, `GET /api/invoices` y `GET /api/invoices/report` aceptan `status=ATTENTION`: una
 factura emitida (`ISSUED`) que SIFEN rechazó (`REJECTED`). La traducción vive en
 `InvoiceService.resolveStatusFilter`, que usan el listado y el reporte.

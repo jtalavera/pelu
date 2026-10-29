@@ -1411,7 +1411,7 @@
         "closedTitle": "The cash register is closed"
       },
       "state": {
-        "issued": "Issued",
+        "issued": "Approved",
         "processing": "In progress",
         "attention": "Needs attention",
         "voided": "Voided"
@@ -1631,6 +1631,10 @@
         "viewDetail": "View",
         "openDetail": "Open invoice #{{invoiceNumber}}",
         "detail": {
+          "share": "Share",
+          "moreActions": "More actions",
+          "technicalDetail": "Technical detail",
+          "processingNote": "It is being sent to SIFEN. This screen updates on its own.",
           "title": "Invoice #{{number}}",
           "loading": "Loading…",
           "loadError": "Could not load invoice.",

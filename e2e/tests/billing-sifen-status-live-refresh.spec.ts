@@ -100,7 +100,7 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
       message: "Autorización del DE satisfactoria",
     });
 
-    await expect(row.getByText("Issued", { exact: true })).toBeVisible({
+    await expect(row.getByText("Approved", { exact: true })).toBeVisible({
       timeout: LIVE_UPDATE_TIMEOUT,
     });
   });
@@ -152,7 +152,7 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
 
     await supportPost(request, `/invoices/${invoiceId}/prepare-with-status/APPROVED`);
 
-    await expect(row.getByText("Issued", { exact: true })).toBeVisible({
+    await expect(row.getByText("Approved", { exact: true })).toBeVisible({
       timeout: LIVE_UPDATE_TIMEOUT,
     });
   });

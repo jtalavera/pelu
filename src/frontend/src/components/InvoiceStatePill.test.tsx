@@ -27,7 +27,7 @@ describe("InvoiceStatePill", () => {
   });
 
   it.each([
-    [{ status: "ISSUED", sifenSubmissionStatus: "APPROVED" }, "Issued"],
+    [{ status: "ISSUED", sifenSubmissionStatus: "APPROVED" }, "Approved"],
     [{ status: "ISSUED", sifenSubmissionStatus: "QUEUED" }, "In progress"],
     [{ status: "ISSUED", sifenSubmissionStatus: "REJECTED" }, "Needs attention"],
     [{ status: "VOIDED" }, "Voided"],

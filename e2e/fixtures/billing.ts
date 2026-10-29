@@ -123,18 +123,51 @@ export async function ensureCashSessionOpen(page: Page) {
 }
 
 /**
- * Switches the open invoice detail modal to its "SIFEN" tab, where every SIFEN detail and action
- * lives (status, message history, KuDE sharing, revalidate, cancel, identify client…). The
- * "Invoice" tab — shown first — holds the invoice data plus the KuDE download / assign-professional
- * buttons.
+ * Billing redesign: the invoice detail is one view. Its secondary actions live behind the "⋯" menu
+ * (void, cancel in SIFEN, revalidate, identify client, assign professionals, sample KuDE,
+ * technical detail) and "Share" is its own button.
+ *
+ * Opens the "⋯" menu of the open invoice detail and picks the item with this test id.
  */
-export async function openInvoiceSifenTab(page: Page) {
-  await page.getByRole("dialog").getByTestId("invoice-detail-tab-sifen").click();
-  await expect(page.getByTestId("sifen-status-section")).toBeVisible();
+export async function clickInvoiceMenuItem(page: Page, testId: string) {
+  const dialog = page.getByRole("dialog").last();
+  await dialog.getByTestId("invoice-more-actions-button").click();
+  await dialog.getByTestId(testId).click();
 }
 
-/** Switches the open invoice detail modal back to its first ("Invoice") tab. */
+/**
+ * Opens (when the invoice offers it) every panel that used to live in the "SIFEN" tab: the share
+ * panel (KuDE by email / WhatsApp), the technical detail (status, control number, history), and
+ * the revalidate / cancel / identify-client panels. Several panels can be open at once, so this
+ * leaves the detail looking like the old tab: every SIFEN control visible.
+ */
+export async function openInvoiceSifenTab(page: Page) {
+  const dialog = page.getByRole("dialog").last();
+  await expect(dialog.getByTestId("invoice-detail-view")).toBeVisible();
+  const share = dialog.getByTestId("invoice-share-button");
+  if ((await share.count()) > 0 && (await share.getAttribute("aria-expanded")) !== "true") {
+    await share.click();
+  }
+  const more = dialog.getByTestId("invoice-more-actions-button");
+  for (const id of [
+    "invoice-menu-technical-detail",
+    "invoice-menu-revalidate",
+    "invoice-menu-cancel-sifen",
+    "invoice-menu-identify",
+  ]) {
+    await more.click();
+    const item = dialog.getByTestId(id);
+    if ((await item.count()) > 0 && (await item.getAttribute("aria-pressed")) !== "true") {
+      await item.click();
+    } else {
+      await more.click(); // nothing to open here: close the menu again
+    }
+  }
+  await expect(dialog.getByTestId("invoice-detail-technical")).toBeVisible();
+  await expect(dialog.getByTestId("sifen-tab-status")).toBeVisible();
+}
+
+/** The invoice detail has a single view now: this only checks it is the one showing. */
 export async function openInvoiceMainTab(page: Page) {
-  await page.getByRole("dialog").getByTestId("invoice-detail-tab-invoice").click();
-  await expect(page.getByTestId("invoice-detail-panel-invoice")).toBeVisible();
+  await expect(page.getByTestId("invoice-detail-view")).toBeVisible();
 }

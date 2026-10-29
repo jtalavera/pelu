@@ -102,7 +102,7 @@ test.describe("Facturación rediseñada · inicio", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toContainText(name);
-    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toContainText("Issued");
+    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toContainText("Approved");
     await expect(page.getByRole("button", { name: "View full history" })).toBeVisible();
 
     await toggle.click();
@@ -491,7 +491,7 @@ test.describe("Facturación rediseñada · historial", () => {
     await searchInvoiceHistory(page, name);
 
     const row = page.getByTestId(`invoice-history-row-${inv.id}`);
-    await expect(row).toContainText("Issued");
+    await expect(row).toContainText("Approved");
     await expect(row.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "issued");
     // The technical SIFEN badge is no longer part of the list (it stays in the invoice detail).
     await expect(row).not.toContainText("Pending verification");
