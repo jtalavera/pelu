@@ -7,6 +7,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToInvoiceHistory } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 
@@ -33,7 +34,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History", exact: true }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#service-record-history-text-filter").fill(client.fullName);
     // Issue #186 · AC2 — the whole row opens the detail; there is no "View" button anymore.
     const historyRow = page

@@ -16,6 +16,7 @@ import {
   snapshotTenant,
 } from "../../fixtures/mt/probe";
 import { getMtWorld, mtLoginToken } from "../../fixtures/mt/world";
+import { goToInvoiceHistory } from "../../fixtures/billing";
 
 /**
  * Task 7 — mt-ficha-propinas: service sheet (ficha de servicio) & tips (propinas) isolation.

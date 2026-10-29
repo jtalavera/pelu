@@ -12,6 +12,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToBillingHome } from "../fixtures/billing";
 
 const nodeRequire = createRequire(import.meta.url);
 const pdfParse = nodeRequire("pdf-parse/lib/pdf-parse.js") as (
@@ -100,7 +101,7 @@ test.describe("Issue #198 · Ajustes mínimos", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
 
     const row = page.getByTestId(`billing-today-row-${inv.id}`);
     await expect(row).toBeVisible({ timeout: 20_000 });

@@ -11,7 +11,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 // HU-33 "Ajustes varios a facturación electrónica" — three fixes, all conditioned on the tenant's
@@ -89,7 +89,7 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
       }
     });
 
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -98,7 +98,7 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
     await page.locator("#billing-client-email").fill("hu33-kude@example.com");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     // Real SIFEN endpoint is unreachable in e2e (application-e2e.properties → discard port), so
     // this freshly-issued invoice lands PENDING_VERIFICATION — never auto-approved, same as
     // sifen-hu-22-activacion-por-tenant.spec.ts's own "AC-04/AC-06/AC-07" test.
@@ -158,10 +158,10 @@ test.describe("HU-33 · Ajustes varios a facturación electrónica", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
     const row = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });

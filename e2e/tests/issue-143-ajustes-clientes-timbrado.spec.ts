@@ -12,7 +12,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 
@@ -43,7 +43,7 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
     await expect(page.getByRole("button", { name: client.fullName })).toHaveCount(0);
@@ -206,7 +206,7 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     await loginAsDemo(page);
     await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History", exact: true }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#service-record-history-text-filter").fill(client.fullName);
     await page
       .locator('tbody tr[role="button"]')

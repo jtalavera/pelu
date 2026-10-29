@@ -9,7 +9,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, openMoreOptions } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 import { ensureCalendarShowsAppointmentByTestId, pickSearchableOption } from "../fixtures/ui";
 
@@ -196,23 +196,21 @@ test.describe("HU-28 · Fixes varios", () => {
     await ensureCashSessionOpen(page);
     await page.goto("/app/billing");
     // Click "New Invoice" inside the Cash Register tab
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible({ timeout: 5_000 });
-    // Wait for the form
-    const form = page.locator("[data-testid='new-invoice-form'], form").first();
-    // Fill the first line
-    const priceInput = page.locator("[id^='line-price-']").first();
+    // The price and the per-item discount belong to an item row, so pick an item first.
+    const seed = await seedCategoryServiceProfessional(request, token);
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    const priceInput = page.locator("#line-price-0");
     await priceInput.fill("100000");
-    // Enable discount for first line
-    const discountToggle = page.locator("[id^='line-disc-toggle-']").first();
-    await discountToggle.check();
+    // Per-item discount lives in "More options"; enable it for the first line.
+    await openMoreOptions(page);
+    await page.locator("#line-disc-toggle-0").check();
     // Fill 10% discount
-    const discountValueInput = page.locator("[id^='line-disc-val-']").first();
-    await discountValueInput.fill("10");
+    await page.locator("#line-disc-val-0").fill("10");
     // Line total should reflect 90000 (100000 - 10%)
-    const lineTotal = page.locator(".tabular-nums").first();
-    await expect(lineTotal).toContainText("90.000");
+    await expect(page.getByTestId("line-total-0")).toContainText("90.000");
   });
 
   // AC9 — Billing: submit scrolls/focuses first invalid field
@@ -227,7 +225,7 @@ test.describe("HU-28 · Fixes varios", () => {
     await ensureCashSessionOpen(page);
     await page.goto("/app/billing");
     // Click "New Invoice" inside the Cash Register tab
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     // The submit button is disabled until client+item+payment are filled (tested in HU-14.13).
     // Trigger form submit programmatically to verify the validation-focus behavior.

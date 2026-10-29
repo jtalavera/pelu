@@ -10,6 +10,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
+import { goToInvoiceHistory } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 
@@ -145,7 +146,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History", exact: true }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#service-record-history-text-filter").fill(client.fullName);
     await page
       .locator('tbody tr[role="button"]')

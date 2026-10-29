@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openInvoiceMainTab, openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceMainTab, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -76,9 +76,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    let row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    let row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -98,9 +98,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     expect(prep.ok(), await prep.text()).toBeTruthy();
 
     await page.reload();
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -160,9 +160,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -218,9 +218,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -279,9 +279,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -321,9 +321,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -399,9 +399,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -513,9 +513,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -589,9 +589,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
       await loginAsDemo(page);
       await page.goto("/app/billing");
-      await page.getByRole("tab", { name: "History" }).click();
-      await page.locator("#invoice-history-text-filter").fill(client.fullName);
-      const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+      await goToInvoiceHistory(page);
+      await searchInvoiceHistory(page, client.fullName);
+      const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
       await expect(row).toBeVisible({ timeout: 30_000 });
       await row.click();
       await openInvoiceSifenTab(page);
@@ -740,9 +740,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -781,9 +781,9 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 

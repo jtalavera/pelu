@@ -8,6 +8,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { setControlledInputValue } from "../fixtures/ui";
+import { goToInvoiceHistory } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 

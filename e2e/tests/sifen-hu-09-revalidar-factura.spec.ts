@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -75,9 +75,9 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
 
   async function openInvoiceDetail(page: Page, clientFullName: string) {
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientFullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: clientFullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }

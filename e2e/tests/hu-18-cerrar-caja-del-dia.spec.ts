@@ -1,21 +1,21 @@
 import { expect, test } from "@playwright/test";
 import { API_BASE, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, openCashPanel } from "../fixtures/billing";
 import { setControlledInputValue } from "../fixtures/ui";
 
 test.describe("HU-18 · Cerrar caja del día", () => {
   test("botón para iniciar cierre de caja", async ({ page }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await openCashPanel(page);
     await expect(page.getByRole("button", { name: "Close cash register" })).toBeVisible();
   });
 
   test("HU-18 · 1 y 2 cierre con arqueo y resumen", async ({ page }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await openCashPanel(page);
     await page.getByRole("button", { name: "Close cash register" }).click();
     await page.getByLabel("Counted cash amount").fill("49900");
     await expect(page.getByLabel("Counted cash amount")).toHaveValue("49.900");
@@ -36,7 +36,7 @@ test.describe("HU-18 · Cerrar caja del día", () => {
   test("HU-18 · 3 diferencia sobregiro o faltante", async ({ page }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await openCashPanel(page);
     await page.getByRole("button", { name: "Close cash register" }).click();
     await setControlledInputValue(page.getByLabel("Counted cash amount"), "999999");
     await expect(page.getByLabel("Counted cash amount")).toHaveValue("999.999");

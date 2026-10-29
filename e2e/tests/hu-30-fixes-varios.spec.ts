@@ -9,7 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe.configure({ mode: "serial" });
@@ -34,7 +34,7 @@ test.describe("HU-30 · Fixes varios", () => {
     const client = await seedClient(request, token, `E2E HU30 Reset ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     // Fill the form
@@ -42,9 +42,11 @@ test.describe("HU-30 · Fixes varios", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("50000");
-    await page.locator("#pay-amount-0").fill("50000");
+    await fillPaymentAmount(page, "50000");
 
     await clickIssueInvoiceAndExpectSuccess(page);
+    // Redesign: a success screen follows the emission; "+ New invoice" goes back to the form.
+    await page.getByTestId("billing-success-new-invoice").click();
 
     // After emit, the client search field should be empty (remounted)
     await expect(page.getByLabel("Search or select client")).toHaveValue("");
@@ -53,6 +55,7 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(page.locator("#billing-line-svc-0")).toHaveValue("");
 
     // Payment amount reset
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("");
   });
 
@@ -111,13 +114,13 @@ test.describe("HU-30 · Fixes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.waitForResponse(
       (r) => r.url().includes("/api/invoices") && r.request().method() === "GET",
     );
 
     // Open the Ver modal for this invoice via the history tab
-    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
+    await page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first().click();
 
     // Wait for modal
     const modal = page.getByRole("dialog");
@@ -213,7 +216,7 @@ test.describe("HU-30 · Fixes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.waitForResponse((r) => r.url().includes("/api/invoices") && r.request().method() === "GET");
 
     // Table should be present (Clientes-style card). Billing keeps all tabs mounted
@@ -223,7 +226,7 @@ test.describe("HU-30 · Fixes varios", () => {
     });
 
     // Clicking a row opens the detail modal (issue #163: the standalone "View" button was removed)
-    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
+    await page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press("Escape");
   });

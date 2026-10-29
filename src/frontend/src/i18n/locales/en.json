@@ -1400,6 +1400,25 @@
       "body": "This area will be wired to the API in the next iteration."
     },
     "billing": {
+      "home": {
+        "today": "Today",
+        "invoiceCount_one": "{{count}} invoice",
+        "invoiceCount_other": "{{count}} invoices",
+        "attentionCount_one": "{{count}} needs attention",
+        "attentionCount_other": "{{count}} need attention",
+        "viewHistory": "View full history",
+        "viewHistoryShort": "View history",
+        "closedTitle": "The cash register is closed"
+      },
+      "state": {
+        "issued": "Issued",
+        "processing": "In progress",
+        "attention": "Needs attention",
+        "voided": "Voided"
+      },
+      "panel": {
+        "title": "Cash register"
+      },
       "title": "Billing",
       "lead": "Manage the daily cash register and issue invoices.",
       "pageSubtitle": "Manage the daily cash register and issue invoices.",
@@ -1447,6 +1466,19 @@
         "cashHistory": "Cash Sessions Log"
       },
       "invoice": {
+        "back": "Back",
+        "backToStart": "Back to start",
+        "noName": "No name",
+        "noNameHint": "Final consumer. Search a client above to identify them on the invoice.",
+        "stepItems": "What did you do?",
+        "stepClient": "Who is it for?",
+        "stepPayment": "How does the client pay?",
+        "splitPayment": "Split payment",
+        "singlePayment": "Single payment",
+        "moreOptions": "More options",
+        "moreOptionsHint": "date, discount, tips, professional",
+        "perItemOptions": "Discount and professional per item",
+        "summary": "Summary",
         "lineProfessional": "Professional / Seller",
         "lineProfessionalNone": "No professional",
         "lineNoCommission": "This line will not generate a commission.",
@@ -1554,6 +1586,16 @@
         "tipsEmpty": "Assign a professional to the service items to enter a tip for them."
       },
       "history": {
+        "screenTitle": "History",
+        "viewLabel": "History view",
+        "searchPlaceholder": "Search by client or number",
+        "searchPlaceholderCash": "Search cash sessions",
+        "filters": "Filters",
+        "moreActions": "More actions",
+        "view": {
+          "invoices": "Invoices",
+          "cash": "Cash sessions"
+        },
         "title": "Invoice history",
         "loading": "Loading…",
         "loadError": "Could not load invoices.",
@@ -2968,10 +3010,10 @@
       },
       "billing": {
         "header": { "title": "Billing", "content": "Manage your cash session here and issue invoices to clients." },
-        "session": { "title": "Session tabs", "content": "Switch between the active session, creating a new invoice, and the full invoice history." },
+        "session": { "title": "Cash register", "content": "See whether the register is open. Tap it to review the day, register cash movements or close the register." },
         "newInvoice": { "title": "New invoice", "content": "Opens the invoice form to charge a client for services rendered during this session." },
         "search": { "title": "Invoice search & filters", "content": "Search by client name or invoice number, and filter by date range or status." },
-        "invoiceList": { "title": "Invoice history", "content": "All issued invoices. Click 'View' on any row to see the full detail or void it." }
+        "invoiceList": { "title": "Invoice history", "content": "All issued invoices, each with a simple status. Click any row to see the full detail or void it." }
       },
       "clients": {
         "header": { "title": "Clients", "content": "Your complete client list. Use the search and filters to find any client quickly." },

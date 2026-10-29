@@ -5,7 +5,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { addPaymentMethodRow, choosePaymentMethod, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, showPaymentAmounts } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 test.describe("HU-15 · Múltiples métodos de pago", () => {
@@ -21,7 +21,7 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -29,9 +29,10 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");
-    await page.getByRole("button", { name: "Add payment method" }).click();
-    await page.locator("#pay-method-0").selectOption("CASH");
-    await page.locator("#pay-amount-0").fill("4000");
+    await addPaymentMethodRow(page);
+    await choosePaymentMethod(page, "CASH");
+    await fillPaymentAmount(page, "4000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("4.000");
     await page.locator("#pay-method-1").selectOption("TRANSFER");
     await page.locator("#pay-amount-1").fill("6000");
@@ -46,7 +47,7 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -54,7 +55,8 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");
-    await page.locator("#pay-amount-0").fill("5000");
+    await fillPaymentAmount(page, "5000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
     await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
@@ -68,7 +70,7 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -76,10 +78,11 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("20000");
     await expect(page.locator("#line-price-0")).toHaveValue("20.000");
-    await page.locator("#pay-amount-0").fill("5000");
+    await fillPaymentAmount(page, "5000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
     await expect(page.getByText("Remaining", { exact: true })).toBeVisible();
     // Amount formatted in es-PY locale: thousands separator ".", no decimals
-    await expect(page.locator("span").getByText("15.000", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Summary").getByText("15.000", { exact: true })).toBeVisible();
   });
 });

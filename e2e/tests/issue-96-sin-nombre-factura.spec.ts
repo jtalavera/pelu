@@ -10,7 +10,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import {
   clickIssueInvoiceAndExpectSuccess,
   pdfContainsText,
@@ -70,7 +70,7 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -83,7 +83,7 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     const pdf = await fetchInvoicePdf(request, token, issued.id);
@@ -104,12 +104,12 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     await ensurePaymentMethodChosen(page);
 
     // No client picked from the search field at all — button stays disabled until identified.

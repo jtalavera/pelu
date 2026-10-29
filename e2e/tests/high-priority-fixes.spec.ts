@@ -30,7 +30,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { choosePaymentMethod, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog } from "../fixtures/ui";
 
@@ -192,7 +192,7 @@ test("Issue #37 · warning RUC faltante en Nuevo comprobante (sin RUC)", async (
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The warning text must be visible on the new-invoice tab
@@ -211,7 +211,7 @@ test("Issue #37 · sin warning RUC cuando el salon tiene RUC configurado", async
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   await expect(
@@ -234,7 +234,7 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Select the client
@@ -248,7 +248,7 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
 
   await pickServiceLine(page, seed.serviceFullName, 0);
   await page.locator("#line-price-0").fill("50000");
-  await page.locator("#pay-amount-0").fill("50000");
+  await fillPaymentAmount(page, "50000");
 
   await clickIssueInvoiceAndExpectSuccess(page);
 
@@ -280,7 +280,7 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   await page.getByLabel("Search or select client").fill(clientName43.slice(0, 8));
@@ -288,7 +288,7 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
 
   await pickServiceLine(page, seed.serviceFullName, 0);
   await page.locator("#line-price-0").fill("50000");
-  await page.locator("#pay-amount-0").fill("50000");
+  await fillPaymentAmount(page, "50000");
 
   // Wait for the invoice to be issued and capture the response
   await ensurePaymentMethodChosen(page);
@@ -600,7 +600,7 @@ test("Issue #51 · dropdown de clientes en formulario de factura flota sobre el 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Trigger the client search dropdown
@@ -731,7 +731,7 @@ test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (port
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The Service combobox is only partially in the viewport at this scroll position — scroll it
@@ -869,10 +869,11 @@ test("Issue #63 · al ingresar un servicio al comprobante, el monto Efectivo se 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The CASH amount field starts empty
+  await showPaymentAmounts(page);
   const amountField = page.locator("#pay-amount-0");
   await expect(amountField).toBeVisible({ timeout: 10_000 });
   await expect(amountField).toHaveValue("");
@@ -896,7 +897,7 @@ test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Fill in a service so the CASH amount auto-populates
@@ -904,11 +905,13 @@ test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra 
   await page.locator("#line-price-0").fill("50000");
   await page.locator("#line-price-0").press("Tab");
 
+  await showPaymentAmounts(page);
+
   const amountField = page.locator("#pay-amount-0");
   await expect(amountField).toHaveValue("50.000");
 
   // Change the payment method from CASH to TRANSFER
-  await page.locator("#pay-method-0").selectOption("TRANSFER");
+  await choosePaymentMethod(page, "TRANSFER");
 
   // The amount must remain unchanged
   await expect(amountField).toHaveValue("50.000");
@@ -927,7 +930,7 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   const issueBtn = page.getByRole("button", { name: "Issue invoice" });
@@ -943,6 +946,6 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
   await pickServiceLine(page, seed.serviceFullName, 0);
   await expect(page.locator("#pay-amount-0")).not.toHaveValue("", { timeout: 5_000 });
   await expect(issueBtn).toBeDisabled();
-  await page.locator("#pay-method-0").selectOption("CASH");
+  await choosePaymentMethod(page, "CASH");
   await expect(issueBtn).toBeEnabled({ timeout: 5_000 });
 });

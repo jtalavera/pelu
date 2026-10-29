@@ -9,7 +9,7 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { addPaymentMethodRow, choosePaymentMethod, ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
 
@@ -127,6 +127,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     // AC5: the default Efectivo (CASH) amount and "Remaining" both exclude the tip —
     // they cover only the 50.000 fiscal total, not 54.000 (total + tip).
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
     const remainingRow = page.getByText("Remaining", { exact: true }).locator("xpath=..");
     await expect(remainingRow.getByText("0", { exact: true })).toBeVisible();
@@ -142,7 +143,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -152,16 +153,16 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     // Row 0 starts empty (issue #284): choose CASH. A second row starts empty too and CASH —
     // already used by row 0 — must be disabled in row 1's dropdown.
-    await page.locator("#pay-method-0").selectOption("CASH");
-    await page.getByRole("button", { name: "Add payment method" }).click();
+    await choosePaymentMethod(page, "CASH");
+    await addPaymentMethodRow(page);
     await expect(page.locator("#pay-method-1")).toHaveValue("");
     await expect(page.locator("#pay-method-1 option[value='CASH']")).toBeDisabled();
     await expect(page.locator("#pay-method-0 option[value='CASH']")).toBeEnabled();
 
     // Once every method type is in use, the "Add payment method" button disables itself.
-    await page.getByRole("button", { name: "Add payment method" }).click();
-    await page.getByRole("button", { name: "Add payment method" }).click();
-    await page.getByRole("button", { name: "Add payment method" }).click();
+    await addPaymentMethodRow(page);
+    await addPaymentMethodRow(page);
+    await addPaymentMethodRow(page);
     await expect(page.getByRole("button", { name: "Add payment method" })).toBeDisabled();
   });
 
@@ -170,7 +171,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
   }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -189,7 +190,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -215,12 +216,12 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
       timeout: 15_000,
     });
 
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     // Filter by the edited free-text name — the invoice's stored clientDisplayName — so the
     // history table narrows to just this invoice. Scope to the interactive history rows so the
     // (hidden) Cash Register today's-invoices table can't be picked up.
-    await page.locator("#invoice-history-text-filter").fill(editedName);
-    const row = page.locator('tbody tr[role="button"]').filter({ visible: true }).first();
+    await searchInvoiceHistory(page, editedName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first();
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(client.fullName);
     await expect(row).not.toContainText(editedName);

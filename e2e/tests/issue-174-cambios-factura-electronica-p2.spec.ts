@@ -19,7 +19,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen, openInvoiceSifenTab } from "../fixtures/billing";
+import { choosePaymentMethod, ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, openInvoiceSifenTab, openMoreOptions, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #174 "Cambios en factura electrónica (Parte 2)":
@@ -64,7 +64,7 @@ async function enableSifen(request: APIRequestContext, token: string) {
 async function openNewInvoiceForm(page: Page) {
   await page.goto("/app/billing");
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 
@@ -166,6 +166,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
     await expect(page.getByTestId("billing-tax-exempt-note")).toBeVisible();
     // Total is now net of the 10% IVA: 55.000 / 1,10 = 50.000.
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
     await clickIssueInvoiceAndExpectSuccess(page);
   });
@@ -193,14 +194,17 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await page.locator("#billing-client-email").fill("e2e174-ac2@example.com");
 
     await page.locator("#line-price-0").fill("40000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("40.000");
 
     // Switch the first row away from CASH — it stays aligned with Total.
-    await page.locator("#pay-method-0").selectOption("TRANSFER");
+    await choosePaymentMethod(page, "TRANSFER");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("40.000");
 
     // Change Total → the first "Monto" follows even though it's a TRANSFER row.
     await page.locator("#line-price-0").fill("75000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("75.000");
     await clickIssueInvoiceAndExpectSuccess(page);
   });
@@ -222,6 +226,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await loginAsDemo(page);
     await openNewInvoiceForm(page);
 
+    await openMoreOptions(page);
     const dateField = page.locator("#billing-issue-date");
     await expect(dateField).toBeDisabled();
     // Issue #181: the legend copy was shortened.
@@ -314,7 +319,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     for (const [testId, ext, sig] of [
       ["invoice-history-report-xlsx", "xlsx", "PK"],
@@ -340,7 +345,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     const today = new Date();
     const from = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
@@ -383,10 +388,10 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = page
-      .locator('tbody tr[role="button"]')
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });

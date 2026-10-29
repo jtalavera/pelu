@@ -9,7 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen, openInvoiceSifenTab } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog, fillTimeComboboxField } from "../fixtures/ui";
 
@@ -58,7 +58,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -66,7 +66,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await page.locator("#line-price-0").fill("50000");
     // Deliberate mismatch — passes client-side validation (a positive amount) but the backend
     // rejects it with PAYMENT_SUM_MISMATCH, landing on the catch/setSubmitError path this AC covers.
-    await page.locator("#pay-amount-0").fill("10000");
+    await fillPaymentAmount(page, "10000");
 
     const errorBox = page.locator("#invoice-submit-error");
     await expect(errorBox).not.toBeVisible();
@@ -116,10 +116,10 @@ test.describe("Issue #161 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
     const row = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
@@ -187,10 +187,10 @@ test.describe("Issue #161 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
     const row = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });

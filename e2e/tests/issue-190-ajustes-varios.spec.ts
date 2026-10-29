@@ -10,6 +10,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -61,7 +62,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await expect(page.getByRole("columnheader", { name: "Invoice date" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Date", exact: true })).toHaveCount(0);
   });
@@ -82,11 +83,11 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
 
     const row = page
-      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
@@ -126,10 +127,10 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = page
-      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
@@ -171,20 +172,20 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(token190);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, token190);
 
     const pager = page.getByRole("navigation", { name: "Pagination" });
     await expect(pager).toContainText("1 / 2");
     await expect(
-      page.locator('tbody tr[role="button"]').filter({ visible: true }),
+      page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }),
     ).toHaveCount(10);
 
     // To the last page…
     await pager.getByRole("button", { name: "Next" }).click();
     await expect(pager).toContainText("2 / 2");
     await expect(
-      page.locator('tbody tr[role="button"]').filter({ visible: true }),
+      page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }),
     ).toHaveCount(2);
     await expect(pager.getByRole("button", { name: "Next" })).toBeDisabled();
 
@@ -192,7 +193,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await pager.getByRole("button", { name: "Previous" }).click();
     await expect(pager).toContainText("1 / 2");
     await expect(
-      page.locator('tbody tr[role="button"]').filter({ visible: true }),
+      page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }),
     ).toHaveCount(10);
     await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
   });

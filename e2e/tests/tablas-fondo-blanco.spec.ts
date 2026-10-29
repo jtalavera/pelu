@@ -17,6 +17,7 @@ import {
   provisionCommissionWorld,
   restoreCommissionsGlobal,
 } from "../fixtures/commissions";
+import { goToInvoiceHistory } from "../fixtures/billing";
 
 /**
  * Todas las tablas tienen fondo blanco (la superficie de las tarjetas, como la tabla de
@@ -110,11 +111,11 @@ test.describe("Tablas con fondo blanco", () => {
     }
 
     await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History", exact: true }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
 
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
   });
 });

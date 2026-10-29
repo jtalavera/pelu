@@ -12,6 +12,7 @@ import {
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
 import { setControlledInputValue } from "../fixtures/ui";
 import { ensurePaymentMethodChosen } from "../fixtures/invoice";
+import { goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 
@@ -256,6 +257,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
     // Issue #139: the tip is never included in the amount to collect — payment auto-fills
     // to cover only the invoice total (50.000), not total + tips.
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
 
     await ensurePaymentMethodChosen(page);

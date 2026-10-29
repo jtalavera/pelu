@@ -1400,6 +1400,25 @@
       "body": "Esta sección se conectará a la API en la siguiente iteración."
     },
     "billing": {
+      "home": {
+        "today": "Hoy",
+        "invoiceCount_one": "{{count}} factura",
+        "invoiceCount_other": "{{count}} facturas",
+        "attentionCount_one": "{{count}} requiere atención",
+        "attentionCount_other": "{{count}} requieren atención",
+        "viewHistory": "Ver historial completo",
+        "viewHistoryShort": "Ver historial",
+        "closedTitle": "La caja está cerrada"
+      },
+      "state": {
+        "issued": "Emitida",
+        "processing": "En proceso",
+        "attention": "Requiere atención",
+        "voided": "Anulada"
+      },
+      "panel": {
+        "title": "Caja"
+      },
       "title": "Facturación",
       "lead": "Gestioná la caja del día y emití comprobantes.",
       "pageSubtitle": "Gestioná la caja del día y emití comprobantes",
@@ -1447,6 +1466,19 @@
         "cashHistory": "Historial de cajas"
       },
       "invoice": {
+        "back": "Volver",
+        "backToStart": "Volver al inicio",
+        "noName": "Sin nombre",
+        "noNameHint": "Consumidor final. Buscá un cliente arriba para identificarlo en la factura.",
+        "stepItems": "¿Qué hiciste?",
+        "stepClient": "¿A quién?",
+        "stepPayment": "¿Cómo paga?",
+        "splitPayment": "Dividir pago",
+        "singlePayment": "Pago simple",
+        "moreOptions": "Más opciones",
+        "moreOptionsHint": "fecha, descuento, propinas, profesional",
+        "perItemOptions": "Descuento y profesional por ítem",
+        "summary": "Resumen",
         "lineProfessional": "Profesional / Vendedor",
         "lineProfessionalNone": "Sin profesional",
         "lineNoCommission": "Esta línea no generará comisión.",
@@ -1554,6 +1586,16 @@
         "tipsEmpty": "Asigná un profesional a los ítems de servicio para cargarle una propina."
       },
       "history": {
+        "screenTitle": "Historial",
+        "viewLabel": "Vista del historial",
+        "searchPlaceholder": "Buscar por cliente o número",
+        "searchPlaceholderCash": "Buscar cajas",
+        "filters": "Filtros",
+        "moreActions": "Más acciones",
+        "view": {
+          "invoices": "Facturas",
+          "cash": "Cajas"
+        },
         "title": "Historial de comprobantes",
         "loading": "Cargando…",
         "loadError": "No se pudieron cargar los comprobantes.",
@@ -2968,10 +3010,10 @@
       },
       "billing": {
         "header": { "title": "Facturación", "content": "Gestioná tu sesión de caja aquí y emití comprobantes para los clientes." },
-        "session": { "title": "Pestañas de sesión", "content": "Cambiá entre la caja activa, la creación de un comprobante y el historial completo." },
+        "session": { "title": "Caja", "content": "Mirá si la caja está abierta. Tocala para revisar el día, registrar movimientos de efectivo o cerrarla." },
         "newInvoice": { "title": "Nuevo comprobante", "content": "Abre el formulario para cobrarle a un cliente por los servicios prestados en esta sesión." },
         "search": { "title": "Búsqueda y filtros de comprobantes", "content": "Buscá por cliente o número de comprobante y filtrá por rango de fechas o estado." },
-        "invoiceList": { "title": "Historial de comprobantes", "content": "Todos los comprobantes emitidos. Hacé clic en 'Ver' en cualquier fila para ver el detalle o anularlo." }
+        "invoiceList": { "title": "Historial de comprobantes", "content": "Todos los comprobantes emitidos, cada uno con un estado simple. Hacé clic en cualquier fila para ver el detalle o anularlo." }
       },
       "clients": {
         "header": { "title": "Clientes", "content": "Tu lista completa de clientes. Usá la búsqueda y los filtros para encontrar cualquier cliente rápidamente." },

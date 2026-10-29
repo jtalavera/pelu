@@ -12,6 +12,7 @@ import {
   voidInvoice,
   type CommissionWorld,
 } from "../../fixtures/commissions";
+import { goToInvoiceHistory } from "../../fixtures/billing";
 
 /**
  * "Asignar profesional" en el detalle del comprobante: después de emitir una factura sin
@@ -57,9 +58,9 @@ const ofInvoice = async (request: import("@playwright/test").APIRequestContext) 
 
 async function openInvoiceDetail(page: Page, invoiceNumber: string) {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "History" }).click();
+  await goToInvoiceHistory(page);
   await page
-    .locator('tbody tr[role="button"]')
+    .locator('[data-testid^="invoice-history-row-"]')
     .filter({ visible: true })
     .filter({ hasText: invoiceNumber })
     .first()

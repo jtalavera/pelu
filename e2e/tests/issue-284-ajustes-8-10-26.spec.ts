@@ -16,7 +16,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { DEMO_EMAIL, loginAs, loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { addPaymentMethodRow, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { pdfContainsText, pickServiceLine } from "../fixtures/invoice";
 
 // Issue #284 "Ajustes 8-10-26". Ajuste 1 (la categoría del producto viaja a Stock) necesita un
@@ -60,7 +60,7 @@ async function seedInvoiceOnDay(
 
 async function openNewInvoiceForm(page: Page) {
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 
@@ -133,24 +133,28 @@ test.describe("Issue #284 · ajuste 3 · método de pago vacío", () => {
     await page.locator("#line-price-0").fill("10000");
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");
 
-    // Empty by default (placeholder), with the rule shown and the submit button disabled.
-    const method = page.locator("#pay-method-0");
-    await expect(method).toHaveValue("");
-    await expect(method.locator("option:checked")).toHaveText("Select a payment method");
+    // Redesign: the methods are buttons and none is pressed by default. The rule is shown and the
+    // submit button stays disabled.
+    const methods = ["CASH", "DEBIT_CARD", "CREDIT_CARD", "TRANSFER", "OTHER"];
+    for (const m of methods) {
+      await expect(page.locator(`#pay-method-${m}`)).toHaveAttribute("aria-pressed", "false");
+    }
     await expect(page.locator("#pay-method-err-0")).toHaveText("Select a payment method.");
-    await expect(method).toHaveAttribute("aria-invalid", "true");
+    await expect(page.locator("#pay-method-CASH")).toHaveAttribute("aria-invalid", "true");
     await expect(page.getByRole("button", { name: "Issue invoice" })).toBeDisabled();
 
     // Choosing one clears the error and enables the button.
-    await method.selectOption("CASH");
+    await page.locator("#pay-method-CASH").click();
+    await expect(page.locator("#pay-method-CASH")).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("#pay-method-err-0")).toHaveCount(0);
-    await expect(method).toHaveAttribute("aria-invalid", "false");
     await expect(page.getByRole("button", { name: "Issue invoice" })).toBeEnabled();
 
-    // A newly added payment row also starts empty; its amount is not enough to issue.
-    await page.getByRole("button", { name: "Add payment method" }).click();
+    // Splitting the payment keeps the chosen method; a newly added payment row starts empty and
+    // its amount is not enough to issue.
+    await addPaymentMethodRow(page);
+    await expect(page.locator("#pay-method-0")).toHaveValue("CASH");
     await expect(page.locator("#pay-method-1")).toHaveValue("");
-    await page.locator("#pay-amount-0").fill("4000");
+    await fillPaymentAmount(page, "4000");
     await page.locator("#pay-amount-1").fill("6000");
     await expect(page.locator("#pay-method-err-1")).toHaveText("Select a payment method.");
     await page.locator("#pay-method-1").selectOption("TRANSFER");
@@ -165,7 +169,7 @@ test.describe("Issue #284 · ajuste 4 · fondo del menú de Descargar reporte", 
   test("el menú del botón Descargar reporte tiene un fondo de color opaco", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.getByTestId("invoice-history-report-button").click();
 
     const menu = page.getByTestId("invoice-history-report-menu");
@@ -235,7 +239,7 @@ test.describe("Issue #284 · ajuste 5 · número completo en el reporte", () => 
     // …and the same through the "Descargar reporte" menu in the browser.
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.getByTestId("invoice-history-report-button").click();
     const [dl] = await Promise.all([
       page.waitForEvent("download"),

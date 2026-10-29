@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
-import { openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -71,10 +71,10 @@ async function createInvoice(request: APIRequestContext, token: string): Promise
 
 async function openInvoiceDetail(page: Page, clientFullName: string) {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#invoice-history-text-filter").fill(clientFullName);
+  await goToInvoiceHistory(page);
+  await searchInvoiceHistory(page, clientFullName);
   const row = page
-    .locator("tbody tr[role=\"button\"]")
+    .locator('[data-testid^="invoice-history-row-"]')
     .filter({ hasText: clientFullName })
     .filter({ visible: true });
   await expect(row).toBeVisible({ timeout: 30_000 });

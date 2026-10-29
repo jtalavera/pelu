@@ -12,7 +12,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { pickServiceLine } from "../fixtures/invoice";
 
 // Issue #181 "Cambios en factura electrónica Parte 2 - CORRECCIÓN 2":
@@ -26,7 +26,7 @@ import { pickServiceLine } from "../fixtures/invoice";
 async function openNewInvoiceForm(page: Page) {
   await page.goto("/app/billing");
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 
@@ -136,7 +136,7 @@ test.describe("Issue #181 · form hints + report", () => {
     // And the "Descargar reporte" dropdown still triggers a browser download.
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.getByTestId("invoice-history-report-button").click();
     const [dl] = await Promise.all([
       page.waitForEvent("download"),

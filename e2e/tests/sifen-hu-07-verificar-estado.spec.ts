@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -85,9 +85,9 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -145,9 +145,9 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 

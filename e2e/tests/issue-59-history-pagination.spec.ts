@@ -18,7 +18,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToInvoiceHistory } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     const today = new Date();
     const fromExpected = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
@@ -82,7 +82,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     const tooOld = new Date();
     tooOld.setMonth(tooOld.getMonth() - 7);
@@ -108,14 +108,14 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     // Wait for invoice row to appear. History rows are <tr role="button"> (issue #163
     // AC10), so their a11y role is "button", not "row" — match by tag instead.
     // Billing keeps all tabs mounted (hidden via the `hidden` attribute) and the Caja
     // tab's today-invoices rows now also carry role="button" (issue #198), so restrict
     // to the visible (History) tab's rows.
-    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    const historyRows = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true });
     await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // PageSizeSelect should be present. Billing keeps all tabs mounted (hidden via
@@ -140,9 +140,9 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
-    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    const historyRows = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true });
     await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Range text should be present (e.g. "1–1 of 1" or "1–10 of N"). Scope to the
@@ -165,9 +165,9 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
-    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    const historyRows = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true });
     await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Should show exactly 10 rows on first page

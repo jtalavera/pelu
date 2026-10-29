@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome } from "../fixtures/billing";
 
 test.describe("Issue #157 · Ajustes varios", () => {
   test("AC1 · el mensaje de éxito de edición se muestra dentro del formulario, sin cerrar el modal", async ({
@@ -54,7 +54,7 @@ test.describe("Issue #157 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
     await page.getByRole("button", { name: client.fullName }).click();

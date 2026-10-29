@@ -9,7 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { bookingAppointmentDialog, professionalFormDialog } from "../fixtures/ui";
 
 type ClientDto = { id: number; fullName: string };
@@ -197,7 +197,7 @@ test.describe("Issue #155 · Cambios varios", () => {
   }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     const nameInput = page.locator("#client-display-name");

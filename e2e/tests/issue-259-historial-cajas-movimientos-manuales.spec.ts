@@ -11,6 +11,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { setControlledInputValue } from "../fixtures/ui";
+import { goToBillingHome } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 
@@ -122,7 +123,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 15_000 });
 
     // AC3: zero cash sales, zero movements -> live expected cash starts at 0.
@@ -184,7 +185,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Register movement", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Register a cash movement" })).toBeVisible();
@@ -210,7 +211,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await expect(page.getByText(/^Cash register is closed$/)).toBeVisible({ timeout: 15_000 });
 
     // AC8: there's no way to open the manual-movement form when there is no open session.

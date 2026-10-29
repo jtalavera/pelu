@@ -9,11 +9,13 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToBillingHome, goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
 
 // The invoice detail ("Ver") dialog already shows a "SIFEN status" badge (see
-// sifen-hu-07/08/09/10 specs). This adds the same information as a column on every table that
-// lists invoices: Billing → Cash Register → today's invoices, Billing → History, and the client
-// detail page's own invoice list — all three consume the same InvoiceListItem/SifenStatusBadge.
+// sifen-hu-07/08/09/10 specs). The lists also carry that information: the client detail page's
+// invoice list keeps its "SIFEN status" column, while the redesigned Billing lists (today's
+// invoices on the home, and the History) fold the invoice status and the SIFEN status into one
+// plain-language state (Issued / In progress / Needs attention / Voided).
 //
 // Reuses the same test-only /api/admin/sifen-test-support fabrication pattern those specs already
 // established (gated behind femme.data-init.enabled, only active in the e2e profile) to put an
@@ -44,14 +46,14 @@ async function createInvoice(
   });
 }
 
-test.describe("Estado SIFEN column on invoice tables", () => {
+test.describe("Estado SIFEN en las listas de facturas", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
   });
 
-  test("Cash Register today's invoices and History both show the SIFEN status badge", async ({
+  test("today's invoices and History show an SIFEN-approved invoice as Issued", async ({
     page,
     request,
   }) => {
@@ -76,33 +78,29 @@ test.describe("Estado SIFEN column on invoice tables", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
 
-    // Cash Register tab (default) — today's invoices table. Its rows are <tr role="button">
-    // (issue #198), so match by tag, and scope to the visible tab (billing keeps every tab
-    // mounted, hidden via the `hidden` attribute).
-    await expect(page.getByRole("columnheader", { name: "SIFEN status", exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
+    // Home — today's invoices (folded by default, so expand them first).
+    await goToBillingHome(page);
+    await page.getByTestId("billing-today-toggle").click();
     const todayRow = page
-      .locator('tbody tr[role="button"]')
+      .locator('[data-testid^="billing-today-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(todayRow).toBeVisible({ timeout: 30_000 });
-    await expect(todayRow.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(todayRow.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "issued");
+    await expect(todayRow.getByText("Issued", { exact: true })).toBeVisible();
 
-    // History tab — same invoice, same column.
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(page.getByRole("columnheader", { name: "SIFEN status", exact: true })).toBeVisible();
-    // History rows are <tr role="button"> (issue #163 AC10), so their a11y role is "button",
-    // not "row" — match by tag instead of getByRole("row").
+    // History — same invoice, same state.
+    await goToInvoiceHistory(page);
     const historyRow = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(historyRow).toBeVisible({ timeout: 30_000 });
-    await expect(historyRow.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(historyRow.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "issued");
+    await expect(historyRow.getByText("Issued", { exact: true })).toBeVisible();
   });
 
-  test("an invoice queued for SIFEN submission shows the Queued badge", async ({
+  test("an invoice queued for SIFEN submission shows as In progress", async ({
     page,
     request,
   }) => {
@@ -129,17 +127,18 @@ test.describe("Estado SIFEN column on invoice tables", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
     const row = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await expect(row.getByText("Queued", { exact: true })).toBeVisible();
+    await expect(row.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "processing");
+    await expect(row.getByText("In progress", { exact: true })).toBeVisible();
   });
 
-  test("an invoice never submitted to SIFEN shows a dash instead of a badge", async ({
+  test("an invoice never submitted to SIFEN shows as Issued, with no SIFEN sent date", async ({
     page,
     request,
   }) => {
@@ -160,14 +159,15 @@ test.describe("Estado SIFEN column on invoice tables", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
     const row = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await expect(row).toContainText("—");
+    await expect(row.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "issued");
+    await expect(row.getByTestId("invoice-row-sifen-sent")).toHaveCount(0);
   });
 
   test("Client detail page's invoice list shows the SIFEN status badge", async ({

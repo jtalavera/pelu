@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -100,9 +100,9 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
 
   async function openInvoiceDetail(page: Page, clientFullName: string) {
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientFullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: clientFullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }
@@ -326,9 +326,9 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     // cancel form), and reloading confirms the invoice was never actually marked identified.
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
     await page.reload();
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
     await openInvoiceSifenTab(page);
