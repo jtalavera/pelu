@@ -944,6 +944,7 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
   // Select service — the amount auto-fills; the payment method starts empty (issue #284), so the
   // button stays disabled until it is chosen, and then enables.
   await pickServiceLine(page, seed.serviceFullName, 0);
+  await showPaymentAmounts(page);
   await expect(page.locator("#pay-amount-0")).not.toHaveValue("", { timeout: 5_000 });
   await expect(issueBtn).toBeDisabled();
   await choosePaymentMethod(page, "CASH");
