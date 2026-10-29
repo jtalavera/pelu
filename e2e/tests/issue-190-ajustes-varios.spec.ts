@@ -57,14 +57,32 @@ async function issueRejectedInvoice(
 }
 
 test.describe("Issue #190 · Ajustes varios", () => {
-  test("AC1 · el encabezado de la columna de fecha del comprobante dice 'Fecha factura'", async ({
+  // Redesign: the history rows have no column headers. The comprobante date and the SIFEN
+  // transmission date stay distinguishable: the first is the row's date, the second is labelled
+  // "Sent to SIFEN".
+  test("AC1 · la fecha del comprobante se distingue de la fecha de envío a SIFEN", async ({
     page,
+    request,
   }) => {
+    test.setTimeout(90_000);
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const clientName = `E2E190 AC1 ${Date.now()}`;
+    await issueRejectedInvoice(request, token, seed.serviceId, seed.serviceFullName, clientName);
+
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToInvoiceHistory(page);
-    await expect(page.getByRole("columnheader", { name: "Invoice date" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Date", exact: true })).toHaveCount(0);
+    await searchInvoiceHistory(page, clientName);
+    const row = page
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
+      .filter({ visible: true });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(row.getByTestId("invoice-row-date")).toContainText(/\d{1,2}:\d{2}/);
+    await expect(row.getByTestId("invoice-row-sifen-sent")).toContainText("Sent to SIFEN");
+    await expect(page.getByRole("columnheader")).toHaveCount(0);
   });
 
   test("AC2 + AC3 · 'Corregir y reenviar' muestra el número y la fecha de emisión del comprobante", async ({
@@ -195,7 +213,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await expect(
       page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }),
     ).toHaveCount(10);
-    await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeVisible();
   });
 
   test("AC7 · Configuración → SIFEN muestra certificados y numeración inutilizada en tablas", async ({

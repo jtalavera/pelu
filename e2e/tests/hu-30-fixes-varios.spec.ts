@@ -115,9 +115,6 @@ test.describe("HU-30 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToInvoiceHistory(page);
-    await page.waitForResponse(
-      (r) => r.url().includes("/api/invoices") && r.request().method() === "GET",
-    );
 
     // Open the Ver modal for this invoice via the history tab
     await page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first().click();
@@ -217,11 +214,10 @@ test.describe("HU-30 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToInvoiceHistory(page);
-    await page.waitForResponse((r) => r.url().includes("/api/invoices") && r.request().method() === "GET");
 
-    // Table should be present (Clientes-style card). Billing keeps all tabs mounted
-    // (hidden via `hidden`), so scope to the visible (History) tab's table.
-    await expect(page.locator("table").filter({ visible: true }).first()).toBeVisible({
+    // Redesign: the list is a card of rows (no <table>). Billing keeps all screens mounted
+    // (hidden via `hidden`), so scope to the visible (History) list.
+    await expect(page.getByTestId("invoice-history-list").filter({ visible: true })).toBeVisible({
       timeout: 20_000,
     });
 

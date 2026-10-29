@@ -352,8 +352,10 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    await expect(page.locator("#filter-from")).toHaveValue(ymd(from));
-    await expect(page.locator("#filter-to")).toHaveValue(ymd(today));
+    // The date range sits under "Filters" in the redesigned history.
+    await page.getByTestId("invoice-history-filters-toggle").click();
+    await expect(page.locator("#invoice-history-from")).toHaveValue(ymd(from));
+    await expect(page.locator("#invoice-history-to")).toHaveValue(ymd(today));
   });
 
   // ── AC-03 ──────────────────────────────────────────────────────────────────

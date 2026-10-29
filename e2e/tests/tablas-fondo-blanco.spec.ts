@@ -114,8 +114,11 @@ test.describe("Tablas con fondo blanco", () => {
     await page.getByRole("tab", { name: "History" }).click();
     await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
 
+    // Redesign: the billing history is a list of rows (no <table>) sitting on a white card.
     await page.goto("/app/billing");
     await goToInvoiceHistory(page);
-    await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
+    const list = page.getByTestId("invoice-history-list");
+    await expect(list).toBeVisible({ timeout: 20_000 });
+    expect(await paintedBackground(list)).toBe((await colors(page)).surface);
   });
 });

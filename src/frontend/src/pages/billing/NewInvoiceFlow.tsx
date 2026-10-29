@@ -1040,11 +1040,17 @@ export function NewInvoiceFlow({
         </Heading>
       </div>
 
-      {globalErrors.map((err, i) => (
-        <Alert key={i} variant="destructive" title={t("femme.billing.errorTitle")}>
-          {err}
-        </Alert>
-      ))}
+      {globalErrors
+        // The identification rule already has its own inline warning in the client step.
+        .filter(
+          (err) =>
+            !(identificationRequired && err === t("femme.billing.invoice.clientIdentificationRequiredThreshold")),
+        )
+        .map((err, i) => (
+          <Alert key={i} variant="destructive" title={t("femme.billing.errorTitle")}>
+            {err}
+          </Alert>
+        ))}
       {submitError && (
         <Alert id="invoice-submit-error" variant="destructive" title={t("femme.billing.errorTitle")}>
           {submitError}

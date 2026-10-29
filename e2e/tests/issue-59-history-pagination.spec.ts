@@ -72,8 +72,10 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    const fromInput = page.locator("#filter-from");
-    const toInput = page.locator("#filter-to");
+    // The date range sits under "Filters" in the redesigned history.
+    await page.getByTestId("invoice-history-filters-toggle").click();
+    const fromInput = page.locator("#invoice-history-from");
+    const toInput = page.locator("#invoice-history-to");
     await expect(fromInput).toHaveValue(fmt(fromExpected));
     await expect(toInput).toHaveValue(fmt(today));
   });
@@ -89,9 +91,9 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    await page.locator("#filter-from").fill(fmt(tooOld));
-    // Trigger search
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.getByTestId("invoice-history-filters-toggle").click();
+    // Date filters apply on their own (debounced), no refresh button needed.
+    await page.locator("#invoice-history-from").fill(fmt(tooOld));
 
     await expect(page.getByRole("alert")).toContainText(/6 months|6 meses/i);
   });
@@ -213,7 +215,8 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
     // Wait for session card to show (session is already open)
     await expect(page.getByText(/cash register is open/i)).toBeVisible({ timeout: 30_000 });
 
-    // Wait for a row in the "Comprobantes de hoy" table (Caja is the default tab).
+    // Today's invoices are folded by default on the redesigned home — expand them, then wait for a row.
+    await page.getByTestId("billing-today-toggle").click();
     await expect(
       page.locator('[data-testid^="billing-today-row-"]').first(),
     ).toBeVisible({ timeout: 30_000 });

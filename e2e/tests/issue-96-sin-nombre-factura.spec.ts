@@ -92,7 +92,7 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
     expect(pdfContainsText(pdf, client.fullName)).toBe(false);
   });
 
-  test("marcar 'Comprobante sin nominar' sin elegir cliente habilita 'Issue invoice'", async ({
+  test("sin elegir cliente (Sin nombre por defecto) 'Issue invoice' queda habilitado", async ({
     page,
     request,
   }) => {
@@ -112,10 +112,9 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
     await fillPaymentAmount(page, "9000");
     await ensurePaymentMethodChosen(page);
 
-    // No client picked from the search field at all — button stays disabled until identified.
-    await expect(page.getByRole("button", { name: "Issue invoice" })).toBeDisabled();
-
-    await page.getByLabel("Unnamed invoice (no client identified)").check();
+    // Redesign: no client picked from the search field means "No name" — it no longer needs a
+    // checkbox, so the button is enabled as soon as there is an item and a payment method.
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
     await expect(page.getByRole("button", { name: "Issue invoice" })).toBeEnabled();
     await clickIssueInvoiceAndExpectSuccess(page);
   });

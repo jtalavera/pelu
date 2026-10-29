@@ -192,7 +192,9 @@ test.describe("Issue #155 · Cambios varios", () => {
     });
   });
 
-  test("AC7 · checkbox Comprobante sin nominar deshabilita y restaura los campos de identificación", async ({
+  // Redesign: the "Unnamed invoice" checkbox is gone — an invoice with no client is "No name" by
+  // default and shows no identification fields; identifying a client shows them.
+  test("AC7 · 'Sin nombre' por defecto oculta los campos de identificación y al identificar un cliente se habilitan", async ({
     page,
   }) => {
     await loginAsDemo(page);
@@ -203,22 +205,23 @@ test.describe("Issue #155 · Cambios varios", () => {
     const nameInput = page.locator("#client-display-name");
     const typeSelect = page.locator("#client-identity-document-type");
     const numberInput = page.locator("#client-identity-document-number");
-    const checkbox = page.getByLabel("Unnamed invoice (no client identified)");
 
-    await expect(typeSelect).toHaveValue("RUC");
-    await expect(nameInput).toBeEnabled();
-    await expect(typeSelect).toBeEnabled();
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
+    await expect(nameInput).toHaveCount(0);
+    await expect(typeSelect).toHaveCount(0);
+    await expect(numberInput).toHaveCount(0);
 
-    await checkbox.check();
-    await expect(typeSelect).toHaveValue("INNOMINADO");
-    await expect(nameInput).toBeDisabled();
-    await expect(typeSelect).toBeDisabled();
-    await expect(numberInput).toBeDisabled();
-
-    await checkbox.uncheck();
+    const search = page.getByLabel("Search or select client");
+    await search.click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await expect(typeSelect).toHaveValue("RUC");
     await expect(nameInput).toBeEnabled();
     await expect(typeSelect).toBeEnabled();
     await expect(numberInput).toBeEnabled();
+
+    // Clearing the search goes back to "No name" and hides the fields again.
+    await search.fill("");
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
+    await expect(nameInput).toHaveCount(0);
   });
 });

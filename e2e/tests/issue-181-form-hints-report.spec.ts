@@ -12,7 +12,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
 import { pickServiceLine } from "../fixtures/invoice";
 
 // Issue #181 "Cambios en factura electrónica Parte 2 - CORRECCIÓN 2":
@@ -63,7 +63,8 @@ test.describe("Issue #181 · form hints + report", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("40000");
 
-    // Issue-date legend: new copy + muted styling.
+    // Issue-date legend (inside "More options"): new copy + muted styling.
+    await openMoreOptions(page);
     const legend = page.getByText(
       "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
     );
@@ -78,6 +79,7 @@ test.describe("Issue #181 · form hints + report", () => {
     await expect(emailHint).toHaveClass(/text-sm/);
 
     // First payment "Monto" hint: new copy + muted styling.
+    await showPaymentAmounts(page);
     const payHint = page.locator("#pay-amount-0-hint");
     await expect(payHint).toHaveText(
       "This field is auto-filled with the total, but you can edit it for partial payments",

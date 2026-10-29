@@ -24,12 +24,12 @@ test.describe("Issue-153 · Mejoras a facturación", () => {
     await ensureCashSessionOpen(page);
     await goToBillingHome(page);
 
-    // Only "Cash Register" and "History" remain in the tab bar.
-    const tabs = page.getByRole("tablist", { name: "Billing" }).getByRole("tab");
-    await expect(tabs).toHaveCount(2);
+    // Redesign: no tab bar at all — the home has a single "New Invoice" button.
+    await expect(page.getByRole("tablist")).toHaveCount(0);
     await expect(page.getByRole("tab", { name: "New Invoice" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "New Invoice" })).toHaveCount(1);
 
-    // The "New Invoice" button inside the Cash Register tab still opens the form.
+    // The "New Invoice" button of the home still opens the form.
     await page.getByRole("button", { name: "New Invoice" }).click();
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
   });

@@ -429,32 +429,33 @@ export function BillingHome({
                         </li>
                       ))}
                     </ul>
-                    {todayTotalPages > 1 && (
-                      <div className="flex flex-wrap items-center justify-between gap-3 px-2 pt-3">
-                        <PageSizeSelect
-                          value={todayPageSize}
-                          onChange={(s) => {
-                            setTodayPageSize(s);
-                            setTodayPageNum(0);
-                          }}
-                          label={t("femme.pagination.rowsPerPage")}
-                        />
-                        <Text variant="small" className="text-ink-3">
-                          {t("femme.pagination.showingRange", {
-                            from: todayShowingFrom,
-                            to: todayShowingTo,
-                            total: todayTotalElements,
-                          })}
-                        </Text>
-                        <Pagination
-                          page={todayPageNum + 1}
-                          pageCount={todayTotalPages}
-                          onPageChange={(p) => setTodayPageNum(p - 1)}
-                          previousLabel={t("femme.pagination.previous")}
-                          nextLabel={t("femme.pagination.next")}
-                        />
-                      </div>
-                    )}
+                    <div
+                      className="flex flex-wrap items-center justify-between gap-3 px-2 pt-3"
+                      data-testid="billing-today-pagination"
+                    >
+                      <PageSizeSelect
+                        value={todayPageSize}
+                        onChange={(s) => {
+                          setTodayPageSize(s);
+                          setTodayPageNum(0);
+                        }}
+                        label={t("femme.pagination.rowsPerPage")}
+                      />
+                      <Text variant="small" className="text-ink-3">
+                        {t("femme.pagination.showingRange", {
+                          from: todayShowingFrom,
+                          to: todayShowingTo,
+                          total: todayTotalElements,
+                        })}
+                      </Text>
+                      <Pagination
+                        page={todayPageNum + 1}
+                        pageCount={todayTotalPages}
+                        onPageChange={(p) => setTodayPageNum(p - 1)}
+                        previousLabel={t("femme.pagination.previous")}
+                        nextLabel={t("femme.pagination.next")}
+                      />
+                    </div>
                   </>
                 )}
                 <div className="border-t border-line px-2 pt-2">
@@ -525,16 +526,13 @@ export function BillingHome({
 
       <Modal
         open={panelOpen}
-        onClose={() => setPanelOpen(false)}
-        title={
-          panelView === "movement"
-            ? t("femme.billing.movements.form.title")
-            : panelView === "close"
-              ? t("femme.billing.close.title")
-              : t("femme.billing.panel.title")
-        }
+        // While the movement form is on top, Escape belongs to it, not to the panel below.
+        onClose={() => {
+          if (panelView !== "movement") setPanelOpen(false);
+        }}
+        title={panelView === "close" ? t("femme.billing.close.title") : t("femme.billing.panel.title")}
       >
-        {panelView === "summary" && (
+        {panelView !== "close" && (
           <div className="flex flex-col gap-4" data-testid="billing-cash-panel">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <span
@@ -610,7 +608,51 @@ export function BillingHome({
           </div>
         )}
 
-        {panelView === "movement" && currentSession && (
+        {panelView === "close" && currentSession && (
+          <form onSubmit={(e) => void handleCloseSession(e)} noValidate className="flex flex-col gap-4">
+            <Text variant="muted">{t("femme.billing.close.lead")}</Text>
+            {closeError && (
+              <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                {closeError}
+              </Alert>
+            )}
+            <div>
+              <Label htmlFor="counted-cash">{t("femme.billing.close.countedCashAmount")}</Label>
+              <Input
+                id="counted-cash"
+                inputMode="numeric"
+                value={countedCash}
+                onChange={(e) => {
+                  setCountedCash(maskMoneyInput(e.target.value));
+                  setCountedCashError(null);
+                }}
+                placeholder="0"
+                className="mt-1 w-full sm:max-w-xs"
+                aria-invalid={!!countedCashError}
+                aria-describedby={countedCashError ? "counted-cash-err" : "counted-cash-hint"}
+              />
+              <FieldValidationError id="counted-cash-err">{countedCashError}</FieldValidationError>
+              <Text variant="small" id="counted-cash-hint" className="mt-1 text-ink-3">
+                {t("femme.billing.close.countedCashAmountHint")}
+              </Text>
+            </div>
+            <div className="flex gap-3">
+              <Button type="button" variant="secondary" className="min-h-11" onClick={() => setPanelView("summary")}>
+                {t("femme.billing.history.detail.voidCancel")}
+              </Button>
+              <Button type="submit" variant="primary" className="min-h-11" disabled={closing}>
+                {closing ? t("femme.billing.close.closing") : t("femme.billing.close.confirmClose")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        open={panelOpen && panelView === "movement" && !!currentSession}
+        onClose={() => setPanelView("summary")}
+        title={t("femme.billing.movements.form.title")}
+      >
           <>
             {movementSubmitSuccess && (
               <Alert variant="success" className="mb-3 py-2">
@@ -692,46 +734,6 @@ export function BillingHome({
               </div>
             </form>
           </>
-        )}
-
-        {panelView === "close" && currentSession && (
-          <form onSubmit={(e) => void handleCloseSession(e)} noValidate className="flex flex-col gap-4">
-            <Text variant="muted">{t("femme.billing.close.lead")}</Text>
-            {closeError && (
-              <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-                {closeError}
-              </Alert>
-            )}
-            <div>
-              <Label htmlFor="counted-cash">{t("femme.billing.close.countedCashAmount")}</Label>
-              <Input
-                id="counted-cash"
-                inputMode="numeric"
-                value={countedCash}
-                onChange={(e) => {
-                  setCountedCash(maskMoneyInput(e.target.value));
-                  setCountedCashError(null);
-                }}
-                placeholder="0"
-                className="mt-1 w-full sm:max-w-xs"
-                aria-invalid={!!countedCashError}
-                aria-describedby={countedCashError ? "counted-cash-err" : "counted-cash-hint"}
-              />
-              <FieldValidationError id="counted-cash-err">{countedCashError}</FieldValidationError>
-              <Text variant="small" id="counted-cash-hint" className="mt-1 text-ink-3">
-                {t("femme.billing.close.countedCashAmountHint")}
-              </Text>
-            </div>
-            <div className="flex gap-3">
-              <Button type="button" variant="secondary" className="min-h-11" onClick={() => setPanelView("summary")}>
-                {t("femme.billing.history.detail.voidCancel")}
-              </Button>
-              <Button type="submit" variant="primary" className="min-h-11" disabled={closing}>
-                {closing ? t("femme.billing.close.closing") : t("femme.billing.close.confirmClose")}
-              </Button>
-            </div>
-          </form>
-        )}
       </Modal>
 
       {correctionInvoiceId !== null && (

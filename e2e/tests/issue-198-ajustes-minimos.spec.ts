@@ -102,6 +102,8 @@ test.describe("Issue #198 · Ajustes mínimos", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToBillingHome(page);
+    // Today's invoices are folded by default on the redesigned home.
+    await page.getByTestId("billing-today-toggle").click();
 
     const row = page.getByTestId(`billing-today-row-${inv.id}`);
     await expect(row).toBeVisible({ timeout: 20_000 });

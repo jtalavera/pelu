@@ -257,7 +257,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await expect(page.locator("#billing-client-email")).toHaveValue(email);
   });
 
-  test("item 1 · with SIFEN enabled the email is mandatory, except for a 'Sin nominar' comprobante", async ({
+  test("item 1 · with SIFEN enabled the email is mandatory, except for a 'Sin nombre' comprobante", async ({
     page,
     request,
   }) => {
@@ -291,8 +291,10 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await expect(page.locator("#billing-client-email-err")).toBeVisible();
     expect(invoicePosted).toBe(false);
 
-    // "Comprobante sin nominar" → email no longer required, issuance succeeds
-    await page.getByLabel("Unnamed invoice (no client identified)").check();
+    // "Sin nombre" (clearing the client goes back to the default) → the email is no longer asked
+    // for nor required, and issuance succeeds
+    await page.getByLabel("Search or select client").fill("");
+    await expect(page.locator("#billing-client-email")).toHaveCount(0);
     await clickIssueInvoiceAndExpectSuccess(page);
   });
 
