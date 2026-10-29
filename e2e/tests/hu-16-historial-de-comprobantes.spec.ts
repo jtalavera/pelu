@@ -85,7 +85,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await goToInvoiceHistory(page);
     await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeVisible();
     await expect(page.locator("#invoice-history-text-filter")).toBeVisible();
-    for (const status of ["all", "ISSUED", "VOIDED"]) {
+    for (const status of ["all", "APPROVED", "PROCESSING", "ATTENTION", "VOIDED"]) {
       await expect(page.getByTestId(`invoice-history-status-${status}`)).toBeVisible();
     }
     // No table with a column per technical field any more.

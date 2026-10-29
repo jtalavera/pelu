@@ -781,26 +781,63 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   /** Invoice-list filter value for "needs attention" (an issued invoice SIFEN rejected). */
   static final String ATTENTION_FILTER = "ATTENTION";
 
-  /** The invoice status and SIFEN status a list/report filter value stands for. */
-  record StatusFilter(InvoiceStatus status, SifenSubmissionStatus sifenStatus) {}
+  /** Invoice-list filter value for "approved" (issued, SIFEN approved or never sent to SIFEN). */
+  static final String APPROVED_FILTER = "APPROVED";
+
+  /** Invoice-list filter value for "in progress" (issued, SIFEN has not answered yet). */
+  static final String PROCESSING_FILTER = "PROCESSING";
 
   /**
-   * Resolves the {@code status} query parameter of the invoice list and report: {@code ISSUED} /
-   * {@code VOIDED}, or {@code ATTENTION} — an issued invoice SIFEN rejected, the one state that
-   * needs the user to act. Blank or unknown values mean no filter.
+   * What a list/report filter value stands for: the invoice status, and — when {@code sifenFilter}
+   * is on — the SIFEN statuses accepted ({@code includeNoSifen}: also invoices never sent to
+   * SIFEN). {@code sifenStatuses} is never empty, so it is always safe to bind to an {@code IN}.
+   */
+  record StatusFilter(
+      InvoiceStatus status,
+      boolean sifenFilter,
+      List<SifenSubmissionStatus> sifenStatuses,
+      boolean includeNoSifen) {
+
+    static StatusFilter none() {
+      return new StatusFilter(null, false, List.of(SifenSubmissionStatus.REJECTED), false);
+    }
+
+    static StatusFilter ofStatus(InvoiceStatus status) {
+      return new StatusFilter(status, false, List.of(SifenSubmissionStatus.REJECTED), false);
+    }
+
+    static StatusFilter issuedWith(boolean includeNoSifen, SifenSubmissionStatus... sifen) {
+      return new StatusFilter(InvoiceStatus.ISSUED, true, List.of(sifen), includeNoSifen);
+    }
+  }
+
+  /**
+   * Resolves the {@code status} query parameter of the invoice list and report. The plain {@code
+   * ISSUED} / {@code VOIDED} filter by the invoice's own status; the rest mirror the states the
+   * screens show for an issued invoice: {@code APPROVED} (SIFEN approved, or never sent to SIFEN),
+   * {@code PROCESSING} (queued or waiting for SIFEN's answer) and {@code ATTENTION} (SIFEN rejected
+   * it — the one state that needs the user to act). Blank or unknown values mean no filter.
    */
   static StatusFilter resolveStatusFilter(String statusStr) {
     if (statusStr == null || statusStr.isBlank()) {
-      return new StatusFilter(null, null);
+      return StatusFilter.none();
     }
     String normalized = statusStr.trim().toUpperCase();
-    if (ATTENTION_FILTER.equals(normalized)) {
-      return new StatusFilter(InvoiceStatus.ISSUED, SifenSubmissionStatus.REJECTED);
-    }
-    try {
-      return new StatusFilter(InvoiceStatus.valueOf(normalized), null);
-    } catch (IllegalArgumentException e) {
-      return new StatusFilter(null, null); // ignore bad status filter
+    switch (normalized) {
+      case ATTENTION_FILTER:
+        return StatusFilter.issuedWith(false, SifenSubmissionStatus.REJECTED);
+      case APPROVED_FILTER:
+        return StatusFilter.issuedWith(
+            true, SifenSubmissionStatus.APPROVED, SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
+      case PROCESSING_FILTER:
+        return StatusFilter.issuedWith(
+            false, SifenSubmissionStatus.QUEUED, SifenSubmissionStatus.PENDING_VERIFICATION);
+      default:
+        try {
+          return StatusFilter.ofStatus(InvoiceStatus.valueOf(normalized));
+        } catch (IllegalArgumentException e) {
+          return StatusFilter.none(); // ignore bad status filter
+        }
     }
   }
 
@@ -826,7 +863,9 @@ public class InvoiceService implements ApplicationEventPublisherAware {
             fromTo[1],
             clientId,
             statusFilter.status(),
-            statusFilter.sifenStatus(),
+            statusFilter.sifenFilter(),
+            statusFilter.sifenStatuses(),
+            statusFilter.includeNoSifen(),
             qTrimmed,
             qInvoiceNumber,
             pageable);
@@ -862,7 +901,9 @@ public class InvoiceService implements ApplicationEventPublisherAware {
         fromTo[1],
         clientId,
         statusFilter.status(),
-        statusFilter.sifenStatus(),
+        statusFilter.sifenFilter(),
+        statusFilter.sifenStatuses(),
+        statusFilter.includeNoSifen(),
         qTrimmed,
         qInvoiceNumber,
         PageRequest.of(0, 5000));

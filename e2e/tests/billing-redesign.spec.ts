@@ -423,45 +423,65 @@ test.describe("Facturación rediseñada · historial", () => {
     await expect(rows).toHaveCount(1);
   });
 
-  test("RD-19 el chip 'Needs attention' lista solo las facturas rechazadas por SIFEN", async ({
-    page,
-    request,
-  }) => {
-    test.setTimeout(90_000);
+  test("RD-19 cada chip de estado lista solo las facturas de ese estado", async ({ page, request }) => {
+    test.setTimeout(120_000);
     const token = await prepare(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     const stamp = Date.now();
-    const okName = `E2E RD19 OK ${stamp}`;
+    const approvedName = `E2E RD19 OK ${stamp}`;
+    const queuedName = `E2E RD19 COLA ${stamp}`;
     const rejectedName = `E2E RD19 RECHAZADA ${stamp}`;
-    await seedInvoice(request, token, seed.serviceId, seed.serviceFullName, okName);
-    const rejected = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
-      clientId: null,
-      clientDisplayName: rejectedName,
-      email: "rd19@example.com",
-      lines: [{ serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 55_000 }],
-      payments: [{ method: "CASH", amount: 55_000 }],
-    });
-    const rej = await request.post(
-      `${API_BASE}/api/admin/sifen-test-support/invoices/${rejected.id}/simulate-sifen-rejection`,
-    );
-    expect(rej.ok(), await rej.text()).toBeTruthy();
+    const mk = (name: string) =>
+      apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+        clientId: null,
+        clientDisplayName: name,
+        email: "rd19@example.com",
+        lines: [{ serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 55_000 }],
+        payments: [{ method: "CASH", amount: 55_000 }],
+      });
+    const support = async (id: number, path: string) => {
+      const res = await request.post(`${API_BASE}/api/admin/sifen-test-support/invoices/${id}/${path}`);
+      expect(res.ok(), await res.text()).toBeTruthy();
+    };
+    const approved = await mk(approvedName);
+    await support(approved.id, "prepare-as-approved");
+    const queued = await mk(queuedName);
+    await support(queued.id, "prepare-with-status/QUEUED");
+    const rejected = await mk(rejectedName);
+    await support(rejected.id, "simulate-sifen-rejection");
+    // An invoice that never went to SIFEN counts as approved too.
+    const plainName = `E2E RD19 SINSIFEN ${stamp}`;
+    await mk(plainName);
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToInvoiceHistory(page);
     await searchInvoiceHistory(page, "E2E RD19");
     const rows = page.locator('[data-testid^="invoice-history-row-"]');
-    await expect(rows).toHaveCount(2);
+    await expect(rows).toHaveCount(4);
 
-    await page.getByTestId("invoice-history-status-ATTENTION").click();
-    await expect(page.getByTestId("invoice-history-status-ATTENTION")).toHaveAttribute("aria-pressed", "true");
+    const chip = (key: string) => page.getByTestId(`invoice-history-status-${key}`);
+
+    await chip("APPROVED").click();
+    await expect(chip("APPROVED")).toHaveAttribute("aria-pressed", "true");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: approvedName })).toHaveCount(1);
+    await expect(rows.filter({ hasText: plainName })).toHaveCount(1);
+    await expect(rows.filter({ hasText: rejectedName })).toHaveCount(0);
+
+    await chip("PROCESSING").click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(queuedName);
+    await expect(rows.first().locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "processing");
+
+    await chip("ATTENTION").click();
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText(rejectedName);
     await expect(rows.first().locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "attention");
     await expect(page.getByTestId(`invoice-row-correct-resend-${rejected.id}`)).toBeVisible();
 
-    await page.getByTestId("invoice-history-status-all").click();
-    await expect(rows).toHaveCount(2);
+    await chip("all").click();
+    await expect(rows).toHaveCount(4);
   });
 
   test("RD-16 fechas bajo 'Filtros' y reporte bajo el menú '⋯'", async ({ page, request }) => {

@@ -496,8 +496,9 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
         onChange={(v) => handleFilterChange(() => setFilterStatus(v))}
         options={[
           { value: "", label: t("femme.billing.history.filterStatusAll") },
-          { value: "ISSUED", label: t("femme.billing.state.issued") },
-          // Issued invoices SIFEN rejected — the ones that need the user to act.
+          // One chip per state the rows show (Approved, In progress, Needs attention, Voided).
+          { value: "APPROVED", label: t("femme.billing.state.issued") },
+          { value: "PROCESSING", label: t("femme.billing.state.processing") },
           { value: "ATTENTION", label: t("femme.billing.state.attention") },
           { value: "VOIDED", label: t("femme.billing.history.statusVoided") },
         ]}
