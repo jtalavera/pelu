@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoicePanel, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -121,7 +121,9 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    // Not eligible: the "⋯" menu does not even offer the option.
+    await page.getByTestId("invoice-more-actions-button").click();
+    await expect(page.getByTestId("invoice-menu-cancel-sifen")).toHaveCount(0);
     await expect(page.getByTestId("sifen-cancel-button")).toHaveCount(0);
   });
 
@@ -138,7 +140,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await openInvoiceDetail(page, client.fullName);
 
     // Cancellation lives in the invoice detail's "SIFEN" tab.
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "cancel");
     await expect(page.getByTestId("sifen-cancel-deadline-remaining")).toBeVisible();
     await expect(page.getByTestId("sifen-cancel-deadline-remaining")).toContainText(
       /\d+h \d+m left/,
@@ -160,7 +162,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "cancel");
     await expect(page.getByTestId("sifen-cancel-deadline-expired")).toBeVisible();
     await expect(page.getByTestId("sifen-cancel-deadline-expired")).toContainText(
       "48-hour window",
@@ -183,8 +185,10 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    // The status lives in the technical detail; the cancellation record in the cancel option.
+    await openInvoicePanel(page, "tech");
     await expect(page.getByTestId("sifen-status-section").getByText("Cancelled")).toBeVisible();
+    await openInvoicePanel(page, "cancel");
     await expect(page.getByTestId("sifen-cancel-button")).toHaveCount(0);
 
     const history = page.getByTestId("sifen-cancellation-history");
@@ -224,7 +228,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "cancel");
     await expect(page.getByTestId("sifen-cancel-button")).toBeVisible();
     await expect(page.getByRole("button", { name: "Void invoice" })).toHaveCount(0);
   });
@@ -260,7 +264,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "cancel");
     await expect(page.getByTestId("sifen-cancel-too-soon")).toBeVisible();
     await expect(page.getByTestId("sifen-cancel-button")).toBeDisabled();
   });
@@ -279,8 +283,9 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await openInvoiceDetail(page, client.fullName);
 
     // Status is untouched — still Approved, not Cancelled.
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "tech");
     await expect(page.getByTestId("sifen-status-section").getByText("Approved", { exact: true })).toBeVisible();
+    await openInvoicePanel(page, "cancel");
     await expect(page.getByTestId("sifen-cancellation-rejected")).toBeVisible();
     await expect(page.getByTestId("sifen-cancellation-rejected")).toContainText(
       "Plazo de solicitud de cancelación de una FE extemporáneo",
@@ -301,7 +306,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "cancel");
     await page.getByTestId("sifen-cancel-button").click();
     await page
       .getByLabel("Cancellation reason")
@@ -312,6 +317,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
       timeout: 30_000,
     });
     // The invoice must remain Approved — no ambiguous partial state.
+    await openInvoicePanel(page, "tech");
     await expect(page.getByTestId("sifen-status-section").getByText("Approved", { exact: true })).toBeVisible();
   });
 
@@ -327,7 +333,7 @@ test.describe("SIFEN HU-10 · Cancelar una factura ya aprobada", () => {
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "cancel");
     await page.getByTestId("sifen-cancel-button").click();
     await page.getByLabel("Cancellation reason").fill("abcd");
     await page.getByTestId("sifen-cancel-confirm-button").click();

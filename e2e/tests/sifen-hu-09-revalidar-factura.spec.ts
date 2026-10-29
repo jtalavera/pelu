@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoicePanel, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -115,7 +115,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await openInvoiceDetail(page, client.fullName);
 
     // The revalidate button lives in the invoice detail's "SIFEN" tab.
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "revalidate");
     const button = page.getByTestId("sifen-revalidate-button");
     await expect(button).toBeVisible();
 
@@ -150,7 +150,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await openInvoiceDetail(page, client.fullName);
 
     // The revalidate button lives in the invoice detail's "SIFEN" tab.
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "revalidate");
     const section = page.getByTestId("sifen-status-section");
     await expect(section.getByText("Not found / Rejected", { exact: true })).toBeVisible();
 
@@ -178,7 +178,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "revalidate");
     const section = page.getByTestId("sifen-tab-revalidate");
     await expect(
       section.getByText(

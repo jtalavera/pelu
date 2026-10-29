@@ -17,7 +17,7 @@ versión *lite* de smartphones y tablets.
 | Archivo | Qué es |
 | --- | --- |
 | `BillingHome.tsx` | Inicio: título, chip de caja, total del día, botón **+ Nueva factura**, "Facturas de hoy" plegado. Caja cerrada: formulario de apertura + "Ver historial". Panel de caja (modal): datos de la apertura, movimientos, cierre y acceso al historial de cajas. |
-| `NewInvoiceFlow.tsx` | Nueva factura en 3 pasos (¿Qué hiciste? / ¿A quién? / ¿Cómo paga?) + "Más opciones" + barra de total fija + pantalla de éxito. |
+| `NewInvoiceFlow.tsx` | Nueva factura en 3 pasos (¿Qué servicios o productos facturamos? / ¿A quién? / ¿Cómo paga?) + "Más opciones" + barra de total fija + pantalla de éxito. |
 | `InvoiceHistory.tsx` | Historial único con vista **Facturas / Cajas**. Búsqueda con Enter, chips de estado, fechas bajo "Filtros", reporte bajo "⋯". |
 | `billingShared.ts` | Constantes y helpers compartidos (rangos de fecha, métodos de pago, umbral SIFEN…). |
 | `../BillingPage.tsx` | Orquestador de las tres pantallas (`home` / `invoice` / `history`). Conserva los nombres `activeTab: session \| invoice \| history` que usan Clientes, Fichas y el tour. |
@@ -51,9 +51,9 @@ Una sola vista, sin pestañas:
    profesionales, Descargar muestra (estilo producción, solo en el ambiente de prueba) y **Detalle técnico**
    (timbrado, estado SIFEN real, CDC, protocolo, mensajes y contenido del documento).
 
-Cada opción abre su panel debajo de las acciones (pueden estar varios abiertos). Los formularios y las reglas de
-SIFEN son los de siempre; solo cambió dónde viven. Un helper de e2e abre todos los paneles a la vez
-(`openInvoiceSifenTab`) y `clickInvoiceMenuItem` elige una opción del menú.
+Cada opción abre su panel debajo de las acciones, de a uno por vez: elegir otra lo reemplaza, y se cierra con su ✕, con la misma opción o volviendo a tocar **⋯** (que además vuelve a mostrar el menú). Los formularios y las reglas de
+SIFEN son los de siempre; solo cambió dónde viven. Los helpers de e2e son `openInvoicePanel` / `closeInvoicePanel` (un panel a la vez), `openInvoiceSifenTab`
+(detalle técnico) y `clickInvoiceMenuItem`.
 
 ## Reglas de negocio que se conservan
 

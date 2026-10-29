@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { goToInvoiceHistory, openInvoiceMainTab, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceMainTab, openInvoicePanel, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -332,7 +332,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
 
     // KuDE-by-email lives in the invoice detail's "SIFEN" tab.
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "share");
     await page.getByLabel("Email address").fill("cliente-e2e@example.com");
     const sendButton = page.getByTestId("sifen-kude-send-email-button");
 
@@ -411,7 +411,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
 
     // Same section as the email action (SIFEN tab) — the WhatsApp button sits right next to "Send".
     // Playwright runs the app in English (see playwright.config.ts `locale: "en-US"`).
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "share");
     const shareSection = page.getByTestId("sifen-tab-email");
     await expect(shareSection.getByRole("heading", { name: "Share KuDE by email or WhatsApp" })).toBeVisible();
     await expect(page.getByTestId("sifen-kude-send-email-button")).toBeVisible();
@@ -521,7 +521,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "share");
     const whatsappButton = page.getByTestId("sifen-kude-send-whatsapp-button");
     await expect(whatsappButton).toBeVisible();
 
@@ -596,7 +596,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
       const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
       await expect(row).toBeVisible({ timeout: 30_000 });
       await row.click();
-      await openInvoiceSifenTab(page);
+      await openInvoicePanel(page, "share");
       return { client, invoice, phone };
     }
 
@@ -748,7 +748,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "share");
     await expect(page.getByLabel("Email address")).toHaveValue(clientEmail);
   });
 
@@ -789,7 +789,7 @@ test.describe("SIFEN HU-08 · Generar el comprobante en PDF (KuDE) de una factur
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "share");
     await expect(page.getByLabel("Email address")).toHaveValue("");
   });
 });

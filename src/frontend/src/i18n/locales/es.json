@@ -1470,7 +1470,7 @@
         "backToStart": "Volver al inicio",
         "noName": "Sin nombre",
         "noNameHint": "Consumidor final. Buscá un cliente arriba para identificarlo en la factura.",
-        "stepItems": "¿Qué hiciste?",
+        "stepItems": "¿Qué servicios o productos facturamos?",
         "stepClient": "¿A quién?",
         "stepPayment": "¿Cómo paga?",
         "splitPayment": "Dividir pago",
@@ -1631,6 +1631,7 @@
         "viewDetail": "Ver",
         "openDetail": "Abrir comprobante #{{invoiceNumber}}",
         "detail": {
+          "hidePanel": "Ocultar esta opción",
           "lineDiscount": "Descuento",
           "share": "Compartir",
           "moreActions": "Más acciones",

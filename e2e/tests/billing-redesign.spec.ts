@@ -167,7 +167,7 @@ test.describe("Facturación rediseñada · nueva factura", () => {
     await goToBillingHome(page);
     await page.getByRole("button", { name: "+ New invoice" }).click();
 
-    await expect(page.getByRole("heading", { name: "What did you do?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Which services or products are we billing?" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Who is it for?" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "How does the client pay?" })).toBeVisible();
     await expect(page.getByTestId("billing-client-default")).toContainText("No name");

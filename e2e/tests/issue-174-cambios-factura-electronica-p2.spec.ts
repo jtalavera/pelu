@@ -19,7 +19,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { choosePaymentMethod, ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, openInvoiceSifenTab, openMoreOptions, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
+import { choosePaymentMethod, ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, openInvoicePanel, openInvoiceSifenTab, openMoreOptions, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #174 "Cambios en factura electrónica (Parte 2)":
@@ -400,7 +400,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await row.click();
 
     const modal = page.getByRole("dialog");
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     // The client-identification form is shown, and the section's own "Identify client" title is
     // the only heading with that label — no inner heading repeating it.
     await expect(

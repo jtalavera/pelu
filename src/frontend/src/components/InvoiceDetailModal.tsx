@@ -289,23 +289,14 @@ export function InvoiceDetailModal({
   const commissionsEnabled = useFeatureFlag("COMMISSIONS");
   const { me } = useMe();
   // Redesign: one view. Share, void, cancel, revalidate, identify and the technical detail are
-  // "panels" that open under the actions (the secondary ones from the "⋯" menu); several can be
-  // open at once.
-  const [openPanels, setOpenPanels] = useState<ReadonlySet<DetailPanel>>(() => new Set());
+  // "panels" that open under the actions (the secondary ones from the "⋯" menu). One panel is open
+  // at a time: picking another replaces it, picking the same one (or its ✕, or "⋯" again) closes it.
+  const [activePanel, setActivePanel] = useState<DetailPanel | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const togglePanel = (panel: DetailPanel) =>
-    setOpenPanels((prev) => {
-      const next = new Set(prev);
-      if (next.has(panel)) next.delete(panel);
-      else next.add(panel);
-      return next;
-    });
+    setActivePanel((current) => (current === panel ? null : panel));
   const closePanel = (panel: DetailPanel) =>
-    setOpenPanels((prev) => {
-      const next = new Set(prev);
-      next.delete(panel);
-      return next;
-    });
+    setActivePanel((current) => (current === panel ? null : current));
   const [showAssignProfessionals, setShowAssignProfessionals] = useState(false);
   const [assignProfessionalsSuccess, setAssignProfessionalsSuccess] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
@@ -1658,7 +1649,7 @@ export function InvoiceDetailModal({
             key: "void",
             label: t("femme.billing.history.detail.voidButton"),
             testId: "invoice-menu-void",
-            active: openPanels.has("void"),
+            active: activePanel === "void",
             onSelect: () => togglePanel("void"),
           });
         }
@@ -1667,7 +1658,7 @@ export function InvoiceDetailModal({
             key: "cancel",
             label: t("femme.billing.history.detail.sifen.cancelButton"),
             testId: "invoice-menu-cancel-sifen",
-            active: openPanels.has("cancel"),
+            active: activePanel === "cancel",
             onSelect: () => togglePanel("cancel"),
           });
         }
@@ -1676,7 +1667,7 @@ export function InvoiceDetailModal({
             key: "revalidate",
             label: t("femme.billing.history.detail.sifen.revalidateButton"),
             testId: "invoice-menu-revalidate",
-            active: openPanels.has("revalidate"),
+            active: activePanel === "revalidate",
             onSelect: () => togglePanel("revalidate"),
           });
         }
@@ -1685,7 +1676,7 @@ export function InvoiceDetailModal({
             key: "identify",
             label: t("femme.billing.history.detail.sifen.identifyClientButton"),
             testId: "invoice-menu-identify",
-            active: openPanels.has("identify"),
+            active: activePanel === "identify",
             onSelect: () => togglePanel("identify"),
           });
         }
@@ -1716,11 +1707,29 @@ export function InvoiceDetailModal({
           key: "tech",
           label: t("femme.billing.history.detail.technicalDetail"),
           testId: "invoice-menu-technical-detail",
-          active: openPanels.has("tech"),
+          active: activePanel === "tech",
           onSelect: () => togglePanel("tech"),
         });
 
         const grossDiscount = (l: InvoiceLine) => discountMonetaryAmount(l);
+        // An option picked from "⋯" is showing ("Share" has its own button).
+        const menuPanelOpen = activePanel !== null && activePanel !== "share";
+        const framed = (panel: DetailPanel, content: ReactNode) => (
+          <div key={panel} className="flex flex-col gap-1" data-testid={`invoice-panel-${panel}`}>
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t("femme.billing.history.detail.hidePanel")}
+                data-testid={`invoice-panel-close-${panel}`}
+                onClick={() => closePanel(panel)}
+              >
+                ✕
+              </Button>
+            </div>
+            {content}
+          </div>
+        );
         // SIFEN invoices keep the container the SIFEN specs already use; an invoice never sent to
         // SIFEN has no SIFEN section at all.
         const wrapPanels = (children: ReactNode) =>
@@ -1905,7 +1914,7 @@ export function InvoiceDetailModal({
                 <Button
                   variant="outline"
                   size="sm"
-                  aria-expanded={openPanels.has("share")}
+                  aria-expanded={activePanel === "share"}
                   data-testid="invoice-share-button"
                   onClick={() => togglePanel("share")}
                 >
@@ -1920,7 +1929,16 @@ export function InvoiceDetailModal({
                   aria-expanded={menuOpen}
                   aria-label={t("femme.billing.history.detail.moreActions")}
                   data-testid="invoice-more-actions-button"
-                  onClick={() => setMenuOpen((o) => !o)}
+                  onClick={() => {
+                    // Pressing "⋯" again dismisses what it opened: the menu, or the option picked
+                    // from it (and then the menu is back, ready to pick another option).
+                    if (menuOpen) {
+                      setMenuOpen(false);
+                    } else {
+                      if (menuPanelOpen) setActivePanel(null);
+                      setMenuOpen(true);
+                    }
+                  }}
                 >
                   ⋯
                 </Button>
@@ -1951,6 +1969,11 @@ export function InvoiceDetailModal({
                       className="block min-h-11 w-full px-3 py-2 text-left text-sm hover:bg-primary-lt disabled:opacity-50"
                     >
                       {item.label}
+                      {item.active && (
+                        <span aria-hidden="true" className="ml-2 text-primary">
+                          ✓
+                        </span>
+                      )}
                       {item.hint && (
                         <span
                           data-testid="sifen-kude-sample-hint"
@@ -1968,9 +1991,12 @@ export function InvoiceDetailModal({
             {/* Panels (the container keeps the testid the SIFEN specs already use) */}
             {wrapPanels(
               <>
-            {openPanels.has("share") && shareAvailable && sifenSections?.email}
+            {activePanel === "share" && shareAvailable && framed("share", sifenSections?.email)}
 
-            {openPanels.has("void") && voidAvailable && (
+            {activePanel === "void" &&
+              voidAvailable &&
+              framed(
+                "void",
               <form
                 className="flex flex-col gap-3 rounded-lg border border-line p-4"
                 onSubmit={(e) => void handleVoid(e)}
@@ -2006,14 +2032,16 @@ export function InvoiceDetailModal({
                       : t("femme.billing.history.detail.voidConfirm")}
                   </Button>
                 </div>
-              </form>
-            )}
+              </form>,
+              )}
 
-            {openPanels.has("revalidate") && revalidateAvailable && sifenSections?.revalidate}
-            {openPanels.has("cancel") && cancelAvailable && sifenSections?.cancel}
-            {openPanels.has("identify") && identifyAvailable && sifenSections?.identify}
+            {activePanel === "revalidate" && revalidateAvailable && framed("revalidate", sifenSections?.revalidate)}
+            {activePanel === "cancel" && cancelAvailable && framed("cancel", sifenSections?.cancel)}
+            {activePanel === "identify" && identifyAvailable && framed("identify", sifenSections?.identify)}
 
-            {openPanels.has("tech") && (
+            {activePanel === "tech" &&
+              framed(
+                "tech",
               <div className="flex flex-col gap-4" data-testid="invoice-detail-technical">
                 <SifenSection
                   data-testid="invoice-technical-base"
@@ -2036,8 +2064,8 @@ export function InvoiceDetailModal({
                 </SifenSection>
                 {sifenSections?.status}
                 {sifenSections?.document}
-              </div>
-            )}
+              </div>,
+              )}
               </>,
             )}
           </div>

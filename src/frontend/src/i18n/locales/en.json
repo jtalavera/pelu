@@ -1470,7 +1470,7 @@
         "backToStart": "Back to start",
         "noName": "No name",
         "noNameHint": "Final consumer. Search a client above to identify them on the invoice.",
-        "stepItems": "What did you do?",
+        "stepItems": "Which services or products are we billing?",
         "stepClient": "Who is it for?",
         "stepPayment": "How does the client pay?",
         "splitPayment": "Split payment",
@@ -1631,6 +1631,7 @@
         "viewDetail": "View",
         "openDetail": "Open invoice #{{invoiceNumber}}",
         "detail": {
+          "hidePanel": "Hide this option",
           "lineDiscount": "Discount",
           "share": "Share",
           "moreActions": "More actions",

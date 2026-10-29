@@ -136,34 +136,47 @@ export async function clickInvoiceMenuItem(page: Page, testId: string) {
 }
 
 /**
- * Opens (when the invoice offers it) every panel that used to live in the "SIFEN" tab: the share
- * panel (KuDE by email / WhatsApp), the technical detail (status, control number, history), and
- * the revalidate / cancel / identify-client panels. Several panels can be open at once, so this
- * leaves the detail looking like the old tab: every SIFEN control visible.
+ * Opens one panel of the invoice detail: "share" (KuDE by email / WhatsApp, its own button), or one
+ * of the options behind "⋯": "tech" (technical detail: SIFEN status, control number, history),
+ * "revalidate", "cancel", "identify" or "void". Only one panel is open at a time — opening one
+ * replaces the previous one — and picking the open one again closes it, so this does nothing when
+ * the panel is already showing.
  */
-export async function openInvoiceSifenTab(page: Page) {
+export type InvoicePanel = "share" | "tech" | "revalidate" | "cancel" | "identify" | "void";
+
+const PANEL_MENU_ITEM: Record<Exclude<InvoicePanel, "share">, string> = {
+  tech: "invoice-menu-technical-detail",
+  revalidate: "invoice-menu-revalidate",
+  cancel: "invoice-menu-cancel-sifen",
+  identify: "invoice-menu-identify",
+  void: "invoice-menu-void",
+};
+
+export async function openInvoicePanel(page: Page, panel: InvoicePanel) {
   const dialog = page.getByRole("dialog").last();
   await expect(dialog.getByTestId("invoice-detail-view")).toBeVisible();
-  const share = dialog.getByTestId("invoice-share-button");
-  if ((await share.count()) > 0 && (await share.getAttribute("aria-expanded")) !== "true") {
-    await share.click();
+  const frame = dialog.getByTestId(`invoice-panel-${panel}`);
+  if (await frame.isVisible()) return;
+  if (panel === "share") {
+    await dialog.getByTestId("invoice-share-button").click();
+  } else {
+    await dialog.getByTestId("invoice-more-actions-button").click();
+    await dialog.getByTestId(PANEL_MENU_ITEM[panel]).click();
   }
-  const more = dialog.getByTestId("invoice-more-actions-button");
-  for (const id of [
-    "invoice-menu-technical-detail",
-    "invoice-menu-revalidate",
-    "invoice-menu-cancel-sifen",
-    "invoice-menu-identify",
-  ]) {
-    await more.click();
-    const item = dialog.getByTestId(id);
-    if ((await item.count()) > 0 && (await item.getAttribute("aria-pressed")) !== "true") {
-      await item.click();
-    } else {
-      await more.click(); // nothing to open here: close the menu again
-    }
-  }
-  await expect(dialog.getByTestId("invoice-detail-technical")).toBeVisible();
+  await expect(frame).toBeVisible();
+}
+
+/** Closes the open panel of the invoice detail through its ✕ button. */
+export async function closeInvoicePanel(page: Page, panel: InvoicePanel) {
+  const dialog = page.getByRole("dialog").last();
+  await dialog.getByTestId(`invoice-panel-close-${panel}`).click();
+  await expect(dialog.getByTestId(`invoice-panel-${panel}`)).toHaveCount(0);
+}
+
+/** Opens the technical detail (the SIFEN status lives there). Kept for the SIFEN specs. */
+export async function openInvoiceSifenTab(page: Page) {
+  await openInvoicePanel(page, "tech");
+  const dialog = page.getByRole("dialog").last();
   await expect(dialog.getByTestId("sifen-tab-status")).toBeVisible();
 }
 

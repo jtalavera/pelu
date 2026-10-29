@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoicePanel, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -151,7 +151,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     // Client identification lives in the invoice detail's "SIFEN" tab. Issue #167 AC3: the form
     // renders directly in its section — no separate trigger button; opening the tab is enough to
     // see the whole form and its fields.
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-identify-client-button")).toHaveCount(0);
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
     await expect(page.locator("#identify-client-name")).toBeVisible();
@@ -179,7 +179,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
   });
 
@@ -234,7 +234,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-client-identification-rejected")).toBeVisible();
     await expect(page.getByTestId("sifen-client-identification-rejected")).toContainText(
       "Datos del receptor inconsistentes",
@@ -254,7 +254,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-name").fill("Comercial ABC S.A.");
     await page.getByLabel("Company").click();
     await page.locator("#identify-client-ruc").fill("not-a-ruc");
@@ -276,7 +276,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-name").fill("John Smith");
     await page.getByLabel("Client from abroad").click();
     await page.locator("#identify-client-document").fill("AB123456");
@@ -294,7 +294,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
 
@@ -314,7 +314,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-name").fill("María Fernanda Duarte");
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
@@ -331,7 +331,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
   });
 });
