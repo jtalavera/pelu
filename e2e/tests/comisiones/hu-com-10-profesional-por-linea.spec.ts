@@ -11,6 +11,7 @@ import {
   setTenantFlag,
   type CommissionWorld,
 } from "../../fixtures/commissions";
+import { fillPaymentAmount, goToBillingHome, goToInvoiceHistory, openMoreOptions } from "../../fixtures/billing";
 
 /** HU-COM-10 · Asignar profesional / vendedor a las líneas del comprobante (modifica HU-14). */
 let w: CommissionWorld;
@@ -30,7 +31,7 @@ test.afterAll(async ({ request }) => {
 
 async function openNewInvoice(page: import("@playwright/test").Page) {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
   await page.getByLabel("Search or select client").click();
   await page.getByRole("button", { name: "Occasional client" }).click();
@@ -45,16 +46,16 @@ test("venta suelta: cada línea (servicio y producto) tiene Profesional / Vended
   await openNewInvoice(page);
   await pickServiceLine(page, w.product.name, 0);
   // Starts empty and lists only active professionals; empty line shows the warning.
+  await openMoreOptions(page);
   await expect(page.locator("#line-professional-0")).toHaveValue("");
   await expect(page.getByTestId("line-no-commission-0")).toHaveText("This line will not generate a commission.");
   await page.locator("#line-professional-0").selectOption({ label: w.bea.name });
   await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Add item" }).click();
   await pickServiceLine(page, w.service.name, 1);
   await expect(page.getByTestId("line-no-commission-1")).toBeVisible();
 
-  await page.locator("#pay-amount-0").fill("220000");
+  await fillPaymentAmount(page, "220000");
   const inv = await clickIssueInvoiceAndExpectSuccess(page);
   const es = await entriesOfInvoice(request, w.adminToken, inv.id, 1);
   expect(es[0].professionalId).toBe(w.bea.id);
@@ -83,6 +84,7 @@ test("desde una ficha de servicio el profesional se precarga y se puede cambiar"
   await page.locator("tbody tr").filter({ hasText: "CLIENTE FICHA" }).first().click();
   await page.getByRole("button", { name: "Generate invoice" }).click();
   await expect(page).toHaveURL(/\/app\/billing/);
+  await openMoreOptions(page);
   const select = page.locator("#line-professional-0");
   await expect(select).toHaveValue(String(w.ana.id));
   await select.selectOption({ label: w.bea.name });
@@ -132,9 +134,10 @@ test("con la flag deshabilitada el campo es opcional, sin aviso de comisión, y 
     await loginAdminUi(page, w);
     await openNewInvoice(page);
     await pickServiceLine(page, w.service.name, 0);
+    await openMoreOptions(page);
     await expect(page.locator("#line-professional-0")).toHaveValue("");
     await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
-    await page.locator("#pay-amount-0").fill("110000");
+    await fillPaymentAmount(page, "110000");
     await clickIssueInvoiceAndExpectSuccess(page);
   } finally {
     await setTenantFlag(request, w.tenantId, "COMMISSIONS", true);

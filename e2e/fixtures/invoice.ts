@@ -22,13 +22,21 @@ export async function pickServiceLine(
 }
 
 /**
- * Issue #284: the payment method of every payment row starts EMPTY in "New invoice" so the user
- * has to choose it. Selects `label` (default "Cash") in each row that is still empty — specs that
- * don't care about the method call this before issuing.
+ * Issue #284: no payment method is preselected in "New invoice" so the user has to choose it.
+ * Chooses `label` (default "Cash") when the payment is still undecided — specs that don't care
+ * about the method call this before issuing. A single payment is picked with the method buttons;
+ * a split payment has one select per row, and every row that is still empty gets `label`.
  */
 export async function ensurePaymentMethodChosen(page: Page, label = "Cash"): Promise<void> {
   const selects = page.locator('select[id^="pay-method-"]');
   const count = await selects.count();
+  if (count === 0) {
+    const pressed = page.locator('button[id^="pay-method-"][aria-pressed="true"]');
+    if ((await pressed.count()) === 0) {
+      await page.getByRole("group", { name: "Method" }).getByRole("button", { name: label, exact: true }).click();
+    }
+    return;
+  }
   for (let i = 0; i < count; i++) {
     const select = selects.nth(i);
     if ((await select.inputValue()) === "") {

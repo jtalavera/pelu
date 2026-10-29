@@ -13,7 +13,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
@@ -175,14 +175,14 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("7000000");
     await expect(page.locator("#line-price-0")).toHaveValue("7.000.000");
-    await page.locator("#pay-amount-0").fill("7000000");
+    await fillPaymentAmount(page, "7000000");
 
     await ensurePaymentMethodChosen(page);
 
@@ -214,7 +214,7 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -224,7 +224,7 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
     await page.locator("#client-identity-document-number").fill("");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("7000000");
-    await page.locator("#pay-amount-0").fill("7000000");
+    await fillPaymentAmount(page, "7000000");
 
     await ensurePaymentMethodChosen(page);
 

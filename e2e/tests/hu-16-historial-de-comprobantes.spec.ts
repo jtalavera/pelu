@@ -10,7 +10,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe("HU-16 · Historial de comprobantes", () => {
@@ -37,22 +37,23 @@ test.describe("HU-16 · Historial de comprobantes", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
     await expect(page.locator("#line-price-0")).toHaveValue("5.000");
-    await page.locator("#pay-amount-0").fill("5000");
+    await fillPaymentAmount(page, "5000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
     // Clicking the History tab (no page reload) refreshes the list on its own — see HU-16 · 4.
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
     const histRow = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
@@ -60,20 +61,45 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await expect(histRow).toContainText("5.000");
   });
 
-  test("HU-16 · 1 y HU-16 · 3 pestaña historial encabezados y columnas", async ({ page }) => {
+  // Billing redesign: the history is a list of rows (client, total, one plain-language state, plus
+  // number / invoice date / payment method) instead of a table with a column per technical field.
+  test("HU-16 · 1 y HU-16 · 3 pantalla historial: título, búsqueda, estados y datos de cada fila", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E HU16-1 ${Date.now()}`);
+    const invoice = await apiPostJson<{ id: number; invoiceNumberFormatted: string }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [{ serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 5000 }],
+      payments: [{ method: "CASH", amount: 5000 }],
+    });
+
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Number" })).toBeVisible();
-    // Issue #190 — "Date" was relabelled "Invoice date" to distinguish it from "Sent to SIFEN".
-    await expect(page.getByRole("columnheader", { name: "Invoice date" })).toBeVisible();
-    // Issue #186 · AC3 — the SIFEN-sent date is its own column, distinct from the comprobante date.
-    await expect(page.getByRole("columnheader", { name: "Sent to SIFEN" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Client" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Total" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Status", exact: true })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "SIFEN status" })).toBeVisible();
+    await goToInvoiceHistory(page);
+    await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeVisible();
+    await expect(page.locator("#invoice-history-text-filter")).toBeVisible();
+    for (const status of ["all", "APPROVED", "PROCESSING", "ATTENTION", "VOIDED"]) {
+      await expect(page.getByTestId(`invoice-history-status-${status}`)).toBeVisible();
+    }
+    // No table with a column per technical field any more.
+    await expect(page.getByRole("columnheader")).toHaveCount(0);
+
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.getByTestId(`invoice-history-row-${invoice.id}`);
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(row.getByTestId("invoice-row-number")).toHaveText(invoice.invoiceNumberFormatted);
+    await expect(row.getByTestId("invoice-row-date")).toContainText(/\d{1,2}:\d{2}/);
+    await expect(row.getByTestId("invoice-row-client")).toContainText(client.fullName);
+    await expect(row.getByTestId("invoice-row-total")).toHaveText("5.000");
+    await expect(row.getByTestId("invoice-row-method")).toHaveText("Cash");
+    await expect(row.locator("[data-invoice-state]")).toHaveText("Approved");
   });
 
   test("HU-16 · 4 abrir la pestaña Historial siempre refresca la lista, sin recargar la página", async ({
@@ -86,8 +112,8 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await page.goto("/app/billing");
     // Visit History once before the invoice exists, so the fetch that follows this test's
     // later re-click is a genuine refresh, not the tab's very first (mount-time) fetch.
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
+    await goToInvoiceHistory(page);
+    await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeVisible();
 
     // Create the invoice out-of-band (API), while the browser tab stays on Billing/History —
     // nothing here triggers a page reload or touches any filter, so the History tab itself must
@@ -113,11 +139,11 @@ test.describe("HU-16 · Historial de comprobantes", () => {
 
     // Switch away from History, then back — no page.goto, no manual "Refresh" click, no filter
     // change. Re-entering the tab must be enough to show the invoice created above.
-    await page.getByRole("tab", { name: "Cash Register" }).click();
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToBillingHome(page);
+    await goToInvoiceHistory(page);
 
     const histRow = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
@@ -155,10 +181,10 @@ test.describe("HU-16 · Historial de comprobantes", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
     const histRow = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: client.fullName })
       .filter({ visible: true });
     await expect(histRow).toBeVisible({ timeout: 30_000 });
@@ -182,9 +208,9 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  // Issue #186 · AC1 + AC3 — the "Corregir y reenviar" action sits in its own column (not stacked
-  // under ESTADO SIFEN), and a separate "Sent to SIFEN" column shows the transmission date.
-  test("Issue #186 · AC1 y AC3 columna propia para reenviar + fecha de envío a SIFEN", async ({
+  // Issue #186 · AC1 + AC3 — the "Corregir y reenviar" action is its own control (never mixed into
+  // the state), and the SIFEN transmission date is shown apart from the comprobante date.
+  test("Issue #186 · AC1 y AC3 acción propia para reenviar + fecha de envío a SIFEN", async ({
     page,
     request,
   }) => {
@@ -220,31 +246,27 @@ test.describe("HU-16 · Historial de comprobantes", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
-    // Plain invoice: no correction button, "Sent to SIFEN" cell shows "—".
-    await page.locator("#invoice-history-text-filter").fill(plainClient.fullName);
+    // Plain invoice: no correction button and nothing sent to SIFEN.
+    await searchInvoiceHistory(page, plainClient.fullName);
     const plainRow = page
-      .locator('tbody tr[role="button"]', { hasText: plainClient.fullName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: plainClient.fullName })
       .filter({ visible: true });
     await expect(plainRow).toBeVisible({ timeout: 30_000 });
     await expect(plainRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(0);
-    // cells: [number, date, sentToSifen, client, total, status, sifenStatus, action]
-    await expect(plainRow.locator("td")).toHaveCount(8);
-    await expect(plainRow.locator("td").nth(2)).toHaveText("—");
+    await expect(plainRow.getByTestId("invoice-row-sifen-sent")).toHaveCount(0);
 
-    // Rejected invoice: correction button lives in the LAST cell, and the ESTADO SIFEN cell
-    // (nth 6) holds only the badge, not the button. "Sent to SIFEN" cell shows a real date.
-    await page.locator("#invoice-history-text-filter").fill(rejectedName);
+    // Rejected invoice: state "Needs attention", its own "Correct and resend" button, and a real
+    // "Sent to SIFEN" date (simulate-sifen-rejection stamps sifenSubmittedAt).
+    await searchInvoiceHistory(page, rejectedName);
     const rejRow = page
-      .locator('tbody tr[role="button"]', { hasText: rejectedName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: rejectedName })
       .filter({ visible: true });
     await expect(rejRow).toBeVisible({ timeout: 30_000 });
-    const resendButton = rejRow.locator('[data-testid^="invoice-row-correct-resend-"]');
-    await expect(resendButton).toBeVisible();
-    await expect(rejRow.locator("td").last().locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(1);
-    await expect(rejRow.locator("td").nth(6).locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(0);
-    await expect(rejRow.locator("td").nth(2)).not.toHaveText("—");
-    await expect(rejRow.locator("td").nth(2)).toContainText(/\d/);
+    await expect(rejRow.locator("[data-invoice-state]")).toHaveText("Needs attention");
+    await expect(page.getByTestId(`invoice-row-correct-resend-${rejected.id}`)).toBeVisible();
+    await expect(rejRow.getByTestId("invoice-row-sifen-sent")).toContainText("Sent to SIFEN");
+    await expect(rejRow.getByTestId("invoice-row-sifen-sent")).toContainText(/\d/);
   });
 });

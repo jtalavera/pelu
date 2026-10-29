@@ -19,6 +19,7 @@ import {
 } from "../../fixtures/stock/api";
 import { issueInvoiceApi, issueInvoiceUi } from "../../fixtures/stock/billing";
 import { getStockWorld } from "../../fixtures/stock/world";
+import { clickInvoiceMenuItem, goToInvoiceHistory } from "../../fixtures/billing";
 
 // HU-63 · Descontar stock al facturar (Cambio 6) · HU-64 · Reponer stock al anular o corregir
 // (Cambio 7). Cross-system: the kardex is read from the real control-stock.
@@ -92,13 +93,13 @@ test.describe("HU-64 · Reponer stock al anular o corregir", () => {
     const inv = await issueInvoiceUi(page, [{ serviceId: p.serviceId, name, quantity: 2 }]);
     await expect.poll(() => onHand(p.stockToken, p.itemId), { timeout: 30_000 }).toBe(3);
 
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page
-      .locator('tbody tr[role="button"]')
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ visible: true, hasText: inv.invoiceNumberFormatted })
       .first()
       .click();
-    await page.getByRole("button", { name: "Void invoice" }).click();
+    await clickInvoiceMenuItem(page, "invoice-menu-void");
     await page.locator("#void-reason").fill("Cliente devolvió el producto");
     await page.getByRole("button", { name: "Confirm void" }).click();
 

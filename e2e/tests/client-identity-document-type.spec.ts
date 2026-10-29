@@ -8,7 +8,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 // Explicit document-type selector (RUC / Cédula paraguaya / Pasaporte / Cédula extranjera /
@@ -32,7 +32,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -43,7 +43,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     const invoice = await apiGetJson<{
@@ -56,24 +56,24 @@ test.describe("Selector de tipo de documento de identidad", () => {
     expect(invoice.clientRucOverride).toBeNull();
   });
 
-  test("factura: 'Sin identificar' deshabilita el campo de número", async ({ page, request }) => {
+  // Redesign: "Sin identificar" is no longer a document type to pick — an invoice with no client is
+  // "Sin nombre" by default, and it simply carries no identity fields.
+  test("factura: 'Sin nombre' (por defecto) no tiene campos de documento", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
-    await page.getByLabel("Search or select client").click();
-    await page.getByRole("button", { name: "Occasional client" }).click();
-
-    await page.locator("#client-identity-document-type").selectOption("INNOMINADO");
-    await expect(page.locator("#client-identity-document-number")).toBeDisabled();
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
+    await expect(page.locator("#client-identity-document-type")).toHaveCount(0);
+    await expect(page.locator("#client-identity-document-number")).toHaveCount(0);
 
     // Below the Gs. 7.000.000 threshold, an unidentified client is still allowed to issue.
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     const invoice = await apiGetJson<{

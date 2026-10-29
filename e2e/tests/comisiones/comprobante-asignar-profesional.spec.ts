@@ -12,6 +12,7 @@ import {
   voidInvoice,
   type CommissionWorld,
 } from "../../fixtures/commissions";
+import { clickInvoiceMenuItem, goToInvoiceHistory } from "../../fixtures/billing";
 
 /**
  * "Asignar profesional" en el detalle del comprobante: después de emitir una factura sin
@@ -57,9 +58,9 @@ const ofInvoice = async (request: import("@playwright/test").APIRequestContext) 
 
 async function openInvoiceDetail(page: Page, invoiceNumber: string) {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "History" }).click();
+  await goToInvoiceHistory(page);
   await page
-    .locator('tbody tr[role="button"]')
+    .locator('[data-testid^="invoice-history-row-"]')
     .filter({ visible: true })
     .filter({ hasText: invoiceNumber })
     .first()
@@ -76,7 +77,7 @@ test("el botón abre un pop up, asigna o cambia profesionales de los servicios e
 
   await loginAdminUi(page, w);
   await openInvoiceDetail(page, detail.invoiceNumberFormatted);
-  await page.getByTestId("invoice-assign-professionals-button").click();
+  await clickInvoiceMenuItem(page, "invoice-assign-professionals-button");
 
   const dialog = page.getByTestId("assign-professionals-dialog");
   await expect(dialog).toBeVisible();
@@ -110,7 +111,7 @@ test("el botón abre un pop up, asigna o cambia profesionales de los servicios e
 
   // Re-opening: the assigned line can be changed too (with an optional reason), and the pending
   // one assigned, in the same save.
-  await page.getByTestId("invoice-assign-professionals-button").click();
+  await clickInvoiceMenuItem(page, "invoice-assign-professionals-button");
   await expect(page.getByTestId(`assign-professionals-line-${line1.id}`)).toContainText(
     `Currently assigned: ${w.bea.name}`,
   );
@@ -130,7 +131,7 @@ test("el botón abre un pop up, asigna o cambia profesionales de los servicios e
   expect(sumOf(await ofInvoice(request), w.bea.id)).toBe(20000);
 
   // The reason is optional: change line 1 back to Bea without one.
-  await page.getByTestId("invoice-assign-professionals-button").click();
+  await clickInvoiceMenuItem(page, "invoice-assign-professionals-button");
   await expect(page.locator(`#assign-professional-${line1.id}`)).toHaveValue(String(w.ana.id));
   await page.locator(`#assign-professional-${line1.id}`).selectOption({ label: w.bea.name });
   await page.getByTestId("assign-professionals-save").click();
@@ -226,11 +227,13 @@ test("el botón no se muestra en un comprobante anulado ni con el módulo de com
   await loginAdminUi(page, w);
   await openInvoiceDetail(page, detail.invoiceNumberFormatted);
   await expect(page.getByRole("button", { name: "Close" }).last()).toBeVisible();
+  await page.getByTestId("invoice-more-actions-button").click();
   await expect(page.getByTestId("invoice-assign-professionals-button")).toHaveCount(0);
 
   await setTenantFlag(request, w.tenantId, "COMMISSIONS", true);
   await voidInvoice(request, w.adminToken, invoiceId);
   await openInvoiceDetail(page, detail.invoiceNumberFormatted);
   await expect(page.getByRole("button", { name: "Close" }).last()).toBeVisible();
+  await page.getByTestId("invoice-more-actions-button").click();
   await expect(page.getByTestId("invoice-assign-professionals-button")).toHaveCount(0);
 });

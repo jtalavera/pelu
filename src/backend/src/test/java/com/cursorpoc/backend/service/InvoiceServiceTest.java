@@ -3,10 +3,12 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -935,7 +937,17 @@ class InvoiceServiceTest {
     neverSubmitted.setIssuedAt(Instant.now());
 
     when(invoiceRepository.findByTenantWithFiltersPaged(
-            eq(1L), any(), any(), any(), any(), any(), any(), any()))
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
         .thenReturn(new PageImpl<>(List.of(submitted, neverSubmitted)));
     when(invoiceRepository.sumIssuedTotalWithFilters(eq(1L), any(), any(), any(), any(), any()))
         .thenReturn(BigDecimal.ZERO);
@@ -966,12 +978,143 @@ class InvoiceServiceTest {
             SifenSubmissionStatus.APPROVED,
             1,
             1);
-    when(invoiceRepository.findReportRows(eq(1L), any(), any(), any(), any(), any(), any(), any()))
+    when(invoiceRepository.findReportRows(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
         .thenReturn(List.of(row));
 
     var result = invoiceService.listInvoicesForReport(1L, null, null, null, "ISSUED", null);
 
     assertThat(result).containsExactly(row);
+  }
+
+  @Test
+  void resolveStatusFilter_plainStatusesFilterOnlyByInvoiceStatus() {
+    var issued = InvoiceService.resolveStatusFilter("ISSUED");
+    assertThat(issued.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(issued.sifenFilter()).isFalse();
+    var voided = InvoiceService.resolveStatusFilter(" voided ");
+    assertThat(voided.status()).isEqualTo(InvoiceStatus.VOIDED);
+    assertThat(voided.sifenFilter()).isFalse();
+  }
+
+  @Test
+  void resolveStatusFilter_blankOrUnknownMeansNoFilter() {
+    for (String value : new String[] {null, "", "  ", "NOPE"}) {
+      var filter = InvoiceService.resolveStatusFilter(value);
+      assertThat(filter.status()).as(String.valueOf(value)).isNull();
+      assertThat(filter.sifenFilter()).as(String.valueOf(value)).isFalse();
+      // Never empty, so it is always safe to bind to an IN clause.
+      assertThat(filter.sifenStatuses()).isNotEmpty();
+    }
+  }
+
+  @Test
+  void resolveStatusFilter_attentionIsAnIssuedInvoiceSifenRejected() {
+    var filter = InvoiceService.resolveStatusFilter("attention");
+    assertThat(filter.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(filter.sifenFilter()).isTrue();
+    assertThat(filter.sifenStatuses()).containsExactly(SifenSubmissionStatus.REJECTED);
+    assertThat(filter.includeNoSifen()).isFalse();
+  }
+
+  @Test
+  void resolveStatusFilter_approvedIncludesInvoicesNeverSentToSifen() {
+    var filter = InvoiceService.resolveStatusFilter("APPROVED");
+    assertThat(filter.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(filter.sifenFilter()).isTrue();
+    assertThat(filter.sifenStatuses())
+        .containsExactlyInAnyOrder(
+            SifenSubmissionStatus.APPROVED, SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
+    assertThat(filter.includeNoSifen()).isTrue();
+  }
+
+  @Test
+  void resolveStatusFilter_processingIsQueuedOrWaitingForSifen() {
+    var filter = InvoiceService.resolveStatusFilter("processing");
+    assertThat(filter.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(filter.sifenFilter()).isTrue();
+    assertThat(filter.sifenStatuses())
+        .containsExactlyInAnyOrder(
+            SifenSubmissionStatus.QUEUED, SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(filter.includeNoSifen()).isFalse();
+  }
+
+  @Test
+  void listInvoices_attentionFilterQueriesIssuedInvoicesSifenRejected() {
+    when(invoiceRepository.findByTenantWithFiltersPaged(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(invoiceRepository.sumIssuedTotalWithFilters(eq(1L), any(), any(), any(), any(), any()))
+        .thenReturn(BigDecimal.ZERO);
+
+    invoiceService.listInvoices(1L, null, null, null, "ATTENTION", null, 0, 10);
+
+    verify(invoiceRepository)
+        .findByTenantWithFiltersPaged(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            eq(InvoiceStatus.ISSUED),
+            eq(true),
+            eq(List.of(SifenSubmissionStatus.REJECTED)),
+            eq(false),
+            any(),
+            any(),
+            any());
+  }
+
+  @Test
+  void listInvoicesForReport_approvedFilterMatchesTheListFilter() {
+    when(invoiceRepository.findReportRows(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
+        .thenReturn(List.of());
+
+    invoiceService.listInvoicesForReport(1L, null, null, null, "APPROVED", null);
+
+    verify(invoiceRepository)
+        .findReportRows(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            eq(InvoiceStatus.ISSUED),
+            eq(true),
+            any(),
+            eq(true),
+            any(),
+            any(),
+            any());
   }
 
   @Test

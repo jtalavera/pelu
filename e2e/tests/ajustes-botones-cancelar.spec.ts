@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { apiPostJson, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { professionalFormDialog } from "../fixtures/ui";
+import { goToInvoiceHistory } from "../fixtures/billing";
 
 /**
  * Todos los botones Cancelar / Cerrar comparten el mismo estilo (secundario, con fondo) y van
@@ -47,7 +48,7 @@ test.describe("Botones Cancelar unificados", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History", exact: true }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await page.locator("#service-record-history-text-filter").fill(client.fullName);
     const row = page.locator('tbody tr[role="button"]').filter({ hasText: client.fullName });
     await expect(row).toBeVisible({ timeout: 30_000 });

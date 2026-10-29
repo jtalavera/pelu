@@ -5,7 +5,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { choosePaymentMethod, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, openMoreOptions } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #170: SIFEN rejected invoices paid with Tarjeta de crédito/débito because the mandatory
@@ -28,7 +28,7 @@ test.describe("Issue #170 · Marca de tarjeta y redondeo de descuento", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -39,7 +39,7 @@ test.describe("Issue #170 · Marca de tarjeta y redondeo de descuento", () => {
     // No card brand field for CASH (the default method).
     await expect(page.locator("#pay-card-brand-0")).toHaveCount(0);
 
-    await page.locator("#pay-method-0").selectOption("CREDIT_CARD");
+    await choosePaymentMethod(page, "CREDIT_CARD");
     await expect(page.locator("#pay-card-brand-0")).toBeVisible();
 
     // AC1: submitting without a brand is blocked with a validation error.
@@ -62,14 +62,14 @@ test.describe("Issue #170 · Marca de tarjeta y redondeo de descuento", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("Visa credit");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("50000");
-    await page.locator("#pay-method-0").selectOption("CREDIT_CARD");
+    await choosePaymentMethod(page, "CREDIT_CARD");
     await page.locator("#pay-card-brand-0").selectOption("VISA");
 
     await clickIssueInvoiceAndExpectSuccess(page);
@@ -83,14 +83,14 @@ test.describe("Issue #170 · Marca de tarjeta y redondeo de descuento", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("Other debit brand");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("50000");
-    await page.locator("#pay-method-0").selectOption("DEBIT_CARD");
+    await choosePaymentMethod(page, "DEBIT_CARD");
     await page.locator("#pay-card-brand-0").selectOption("OTHER");
     await page.locator("#pay-card-brand-other-0").fill("Union Pay");
 
@@ -108,7 +108,7 @@ test.describe("Issue #170 · Marca de tarjeta y redondeo de descuento", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -116,18 +116,17 @@ test.describe("Issue #170 · Marca de tarjeta y redondeo de descuento", () => {
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
-    await page.getByRole("button", { name: "Add item" }).click();
     await pickServiceLine(page, seed.serviceFullName, 1);
     await page.locator("#line-price-1").fill("20000");
-    await page.getByRole("button", { name: "Add item" }).click();
     await pickServiceLine(page, seed.serviceFullName, 2);
     await page.locator("#line-price-2").fill("30000");
 
+    await openMoreOptions(page);
     await page.locator("#discount-type").selectOption("FIXED");
     await page.locator("#discount-value").fill("6000");
     // Subtotal 60.000, discount 6.000, total 54.000 (dot-separator, no-decimals format).
     await expect(page.getByText("54.000", { exact: true }).first()).toBeVisible();
-    await page.locator("#pay-amount-0").fill("54000");
+    await fillPaymentAmount(page, "54000");
 
     await clickIssueInvoiceAndExpectSuccess(page);
   });

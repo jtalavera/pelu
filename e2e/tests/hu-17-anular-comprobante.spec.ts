@@ -7,7 +7,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { clickInvoiceMenuItem, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe("HU-17 · Anular comprobante", () => {
@@ -33,20 +33,21 @@ test.describe("HU-17 · Anular comprobante", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("8000");
     await expect(page.locator("#line-price-0")).toHaveValue("8.000");
-    await page.locator("#pay-amount-0").fill("8000");
+    await fillPaymentAmount(page, "8000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("8.000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
-    await page.getByRole("button", { name: "Void invoice" }).click();
+    await goToInvoiceHistory(page);
+    await page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first().click();
+    await clickInvoiceMenuItem(page, "invoice-menu-void");
     await expect(page.locator("#void-reason")).toBeVisible();
     await page.getByRole("button", { name: "Confirm void" }).click();
     await expect(page.getByText("Enter a reason.", { exact: true })).toBeVisible();
@@ -80,27 +81,28 @@ test.describe("HU-17 · Anular comprobante", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill("E2E Vo2");
     await page.getByRole("button", { name: clientName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("3000");
     await expect(page.locator("#line-price-0")).toHaveValue("3.000");
-    await page.locator("#pay-amount-0").fill("3000");
+    await fillPaymentAmount(page, "3000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("3.000");
     await clickIssueInvoiceAndExpectSuccess(page);
     // Navigate fresh to ensure History loads up-to-date invoice data
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     // Filter by unique client name to isolate this invoice from previous test runs
-    await page.locator("#invoice-history-text-filter").fill(clientName);
-    const clientRow = page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first();
+    await searchInvoiceHistory(page, clientName);
+    const clientRow = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first();
     await expect(clientRow).toBeVisible({ timeout: 15_000 });
     // Total in history table must use dot separator, no decimals
     await expect(clientRow).toContainText("3.000");
     await clientRow.click();
-    await page.getByRole("button", { name: "Void invoice" }).click();
+    await clickInvoiceMenuItem(page, "invoice-menu-void");
     await page.locator("#void-reason").fill("Wrong amount");
     const [voidRes2] = await Promise.all([
       page.waitForResponse(
@@ -115,7 +117,7 @@ test.describe("HU-17 · Anular comprobante", () => {
     expect(voidRes2.ok(), await voidRes2.text()).toBeTruthy();
     // After void the detail closes; verify the row now shows Voided status
     await expect(
-      page.locator("tbody tr[role=\"button\"]").filter({ hasText: "Voided" }).filter({ visible: true }).first(),
+      page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: "Voided" }).filter({ visible: true }).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 });

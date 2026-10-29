@@ -19,7 +19,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #173 "Cambios en factura electrónica (Parte 1)":
@@ -130,7 +130,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await selectClientInSearch(page, nameWithEmail);
@@ -161,14 +161,14 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await selectClientInSearch(page, name);
     await page.locator("#billing-client-email").fill(newEmail);
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("45000");
-    await page.locator("#pay-amount-0").fill("45000");
+    await fillPaymentAmount(page, "45000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
     const updated = await apiGetJson<{ email: string }>(request, token, `/api/clients/${client.id}`);
@@ -199,7 +199,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await selectClientInSearch(page, name);
@@ -207,7 +207,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await page.locator("#billing-client-email").fill(editedEmail);
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("45000");
-    await page.locator("#pay-amount-0").fill("45000");
+    await fillPaymentAmount(page, "45000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
     const unchanged = await apiGetJson<{ email: string }>(request, token, `/api/clients/${client.id}`);
@@ -257,7 +257,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await expect(page.locator("#billing-client-email")).toHaveValue(email);
   });
 
-  test("item 1 · with SIFEN enabled the email is mandatory, except for a 'Sin nominar' comprobante", async ({
+  test("item 1 · with SIFEN enabled the email is mandatory, except for a 'Sin nombre' comprobante", async ({
     page,
     request,
   }) => {
@@ -271,7 +271,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await page.getByLabel("Search or select client").click();
@@ -279,7 +279,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await page.getByLabel("Client name / business name").fill("E2E 173 obligatorio");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("45000");
-    await page.locator("#pay-amount-0").fill("45000");
+    await fillPaymentAmount(page, "45000");
 
     // blank email → the form blocks submission with a field-level error, no POST fires
     let invoicePosted = false;
@@ -291,8 +291,10 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     await expect(page.locator("#billing-client-email-err")).toBeVisible();
     expect(invoicePosted).toBe(false);
 
-    // "Comprobante sin nominar" → email no longer required, issuance succeeds
-    await page.getByLabel("Unnamed invoice (no client identified)").check();
+    // "Sin nombre" (clearing the client goes back to the default) → the email is no longer asked
+    // for nor required, and issuance succeeds
+    await page.getByLabel("Search or select client").fill("");
+    await expect(page.locator("#billing-client-email")).toHaveCount(0);
     await clickIssueInvoiceAndExpectSuccess(page);
   });
 

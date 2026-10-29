@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type HTMLAttributes, type Rea
 import { useTranslation } from "react-i18next";
 import {
   Alert,
-  Badge,
   Button,
   cn,
   Heading,
@@ -12,10 +11,6 @@ import {
   RadioGroup,
   Select,
   Spinner,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   Text,
   Textarea,
   Label,
@@ -36,6 +31,7 @@ import { useMe } from "../hooks/useMe";
 import { AssignInvoiceProfessionalsDialog } from "./invoice/AssignInvoiceProfessionalsDialog";
 import { FieldValidationError } from "./FieldValidationError";
 import { InvoiceCorrectionForm } from "./InvoiceCorrectionForm";
+import { InvoiceStatePill, deriveInvoiceState } from "./InvoiceStatePill";
 import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
@@ -230,7 +226,7 @@ function discountLabel(type: string, value: string | null): string {
   return formatAmountDecimal(value, "0");
 }
 
-type DetailTab = "invoice" | "sifen";
+type DetailPanel = "share" | "void" | "cancel" | "revalidate" | "identify" | "tech";
 
 /** A titled block of the invoice detail's SIFEN tab — stacked bordered sections, no accordion. */
 function SifenSection({
@@ -292,13 +288,29 @@ export function InvoiceDetailModal({
   // commissions module and an ADMIN (same as HU-COM-13).
   const commissionsEnabled = useFeatureFlag("COMMISSIONS");
   const { me } = useMe();
-  const [detailTab, setDetailTab] = useState<DetailTab>("invoice");
+  // Redesign: one view. Share, void, cancel, revalidate, identify and the technical detail are
+  // "panels" that open under the actions (the secondary ones from the "⋯" menu); several can be
+  // open at once.
+  const [openPanels, setOpenPanels] = useState<ReadonlySet<DetailPanel>>(() => new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
+  const togglePanel = (panel: DetailPanel) =>
+    setOpenPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(panel)) next.delete(panel);
+      else next.add(panel);
+      return next;
+    });
+  const closePanel = (panel: DetailPanel) =>
+    setOpenPanels((prev) => {
+      const next = new Set(prev);
+      next.delete(panel);
+      return next;
+    });
   const [showAssignProfessionals, setShowAssignProfessionals] = useState(false);
   const [assignProfessionalsSuccess, setAssignProfessionalsSuccess] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showVoidForm, setShowVoidForm] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [voidReasonError, setVoidReasonError] = useState<string | null>(null);
   const [voiding, setVoiding] = useState(false);
@@ -675,7 +687,7 @@ export function InvoiceDetailModal({
         voidReason: voidReason.trim(),
       });
       setVoidSuccess(true);
-      setShowVoidForm(false);
+      closePanel("void");
       onVoided?.();
     } catch (err) {
       setVoidError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
@@ -747,223 +759,11 @@ export function InvoiceDetailModal({
     invoice?.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION" ||
     invoice?.sifenSubmissionStatus === "QUEUED" ||
     invoice?.sifenSubmissionStatus === "PENDING_VERIFICATION";
-  const assignProfessionalsButton = canAssignProfessionals ? (
-    <Button
-      variant="outline"
-      size="sm"
-      data-testid="invoice-assign-professionals-button"
-      onClick={() => {
-        setAssignProfessionalsSuccess(false);
-        setShowAssignProfessionals(true);
-      }}
-    >
-      {t("femme.billing.history.detail.assignProfessionals.button")}
-    </Button>
-  ) : null;
-
-  // Tab 1 ("Comprobante"): the invoice itself, down to the KuDE / assign-professional buttons.
-  const invoiceTabContent = invoice ? (
-    <div className="flex flex-col gap-4">
-      {/* Status badge */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Badge
-          variant={invoice.status === "ISSUED" ? "success" : "destructive"}
-          data-testid="invoice-status-badge"
-        >
-          {invoice.status === "ISSUED"
-            ? t("femme.billing.history.statusIssued")
-            : t("femme.billing.history.statusVoided")}
-        </Badge>
-        {invoice.status === "VOIDED" && invoice.voidReason && (
-          <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-            {t("femme.billing.history.detail.voidReason2")}: {invoice.voidReason}
-          </Text>
-        )}
-      </div>
-
-      {/* Meta */}
-      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 text-sm">
-        <div>
-          <span className="font-medium">{t("femme.billing.history.detail.fiscalStamp")}: </span>
-          {invoice.fiscalStampNumber}
-        </div>
-        <div>
-          <span className="font-medium">{t("femme.billing.history.detail.issuedAt")}: </span>
-          {formatParaguayDateTime(invoice.issuedAt, dateLocale)}
-        </div>
-        <div>
-          <span className="font-medium">{t("femme.billing.history.detail.client")}: </span>
-          {invoice.clientDisplayName ?? "—"}
-        </div>
-        {invoice.clientRucOverride && (
-          <div>
-            <span className="font-medium">{t("femme.billing.history.detail.clientRuc")}: </span>
-            {invoice.clientRucOverride}
-          </div>
-        )}
-      </div>
-
-      {/* Lines */}
-      <div>
-        <Text className="font-medium mb-2">{t("femme.billing.history.detail.items")}</Text>
-        {invoice.clientIdentityDocumentTypeOverride === "TARJETA_DIPLOMATICA" && (
-          <Text
-            variant="small"
-            data-testid="invoice-detail-tax-exempt-note"
-            className="mb-2 text-[rgb(var(--color-muted-foreground))]"
-          >
-            {t("femme.billing.history.detail.taxExemptNote")}
-          </Text>
-        )}
-        <div className="overflow-x-auto rounded border border-[rgb(var(--color-border))]">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[rgb(var(--color-muted))]">
-              <tr>
-                <th className="px-3 py-2 text-left">{t("femme.billing.history.detail.colDescription")}</th>
-                <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colQty")}</th>
-                <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colUnitPrice")}</th>
-                <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colItemDiscountType")}</th>
-                <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colItemDiscountValue")}</th>
-                <th className="px-3 py-2 text-right">{t("femme.billing.history.detail.colLineTotal")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.lines.map((l) => (
-                <tr key={l.id} className="border-t border-[rgb(var(--color-border))]">
-                  <td className="px-3 py-2">{l.description}</td>
-                  <td className="px-3 py-2 text-right">{l.quantity}</td>
-                  <td className="px-3 py-2 text-right">{formatAmountDecimal(l.unitPrice)}</td>
-                  <td className="px-3 py-2 text-right">
-                    {(() => {
-                      const label = discountTypeLabel(l.discountType ?? "", l.discountValue ?? null);
-                      if (label === "FIXED") return t("femme.billing.history.detail.fixedAmount");
-                      return label;
-                    })()}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {formatAmountDecimal(discountMonetaryAmount(l), "—")}
-                  </td>
-                  <td className="px-3 py-2 text-right">{formatAmountDecimal(l.lineTotal)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Totals */}
-      <div className="flex flex-col items-end gap-1 text-sm">
-        <div className="flex gap-8">
-          <span className="text-[rgb(var(--color-muted-foreground))]">{t("femme.billing.history.detail.subtotal")}</span>
-          <span>{formatAmountDecimal(invoice.subtotal)}</span>
-        </div>
-        {invoice.discountType !== "NONE" && (
-          <div className="flex gap-8">
-            <span className="text-[rgb(var(--color-muted-foreground))]">{t("femme.billing.history.detail.discount")}</span>
-            <span>{discountLabel(invoice.discountType, invoice.discountValue)}</span>
-          </div>
-        )}
-        <div className="flex gap-8 font-semibold">
-          <span>{t("femme.billing.history.detail.total")}</span>
-          <span>{formatAmountDecimal(invoice.total)}</span>
-        </div>
-      </div>
-
-      {/* Payments */}
-      <div>
-        <Text className="font-medium mb-1">{t("femme.billing.history.detail.payments")}</Text>
-        <div className="flex flex-col gap-1">
-          {invoice.payments.map((p, i) => (
-            <div key={i} className="flex justify-between text-sm">
-              <span>
-                {t(`femme.billing.invoice.paymentMethod${capitalize(p.method)}`)}
-                {p.cardBrand &&
-                  ` — ${
-                    p.cardBrand === "OTHER"
-                      ? p.cardBrandOtherDescription
-                      : t(`femme.billing.invoice.cardBrand${capitalize(p.cardBrand)}`)
-                  }`}
-              </span>
-              <span>{formatAmountDecimal(p.amount)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Issue #163: the KuDE download (+ "Asignar profesional") closes the invoice tab. */}
-      {kudeRowShown && (
-        <div className="flex flex-col gap-2">
-          {(invoice.sifenSubmissionStatus === "QUEUED" ||
-            invoice.sifenSubmissionStatus === "PENDING_VERIFICATION") && (
-            <Text
-              variant="small"
-              className="text-[rgb(var(--color-muted-foreground))]"
-              data-testid="sifen-kude-pending-validation-note"
-            >
-              {t("femme.billing.history.detail.sifen.kudePendingValidationNote")}
-            </Text>
-          )}
-          {kudeError && (
-            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-              {kudeError}
-            </Alert>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={kudeDownloading}
-              data-testid="sifen-kude-download-button"
-              onClick={() => void handleDownloadKude()}
-            >
-              {kudeDownloading
-                ? t("femme.billing.history.detail.sifen.kudeDownloading")
-                : t("femme.billing.history.detail.sifen.kudeDownloadButton")}
-            </Button>
-            {assignProfessionalsButton}
-            {sifenEnvironment === "TEST" && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={sampleKudeDownloading}
-                data-testid="sifen-kude-sample-download-button"
-                onClick={() => void handleDownloadSampleKude()}
-              >
-                {sampleKudeDownloading
-                  ? t("femme.billing.history.detail.sifen.kudeSampleDownloading")
-                  : t("femme.billing.history.detail.sifen.kudeSampleDownloadButton")}
-              </Button>
-            )}
-          </div>
-          {sifenEnvironment === "TEST" && (
-            <Text
-              variant="small"
-              className="text-[rgb(var(--color-muted-foreground))]"
-              data-testid="sifen-kude-sample-hint"
-            >
-              {t("femme.billing.history.detail.sifen.kudeSampleHint")}
-            </Text>
-          )}
-          {sampleKudeError && (
-            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-              {sampleKudeError}
-            </Alert>
-          )}
-        </div>
-      )}
-
-      {assignProfessionalsSuccess && (
-        <Alert variant="success" data-testid="invoice-assign-professionals-success">
-          {t("femme.billing.history.detail.assignProfessionals.success")}
-        </Alert>
-      )}
-    </div>
-  ) : null;
 
   // Tab 2 ("SIFEN"): every SIFEN detail and action, as stacked titled sections (no accordion):
   // status summary first, then whatever needs attention (rejection), then the actions, and the
   // raw document content — the most technical bit — last.
-  const sifenTabContent =
+  const sifenSections =
     invoice && invoice.sifenSubmissionStatus
       ? (() => {
           const kudeEligible =
@@ -983,8 +783,9 @@ export function InvoiceDetailModal({
             invoice.sifenNumberVoidingStatus === "APPROVED" ||
             invoice.sifenNumberVoidingStatus === "APPROVED_WITH_OBSERVATION";
 
-          return (
-            <div className="flex flex-col gap-4">
+          return {
+            status: (
+              <>
               <SifenSection
                 data-testid="sifen-tab-status"
                 title={t("femme.billing.history.detail.sifen.title")}
@@ -1067,7 +868,10 @@ export function InvoiceDetailModal({
                   </Button>
                 </div>
               </SifenSection>
-
+              </>
+            ),
+            correct: (
+              <>
               {/* Issue #175 + follow-up: resolve a rejected invoice — correct & resend under
                   the same CDC, or "Anular comprobante" (= inutilizar its numeración ante
                   SIFEN). Right after the status: it is the one thing that needs attention. */}
@@ -1228,7 +1032,10 @@ export function InvoiceDetailModal({
                   )}
                 </SifenSection>
               )}
-
+              </>
+            ),
+            email: (
+              <>
               {kudeEligible && (
                 <SifenSection
                   data-testid="sifen-tab-email"
@@ -1306,7 +1113,10 @@ export function InvoiceDetailModal({
                   )}
                 </SifenSection>
               )}
-
+              </>
+            ),
+            revalidate: (
+              <>
               {/* SIFEN HU-09 AC-01/AC-05: available regardless of status as long as the invoice
                   actually has a persisted verification URL — i.e. it was really signed/submitted. */}
               {invoice.sifenVerificationUrl && (
@@ -1336,7 +1146,10 @@ export function InvoiceDetailModal({
                   </div>
                 </SifenSection>
               )}
-
+              </>
+            ),
+            cancel: (
+              <>
               {(cancelEligible || cancelHistoryVisible) && (
                 <SifenSection
                   data-testid="sifen-tab-cancel"
@@ -1512,7 +1325,10 @@ export function InvoiceDetailModal({
                   )}
                 </SifenSection>
               )}
-
+              </>
+            ),
+            identify: (
+              <>
               {(invoice.sifenClientIdentificationEligible || identifyHistoryVisible) && (
                 <SifenSection
                   data-testid="sifen-tab-identify"
@@ -1784,7 +1600,10 @@ export function InvoiceDetailModal({
                   )}
                 </SifenSection>
               )}
-
+              </>
+            ),
+            document: (
+              <>
               {(invoice.sifenSubmissionStatus === "APPROVED" ||
                 invoice.sifenSubmissionStatus === "APPROVED_WITH_OBSERVATION") &&
                 invoice.sifenQueryDocumentContent && (
@@ -1797,19 +1616,434 @@ export function InvoiceDetailModal({
                   </pre>
                 </SifenSection>
               )}
-
-              {/* Space reserved for future SIFEN functionality (issue #163 AC11-f) */}
-            </div>
-          );
+              </>
+            ),
+            kudeEligible,
+            cancelEligible,
+            cancelHistoryVisible,
+            identifyHistoryVisible,
+          };
         })()
       : null;
 
-  // A rejection still waiting to be resolved flags the SIFEN tab, so it isn't missed from tab 1.
-  const sifenNeedsAttention =
-    invoice?.sifenSubmissionStatus === "REJECTED" &&
-    invoice.status !== "VOIDED" &&
-    invoice.sifenNumberVoidingStatus !== "APPROVED" &&
-    invoice.sifenNumberVoidingStatus !== "APPROVED_WITH_OBSERVATION";
+  // ── Redesigned detail: one view ─────────────────────────────────────────────────────────────
+  const detailBody = invoice
+    ? (() => {
+        const voidAvailable =
+          allowVoid &&
+          invoice.status === "ISSUED" &&
+          !sifenCancelEligible &&
+          invoice.sifenSubmissionStatus !== "REJECTED";
+        const shareAvailable = !!sifenSections?.kudeEligible;
+        const cancelAvailable =
+          !!sifenSections && (sifenSections.cancelEligible || sifenSections.cancelHistoryVisible);
+        const revalidateAvailable = !!sifenSections && !!invoice.sifenVerificationUrl;
+        const identifyAvailable =
+          !!sifenSections &&
+          (!!invoice.sifenClientIdentificationEligible || sifenSections.identifyHistoryVisible);
+        const sampleAvailable = sifenEnvironment === "TEST" && kudeRowShown;
+
+        type MenuItem = {
+          key: string;
+          label: string;
+          testId: string;
+          hint?: string;
+          active?: boolean;
+          disabled?: boolean;
+          onSelect: () => void;
+        };
+        const menuItems: MenuItem[] = [];
+        if (voidAvailable) {
+          menuItems.push({
+            key: "void",
+            label: t("femme.billing.history.detail.voidButton"),
+            testId: "invoice-menu-void",
+            active: openPanels.has("void"),
+            onSelect: () => togglePanel("void"),
+          });
+        }
+        if (cancelAvailable) {
+          menuItems.push({
+            key: "cancel",
+            label: t("femme.billing.history.detail.sifen.cancelButton"),
+            testId: "invoice-menu-cancel-sifen",
+            active: openPanels.has("cancel"),
+            onSelect: () => togglePanel("cancel"),
+          });
+        }
+        if (revalidateAvailable) {
+          menuItems.push({
+            key: "revalidate",
+            label: t("femme.billing.history.detail.sifen.revalidateButton"),
+            testId: "invoice-menu-revalidate",
+            active: openPanels.has("revalidate"),
+            onSelect: () => togglePanel("revalidate"),
+          });
+        }
+        if (identifyAvailable) {
+          menuItems.push({
+            key: "identify",
+            label: t("femme.billing.history.detail.sifen.identifyClientButton"),
+            testId: "invoice-menu-identify",
+            active: openPanels.has("identify"),
+            onSelect: () => togglePanel("identify"),
+          });
+        }
+        if (canAssignProfessionals) {
+          menuItems.push({
+            key: "assign",
+            label: t("femme.billing.history.detail.assignProfessionals.button"),
+            testId: "invoice-assign-professionals-button",
+            onSelect: () => {
+              setAssignProfessionalsSuccess(false);
+              setShowAssignProfessionals(true);
+            },
+          });
+        }
+        if (sampleAvailable) {
+          menuItems.push({
+            key: "sample",
+            label: sampleKudeDownloading
+              ? t("femme.billing.history.detail.sifen.kudeSampleDownloading")
+              : t("femme.billing.history.detail.sifen.kudeSampleDownloadButton"),
+            testId: "sifen-kude-sample-download-button",
+            hint: t("femme.billing.history.detail.sifen.kudeSampleHint"),
+            disabled: sampleKudeDownloading,
+            onSelect: () => void handleDownloadSampleKude(),
+          });
+        }
+        menuItems.push({
+          key: "tech",
+          label: t("femme.billing.history.detail.technicalDetail"),
+          testId: "invoice-menu-technical-detail",
+          active: openPanels.has("tech"),
+          onSelect: () => togglePanel("tech"),
+        });
+
+        const grossDiscount = (l: InvoiceLine) => discountMonetaryAmount(l);
+        // SIFEN invoices keep the container the SIFEN specs already use; an invoice never sent to
+        // SIFEN has no SIFEN section at all.
+        const wrapPanels = (children: ReactNode) =>
+          sifenSections ? (
+            <div className="flex flex-col gap-4" data-testid="sifen-status-section">
+              {children}
+            </div>
+          ) : (
+            <>{children}</>
+          );
+
+        return (
+          <div className="flex flex-col gap-4" data-testid="invoice-detail-view">
+            {/* Header: who, when, one plain-language state, the total */}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="break-words font-heading text-lg font-extrabold text-ink">
+                  {invoice.clientDisplayName || t("femme.billing.invoice.noName")}
+                </div>
+                <div className="text-sm text-ink-3">
+                  {formatParaguayDateTime(invoice.issuedAt, dateLocale)}
+                  {invoice.clientRucOverride ? ` · ${invoice.clientRucOverride}` : ""}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className="font-heading text-2xl font-extrabold tabular-nums text-ink">
+                  {formatAmountDecimal(invoice.total)}
+                </span>
+                <span data-testid="invoice-status-badge">
+                  <InvoiceStatePill invoice={invoice} />
+                </span>
+              </div>
+            </div>
+            {invoice.status === "VOIDED" && invoice.voidReason && (
+              <Text variant="small" className="text-ink-3">
+                {t("femme.billing.history.detail.voidReason2")}: {invoice.voidReason}
+              </Text>
+            )}
+            {deriveInvoiceState(invoice) === "processing" && (
+              <Alert variant="info" data-testid="invoice-detail-processing-note">
+                {t("femme.billing.history.detail.processingNote")}
+              </Alert>
+            )}
+
+            {/* A rejection is the one thing that needs the user to act: it sits on top. */}
+            {sifenSections?.correct}
+
+            {/* What was charged */}
+            <section className="flex flex-col gap-2">
+              <Heading as="h3" className="text-base">
+                {t("femme.billing.history.detail.items")}
+              </Heading>
+              {invoice.clientIdentityDocumentTypeOverride === "TARJETA_DIPLOMATICA" && (
+                <Text
+                  variant="small"
+                  data-testid="invoice-detail-tax-exempt-note"
+                  className="text-ink-3"
+                >
+                  {t("femme.billing.history.detail.taxExemptNote")}
+                </Text>
+              )}
+              <ul className="divide-y divide-line" data-testid="invoice-detail-lines">
+                {invoice.lines.map((l) => {
+                  const off = grossDiscount(l);
+                  return (
+                    <li key={l.id} className="flex items-start justify-between gap-3 py-2">
+                      <span className="min-w-0">
+                        <span className="break-words">{l.description}</span>{" "}
+                        <span className="text-ink-3">× {l.quantity}</span>
+                        {off && (
+                          <span className="block text-xs text-ink-3">
+                            {t("femme.billing.history.detail.lineDiscount")}:{" "}
+                            {discountTypeLabel(l.discountType ?? "", l.discountValue ?? null) === "FIXED"
+                              ? t("femme.billing.history.detail.fixedAmount")
+                              : discountTypeLabel(l.discountType ?? "", l.discountValue ?? null)}{" "}
+                            (−{formatAmountDecimal(off)})
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-semibold tabular-nums">{formatAmountDecimal(l.lineTotal)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex flex-col items-end gap-1 border-t border-line pt-2 text-sm">
+                {invoice.discountType !== "NONE" && (
+                  <>
+                    <div className="flex gap-8">
+                      <span className="text-ink-3">{t("femme.billing.history.detail.subtotal")}</span>
+                      <span className="tabular-nums">{formatAmountDecimal(invoice.subtotal)}</span>
+                    </div>
+                    <div className="flex gap-8">
+                      <span className="text-ink-3">{t("femme.billing.history.detail.discount")}</span>
+                      <span className="tabular-nums">
+                        {discountLabel(invoice.discountType, invoice.discountValue)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="flex gap-8 font-semibold">
+                  <span>{t("femme.billing.history.detail.total")}</span>
+                  <span className="tabular-nums">{formatAmountDecimal(invoice.total)}</span>
+                </div>
+              </div>
+            </section>
+
+            {/* How it was paid */}
+            <section className="flex flex-col gap-1">
+              <Heading as="h3" className="text-base">
+                {t("femme.billing.history.detail.payments")}
+              </Heading>
+              {invoice.payments.map((p, i) => (
+                <div key={i} className="flex justify-between gap-3 text-sm">
+                  <span>
+                    {t(`femme.billing.invoice.paymentMethod${capitalize(p.method)}`)}
+                    {p.cardBrand &&
+                      ` — ${
+                        p.cardBrand === "OTHER"
+                          ? p.cardBrandOtherDescription
+                          : t(`femme.billing.invoice.cardBrand${capitalize(p.cardBrand)}`)
+                      }`}
+                  </span>
+                  <span className="tabular-nums">{formatAmountDecimal(p.amount)}</span>
+                </div>
+              ))}
+            </section>
+
+            {assignProfessionalsSuccess && (
+              <Alert variant="success" data-testid="invoice-assign-professionals-success">
+                {t("femme.billing.history.detail.assignProfessionals.success")}
+              </Alert>
+            )}
+
+            {/* Actions: one primary, "Share" on its own, everything else behind "⋯" */}
+            {(invoice.sifenSubmissionStatus === "QUEUED" ||
+              invoice.sifenSubmissionStatus === "PENDING_VERIFICATION") && (
+              <Text
+                variant="small"
+                className="text-ink-3"
+                data-testid="sifen-kude-pending-validation-note"
+              >
+                {t("femme.billing.history.detail.sifen.kudePendingValidationNote")}
+              </Text>
+            )}
+            {kudeError && (
+              <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                {kudeError}
+              </Alert>
+            )}
+            {sampleKudeError && (
+              <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+                {sampleKudeError}
+              </Alert>
+            )}
+            <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+              {kudeRowShown ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={kudeDownloading}
+                  data-testid="sifen-kude-download-button"
+                  onClick={() => void handleDownloadKude()}
+                >
+                  {kudeDownloading
+                    ? t("femme.billing.history.detail.sifen.kudeDownloading")
+                    : t("femme.billing.history.detail.sifen.kudeDownloadButton")}
+                </Button>
+              ) : (
+                invoice.status === "ISSUED" &&
+                !sifenEnabled && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    data-testid="invoice-download-pdf-button"
+                    onClick={() => void handleDownloadPdf()}
+                  >
+                    {t("femme.billing.history.detail.downloadPdf")}
+                  </Button>
+                )
+              )}
+              {shareAvailable && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-expanded={openPanels.has("share")}
+                  data-testid="invoice-share-button"
+                  onClick={() => togglePanel("share")}
+                >
+                  {t("femme.billing.history.detail.share")}
+                </Button>
+              )}
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  aria-label={t("femme.billing.history.detail.moreActions")}
+                  data-testid="invoice-more-actions-button"
+                  onClick={() => setMenuOpen((o) => !o)}
+                >
+                  ⋯
+                </Button>
+              </div>
+              <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
+                {t("femme.billing.history.detail.close")}
+              </Button>
+            </div>
+
+            {menuOpen && (
+              <ul
+                role="menu"
+                data-testid="invoice-more-actions-menu"
+                className="rounded-md border border-line bg-surface py-1"
+              >
+                {menuItems.map((item) => (
+                  <li key={item.key} role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid={item.testId}
+                      aria-pressed={item.active === undefined ? undefined : item.active}
+                      disabled={item.disabled}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        item.onSelect();
+                      }}
+                      className="block min-h-11 w-full px-3 py-2 text-left text-sm hover:bg-primary-lt disabled:opacity-50"
+                    >
+                      {item.label}
+                      {item.hint && (
+                        <span
+                          data-testid="sifen-kude-sample-hint"
+                          className="block text-xs text-ink-3"
+                        >
+                          {item.hint}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Panels (the container keeps the testid the SIFEN specs already use) */}
+            {wrapPanels(
+              <>
+            {openPanels.has("share") && shareAvailable && sifenSections?.email}
+
+            {openPanels.has("void") && voidAvailable && (
+              <form
+                className="flex flex-col gap-3 rounded-lg border border-line p-4"
+                onSubmit={(e) => void handleVoid(e)}
+                noValidate
+              >
+                <Heading as="h3" className="text-base">
+                  {t("femme.billing.history.detail.voidTitle")}
+                </Heading>
+                <div>
+                  <Label htmlFor="void-reason">{t("femme.billing.history.detail.voidReason")}</Label>
+                  <Textarea
+                    id="void-reason"
+                    value={voidReason}
+                    onChange={(e) => {
+                      setVoidReason(e.target.value);
+                      setVoidReasonError(null);
+                    }}
+                    placeholder={t("femme.billing.history.detail.voidReasonPlaceholder")}
+                    rows={2}
+                    aria-invalid={!!voidReasonError}
+                    aria-describedby={voidReasonError ? "void-reason-err" : undefined}
+                    className="mt-1 w-full"
+                  />
+                  <FieldValidationError id="void-reason-err">{voidReasonError}</FieldValidationError>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => closePanel("void")}>
+                    {t("femme.billing.history.detail.voidCancel")}
+                  </Button>
+                  <Button type="submit" variant="danger" size="sm" disabled={voiding}>
+                    {voiding
+                      ? t("femme.billing.history.detail.voiding")
+                      : t("femme.billing.history.detail.voidConfirm")}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {openPanels.has("revalidate") && revalidateAvailable && sifenSections?.revalidate}
+            {openPanels.has("cancel") && cancelAvailable && sifenSections?.cancel}
+            {openPanels.has("identify") && identifyAvailable && sifenSections?.identify}
+
+            {openPanels.has("tech") && (
+              <div className="flex flex-col gap-4" data-testid="invoice-detail-technical">
+                <SifenSection
+                  data-testid="invoice-technical-base"
+                  title={t("femme.billing.history.detail.technicalDetail")}
+                >
+                  <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs font-medium text-ink-3">
+                        {t("femme.billing.history.detail.fiscalStamp")}
+                      </dt>
+                      <dd>{invoice.fiscalStampNumber}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium text-ink-3">
+                        {t("femme.billing.history.detail.issuedAt")}
+                      </dt>
+                      <dd>{formatParaguayDateTime(invoice.issuedAt, dateLocale)}</dd>
+                    </div>
+                  </dl>
+                </SifenSection>
+                {sifenSections?.status}
+                {sifenSections?.document}
+              </div>
+            )}
+              </>,
+            )}
+          </div>
+        );
+      })()
+    : null;
 
   return (
     <>
@@ -1851,120 +2085,7 @@ export function InvoiceDetailModal({
             {pdfError}
           </Alert>
         )}
-        {invoice && sifenTabContent && (
-          <Tabs value={detailTab} onValueChange={(v) => setDetailTab(v as DetailTab)}>
-            <TabsList aria-label={t("femme.billing.history.detail.tabs.ariaLabel")}>
-              <TabsTrigger value="invoice" data-testid="invoice-detail-tab-invoice">
-                {t("femme.billing.history.detail.tabs.invoice")}
-              </TabsTrigger>
-              <TabsTrigger value="sifen" data-testid="invoice-detail-tab-sifen">
-                {t("femme.billing.history.detail.tabs.sifen")}
-                {sifenNeedsAttention && (
-                  <>
-                    <span
-                      aria-hidden="true"
-                      className="ml-2 inline-block h-2 w-2 rounded-full bg-red-600 dark:bg-red-400"
-                      data-testid="invoice-detail-tab-sifen-attention"
-                    />
-                    <span className="sr-only">
-                      {t("femme.billing.history.detail.tabs.sifenNeedsAttention")}
-                    </span>
-                  </>
-                )}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="invoice" data-testid="invoice-detail-panel-invoice">
-              {invoiceTabContent}
-            </TabsContent>
-            <TabsContent value="sifen" data-testid="sifen-status-section">
-              {sifenTabContent}
-            </TabsContent>
-          </Tabs>
-        )}
-        {invoice && !sifenTabContent && invoiceTabContent}
-        {invoice && (
-          <>
-            {/* Actions — shared by both tabs */}
-            <div className="flex flex-wrap gap-3 border-t border-[rgb(var(--color-border))] pt-4">
-              <Button variant="secondary" size="sm" onClick={onClose}>
-                {t("femme.billing.history.detail.close")}
-              </Button>
-              {invoice.status === "ISSUED" && !sifenEnabled && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleDownloadPdf()}
-                >
-                  {t("femme.billing.history.detail.downloadPdf")}
-                </Button>
-              )}
-              {!kudeRowShown && assignProfessionalsButton}
-              {allowVoid &&
-                invoice.status === "ISSUED" &&
-                !showVoidForm &&
-                !sifenCancelEligible &&
-                invoice.sifenSubmissionStatus !== "REJECTED" && (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => setShowVoidForm(true)}
-                  >
-                    {t("femme.billing.history.detail.voidButton")}
-                  </Button>
-                )}
-            </div>
-
-            {/* Void form — rejected invoices are anulados from the "Resolver factura rechazada"
-                section above (that also inutiliza the numeración ante SIFEN). */}
-            {allowVoid &&
-              showVoidForm &&
-              invoice.status === "ISSUED" &&
-              !sifenCancelEligible &&
-              invoice.sifenSubmissionStatus !== "REJECTED" && (
-              <form
-                className="border-t border-[rgb(var(--color-border))] pt-4 flex flex-col gap-3"
-                onSubmit={(e) => void handleVoid(e)}
-                noValidate
-              >
-                <Heading as="h3" className="text-base">
-                  {t("femme.billing.history.detail.voidTitle")}
-                </Heading>
-                <div>
-                  <Label htmlFor="void-reason">{t("femme.billing.history.detail.voidReason")}</Label>
-                  <Textarea
-                    id="void-reason"
-                    value={voidReason}
-                    onChange={(e) => {
-                      setVoidReason(e.target.value);
-                      setVoidReasonError(null);
-                    }}
-                    placeholder={t("femme.billing.history.detail.voidReasonPlaceholder")}
-                    rows={2}
-                    aria-invalid={!!voidReasonError}
-                    aria-describedby={voidReasonError ? "void-reason-err" : undefined}
-                    className="mt-1 w-full"
-                  />
-                  <FieldValidationError id="void-reason-err">{voidReasonError}</FieldValidationError>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowVoidForm(false)}
-                  >
-                    {t("femme.billing.history.detail.voidCancel")}
-                  </Button>
-                  <Button type="submit" variant="danger" size="sm" disabled={voiding}>
-                    {voiding
-                      ? t("femme.billing.history.detail.voiding")
-                      : t("femme.billing.history.detail.voidConfirm")}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </>
-        )}
+        {invoice && detailBody}
       </div>
     </Modal>
     {showAssignProfessionals && invoice && (

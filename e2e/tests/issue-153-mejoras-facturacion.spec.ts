@@ -6,7 +6,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 test.describe.configure({ mode: "serial" });
@@ -22,14 +22,14 @@ test.describe("Issue-153 · Mejoras a facturación", () => {
   }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
 
-    // Only "Cash Register" and "History" remain in the tab bar.
-    const tabs = page.getByRole("tablist", { name: "Billing" }).getByRole("tab");
-    await expect(tabs).toHaveCount(2);
+    // Redesign: no tab bar at all — the home has a single "New Invoice" button.
+    await expect(page.getByRole("tablist")).toHaveCount(0);
     await expect(page.getByRole("tab", { name: "New Invoice" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "New Invoice" })).toHaveCount(1);
 
-    // The "New Invoice" button inside the Cash Register tab still opens the form.
+    // The "New Invoice" button of the home still opens the form.
     await page.getByRole("button", { name: "New Invoice" }).click();
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
   });
@@ -51,7 +51,7 @@ test.describe("Issue-153 · Mejoras a facturación", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await page.getByLabel("Search or select client").click();
@@ -59,14 +59,14 @@ test.describe("Issue-153 · Mejoras a facturación", () => {
     await page.getByLabel("Client name / business name").fill("E2E-153 Occ");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("15000");
-    await page.locator("#pay-amount-0").fill("15000");
+    await fillPaymentAmount(page, "15000");
     const { invoiceNumberFormatted } = await clickIssueInvoiceAndExpectSuccess(page);
     await expect(
       page.getByText(`Invoice ${invoiceNumberFormatted} issued successfully.`),
     ).toBeVisible();
 
     // Go back to the Cash Register tab and click "New Invoice" again.
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     // The success message from the previous invoice must be gone.

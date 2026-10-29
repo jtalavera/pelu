@@ -9,7 +9,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import {
   clickIssueInvoiceAndExpectSuccess,
   expectedInvoiceFilename,
@@ -96,14 +96,14 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     // Issue invoice via UI to get the success alert with "Download PDF" button.
     // A client (here an occasional one) is required for the Issue button to enable.
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("E2E HU35 sin RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     await clickIssueInvoiceAndExpectSuccess(page);
 
     // The success alert appears with "Download PDF" button
@@ -118,11 +118,10 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     await downloadBtn.click();
 
-    // A destructive alert must appear with the RUC-required message.
-    // Match the exact copy (not just "RUC"): the fiscal-config banner also
-    // mentions RUC and trips strict mode when earlier tests leave it visible.
+    // A destructive alert must appear with the RUC-required message of the PDF download. Match the
+    // exact copy (not just "RUC"): the fiscal-config banner also mentions RUC.
     await expect(
-      page.getByRole("alert").filter({ hasText: "Add a valid business RUC" }),
+      page.getByRole("alert").filter({ hasText: "Configure your business RUC in Settings before generating invoice PDFs." }),
     ).toBeVisible({ timeout: 10_000 });
 
     // No file should have been downloaded (no corrupt PDF)
@@ -143,11 +142,11 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     // Navigate to invoice history
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     // Find the row for this invoice and click "View"
     const invRow = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: inv.invoiceNumberFormatted })
       .filter({ visible: true });
     await expect(invRow).toBeVisible({ timeout: 15_000 });
@@ -192,14 +191,14 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
     await ensureCashSessionOpen(page);
 
     // Issue invoice via UI. A client (occasional) is required to enable the Issue button.
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
     await page.getByLabel("Client name / business name").fill("E2E HU35 con RUC");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     // The success alert appears with "Download PDF" button
@@ -245,11 +244,11 @@ test.describe("HU-35 · Factura en PDF no se genera", () => {
 
     // Navigate to invoice history
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     // Find the row for this invoice and click "View"
     const invRow = page
-      .locator("tbody tr[role=\"button\"]")
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: inv.invoiceNumberFormatted })
       .filter({ visible: true });
     await expect(invRow).toBeVisible({ timeout: 15_000 });

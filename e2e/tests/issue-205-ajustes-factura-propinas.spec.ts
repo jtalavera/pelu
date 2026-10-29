@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
-import { openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -71,10 +71,10 @@ async function createInvoice(request: APIRequestContext, token: string): Promise
 
 async function openInvoiceDetail(page: Page, clientFullName: string) {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#invoice-history-text-filter").fill(clientFullName);
+  await goToInvoiceHistory(page);
+  await searchInvoiceHistory(page, clientFullName);
   const row = page
-    .locator("tbody tr[role=\"button\"]")
+    .locator('[data-testid^="invoice-history-row-"]')
     .filter({ hasText: clientFullName })
     .filter({ visible: true });
   await expect(row).toBeVisible({ timeout: 30_000 });
@@ -108,7 +108,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("AC5 · el detalle del comprobante abre en la solapa Factura; el estado SIFEN está en la solapa SIFEN", async ({
+  test("AC5 · el detalle del comprobante es una sola vista; el estado SIFEN está en «Detalle técnico»", async ({
     page,
     request,
   }) => {
@@ -126,10 +126,11 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await loginAsDemo(page);
     await openInvoiceDetail(page, clientDisplayName);
 
-    // The detail opens on its "Invoice" tab: the SIFEN status (and its message) lives in the
-    // "SIFEN" tab, rendered but hidden until that tab is selected.
+    // Redesign: the detail is one view. The SIFEN status (and its message history) lives in the
+    // "Technical detail" panel behind "⋯", closed until the user opens it.
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByTestId("invoice-detail-tab-invoice")).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByTestId("invoice-detail-view")).toBeVisible();
+    await expect(dialog.getByRole("tab")).toHaveCount(0);
     await expect(page.getByTestId("sifen-tab-status")).toBeHidden();
     await expect(page.getByTestId("sifen-history-button")).toBeHidden();
 

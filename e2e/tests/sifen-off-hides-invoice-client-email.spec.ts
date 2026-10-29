@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { apiBaseUrl, authHeaders, loginPlatformAdminApi, setTenantFeatureFlag } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome } from "../fixtures/billing";
 
 // When the SIFEN_ELECTRONIC_INVOICING feature flag is off for a tenant, the New Invoice form
 // must not show SIFEN-only copy/fields: the issue-date legend about the ±30/±5 day SIFEN
@@ -23,7 +23,7 @@ async function clearTenantFlag(request: APIRequestContext) {
 async function openNewInvoiceForm(page: Page) {
   await page.goto("/app/billing");
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 

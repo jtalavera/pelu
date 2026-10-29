@@ -39,6 +39,13 @@ function renderPage() {
   );
 }
 
+/** Opens the cash register panel behind the status chip. */
+async function openCashPanel() {
+  const chip = await screen.findByTestId("billing-cash-chip");
+  fireEvent.click(chip);
+  return await screen.findByTestId("billing-cash-panel");
+}
+
 const openSession = {
   id: 1,
   tenantId: 1,
@@ -115,11 +122,25 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       });
     });
 
-    it("shows open session info", async () => {
+    it("shows the register status chip and, in its panel, the open session info", async () => {
       renderPage();
       const openTexts = await screen.findAllByText(/cash register is open/i);
       expect(openTexts.length).toBeGreaterThan(0);
+      // Details live behind the chip, not on the home screen.
+      expect(screen.queryByText(/admin@demo\.com/i)).toBeNull();
+      await openCashPanel();
       expect(screen.getByText(/admin@demo\.com/i)).toBeTruthy();
+    });
+
+    it("keeps today's invoices folded until the user expands them", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const toggle = await screen.findByTestId("billing-today-toggle");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByTestId("billing-view-history")).toBeNull();
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(await screen.findByTestId("billing-view-history")).toBeTruthy();
     });
 
     it("renders the New Invoice button inside the Cash Register tab (HU-14, HU-15, issue #153)", async () => {
@@ -137,28 +158,25 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(anyEnabled).toBe(true);
     });
 
-    it("shows invoice history tab trigger (HU-16)", async () => {
-      femmeJson
-        .mockResolvedValueOnce(openSession)
-        .mockResolvedValueOnce([])
-        .mockResolvedValue([]);
+    it("reaches the invoice history from the expanded list of today (HU-16)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
-
-      // History tab trigger should exist
-      const historyTabs = screen.getAllByRole("tab", { name: /history/i });
-      expect(historyTabs.length).toBeGreaterThan(0);
+      fireEvent.click(await screen.findByTestId("billing-today-toggle"));
+      expect(await screen.findByRole("button", { name: /view full history/i })).toBeTruthy();
     });
 
-    it("shows close cash register button (HU-18)", async () => {
+    it("shows close cash register button inside the register panel (HU-18)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      expect(screen.queryByRole("button", { name: /close cash register/i })).toBeNull();
+      await openCashPanel();
       expect(screen.getByRole("button", { name: /close cash register/i })).toBeTruthy();
     });
 
     it("shows close form when clicking close register button", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      await openCashPanel();
 
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
@@ -197,14 +215,46 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       );
       expect(serviceInputs.length).toBeGreaterThan(0);
 
-      // Payment method select should exist
-      const paymentSelects = document.querySelectorAll("select");
-      expect(paymentSelects.length).toBeGreaterThan(0);
+      // Payment methods are big buttons, and none is preselected (issue #284).
+      const methodButtons = document.querySelectorAll('button[id^="pay-method-"]');
+      expect(methodButtons.length).toBe(5);
+      methodButtons.forEach((b) => expect(b.getAttribute("aria-pressed")).toBe("false"));
     });
 
-    it("renders the recipient email field below the client search (issue #173)", async () => {
+    it("lays the new invoice out as three steps and keeps the extras in More options", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+
+      expect(screen.getByTestId("billing-step-items")).toBeTruthy();
+      expect(screen.getByTestId("billing-step-client")).toBeTruthy();
+      expect(screen.getByTestId("billing-step-payment")).toBeTruthy();
+      const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
+      expect(more.open).toBe(false);
+      // Date, discount and tips all live inside the folded section.
+      for (const selector of ["#billing-issue-date", "#discount-type", '[data-testid="billing-tips-section"]']) {
+        expect(more.querySelector(selector)).not.toBeNull();
+      }
+    });
+
+    it("issues the invoice 'No name' by default and blocks Issue until a payment method is chosen", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      expect(screen.getByTestId("billing-client-default")).toBeTruthy();
+      // No client identity fields while the invoice is anonymous.
+      expect(document.querySelector("#client-display-name")).toBeNull();
+      const submit = screen.getByTestId("billing-invoice-submit") as HTMLButtonElement;
+      expect(submit.disabled).toBe(true);
+    });
+
+    it("renders the recipient email field once a client is identified (issue #173)", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      // "No name" invoices carry no recipient email.
+      expect(document.querySelector("#billing-client-email")).toBeNull();
+      fireEvent.focus(document.querySelector("#billing-client-search") as HTMLElement);
+      fireEvent.click(await screen.findByRole("button", { name: /occasional client/i }));
 
       const emailInput = document.querySelector("#billing-client-email");
       expect(emailInput).not.toBeNull();
@@ -215,6 +265,9 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       sifenEnabledFlag = false;
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+
+      fireEvent.focus(document.querySelector("#billing-client-search") as HTMLElement);
+      fireEvent.click(await screen.findByRole("button", { name: /occasional client/i }));
 
       expect(document.querySelector("#billing-client-email")).toBeNull();
       expect(document.querySelector("#billing-client-email-hint")).toBeNull();
@@ -265,13 +318,13 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
-      const historyTabs = screen.getAllByRole("tab", { name: /history/i });
-      fireEvent.click(historyTabs[0]);
+      fireEvent.click(await screen.findByTestId("billing-today-toggle"));
+      fireEvent.click(await screen.findByRole("button", { name: /view full history/i }));
 
       expect(await screen.findByText("0000001")).toBeTruthy();
       expect(screen.getAllByText("0000002").length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/issued/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/voided/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^approved$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^voided$/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -299,6 +352,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
 
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      await openCashPanel();
 
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
@@ -322,6 +376,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
 
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      await openCashPanel();
 
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);

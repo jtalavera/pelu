@@ -10,7 +10,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 import { bookingAppointmentDialog, professionalFormDialog } from "../fixtures/ui";
 
@@ -91,8 +91,10 @@ test.describe("HU-26 · Fixes varios UX general", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: /^(History|Historial)$/ }).click();
-    await expect(page.getByRole("button", { name: /^(Refresh|Actualizar)$/ })).toBeVisible();
+    await goToInvoiceHistory(page);
+    // Redesign: the forced refresh lives in the history's "⋯" menu.
+    await page.getByTestId("invoice-history-report-button").click();
+    await expect(page.getByRole("menuitem", { name: /^(Refresh|Actualizar)$/ })).toBeVisible();
   });
 
   // Req 9: Page scrolls to top after saving an invoice
@@ -116,14 +118,15 @@ test.describe("HU-26 · Fixes varios UX general", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
     await expect(page.locator("#line-price-0")).toHaveValue("5.000");
-    await page.locator("#pay-amount-0").fill("5000");
+    await fillPaymentAmount(page, "5000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
 
     // Scroll down so the page is not at top before issuing the invoice

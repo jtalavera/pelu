@@ -778,6 +778,69 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     }
   }
 
+  /** Invoice-list filter value for "needs attention" (an issued invoice SIFEN rejected). */
+  static final String ATTENTION_FILTER = "ATTENTION";
+
+  /** Invoice-list filter value for "approved" (issued, SIFEN approved or never sent to SIFEN). */
+  static final String APPROVED_FILTER = "APPROVED";
+
+  /** Invoice-list filter value for "in progress" (issued, SIFEN has not answered yet). */
+  static final String PROCESSING_FILTER = "PROCESSING";
+
+  /**
+   * What a list/report filter value stands for: the invoice status, and — when {@code sifenFilter}
+   * is on — the SIFEN statuses accepted ({@code includeNoSifen}: also invoices never sent to
+   * SIFEN). {@code sifenStatuses} is never empty, so it is always safe to bind to an {@code IN}.
+   */
+  record StatusFilter(
+      InvoiceStatus status,
+      boolean sifenFilter,
+      List<SifenSubmissionStatus> sifenStatuses,
+      boolean includeNoSifen) {
+
+    static StatusFilter none() {
+      return new StatusFilter(null, false, List.of(SifenSubmissionStatus.REJECTED), false);
+    }
+
+    static StatusFilter ofStatus(InvoiceStatus status) {
+      return new StatusFilter(status, false, List.of(SifenSubmissionStatus.REJECTED), false);
+    }
+
+    static StatusFilter issuedWith(boolean includeNoSifen, SifenSubmissionStatus... sifen) {
+      return new StatusFilter(InvoiceStatus.ISSUED, true, List.of(sifen), includeNoSifen);
+    }
+  }
+
+  /**
+   * Resolves the {@code status} query parameter of the invoice list and report. The plain {@code
+   * ISSUED} / {@code VOIDED} filter by the invoice's own status; the rest mirror the states the
+   * screens show for an issued invoice: {@code APPROVED} (SIFEN approved, or never sent to SIFEN),
+   * {@code PROCESSING} (queued or waiting for SIFEN's answer) and {@code ATTENTION} (SIFEN rejected
+   * it — the one state that needs the user to act). Blank or unknown values mean no filter.
+   */
+  static StatusFilter resolveStatusFilter(String statusStr) {
+    if (statusStr == null || statusStr.isBlank()) {
+      return StatusFilter.none();
+    }
+    String normalized = statusStr.trim().toUpperCase();
+    switch (normalized) {
+      case ATTENTION_FILTER:
+        return StatusFilter.issuedWith(false, SifenSubmissionStatus.REJECTED);
+      case APPROVED_FILTER:
+        return StatusFilter.issuedWith(
+            true, SifenSubmissionStatus.APPROVED, SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
+      case PROCESSING_FILTER:
+        return StatusFilter.issuedWith(
+            false, SifenSubmissionStatus.QUEUED, SifenSubmissionStatus.PENDING_VERIFICATION);
+      default:
+        try {
+          return StatusFilter.ofStatus(InvoiceStatus.valueOf(normalized));
+        } catch (IllegalArgumentException e) {
+          return StatusFilter.none(); // ignore bad status filter
+        }
+    }
+  }
+
   @Transactional(readOnly = true)
   public PagedInvoicesResponse listInvoices(
       long tenantId,
@@ -789,20 +852,23 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       int page,
       int size) {
     Instant[] fromTo = resolveInvoiceListRange(fromDate, toDate, clientId);
-    InvoiceStatus status = null;
-    if (statusStr != null && !statusStr.isBlank()) {
-      try {
-        status = InvoiceStatus.valueOf(statusStr.toUpperCase());
-      } catch (IllegalArgumentException e) {
-        // ignore bad status filter
-      }
-    }
+    StatusFilter statusFilter = resolveStatusFilter(statusStr);
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
     Integer qInvoiceNumber = parseInvoiceNumberQuery(qTrimmed);
     Pageable pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Invoice> invoicePage =
         invoiceRepository.findByTenantWithFiltersPaged(
-            tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, qInvoiceNumber, pageable);
+            tenantId,
+            fromTo[0],
+            fromTo[1],
+            clientId,
+            statusFilter.status(),
+            statusFilter.sifenFilter(),
+            statusFilter.sifenStatuses(),
+            statusFilter.includeNoSifen(),
+            qTrimmed,
+            qInvoiceNumber,
+            pageable);
     BigDecimal issuedTotal =
         invoiceRepository.sumIssuedTotalWithFilters(
             tenantId, fromTo[0], fromTo[1], clientId, qTrimmed, qInvoiceNumber);
@@ -826,14 +892,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   public List<InvoiceReportRow> listInvoicesForReport(
       long tenantId, Instant fromDate, Instant toDate, Long clientId, String statusStr, String q) {
     Instant[] fromTo = resolveInvoiceListRange(fromDate, toDate, clientId);
-    InvoiceStatus status = null;
-    if (statusStr != null && !statusStr.isBlank()) {
-      try {
-        status = InvoiceStatus.valueOf(statusStr.toUpperCase());
-      } catch (IllegalArgumentException e) {
-        // ignore bad status filter
-      }
-    }
+    StatusFilter statusFilter = resolveStatusFilter(statusStr);
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
     Integer qInvoiceNumber = parseInvoiceNumberQuery(qTrimmed);
     return invoiceRepository.findReportRows(
@@ -841,7 +900,10 @@ public class InvoiceService implements ApplicationEventPublisherAware {
         fromTo[0],
         fromTo[1],
         clientId,
-        status,
+        statusFilter.status(),
+        statusFilter.sifenFilter(),
+        statusFilter.sifenStatuses(),
+        statusFilter.includeNoSifen(),
         qTrimmed,
         qInvoiceNumber,
         PageRequest.of(0, 5000));

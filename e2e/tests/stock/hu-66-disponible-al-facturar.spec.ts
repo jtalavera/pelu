@@ -14,6 +14,7 @@ import {
 } from "../../fixtures/stock/api";
 import { fillNewInvoiceUi } from "../../fixtures/stock/billing";
 import { getStockWorld } from "../../fixtures/stock/world";
+import { fillPaymentAmount } from "../../fixtures/billing";
 
 // HU-66 · Disponible al facturar (Cambio 9).
 
@@ -39,7 +40,7 @@ test.describe("HU-66 · Disponible al facturar", () => {
     await expect(page.getByTestId("line-stock-0")).toHaveText("Available: 3");
 
     await page.locator("#line-qty-0").fill("5");
-    await page.locator("#pay-amount-0").fill("250000");
+    await fillPaymentAmount(page, "250000");
     const warning = page.getByTestId("line-stock-0-warning");
     await expect(warning).toContainText("Available: 3 — stock will go negative");
     // Amber, not blocking.

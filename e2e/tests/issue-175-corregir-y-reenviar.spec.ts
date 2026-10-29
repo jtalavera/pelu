@@ -12,7 +12,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -90,32 +90,30 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     // Rejected → accordion present, and the row shows the shortcut button.
-    await page.locator("#invoice-history-text-filter").fill(rejectedName);
+    await searchInvoiceHistory(page, rejectedName);
     const rejectedRow = page
-      .locator('tbody tr[role="button"]', { hasText: rejectedName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: rejectedName })
       .filter({ visible: true });
     await expect(rejectedRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toBeVisible();
     await rejectedRow.click();
-    // An unresolved rejection flags the "SIFEN" tab, where the "resolve" section lives.
-    await expect(page.getByTestId("invoice-detail-tab-sifen-attention")).toBeVisible();
-    await openInvoiceSifenTab(page);
+    // Redesign: an unresolved rejection puts the "resolve" section on top of the detail, no menu needed.
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toBeVisible();
+    await expect(page.getByRole("dialog").getByTestId("invoice-detail-processing-note")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
     // Approved → no "resolve" section, no row button.
-    await page.locator("#invoice-history-text-filter").fill(okName);
+    await searchInvoiceHistory(page, okName);
     const okRow = page
-      .locator('tbody tr[role="button"]', { hasText: okName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: okName })
       .filter({ visible: true });
     await expect(okRow).toBeVisible({ timeout: 30_000 });
     await expect(okRow.locator('[data-testid^="invoice-row-correct-resend-"]')).toHaveCount(0);
     await okRow.click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByTestId("invoice-detail-tab-sifen-attention")).toHaveCount(0);
     await openInvoiceSifenTab(page);
     await expect(page.getByRole("dialog").getByTestId("sifen-tab-correct-resend")).toHaveCount(0);
   });
@@ -154,12 +152,12 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
 
     // Row button (visible only for REJECTED).
     const row = page
-      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
@@ -175,6 +173,7 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await expect(priceField).toHaveValue("55.000");
     await priceField.fill("60000");
     // Issue #174 AC-02: the first payment amount follows the new total.
+    await showPaymentAmounts(form);
     await expect(form.locator("#pay-amount-0")).toHaveValue("60.000");
 
     const [resendResponse] = await Promise.all([
@@ -294,10 +293,10 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = page
-      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
@@ -334,10 +333,10 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
 
     // Row: no correct-resend shortcut anymore.
     await page.reload();
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row2 = page
-      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
       .filter({ visible: true });
     await expect(row2).toBeVisible({ timeout: 30_000 });
     await expect(

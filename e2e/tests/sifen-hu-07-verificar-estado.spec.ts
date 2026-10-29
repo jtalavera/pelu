@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openInvoiceSifenTab } from "../fixtures/billing";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -85,9 +85,9 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
@@ -145,15 +145,19 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
     await expect(page.getByRole("heading", { name: /Invoice #/ })).toBeVisible();
     await expect(page.getByTestId("sifen-status-section")).toHaveCount(0);
-    // Without SIFEN data there is nothing to split: no "Invoice" / "SIFEN" tabs at all.
-    await expect(page.getByTestId("invoice-detail-tab-sifen")).toHaveCount(0);
+    // Without SIFEN data there is nothing SIFEN to offer: no share panel, no SIFEN-only menu items.
+    await expect(page.getByTestId("invoice-share-button")).toHaveCount(0);
+    await page.getByTestId("invoice-more-actions-button").click();
+    await expect(page.getByTestId("invoice-menu-revalidate")).toHaveCount(0);
+    await expect(page.getByTestId("invoice-menu-cancel-sifen")).toHaveCount(0);
+    await expect(page.getByTestId("invoice-menu-technical-detail")).toBeVisible();
   });
 });

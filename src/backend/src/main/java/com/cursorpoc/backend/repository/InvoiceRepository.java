@@ -102,6 +102,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
       AND (:status IS NULL OR i.status = :status)
+      AND (:sifenFilter = false
+           OR i.sifenSubmissionStatus IN :sifenStatuses
+           OR (:sifenIncludeNone = true AND i.sifenSubmissionStatus IS NULL))
       AND (:q IS NULL
            OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
            OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
@@ -114,6 +117,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("toDate") Instant toDate,
       @Param("clientId") Long clientId,
       @Param("status") InvoiceStatus status,
+      @Param("sifenFilter") boolean sifenFilter,
+      @Param("sifenStatuses") java.util.Collection<SifenSubmissionStatus> sifenStatuses,
+      @Param("sifenIncludeNone") boolean sifenIncludeNone,
       @Param("q") String q,
       @Param("qInvoiceNumber") Integer qInvoiceNumber,
       Pageable pageable);
@@ -144,6 +150,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
       AND (:status IS NULL OR i.status = :status)
+      AND (:sifenFilter = false
+           OR i.sifenSubmissionStatus IN :sifenStatuses
+           OR (:sifenIncludeNone = true AND i.sifenSubmissionStatus IS NULL))
       AND (:q IS NULL
            OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
            OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
@@ -156,6 +165,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("toDate") Instant toDate,
       @Param("clientId") Long clientId,
       @Param("status") InvoiceStatus status,
+      @Param("sifenFilter") boolean sifenFilter,
+      @Param("sifenStatuses") java.util.Collection<SifenSubmissionStatus> sifenStatuses,
+      @Param("sifenIncludeNone") boolean sifenIncludeNone,
       @Param("q") String q,
       @Param("qInvoiceNumber") Integer qInvoiceNumber,
       Pageable pageable);

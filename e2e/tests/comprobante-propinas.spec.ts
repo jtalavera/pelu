@@ -8,6 +8,7 @@ import {
   voidInvoice,
   type CommissionWorld,
 } from "../fixtures/commissions";
+import { goToBillingHome, goToInvoiceHistory, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
 
 /**
  * Subsección "Propinas" del formulario de comprobante (debajo de "Métodos de pago"): igual que en
@@ -23,7 +24,7 @@ test.beforeEach(async ({ request }) => {
 
 async function openNewInvoice(page: Page) {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
   await page.getByLabel("Search or select client").click();
   await page.getByRole("button", { name: "Occasional client" }).click();
@@ -48,10 +49,12 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
   await loginAdminUi(page, w);
   await openNewInvoice(page);
 
-  // The section sits right below "Payment methods" and starts empty (no professional yet).
+  // The section sits below the payment step (inside "More options") and starts empty (no
+  // professional yet).
+  await openMoreOptions(page);
   const tipsSection = page.getByTestId("billing-tips-section");
   await expect(tipsSection.getByRole("heading", { name: "Tips" })).toBeVisible();
-  const paymentsBox = await page.getByRole("heading", { name: "Payment methods" }).boundingBox();
+  const paymentsBox = await page.getByRole("heading", { name: "How does the client pay?" }).boundingBox();
   const tipsBox = await tipsSection.boundingBox();
   expect(tipsBox!.y).toBeGreaterThan(paymentsBox!.y);
   await expect(page.getByTestId("billing-tips-empty")).toBeVisible();
@@ -60,11 +63,9 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
   // Without the commissions module the professional is still selectable, with no commission hint.
   await page.locator("#line-professional-0").selectOption({ label: w.ana.name });
   await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
-  await page.getByRole("button", { name: "Add item" }).click();
   await pickServiceLine(page, w.service2.name, 1);
   await page.locator("#line-professional-1").selectOption({ label: w.bea.name });
   // A product line's seller does not get a tip row.
-  await page.getByRole("button", { name: "Add item" }).click();
   await pickServiceLine(page, w.product.name, 2);
   await page.locator("#line-professional-2").selectOption({ label: w.ana.name });
 
@@ -80,6 +81,7 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
   await expect(page.locator("#billing-tips-amount")).toHaveText("8.000");
   await expect(page.locator("#billing-tips-amount")).toHaveClass(/text-danger/);
   await expect(page.getByText("Tip (non-invoiceable)", { exact: true })).toHaveClass(/text-danger/);
+  await showPaymentAmounts(page);
   await expect(page.locator("#pay-amount-0")).toHaveValue("330.000");
 
   const inv = await clickIssueInvoiceAndExpectSuccess(page);
@@ -127,10 +129,12 @@ test("desde una ficha: las propinas se precargan, se pueden corregir y reemplaza
   await page.getByRole("button", { name: "Generate invoice" }).click();
   await expect(page).toHaveURL(/\/app\/billing/);
 
+  await openMoreOptions(page);
   await expect(page.locator(`#billing-tip-${w.ana.id}`)).toHaveValue("4.000");
   await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
   await page.locator(`#billing-tip-${w.ana.id}`).fill("6000");
   await expect(page.locator("#billing-tips-amount")).toHaveText("6.000");
+  await showPaymentAmounts(page);
   await expect(page.locator("#pay-amount-0")).toHaveValue("110.000");
   await clickIssueInvoiceAndExpectSuccess(page);
 
