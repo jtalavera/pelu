@@ -514,15 +514,12 @@ export function BillingHome({
       >
         {panelView !== "close" && (
           <div className="flex flex-col gap-4" data-testid="billing-cash-panel">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <span
-                aria-hidden
-                className={`h-2 w-2 rounded-full ${currentSession ? "bg-success" : "bg-ink-3"}`}
-              />
-              <span className={currentSession ? "text-success" : "text-ink-2"}>
-                {currentSession ? t("femme.billing.sessionOpen") : t("femme.billing.sessionClosed")}
-              </span>
-            </div>
+            {!currentSession && (
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <span aria-hidden className="h-2 w-2 rounded-full bg-ink-3" />
+                <span className="text-ink-2">{t("femme.billing.sessionClosed")}</span>
+              </div>
+            )}
             {currentSession ? (
               <>
                 {liveDetailError && (

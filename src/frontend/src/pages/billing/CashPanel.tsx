@@ -230,7 +230,7 @@ export function CashClosedSummary({
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="font-heading text-[22px] font-extrabold leading-tight text-ink">
-            {t("femme.billing.close.closedTitle")}
+            {t("femme.billing.cash.closedNotice")}
           </h2>
           <p className="text-sm text-ink-3">
             {detail.closedAt ? formatParaguayDateTime(detail.closedAt, dateLocale) : ""}

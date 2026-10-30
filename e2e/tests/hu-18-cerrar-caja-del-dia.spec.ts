@@ -33,7 +33,7 @@ test.describe("HU-18 · Cerrar caja del día", () => {
     await expect(page.getByRole("button", { name: "Open cash register" })).toBeVisible();
     // Minimalist summary: the verdict first, the numbers one tap away.
     const summary = page.getByTestId("billing-close-result");
-    await expect(summary).toContainText("Closed");
+    await expect(summary).toContainText("Cash register closed");
     await expect(page.getByTestId("billing-close-verdict")).toHaveText(
       /^(The register balanced|Surplus Gs\. [\d.]+|Short Gs\. [\d.]+)$/,
     );
