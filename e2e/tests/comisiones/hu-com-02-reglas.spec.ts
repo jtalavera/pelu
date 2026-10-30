@@ -37,7 +37,7 @@ test("% general y excepciones por profesional desde la sección «Comisión» de
   request,
 }) => {
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Services" }).click();
+  await page.getByRole("link", { name: "Catalog" }).click();
   await page.getByTestId(`svc-row-${w.service.id}`).click();
   await page.getByTestId("svc-tab-commission").click();
   const section = page.getByTestId("item-commission-section");
@@ -90,7 +90,8 @@ test("productos: reglas desde la pantalla Productos; sin regla se aplica el % po
   expect(es.find((e) => e.itemKind === "PRODUCT")!.percentApplied).toBe(5);
 
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Products" }).click();
+  await page.getByRole("link", { name: "Catalog" }).click();
+  await page.getByTestId("catalog-view-products").click();
   // Warning badge on items without a general % (shortcut: the row opens the item; its «Commission» tab holds the rules).
   await expect(page.getByTestId(`svc-no-commission-${w.product.id}`)).toBeVisible();
   await page.getByTestId(`svc-row-${w.product.id}`).click();
@@ -133,7 +134,7 @@ test("historial de cambios por regla (quién, valor anterior y nuevo, vigencia)"
   await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, value: "30" }]);
   await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, value: "35" }]);
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Services" }).click();
+  await page.getByRole("link", { name: "Catalog" }).click();
   await page.getByTestId(`svc-row-${w.service.id}`).click();
   await page.getByTestId("svc-tab-commission").click();
   await page.getByText("Rule history").click();

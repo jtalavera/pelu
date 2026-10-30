@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
 import { apiBaseUrl } from "../fixtures/api";
+import { openProfessionalMoreOptions } from "../fixtures/catalog";
 
 /** Creates a professional via the API and returns their id. */
 async function createProfessional(
@@ -35,6 +36,7 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     await expect(dlg.locator("#prof-system-access")).toBeVisible();
   });
 
@@ -44,6 +46,7 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     const name = `E2E NoEmail ${Date.now()}`;
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(name);
     // Issue #38 (1): without a valid email the toggle can't be turned on at all...
     await expect(dlg.locator("#prof-system-access")).toBeDisabled();
@@ -52,7 +55,7 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     await dlg.locator("#prof-email").fill(`noemail${Date.now()}@test.com`);
     await dlg.locator("#prof-system-access").check();
     await dlg.locator("#prof-email").fill("");
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.getByTestId("prof-save").click();
     await expect(dlg.getByText(/no email configured/i)).toBeVisible();
   });
 

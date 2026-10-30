@@ -172,7 +172,7 @@ test.describe("HU-51 · Importar catálogo de servicios desde Excel", () => {
     await page.goto("/app/services");
     await page.locator("#services-list-filter").fill("Formato Moneda E2E");
 
-    const row = page.locator("tr").filter({ hasText: "Servicio Formato Moneda E2E" });
+    const row = page.locator('[data-testid^="svc-row-"]').filter({ hasText: "Servicio Formato Moneda E2E" });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText("Gs. 175.000");
   });

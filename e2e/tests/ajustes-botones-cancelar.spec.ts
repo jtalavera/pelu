@@ -95,7 +95,7 @@ test.describe("Botones Cancelar unificados", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await expectCancelFirstAndSecondary(page, dlg.getByRole("button", { name: "Cancel", exact: true }), [
-      dlg.getByRole("button", { name: "Save and set schedule" }),
+      dlg.getByTestId("prof-save"),
     ]);
   });
 });

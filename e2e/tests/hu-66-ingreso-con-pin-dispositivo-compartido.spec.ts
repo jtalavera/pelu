@@ -295,8 +295,9 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
         );
         await adminPage.locator("#professionals-inline-search").fill(pro.fullName);
         await filtered;
-        await adminPage.getByTestId(`professionals-row-${pro.id}-trigger`).click();
-        await adminPage.getByRole("menuitem", { name: "Edit details and photo" }).click();
+        await adminPage.getByTestId(`prof-row-${pro.id}`).click();
+        // The PIN (and its lock) live under "More options".
+        await adminPage.getByTestId("prof-more-options-toggle").click();
         const lockedAlert = adminPage.getByTestId("prof-pin-locked");
         await expect(lockedAlert).toContainText(device.name);
         await adminPage.getByTestId("prof-pin-unlock").click();

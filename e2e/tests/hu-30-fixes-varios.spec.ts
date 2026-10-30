@@ -11,6 +11,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { openProfessionalMoreOptions } from "../fixtures/catalog";
 
 test.describe.configure({ mode: "serial" });
 
@@ -65,7 +66,7 @@ test.describe("HU-30 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     // Wait for page to load
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("catalog-professionals-list")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("GABRIELA", { exact: true })).toHaveCount(0);
   });
 
@@ -244,13 +245,14 @@ test.describe("HU-30 · Fixes varios", () => {
     // click its row to open the edit dialog. Data rows are <tr> elements (CSS `tr`); their
     // a11y role is "button", so getByRole("row") does not match them.
     await page.locator("#professionals-inline-search").fill(profName);
-    const row = page.locator("tr").filter({ hasText: profName }).first();
+    const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: profName }).first();
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.click();
 
     // Enable system access in the edit dialog.
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await openProfessionalMoreOptions(page);
     const accessToggle = dialog.locator("#prof-system-access");
     await expect(accessToggle).toBeVisible({ timeout: 10_000 });
     await accessToggle.check();
@@ -262,7 +264,7 @@ test.describe("HU-30 · Fixes varios", () => {
         (req) => /\/api\/professionals\/\d+$/.test(req.url()) && req.method() === "PUT",
         { timeout: 20_000 },
       ),
-      dialog.getByRole("button", { name: "Save and set schedule" }).click(),
+      dialog.getByTestId("prof-save").click(),
     ]);
     const acceptLang = grantReq.headers()["accept-language"];
     expect(acceptLang).toBeTruthy();

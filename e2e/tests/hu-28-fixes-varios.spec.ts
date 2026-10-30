@@ -12,6 +12,7 @@ import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen, goToBillingHome, openMoreOptions } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 import { ensureCalendarShowsAppointmentByTestId, pickSearchableOption } from "../fixtures/ui";
+import { openItemMoreOptions } from "../fixtures/catalog";
 
 test.describe("HU-28 · Fixes varios", () => {
   // AC1 — Login subtitle
@@ -57,7 +58,7 @@ test.describe("HU-28 · Fixes varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    const nameCell = page.locator("tr").filter({ hasText: seed.professionalFullName }).first();
+    const nameCell = page.locator('[data-testid^="prof-row-"]').filter({ hasText: seed.professionalFullName }).first();
     await expect(nameCell).toBeVisible({ timeout: 15_000 });
     await nameCell.click();
     // The edit dialog should appear pre-filled with the professional's name
@@ -178,6 +179,7 @@ test.describe("HU-28 · Fixes varios", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 5_000 });
     // The tax select must exist and default to IVA 10% (or first active as fallback)
+    await openItemMoreOptions(page);
     const taxSelect = dialog.getByLabel(/Tipo de impuesto|Tax type/);
     await expect(taxSelect).toBeVisible();
     const selectedValue = await taxSelect.inputValue();
@@ -249,19 +251,16 @@ test.describe("HU-28 · Fixes varios", () => {
     expect(focusedId).not.toBe("");
   });
 
-  // AC10 — Dashboard date click navigates to calendar for that date
-  test("HU-28 · AC10 clic en fecha del mini-calendario del dashboard navega al calendario en esa fecha", async ({
+  // AC10 — (Inicio redesign) the monthly mini-calendar was removed from the dashboard: the
+  // Calendario screen already shows the month, and "Ver agenda" is the way in.
+  test("HU-28 · AC10 el Inicio ya no muestra el mini-calendario y «View agenda» lleva al calendario", async ({
     page,
   }) => {
     await loginAsDemo(page);
     await page.goto("/app");
-    // Wait for the dashboard to load
-    await page.waitForLoadState("networkidle");
-    // Find a day cell with role="button" (current-month days) in the mini calendar.
-    // The cells contain just a number (the day).
-    const dayBtn = page.locator("[role='button']").filter({ hasText: /^\d{1,2}$/ }).first();
-    await expect(dayBtn).toBeVisible({ timeout: 10_000 });
-    await dayBtn.click();
+    await expect(page.getByTestId("dashboard-summary")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("[data-tour='dashboard-mini-cal']")).toHaveCount(0);
+    await page.getByRole("link", { name: "View agenda →" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/, { timeout: 5_000 });
   });
 

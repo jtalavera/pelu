@@ -61,6 +61,12 @@ function makePageResponse(items: unknown[]) {
   return { content: items, page: 0, size: 10, totalElements: items.length, totalPages: 1 };
 }
 
+/** Catalog redesign: categories live in a dialog opened from the "⋯" menu. */
+async function openCategories() {
+  await userEvent.click(await screen.findByTestId("catalog-more-trigger"));
+  await userEvent.click(screen.getByTestId("catalog-more-item-categories"));
+}
+
 function mockLoad(categories: unknown[], services: unknown[]) {
   femmeJson.mockImplementation((url: string) => {
     if (typeof url === "string" && url.includes("service-categories")) {
@@ -105,10 +111,7 @@ describe("ProductsPage", () => {
     renderPage();
     await screen.findByText("Shampoo 300 ml");
 
-    expect(screen.getByText("Products", { selector: "div" })).toBeTruthy();
-    expect(screen.getByRole("columnheader", { name: "Product" })).toBeTruthy();
-    expect(screen.getByRole("columnheader", { name: "Code (SKU)" })).toBeTruthy();
-    expect(screen.queryByRole("columnheader", { name: "Duration" })).toBeNull();
+    expect(screen.getByRole("button", { name: "+ New product" })).toBeTruthy();
     const row = screen.getByTestId(`svc-row-${product.id}`);
     expect(row.textContent).toContain("SH-300");
     expect(row.textContent).not.toContain("min");
@@ -120,6 +123,9 @@ describe("ProductsPage", () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "+ New product" }));
 
+    // SKU (and the tax) live under "More options".
+    expect(screen.queryByLabelText("Code (SKU, optional)")).toBeNull();
+    await userEvent.click(await screen.findByTestId("svc-more-options-toggle"));
     expect(await screen.findByLabelText("Code (SKU, optional)")).toBeTruthy();
     expect(screen.queryByLabelText("Duration (minutes)")).toBeNull();
     expect(screen.queryByLabelText("Type")).toBeNull();
@@ -145,8 +151,8 @@ describe("ProductsPage", () => {
     mockLoad([sampleCategory], []);
     femmePostJson.mockResolvedValue({ id: 5, name: "Styling", active: true, accentKey: "stone" });
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: "Categories" }));
-    await userEvent.click(screen.getByRole("button", { name: "+ New category" }));
+    await openCategories();
+    await userEvent.click(await screen.findByRole("button", { name: "+ New category" }));
     await userEvent.type(await screen.findByLabelText("Name"), "Styling");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
@@ -157,10 +163,10 @@ describe("ProductsPage", () => {
     });
   });
 
-  it("shows the product count in the categories tab", async () => {
+  it("shows the product count in the categories dialog", async () => {
     mockLoad([sampleCategory], [product]);
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: "Categories" }));
+    await openCategories();
     expect(await screen.findByText("1 products")).toBeTruthy();
   });
 
@@ -170,7 +176,8 @@ describe("ProductsPage", () => {
     renderPage();
     await screen.findByText("Shampoo 300 ml");
 
-    await userEvent.click(screen.getByTestId("download-price-list-button"));
+    await userEvent.click(await screen.findByTestId("catalog-more-trigger"));
+    await userEvent.click(screen.getByTestId("catalog-more-item-price-list"));
 
     await waitFor(() => {
       expect(downloadPriceListPdf).toHaveBeenCalledWith("PRODUCT");

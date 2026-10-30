@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { professionalFormDialog, setControlledInputValue } from "../fixtures/ui";
+import { openProfessionalMoreOptions, openProfessionalSchedule } from "../fixtures/catalog";
 
 const PROFESSIONAL_PHOTO_ACCEPT =
   "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
@@ -9,7 +10,7 @@ const PROFESSIONAL_PHOTO_ACCEPT =
 test.describe("HU-20 · Fixes varios profesionales", () => {
 
 
-  test("HU-20 · 9 menú kebab visible en tabla de profesionales", async ({
+  test("HU-20 · 9 interruptor de estado visible en la lista de profesionales", async ({
     page,
     request,
   }) => {
@@ -24,12 +25,12 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.locator("#professionals-inline-search").fill(name);
-    const prow = page.locator("tr").filter({ hasText: name }).first();
+    const prow = page.locator('[data-testid^="prof-row-"]').filter({ hasText: name }).first();
     await expect(prow).toBeVisible({ timeout: 20_000 });
-    await expect(prow.getByRole("button", { name: /^(Actions|Acciones)$/ })).toBeVisible();
+    await expect(prow.locator('[data-testid^="prof-switch-"]')).toBeVisible();
   });
 
-  test("HU-20 · 9 kebab menu expone Editar datos y foto / Editar horarios / Desactivar", async ({
+  test("HU-20 · 9 tocar la fila abre un único formulario con datos y horario (sin menú de acciones)", async ({
     page,
     request,
   }) => {
@@ -44,19 +45,19 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.locator("#professionals-inline-search").fill(fullName);
-    await expect(page.getByTestId(`professionals-row-${created.id}-trigger`)).toBeVisible({
-      timeout: 20_000,
-    });
-    await page.getByTestId(`professionals-row-${created.id}-trigger`).click();
-    await expect(page.getByRole("menuitem", { name: "Edit details and photo" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Edit schedule" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Deactivate" })).toBeVisible();
+    await expect(page.getByTestId(`prof-row-${created.id}`)).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId(`prof-row-${created.id}`).click();
+    const dlg = professionalFormDialog(page);
+    await expect(dlg.getByLabel("Full name")).toHaveValue(fullName.toUpperCase());
+    await expect(dlg.getByTestId("prof-schedule-block")).toBeVisible();
+    await expect(dlg.getByRole("tab")).toHaveCount(0);
   });
 
   test("HU-20 · 1 input de foto usa accept de tipos de imagen", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
+    await openProfessionalMoreOptions(page);
     const fileInput = page.locator('input[type="file"]');
     await expect(fileInput).toHaveAttribute("accept", PROFESSIONAL_PHOTO_ACCEPT);
   });
@@ -66,6 +67,7 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill("E2E Bad ext");
     await dlg.locator('input[type="file"]').setInputFiles({
       name: "bad.txt",
@@ -85,7 +87,7 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill("E2E Time");
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await openProfessionalSchedule(page);
     await dlg.getByTestId("prof-day-mon-active").check();
     await expect(dlg.locator("#prof-1-start")).toHaveAttribute("role", "combobox");
     await expect(dlg.locator("#prof-1-end")).toHaveAttribute("role", "combobox");
@@ -107,32 +109,40 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill("E2E Email");
     await setControlledInputValue(dlg.getByLabel("Email"), "@no-prefix.com");
     await dlg.getByRole("button", { name: /^Save( and set schedule)?$/ }).first().click();
     await expect(dlg.locator("#prof-email-err")).toBeVisible();
   });
 
-  test("HU-20 · 10 horario semanal solo exige Desde/Hasta para días marcados", async ({
-    page,
-  }) => {
+  test("HU-20 · 10 horario semanal solo exige Desde/Hasta para días marcados", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill("E2E Days");
+    await openProfessionalSchedule(page);
+
+    // A new professional starts Monday to Saturday; Sunday is off and has no time inputs.
+    await expect(dlg.getByTestId("prof-day-mon-active")).toBeChecked();
+    await expect(dlg.getByTestId("prof-day-sun-active")).not.toBeChecked();
+    await expect(dlg.locator("#prof-7-start")).toHaveCount(0);
+
+    // A marked day with a missing time blocks saving...
+    await dlg.locator("#prof-1-start").fill("");
+    await dlg.getByTestId("prof-save").click();
+    await expect(dlg.locator("#prof-sched-err")).toBeVisible();
+
+    // ...and unmarking that day removes the requirement.
+    await dlg.getByTestId("prof-day-mon-active").uncheck();
     const respP = page.waitForResponse((r) => {
       const u = new URL(r.url());
       return u.pathname === "/api/professionals" && r.request().method() === "POST";
     });
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.getByTestId("prof-save").click();
     const resp = await respP;
     expect(resp.ok(), await resp.text()).toBeTruthy();
-    const modal = professionalFormDialog(page);
-    await expect(modal.getByRole("tab", { name: "Schedule" })).toHaveAttribute("aria-selected", "true", {
-      timeout: 20_000,
-    });
-    await expect(page.getByTestId("prof-day-mon-active")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("prof-day-mon-active")).not.toBeChecked();
+    await expect(dlg).toBeHidden({ timeout: 20_000 });
   });
 });

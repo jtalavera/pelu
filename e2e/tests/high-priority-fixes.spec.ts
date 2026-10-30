@@ -33,6 +33,7 @@ import { loginAsDemo } from "../fixtures/auth";
 import { choosePaymentMethod, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog } from "../fixtures/ui";
+import { closeCategoriesDialog, openCategoriesDialog, openItemMoreOptions, openProfessionalSchedule } from "../fixtures/catalog";
 
 test.describe.configure({ mode: "serial" });
 
@@ -77,18 +78,19 @@ test("Issue #46 · nuevo servicio: IVA 10% seleccionado por defecto", async ({ p
   await loginAsDemo(page);
   await page.goto("/app/services");
   // Create a category so the service form can open
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
   const catName = `IVACat ${Date.now()}`;
   await page.getByRole("button", { name: "+ New category" }).click();
-  await page.getByRole("dialog").getByLabel("Name").fill(catName);
-  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
-  await page.getByRole("button", { name: "Services", exact: true }).click();
+  await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(catName);
+  await page.getByRole("dialog", { name: "New category" }).getByRole("button", { name: "Save" }).click();
+  await closeCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New service" }).click();
   const dialog = page.getByRole("dialog", { name: "New service" });
   await expect(dialog).toBeVisible();
 
-  // The "Tipo de impuesto" / "Tax type" select should default to IVA 10%
+  // The "Tipo de impuesto" / "Tax type" select (under "More options") should default to IVA 10%
+  await openItemMoreOptions(page);
   const taxSelect = dialog.getByLabel(/tax type|tipo de impuesto/i);
   await expect(taxSelect).toBeVisible();
   const selectedOption = await taxSelect.inputValue();
@@ -107,10 +109,10 @@ test("Issue #49 · paleta de categorías tiene más colores y el swatch refleja 
 }) => {
   await loginAsDemo(page);
   await page.goto("/app/services");
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New category" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "New category" });
   await expect(dialog).toBeVisible();
 
   // At least 8 color swatches must exist (we added many new vivid colors)
@@ -321,12 +323,12 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
 }) => {
   await loginAsDemo(page);
   await page.goto("/app/services");
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
 
   // Create a category first with default color
   const catName = `TealCat52 ${Date.now()}`;
   await page.getByRole("button", { name: "+ New category" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "New category" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Name").fill(catName);
   // Pick a color that was previously rejected by the backend (teal)
@@ -337,12 +339,12 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
   await expect(dialog).not.toBeVisible({ timeout: 10_000 });
 
   // The new category should appear in the list
-  await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("catalog-categories-dialog").getByText(catName)).toBeVisible({ timeout: 10_000 });
 
   // Now edit it and pick another previously-rejected color (sky)
   // The category row itself has aria-label "Edit category <name>"
   await page.getByRole("button", { name: `Edit category ${catName}` }).click();
-  const editDialog = page.getByRole("dialog");
+  const editDialog = page.getByRole("dialog", { name: "Edit category" });
   await expect(editDialog).toBeVisible();
   await editDialog.getByRole("button", { name: /sky/i }).click();
   await editDialog.getByRole("button", { name: "Save" }).click();
@@ -356,7 +358,7 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
   await expect(editDialog).not.toBeVisible();
 
   // Category should still appear in the list
-  await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("catalog-categories-dialog").getByText(catName)).toBeVisible({ timeout: 10_000 });
 });
 
 // ─── Issue #42 ────────────────────────────────────────────────────────────────
@@ -546,19 +548,12 @@ test("Issue #40 · guardar horario con cero días seleccionados no lanza error",
   await loginAsDemo(page);
   await page.goto("/app/professionals");
 
-  // Open "Edit schedule" via kebab menu
-  await expect(page.getByTestId(`professionals-row-${created.id}-trigger`)).toBeVisible({
-    timeout: 20_000,
-  });
-  await page.getByTestId(`professionals-row-${created.id}-trigger`).click();
-  await page.getByRole("menuitem", { name: "Edit schedule" }).click();
+  // Open the professional (tap the row): the schedule is part of the one form.
+  await expect(page.getByTestId(`prof-row-${created.id}`)).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId(`prof-row-${created.id}`).click();
 
   const dlg = professionalFormDialog(page);
-  await expect(dlg.getByRole("tab", { name: "Schedule" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-    { timeout: 10_000 },
-  );
+  await openProfessionalSchedule(page);
 
   // Ensure no day is checked
   const monCheckbox = dlg.getByTestId("prof-day-mon-active");
@@ -580,7 +575,7 @@ test("Issue #40 · guardar horario con cero días seleccionados no lanza error",
       r.url().includes(`/api/professionals/${created.id}/schedules`) &&
       r.request().method() === "PUT",
   );
-  await dlg.getByRole("button", { name: /save schedule/i }).click();
+  await dlg.getByTestId("prof-save").click();
   const resp = await scheduleResp;
   expect(resp.ok(), await resp.text()).toBeTruthy();
 

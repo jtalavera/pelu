@@ -53,7 +53,8 @@ test.describe("Issue #217 · Lista de precios compartible", () => {
   test("shows the 'Download price list' button on the Services page", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
-    const button = page.getByTestId("download-price-list-button");
+    await page.getByTestId("catalog-more-trigger").click();
+    const button = page.getByTestId("catalog-more-item-price-list");
     await expect(button).toBeVisible({ timeout: 10_000 });
     await expect(button).toBeEnabled();
   });
@@ -127,7 +128,8 @@ test.describe("Issue #217 · Lista de precios compartible", () => {
     // ── UI check: the button on the Services page actually triggers a browser download ──
     await loginAsDemo(page);
     await page.goto("/app/services");
-    const button = page.getByTestId("download-price-list-button");
+    await page.getByTestId("catalog-more-trigger").click();
+    const button = page.getByTestId("catalog-more-item-price-list");
     await expect(button).toBeVisible({ timeout: 10_000 });
 
     const [download, response] = await Promise.all([
@@ -228,7 +230,8 @@ test.describe("Issue #217 · Lista de precios compartible", () => {
     const fs = await import("fs/promises");
     async function downloadFrom(path: string): Promise<{ text: string; filename: string }> {
       await page.goto(path);
-      const button = page.getByTestId("download-price-list-button");
+      await page.getByTestId("catalog-more-trigger").click();
+      const button = page.getByTestId("catalog-more-item-price-list");
       await expect(button).toBeVisible({ timeout: 10_000 });
       const [download, response] = await Promise.all([
         page.waitForEvent("download", { timeout: 20_000 }),

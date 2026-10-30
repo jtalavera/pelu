@@ -31,7 +31,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 async function openItemRules(page: Page) {
-  await page.getByRole("link", { name: "Services" }).click();
+  await page.getByRole("link", { name: "Catalog" }).click();
   await page.getByTestId(`svc-row-${w.service.id}`).click();
   await page.getByTestId("svc-tab-commission").click();
   await expect(page.getByTestId("item-commission-section")).toBeVisible();

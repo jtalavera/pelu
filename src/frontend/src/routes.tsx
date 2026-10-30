@@ -11,8 +11,7 @@ import DashboardsPage from "./pages/DashboardsPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
-import ProductsPage from "./pages/ProductsPage";
-import ServicesPage from "./pages/ServicesPage";
+import CatalogPage from "./pages/CatalogPage";
 import FiscalStampSettingsPage from "./pages/FiscalStampSettingsPage";
 import TaxSettingsPage from "./pages/TaxSettingsPage";
 import ClientsPage from "./pages/ClientsPage";
@@ -30,7 +29,6 @@ import MyCommissionsPage from "./pages/commissions/MyCommissionsPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import AuditSettingsPage from "./pages/settings/AuditSettingsPage";
 import PlatformAuditPage from "./pages/PlatformAuditPage";
-import ProfessionalsPage from "./pages/ProfessionalsPage";
 import ActivatePage from "./pages/ActivatePage";
 import SharedDevicePage from "./pages/SharedDevicePage";
 import SharedDevicesSettingsPage from "./pages/settings/SharedDevicesSettingsPage";
@@ -96,15 +94,17 @@ export function AppRoutes() {
         <Route element={<AdminOnlyRoute />}>
           <Route path="/app" element={<DashboardPage />} />
           <Route path="/app/dashboards" element={<DashboardsPage />} />
-          <Route path="/app/services" element={<ServicesPage />} />
-          <Route path="/app/products" element={<ProductsPage />} />
+          {/* Catalog redesign: Servicios, Productos and Profesionales are views of one screen. */}
+          <Route path="/app/catalog" element={<CatalogPage />} />
+          <Route path="/app/services" element={<Navigate to="/app/catalog?view=services" replace />} />
+          <Route path="/app/products" element={<Navigate to="/app/catalog?view=products" replace />} />
           <Route path="/app/billing" element={<BillingPage />} />
           <Route path="/app/service-records" element={<ServiceRecordsPage />} />
           <Route path="/app/propinas" element={<PropinasPage />} />
           <Route path="/app/commissions" element={<CommissionsPage />} />
           <Route path="/app/commissions/settlements/:id" element={<CommissionSettlementPage />} />
           <Route path="/app/inactive-clients" element={<InactiveClientsPage />} />
-          <Route path="/app/professionals" element={<ProfessionalsPage />} />
+          <Route path="/app/professionals" element={<Navigate to="/app/catalog?view=professionals" replace />} />
           <Route path="/app/settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="business" replace />} />
             <Route path="business" element={<BusinessSettingsPage />} />
