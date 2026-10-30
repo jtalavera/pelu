@@ -221,10 +221,8 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     const confirm = page.getByRole("dialog", { name: "Change the sign-in email?" });
     await expect(confirm).toBeVisible();
     await confirm.getByRole("button", { name: "Change email" }).click();
-    await expect(page.getByRole("dialog").getByRole("tab", { name: "Schedule" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    // Catalog redesign: saving an edit keeps the form open with the success message.
+    await expect(page.getByRole("dialog", { name: "Edit professional" }).getByText("Changes saved successfully.")).toBeVisible();
 
     const after = await getProfessional(request, token, prof.id);
     expect(after.email).toBe(newEmail);
@@ -274,10 +272,8 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     await expect(dlg.getByTestId("prof-email-change-warning")).toContainText(/will be deactivated|is deactivated/i);
     await saveDetails(page);
     await page.getByRole("dialog", { name: "Change the sign-in email?" }).getByRole("button", { name: "Change email" }).click();
-    await expect(page.getByRole("dialog").getByRole("tab", { name: "Schedule" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    // Catalog redesign: saving an edit keeps the form open with the success message.
+    await expect(page.getByRole("dialog", { name: "Edit professional" }).getByText("Changes saved successfully.")).toBeVisible();
 
     const after = await getProfessional(request, token, prof.id);
     expect(after.accessStatus).toBe("NO_ACCESS");
@@ -337,18 +333,24 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     await dlg.locator("#prof-system-access").check();
     await expect(statusText(page)).toHaveText("An invitation will be sent when you save");
     await saveDetails(page);
-    await dlg.getByRole("tab", { name: "Details" }).click();
-    await expect(statusText(page)).toHaveText("Invitation sent, please open the link to create the password");
-    await expect(dlg.getByTestId("prof-access-message")).toContainText(email);
+    // Catalog redesign: saving a new professional closes the form and shows the success message.
+    await expect(dlg).toBeHidden({ timeout: 20_000 });
+    await expect(page.getByText("Professional saved successfully.", { exact: true })).toBeVisible();
 
-    // Unticking (without saving) shows "No access" again.
-    await dlg.locator("#prof-system-access").uncheck();
-    await expect(statusText(page)).toHaveText("No access");
-
-    // Password created → ready to sign in with her email.
     const token = await loginAsDemoApi(request);
     const all = (await (await request.get(`${base}/api/professionals`, { headers: authHeaders(token) })).json()) as Prof[];
     const prof = all.find((p) => p.fullName === name.toUpperCase())!;
+
+    // Reopened: invitation sent.
+    const dlgInvited = await openEditDetails(page, prof);
+    await expect(statusText(page)).toHaveText("Invitation sent, please open the link to create the password");
+
+    // Unticking (without saving) shows "No access" again.
+    await dlgInvited.locator("#prof-system-access").uncheck();
+    await expect(statusText(page)).toHaveText("No access");
+    await page.keyboard.press("Escape");
+
+    // Password created → ready to sign in with her email.
     await grantAndActivate(request, token, prof.id);
     await page.keyboard.press("Escape");
     const dlg2 = await openEditDetails(page, prof);

@@ -732,7 +732,7 @@ export default function CatalogItemsPage({
               resultCount={svcTotalElements}
               totalCount={services.length}
               maxWidth={480}
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: "min(100%, 320px)" }}
             />
             <div data-tour="services-filters" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {filterOptions.map((o) => (
@@ -796,6 +796,11 @@ export default function CatalogItemsPage({
                           onKeyDown={onRowKeyOpenService(s)}
                           className="flex min-h-14 cursor-pointer items-center gap-3 border-t border-line px-3 py-2.5 first:border-t-0 hover:bg-bg"
                         >
+                          <span
+                            aria-hidden="true"
+                            className="cat-ic size-2.5 shrink-0 rounded-full"
+                            style={{ background: categoryAccentStyle(s.categoryAccentKey).color }}
+                          />
                           <div className={`min-w-0 flex-1 ${s.active ? "" : "opacity-60"}`}>
                             <div className="break-words font-semibold text-ink">
                               {s.name}

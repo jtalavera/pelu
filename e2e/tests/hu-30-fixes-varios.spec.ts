@@ -11,6 +11,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { openProfessionalMoreOptions } from "../fixtures/catalog";
 
 test.describe.configure({ mode: "serial" });
 
@@ -251,6 +252,7 @@ test.describe("HU-30 · Fixes varios", () => {
     // Enable system access in the edit dialog.
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await openProfessionalMoreOptions(page);
     const accessToggle = dialog.locator("#prof-system-access");
     await expect(accessToggle).toBeVisible({ timeout: 10_000 });
     await accessToggle.check();

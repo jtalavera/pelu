@@ -112,7 +112,7 @@ test("Issue #49 · paleta de categorías tiene más colores y el swatch refleja 
   await openCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New category" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "New category" });
   await expect(dialog).toBeVisible();
 
   // At least 8 color swatches must exist (we added many new vivid colors)

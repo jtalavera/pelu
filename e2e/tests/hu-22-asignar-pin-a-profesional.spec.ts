@@ -159,6 +159,8 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     dlg = professionalFormDialog(page);
     await openProfessionalMoreOptions(page);
     await expect(dlg.locator("#prof-pin")).toHaveAttribute("type", "password");
-    await clickSaveAndCloseModal(page, dlg);
+    // Editing keeps the form open with the success message.
+    await dlg.getByTestId("prof-save").click();
+    await expect(dlg.getByText("Changes saved successfully.")).toBeVisible();
   });
 });

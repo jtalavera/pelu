@@ -61,7 +61,7 @@ test.describe("Menú Productos separado de Servicios", () => {
     await expect(page.locator('[data-tour="nav-products"]')).toHaveCount(0);
 
     await page.locator('[data-tour="nav-catalog"]').click();
-    await expect(page).toHaveURL(/\/app\/catalog\?view=services$/);
+    await expect(page).toHaveURL(/\/app\/catalog(\?view=services)?$/);
     await page.getByTestId("catalog-view-products").click();
     await expect(page).toHaveURL(/\/app\/catalog\?view=products$/);
     await expect(page.getByTestId("catalog-view-products")).toHaveAttribute("aria-selected", "true");
