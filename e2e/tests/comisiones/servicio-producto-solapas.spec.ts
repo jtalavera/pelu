@@ -31,7 +31,8 @@ for (const kind of ["service", "product"] as const) {
   }) => {
     await loginAdminUi(page, w);
     const item = kind === "service" ? w.service : w.product;
-    await page.getByRole("link", { name: kind === "service" ? "Services" : "Products" }).click();
+    await page.getByRole("link", { name: "Catalog" }).click();
+    await page.getByTestId(kind === "service" ? "catalog-view-services" : "catalog-view-products").click();
     await page.getByTestId(`svc-row-${item.id}`).click();
     const dialog = page.getByRole("dialog", { name: kind === "service" ? "Edit service" : "Edit product" });
     await expect(dialog).toBeVisible();

@@ -65,7 +65,7 @@ test.describe("HU-30 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     // Wait for page to load
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("catalog-professionals-list")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("GABRIELA", { exact: true })).toHaveCount(0);
   });
 

@@ -7,7 +7,7 @@ import {
   loginAsDemoApi,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { closeCategoriesDialog, openCategoriesDialog } from "../fixtures/catalog";
+import { closeCategoriesDialog, openCategoriesDialog, openItemMoreOptions } from "../fixtures/catalog";
 
 // Catálogo separado: menú "Productos" (debajo de "Servicios"), cada pantalla con SOLO los ítems de
 // su tipo, filtros acotados al tipo y solapa de Categorías exclusiva para servicios / productos.
@@ -51,24 +51,25 @@ async function searchItems(page: Page, text: string) {
 }
 
 test.describe("Menú Productos separado de Servicios", () => {
-  test("el menú Productos aparece justo debajo de Servicios y abre /app/products", async ({ page }) => {
+  test("el menú Catálogo reúne Servicios, Productos y Profesionales; /app/products abre la vista Productos", async ({
+    page,
+  }) => {
     await loginAsDemo(page);
-    const services = page.locator('[data-tour="nav-services"]');
-    const products = page.locator('[data-tour="nav-products"]');
-    await expect(services).toBeVisible();
-    await expect(products).toBeVisible();
-    await expect(products).toContainText("Products");
+    // One sidebar entry instead of three.
+    await expect(page.locator('[data-tour="nav-catalog"]')).toContainText("Catalog");
+    await expect(page.locator('[data-tour="nav-services"]')).toHaveCount(0);
+    await expect(page.locator('[data-tour="nav-products"]')).toHaveCount(0);
 
-    // Same sidebar, products link immediately after the services one.
-    const immediatelyAfter = await services.evaluate(
-      (el) => el.nextElementSibling === document.querySelector('[data-tour="nav-products"]'),
-    );
-    expect(immediatelyAfter).toBe(true);
-
-    await products.click();
-    await expect(page).toHaveURL(/\/app\/products$/);
-    await expect(page.locator('[data-tour="services-header"]')).toContainText("Products");
+    await page.locator('[data-tour="nav-catalog"]').click();
+    await expect(page).toHaveURL(/\/app\/catalog\?view=services$/);
+    await page.getByTestId("catalog-view-products").click();
+    await expect(page).toHaveURL(/\/app\/catalog\?view=products$/);
+    await expect(page.getByTestId("catalog-view-products")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("button", { name: "+ New product" })).toBeVisible();
+
+    // The old route still works and lands on the products view.
+    await page.goto("/app/products");
+    await expect(page).toHaveURL(/\/app\/catalog\?view=products$/);
   });
 
   test("Servicios lista SOLO servicios y Productos lista SOLO productos", async ({ page, request }) => {
@@ -98,7 +99,7 @@ test.describe("Menú Productos separado de Servicios", () => {
     await expect(serviceFilters.getByRole("button", { name: serviceCategory.name, exact: true })).toBeVisible();
     await expect(serviceFilters.getByRole("button", { name: productCategory.name, exact: true })).toHaveCount(0);
     await expect(serviceFilters.getByRole("button", { name: "All categories", exact: true })).toBeVisible();
-    await expect(serviceFilters.getByRole("button", { name: "All statuses", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "All statuses", exact: true })).toHaveCount(0);
     await expect(page.getByTestId("services-kind-filter")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "All types" })).toHaveCount(0);
 
@@ -107,7 +108,7 @@ test.describe("Menú Productos separado de Servicios", () => {
     await expect(productFilters.getByRole("button", { name: productCategory.name, exact: true })).toBeVisible();
     await expect(productFilters.getByRole("button", { name: serviceCategory.name, exact: true })).toHaveCount(0);
     await expect(productFilters.getByRole("button", { name: "All categories", exact: true })).toBeVisible();
-    await expect(productFilters.getByRole("button", { name: "All statuses", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "All statuses", exact: true })).toHaveCount(0);
     await expect(page.getByTestId("services-kind-filter")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "All types" })).toHaveCount(0);
   });
@@ -133,11 +134,9 @@ test.describe("Menú Productos separado de Servicios", () => {
     await expect(page.getByTestId(`svc-row-${product.id}`)).toBeVisible();
     await expect(page.getByTestId(`svc-row-${second.id}`)).toBeVisible();
 
-    // Status filter (Inactive only) keeps only the deactivated product.
-    await page.locator('[data-tour="services-filters"]').getByRole("button", { name: "Inactive only" }).click();
-    await expect(page.getByTestId(`svc-row-${second.id}`)).toBeVisible();
-    await expect(page.getByTestId(`svc-row-${product.id}`)).toHaveCount(0);
-    await page.locator('[data-tour="services-filters"]').getByRole("button", { name: "All statuses" }).click();
+    // No status filter: the deactivated product stays in the list, marked as inactive.
+    await expect(page.getByTestId(`svc-row-${second.id}`)).toContainText("Inactive");
+    await expect(page.getByTestId(`svc-row-${product.id}`)).not.toContainText("Inactive");
 
     // Text search + no-match message.
     await searchItems(page, `E2E Sep ${stamp} Shampoo`);
@@ -204,6 +203,9 @@ test.describe("Menú Productos separado de Servicios", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.locator("#svc-duration")).toHaveCount(0);
     await expect(dialog.locator("#svc-kind")).toHaveCount(0);
+    // The SKU lives under "More options".
+    await expect(dialog.locator("#svc-sku")).toHaveCount(0);
+    await openItemMoreOptions(page);
     await expect(dialog.locator("#svc-sku")).toBeVisible();
 
     await dialog.getByLabel("Name").fill(name);
@@ -219,8 +221,6 @@ test.describe("Menú Productos separado de Servicios", () => {
     await expect(row).toBeVisible();
     await expect(row).toContainText("UI-300");
     await expect(row).not.toContainText("min");
-    await expect(page.getByRole("columnheader", { name: "Duration" })).toHaveCount(0);
-    await expect(page.getByRole("columnheader", { name: "Code (SKU)" })).toBeVisible();
 
     const res = await request.get(`${API_BASE}/api/services?kind=PRODUCT&q=${encodeURIComponent(name)}`, {
       headers: authHeaders(token),
@@ -237,7 +237,8 @@ test.describe("Menú Productos separado de Servicios", () => {
     await expect(dialog.locator("#svc-duration")).toBeVisible();
     await expect(dialog.locator("#svc-kind")).toHaveCount(0);
     await expect(dialog.locator("#svc-sku")).toHaveCount(0);
-    await expect(page.getByRole("columnheader", { name: "Duration" })).toBeVisible();
+    await openItemMoreOptions(page);
+    await expect(dialog.locator("#svc-sku")).toHaveCount(0);
   });
 
   test("la API rechaza mezclar tipos: producto en categoría de servicios y viceversa", async ({ request }) => {

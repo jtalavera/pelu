@@ -105,9 +105,18 @@ test.describe("Tablas con fondo blanco", () => {
     });
     await loginAsDemo(page);
 
-    for (const path of ["/app/clients", "/app/professionals", "/app/services"]) {
+    await page.goto("/app/clients");
+    await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
+
+    // Redesign: the catalog lists (professionals, services) are rows on a white card, no <table>.
+    for (const [path, testId] of [
+      ["/app/professionals", "catalog-professionals-list"],
+      ["/app/services", "catalog-items-list"],
+    ] as const) {
       await page.goto(path);
-      await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
+      const list = page.getByTestId(testId);
+      await expect(list).toBeVisible({ timeout: 20_000 });
+      expect(await paintedBackground(list)).toBe((await colors(page)).surface);
     }
 
     await page.goto("/app/service-records");

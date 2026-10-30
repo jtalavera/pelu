@@ -72,7 +72,7 @@ test.describe("HU-32 – Services table pagination", () => {
     await page.goto("/app/services");
 
     // Wait for the services tab to be active and data to load
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible();
+    await expect(page.getByTestId("catalog-view-services")).toBeVisible();
     await page.waitForTimeout(600); // let debounce fire
 
     const select = page.getByLabel("Rows per page:");
