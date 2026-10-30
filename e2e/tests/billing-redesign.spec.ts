@@ -497,7 +497,7 @@ test.describe("Facturación rediseñada · historial", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToInvoiceHistory(page);
-    await searchInvoiceHistory(page, "E2E RD19");
+    await searchInvoiceHistory(page, String(stamp)); // unique per run: earlier runs leave RD19 rows behind
     const rows = page.locator('[data-testid^="invoice-history-row-"]');
     await expect(rows).toHaveCount(4);
 
