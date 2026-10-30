@@ -120,9 +120,21 @@ test.describe("Facturación rediseñada · inicio", () => {
     await openCashPanel(page);
 
     const panel = page.getByTestId("billing-cash-panel");
-    await expect(panel.getByText("Opened at")).toBeVisible();
+    // One number up front: the cash that should be in the register, plus a one-line day summary.
+    await expect(panel.getByText(/^Open since /)).toBeVisible();
+    await expect(panel.getByText("Expected cash in the register")).toBeVisible();
+    await expect(panel.getByTestId("cash-summary-expected-cash")).toHaveText(/^Gs\. [\d.]+$/);
+    await expect(panel.getByTestId("cash-panel-day-line")).toContainText("invoiced");
+    // The rest is folded: payments by method, movements and the opening details.
+    await expect(panel.getByTestId("cash-section-methods")).toHaveAttribute("aria-expanded", "false");
+    await expect(panel.getByTestId("cash-section-movements")).toHaveAttribute("aria-expanded", "false");
+    await expect(panel.getByText("Opened by")).toHaveCount(0);
+    await panel.getByTestId("cash-section-opening").click();
     await expect(panel.getByText("Opened by")).toBeVisible();
     await expect(panel.getByText("Opening amount")).toBeVisible();
+    // Opening another section closes the previous one.
+    await panel.getByTestId("cash-section-methods").click();
+    await expect(panel.getByTestId("cash-section-opening")).toHaveAttribute("aria-expanded", "false");
     await expect(panel.getByRole("button", { name: "Close cash register" })).toBeVisible();
 
     // Manual movement form lives inside the same panel.
@@ -150,6 +162,39 @@ test.describe("Facturación rediseñada · inicio", () => {
       await page.getByTestId("billing-view-history").click();
       await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeVisible();
       await expect(page.getByTestId("billing-history-view-invoices")).toHaveAttribute("aria-pressed", "true");
+    } finally {
+      await ensureCashSessionOpenApi(request, token);
+    }
+  });
+
+  test("RD-21 los avisos de caja son pasajeros: se van solos y no quedan tras cerrar la caja", async ({
+    page,
+    request,
+  }) => {
+    const token = await prepare(request);
+    await request.post(`${API_BASE}/api/cash-sessions/close`, {
+      headers: authHeaders(token),
+      data: { countedCashAmount: 50_000 },
+    });
+    try {
+      await loginAsDemo(page);
+      await page.goto("/app/billing");
+      await goToBillingHome(page);
+      await page.getByLabel("Initial cash amount").fill("50000");
+      await page.getByRole("button", { name: "Open cash register" }).click();
+      const notice = page.getByTestId("billing-notice");
+      await expect(notice).toHaveText("Cash register opened");
+      // It fades on its own.
+      await expect(notice).toBeHidden({ timeout: 10_000 });
+
+      // Closing replaces any old message: no stale "opened" notice next to the closed register.
+      await openCashPanel(page);
+      await page.getByTestId("billing-open-close-form").click();
+      await page.locator("#counted-cash").fill("50000");
+      await page.getByRole("button", { name: "Confirm close" }).click();
+      await expect(page.getByTestId("billing-notice")).toHaveText("Cash register closed");
+      await expect(page.getByText("Cash register opened")).toHaveCount(0);
+      await expect(page.getByTestId("billing-close-verdict")).toHaveText("The register balanced");
     } finally {
       await ensureCashSessionOpenApi(request, token);
     }

@@ -1430,6 +1430,29 @@
         "attention": "Needs attention",
         "voided": "Voided"
       },
+      "cash": {
+        "openSince": "Open since {{when}}",
+        "expectedLabel": "Expected cash in the register",
+        "invoicedLine_one": "{{count}} invoice · {{amount}} invoiced",
+        "invoicedLine_other": "{{count}} invoices · {{amount}} invoiced",
+        "methods": "Payments by method",
+        "noPayments": "No payments yet.",
+        "openingData": "Opening details",
+        "closeQuestion": "How much cash is in the register?",
+        "closeHint": "Count it and enter the total.",
+        "expected": "Expected",
+        "difference": "Difference",
+        "matches": "Matches",
+        "surplusAmount": "Surplus {{amount}}",
+        "shortageAmount": "Short {{amount}}",
+        "balanced": "The register balanced",
+        "closedInvoicedLine_one": "You invoiced {{amount}} in {{count}} invoice",
+        "closedInvoicedLine_other": "You invoiced {{amount}} in {{count}} invoices",
+        "viewDetail": "View details",
+        "dismiss": "Hide summary",
+        "openedNotice": "Cash register opened",
+        "closedNotice": "Cash register closed"
+      },
       "panel": {
         "title": "Cash register"
       },

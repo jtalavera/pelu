@@ -129,6 +129,9 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       // Details live behind the chip, not on the home screen.
       expect(screen.queryByText(/admin@demo\.com/i)).toBeNull();
       await openCashPanel();
+      // The opening details (who, initial amount) are one tap away inside the panel.
+      expect(screen.queryByText(/admin@demo\.com/i)).toBeNull();
+      fireEvent.click(screen.getByTestId("cash-section-opening"));
       expect(screen.getByText(/admin@demo\.com/i)).toBeTruthy();
     });
 
@@ -181,7 +184,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
 
-      expect(await screen.findByLabelText(/counted cash amount/i)).toBeTruthy();
+      expect(await screen.findByLabelText(/how much cash is in the register/i)).toBeTruthy();
     });
   });
 
@@ -357,7 +360,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
 
-      const countedInput = await screen.findByLabelText(/counted cash amount/i);
+      const countedInput = await screen.findByLabelText(/how much cash is in the register/i);
       fireEvent.change(countedInput, { target: { value: "150000" } });
 
       const confirmBtn = screen.getByRole("button", { name: /confirm close/i });
@@ -381,7 +384,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
 
-      const countedInput = await screen.findByLabelText(/counted cash amount/i);
+      const countedInput = await screen.findByLabelText(/how much cash is in the register/i);
       fireEvent.change(countedInput, { target: { value: "0" } });
 
       const confirmBtn = screen.getByRole("button", { name: /confirm close/i });

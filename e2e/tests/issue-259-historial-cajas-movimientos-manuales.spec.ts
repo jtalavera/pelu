@@ -128,7 +128,9 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     // Redesign: the live summary and the movements live in the cash register panel.
     await openCashPanel(page);
 
-    // AC3: zero cash sales, zero movements -> live expected cash starts at 0.
+    // AC3: zero cash sales, zero movements -> live expected cash starts at 0. (The movements are one
+    // tap away inside the panel; the section stays open while the movement form is used.)
+    await page.getByTestId("cash-section-movements").click();
     await expect(page.getByText("No cash movements recorded yet.")).toBeVisible({
       timeout: 15_000,
     });
@@ -155,9 +157,9 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     // AC4: the movement appears live and expected cash increases by its amount (0 -> 20.000).
     await expect(page.getByText(ingresoReason)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Manual cash in")).toBeVisible();
-    await expect(page.getByText("Expected cash (live)")).toBeVisible();
+    await expect(page.getByText("Expected cash in the register")).toBeVisible();
     const expectedCash = page.getByTestId("cash-summary-expected-cash");
-    await expect(expectedCash).toHaveText("20.000", { timeout: 15_000 });
+    await expect(expectedCash).toHaveText("Gs. 20.000", { timeout: 15_000 });
 
     const egresoReason = `E2E egreso ${Date.now()}`;
     await page.getByRole("button", { name: "Cash out", exact: true }).click();
@@ -176,7 +178,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     // AC5: a cash-out movement decreases the live expected cash (20.000 -> 15.000).
     await expect(page.getByText(egresoReason)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Manual cash out")).toBeVisible();
-    await expect(expectedCash).toHaveText("15.000", { timeout: 15_000 });
+    await expect(expectedCash).toHaveText("Gs. 15.000", { timeout: 15_000 });
   });
 
   test("AC6+AC7 · el formulario de movimiento valida monto y motivo", async ({ page, request }) => {

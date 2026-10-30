@@ -17,8 +17,8 @@ test.describe("HU-18 · Cerrar caja del día", () => {
     await ensureCashSessionOpen(page);
     await openCashPanel(page);
     await page.getByRole("button", { name: "Close cash register" }).click();
-    await page.getByLabel("Counted cash amount").fill("49900");
-    await expect(page.getByLabel("Counted cash amount")).toHaveValue("49.900");
+    await page.getByLabel("How much cash is in the register?").fill("49900");
+    await expect(page.getByLabel("How much cash is in the register?")).toHaveValue("49.900");
     const [closeRes] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/cash-sessions/close") && r.request().method() === "POST",
@@ -31,6 +31,18 @@ test.describe("HU-18 · Cerrar caja del día", () => {
       timeout: 15_000,
     });
     await expect(page.getByRole("button", { name: "Open cash register" })).toBeVisible();
+    // Minimalist summary: the verdict first, the numbers one tap away.
+    const summary = page.getByTestId("billing-close-result");
+    await expect(summary).toContainText("Cash register closed");
+    await expect(page.getByTestId("billing-close-verdict")).toHaveText(
+      /^(The register balanced|Surplus Gs\. [\d.]+|Short Gs\. [\d.]+)$/,
+    );
+    await expect(page.getByTestId("billing-close-result-detail")).toHaveCount(0);
+    await page.getByTestId("billing-close-result-toggle").click();
+    await expect(page.getByTestId("billing-close-result-detail")).toContainText("Counted cash");
+    // The summary can be hidden.
+    await page.getByTestId("billing-close-result-dismiss").click();
+    await expect(summary).toHaveCount(0);
   });
 
   test("HU-18 · 3 diferencia sobregiro o faltante", async ({ page }) => {
@@ -38,8 +50,11 @@ test.describe("HU-18 · Cerrar caja del día", () => {
     await ensureCashSessionOpen(page);
     await openCashPanel(page);
     await page.getByRole("button", { name: "Close cash register" }).click();
-    await setControlledInputValue(page.getByLabel("Counted cash amount"), "999999");
-    await expect(page.getByLabel("Counted cash amount")).toHaveValue("999.999");
+    await setControlledInputValue(page.getByLabel("How much cash is in the register?"), "999999");
+    await expect(page.getByLabel("How much cash is in the register?")).toHaveValue("999.999");
+    // While typing, the expected cash and the difference are shown live.
+    await expect(page.getByTestId("billing-close-live-diff")).toContainText("Expected");
+    await expect(page.getByTestId("billing-close-live-verdict")).toContainText(/Surplus Gs\./);
     const [closeRes2] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/cash-sessions/close") && r.request().method() === "POST",
@@ -51,6 +66,7 @@ test.describe("HU-18 · Cerrar caja del día", () => {
     await expect(page.getByText("Cash register is closed", { exact: true })).toBeVisible({
       timeout: 15_000,
     });
+    await expect(page.getByTestId("billing-close-verdict")).toContainText(/^Surplus Gs\./);
     await expect(page.getByRole("button", { name: "Open cash register" })).toBeVisible();
   });
 

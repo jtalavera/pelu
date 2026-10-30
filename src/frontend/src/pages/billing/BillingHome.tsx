@@ -12,6 +12,7 @@ import {
   Pagination,
   Spinner,
   Text,
+  Toast,
 } from "@design-system";
 import { listInvoicesPaged, type PagedInvoicesResponse } from "../../api/invoices";
 import {
@@ -24,16 +25,14 @@ import {
   type CashSessionDetail,
 } from "../../api/cashSessions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
-import { CashSessionSummaryCard } from "../../components/CashSessionSummaryCard";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { InvoiceCorrectionForm } from "../../components/InvoiceCorrectionForm";
 import { InvoiceDetailModal } from "../../components/InvoiceDetailModal";
 import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceStatePill";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
-import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../../lib/moneyInputMask";
-import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
+import { CashClosedSummary, CashPanelSummary, cashVerdict } from "./CashPanel";
 import { paymentMethodsLabel, todayRangeIso } from "./billingShared";
 
 type PanelView = "summary" | "movement" | "close";
@@ -59,14 +58,14 @@ export function BillingHome({
   isActive: boolean;
 }) {
   const { t } = useTranslation();
-  const dateLocale = useDateLocale();
 
   // ── Open session (shown when the cash register is closed) ──
   const [openingAmount, setOpeningAmount] = useState("");
   const [amountError, setAmountError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
-  const [openSuccess, setOpenSuccess] = useState(false);
+  // Passing notices ("Caja abierta", "Caja cerrada"): they fade on their own and the next one replaces them.
+  const [notice, setNotice] = useState<string | null>(null);
 
   // ── Cash panel ──
   const [panelOpen, setPanelOpen] = useState(false);
@@ -157,7 +156,7 @@ export function BillingHome({
 
   async function handleOpenSession(e: React.FormEvent) {
     e.preventDefault();
-    setOpenSuccess(false);
+    setNotice(null);
     setOpenError(null);
     if (moneyDigitsOnly(openingAmount) === "") {
       setAmountError(t("femme.billing.openingCashAmountInvalid"));
@@ -168,7 +167,7 @@ export function BillingHome({
     try {
       await openSessionApi(parseMaskedMoney(openingAmount));
       setOpeningAmount("");
-      setOpenSuccess(true);
+      setNotice(t("femme.billing.cash.openedNotice"));
       setCloseResult(null);
       onSessionChanged();
     } catch (err) {
@@ -192,6 +191,7 @@ export function BillingHome({
       setCloseResult(result);
       setCountedCash("");
       setPanelOpen(false);
+      setNotice(t("femme.billing.cash.closedNotice"));
       onSessionChanged();
     } catch (err) {
       setCloseError(translateApiError(err, t, "femme.billing.close.closeError"));
@@ -279,29 +279,9 @@ export function BillingHome({
           {openError}
         </Alert>
       )}
-      {openSuccess && (
-        <Alert variant="success" title={t("femme.billing.savedTitle")}>
-          {t("femme.billing.savedBody")}
-        </Alert>
-      )}
 
       {closeResult && !currentSession && (
-        <Card className="flex flex-col gap-3 p-4 sm:p-6" data-testid="billing-close-result">
-          <Heading as="h2" className="text-lg">
-            {t("femme.billing.close.closedTitle")}
-          </Heading>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            <span>
-              <span className="font-medium">{t("femme.billing.close.closedAt")}: </span>
-              {formatParaguayDateTime(closeResult.closedAt as string, dateLocale)}
-            </span>
-            <span>
-              <span className="font-medium">{t("femme.billing.close.closedBy")}: </span>
-              {closeResult.closedByEmail}
-            </span>
-          </div>
-          <CashSessionSummaryCard detail={closeResult} />
-        </Card>
+        <CashClosedSummary detail={closeResult} onDismiss={() => setCloseResult(null)} />
       )}
 
       {currentSession ? (
@@ -496,7 +476,7 @@ export function BillingHome({
                   setOpeningAmount(maskMoneyInput(e.target.value));
                   setAmountError(null);
                   setOpenError(null);
-                  setOpenSuccess(false);
+                  setNotice(null);
                 }}
                 className="mt-1 w-full sm:max-w-xs"
                 placeholder="0"
@@ -545,31 +525,17 @@ export function BillingHome({
             </div>
             {currentSession ? (
               <>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-                  <dt className="text-ink-3">{t("femme.billing.session.metricOpenedAt")}</dt>
-                  <dd className="text-right font-semibold">
-                    {formatParaguayDateTime(currentSession.openedAt, dateLocale)}
-                  </dd>
-                  <dt className="text-ink-3">{t("femme.billing.session.metricOpenedBy")}</dt>
-                  <dd className="min-w-0 break-words text-right font-semibold">
-                    {currentSession.openedByEmail}
-                  </dd>
-                  <dt className="text-ink-3">{t("femme.billing.session.metricOpeningAmount")}</dt>
-                  <dd className="text-right font-semibold">
-                    {formatGuaraniesGs(currentSession.openingCashAmount)}
-                  </dd>
-                </dl>
                 {liveDetailError && (
                   <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
                     {liveDetailError}
                   </Alert>
                 )}
-                {liveDetail && <CashSessionSummaryCard detail={liveDetail} />}
-                <div className="flex flex-col gap-2">
+                <CashPanelSummary session={currentSession} detail={liveDetail} />
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-12"
+                    className="min-h-12 flex-1"
                     data-testid="billing-open-movement"
                     onClick={() => {
                       setMovementSubmitError(null);
@@ -582,7 +548,7 @@ export function BillingHome({
                   <Button
                     type="button"
                     variant="danger"
-                    className="min-h-12"
+                    className="min-h-12 flex-1"
                     data-testid="billing-open-close-form"
                     onClick={() => setPanelView("close")}
                   >
@@ -597,7 +563,7 @@ export function BillingHome({
               type="button"
               variant="ghost"
               data-testid="billing-view-cash-history"
-              className="self-start text-primary"
+              className="self-center text-primary"
               onClick={() => {
                 setPanelOpen(false);
                 onOpenHistory("cash");
@@ -610,14 +576,13 @@ export function BillingHome({
 
         {panelView === "close" && currentSession && (
           <form onSubmit={(e) => void handleCloseSession(e)} noValidate className="flex flex-col gap-4">
-            <Text variant="muted">{t("femme.billing.close.lead")}</Text>
             {closeError && (
               <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
                 {closeError}
               </Alert>
             )}
             <div>
-              <Label htmlFor="counted-cash">{t("femme.billing.close.countedCashAmount")}</Label>
+              <Label htmlFor="counted-cash">{t("femme.billing.cash.closeQuestion")}</Label>
               <Input
                 id="counted-cash"
                 inputMode="numeric"
@@ -627,15 +592,46 @@ export function BillingHome({
                   setCountedCashError(null);
                 }}
                 placeholder="0"
-                className="mt-1 w-full sm:max-w-xs"
+                className="mt-1 min-h-14 w-full font-heading text-xl font-extrabold"
                 aria-invalid={!!countedCashError}
                 aria-describedby={countedCashError ? "counted-cash-err" : "counted-cash-hint"}
               />
               <FieldValidationError id="counted-cash-err">{countedCashError}</FieldValidationError>
               <Text variant="small" id="counted-cash-hint" className="mt-1 text-ink-3">
-                {t("femme.billing.close.countedCashAmountHint")}
+                {t("femme.billing.cash.closeHint")}
               </Text>
             </div>
+            {liveDetail && (
+              <div className="flex flex-col gap-1.5 rounded-xl border border-line px-4 py-3 text-sm" data-testid="billing-close-live-diff">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-ink-3">{t("femme.billing.cash.expected")}</span>
+                  <b className="tabular-nums">{formatGuaraniesGs(liveDetail.expectedCashAmount)}</b>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-ink-3">{t("femme.billing.cash.difference")}</span>
+                  {moneyDigitsOnly(countedCash) === "" ? (
+                    <span className="text-ink-3">—</span>
+                  ) : (
+                    (() => {
+                      const v = cashVerdict(
+                        t as never,
+                        parseMaskedMoney(countedCash) - parseFloat(liveDetail.expectedCashAmount),
+                      );
+                      return (
+                        <span
+                          data-testid="billing-close-live-verdict"
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                            v.balanced ? "bg-success-lt text-success" : "bg-warning-lt text-warning"
+                          }`}
+                        >
+                          {v.balanced ? t("femme.billing.cash.matches") : v.text}
+                        </span>
+                      );
+                    })()
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex gap-3">
               <Button type="button" variant="secondary" className="min-h-11" onClick={() => setPanelView("summary")}>
                 {t("femme.billing.history.detail.voidCancel")}
@@ -735,6 +731,18 @@ export function BillingHome({
             </form>
           </>
       </Modal>
+
+      <Toast
+        open={notice !== null}
+        onOpenChange={(o) => {
+          if (!o) setNotice(null);
+        }}
+        variant="success"
+        duration={4000}
+        data-testid="billing-notice"
+      >
+        {notice}
+      </Toast>
 
       {correctionInvoiceId !== null && (
         <InvoiceCorrectionForm

@@ -1430,6 +1430,29 @@
         "attention": "Requiere atención",
         "voided": "Anulada"
       },
+      "cash": {
+        "openSince": "Abierta desde {{when}}",
+        "expectedLabel": "Efectivo esperado en caja",
+        "invoicedLine_one": "{{count}} comprobante · {{amount}} facturados",
+        "invoicedLine_other": "{{count}} comprobantes · {{amount}} facturados",
+        "methods": "Cobros por medio de pago",
+        "noPayments": "Todavía no hay cobros.",
+        "openingData": "Datos de la apertura",
+        "closeQuestion": "¿Cuánto efectivo hay en la caja?",
+        "closeHint": "Contalo y escribí el total.",
+        "expected": "Esperado",
+        "difference": "Diferencia",
+        "matches": "Coincide",
+        "surplusAmount": "Sobran {{amount}}",
+        "shortageAmount": "Faltan {{amount}}",
+        "balanced": "La caja cuadró",
+        "closedInvoicedLine_one": "Facturaste {{amount}} en {{count}} comprobante",
+        "closedInvoicedLine_other": "Facturaste {{amount}} en {{count}} comprobantes",
+        "viewDetail": "Ver detalle",
+        "dismiss": "Ocultar resumen",
+        "openedNotice": "Caja abierta",
+        "closedNotice": "Caja cerrada"
+      },
       "panel": {
         "title": "Caja"
       },
