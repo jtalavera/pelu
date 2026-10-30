@@ -13,6 +13,7 @@ import { loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 import { bookingAppointmentDialog, professionalFormDialog } from "../fixtures/ui";
+import { openProfessionalSchedule } from "../fixtures/catalog";
 
 test.describe("HU-26 · Fixes varios UX general", () => {
   // Req 1: Calendar time picker shows 06:00–20:00
@@ -45,7 +46,7 @@ test.describe("HU-26 · Fixes varios UX general", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await openProfessionalSchedule(page);
     await dlg.getByTestId("prof-day-mon-active").check();
     await expect(dlg.locator("#prof-1-start")).toHaveValue("09:00");
     await expect(dlg.locator("#prof-1-end")).toHaveValue("19:00");

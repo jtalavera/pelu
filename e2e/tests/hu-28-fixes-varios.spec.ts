@@ -57,7 +57,7 @@ test.describe("HU-28 · Fixes varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    const nameCell = page.locator("tr").filter({ hasText: seed.professionalFullName }).first();
+    const nameCell = page.locator('[data-testid^="prof-row-"]').filter({ hasText: seed.professionalFullName }).first();
     await expect(nameCell).toBeVisible({ timeout: 15_000 });
     await nameCell.click();
     // The edit dialog should appear pre-filled with the professional's name

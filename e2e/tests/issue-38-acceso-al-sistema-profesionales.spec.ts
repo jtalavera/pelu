@@ -105,7 +105,7 @@ async function openEditDetails(page: Page, prof: { id: number; fullName: string 
 }
 
 async function saveDetails(page: Page) {
-  await page.getByRole("dialog").getByRole("button", { name: "Save and set schedule" }).click();
+  await page.getByRole("dialog").getByTestId("prof-save").click();
 }
 
 const statusText = (page: Page) => page.getByRole("dialog").getByTestId("prof-access-status-text");

@@ -52,7 +52,7 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     await dlg.locator("#prof-email").fill(`noemail${Date.now()}@test.com`);
     await dlg.locator("#prof-system-access").check();
     await dlg.locator("#prof-email").fill("");
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.getByTestId("prof-save").click();
     await expect(dlg.getByText(/no email configured/i)).toBeVisible();
   });
 

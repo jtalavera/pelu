@@ -244,7 +244,7 @@ test.describe("HU-30 · Fixes varios", () => {
     // click its row to open the edit dialog. Data rows are <tr> elements (CSS `tr`); their
     // a11y role is "button", so getByRole("row") does not match them.
     await page.locator("#professionals-inline-search").fill(profName);
-    const row = page.locator("tr").filter({ hasText: profName }).first();
+    const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: profName }).first();
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.click();
 
@@ -262,7 +262,7 @@ test.describe("HU-30 · Fixes varios", () => {
         (req) => /\/api\/professionals\/\d+$/.test(req.url()) && req.method() === "PUT",
         { timeout: 20_000 },
       ),
-      dialog.getByRole("button", { name: "Save and set schedule" }).click(),
+      dialog.getByTestId("prof-save").click(),
     ]);
     const acceptLang = grantReq.headers()["accept-language"];
     expect(acceptLang).toBeTruthy();

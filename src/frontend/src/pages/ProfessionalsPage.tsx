@@ -699,7 +699,9 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
                 <div className={`min-w-0 flex-1 ${p.active ? "" : "opacity-60"}`}>
                   <div className="break-words font-semibold text-ink">{p.fullName}</div>
                   <div className="break-words text-sm text-ink-3">
-                    {p.phone || t("femme.catalog.noPhone")}
+                    {[p.phone || t("femme.catalog.noPhone"), p.active ? null : t("femme.status.INACTIVE")]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </div>
                 </div>
                 <div

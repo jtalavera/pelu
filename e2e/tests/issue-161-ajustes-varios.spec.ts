@@ -248,7 +248,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.getByTestId("prof-save").click();
 
     const mondayRow = dlg.getByTestId("prof-day-mon-row");
     await expect(mondayRow).toBeVisible();

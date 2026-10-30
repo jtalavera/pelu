@@ -54,12 +54,12 @@ test.describe("Issue #155 · Cambios varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.locator("#professionals-inline-search").fill(prof.fullName);
-    const row = page.locator("tr").filter({ hasText: prof.fullName }).first();
+    const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: prof.fullName }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.click();
     const dlg = professionalFormDialog(page);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
-    await dlg.getByRole("button", { name: "Save schedule" }).click();
+    await dlg.getByTestId("prof-save").click();
+    await dlg.getByTestId("prof-save").click();
     // Issue #157: the success message shows inside the edit form itself, which stays open.
     await expect(dlg).toBeVisible();
     await expect(

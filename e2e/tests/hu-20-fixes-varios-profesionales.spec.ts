@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { professionalFormDialog, setControlledInputValue } from "../fixtures/ui";
+import { openProfessionalMoreOptions, openProfessionalSchedule } from "../fixtures/catalog";
 
 const PROFESSIONAL_PHOTO_ACCEPT =
   "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
@@ -24,7 +25,7 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     await page.locator("#professionals-inline-search").fill(name);
-    const prow = page.locator("tr").filter({ hasText: name }).first();
+    const prow = page.locator('[data-testid^="prof-row-"]').filter({ hasText: name }).first();
     await expect(prow).toBeVisible({ timeout: 20_000 });
     await expect(prow.getByRole("button", { name: /^(Actions|Acciones)$/ })).toBeVisible();
   });
@@ -85,7 +86,7 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill("E2E Time");
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await openProfessionalSchedule(page);
     await dlg.getByTestId("prof-day-mon-active").check();
     await expect(dlg.locator("#prof-1-start")).toHaveAttribute("role", "combobox");
     await expect(dlg.locator("#prof-1-end")).toHaveAttribute("role", "combobox");
@@ -107,6 +108,7 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill("E2E Email");
     await setControlledInputValue(dlg.getByLabel("Email"), "@no-prefix.com");
     await dlg.getByRole("button", { name: /^Save( and set schedule)?$/ }).first().click();
@@ -125,7 +127,7 @@ test.describe("HU-20 · Fixes varios profesionales", () => {
       const u = new URL(r.url());
       return u.pathname === "/api/professionals" && r.request().method() === "POST";
     });
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.getByTestId("prof-save").click();
     const resp = await respP;
     expect(resp.ok(), await resp.text()).toBeTruthy();
     const modal = professionalFormDialog(page);
