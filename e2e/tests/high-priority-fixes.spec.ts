@@ -33,7 +33,7 @@ import { loginAsDemo } from "../fixtures/auth";
 import { choosePaymentMethod, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog } from "../fixtures/ui";
-import { closeCategoriesDialog, openCategoriesDialog } from "../fixtures/catalog";
+import { closeCategoriesDialog, openCategoriesDialog, openItemMoreOptions } from "../fixtures/catalog";
 
 test.describe.configure({ mode: "serial" });
 
@@ -81,15 +81,16 @@ test("Issue #46 · nuevo servicio: IVA 10% seleccionado por defecto", async ({ p
   await openCategoriesDialog(page);
   const catName = `IVACat ${Date.now()}`;
   await page.getByRole("button", { name: "+ New category" }).click();
-  await page.getByRole("dialog").getByLabel("Name").fill(catName);
-  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(catName);
+  await page.getByRole("dialog", { name: "New category" }).getByRole("button", { name: "Save" }).click();
   await closeCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New service" }).click();
   const dialog = page.getByRole("dialog", { name: "New service" });
   await expect(dialog).toBeVisible();
 
-  // The "Tipo de impuesto" / "Tax type" select should default to IVA 10%
+  // The "Tipo de impuesto" / "Tax type" select (under "More options") should default to IVA 10%
+  await openItemMoreOptions(page);
   const taxSelect = dialog.getByLabel(/tax type|tipo de impuesto/i);
   await expect(taxSelect).toBeVisible();
   const selectedOption = await taxSelect.inputValue();

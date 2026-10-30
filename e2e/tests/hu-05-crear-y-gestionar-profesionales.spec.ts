@@ -67,7 +67,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
   test("HU-05 · 4 listado muestra estado activo", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+    await expect(page.locator('[data-testid^="prof-switch-"]').first()).toBeVisible();
   });
 
   test("HU-05 · 3 desactivar y reactivar profesional", async ({ page }) => {
@@ -88,7 +88,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
 
     await toggleRowSwitch(row);
     await page.getByRole("dialog", { name: "Deactivate professional" }).getByRole("button", { name: "Deactivate" }).click();
-    await expect(row.getByText("Inactive", { exact: true })).toBeVisible();
+    await expect(row).toContainText("Inactive");
     // Issue #163 AC3: deactivating from the table shows a success message in the page header.
     await expect(
       page.getByText("Professional deactivated successfully.", { exact: true }),
@@ -96,7 +96,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
 
     await toggleRowSwitch(row);
     await page.getByRole("dialog", { name: "Activate professional" }).getByRole("button", { name: "Activate" }).click();
-    await expect(row.getByText("Active", { exact: true })).toBeVisible();
+    await expect(row).not.toContainText("Inactive");
     await expect(
       page.getByText("Professional activated successfully.", { exact: true }),
     ).toBeVisible();
@@ -131,7 +131,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     // The message box must leave a gap before the table header — not touch it directly.
     const gap = await page.evaluate(() => {
       const alertEl = document.querySelector('[role="alert"]');
-      const table = document.querySelector("table");
+      const table = document.querySelector('[data-testid="catalog-professionals-list"]');
       if (!alertEl || !table) return null;
       return table.getBoundingClientRect().top - alertEl.getBoundingClientRect().bottom;
     });

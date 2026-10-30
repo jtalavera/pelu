@@ -3,11 +3,8 @@ import { loginAsDemo } from "../fixtures/auth";
 import { professionalFormDialog } from "../fixtures/ui";
 import { openProfessionalMoreOptions } from "../fixtures/catalog";
 
-async function clickSaveScheduleAndCloseModal(page: Page, dlg: Locator) {
-  // New professionals start with zero active weekdays; `saveSchedules` bails out without a PUT
-  // until at least one day is enabled.
-  await dlg.getByTestId("prof-day-mon-active").check();
-
+/** Catalog redesign: one Save creates the professional and its default schedule, then closes. */
+async function clickSaveAndCloseModal(page: Page, dlg: Locator) {
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -86,8 +83,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(name);
     await dlg.locator("#prof-pin").fill(pin4);
-    await dlg.getByTestId("prof-save").click();
-    await expect(dlg.getByTestId("prof-save")).toBeVisible();
+    await clickSaveAndCloseModal(page, dlg);
   });
 
   test("HU-22 · guardado valores PIN 7 dígitos", async ({ page }) => {
@@ -101,8 +97,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(name);
     await dlg.locator("#prof-pin").fill(pin7);
-    await dlg.getByTestId("prof-save").click();
-    await expect(dlg.getByTestId("prof-save")).toBeVisible();
+    await clickSaveAndCloseModal(page, dlg);
   });
 
   test("HU-22 · 4 PIN duplicado dentro del mismo tenant es rechazado", async ({ page }) => {
@@ -117,9 +112,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(name1);
     await dlg.locator("#prof-pin").fill(pin);
-    await dlg.getByTestId("prof-save").click();
-    await dlg.getByTestId("prof-save").waitFor({ state: "visible" });
-    await clickSaveScheduleAndCloseModal(page, dlg);
+    await clickSaveAndCloseModal(page, dlg);
 
     // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
     await expect(page.getByText(name1.toUpperCase(), { exact: true }).first()).toBeVisible();
@@ -127,6 +120,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     const name2 = `E2E DupPin2 ${Date.now()}`;
     await page.getByRole("button", { name: "+ New professional" }).click();
     dlg = professionalFormDialog(page);
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(name2);
     await dlg.locator("#prof-pin").fill(pin);
     await dlg.getByTestId("prof-save").click();
@@ -141,8 +135,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByTestId("prof-save").click();
-    await expect(dlg.getByTestId("prof-save")).toBeVisible();
+    await clickSaveAndCloseModal(page, dlg);
   });
 
   test("HU-22 · 8 PIN existente puede eliminarse dejando el campo vacío", async ({ page }) => {
@@ -155,9 +148,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(name);
     await dlg.locator("#prof-pin").fill(String(Date.now()).slice(-6));
-    await dlg.getByTestId("prof-save").click();
-    await dlg.getByTestId("prof-save").waitFor({ state: "visible" });
-    await clickSaveScheduleAndCloseModal(page, dlg);
+    await clickSaveAndCloseModal(page, dlg);
 
     // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
     await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
@@ -166,8 +157,8 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.click();
     dlg = professionalFormDialog(page);
+    await openProfessionalMoreOptions(page);
     await expect(dlg.locator("#prof-pin")).toHaveAttribute("type", "password");
-    await dlg.getByTestId("prof-save").click();
-    await expect(dlg.getByTestId("prof-save")).toBeVisible();
+    await clickSaveAndCloseModal(page, dlg);
   });
 });

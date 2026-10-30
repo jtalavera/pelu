@@ -1,3 +1,4 @@
+import { openProfessionalSchedule } from "../fixtures/catalog";
 import { expect, test } from "@playwright/test";
 import {
   apiBaseUrl,
@@ -248,20 +249,20 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByTestId("prof-save").click();
+    await openProfessionalSchedule(page);
 
-    const mondayRow = dlg.getByTestId("prof-day-mon-row");
-    await expect(mondayRow).toBeVisible();
-    const inactiveBox = await mondayRow.boundingBox();
+    // Sunday is a day off by default (checkbox + "Day off" text only): it must stay compact.
+    const sundayRow = dlg.getByTestId("prof-day-sun-row");
+    await expect(sundayRow).toBeVisible();
+    const inactiveBox = await sundayRow.boundingBox();
     expect(inactiveBox).not.toBeNull();
-    // A day off (checkbox + "Day off" text only) must stay compact.
     expect(inactiveBox!.height).toBeLessThan(50);
 
-    await dlg.getByTestId("prof-day-mon-active").check();
-    await fillTimeComboboxField(dlg.locator("#prof-1-start"), "09:00");
-    await fillTimeComboboxField(dlg.locator("#prof-1-end"), "17:00");
+    await dlg.getByTestId("prof-day-sun-active").check();
+    await fillTimeComboboxField(dlg.locator("#prof-7-start"), "09:00");
+    await fillTimeComboboxField(dlg.locator("#prof-7-end"), "17:00");
 
-    const activeBox = await mondayRow.boundingBox();
+    const activeBox = await sundayRow.boundingBox();
     expect(activeBox).not.toBeNull();
     // Even with both time pickers showing, the row must not balloon back to the old
     // label-above-input layout (~90-100px+) — a single compact line, touch-target height included.

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { DEMO_EMAIL, loginAsDemo } from "../fixtures/auth";
 import { apiBaseUrl, authHeaders, loginAsDemoApi } from "../fixtures/api";
+import { openProfessionalMoreOptions } from "../fixtures/catalog";
 
 /**
  * Issue #38 · Acceso al sistema para profesionales
@@ -96,10 +97,10 @@ async function openEditDetails(page: Page, prof: { id: number; fullName: string 
   );
   await page.locator("#professionals-inline-search").fill(prof.fullName);
   await filtered;
-  await expect(page.getByTestId(`professionals-row-${prof.id}-trigger`)).toBeVisible({ timeout: 20_000 });
-  await page.getByTestId(`professionals-row-${prof.id}-trigger`).click();
-  await page.getByRole("menuitem", { name: "Edit details and photo" }).click();
+  await expect(page.getByTestId(`prof-row-${prof.id}`)).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId(`prof-row-${prof.id}`).click();
   const dlg = page.getByRole("dialog");
+  await openProfessionalMoreOptions(page);
   await expect(dlg.locator("#prof-system-access")).toBeVisible();
   return dlg;
 }
@@ -118,6 +119,7 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(`E2E I38 NoMail ${Date.now()}`);
     const toggle = dlg.locator("#prof-system-access");
     await expect(toggle).toBeDisabled();
@@ -134,6 +136,7 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     const name = `E2E I38 Clear ${Date.now()}`;
     await dlg.getByLabel("Full name").fill(name);
     await dlg.locator("#prof-email").fill(uniqueEmail("i38clear"));
@@ -291,6 +294,7 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(`E2E I38 Dup ${Date.now()}`);
     await dlg.locator("#prof-email").fill(DEMO_EMAIL);
     await dlg.locator("#prof-system-access").check();
@@ -322,6 +326,7 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     const name = `E2E I38 Status ${Date.now()}`;
     const email = uniqueEmail("i38status");
     await dlg.getByLabel("Full name").fill(name);
