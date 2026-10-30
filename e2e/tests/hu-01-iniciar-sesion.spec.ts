@@ -20,7 +20,7 @@ test.describe("HU-01 · Iniciar sesión", () => {
 
   test("login exitoso redirige al panel", async ({ page }) => {
     await loginAsDemo(page);
-    await expect(page.getByText("Appointments today", { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId("dashboard-summary-appointments")).toBeVisible();
   });
 
   test("enlace a recuperación de contraseña", async ({ page }) => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "../test/renderWithTour";
+import { cleanup, fireEvent, render, screen, waitFor } from "../test/renderWithTour";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
@@ -107,8 +107,11 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
       inactiveClientsThresholdDays: 60,
     });
     renderPage();
-    expect(await screen.findByText(/^Gs\.[\s\u00a0]*890/)).toBeTruthy();
-    expect(screen.getByText(/^1,284$/)).toBeTruthy();
+    // Billing redesign: Inicio shows a one-line summary; week/month totals live in Dashboards.
+    expect((await screen.findByTestId("dashboard-summary-collected")).textContent).toMatch(
+      /^Gs\.[\s\u00a0]*890.*collected$/,
+    );
+    expect(screen.queryByText(/^1,284$/)).toBeNull();
   });
 });
 
@@ -134,6 +137,7 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
   it("shows the empty state when there are no inactive clients", async () => {
     femmeJson.mockResolvedValue(baseDashboard([]));
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
     expect(await screen.findByText("No inactive clients right now")).toBeTruthy();
   });
 
@@ -157,6 +161,7 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
       ]),
     );
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
 
     const rows = await screen.findAllByTestId("dashboard-inactive-client-row");
     expect(rows).toHaveLength(2);
@@ -180,12 +185,14 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
       ]),
     );
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
     expect(await screen.findByTestId("dashboard-inactive-clients-view-all")).toBeTruthy();
   });
 
   it("uses the server-provided threshold in the subtitle copy, not a hardcoded frontend value", async () => {
     femmeJson.mockResolvedValue(baseDashboard([], 45));
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
     expect(
       await screen.findByText("Active clients with no completed visit in the last 45 days"),
     ).toBeTruthy();

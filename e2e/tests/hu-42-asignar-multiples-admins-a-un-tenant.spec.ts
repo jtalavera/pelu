@@ -216,7 +216,7 @@ test.describe("HU-42 · Asignar más de un Admin al mismo tenant", () => {
     await page.getByLabel("Password").fill("ValidPassA1!");
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/app/, { timeout: 25_000 });
-    await expect(page.getByText("Appointments today", { exact: true }).first()).toBeVisible({
+    await expect(page.getByTestId("dashboard-summary-appointments")).toBeVisible({
       timeout: 20_000,
     });
 
@@ -226,7 +226,7 @@ test.describe("HU-42 · Asignar más de un Admin al mismo tenant", () => {
     await page.getByLabel("Password").fill("ValidPassB1!");
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/app/, { timeout: 25_000 });
-    await expect(page.getByText("Appointments today", { exact: true }).first()).toBeVisible({
+    await expect(page.getByTestId("dashboard-summary-appointments")).toBeVisible({
       timeout: 20_000,
     });
   });

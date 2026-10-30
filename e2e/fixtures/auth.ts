@@ -68,7 +68,7 @@ export async function loginAsDemo(page: Page) {
   const loginResp = await loginPromise;
   expect(loginResp.ok(), `login failed (${loginResp.status()}): ${loginResp.statusText()}`).toBeTruthy();
   await expect(page).toHaveURL(/\/app/, { timeout: 25_000 });
-  await expect(page.getByText("Appointments today", { exact: true }).first()).toBeVisible({
+  await expect(page.getByTestId("dashboard-summary-appointments")).toBeVisible({
     timeout: 20_000,
   });
 }

@@ -89,8 +89,10 @@ type PrefillServiceRecordLine = {
   professionalId?: number | null;
 };
 export type PrefillServiceRecord = {
-  serviceRecordId: number;
-  client: InitialClientForBilling;
+  /** null when the prefill comes from a turno (Inicio → Cobrar) instead of a ficha. */
+  serviceRecordId: number | null;
+  /** null for an occasional client (turno without a registered client). */
+  client: InitialClientForBilling | null;
   lines: PrefillServiceRecordLine[];
   tipsAmount: string | number;
   /** Per-professional tips of the ficha — prefill the comprobante's "Propinas" section. */

@@ -951,6 +951,20 @@
       }
     },
     "dashboard": {
+      "home": {
+        "summaryAppointments": "{{count}} appointment today",
+        "summaryAppointments_other": "{{count}} appointments today",
+        "summaryCollected": "{{amount}} collected",
+        "charge": "Charge",
+        "chargeError": "Could not prepare the payment. Please try again.",
+        "nowTag": "now",
+        "moreTitle": "More for today",
+        "moreRecords": "Today's service records",
+        "moreOccupancy": "Occupancy by professional",
+        "moreBirthdays": "Birthdays",
+        "moreInactive": "Inactive clients",
+        "moreNone": "Nothing right now"
+      },
       "birthdays": {
         "title": "Birthdays",
         "subtitle": "Active clients with a birthday today and in the next {{days}} days",

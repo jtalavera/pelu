@@ -9,6 +9,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAs, loginAsDemo } from "../fixtures/auth";
+import { openDashboardMore } from "../fixtures/dashboard";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
 
 /**
@@ -195,6 +196,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
 
     await loginAsDemo(page);
     await page.goto("/app");
+    await openDashboardMore(page, "birthdays");
     const card = page.getByTestId("dashboard-birthdays");
     const todayList = card.getByTestId("dashboard-birthdays-today");
     await expect(todayList).toContainText(todayClient.fullName);
@@ -227,6 +229,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     );
     await loginAsDemo(page);
     await page.goto("/app");
+    await openDashboardMore(page, "birthdays");
     await expect(page.getByTestId("dashboard-birthdays")).toContainText(
       "No birthdays in the next 7 days.",
     );

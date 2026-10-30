@@ -7,6 +7,7 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openDashboardMore } from "../fixtures/dashboard";
 import { setControlledInputValue } from "../fixtures/ui";
 import { goToInvoiceHistory } from "../fixtures/billing";
 
@@ -206,6 +207,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await loginAsDemo(page);
     await page.goto("/app");
 
+    await openDashboardMore(page, "records");
     const grid = page.getByTestId("dashboard-service-records-grid");
     await expect(grid).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(marker, { exact: false }).first()).toBeVisible({
