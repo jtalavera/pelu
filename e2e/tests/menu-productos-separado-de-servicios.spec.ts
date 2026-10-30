@@ -7,6 +7,7 @@ import {
   loginAsDemoApi,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { closeCategoriesDialog, openCategoriesDialog } from "../fixtures/catalog";
 
 // Catálogo separado: menú "Productos" (debajo de "Servicios"), cada pantalla con SOLO los ítems de
 // su tipo, filtros acotados al tipo y solapa de Categorías exclusiva para servicios / productos.
@@ -151,12 +152,12 @@ test.describe("Menú Productos separado de Servicios", () => {
     await loginAsDemo(page);
 
     await page.goto("/app/services");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     await expect(page.getByTestId(`cat-row-${serviceCategory.id}`)).toBeVisible();
     await expect(page.getByTestId(`cat-row-${productCategory.id}`)).toHaveCount(0);
 
     await page.goto("/app/products");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     await expect(page.getByTestId(`cat-row-${productCategory.id}`)).toBeVisible();
     await expect(page.getByTestId(`cat-row-${serviceCategory.id}`)).toHaveCount(0);
     // Product categories count products, not services.
@@ -168,7 +169,7 @@ test.describe("Menú Productos separado de Servicios", () => {
     const name = `E2E Cat Nueva Prod ${Date.now()}`;
     await loginAsDemo(page);
     await page.goto("/app/products");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     await page.getByRole("button", { name: "+ New category" }).click();
     const categoryDialog = page.getByRole("dialog", { name: "New category" });
     await categoryDialog.getByLabel("Name").fill(name);
@@ -182,7 +183,7 @@ test.describe("Menú Productos separado de Servicios", () => {
     expect(((await serviceCats.json()) as Cat[]).map((c) => c.name)).not.toContain(name);
 
     // The product form offers it; the service form does not.
-    await page.getByRole("button", { name: "Products", exact: true }).click();
+    await closeCategoriesDialog(page);
     await page.getByRole("button", { name: "+ New product" }).click();
     await expect(page.locator("#svc-cat").locator("option", { hasText: name })).toHaveCount(1);
     await page.goto("/app/services");

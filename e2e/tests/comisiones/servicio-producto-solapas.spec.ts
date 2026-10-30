@@ -64,7 +64,7 @@ for (const kind of ["service", "product"] as const) {
 
 test("al reabrir el pop-up siempre arranca en Datos", async ({ page }) => {
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Services" }).click();
+  await page.getByRole("link", { name: "Catalog" }).click();
   await page.getByTestId(`svc-row-${w.service.id}`).click();
   const dialog = page.getByRole("dialog", { name: "Edit service" });
   await dialog.getByTestId("svc-tab-commission").click();
@@ -75,7 +75,7 @@ test("al reabrir el pop-up siempre arranca en Datos", async ({ page }) => {
 
 test("un servicio nuevo no muestra solapas (la comisión se define al editar)", async ({ page }) => {
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Services" }).click();
+  await page.getByRole("link", { name: "Catalog" }).click();
   await page.getByRole("button", { name: "+ New service" }).click();
   const dialog = page.getByRole("dialog", { name: "New service" });
   await expect(dialog.getByLabel("Name")).toBeVisible();

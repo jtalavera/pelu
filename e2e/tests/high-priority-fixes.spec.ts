@@ -33,6 +33,7 @@ import { loginAsDemo } from "../fixtures/auth";
 import { choosePaymentMethod, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog } from "../fixtures/ui";
+import { closeCategoriesDialog, openCategoriesDialog } from "../fixtures/catalog";
 
 test.describe.configure({ mode: "serial" });
 
@@ -77,12 +78,12 @@ test("Issue #46 · nuevo servicio: IVA 10% seleccionado por defecto", async ({ p
   await loginAsDemo(page);
   await page.goto("/app/services");
   // Create a category so the service form can open
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
   const catName = `IVACat ${Date.now()}`;
   await page.getByRole("button", { name: "+ New category" }).click();
   await page.getByRole("dialog").getByLabel("Name").fill(catName);
   await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
-  await page.getByRole("button", { name: "Services", exact: true }).click();
+  await closeCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New service" }).click();
   const dialog = page.getByRole("dialog", { name: "New service" });
@@ -107,7 +108,7 @@ test("Issue #49 · paleta de categorías tiene más colores y el swatch refleja 
 }) => {
   await loginAsDemo(page);
   await page.goto("/app/services");
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New category" }).click();
   const dialog = page.getByRole("dialog");
@@ -321,7 +322,7 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
 }) => {
   await loginAsDemo(page);
   await page.goto("/app/services");
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
 
   // Create a category first with default color
   const catName = `TealCat52 ${Date.now()}`;

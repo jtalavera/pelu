@@ -49,3 +49,17 @@ export async function openProfessionalSchedule(page: Page): Promise<void> {
 export function catalogSwitch(page: Page, kind: "svc" | "prof", id: number | string): Locator {
   return page.getByTestId(`${kind}-switch-${id}`);
 }
+
+/** Closes the "Administrar categorías" dialog (Escape, as the user would). */
+export async function closeCategoriesDialog(page: Page): Promise<void> {
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("catalog-categories-dialog")).toBeHidden();
+}
+
+/**
+ * Clicks the row switch of a catalog row. The real checkbox is visually hidden (sr-only), so the
+ * click goes to the wrapping label — which is what a user's click hits.
+ */
+export async function toggleRowSwitch(row: Locator): Promise<void> {
+  await row.locator("label").click();
+}
