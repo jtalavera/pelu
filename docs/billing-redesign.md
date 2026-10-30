@@ -55,6 +55,24 @@ Cada opción abre su panel debajo de las acciones, de a uno por vez: elegir otra
 SIFEN son los de siempre; solo cambió dónde viven. Los helpers de e2e son `openInvoicePanel` / `closeInvoicePanel` (un panel a la vez), `openInvoiceSifenTab`
 (detalle técnico) y `clickInvoiceMenuItem`.
 
+## Caja (panel, cierre y avisos)
+
+Maqueta aprobada: https://claude.ai/artifact/3WrgNQeGMHBx811AE2rshy
+
+- **Panel de caja abierta** (`pages/billing/CashPanel.tsx`): estado "Abierta desde …", una cifra grande
+  (**efectivo esperado en caja**) y una línea del día (`N comprobantes · Gs. X facturados`). Plegados, de a
+  uno por vez: *Cobros por medio de pago*, *Movimientos de caja* (con contador) y *Datos de la apertura*.
+  Botones **Registrar movimiento** y **Cerrar caja** lado a lado, y el enlace *Historial de cajas*.
+- **Cerrar caja** pide solo "¿Cuánto efectivo hay en la caja?" y muestra en vivo el esperado y la diferencia
+  (*Coincide* / *Sobran …* / *Faltan …*).
+- **Resumen de cierre** (`CashClosedSummary`): "Cerrada", la hora, el veredicto (*La caja cuadró* / *Sobran …* /
+  *Faltan …*) y una línea "Facturaste … en N comprobantes". *Ver detalle* despliega los números completos
+  (es el mismo bloque del historial de cajas) y la ✕ lo oculta.
+- **Avisos pasajeros**: "Caja abierta" y "Caja cerrada" salen como aviso (`billing-notice`) que se va solo a
+  los 4 segundos y que el siguiente reemplaza; ya no queda un cartel fijo arriba.
+- El efectivo esperado del sistema son las ventas en efectivo y los movimientos del día: **no incluye el
+  monto inicial**. Si se cuenta todo el cajón, la diferencia muestra el monto inicial como sobrante.
+
 ## Reglas de negocio que se conservan
 
 - Issue #284: el método de pago **no** se preselecciona; no se puede emitir hasta elegirlo.

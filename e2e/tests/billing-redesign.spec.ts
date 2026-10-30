@@ -190,7 +190,10 @@ test.describe("Facturación rediseñada · inicio", () => {
       // Closing replaces any old message: no stale "opened" notice next to the closed register.
       await openCashPanel(page);
       await page.getByTestId("billing-open-close-form").click();
-      await page.locator("#counted-cash").fill("50000");
+      // The system's expected cash is the day's cash sales and movements (the opening amount is
+      // not part of it), so counting 0 against a fresh register balances.
+      await page.locator("#counted-cash").fill("0");
+      await expect(page.getByTestId("billing-close-live-verdict")).toHaveText("Matches");
       await page.getByRole("button", { name: "Confirm close" }).click();
       await expect(page.getByTestId("billing-notice")).toHaveText("Cash register closed");
       await expect(page.getByText("Cash register opened")).toHaveCount(0);
