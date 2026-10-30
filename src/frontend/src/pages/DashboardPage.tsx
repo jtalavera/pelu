@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Spinner, Text } from "@design-system";
+import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { listServicesPaged } from "../api/services";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { BirthdaysCard } from "../components/BirthdaysCard";
-import { cardStyle } from "../components/charts/chartTheme";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
@@ -85,11 +85,6 @@ type DashboardResponse = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtCount(n: number, numberLocale: string): string {
-  if (!Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(n);
-}
-
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -102,40 +97,16 @@ function fmtTime(iso: string, locale: string): string {
   });
 }
 
-const AVATAR_PALETTE = [
-  { bg: "var(--color-rose-md)",  color: "var(--color-rose-dk)"  },
-  { bg: "var(--color-mauve-md)", color: "var(--color-mauve-dk)" },
-  { bg: "var(--color-stone-md)", color: "var(--color-ink-2)"    },
-];
-
-function hashStr(s: string): number {
-  let h = 0;
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
-  return h;
-}
-
-function avatarColor(name: string) {
-  return AVATAR_PALETTE[hashStr(name) % AVATAR_PALETTE.length];
-}
-
-function getInitials(name: string): string {
-  const p = name.trim().split(/\s+/);
-  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
-}
-
-function buildCalGrid(year: number, month: number): { day: number; current: boolean }[] {
-  const first = new Date(year, month, 1);
-  const last  = new Date(year, month + 1, 0);
-  const cells: { day: number; current: boolean }[] = [];
-  const prevLast = new Date(year, month, 0).getDate();
-  for (let i = first.getDay() - 1; i >= 0; i--) cells.push({ day: prevLast - i, current: false });
-  for (let d = 1; d <= last.getDate(); d++) cells.push({ day: d, current: true });
-  const rem = cells.length % 7;
-  if (rem > 0) for (let d = 1; d <= 7 - rem; d++) cells.push({ day: d, current: false });
-  return cells;
-}
-
 const POLL_MS = 60_000;
+
+type MoreKey = "records" | "occupancy" | "birthdays" | "inactive";
+
+const APPT_STATUS_TEXT: Record<string, string> = {
+  PENDING: "text-warning",
+  CONFIRMED: "text-success",
+  IN_PROGRESS: "text-primary",
+  COMPLETED: "text-primary",
+};
 
 // ─── Shared card style ────────────────────────────────────────────────────────
 // `cardStyle` itself now lives in `components/charts/chartTheme.ts` (single source of truth,
@@ -155,106 +126,6 @@ const inactiveClientsTdStyle: React.CSSProperties = {
   color: "var(--color-ink)",
   whiteSpace: "nowrap",
 };
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function MetricCard({
-  iconBg,
-  icon,
-  value,
-  label,
-  delta,
-  deltaPositive = false,
-}: {
-  iconBg: string;
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-  delta?: string;
-  deltaPositive?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        background: "var(--color-white)",
-        borderRadius: "var(--radius-lg)",
-        border: "var(--border-default)",
-        padding: 14,
-      }}
-    >
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: "var(--radius-md)",
-          background: iconBg,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 10,
-        }}
-      >
-        {icon}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 500, color: "var(--color-ink)", lineHeight: 1 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 3 }}>{label}</div>
-      {delta && (
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 3,
-            padding: "2px 7px",
-            borderRadius: "var(--radius-pill)",
-            fontSize: 10,
-            fontWeight: 500,
-            marginTop: 6,
-            background: deltaPositive ? "var(--color-success-lt)" : "var(--color-stone)",
-            color: deltaPositive ? "var(--color-success)" : "var(--color-ink-3)",
-          }}
-        >
-          {delta}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── SVG Icons ────────────────────────────────────────────────────────────────
-
-const MoneyIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="1" x2="12" y2="23" />
-    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-  </svg>
-);
-
-const CalIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
-
-const TrendIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-    <polyline points="17 6 23 6 23 12" />
-  </svg>
-);
-
-const UsersIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -277,8 +148,11 @@ export default function DashboardPage() {
   const [todayAppts, setTodayAppts]   = useState<Appointment[]>([]);
   const [todayServiceRecords, setTodayServiceRecords] = useState<ServiceRecordListItem[]>([]);
   const [selectedServiceRecordId, setSelectedServiceRecordId] = useState<number | null>(null);
-  const [calMonth, setCalMonth]       = useState(() => new Date());
   const [alertDismissed, setAlertDismissed] = useState(false);
+  const [openMore, setOpenMore] = useState<MoreKey | null>(null);
+  const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
+  const [chargingId, setChargingId] = useState<number | null>(null);
+  const [chargeError, setChargeError] = useState<string | null>(null);
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
 
@@ -391,31 +265,66 @@ export default function DashboardPage() {
     [todayAppts, apptListQuery],
   );
 
-  // ── Calendar helpers ──────────────────────────────────────────────────────
-  const calYear     = calMonth.getFullYear();
-  const calMonthIdx = calMonth.getMonth();
-  const calCells    = useMemo(() => buildCalGrid(calYear, calMonthIdx), [calYear, calMonthIdx]);
-  const todayDay    = now.getDate();
-  const todayMonth  = now.getMonth();
-  const todayYear   = now.getFullYear();
-
   const locale = getDateLocale(i18n);
-  const numberLocale = locale.startsWith("es") ? "es-PY" : "en-US";
 
-  const monthLabel = new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-  }).format(calMonth);
-
-  const DOW = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) =>
-        new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(
-          new Date(2024, 0, 7 + i),
-        ),
-      ),
-    [locale],
-  );
+  /**
+   * "Cobrar" on a turno: opens Facturación with the client and the booked service already loaded
+   * (the same prefill channel the fichas use), so the only thing left is "¿Cómo paga?".
+   */
+  async function chargeAppointment(appt: Appointment) {
+    setChargingId(appt.id);
+    setChargeError(null);
+    try {
+      let client: Record<string, unknown> | null = null;
+      if (appt.clientId != null) {
+        client = await femmeJson<Record<string, unknown>>(`/api/clients/${appt.clientId}`);
+      }
+      let unitPrice = "0";
+      try {
+        const page = await listServicesPaged<{ id: number; priceMinor: string | number }>({
+          q: appt.serviceName,
+          size: 50,
+        });
+        const found = page.content.find((svc) => svc.id === appt.serviceId);
+        if (found) unitPrice = String(found.priceMinor);
+      } catch {
+        // Best effort: the invoice still opens with the service and a price to confirm.
+      }
+      navigate("/app/billing", {
+        state: {
+          activeTab: "invoice",
+          prefillServiceRecord: {
+            serviceRecordId: null,
+            client: client
+              ? {
+                  id: appt.clientId,
+                  fullName: String(client.fullName ?? appt.clientName ?? ""),
+                  phone: (client.phone as string | null) ?? null,
+                  email: (client.email as string | null) ?? null,
+                  ruc: (client.ruc as string | null) ?? null,
+                  identityDocumentNumber: (client.identityDocumentNumber as string | null) ?? null,
+                  identityDocumentType: (client.identityDocumentType as string | null) ?? null,
+                  taxpayerType: (client.taxpayerType as string | null) ?? null,
+                }
+              : null,
+            lines: [
+              {
+                serviceId: appt.serviceId,
+                description: appt.serviceName,
+                unitPrice,
+                professionalId: appt.professionalId,
+              },
+            ],
+            tipsAmount: 0,
+          },
+        },
+      });
+    } catch {
+      setChargeError(t("femme.dashboard.home.chargeError"));
+    } finally {
+      setChargingId(null);
+    }
+  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   const hour = now.getHours();
@@ -472,156 +381,229 @@ export default function DashboardPage() {
   // never hardcoded as the source of truth.
   const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
 
+  const occupancyOpenKey = openMore;
+  const moreSections: Array<{ key: MoreKey; label: string; count: number | null; body: React.ReactNode }> = [
+    {
+      key: "records",
+      label: t("femme.dashboard.home.moreRecords"),
+      count: todayServiceRecords.length,
+      body: (
+        <div>
+          {todayServiceRecords.length === 0 ? (
+            <div className="py-2 text-sm text-ink-3">{t("femme.serviceRecords.dashboard.empty")}</div>
+          ) : (
+            <div
+              data-testid="dashboard-service-records-grid"
+              className="grid grid-cols-1 gap-2 py-2 sm:grid-cols-2"
+            >
+              {visibleTodayServiceRecords.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  data-testid="dashboard-service-record-card"
+                  onClick={() => setSelectedServiceRecordId(r.id)}
+                  className="flex min-h-11 flex-col items-start gap-1 rounded-card border border-line bg-surface p-3 text-left"
+                >
+                  <span className="w-full truncate text-sm font-semibold text-ink">{r.clientFullName}</span>
+                  <span className="text-xs text-ink-3">
+                    {formatParaguayDateTime(r.createdAt, locale)} · {formatAmountDecimal(r.totalAmount)}
+                  </span>
+                  <StatusBadge status={r.status} />
+                </button>
+              ))}
+              {hasMoreTodayServiceRecords && (
+                <button
+                  type="button"
+                  data-testid="dashboard-service-records-more"
+                  onClick={() => setVisibleServiceRecordCount((c) => c + DASHBOARD_SERVICE_RECORDS_CAP)}
+                  className="min-h-11 rounded-card border border-line bg-surface p-3 text-sm font-semibold text-primary"
+                >
+                  {t("femme.serviceRecords.dashboard.showMore")}
+                </button>
+              )}
+            </div>
+          )}
+          <Link
+            to="/app/service-records"
+            state={{ activeTab: "history" }}
+            className="inline-flex min-h-11 items-center text-sm font-semibold text-primary"
+          >
+            {t("femme.serviceRecords.dashboard.viewHistory")}
+          </Link>
+        </div>
+      ),
+    },
+    {
+      key: "occupancy",
+      label: t("femme.dashboard.home.moreOccupancy"),
+      count: null,
+      body: (
+        <div data-tour="dashboard-occupancy" className="flex flex-col py-1">
+          {occupancy.length === 0 ? (
+            <div className="py-2 text-sm text-ink-3">{t("femme.dashboard.noAppts")}</div>
+          ) : (
+            occupancy.map((prof) => (
+              <div key={prof.id} className="flex min-h-11 items-center gap-3 border-t border-line first:border-t-0">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{prof.name}</span>
+                <span className="text-xs text-ink-3">
+                  {prof.count} {t("femme.dashboard.occupancyUnit")}
+                </span>
+                <span className="h-2 w-24 shrink-0 rounded bg-line">
+                  <span
+                    className="block h-full rounded bg-primary"
+                    style={{ width: `${(prof.count / maxOccupancy) * 100}%` }}
+                  />
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "birthdays",
+      label: t("femme.dashboard.home.moreBirthdays"),
+      count: birthdaysCount,
+      body: null, // rendered below (always mounted so the count is known while collapsed)
+    },
+    {
+      key: "inactive",
+      label: t("femme.dashboard.home.moreInactive"),
+      count: inactiveClients.length,
+      body: (
+        <div data-testid="dashboard-inactive-clients">
+          <div className="pb-1 text-xs text-ink-3">
+            {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
+          </div>
+          {inactiveClients.length === 0 ? (
+            <div className="py-2 text-sm text-ink-3">{t("femme.dashboard.inactiveClientsEmpty")}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColClient")}</th>
+                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColPhone")}</th>
+                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColInactivity")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inactiveClients.map((c) => {
+                    const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
+                    return (
+                      <tr
+                        key={c.clientId}
+                        data-testid="dashboard-inactive-client-row"
+                        role="button"
+                        tabIndex={0}
+                        onClick={goToClientDetail}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            goToClientDetail();
+                          }
+                        }}
+                        style={{ cursor: "pointer", borderBottom: "0.5px solid var(--color-stone)" }}
+                      >
+                        <td style={inactiveClientsTdStyle}>{c.fullName}</td>
+                        <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
+                        <td style={inactiveClientsTdStyle}>
+                          {t("femme.dashboard.inactiveClientsDaysValue", { days: c.daysSinceLastVisit })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {inactiveClients.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              data-testid="dashboard-inactive-clients-view-all"
+              onClick={() => navigate("/app/inactive-clients")}
+            >
+              {t("femme.dashboard.inactiveClientsViewAll")}
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       {/* ── 1. PAGE HEADER ── */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 20,
-        }}
-      >
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div data-tour="dashboard-greeting">
-          <div style={{ fontSize: 16, fontWeight: 500, color: "var(--color-ink)" }}>
+          <h1 className="font-heading text-2xl font-extrabold text-ink">
             {t(`femme.dashboard.${greetingKey}`)}
             {userName ? `, ${userName}` : ""}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
+          </h1>
+          <div className="text-sm text-ink-3">
             {dateLabel} · {timeLabel}
           </div>
         </div>
-
-        <button
+        <Button
           data-tour="dashboard-new-appointment"
           type="button"
+          variant="primary"
+          className="min-h-11"
           onClick={() => navigate("/app/calendar")}
-          style={{
-            background: "var(--color-rose)",
-            color: "var(--color-on-primary)",
-            border: "none",
-            borderRadius: "var(--radius-md)",
-            padding: "8px 16px",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
         >
           {t("femme.dashboard.newAppointment")}
-        </button>
+        </Button>
       </div>
 
-      {/* ── 2. FISCAL ALERT ── */}
+      {/* ── 2. FISCAL ALERT (one line) ── */}
       {fiscalAlert && (
         <div
-          style={{
-            background: "var(--color-warning-lt)",
-            borderRadius: "var(--radius-md)",
-            padding: "10px 14px",
-            marginBottom: 16,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
+          role="status"
+          className="flex items-center gap-2 rounded-card bg-warning-lt py-1 pl-4 pr-1 text-sm font-semibold text-warning"
         >
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "var(--color-warning)",
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ flex: 1, fontSize: 12, color: "var(--color-warning)" }}>
-            {t(`femme.dashboard.alerts.${fiscalAlert.messageKey}`, {
-              defaultValue: fiscalAlert.message,
-            })}
+          <span className="min-w-0 flex-1">
+            {t(`femme.dashboard.alerts.${fiscalAlert.messageKey}`, { defaultValue: fiscalAlert.message })}
           </span>
           <button
             type="button"
             aria-label={t("femme.dashboard.fiscalAlertDismiss")}
             onClick={() => setAlertDismissed(true)}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--color-warning)",
-              fontSize: 18,
-              lineHeight: 1,
-              padding: "0 2px",
-            }}
+            className="min-h-11 min-w-11 text-lg leading-none"
           >
             ×
           </button>
         </div>
       )}
 
-      {/* ── 3. METRICS ── */}
-      <div
-        data-tour="dashboard-metrics"
-        className="mb-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
-      >
-        <MetricCard
-          iconBg="var(--color-rose-lt)"
-          icon={<MoneyIcon c="var(--color-rose)" />}
-          value={formatGuaraniesGs(data.revenueDay.collected)}
-          label={t("femme.dashboard.metricRevenueDay")}
-          delta={`${t("femme.dashboard.invoiced")}: ${formatGuaraniesGs(data.revenueDay.invoiced)}`}
-        />
-        <MetricCard
-          iconBg="var(--color-mauve-lt)"
-          icon={<CalIcon c="var(--color-mauve)" />}
-          value={String(a.total)}
-          label={t("femme.dashboard.metricApptToday")}
-          delta={
-            a.pending > 0 ? `${a.pending} ${t("femme.dashboard.metricPending")}` : undefined
-          }
-        />
-        <MetricCard
-          iconBg="var(--color-success-lt)"
-          icon={<TrendIcon c="var(--color-success)" />}
-          value={formatGuaraniesGs(data.revenueWeek.collected)}
-          label={t("femme.dashboard.metricRevenueWeek")}
-          delta={`${t("femme.dashboard.invoiced")}: ${formatGuaraniesGs(data.revenueWeek.invoiced)}`}
-        />
-        <MetricCard
-          iconBg="var(--color-stone-md)"
-          icon={<UsersIcon c="var(--color-ink-3)" />}
-          value={fmtCount(data.clientsThisMonth, numberLocale)}
-          label={t("femme.dashboard.metricClientsMonth")}
-        />
+      {/* ── 3. ONE-LINE SUMMARY ── */}
+      <div data-tour="dashboard-metrics" data-testid="dashboard-summary" className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        <span className="font-heading text-xl font-extrabold tabular-nums text-ink" data-testid="dashboard-summary-appointments">
+          {t("femme.dashboard.home.summaryAppointments", { count: a.total })}
+        </span>
+        <span aria-hidden className="text-line">|</span>
+        <span className="font-heading text-xl font-extrabold tabular-nums text-ink" data-testid="dashboard-summary-collected">
+          {t("femme.dashboard.home.summaryCollected", { amount: formatGuaraniesGs(data.revenueDay.collected) })}
+        </span>
       </div>
 
-      {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
-      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
-        {/* LEFT: Today's appointments */}
-        <div data-tour="dashboard-appt-list" style={{ ...cardStyle, minWidth: 0 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
+      {/* ── 4. TODAY'S APPOINTMENTS ── */}
+      <Card data-tour="dashboard-appt-list" className="p-0">
+        <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 sm:px-5">
+          <h2 className="font-heading text-lg font-extrabold text-ink">{t("femme.dashboard.todayAppointments")}</h2>
+          <Link
+            data-tour="dashboard-view-agenda"
+            to="/app/calendar"
+            className="inline-flex min-h-11 items-center text-sm font-semibold text-primary"
           >
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-              {t("femme.dashboard.todayAppointments")}
-            </span>
-            <Link
-              data-tour="dashboard-view-agenda"
-              to="/app/calendar"
-              style={{ fontSize: 11, color: "var(--color-rose)", textDecoration: "none" }}
-            >
-              {t("femme.dashboard.viewAgenda")}
-            </Link>
-          </div>
+            {t("femme.dashboard.viewAgenda")}
+          </Link>
+        </div>
 
-          <div data-tour="dashboard-appt-filter" style={{ marginBottom: 10 }}>
+        {todayAppts.length > 0 && (
+          <div data-tour="dashboard-appt-filter" className="px-4 pb-2 sm:px-5">
             <ListSearchField
               id="dashboard-appt-filter"
               value={apptListQuery}
@@ -630,523 +612,125 @@ export default function DashboardPage() {
               placeholder={t("femme.listFilter.placeholder")}
             />
           </div>
+        )}
 
-          {todayAppts.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-              {t("femme.dashboard.noAppts")}
-            </div>
-          ) : visibleTodayAppts.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-              {t("femme.listFilter.noMatches")}
-            </div>
-          ) : (
-            visibleTodayAppts.map((appt, idx) => {
-              const ac = avatarColor(appt.professionalName);
-              const isLast = idx === visibleTodayAppts.length - 1;
+        {todayAppts.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-5 pb-6 pt-4 text-center">
+            <p className="text-ink-3">{t("femme.dashboard.noAppts")}</p>
+            <Button type="button" variant="primary" onClick={() => navigate("/app/calendar")}>
+              {t("femme.dashboard.newAppointment")}
+            </Button>
+          </div>
+        ) : visibleTodayAppts.length === 0 ? (
+          <div className="px-5 pb-5 pt-2 text-sm text-ink-3">{t("femme.listFilter.noMatches")}</div>
+        ) : (
+          <ul className="flex flex-col px-2 pb-2 sm:px-3" data-testid="dashboard-appointments">
+            {visibleTodayAppts.map((appt) => {
               const goToApptDetail = () =>
                 navigate("/app/calendar", {
-                  state: {
-                    selectedDate: toLocalDateStr(new Date(appt.startAt)),
-                    openAppointmentId: appt.id,
-                  },
+                  state: { selectedDate: toLocalDateStr(new Date(appt.startAt)), openAppointmentId: appt.id },
                 });
+              const canCharge = appt.status !== "CANCELLED" && appt.status !== "NO_SHOW";
               return (
-                <div
+                <li
                   key={appt.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={t("femme.dashboard.openAppointmentDetail", {
-                    client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
-                  })}
-                  onClick={goToApptDetail}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      goToApptDetail();
-                    }
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 0",
-                    borderBottom: isLast ? "none" : "0.5px solid var(--color-stone)",
-                    cursor: "pointer",
-                  }}
+                  data-testid="dashboard-appointment-row"
+                  className="grid grid-cols-[44px_minmax(0,1fr)_100px] items-center gap-x-2.5 gap-y-0.5 border-t border-line px-1 py-3 first:border-t-0 sm:grid-cols-[52px_minmax(0,1fr)_116px] sm:gap-x-3 sm:px-3"
                 >
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 500,
-                      color: "var(--color-ink)",
-                      minWidth: 34,
-                      flexShrink: 0,
-                    }}
-                  >
+                  <span className="col-start-1 row-span-2 row-start-1 font-heading text-[17px] font-extrabold tabular-nums text-ink">
                     {fmtTime(appt.startAt, locale)}
                   </span>
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: "var(--radius-pill)",
-                      background: ac.bg,
-                      color: ac.color,
-                      fontSize: 9,
-                      fontWeight: 500,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
+                  <button
+                    type="button"
+                    aria-label={t("femme.dashboard.openAppointmentDetail", {
+                      client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
+                    })}
+                    onClick={goToApptDetail}
+                    className="col-start-2 row-start-1 min-w-0 self-end break-words text-left font-semibold text-ink"
                   >
-                    {getInitials(appt.professionalName)}
+                    {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
+                    {appt.status === "IN_PROGRESS" && (
+                      <span className="ml-1.5 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wider text-primary">
+                        · {t("femme.dashboard.home.nowTag")}
+                      </span>
+                    )}
+                  </button>
+                  <div className="col-start-2 row-start-2 min-w-0 self-start break-words text-sm text-ink-3">
+                    <span className={`font-semibold ${APPT_STATUS_TEXT[appt.status] ?? "text-ink-3"}`}>
+                      {t(`femme.status.${appt.status}`, { defaultValue: appt.status })}
+                    </span>{" "}
+                    · {appt.serviceName} · {appt.professionalName}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "var(--color-ink-3)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {appt.serviceName} · {appt.professionalName}
-                    </div>
+                  <div className="col-start-3 row-span-2 row-start-1">
+                    {canCharge && (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        className="min-h-11 w-full px-2"
+                        data-testid="dashboard-appointment-charge"
+                        disabled={chargingId === appt.id}
+                        onClick={() => void chargeAppointment(appt)}
+                      >
+                        {t("femme.dashboard.home.charge")}
+                      </Button>
+                    )}
                   </div>
-                  <StatusBadge status={appt.status} />
-                </div>
+                </li>
               );
-            })
-          )}
-        </div>
-
-        {/* RIGHT column */}
-        <div className="flex min-w-0 flex-col gap-4">
-          {/* Mini calendar */}
-          <div data-tour="dashboard-mini-cal" style={cardStyle}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 10,
-              }}
-            >
-              <button
-                type="button"
-                aria-label={t("femme.calendar.prev")}
-                onClick={() =>
-                  setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
-                }
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--color-ink-2)",
-                  fontSize: 16,
-                  lineHeight: 1,
-                  padding: "2px 6px",
-                }}
-              >
-                ‹
-              </button>
-              <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-ink)" }}>
-                {monthLabel}
-              </span>
-              <button
-                type="button"
-                aria-label={t("femme.calendar.next")}
-                onClick={() =>
-                  setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
-                }
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--color-ink-2)",
-                  fontSize: 16,
-                  lineHeight: 1,
-                  padding: "2px 6px",
-                }}
-              >
-                ›
-              </button>
-            </div>
-
-            {/* Day-of-week headers */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(7, 1fr)",
-                gap: 1,
-                marginBottom: 4,
-              }}
-            >
-              {DOW.map((d, i) => (
-                <div
-                  key={i}
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 500,
-                    color: "var(--color-ink-3)",
-                    textAlign: "center",
-                    padding: "2px 0",
-                  }}
-                >
-                  {d}
-                </div>
-              ))}
-            </div>
-
-            {/* Day cells */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
-              {calCells.map((cell, i) => {
-                const isToday =
-                  cell.current &&
-                  cell.day === todayDay &&
-                  calMonthIdx === todayMonth &&
-                  calYear === todayYear;
-
-                return (
-                  <div
-                    key={i}
-                    role={cell.current ? "button" : undefined}
-                    tabIndex={cell.current ? 0 : undefined}
-                    onClick={
-                      cell.current
-                        ? () => {
-                            const d = new Date(calYear, calMonthIdx, cell.day);
-                            navigate("/app/calendar", {
-                              state: { selectedDate: toLocalDateStr(d) },
-                            });
-                          }
-                        : undefined
-                    }
-                    onKeyDown={
-                      cell.current
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              const d = new Date(calYear, calMonthIdx, cell.day);
-                              navigate("/app/calendar", {
-                                state: { selectedDate: toLocalDateStr(d) },
-                              });
-                            }
-                          }
-                        : undefined
-                    }
-                    style={{
-                      fontSize: 10,
-                      textAlign: "center",
-                      padding: "4px 2px",
-                      borderRadius: 5,
-                      cursor: cell.current ? "pointer" : "default",
-                      fontWeight: isToday ? 500 : 400,
-                      background: isToday ? "var(--color-rose)" : "transparent",
-                      color: isToday
-                        ? "var(--color-on-primary)"
-                        : cell.current
-                          ? "var(--color-ink-2)"
-                          : "var(--color-stone-md)",
-                    }}
-                  >
-                    {cell.day}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Occupancy */}
-          <div data-tour="dashboard-occupancy" style={cardStyle}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                color: "var(--color-ink)",
-                marginBottom: 12,
-              }}
-            >
-              {t("femme.dashboard.occupancyTitle")}
-            </div>
-
-            {occupancy.length === 0 ? (
-              <div style={{ fontSize: 12, color: "var(--color-ink-3)" }}>
-                {t("femme.dashboard.noAppts")}
-              </div>
-            ) : (
-              occupancy.map((prof) => {
-                const ac = avatarColor(prof.name);
-                return (
-                  <div
-                    key={prof.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: "var(--radius-pill)",
-                        background: ac.bg,
-                        color: ac.color,
-                        fontSize: 8,
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {getInitials(prof.name)}
-                    </div>
-                    <div
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {prof.name}
-                    </div>
-                    <div
-                      style={{ fontSize: 10, color: "var(--color-ink-3)", flexShrink: 0 }}
-                    >
-                      {prof.count} {t("femme.dashboard.occupancyUnit")}
-                    </div>
-                    <div
-                      style={{
-                        width: 60,
-                        height: 3,
-                        background: "var(--color-stone-md)",
-                        borderRadius: 2,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: "100%",
-                          background: "var(--color-rose)",
-                          borderRadius: 2,
-                          width: `${(prof.count / maxOccupancy) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── 5. TODAY'S SERVICE RECORDS ── */}
-      <div style={{ ...cardStyle, marginTop: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-            {t("femme.serviceRecords.dashboard.title")}
-          </span>
-          <Link
-            to="/app/service-records"
-            state={{ activeTab: "history" }}
-            style={{ fontSize: 11, color: "var(--color-rose)", textDecoration: "none" }}
-          >
-            {t("femme.serviceRecords.dashboard.viewHistory")}
-          </Link>
-        </div>
-
-        {todayServiceRecords.length === 0 ? (
-          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-            {t("femme.serviceRecords.dashboard.empty")}
-          </div>
-        ) : (
-          <div
-            data-testid="dashboard-service-records-grid"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
-          >
-            {visibleTodayServiceRecords.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                data-testid="dashboard-service-record-card"
-                onClick={() => setSelectedServiceRecordId(r.id)}
-                style={{
-                  textAlign: "left",
-                  background: "var(--color-stone)",
-                  border: "var(--border-default)",
-                  borderRadius: "var(--radius-md)",
-                  padding: 10,
-                  cursor: "pointer",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: "var(--color-ink)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    marginBottom: 4,
-                  }}
-                >
-                  {r.clientFullName}
-                </div>
-                <div style={{ fontSize: 10, color: "var(--color-ink-3)", marginBottom: 6 }}>
-                  {formatParaguayDateTime(r.createdAt, locale)} · {formatAmountDecimal(r.totalAmount)}
-                </div>
-                <StatusBadge status={r.status} />
-              </button>
-            ))}
-            {hasMoreTodayServiceRecords && (
-              <button
-                type="button"
-                data-testid="dashboard-service-records-more"
-                onClick={() =>
-                  setVisibleServiceRecordCount((c) => c + DASHBOARD_SERVICE_RECORDS_CAP)
-                }
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "var(--color-stone)",
-                  border: "var(--border-default)",
-                  borderRadius: "var(--radius-md)",
-                  padding: 10,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: "var(--color-rose)",
-                }}
-              >
-                {t("femme.serviceRecords.dashboard.showMore")}
-              </button>
-            )}
+            })}
+          </ul>
+        )}
+        {chargeError && (
+          <div role="alert" className="px-5 pb-4 text-sm text-danger">
+            {chargeError}
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* ── HU-69: BIRTHDAYS ── */}
-      <BirthdaysCard />
-
-      {/* ── 6. INACTIVE CLIENTS ── */}
-      <div data-testid="dashboard-inactive-clients" style={{ ...cardStyle, marginTop: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-              {t("femme.dashboard.inactiveClientsTitle")}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-              {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
-            </div>
-          </div>
-          {inactiveClients.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="dashboard-inactive-clients-view-all"
-              onClick={() => navigate("/app/inactive-clients")}
-            >
-              {t("femme.dashboard.inactiveClientsViewAll")}
-            </Button>
-          )}
-        </div>
-        <div style={{ marginBottom: 12 }} />
-
-        {inactiveClients.length === 0 ? (
-          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-            {t("femme.dashboard.inactiveClientsEmpty")}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={inactiveClientsThStyle}>
-                    {t("femme.dashboard.inactiveClientsColClient")}
-                  </th>
-                  <th style={inactiveClientsThStyle}>
-                    {t("femme.dashboard.inactiveClientsColPhone")}
-                  </th>
-                  <th style={inactiveClientsThStyle}>
-                    {t("femme.dashboard.inactiveClientsColInactivity")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {inactiveClients.map((c) => {
-                  const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
-                  return (
-                    <tr
-                      key={c.clientId}
-                      data-testid="dashboard-inactive-client-row"
-                      role="button"
-                      tabIndex={0}
-                      onClick={goToClientDetail}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          goToClientDetail();
-                        }
-                      }}
-                      style={{
-                        cursor: "pointer",
-                        borderBottom: "0.5px solid var(--color-stone)",
-                      }}
+      {/* ── 5. MORE FOR TODAY (collapsed) ── */}
+      <Card className="p-0" data-testid="dashboard-more">
+        <h2 className="px-4 pb-1 pt-4 font-heading text-[15px] font-extrabold text-ink-2 sm:px-5">
+          {t("femme.dashboard.home.moreTitle")}
+        </h2>
+        {moreSections.map((sec) => {
+          const open = occupancyOpenKey === sec.key;
+          return (
+            <div key={sec.key} className="border-t border-line first:border-t-0">
+              <button
+                type="button"
+                data-testid={`dashboard-more-${sec.key}`}
+                aria-expanded={open}
+                onClick={() => setOpenMore(open ? null : sec.key)}
+                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left sm:px-5"
+              >
+                <span className="font-semibold text-ink">{sec.label}</span>
+                <span className="flex items-center gap-2.5 text-ink-3">
+                  {sec.count !== null && (
+                    <span
+                      className={`inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full px-2 text-[13px] font-extrabold ${
+                        sec.count > 0 ? "bg-primary-lt text-primary" : "bg-line text-ink-3"
+                      }`}
                     >
-                      <td style={inactiveClientsTdStyle}>{c.fullName}</td>
-                      <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
-                      <td style={inactiveClientsTdStyle}>
-                        {t("femme.dashboard.inactiveClientsDaysValue", {
-                          days: c.daysSinceLastVisit,
-                        })}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                      {sec.count}
+                    </span>
+                  )}
+                  <span aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`}>
+                    ⌄
+                  </span>
+                </span>
+              </button>
+              {sec.key === "birthdays" ? (
+                <div hidden={!open} className="px-4 pb-3 sm:px-5">
+                  <BirthdaysCard embedded onLoaded={setBirthdaysCount} />
+                </div>
+              ) : (
+                open && <div className="px-4 pb-3 sm:px-5">{sec.body}</div>
+              )}
+            </div>
+          );
+        })}
+      </Card>
 
       {selectedServiceRecordId !== null && (
         <ServiceRecordDetailModal

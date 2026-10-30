@@ -951,6 +951,20 @@
       }
     },
     "dashboard": {
+      "home": {
+        "summaryAppointments": "{{count}} turno hoy",
+        "summaryAppointments_other": "{{count}} turnos hoy",
+        "summaryCollected": "{{amount}} cobrados",
+        "charge": "Cobrar",
+        "chargeError": "No se pudo preparar el cobro. Probá de nuevo.",
+        "nowTag": "ahora",
+        "moreTitle": "Más del día",
+        "moreRecords": "Fichas de hoy",
+        "moreOccupancy": "Ocupación por profesional",
+        "moreBirthdays": "Cumpleaños",
+        "moreInactive": "Clientes inactivos",
+        "moreNone": "Nada por ahora"
+      },
       "birthdays": {
         "title": "Cumpleaños",
         "subtitle": "Clientes activas que cumplen años hoy y en los próximos {{days}} días",

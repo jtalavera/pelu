@@ -10,6 +10,7 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
+import { openDashboardMore } from "../fixtures/dashboard";
 import { setControlledInputValue } from "../fixtures/ui";
 import { ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
@@ -91,6 +92,7 @@ async function findHistoryRow(page: Page, query: string) {
  * "today" activity already exists.
  */
 async function revealAllTodayRecords(page: Page): Promise<void> {
+  await openDashboardMore(page, "records");
   const moreButton = page.getByTestId("dashboard-service-records-more");
   // Each click reveals 12 more (DASHBOARD_SERVICE_RECORDS_CAP) — a generous cap so this keeps
   // working as the full suite (and its own same-day fichas) grows well past what 10 clicks (132
@@ -392,7 +394,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
 
     await loginAsDemo(page);
     await page.goto("/app");
-    await expect(page.getByText("Today's service records")).toBeVisible();
+    await openDashboardMore(page, "records");
     await expect(page.getByText(capMarker, { exact: false }).first()).toBeVisible({
       timeout: 15_000,
     });

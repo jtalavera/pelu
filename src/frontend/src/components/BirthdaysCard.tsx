@@ -27,7 +27,11 @@ function formatDay(isoDate: string, locale: string): string {
 const linkClass = "font-medium text-[var(--color-ink)] hover:underline";
 
 /** HU-69 AC5: dashboard alert — active clients whose birthday is today / in the next 7 days. */
-export function BirthdaysCard() {
+/** `embedded`: only the list (no card or title) — used inside the Inicio "Más del día" section. */
+export function BirthdaysCard({
+  embedded = false,
+  onLoaded,
+}: { embedded?: boolean; onLoaded?: (count: number) => void } = {}) {
   const { t } = useTranslation();
   const locale = useDateLocale();
   const [data, setData] = useState<BirthdaysResponse | null>(null);
@@ -37,7 +41,10 @@ export function BirthdaysCard() {
     let cancelled = false;
     femmeJson<BirthdaysResponse>("/api/dashboard/birthdays")
       .then((res) => {
-        if (!cancelled) setData(res);
+        if (!cancelled) {
+          setData(res);
+          onLoaded?.((res.today?.length ?? 0) + (res.upcoming?.length ?? 0));
+        }
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -45,6 +52,7 @@ export function BirthdaysCard() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const today = data?.today ?? [];
@@ -52,13 +60,17 @@ export function BirthdaysCard() {
   const empty = data != null && today.length === 0 && upcoming.length === 0;
 
   return (
-    <div data-testid="dashboard-birthdays" style={{ ...cardStyle, marginTop: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-        🎂 {t("femme.dashboard.birthdays.title")}
-      </div>
-      <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2, marginBottom: 12 }}>
-        {t("femme.dashboard.birthdays.subtitle", { days: data?.upcomingDays ?? 7 })}
-      </div>
+    <div data-testid="dashboard-birthdays" style={embedded ? undefined : { ...cardStyle, marginTop: 16 }}>
+      {!embedded && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
+            🎂 {t("femme.dashboard.birthdays.title")}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2, marginBottom: 12 }}>
+            {t("femme.dashboard.birthdays.subtitle", { days: data?.upcomingDays ?? 7 })}
+          </div>
+        </>
+      )}
 
       {failed ? (
         <div role="alert" style={{ fontSize: 12, color: "var(--color-ink-3)" }}>

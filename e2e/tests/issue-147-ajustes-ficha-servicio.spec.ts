@@ -7,6 +7,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openDashboardMore } from "../fixtures/dashboard";
 import { goToInvoiceHistory } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
@@ -84,6 +85,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
 
     await loginAsDemo(page);
     await page.goto("/app");
+    await openDashboardMore(page, "records");
     const grid = page.getByTestId("dashboard-service-records-grid");
     await expect(grid).toBeVisible({ timeout: 15_000 });
     await grid

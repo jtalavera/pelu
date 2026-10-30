@@ -8,10 +8,13 @@ import { TopServicesChart } from "../components/charts/TopServicesChart";
 import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
 import { AppointmentsByDayOfWeekChart } from "../components/charts/AppointmentsByDayOfWeekChart";
 import { TipsByProfessionalChart } from "../components/charts/TipsByProfessionalChart";
+import { formatGuaraniesGs } from "../lib/formatMoney";
 import { getDateLocale } from "../i18n/dateLocale";
 import { PARAGUAY_TIMEZONE } from "../lib/paraguayDateTime";
 
 type DashboardsResponse = {
+  revenueWeek?: { invoiced: string | number; collected: string | number };
+  clientsThisMonth?: number;
   revenueTrend: Array<{ date: string; invoiced: string | number }>;
   revenueTrendDays: number;
   /** Days right before `revenueTrend` — only feed the 7-day average, never plotted as bars. */
@@ -207,6 +210,25 @@ export default function DashboardsPage() {
         </Alert>
       ) : (
         <div className="flex min-w-0 flex-col gap-4">
+          {/* Week and month totals moved here from Inicio (billing redesign). */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2" data-testid="dashboards-totals">
+            <div className="rounded-card border border-line bg-surface p-4">
+              <div className="text-sm text-ink-3">{t("femme.dashboard.metricRevenueWeek")}</div>
+              <div className="font-heading text-2xl font-extrabold tabular-nums text-ink" data-testid="dashboards-revenue-week">
+                {formatGuaraniesGs(data.revenueWeek?.collected ?? 0)}
+              </div>
+              <div className="text-xs text-ink-3">
+                {t("femme.dashboard.invoiced")}: {formatGuaraniesGs(data.revenueWeek?.invoiced ?? 0)}
+              </div>
+            </div>
+            <div className="rounded-card border border-line bg-surface p-4">
+              <div className="text-sm text-ink-3">{t("femme.dashboard.metricClientsMonth")}</div>
+              <div className="font-heading text-2xl font-extrabold tabular-nums text-ink" data-testid="dashboards-clients-month">
+                {data.clientsThisMonth ?? 0}
+              </div>
+            </div>
+          </div>
+
           <RevenueTrendChart
             data={Array.isArray(data.revenueTrend) ? data.revenueTrend : []}
             lookback={Array.isArray(data.revenueTrendLookback) ? data.revenueTrendLookback : []}
