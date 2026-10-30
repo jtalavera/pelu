@@ -430,7 +430,7 @@ export function BillingHome({
                       ))}
                     </ul>
                     <div
-                      className="flex flex-wrap items-center justify-between gap-3 px-2 pt-3"
+                      className="flex flex-wrap items-center justify-between gap-3 px-2 pb-4 pt-4"
                       data-testid="billing-today-pagination"
                     >
                       <PageSizeSelect
@@ -458,7 +458,7 @@ export function BillingHome({
                     </div>
                   </>
                 )}
-                <div className="border-t border-line px-2 pt-2">
+                <div className="mt-1 border-t border-line px-2 pt-2">
                   <Button
                     type="button"
                     variant="ghost"
