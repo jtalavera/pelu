@@ -1466,6 +1466,8 @@
         "cashHistory": "Cash Sessions Log"
       },
       "invoice": {
+        "viewDetail": "View full details",
+        "summaryOfIssued": "Summary of the issued invoice",
         "back": "Back",
         "backToStart": "Back to start",
         "noName": "No name",

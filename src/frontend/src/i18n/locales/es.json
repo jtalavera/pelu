@@ -1466,6 +1466,8 @@
         "cashHistory": "Historial de cajas"
       },
       "invoice": {
+        "viewDetail": "Ver detalle completo",
+        "summaryOfIssued": "Resumen de la factura emitida",
         "back": "Volver",
         "backToStart": "Volver al inicio",
         "noName": "Sin nombre",

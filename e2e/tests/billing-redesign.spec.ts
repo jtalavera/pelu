@@ -237,6 +237,47 @@ test.describe("Facturación rediseñada · nueva factura", () => {
     await expect(page.getByTestId("billing-cash-chip")).toBeVisible();
   });
 
+  test("RD-7b tras emitir se ve el resumen del comprobante y el detalle completo está a un toque", async ({
+    page,
+    request,
+  }) => {
+    const token = await prepare(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await goToBillingHome(page);
+    await page.getByRole("button", { name: "+ New invoice" }).click();
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#pay-method-TRANSFER").click();
+    const invoice = await clickIssueInvoiceAndExpectSuccess(page);
+
+    // The summary of what was just billed, without leaving the screen.
+    const summary = page.getByTestId("billing-success-summary");
+    await expect(summary).toBeVisible();
+    // The backend names an anonymous invoice "CONSUMIDOR FINAL".
+    await expect(summary.getByTestId("billing-success-client")).toHaveText(/CONSUMIDOR FINAL|No name/);
+    await expect(summary.getByTestId("billing-success-lines")).toContainText(seed.serviceFullName);
+    await expect(summary.getByTestId("billing-success-lines")).toContainText("× 1");
+    await expect(summary.getByTestId("billing-success-total")).toHaveText("50.000");
+    await expect(summary).toContainText("Transfer");
+    await expect(summary.locator("[data-invoice-state]")).toBeVisible();
+
+    // One tap to the full detail (the same one the history opens) — and back to the success screen.
+    await page.getByTestId("billing-success-view-detail").click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText(invoice.invoiceNumberFormatted);
+    await expect(dialog.getByTestId("invoice-detail-view")).toBeVisible();
+    await expect(dialog.getByTestId("invoice-more-actions-button")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByTestId("billing-invoice-success")).toBeVisible();
+    await expect(page.getByTestId("billing-success-summary")).toBeVisible();
+
+    // Starting another invoice clears the summary.
+    await page.getByTestId("billing-success-new-invoice").click();
+    await expect(page.getByTestId("billing-success-summary")).toHaveCount(0);
+  });
+
   test("RD-8 el pago por defecto es un solo método y 'Dividir pago' abre las filas con monto", async ({
     page,
     request,

@@ -12,6 +12,9 @@ import { ClientSearchField, type ClientSelection } from "../../components/Client
 import { ServiceSearchField, type SalonServiceOption } from "../../components/ServiceSearchField";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { FiscalRucWarning } from "../../components/FiscalRucWarning";
+import { InvoiceDetailModal, type InvoiceDetail } from "../../components/InvoiceDetailModal";
+import { InvoiceStatePill } from "../../components/InvoiceStatePill";
+import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
 import { formatAmountDecimal, formatDecimalGs } from "../../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../../lib/moneyInputMask";
 import { useFeatureFlag } from "../../hooks/useFeatureFlags";
@@ -255,6 +258,10 @@ export function NewInvoiceFlow({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successInvoiceNumber, setSuccessInvoiceNumber] = useState<string | null>(null);
   const [lastInvoiceId, setLastInvoiceId] = useState<number | null>(null);
+  // The invoice just issued: read back so the success screen can show what was billed, and open
+  // the full detail without going through the history.
+  const [issuedInvoice, setIssuedInvoice] = useState<InvoiceDetail | null>(null);
+  const [showIssuedDetail, setShowIssuedDetail] = useState(false);
   const [lineErrors, setLineErrors] = useState<Record<number, Record<string, string>>>({});
   const [paymentErrors, setPaymentErrors] = useState<Record<number, string>>({});
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
@@ -265,6 +272,8 @@ export function NewInvoiceFlow({
     if (resetKey === undefined) return;
     setSuccessInvoiceNumber(null);
     setLastInvoiceId(null);
+    setIssuedInvoice(null);
+    setShowIssuedDetail(false);
     setSubmitError(null);
     setPdfError(null);
     setGlobalErrors([]);
@@ -859,6 +868,10 @@ export function NewInvoiceFlow({
       );
       setSuccessInvoiceNumber(result.invoiceNumberFormatted);
       setLastInvoiceId(result.id);
+      setIssuedInvoice(null);
+      femmeJson<InvoiceDetail>(`/api/invoices/${result.id}`)
+        .then(setIssuedInvoice)
+        .catch(() => setIssuedInvoice(null)); // the summary is a nicety: the success itself stands
       window.scrollTo({ top: 0, behavior: "smooth" });
       // Reset form
       setClientSelection(null);
@@ -915,9 +928,23 @@ export function NewInvoiceFlow({
   }
 
 
+  // The state of an invoice sent to SIFEN changes on its own ("In progress" → "Approved").
+  const refreshIssuedInvoice = () => {
+    if (lastInvoiceId == null) return;
+    femmeJson<InvoiceDetail>(`/api/invoices/${lastInvoiceId}`)
+      .then(setIssuedInvoice)
+      .catch(() => undefined);
+  };
+  useSifenStatusLiveRefresh(
+    !!successInvoiceNumber && !!issuedInvoice && isSifenStatusInFlight(issuedInvoice.sifenSubmissionStatus),
+    refreshIssuedInvoice,
+  );
+
   function startAnother() {
     setSuccessInvoiceNumber(null);
     setLastInvoiceId(null);
+    setIssuedInvoice(null);
+    setShowIssuedDetail(false);
     setPdfError(null);
     window.scrollTo({ top: 0 });
   }
@@ -933,6 +960,43 @@ export function NewInvoiceFlow({
             {pdfError}
           </Alert>
         )}
+        {issuedInvoice && (
+          <Card
+            className="flex flex-col gap-3 p-4 sm:p-6"
+            data-testid="billing-success-summary"
+            aria-label={t("femme.billing.invoice.summaryOfIssued")}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="break-words font-semibold text-ink" data-testid="billing-success-client">
+                  {issuedInvoice.clientDisplayName || t("femme.billing.invoice.noName")}
+                </div>
+                <div className="text-sm text-ink-3">
+                  {issuedInvoice.payments
+                    .map((p) => t(`femme.billing.invoice.paymentMethod${capitalize(p.method)}`))
+                    .join(" + ")}
+                </div>
+              </div>
+              <InvoiceStatePill invoice={issuedInvoice} />
+            </div>
+            <ul className="divide-y divide-line" data-testid="billing-success-lines">
+              {issuedInvoice.lines.map((l) => (
+                <li key={l.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                  <span className="min-w-0 break-words">
+                    {l.description} <span className="text-ink-3">× {l.quantity}</span>
+                  </span>
+                  <span className="font-semibold tabular-nums">{formatAmountDecimal(l.lineTotal)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2">
+              <span className="font-semibold">{t("femme.billing.invoice.total")}</span>
+              <span className="font-heading text-2xl font-extrabold tabular-nums text-ink" data-testid="billing-success-total">
+                {formatAmountDecimal(issuedInvoice.total)}
+              </span>
+            </div>
+          </Card>
+        )}
         <Card className="flex flex-col gap-3 p-4 sm:p-6">
           {lastInvoiceId && (
             <Button
@@ -944,6 +1008,18 @@ export function NewInvoiceFlow({
               onClick={() => void handleDownloadLastPdf()}
             >
               {t("femme.billing.invoice.downloadPdf")}
+            </Button>
+          )}
+          {lastInvoiceId && (
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="min-h-12"
+              data-testid="billing-success-view-detail"
+              onClick={() => setShowIssuedDetail(true)}
+            >
+              {t("femme.billing.invoice.viewDetail")}
             </Button>
           )}
           <Button
@@ -966,6 +1042,25 @@ export function NewInvoiceFlow({
             {t("femme.billing.invoice.backToStart")}
           </Button>
         </Card>
+        {showIssuedDetail && lastInvoiceId != null && (
+          <InvoiceDetailModal
+            invoiceId={lastInvoiceId}
+            onClose={() => {
+              setShowIssuedDetail(false);
+              refreshIssuedInvoice();
+            }}
+            onVoided={() => {
+              setShowIssuedDetail(false);
+              refreshIssuedInvoice();
+              onIssued();
+            }}
+            onCorrected={() => {
+              setShowIssuedDetail(false);
+              refreshIssuedInvoice();
+              onIssued();
+            }}
+          />
+        )}
       </div>
     );
   }
