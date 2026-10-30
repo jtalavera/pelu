@@ -951,23 +951,38 @@ export function NewInvoiceFlow({
 
   if (successInvoiceNumber) {
     return (
-      <div className="mx-auto flex w-full max-w-xl flex-col gap-4" data-testid="billing-invoice-success">
-        <Alert variant="success" title={t("femme.billing.invoice.successTitle")}>
-          {t("femme.billing.invoice.successBody", { number: successInvoiceNumber })}
-        </Alert>
-        {pdfError && (
-          <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
-            {pdfError}
-          </Alert>
-        )}
-        {issuedInvoice && (
-          <Card
-            className="flex flex-col gap-3 p-4 sm:p-6"
-            data-testid="billing-success-summary"
-            aria-label={t("femme.billing.invoice.summaryOfIssued")}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+      <div className="mx-auto flex w-full max-w-[560px] flex-col gap-4" data-testid="billing-invoice-success">
+        <Card className="flex flex-col gap-5 p-5 sm:p-7">
+          <div className="flex items-center gap-4" role="alert">
+            <span
+              aria-hidden="true"
+              className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-success-lt text-2xl font-bold text-success"
+            >
+              ✓
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-heading text-[22px] font-extrabold leading-tight text-ink">
+                {t("femme.billing.invoice.successTitle")}
+              </h1>
+              <p className="text-sm text-ink-3">
+                <span aria-hidden="true">#{successInvoiceNumber}</span>
+                <span className="sr-only">{t("femme.billing.invoice.successBody", { number: successInvoiceNumber })}</span>
+              </p>
+            </div>
+            {issuedInvoice && <InvoiceStatePill invoice={issuedInvoice} />}
+          </div>
+          {pdfError && (
+            <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
+              {pdfError}
+            </Alert>
+          )}
+          {issuedInvoice && (
+            <section
+              className="flex flex-col gap-3 border-t border-line pt-4"
+              data-testid="billing-success-summary"
+              aria-label={t("femme.billing.invoice.summaryOfIssued")}
+            >
+              <div>
                 <div className="break-words font-semibold text-ink" data-testid="billing-success-client">
                   {issuedInvoice.clientDisplayName || t("femme.billing.invoice.noName")}
                 </div>
@@ -977,70 +992,74 @@ export function NewInvoiceFlow({
                     .join(" + ")}
                 </div>
               </div>
-              <InvoiceStatePill invoice={issuedInvoice} />
+              <ul className="flex flex-col gap-1" data-testid="billing-success-lines">
+                {issuedInvoice.lines.map((l) => (
+                  <li key={l.id} className="flex items-start justify-between gap-3 text-sm">
+                    <span className="min-w-0 break-words">
+                      {l.description} <span className="text-ink-3">× {l.quantity}</span>
+                    </span>
+                    <span className="tabular-nums">{formatAmountDecimal(l.lineTotal)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3">
+                <span className="font-semibold">{t("femme.billing.invoice.total")}</span>
+                <span
+                  className="font-heading text-[26px] font-extrabold tabular-nums text-ink"
+                  data-testid="billing-success-total"
+                >
+                  {formatAmountDecimal(issuedInvoice.total)}
+                </span>
+              </div>
+            </section>
+          )}
+          <div className="flex flex-col gap-3">
+            {lastInvoiceId && (
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                className="min-h-12 w-full"
+                data-testid="billing-success-download-pdf"
+                onClick={() => void handleDownloadLastPdf()}
+              >
+                {t("femme.billing.invoice.downloadPdf")}
+              </Button>
+            )}
+            <div className="flex gap-3">
+              {lastInvoiceId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="min-h-12 min-w-0 flex-1"
+                  data-testid="billing-success-view-detail"
+                  onClick={() => setShowIssuedDetail(true)}
+                >
+                  {t("femme.billing.invoice.viewDetail")}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="min-h-12 min-w-0 flex-1"
+                data-testid="billing-success-new-invoice"
+                onClick={startAnother}
+              >
+                {t("femme.billing.session.newInvoiceButton")}
+              </Button>
             </div>
-            <ul className="divide-y divide-line" data-testid="billing-success-lines">
-              {issuedInvoice.lines.map((l) => (
-                <li key={l.id} className="flex items-start justify-between gap-3 py-2 text-sm">
-                  <span className="min-w-0 break-words">
-                    {l.description} <span className="text-ink-3">× {l.quantity}</span>
-                  </span>
-                  <span className="font-semibold tabular-nums">{formatAmountDecimal(l.lineTotal)}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2">
-              <span className="font-semibold">{t("femme.billing.invoice.total")}</span>
-              <span className="font-heading text-2xl font-extrabold tabular-nums text-ink" data-testid="billing-success-total">
-                {formatAmountDecimal(issuedInvoice.total)}
-              </span>
-            </div>
-          </Card>
-        )}
-        <Card className="flex flex-col gap-3 p-4 sm:p-6">
-          {lastInvoiceId && (
             <Button
               type="button"
-              variant="primary"
-              size="lg"
-              className="min-h-12"
-              data-testid="billing-success-download-pdf"
-              onClick={() => void handleDownloadLastPdf()}
+              variant="ghost"
+              className="self-center text-primary"
+              data-testid="billing-success-back"
+              onClick={onBack}
             >
-              {t("femme.billing.invoice.downloadPdf")}
+              {t("femme.billing.invoice.backToStart")}
             </Button>
-          )}
-          {lastInvoiceId && (
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="min-h-12"
-              data-testid="billing-success-view-detail"
-              onClick={() => setShowIssuedDetail(true)}
-            >
-              {t("femme.billing.invoice.viewDetail")}
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="min-h-12"
-            data-testid="billing-success-new-invoice"
-            onClick={startAnother}
-          >
-            {t("femme.billing.session.newInvoiceButton")}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-primary"
-            data-testid="billing-success-back"
-            onClick={onBack}
-          >
-            {t("femme.billing.invoice.backToStart")}
-          </Button>
+          </div>
         </Card>
         {showIssuedDetail && lastInvoiceId != null && (
           <InvoiceDetailModal

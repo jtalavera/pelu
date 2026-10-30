@@ -260,7 +260,7 @@ test.describe("Facturación rediseñada · nueva factura", () => {
     await expect(summary.getByTestId("billing-success-lines")).toContainText("× 1");
     await expect(summary.getByTestId("billing-success-total")).toHaveText("50.000");
     await expect(summary).toContainText("Transfer");
-    await expect(summary.locator("[data-invoice-state]")).toBeVisible();
+    await expect(page.getByTestId("billing-invoice-success").locator("[data-invoice-state]")).toBeVisible();
 
     // One tap to the full detail (the same one the history opens) — and back to the success screen.
     await page.getByTestId("billing-success-view-detail").click();
