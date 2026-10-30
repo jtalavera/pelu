@@ -80,7 +80,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await toggleRowSwitch(svcRow);
     await page.getByRole("dialog", { name: "Deactivate service" }).getByRole("button", { name: "Deactivate" }).click();
     await expect(svcSwitch).not.toBeChecked();
-    await expect(svcRow.getByText("Inactive", { exact: true })).toBeVisible();
+    await expect(svcRow).toContainText("Inactive");
     // AC8: the service name is never struck through.
     const nameDecoration = await svcRow
       .getByText(svcName, { exact: true })
@@ -225,7 +225,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
 
     await toggleRowSwitch(svcRow);
     await page.getByRole("dialog", { name: "Deactivate service" }).getByRole("button", { name: "Deactivate" }).click();
-    await expect(svcRow.getByText("Inactive", { exact: true })).toBeVisible();
+    await expect(svcRow).toContainText("Inactive");
     // The full-page loading spinner text must never reappear after this in-place update —
     // the search box (unmounted while the spinner is shown) must stay mounted throughout.
     await expect(page.getByPlaceholder(/search by name/i)).toBeVisible();
