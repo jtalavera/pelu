@@ -376,21 +376,16 @@ export function BillingHome({
                                 setSelectedInvoiceId(inv.id);
                               }
                             }}
-                            className="grid min-h-14 w-full cursor-pointer grid-cols-[1fr_auto] gap-x-3 gap-y-1 rounded-md px-2 py-3 text-left hover:bg-primary-lt"
+                            className="grid min-h-14 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-md px-2 py-3 text-left hover:bg-primary-lt"
                           >
-                            <span className="min-w-0 truncate font-semibold text-ink">
+                            <span className="col-start-1 min-w-0 truncate font-semibold text-ink">
                               {inv.clientDisplayName || t("femme.billing.invoice.noName")}
                             </span>
-                            <span className="text-right font-bold tabular-nums text-ink">
-                              {formatGuaraniesGs(inv.total)}
-                            </span>
-                            <span className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
-                              <InvoiceStatePill invoice={inv} />
-                              <span className="font-mono text-xs">{inv.invoiceNumberFormatted}</span>
-                              <span>{paymentMethodsLabel(inv.paymentMethodsSummary, t)}</span>
-                            </span>
-                            {deriveInvoiceState(inv) === "attention" && inv.status === "ISSUED" && (
-                              <span className="col-span-2 pt-1">
+                            <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1.5">
+                              <span className="text-right font-bold tabular-nums text-ink">
+                                {formatGuaraniesGs(inv.total)}
+                              </span>
+                              {deriveInvoiceState(inv) === "attention" && inv.status === "ISSUED" && (
                                 <Button
                                   type="button"
                                   variant="outline"
@@ -403,8 +398,13 @@ export function BillingHome({
                                 >
                                   {t("femme.billing.history.detail.sifen.correctResendButton")}
                                 </Button>
-                              </span>
-                            )}
+                              )}
+                            </span>
+                            <span className="col-start-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+                              <InvoiceStatePill invoice={inv} />
+                              <span className="font-mono text-xs">{inv.invoiceNumberFormatted}</span>
+                              <span>{paymentMethodsLabel(inv.paymentMethodsSummary, t)}</span>
+                            </span>
                           </div>
                         </li>
                       ))}

@@ -133,3 +133,6 @@ Al elegir un cliente en "Nueva factura" se busca su ficha de servicio **abierta,
   y **descuento del ítem**. Con un profesional asignado su nombre se ve junto al servicio sin abrir. Se abre solo si el
   descuento del ítem tiene un error.
 - **"Más opciones" general**: solo **Descuento** (global) y **Propinas** (una por profesional asignado a los servicios).
+
+## Ajuste: lista "Comprobantes de hoy" en dos renglones
+Cada fila ocupa dos renglones: a la izquierda nombre y `estado · número · forma de pago`; a la derecha el monto y, si requiere atención, **Corregir y reenviar** justo debajo (antes era un tercer renglón suelto). Los `data-testid` (`billing-today-row-*`, `today-row-correct-resend-*`) no cambian.
