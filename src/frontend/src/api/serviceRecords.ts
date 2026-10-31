@@ -41,6 +41,10 @@ export type ServiceRecordListItem = {
   status: "OPEN" | "CLOSED" | "VOIDED";
   totalAmount: string;
   createdAt: string;
+  /** Distinct service names on the record, comma-separated. */
+  servicesSummary?: string | null;
+  /** Distinct professional names on the record, comma-separated. */
+  professionalsSummary?: string | null;
 };
 
 export type PagedServiceRecordsResponse = {

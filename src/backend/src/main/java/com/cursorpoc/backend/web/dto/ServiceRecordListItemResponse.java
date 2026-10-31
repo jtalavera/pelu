@@ -9,4 +9,8 @@ public record ServiceRecordListItemResponse(
     String clientFullName,
     String status,
     BigDecimal totalAmount,
-    Instant createdAt) {}
+    Instant createdAt,
+    /** Distinct service names on the record, in line order, comma-separated (list subtitle). */
+    String servicesSummary,
+    /** Distinct professional names on the record, in line order, comma-separated. */
+    String professionalsSummary) {}

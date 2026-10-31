@@ -12,7 +12,8 @@ export function ServiceRecordDetailModal({
 }: {
   serviceRecordId: number;
   onClose: () => void;
-  onChanged?: () => void;
+  /** Called after the record was saved or voided; the dialog closes itself right after. */
+  onChanged?: (kind: "updated" | "voided") => void;
 }) {
   const { t } = useTranslation();
   const [record, setRecord] = useState<ServiceRecordDetail | null>(null);
@@ -68,8 +69,14 @@ export function ServiceRecordDetailModal({
           <ServiceRecordEditor
             initial={record}
             allowClientCreateNew={false}
-            onSaved={() => onChanged?.()}
-            onVoided={() => onChanged?.()}
+            onSaved={() => {
+              onChanged?.("updated");
+              onClose();
+            }}
+            onVoided={() => {
+              onChanged?.("voided");
+              onClose();
+            }}
             onClose={onClose}
           />
         )}
