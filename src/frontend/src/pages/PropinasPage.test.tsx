@@ -31,7 +31,8 @@ function report(rows: Array<{ professionalId: number; professionalName: string; 
   return {
     rows,
     professionalTotals: [],
-    grandTotal: total,
+    // Like the backend: grandTotal is NET — tips minus the period's withdrawals.
+    grandTotal: total - 60000,
     withdrawalsTotal: 60000,
     withdrawalsByProfessional: [],
   };
@@ -124,6 +125,14 @@ describe("PropinasPage", () => {
     expect(screen.getByTestId("propinas-period-7").getAttribute("aria-pressed")).toBe("true");
     await waitFor(() => expect(calls("/api/propinas/report?").length).toBeGreaterThan(before));
     expect(screen.getByTestId("propinas-summary").textContent).toMatch(/in 7 days/);
+  });
+
+  it("the 'tips' figure is the gross tips of the period, not the report's net total", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getAllByTestId("propinas-movement")).toHaveLength(2));
+    // One tip of 20.000 and one withdrawal of 60.000: net is −40.000, but the tips figure stays 20.000.
+    expect(screen.getByTestId("propinas-tips-total").textContent).toMatch(/Gs\. 20\.000/);
+    expect(screen.getByTestId("propinas-withdrawn-total").textContent).toMatch(/Gs\. 60\.000/);
   });
 
   it("shows the period summary and one compact list mixing tips and withdrawals", async () => {

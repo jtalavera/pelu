@@ -12,7 +12,7 @@ Parte del rediseño general. Una sola pantalla (`/app/propinas`) en lugar de las
 - **Movimientos**: una **tabla** (Fecha · Concepto · Profesional · Monto) con filas de 44 px y **paginación** estándar
   (filas por página 5/10/20, "1–10 de N", Anterior/Siguiente); ya no hay "Ver más". Los retiros van en la misma tabla con
   la etiqueta "Retiro" y signo menos. Los totales del período ("Gs. X propinas · Gs. Y retirado · en N días") van en una
-  línea junto al título. Las propinas vienen del reporte y los retiros de `GET /api/propinas/withdrawals` (últimos
+  línea junto al título (las propinas del período son las brutas: el `grandTotal` del reporte es neto —propinas menos retiros del período— así que se calcula `grandTotal + withdrawalsTotal`). Las propinas vienen del reporte y los retiros de `GET /api/propinas/withdrawals` (últimos
   3 meses), filtrados al rango. En celular la tabla se desliza horizontalmente.
 - **Retirar** (diálogo): saldo, monto, atajo **Retirar todo (Gs. …)**, validaciones ("mayor a cero", "no supera el
   saldo") y un solo botón. Al confirmar se cierra, se refrescan saldos y movimientos y un `Toast` de 4 s lo confirma.

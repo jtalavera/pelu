@@ -218,8 +218,10 @@ export default function PropinasPage() {
   const movFrom = movements.length === 0 ? 0 : safeMovPage * movPageSize + 1;
   const movTo = Math.min((safeMovPage + 1) * movPageSize, movements.length);
 
-  const tipsTotal = Number(report?.grandTotal ?? 0);
+  // The report's `grandTotal` is NET (tips minus the withdrawals of the period), so the gross tips
+  // of the period are the net plus what was withdrawn — the two figures shown are tips and withdrawals.
   const withdrawnTotal = Number(report?.withdrawalsTotal ?? 0);
+  const tipsTotal = Number(report?.grandTotal ?? 0) + withdrawnTotal;
   const periodDays = period ?? 0;
 
   const fmtDay = (iso: string) => {
