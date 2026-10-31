@@ -197,22 +197,6 @@ async function fullNameOf(
   return row.fullName;
 }
 
-/** Picks one option from the report tab's professional `MultiSelect` filter (issue-120 pattern). */
-async function pickReportProfessional(
-  page: Page,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: "Professional", exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: "Professional", exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
-}
-
 async function tipBalance(
   request: APIRequestContext,
   token: string,
@@ -423,21 +407,30 @@ test.describe("mt-ficha-propinas · service sheet & tips isolation", () => {
     try {
       await loginAs(pageA, world.tenantA.adminEmail, world.tenantA.adminPassword);
       await pageA.goto("/app/propinas");
-      await expect(
-        pageA.getByRole("tab", { name: "Tips report", selected: true }),
-      ).toBeVisible({ timeout: 15_000 });
+      // One screen: the period chips (30 days by default) replace the old date form and tabs.
+      await expect(pageA.getByTestId("propinas-period-30")).toHaveAttribute("aria-pressed", "true", {
+        timeout: 15_000,
+      });
 
-      await pickReportProfessional(pageA, aProfName.slice(0, 10), rxExact(aProfName));
-      await pageA.getByRole("button", { name: "Search", exact: true }).click();
+      // Narrow to A's professional through the folded "Filters" section.
+      await pageA.getByTestId("propinas-filters-toggle").click();
+      const aProfOption = pageA
+        .locator("#propinas-filter-professional option")
+        .filter({ hasText: rxExact(aProfName) });
+      await pageA
+        .locator("#propinas-filter-professional")
+        .selectOption({ value: (await aProfOption.first().getAttribute("value")) ?? "" });
 
-      const reportRows = pageA.getByTestId("propinas-report-table").locator("tbody tr");
-      const tipRow = reportRows.filter({ hasText: aClientName }).first();
+      // The tip shows up in the compact movements list, in house money format.
+      const tipRow = pageA
+        .getByTestId("propinas-movement")
+        .filter({ hasText: aClientName })
+        .first();
       await expect(tipRow).toBeVisible({ timeout: 15_000 });
-      expectMoneyFormat(await tipRow.locator("td").nth(1).innerText());
+      expectMoneyFormat(await tipRow.locator("b").first().innerText());
 
-      const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-      await expect(grandTotalRow).toBeVisible();
-      expectMoneyFormat(await grandTotalRow.locator("td").nth(1).innerText());
+      // The period summary renders the same format.
+      expectMoneyFormat(await pageA.getByTestId("propinas-tips-total").innerText());
     } finally {
       await ctxA.close();
     }
