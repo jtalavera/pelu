@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Spinner } from "@design-system";
+import { Alert, KebabMenu, Spinner } from "@design-system";
 import { useFeatureFlag, useFeatureFlagsState } from "../../hooks/useFeatureFlags";
 import { useMe } from "../../hooks/useMe";
 import { MovementsTab } from "./MovementsTab";
@@ -10,16 +10,21 @@ import { RulesTab } from "./RulesTab";
 import { SettingsTab } from "./SettingsTab";
 import { SettlementsTab } from "./SettlementsTab";
 
-const TABS = ["settlements", "movements", "rules", "preview", "reports", "settings"] as const;
-type Tab = (typeof TABS)[number];
+const MAIN_TABS = ["settlements", "movements", "rules"] as const;
+const MORE_TABS = ["preview", "reports", "settings"] as const;
+type Tab = (typeof MAIN_TABS)[number] | (typeof MORE_TABS)[number];
 
-/** Módulo de comisiones (ADMIN): HU-COM-01/02/03/06/08/09. */
+/**
+ * Módulo de comisiones (ADMIN): HU-COM-01/02/03/06/08/09. The three day-to-day screens are tabs; the
+ * rest (preview, reports, settings) live under the «⋯» menu so they don't compete for attention.
+ */
 export default function CommissionsPage() {
   const { t } = useTranslation();
   const enabled = useFeatureFlag("COMMISSIONS");
   const { loading } = useFeatureFlagsState();
   const { me } = useMe();
   const [tab, setTab] = useState<Tab>("settlements");
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
 
   if (loading) return <Spinner />;
 
@@ -27,32 +32,48 @@ export default function CommissionsPage() {
     return <Alert variant="warning">{t("femme.commissions.notEnabled")}</Alert>;
   }
 
+  const moreActive = (MORE_TABS as readonly string[]).includes(tab);
+
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <div>
-        <div className="text-[15px] font-medium text-[var(--color-ink)]">{t("femme.commissions.pageTitle")}</div>
-        <div className="mt-0.5 text-[11px] text-[var(--color-ink-3)]">{t("femme.commissions.pageSubtitle")}</div>
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-heading text-2xl font-extrabold text-ink sm:text-3xl">{t("femme.commissions.pageTitle")}</h1>
+        <div ref={setActionSlot} className="empty:hidden" />
       </div>
-      <div className="flex flex-wrap gap-1 overflow-x-auto" role="tablist" aria-label={t("femme.commissions.pageTitle")}>
-        {TABS.map((key) => (
+      <div
+        className="flex items-center gap-1 rounded-2xl bg-primary-lt p-1"
+        role="tablist"
+        aria-label={t("femme.commissions.pageTitle")}
+      >
+        {MAIN_TABS.map((key) => (
           <button
             key={key}
             type="button"
             role="tab"
             aria-selected={tab === key}
+            data-testid={`commissions-tab-${key}`}
             onClick={() => setTab(key)}
-            className={
-              "rounded-[var(--radius-md)] border px-3.5 py-1.5 text-xs leading-normal " +
-              (tab === key
-                ? "border-[var(--color-rose-md)] bg-[var(--color-rose-lt)] font-medium text-[var(--color-rose-dk)]"
-                : "bg-[var(--color-white)] text-[var(--color-ink-2)]")
-            }
+            className="min-h-11 min-w-0 flex-1 truncate rounded-[10px] bg-transparent px-2 font-bold text-ink-2 aria-selected:bg-surface aria-selected:text-primary aria-selected:shadow-[0_1px_2px_rgba(10,31,51,0.12)] sm:px-4"
           >
             {t(`femme.commissions.tabs.${key}`)}
           </button>
         ))}
+        <KebabMenu
+          id="commissions-more"
+          triggerAriaLabel={t("femme.commissions.moreMenu")}
+          items={MORE_TABS.map((key) => ({
+            id: key,
+            label: t(`femme.commissions.tabs.${key}`),
+            onSelect: () => setTab(key),
+          }))}
+        />
       </div>
-      {tab === "settlements" && <SettlementsTab />}
+      {moreActive && (
+        <h2 className="font-heading text-lg font-extrabold text-ink" data-testid="commissions-more-title">
+          {t(`femme.commissions.tabs.${tab}`)}
+        </h2>
+      )}
+      {tab === "settlements" && <SettlementsTab actionSlot={actionSlot} />}
       {tab === "movements" && <MovementsTab />}
       {tab === "rules" && <RulesTab />}
       {tab === "preview" && <PreviewTab />}

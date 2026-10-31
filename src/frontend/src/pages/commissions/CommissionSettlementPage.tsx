@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
-import { Alert, Button, Card, Input, Label, Modal, Select, Spinner, Text, Textarea } from "@design-system";
+import { Alert, Button, Input, KebabMenu, Label, Modal, Select, Spinner, Textarea } from "@design-system";
 import {
   addAdjustment,
   approveSettlement,
@@ -21,7 +21,7 @@ import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDate, formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ReassignDialog } from "./ReassignDialog";
-import { SettlementStatusBadge, TableWrap, formatPercent, tdClass, thClass, todayYmd } from "./common";
+import { SettlementStatusBadge, formatPercent, todayYmd } from "./common";
 
 /** HU-COM-06: settlement detail, adjustments (Draft), approve, pay, void, PDF. */
 export default function CommissionSettlementPage() {
@@ -44,6 +44,9 @@ export default function CommissionSettlementPage() {
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState<string | null>(null);
   const [toReassign, setToReassign] = useState<EntryView | null>(null);
+  const [adjOpen, setAdjOpen] = useState(false);
+  const [subtotalsOpen, setSubtotalsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +83,7 @@ export default function CommissionSettlementPage() {
     }
     setAdjError(null);
     const amount = Number(digits) * (adjSign === "-" ? -1 : 1);
+    setAdjOpen(false);
     await run(() => addAdjustment(settlementId, amount, adjReason.trim()));
     setAdjAmount("");
     setAdjReason("");
@@ -95,149 +99,250 @@ export default function CommissionSettlementPage() {
     return "";
   }
 
+  const sectionTitle = "mt-1 font-heading text-xs font-extrabold uppercase tracking-wider text-primary";
+  const foldBtn =
+    "flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink";
+
   return (
-    <div className="flex min-w-0 flex-col gap-4" data-testid="commission-settlement-detail">
-      <Link to="/app/commissions" className="text-sm underline">
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4" data-testid="commission-settlement-detail">
+      <Link to="/app/commissions" className="inline-flex min-h-11 items-center text-sm font-bold text-primary">
         ← {t("femme.commissions.pageTitle")}
       </Link>
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-lg font-medium">
-          {t("femme.commissions.settlement.title", { id: s.id, name: s.professionalName })}
-        </h2>
-        <SettlementStatusBadge status={s.status} />
-      </div>
-      <Text>
-        {t("femme.commissions.settlements.period")}: {formatParaguayDate(s.periodFrom + "T12:00:00", dateLocale)} –{" "}
-        {formatParaguayDate(s.periodTo + "T12:00:00", dateLocale)}
-      </Text>
-      <Text className="text-lg font-semibold" data-testid="settlement-total">
-        {t("femme.commissions.common.total")}: {formatGuaraniesGs(s.totalAmount)}
-      </Text>
-      {s.paidAt && (
-        <Text variant="small">
-          {t("femme.commissions.settlement.paidInfo", {
-            date: formatParaguayDateTime(s.paidAt, dateLocale),
-            method: t(`femme.commissions.paymentMethod.${s.paymentMethod}`),
-            reference: s.paymentReference ?? "—",
-          })}
-        </Text>
-      )}
-      {s.voidReason && <Alert variant="warning">{t("femme.commissions.settlement.voidedInfo", { reason: s.voidReason })}</Alert>}
-      {detail.mixedBases && (
-        <Alert variant="warning" data-testid="settlement-mixed-bases">
-          {t("femme.commissions.settlement.mixedBases")}
-        </Alert>
-      )}
-      {error && <Alert variant="destructive">{error}</Alert>}
 
-      <div className="flex flex-wrap gap-2">
-        {isDraft && (
-          <Button type="button" onClick={() => setConfirmApprove(true)} data-testid="settlement-approve">
-            {t("femme.commissions.settlement.approve")}
-          </Button>
-        )}
-        {s.status === "APPROVED" && (
-          <Button type="button" onClick={() => setPayOpen(true)} data-testid="settlement-pay">
-            {t("femme.commissions.settlement.markPaid")}
-          </Button>
-        )}
-        {(isDraft || s.status === "APPROVED") && (
-          <Button type="button" variant="danger" onClick={() => setVoidOpen(true)} data-testid="settlement-void">
-            {t("femme.commissions.settlement.void")}
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() =>
-            void downloadCommissionFile(settlementPdfPath(s.id, i18n.language), `liquidacion-${s.id}.pdf`).catch((err) =>
-              setError(translateApiError(err, t)),
-            )
-          }
-          data-testid="settlement-pdf"
-        >
-          {t("femme.commissions.settlement.pdf")}
-        </Button>
-      </div>
-
-      <Card className="flex flex-col gap-2 p-4">
-        <h3 className="text-base font-medium">{t("femme.commissions.settlement.lines")}</h3>
-        <TableWrap testId="settlement-lines">
-          <thead>
-            <tr>
-              <th className={thClass}>{t("femme.commissions.history.date")}</th>
-              <th className={thClass}>{t("femme.commissions.reports.invoice")}</th>
-              <th className={thClass}>{t("femme.commissions.common.item")}</th>
-              <th className={thClass}>{t("femme.commissions.common.itemKind")}</th>
-              <th className={thClass}>{t("femme.commissions.settlement.base")}</th>
-              <th className={`${thClass} text-right`}>{t("femme.commissions.settlement.baseAmount")}</th>
-              <th className={`${thClass} text-right`}>%</th>
-              <th className={`${thClass} text-right`}>{t("femme.commissions.settlement.commission")}</th>
-              {isDraft && <th className={thClass} />}
-            </tr>
-          </thead>
-          <tbody>
-            {detail.entries.map((e) => (
-              <tr key={e.id} className="border-t" data-testid="settlement-line">
-                <td className={tdClass}>{formatParaguayDateTime(e.accrualAt, dateLocale)}</td>
-                <td className={tdClass}>{e.invoiceNumber}</td>
-                <td className={tdClass}>
-                  {e.itemName}
-                  {entryLabel(e) && <span className="block text-xs text-[var(--color-ink-3)]">{entryLabel(e)}</span>}
-                </td>
-                <td className={tdClass}>{e.itemKind ? t(`femme.commissions.kind.${e.itemKind}`) : ""}</td>
-                <td className={tdClass}>{e.baseType ? t(`femme.commissions.base.${e.baseType}`) : ""}</td>
-                <td className={`${tdClass} text-right`}>{formatGuaraniesGs(e.baseAmount)}</td>
-                <td className={`${tdClass} text-right`}>{formatPercent(e.percentApplied)}</td>
-                <td className={`${tdClass} text-right`}>{formatGuaraniesGs(e.commissionAmount)}</td>
-                {isDraft && (
-                  <td className={`${tdClass} whitespace-nowrap`}>
-                    {e.reassignable && (
-                      <Button type="button" size="sm" variant="secondary" onClick={() => setToReassign(e)}>
-                        {t("femme.commissions.reassign.action")}
-                      </Button>
-                    )}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </TableWrap>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div data-testid="settlement-subtotals-kind">
-            <h4 className="text-sm font-medium">{t("femme.commissions.settlement.byKind")}</h4>
-            {detail.byKind.map((st) => (
-              <Text key={st.key} variant="small">
-                {t(`femme.commissions.kind.${st.key}`)}: {formatGuaraniesGs(st.amount)}
-              </Text>
-            ))}
+      <section className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4 shadow-sm sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="break-words font-heading text-xl font-extrabold text-ink">{s.professionalName}</h1>
+            <p className="text-sm text-ink-3">
+              {t("femme.commissions.settlement.subtitle", {
+                id: s.id,
+                from: formatParaguayDate(s.periodFrom + "T12:00:00", dateLocale),
+                to: formatParaguayDate(s.periodTo + "T12:00:00", dateLocale),
+              })}
+            </p>
           </div>
-          <div data-testid="settlement-subtotals-item">
-            <h4 className="text-sm font-medium">{t("femme.commissions.settlement.byItem")}</h4>
-            {detail.byItem.map((st) => (
-              <Text key={st.key} variant="small">
-                {st.label}: {formatGuaraniesGs(st.amount)}
-              </Text>
-            ))}
-          </div>
+          <SettlementStatusBadge status={s.status} />
         </div>
-      </Card>
+        <div className="font-heading text-3xl font-extrabold tabular-nums text-ink" data-testid="settlement-total">
+          {formatGuaraniesGs(s.totalAmount)}
+        </div>
+        {s.paidAt && (
+          <p className="text-sm text-ink-3" data-testid="settlement-paid-info">
+            {t("femme.commissions.settlement.paidInfo", {
+              date: formatParaguayDateTime(s.paidAt, dateLocale),
+              method: t(`femme.commissions.paymentMethod.${s.paymentMethod}`),
+              reference: s.paymentReference ?? "—",
+            })}
+          </p>
+        )}
+        {s.voidReason && (
+          <p className="text-sm text-ink-3">{t("femme.commissions.settlement.voidedInfo", { reason: s.voidReason })}</p>
+        )}
+        {detail.mixedBases && (
+          <Alert variant="warning" data-testid="settlement-mixed-bases">
+            {t("femme.commissions.settlement.mixedBases")}
+          </Alert>
+        )}
+        {error && <Alert variant="destructive">{error}</Alert>}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {isDraft && (
+            <Button type="button" className="min-h-11" onClick={() => setConfirmApprove(true)} data-testid="settlement-approve">
+              {t("femme.commissions.settlement.approve")}
+            </Button>
+          )}
+          {s.status === "APPROVED" && (
+            <Button type="button" className="min-h-11" onClick={() => setPayOpen(true)} data-testid="settlement-pay">
+              {t("femme.commissions.settlement.markPaid")}
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={() =>
+              void downloadCommissionFile(settlementPdfPath(s.id, i18n.language), `liquidacion-${s.id}.pdf`).catch((err) =>
+                setError(translateApiError(err, t)),
+              )
+            }
+            data-testid="settlement-pdf"
+          >
+            {t("femme.commissions.settlement.pdf")}
+          </Button>
+          {(isDraft || s.status === "APPROVED") && (
+            <KebabMenu
+              id="settlement-more"
+              triggerAriaLabel={t("femme.commissions.settlement.moreActions")}
+              items={[
+                {
+                  id: "void",
+                  label: t("femme.commissions.settlement.void"),
+                  destructive: true,
+                  onSelect: () => setVoidOpen(true),
+                },
+              ]}
+            />
+          )}
+        </div>
+      </section>
 
-      <Card className="flex flex-col gap-2 p-4">
-        <h3 className="text-base font-medium">{t("femme.commissions.settlement.adjustments")}</h3>
+      <h2 className={sectionTitle}>{t("femme.commissions.settlement.lines")}</h2>
+      <ul className="rounded-card border border-line bg-surface shadow-sm" data-testid="settlement-lines">
+        {detail.entries.map((e) => (
+          <li
+            key={e.id}
+            data-testid="settlement-line"
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-4 py-2.5 first:border-t-0"
+          >
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-ink">{e.itemName}</div>
+              <div className="text-sm text-ink-3">
+                {formatParaguayDate(e.accrualAt, dateLocale)} · {e.invoiceNumber} ·{" "}
+                {formatGuaraniesGs(e.baseAmount)} × {formatPercent(e.percentApplied)}
+                {e.baseType ? ` · ${t(`femme.commissions.baseShort.${e.baseType}`)}` : ""}
+                {entryLabel(e) ? ` · ${entryLabel(e)}` : ""}
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-right font-heading font-extrabold tabular-nums text-ink">
+                {formatGuaraniesGs(e.commissionAmount)}
+              </span>
+              {isDraft && e.reassignable && (
+                <KebabMenu
+                  id={`settlement-line-${e.id}`}
+                  triggerAriaLabel={t("femme.commissions.settlement.lineActions")}
+                  items={[
+                    {
+                      id: "reassign",
+                      label: t("femme.commissions.reassign.action"),
+                      onSelect: () => setToReassign(e),
+                    },
+                  ]}
+                />
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <h2 className={sectionTitle}>{t("femme.commissions.settlement.adjustments")}</h2>
+      <div className="rounded-card border border-line bg-surface shadow-sm">
         {detail.adjustments.length === 0 ? (
-          <Text variant="muted">{t("femme.commissions.settlement.noAdjustments")}</Text>
+          <p className="px-4 py-3 text-sm text-ink-3">{t("femme.commissions.settlement.noAdjustments")}</p>
         ) : (
-          <ul className="text-sm" data-testid="settlement-adjustments">
+          <ul data-testid="settlement-adjustments">
             {detail.adjustments.map((a) => (
-              <li key={a.id}>
-                {a.note ?? t(`femme.commissions.reason.${a.reasonCode}`)}: {formatGuaraniesGs(a.commissionAmount)}
+              <li
+                key={a.id}
+                className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 first:border-t-0"
+              >
+                <span className="min-w-0 break-words text-ink">
+                  {a.note ?? t(`femme.commissions.reason.${a.reasonCode}`)}
+                </span>
+                <span
+                  className={`font-heading font-extrabold tabular-nums ${a.commissionAmount < 0 ? "text-danger" : "text-success"}`}
+                >
+                  {a.commissionAmount > 0 ? "+" : ""}
+                  {formatGuaraniesGs(a.commissionAmount)}
+                </span>
               </li>
             ))}
           </ul>
         )}
-        {isDraft && (
-          <form onSubmit={(e) => void submitAdjustment(e)} className="flex flex-wrap items-end gap-2">
+      </div>
+      {isDraft && (
+        <button
+          type="button"
+          className="min-h-11 self-start px-1 text-sm font-bold text-primary underline underline-offset-4"
+          onClick={() => setAdjOpen(true)}
+          data-testid="settlement-adjustment-open"
+        >
+          + {t("femme.commissions.settlement.addAdjustment")}
+        </button>
+      )}
+
+      <button
+        type="button"
+        aria-expanded={subtotalsOpen}
+        aria-controls="settlement-subtotals"
+        data-testid="settlement-subtotals-toggle"
+        className={foldBtn}
+        onClick={() => setSubtotalsOpen((o) => !o)}
+      >
+        {t("femme.commissions.settlement.subtotals")}
+        <span aria-hidden className={`text-ink-3 transition-transform ${subtotalsOpen ? "rotate-180" : ""}`}>
+          ⌄
+        </span>
+      </button>
+      {subtotalsOpen && (
+        <div id="settlement-subtotals" className="grid gap-4 rounded-card border border-line bg-surface p-4 sm:grid-cols-2">
+          <div data-testid="settlement-subtotals-kind">
+            <h3 className="text-sm font-bold text-ink">{t("femme.commissions.settlement.byKind")}</h3>
+            {detail.byKind.map((st) => (
+              <div key={st.key} className="flex justify-between gap-2 py-1 text-sm">
+                <span>{t(`femme.commissions.kind.${st.key}`)}</span>
+                <b className="tabular-nums">{formatGuaraniesGs(st.amount)}</b>
+              </div>
+            ))}
+          </div>
+          <div data-testid="settlement-subtotals-item">
+            <h3 className="text-sm font-bold text-ink">{t("femme.commissions.settlement.byItem")}</h3>
+            {detail.byItem.map((st) => (
+              <div key={st.key} className="flex justify-between gap-2 py-1 text-sm">
+                <span className="min-w-0 break-words">{st.label}</span>
+                <b className="tabular-nums">{formatGuaraniesGs(st.amount)}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        aria-expanded={historyOpen}
+        aria-controls="settlement-history"
+        data-testid="settlement-history-toggle"
+        className={foldBtn}
+        onClick={() => setHistoryOpen((o) => !o)}
+      >
+        {t("femme.commissions.settlement.historyTitle")}
+        <span aria-hidden className={`text-ink-3 transition-transform ${historyOpen ? "rotate-180" : ""}`}>
+          ⌄
+        </span>
+      </button>
+      {historyOpen && (
+        <ul id="settlement-history" className="rounded-card border border-line bg-surface p-4 text-sm" data-testid="settlement-history">
+          {detail.history.map((h, i) => (
+            <li key={i} className="py-1">
+              {formatParaguayDateTime(h.changedAt, dateLocale)} ·{" "}
+              {h.fromStatus ? t(`femme.commissions.settlementStatus.${h.fromStatus}`) + " → " : ""}
+              {t(`femme.commissions.settlementStatus.${h.toStatus}`)} · {h.changedByEmail}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Modal
+        open={adjOpen}
+        onClose={() => setAdjOpen(false)}
+        title={t("femme.commissions.settlement.addAdjustment")}
+        footer={
+          <>
+            <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={() => setAdjOpen(false)}>
+              {t("femme.commissions.common.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="settlement-adjustment-form"
+              className="min-h-11 w-full sm:w-auto"
+              data-testid="settlement-add-adjustment"
+            >
+              {t("femme.commissions.settlement.addAdjustment")}
+            </Button>
+          </>
+        }
+      >
+        <form id="settlement-adjustment-form" onSubmit={(e) => void submitAdjustment(e)} className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <Label htmlFor="adj-sign">{t("femme.commissions.settlement.adjustmentType")}</Label>
               <Select id="adj-sign" value={adjSign} onChange={(e) => setAdjSign(e.target.value as "+" | "-")}>
@@ -247,41 +352,24 @@ export default function CommissionSettlementPage() {
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="adj-amount">{t("femme.commissions.settlement.amount")}</Label>
-              <Input id="adj-amount" inputMode="numeric" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} className="max-w-[10rem]" />
+              <Input id="adj-amount" inputMode="numeric" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
             </div>
-            <div className="flex min-w-[14rem] flex-1 flex-col gap-1">
-              <Label htmlFor="adj-reason" required>
-                {t("femme.commissions.settlement.reason")}
-              </Label>
-              <Input
-                id="adj-reason"
-                value={adjReason}
-                onChange={(e) => setAdjReason(e.target.value)}
-                invalid={!!adjError}
-                aria-describedby={adjError ? "adj-error" : undefined}
-              />
-            </div>
-            <Button type="submit" data-testid="settlement-add-adjustment">
-              {t("femme.commissions.settlement.addAdjustment")}
-            </Button>
-            <div className="w-full">
-              <FieldValidationError id="adj-error">{adjError}</FieldValidationError>
-            </div>
-          </form>
-        )}
-      </Card>
-
-      <Card className="flex flex-col gap-1 p-4">
-        <h3 className="text-base font-medium">{t("femme.commissions.settlement.historyTitle")}</h3>
-        <ul className="text-sm" data-testid="settlement-history">
-          {detail.history.map((h, i) => (
-            <li key={i}>
-              {formatParaguayDateTime(h.changedAt, dateLocale)} · {h.fromStatus ? t(`femme.commissions.settlementStatus.${h.fromStatus}`) + " → " : ""}
-              {t(`femme.commissions.settlementStatus.${h.toStatus}`)} · {h.changedByEmail}
-            </li>
-          ))}
-        </ul>
-      </Card>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="adj-reason" required>
+              {t("femme.commissions.settlement.reason")}
+            </Label>
+            <Input
+              id="adj-reason"
+              value={adjReason}
+              onChange={(e) => setAdjReason(e.target.value)}
+              invalid={!!adjError}
+              aria-describedby={adjError ? "adj-error" : undefined}
+            />
+          </div>
+          <FieldValidationError id="adj-error">{adjError}</FieldValidationError>
+        </form>
+      </Modal>
 
       <ReassignDialog
         entry={toReassign}

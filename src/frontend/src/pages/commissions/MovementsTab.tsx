@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, Label, MultiSelect, Text } from "@design-system";
+import { Alert, Button, Input, KebabMenu, Label, MultiSelect, PageSizeSelect, Pagination, Text } from "@design-system";
 import { getEntries, type EntryFilters, type EntryView } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
@@ -8,7 +8,15 @@ import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ReassignDialog } from "./ReassignDialog";
-import { SettlementStatusBadge, TableWrap, firstOfMonthYmd, formatPercent, tdClass, thClass, todayYmd, useProfessionals } from "./common";
+import { SettlementStatusBadge, firstOfMonthYmd, formatPercent, todayYmd, useProfessionals } from "./common";
+
+const initials = (name: string | null) =>
+  (name ?? "?")
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
 /** Every commission movement, with «Cambiar profesional» on the live ones. */
 export function MovementsTab() {
@@ -24,6 +32,9 @@ export function MovementsTab() {
   const [error, setError] = useState<string | null>(null);
   const [toReassign, setToReassign] = useState<EntryView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(20);
 
   const load = useCallback(
     async (filters?: EntryFilters) => {
@@ -45,6 +56,7 @@ export function MovementsTab() {
     setProfessionalIds(defaults.professionalIds);
     setQuery("");
     setAppliedQuery("");
+    setPage(0);
     void load(defaults);
   }
 
@@ -68,53 +80,86 @@ export function MovementsTab() {
     return t(`femme.commissions.reason.${e.reasonCode ?? "MANUAL_ADJUSTMENT"}`);
   }
 
+  const pageItems = visible.slice(page * size, (page + 1) * size);
+  const totalPages = Math.max(1, Math.ceil(visible.length / size));
+
   return (
-    <div className="flex flex-col gap-4" data-testid="commission-movements">
+    <div className="flex flex-col gap-3" data-testid="commission-movements">
       <form
-        className="flex flex-wrap items-end gap-3"
+        className="flex flex-col gap-3"
+        role="search"
         onSubmit={(e) => {
           e.preventDefault();
           setAppliedQuery(query);
+          setPage(0);
           void load();
         }}
       >
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="mov-from">{t("femme.commissions.common.from")}</Label>
-          <LocalizedDateInput id="mov-from" value={from} onChange={setFrom} />
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1">
+            <Label htmlFor="mov-query" className="sr-only">
+              {t("femme.commissions.movements.search")}
+            </Label>
+            <Input
+              id="mov-query"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("femme.commissions.movements.searchPlaceholder")}
+            />
+          </div>
+          <Button type="submit" className="min-h-11" data-testid="movements-search">
+            {t("femme.commissions.common.search")}
+          </Button>
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="mov-to">{t("femme.commissions.common.to")}</Label>
-          <LocalizedDateInput id="mov-to" value={to} onChange={setTo} />
-        </div>
-        <MultiSelect
-          id="mov-professional"
-          className="min-w-[14rem]"
-          label={t("femme.commissions.common.professionals")}
-          value={professionalIds}
-          onChange={setProfessionalIds}
-          options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-          placeholder={t("femme.commissions.common.allProfessionals")}
-          filterPlaceholder={t("femme.commissions.common.filterProfessionals")}
-          noResultsText={t("femme.commissions.common.noProfessionals")}
-          summaryTemplate={t("femme.commissions.common.professionalsSelected")}
-        />
-        <div className="flex min-w-[12rem] flex-col gap-1">
-          <Label htmlFor="mov-query">{t("femme.commissions.movements.search")}</Label>
-          <Input
-            id="mov-query"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("femme.commissions.movements.searchPlaceholder")}
-          />
-        </div>
-        <Button type="button" variant="secondary" onClick={clearFilters} data-testid="movements-clear-filters">
-          {t("femme.commissions.common.clearFilters")}
-        </Button>
-        <Button type="submit" data-testid="movements-search">
-          {t("femme.commissions.common.search")}
-        </Button>
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls="movements-filters"
+          data-testid="movements-filters-toggle"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
+        >
+          {t("femme.commissions.movements.filtersToggle")}
+          <span aria-hidden className={`text-ink-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
+            ⌄
+          </span>
+        </button>
+        {filtersOpen && (
+          <div id="movements-filters" className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="mov-from">{t("femme.commissions.common.from")}</Label>
+                <LocalizedDateInput id="mov-from" value={from} onChange={setFrom} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="mov-to">{t("femme.commissions.common.to")}</Label>
+                <LocalizedDateInput id="mov-to" value={to} onChange={setTo} />
+              </div>
+            </div>
+            <MultiSelect
+              id="mov-professional"
+              label={t("femme.commissions.common.professionals")}
+              value={professionalIds}
+              onChange={setProfessionalIds}
+              options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+              placeholder={t("femme.commissions.common.allProfessionals")}
+              filterPlaceholder={t("femme.commissions.common.filterProfessionals")}
+              noResultsText={t("femme.commissions.common.noProfessionals")}
+              summaryTemplate={t("femme.commissions.common.professionalsSelected")}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" className="min-h-11">
+                {t("femme.commissions.common.search")}
+              </Button>
+              <Button type="button" variant="secondary" className="min-h-11" onClick={clearFilters} data-testid="movements-clear-filters">
+                {t("femme.commissions.common.clearFilters")}
+              </Button>
+            </div>
+          </div>
+        )}
       </form>
-      <Text variant="small" className="text-[var(--color-ink-3)]">
+      <Text variant="small" className="text-ink-3">
         {t("femme.commissions.movements.hint")}
       </Text>
       {notice && (
@@ -123,53 +168,90 @@ export function MovementsTab() {
         </Alert>
       )}
       {error && <Alert variant="destructive">{error}</Alert>}
-      {entries && visible.length === 0 ? (
-        <Text variant="muted">{t("femme.commissions.movements.empty")}</Text>
-      ) : (
-        <TableWrap testId="movements-table">
-          <thead>
-            <tr>
-              <th className={thClass}>{t("femme.commissions.history.date")}</th>
-              <th className={thClass}>{t("femme.commissions.reports.invoice")}</th>
-              <th className={thClass}>{t("femme.commissions.common.item")}</th>
-              <th className={thClass}>{t("femme.commissions.common.professional")}</th>
-              <th className={thClass}>{t("femme.commissions.movements.movement")}</th>
-              <th className={`${thClass} text-right`}>%</th>
-              <th className={`${thClass} text-right`}>{t("femme.commissions.settlement.commission")}</th>
-              <th className={thClass}>{t("femme.commissions.reports.settlementState")}</th>
-              <th className={thClass} />
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((e) => (
-              <tr key={e.id} className="border-t" data-testid="movement-row">
-                <td className={tdClass}>{formatParaguayDateTime(e.accrualAt, dateLocale)}</td>
-                <td className={tdClass}>{e.invoiceNumber}</td>
-                <td className={tdClass}>{e.itemName ?? e.note}</td>
-                <td className={tdClass}>{e.professionalName}</td>
-                <td className={tdClass}>
-                  {movementLabel(e)}
-                  {e.note && e.sourceType !== "ADJUSTMENT" && (
-                    <span className="block text-xs text-[var(--color-ink-3)]">{e.note}</span>
+      <div className="rounded-card border border-line bg-surface shadow-sm" data-testid="movements-table">
+        {entries && visible.length === 0 ? (
+          <Text variant="muted" className="p-4">
+            {t("femme.commissions.movements.empty")}
+          </Text>
+        ) : (
+          <ul>
+            {pageItems.map((e) => (
+              <li
+                key={e.id}
+                data-testid="movement-row"
+                className="grid min-h-14 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-3 py-2 first:border-t-0"
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex size-9 items-center justify-center rounded-full bg-primary-lt text-xs font-heading font-extrabold text-primary"
+                >
+                  {initials(e.professionalName)}
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-ink">
+                    {e.itemName ?? e.note} · {e.professionalName}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-2 text-sm text-ink-3">
+                    <span>
+                      {formatParaguayDateTime(e.accrualAt, dateLocale)}
+                      {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {movementLabel(e)} · {formatPercent(e.percentApplied)}
+                    </span>
+                    <SettlementStatusBadge status={e.settlementStatus} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span
+                    className={`text-right font-heading font-extrabold tabular-nums ${e.commissionAmount < 0 ? "text-danger" : "text-ink"}`}
+                  >
+                    {formatGuaraniesGs(e.commissionAmount)}
+                  </span>
+                  {e.reassignable ? (
+                    <KebabMenu
+                      id={`movement-${e.id}`}
+                      triggerAriaLabel={t("femme.commissions.movements.rowActions")}
+                      items={[
+                        {
+                          id: "reassign",
+                          label: t("femme.commissions.reassign.action"),
+                          onSelect: () => setToReassign(e),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <span className="w-11" aria-hidden />
                   )}
-                </td>
-                <td className={`${tdClass} text-right`}>{formatPercent(e.percentApplied)}</td>
-                <td className={`${tdClass} text-right`}>{formatGuaraniesGs(e.commissionAmount)}</td>
-                <td className={tdClass}>
-                  <SettlementStatusBadge status={e.settlementStatus} />
-                </td>
-                <td className={`${tdClass} whitespace-nowrap`}>
-                  {e.reassignable && (
-                    <Button type="button" size="sm" variant="secondary" onClick={() => setToReassign(e)}>
-                      {t("femme.commissions.reassign.action")}
-                    </Button>
-                  )}
-                </td>
-              </tr>
+                </div>
+              </li>
             ))}
-          </tbody>
-        </TableWrap>
-      )}
+          </ul>
+        )}
+        {visible.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-3 py-3">
+            <PageSizeSelect
+              value={size}
+              onChange={(s) => {
+                setSize(s);
+                setPage(0);
+              }}
+              label={t("femme.pagination.rowsPerPage")}
+            />
+            <Text variant="small" className="text-ink-3">
+              {t("femme.pagination.showingRange", {
+                from: page * size + 1,
+                to: Math.min((page + 1) * size, visible.length),
+                total: visible.length,
+              })}
+            </Text>
+            <Pagination
+              page={page + 1}
+              pageCount={totalPages}
+              onPageChange={(p) => setPage(p - 1)}
+              previousLabel={t("femme.pagination.previous")}
+              nextLabel={t("femme.pagination.next")}
+            />
+          </div>
+        )}
+      </div>
       <ReassignDialog
         entry={toReassign}
         onClose={() => setToReassign(null)}

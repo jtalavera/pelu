@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Card, Label, Select, Text } from "@design-system";
+import { Alert, Button, Label, Select, Text } from "@design-system";
 import { getSettings, getSettlementPreview, type SettlementPreview } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { FieldValidationError } from "../../components/FieldValidationError";
@@ -8,7 +8,7 @@ import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
-import { TableWrap, firstOfMonthYmd, formatPercent, tdClass, thClass, todayYmd, useProfessionals } from "./common";
+import { firstOfMonthYmd, formatPercent, todayYmd, useProfessionals } from "./common";
 
 /**
  * Replaces the old simulator: how much a professional would be paid today for an open period,
@@ -51,12 +51,13 @@ export function PreviewTab() {
   }
 
   return (
-    <div className="flex flex-col gap-4" data-testid="commission-preview">
-      <Text variant="small" className="text-[var(--color-ink-3)]">
-        {t("femme.commissions.preview.hint")}
-      </Text>
-      <form onSubmit={(e) => void run(e)} className="flex flex-wrap items-end gap-3">
-        <div className="flex min-w-[12rem] flex-col gap-1">
+    <div className="flex flex-col gap-3" data-testid="commission-preview">
+      <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.preview.hint")}</p>
+      <form
+        onSubmit={(e) => void run(e)}
+        className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+      >
+        <div className="flex flex-col gap-1">
           <Label htmlFor="preview-professional" required>
             {t("femme.commissions.common.professional")}
           </Label>
@@ -73,84 +74,74 @@ export function PreviewTab() {
               </option>
             ))}
           </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="preview-from">{t("femme.commissions.common.from")}</Label>
-          <LocalizedDateInput id="preview-from" value={from} onChange={setFrom} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="preview-to">{t("femme.commissions.common.to")}</Label>
-          <LocalizedDateInput id="preview-to" value={to} onChange={setTo} />
-        </div>
-        <Button type="submit" data-testid="preview-run">
-          {t("femme.commissions.preview.run")}
-        </Button>
-        <div className="w-full">
           <FieldValidationError id="preview-error">{fieldError}</FieldValidationError>
         </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="preview-from">{t("femme.commissions.common.from")}</Label>
+            <LocalizedDateInput id="preview-from" value={from} onChange={setFrom} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="preview-to">{t("femme.commissions.common.to")}</Label>
+            <LocalizedDateInput id="preview-to" value={to} onChange={setTo} />
+          </div>
+        </div>
+        <Button type="submit" className="min-h-11 self-start" data-testid="preview-run">
+          {t("femme.commissions.preview.run")}
+        </Button>
       </form>
       {error && <Alert variant="destructive">{error}</Alert>}
       {preview && (
         <>
-          <Card className="grid gap-3 p-4 sm:grid-cols-4" data-testid="preview-summary">
-            <div>
-              <Text variant="small">{t("femme.commissions.preview.total")}</Text>
-              <Text className="text-lg font-semibold" data-testid="preview-total">
-                {formatGuaraniesGs(preview.total)}
-              </Text>
-            </div>
-            <div>
-              <Text variant="small">{t("femme.commissions.kind.SERVICE")}</Text>
-              <Text data-testid="preview-services">{formatGuaraniesGs(preview.servicesTotal)}</Text>
-            </div>
-            <div>
-              <Text variant="small">{t("femme.commissions.kind.PRODUCT")}</Text>
-              <Text data-testid="preview-products">{formatGuaraniesGs(preview.productsTotal)}</Text>
-            </div>
-            <div>
-              <Text variant="small">{t("femme.commissions.settlement.adjustments")}</Text>
-              <Text data-testid="preview-adjustments">{formatGuaraniesGs(preview.adjustmentsTotal)}</Text>
-            </div>
-          </Card>
+          <section className="flex flex-col gap-1 rounded-card border border-line bg-surface p-4 shadow-sm" data-testid="preview-summary">
+            <span className="text-sm text-ink-3">{t("femme.commissions.preview.total")}</span>
+            <span className="font-heading text-3xl font-extrabold tabular-nums text-ink" data-testid="preview-total">
+              {formatGuaraniesGs(preview.total)}
+            </span>
+            <span className="text-sm text-ink-3">
+              {t("femme.commissions.kind.SERVICE")}{" "}
+              <b className="tabular-nums text-ink" data-testid="preview-services">
+                {formatGuaraniesGs(preview.servicesTotal)}
+              </b>{" "}
+              · {t("femme.commissions.kind.PRODUCT")}{" "}
+              <b className="tabular-nums text-ink" data-testid="preview-products">
+                {formatGuaraniesGs(preview.productsTotal)}
+              </b>{" "}
+              · {t("femme.commissions.settlement.adjustments")}{" "}
+              <b className="tabular-nums text-ink" data-testid="preview-adjustments">
+                {formatGuaraniesGs(preview.adjustmentsTotal)}
+              </b>
+            </span>
+          </section>
           {preview.draftSettlements.length > 0 && (
             <Alert variant="info">{t("femme.commissions.preview.draftExists", { count: preview.draftSettlements.length })}</Alert>
           )}
           {preview.entries.length === 0 ? (
             <Text variant="muted">{t("femme.commissions.preview.empty")}</Text>
           ) : (
-            <TableWrap testId="preview-entries">
-              <thead>
-                <tr>
-                  <th className={thClass}>{t("femme.commissions.history.date")}</th>
-                  <th className={thClass}>{t("femme.commissions.reports.invoice")}</th>
-                  <th className={thClass}>{t("femme.commissions.common.item")}</th>
-                  <th className={thClass}>{t("femme.commissions.common.itemKind")}</th>
-                  <th className={`${thClass} text-right`}>{t("femme.commissions.settlement.baseAmount")}</th>
-                  <th className={`${thClass} text-right`}>%</th>
-                  <th className={`${thClass} text-right`}>{t("femme.commissions.settlement.commission")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.entries.map((e) => (
-                  <tr key={e.id} className="border-t">
-                    <td className={tdClass}>{formatParaguayDateTime(e.accrualAt, dateLocale)}</td>
-                    <td className={tdClass}>{e.invoiceNumber}</td>
-                    <td className={tdClass}>
+            <ul className="rounded-card border border-line bg-surface shadow-sm" data-testid="preview-entries">
+              {preview.entries.map((e) => (
+                <li
+                  key={e.id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-4 py-2.5 first:border-t-0"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-ink">
                       {e.itemName ?? e.note ?? t(`femme.commissions.reason.${e.reasonCode}`)}
-                      {e.sourceType === "REVERSAL" && (
-                        <span className="block text-xs text-[var(--color-ink-3)]">
-                          {t(`femme.commissions.reason.${e.reasonCode ?? "VOID"}`)}
-                        </span>
-                      )}
-                    </td>
-                    <td className={tdClass}>{e.itemKind ? t(`femme.commissions.kind.${e.itemKind}`) : ""}</td>
-                    <td className={`${tdClass} text-right`}>{formatGuaraniesGs(e.baseAmount)}</td>
-                    <td className={`${tdClass} text-right`}>{formatPercent(e.percentApplied)}</td>
-                    <td className={`${tdClass} text-right`}>{formatGuaraniesGs(e.commissionAmount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableWrap>
+                    </div>
+                    <div className="text-sm text-ink-3">
+                      {formatParaguayDateTime(e.accrualAt, dateLocale)}
+                      {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {formatGuaraniesGs(e.baseAmount)} ×{" "}
+                      {formatPercent(e.percentApplied)}
+                      {e.sourceType === "REVERSAL" ? ` · ${t(`femme.commissions.reason.${e.reasonCode ?? "VOID"}`)}` : ""}
+                    </div>
+                  </div>
+                  <span className="text-right font-heading font-extrabold tabular-nums text-ink">
+                    {formatGuaraniesGs(e.commissionAmount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </>
       )}

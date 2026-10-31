@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Card, Label, Select, Text } from "@design-system";
+import { Alert, Button, Label, Select, Text } from "@design-system";
 import {
   downloadCommissionFile,
   entriesCsvPath,
@@ -17,30 +17,44 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { AssignLineDialog } from "./AssignLineDialog";
-import { SectionTitle, TableWrap, firstOfMonthYmd, tdClass, thClass, todayYmd, useProfessionals } from "./common";
+import { firstOfMonthYmd, todayYmd, useProfessionals } from "./common";
 
-function RowsTable({ rows, testId, labelOf }: { rows: ReportRow[]; testId: string; labelOf?: (r: ReportRow) => string }) {
+type Group = "byProfessional" | "byItem" | "byKind" | "byPeriod";
+const GROUPS: Group[] = ["byProfessional", "byItem", "byKind", "byPeriod"];
+const GROUP_TEST_ID: Record<Group, string> = {
+  byProfessional: "report-by-professional",
+  byItem: "report-by-item",
+  byKind: "report-by-kind",
+  byPeriod: "report-by-period",
+};
+
+/** Ranked rows with a proportional bar: the biggest row is the full bar. */
+function RowsBars({ rows, testId, labelOf }: { rows: ReportRow[]; testId: string; labelOf?: (r: ReportRow) => string }) {
   const { t } = useTranslation();
-  if (rows.length === 0) return <Text variant="muted">{t("femme.commissions.reports.empty")}</Text>;
+  if (rows.length === 0)
+    return (
+      <Text variant="muted" className="p-4">
+        {t("femme.commissions.reports.empty")}
+      </Text>
+    );
+  const max = Math.max(...rows.map((r) => Math.abs(r.amount)), 1);
   return (
-    <TableWrap testId={testId}>
-      <thead>
-        <tr>
-          <th className={thClass}>{t("femme.commissions.reports.concept")}</th>
-          <th className={`${thClass} text-right`}>{t("femme.commissions.reports.lines")}</th>
-          <th className={`${thClass} text-right`}>{t("femme.commissions.common.total")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.key} className="border-t">
-            <td className={tdClass}>{labelOf ? labelOf(r) : r.label}</td>
-            <td className={`${tdClass} text-right`}>{r.lines}</td>
-            <td className={`${tdClass} text-right`}>{formatGuaraniesGs(r.amount)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </TableWrap>
+    <ul data-testid={testId}>
+      {rows.map((r) => (
+        <li key={r.key} className="border-t border-line px-4 py-2.5 first:border-t-0">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0 break-words text-ink">
+              {labelOf ? labelOf(r) : r.label}
+              <span className="ml-2 text-xs text-ink-3">{t("femme.commissions.reports.linesCount", { count: r.lines })}</span>
+            </span>
+            <b className="shrink-0 font-heading tabular-nums text-ink">{formatGuaraniesGs(r.amount)}</b>
+          </div>
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-primary-lt" aria-hidden>
+            <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((Math.abs(r.amount) / max) * 100, 2)}%` }} />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -59,6 +73,8 @@ export function ReportsTab() {
   const [error, setError] = useState<string | null>(null);
   const [toAssign, setToAssign] = useState<LineWithoutBeneficiary | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [group, setGroup] = useState<Group>("byProfessional");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const filters: EntryFilters = {
     from,
@@ -87,135 +103,157 @@ export function ReportsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const labelFor = (g: Group) => (g === "byKind" ? (r: ReportRow) => t(`femme.commissions.kind.${r.key}`) : undefined);
+
   return (
-    <div className="flex flex-col gap-4" data-testid="commission-reports">
+    <div className="flex flex-col gap-3" data-testid="commission-reports">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t("femme.commissions.tabs.reports")}>
+        {GROUPS.map((g) => (
+          <button
+            key={g}
+            type="button"
+            aria-pressed={group === g}
+            data-testid={`report-group-${g}`}
+            onClick={() => setGroup(g)}
+            className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+              group === g ? "border-primary bg-primary-lt text-primary" : "border-line bg-surface text-ink hover:bg-bg"
+            }`}
+          >
+            {t(`femme.commissions.reports.${g}`)}
+          </button>
+        ))}
+      </div>
+
       <form
-        className="flex flex-wrap items-end gap-3"
+        className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           void load();
         }}
       >
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="report-from">{t("femme.commissions.common.from")}</Label>
-          <LocalizedDateInput id="report-from" value={from} onChange={setFrom} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="report-from">{t("femme.commissions.common.from")}</Label>
+            <LocalizedDateInput id="report-from" value={from} onChange={setFrom} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="report-to">{t("femme.commissions.common.to")}</Label>
+            <LocalizedDateInput id="report-to" value={to} onChange={setTo} />
+          </div>
+          <Button type="submit" className="min-h-11" data-testid="commission-report-search">
+            {t("femme.commissions.common.search")}
+          </Button>
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="report-to">{t("femme.commissions.common.to")}</Label>
-          <LocalizedDateInput id="report-to" value={to} onChange={setTo} />
-        </div>
-        <div className="flex min-w-[12rem] flex-col gap-1">
-          <Label htmlFor="report-professional">{t("femme.commissions.common.professional")}</Label>
-          <Select id="report-professional" value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
-            <option value="">{t("femme.commissions.common.allProfessionals")}</option>
-            {professionals.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.fullName}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="report-kind">{t("femme.commissions.common.itemKind")}</Label>
-          <Select id="report-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">{t("femme.commissions.kind.ALL")}</option>
-            <option value="SERVICE">{t("femme.commissions.kind.SERVICE")}</option>
-            <option value="PRODUCT">{t("femme.commissions.kind.PRODUCT")}</option>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="report-state">{t("femme.commissions.reports.settlementState")}</Label>
-          <Select id="report-state" value={state} onChange={(e) => setState(e.target.value)}>
-            <option value="">{t("femme.commissions.common.allStatuses")}</option>
-            {["UNSETTLED", "DRAFT", "APPROVED", "PAID"].map((s) => (
-              <option key={s} value={s}>
-                {t(`femme.commissions.settlementStatus.${s}`)}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <Button type="submit" data-testid="commission-report-search">
-          {t("femme.commissions.common.search")}
-        </Button>
-        <Button
+        <button
           type="button"
-          variant="secondary"
-          onClick={() =>
-            void downloadCommissionFile(entriesCsvPath(filters, i18n.language), "comisiones.csv").catch((err) =>
-              setError(translateApiError(err, t)),
-            )
-          }
-          data-testid="commission-export-entries"
+          aria-expanded={filtersOpen}
+          aria-controls="report-filters"
+          data-testid="report-filters-toggle"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
         >
-          {t("femme.commissions.common.exportCsv")}
-        </Button>
+          {t("femme.commissions.reports.moreFilters")}
+          <span aria-hidden className={`text-ink-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
+            ⌄
+          </span>
+        </button>
+        {filtersOpen && (
+          <div id="report-filters" className="grid gap-3 rounded-card border border-line bg-surface p-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="report-professional">{t("femme.commissions.common.professional")}</Label>
+              <Select id="report-professional" value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
+                <option value="">{t("femme.commissions.common.allProfessionals")}</option>
+                {professionals.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.fullName}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="report-kind">{t("femme.commissions.common.itemKind")}</Label>
+              <Select id="report-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="">{t("femme.commissions.kind.ALL")}</option>
+                <option value="SERVICE">{t("femme.commissions.kind.SERVICE")}</option>
+                <option value="PRODUCT">{t("femme.commissions.kind.PRODUCT")}</option>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="report-state">{t("femme.commissions.reports.settlementState")}</Label>
+              <Select id="report-state" value={state} onChange={(e) => setState(e.target.value)}>
+                <option value="">{t("femme.commissions.common.allStatuses")}</option>
+                {["UNSETTLED", "DRAFT", "APPROVED", "PAID"].map((s) => (
+                  <option key={s} value={s}>
+                    {t(`femme.commissions.settlementStatus.${s}`)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+        )}
       </form>
       {error && <Alert variant="destructive">{error}</Alert>}
       {report && (
         <>
-          <Text className="font-medium" data-testid="commission-report-total">
-            {t("femme.commissions.reports.total", { amount: formatGuaraniesGs(report.total) })}
-          </Text>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="flex flex-col gap-2 p-4">
-              <SectionTitle>{t("femme.commissions.reports.byProfessional")}</SectionTitle>
-              <RowsTable rows={report.byProfessional} testId="report-by-professional" />
-            </Card>
-            <Card className="flex flex-col gap-2 p-4">
-              <SectionTitle>{t("femme.commissions.reports.byKind")}</SectionTitle>
-              <RowsTable rows={report.byKind} testId="report-by-kind" labelOf={(r) => t(`femme.commissions.kind.${r.key}`)} />
-            </Card>
-            <Card className="flex flex-col gap-2 p-4">
-              <SectionTitle>{t("femme.commissions.reports.byItem")}</SectionTitle>
-              <RowsTable rows={report.byItem} testId="report-by-item" />
-            </Card>
-            <Card className="flex flex-col gap-2 p-4">
-              <SectionTitle>{t("femme.commissions.reports.byPeriod")}</SectionTitle>
-              <RowsTable rows={report.byPeriod} testId="report-by-period" />
-            </Card>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Text className="font-semibold" data-testid="commission-report-total">
+              {t("femme.commissions.reports.total", { amount: formatGuaraniesGs(report.total) })}
+            </Text>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-11"
+              onClick={() =>
+                void downloadCommissionFile(entriesCsvPath(filters, i18n.language), "comisiones.csv").catch((err) =>
+                  setError(translateApiError(err, t)),
+                )
+              }
+              data-testid="commission-export-entries"
+            >
+              {t("femme.commissions.common.exportCsv")}
+            </Button>
+          </div>
+          <div className="rounded-card border border-line bg-surface shadow-sm">
+            <RowsBars rows={report[group]} testId={GROUP_TEST_ID[group]} labelOf={labelFor(group)} />
           </div>
         </>
       )}
-      <Card className="flex flex-col gap-2 p-4">
-        <SectionTitle>{t("femme.commissions.reports.linesWithoutBeneficiary")}</SectionTitle>
-        {notice && (
-          <Alert variant="success" role="status">
-            {notice}
-          </Alert>
-        )}
+
+      <h3 className="mt-2 font-heading text-xs font-extrabold uppercase tracking-wider text-primary">
+        {t("femme.commissions.reports.linesWithoutBeneficiary")}
+      </h3>
+      {notice && (
+        <Alert variant="success" role="status">
+          {notice}
+        </Alert>
+      )}
+      <div className="rounded-card border border-line bg-surface shadow-sm">
         {orphans.length === 0 ? (
-          <Text variant="muted">{t("femme.commissions.reports.empty")}</Text>
+          <Text variant="muted" className="p-4">
+            {t("femme.commissions.reports.empty")}
+          </Text>
         ) : (
-          <TableWrap testId="report-lines-without-beneficiary">
-            <thead>
-              <tr>
-                <th className={thClass}>{t("femme.commissions.reports.invoice")}</th>
-                <th className={thClass}>{t("femme.commissions.history.date")}</th>
-                <th className={thClass}>{t("femme.commissions.common.item")}</th>
-                <th className={thClass}>{t("femme.commissions.common.itemKind")}</th>
-                <th className={`${thClass} text-right`}>{t("femme.commissions.common.total")}</th>
-                <th className={thClass} />
-              </tr>
-            </thead>
-            <tbody>
-              {orphans.map((o) => (
-                <tr key={o.invoiceLineId} className="border-t" data-testid={`orphan-line-${o.invoiceLineId}`}>
-                  <td className={tdClass}>{o.invoiceNumber}</td>
-                  <td className={tdClass}>{formatParaguayDateTime(o.issuedAt, dateLocale)}</td>
-                  <td className={tdClass}>{o.description}</td>
-                  <td className={tdClass}>{o.itemKind ? t(`femme.commissions.kind.${o.itemKind}`) : ""}</td>
-                  <td className={`${tdClass} text-right`}>{formatGuaraniesGs(o.lineTotal)}</td>
-                  <td className={`${tdClass} whitespace-nowrap`}>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => setToAssign(o)}>
-                      {t("femme.commissions.assignLine.action")}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </TableWrap>
+          <ul data-testid="report-lines-without-beneficiary">
+            {orphans.map((o) => (
+              <li
+                key={o.invoiceLineId}
+                data-testid={`orphan-line-${o.invoiceLineId}`}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-4 py-2.5 first:border-t-0"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-ink">{o.description}</div>
+                  <div className="text-sm text-ink-3">
+                    {formatParaguayDateTime(o.issuedAt, dateLocale)} · {o.invoiceNumber} · {formatGuaraniesGs(o.lineTotal)}
+                  </div>
+                </div>
+                <Button type="button" size="sm" variant="secondary" className="min-h-11" onClick={() => setToAssign(o)}>
+                  {t("femme.commissions.assignLine.action")}
+                </Button>
+              </li>
+            ))}
+          </ul>
         )}
-      </Card>
+      </div>
       <AssignLineDialog
         line={toAssign}
         onClose={() => setToAssign(null)}

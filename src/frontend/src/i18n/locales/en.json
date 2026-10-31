@@ -27,6 +27,7 @@
   },
   "femme": {
     "commissions": {
+      "moreMenu": "More",
       "assignLine": {
         "action": "Assign professional",
         "title": "Assign a professional to the line",
@@ -42,6 +43,8 @@
         "TAX_INCLUDED": "incl. VAT"
       },
       "movements": {
+        "filtersToggle": "Filters",
+        "rowActions": "Movement actions",
         "hint": "All recorded commissions. If one was assigned to the wrong professional, use \"Change professional\".",
         "empty": "No movements for those filters.",
         "movement": "Movement",
@@ -199,6 +202,7 @@
         "applied": "Change applied."
       },
       "settings": {
+        "intro": "Changes can apply from today or from the next period; they never modify commissions already accrued.",
         "baseTitle": "Calculation base",
         "baseExample": "Example: a 110,000 Gs line with 10% VAT and a 40% commission → excluding VAT 40,000 Gs; including VAT 44,000 Gs.",
         "baseChangeSummary": "Change the calculation base from “{{from}}” to “{{to}}”. The change is not retroactive unless you apply it from the start of the current period.",
@@ -231,6 +235,9 @@
         "user": "User"
       },
       "rules": {
+        "optionsToggle": "More options",
+        "exceptionsCount_one": "{{count}} exception",
+        "exceptionsCount_other": "{{count}} exceptions",
         "searchService": "Search service",
         "searchProduct": "Search product",
         "searchServicePlaceholder": "Service name, e.g. Haircut",
@@ -322,6 +329,9 @@
         "cellTitle": "{{professional}} · {{item}}"
       },
       "settlements": {
+        "periodLine": "{{periodicity}} settlements · current period: {{range}}",
+        "filtersToggle": "Filters and export",
+        "openAria": "Open settlement {{id}} for {{name}}",
         "generateTitle": "Generate settlements",
         "generate": "Generate",
         "generateHint": "One draft settlement is created per professional with the commissions not yet settled up to the “To” date.",
@@ -343,6 +353,10 @@
         }
       },
       "settlement": {
+        "subtitle": "Settlement #{{id}} · {{from}} – {{to}}",
+        "moreActions": "More actions",
+        "lineActions": "Line actions",
+        "subtotals": "Subtotals by type and item",
         "title": "Settlement #{{id}} · {{name}}",
         "approve": "Approve",
         "approveTitle": "Approve settlement",
@@ -375,6 +389,9 @@
         "voidedInfo": "Voided: {{reason}}"
       },
       "reports": {
+        "linesCount_one": "{{count}} line",
+        "linesCount_other": "{{count}} lines",
+        "moreFilters": "More filters",
         "total": "Period total: {{amount}}",
         "byProfessional": "By professional",
         "byItem": "By item",
