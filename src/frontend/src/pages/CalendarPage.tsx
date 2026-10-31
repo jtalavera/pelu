@@ -5,7 +5,6 @@ import {
   Button,
   Label,
   Modal,
-  Select,
   Spinner,
   Textarea,
   TimeCombobox,
@@ -19,7 +18,6 @@ import {
   AppointmentUpdateRequest,
   CALENDAR_GRID_STATUSES,
   EDITABLE_STATUSES,
-  ALL_STATUSES,
   createAppointment,
   listAppointments,
   updateAppointment,
@@ -36,9 +34,9 @@ import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
-import { useMediaQuery } from "../hooks/useMediaQuery";
 import { isPinSession } from "../auth/sharedDevice";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { billingStateForAppointment } from "../lib/appointmentBilling";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -73,6 +71,10 @@ function formatDate(date: Date, locale: string): string {
 
 function formatDateIso(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function formatLocalYmd(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function formatDateTime(isoString: string, locale: string): string {
@@ -164,14 +166,22 @@ export default function CalendarPage() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const [weekStart, setWeekStart] = useState<Date>(() => {
+  const [searchParams] = useSearchParams();
+  // Agenda redesign: the day is the main view and the cursor is the day being looked at; the week is
+  // the same agenda as a grid, one tap away (`?view=week` also opens it directly).
+  const [cursor, setCursor] = useState<Date>(() => {
     const selectedDate = (location.state as { selectedDate?: string } | null)?.selectedDate;
     if (selectedDate) {
       const d = new Date(selectedDate + "T00:00:00");
-      if (!isNaN(d.getTime())) return startOfWeek(d);
+      if (!isNaN(d.getTime())) return d;
     }
-    return startOfWeek(new Date());
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
   });
+  const [view, setView] = useState<"day" | "week">(searchParams.get("view") === "week" ? "week" : "day");
+  const weekStartMs = startOfWeek(cursor).getTime();
+  const weekStart = useMemo(() => new Date(weekStartMs), [weekStartMs]);
   const [pendingOpenApptId, setPendingOpenApptId] = useState<number | null>(
     () => (location.state as { openAppointmentId?: number } | null)?.openAppointmentId ?? null,
   );
@@ -201,9 +211,10 @@ export default function CalendarPage() {
   const [formSaving, setFormSaving] = useState(false);
   const [formApiError, setFormApiError] = useState<string | null>(null);
 
-  // Status change
+  // Status change: one next-step button + a few actions behind "⋯"; cancelling asks for a reason
   const [statusModalOpen, setStatusModalOpen] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<AppointmentStatus>("PENDING");
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -217,12 +228,6 @@ export default function CalendarPage() {
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches,
   );
-  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => {
-    const today = new Date();
-    const jsDay = today.getDay();
-    return jsDay === 0 ? 6 : jsDay - 1; // 0=Mon..6=Sun
-  });
-
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
@@ -231,9 +236,6 @@ export default function CalendarPage() {
   }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Phones and tablets: the header wraps and its controls grow to 44px touch targets.
-  const isTouchLayout = !useMediaQuery("(min-width: 1024px)");
-
   // ── Availability warning (non-blocking) ────────────────────────────────────
   // dayOfWeek: JS Date.getDay() returns 0=Sun; schedule uses 1=Mon..7=Sun
   const availabilityWarning = useMemo((): string | null => {
@@ -323,31 +325,14 @@ export default function CalendarPage() {
   }, [formOpen, clients.length]);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
-  const goPrev = () => setWeekStart((w) => addDays(w, -7));
-  const goNext = () => setWeekStart((w) => addDays(w, 7));
+  const activeView: "day" | "week" = isMobile ? "day" : view;
+  const stepDays = activeView === "week" ? 7 : 1;
+  const goPrev = () => setCursor((c) => addDays(c, -stepDays));
+  const goNext = () => setCursor((c) => addDays(c, stepDays));
   const goToday = () => {
-    setWeekStart(startOfWeek(new Date()));
-    const today = new Date();
-    const jsDay = today.getDay();
-    setSelectedDayIdx(jsDay === 0 ? 6 : jsDay - 1);
-  };
-  const goPrevDay = () => {
-    setSelectedDayIdx((idx) => {
-      if (idx === 0) {
-        setWeekStart((w) => addDays(w, -7));
-        return 6;
-      }
-      return idx - 1;
-    });
-  };
-  const goNextDay = () => {
-    setSelectedDayIdx((idx) => {
-      if (idx === 6) {
-        setWeekStart((w) => addDays(w, 7));
-        return 0;
-      }
-      return idx + 1;
-    });
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    setCursor(now);
   };
 
   // ── Week days ───────────────────────────────────────────────────────────────
@@ -375,52 +360,71 @@ export default function CalendarPage() {
   const openDetail = (appt: Appointment) => {
     setDetailAppt(appt);
     setDetailError(null);
+    setMoreOpen(false);
   };
 
   const closeDetail = () => {
     setDetailAppt(null);
     setDetailError(null);
+    setMoreOpen(false);
   };
 
   // ── Status change ───────────────────────────────────────────────────────────
-  const openStatusModal = () => {
+  const openCancelDialog = () => {
     if (!detailAppt) return;
-    setSelectedStatus(detailAppt.status);
     setCancelReason(detailAppt.cancelReason ?? "");
     setStatusError(null);
+    setMoreOpen(false);
     setStatusModalOpen(true);
   };
 
-  const saveStatus = async () => {
+  /** Moves the open appointment to `status` (no reason unless cancelling). */
+  const applyStatus = async (status: AppointmentStatus, reason: string | null = null) => {
     if (!detailAppt) return;
     setStatusSaving(true);
+    setActionBusy(true);
     setStatusError(null);
+    setDetailError(null);
     try {
       const updated = await updateAppointmentStatus(detailAppt.id, {
-        status: selectedStatus,
-        cancelReason: selectedStatus === "CANCELLED" ? cancelReason || null : null,
+        status,
+        cancelReason: status === "CANCELLED" ? reason || null : null,
       });
       setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
       setDetailAppt(updated);
       setStatusModalOpen(false);
+      setMoreOpen(false);
     } catch (err) {
-      setStatusError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+      const msg = translateApiError(err, t, "femme.apiErrors.GENERIC");
+      if (status === "CANCELLED") setStatusError(msg);
+      else setDetailError(msg);
     } finally {
       setStatusSaving(false);
+      setActionBusy(false);
+    }
+  };
+
+  const saveStatus = () => applyStatus("CANCELLED", cancelReason);
+
+  /** "Cobrar": Facturación opens with the client and the booked service already loaded. */
+  const chargeAppointment = async () => {
+    if (!detailAppt) return;
+    setActionBusy(true);
+    setDetailError(null);
+    try {
+      navigate("/app/billing", { state: await billingStateForAppointment(detailAppt) });
+    } catch {
+      setDetailError(t("femme.calendar.chargeError"));
+    } finally {
+      setActionBusy(false);
     }
   };
 
   // ── New appointment ─────────────────────────────────────────────────────────
   const openNewForm = (date?: Date, hour?: number) => {
     setEditAppt(null);
-    setFormDate(date ? formatDateIso(date) : formatDateIso(new Date()));
-    setFormTime(
-      hour != null
-        ? `${String(hour).padStart(2, "0")}:00`
-        : formatDateIso(new Date()) === formatDateIso(new Date())
-          ? ""
-          : "",
-    );
+    setFormDate(formatLocalYmd(date ?? cursor));
+    setFormTime(hour != null ? `${String(hour).padStart(2, "0")}:00` : "");
     setFormProfessionalId(
       isProfessional && me?.professionalId != null
         ? me.professionalId
@@ -501,6 +505,10 @@ export default function CalendarPage() {
         setAppointments((prev) => [...prev, updated]);
       }
       setFormOpen(false);
+      // Show the day of the appointment that was just saved.
+      const savedDay = new Date(updated.startAt);
+      savedDay.setHours(0, 0, 0, 0);
+      setCursor(savedDay);
     } catch (err) {
       setFormApiError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
@@ -509,174 +517,220 @@ export default function CalendarPage() {
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
+  const longDateLabel = (() => {
+    const l = cursor.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+    return l.charAt(0).toUpperCase() + l.slice(1);
+  })();
   const weekLabel = `${formatDate(weekStart, locale)} – ${formatDate(addDays(weekStart, 6), locale)}`;
-  const mobileDayLabel = weekDays[selectedDayIdx]
-    ? `${weekDays[selectedDayIdx].label} ${formatDate(weekDays[selectedDayIdx].date, locale)}`
-    : "";
-  // On mobile, only render the selected day column
-  const visibleDays = isMobile ? [weekDays[selectedDayIdx]].filter(Boolean) : weekDays;
+  const rangeLabel = activeView === "week" ? weekLabel : longDateLabel;
+  // Same appointments the grid shows (cancelled and no-shows are not listed).
+  const dayList = appointments
+    .filter((a) => isSameDay(a.startAt, cursor) && CALENDAR_GRID_STATUSES.includes(a.status))
+    .sort((a, b) => a.startAt.localeCompare(b.startAt));
+  const visibleDays = weekDays;
+  const selectedProfessionalName =
+    professionals.find((p) => p.id === selectedProfessionalId)?.fullName ?? null;
 
-  const navBtnStyle: React.CSSProperties = {
-    padding: "6px 10px",
-    minWidth: isTouchLayout ? 44 : undefined,
-    minHeight: isTouchLayout ? 44 : undefined,
-    border: "var(--border-default)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 14,
-    lineHeight: 1,
-    background: "var(--color-white)",
-    color: "var(--color-ink-2)",
-    cursor: "pointer",
+  const STATUS_TEXT: Record<string, string> = {
+    PENDING: "text-warning",
+    CONFIRMED: "text-success",
+    IN_PROGRESS: "text-primary",
+    COMPLETED: "text-ink-3",
   };
 
+  // Detail actions: ONE main next step by state, the rest behind "⋯".
+  type DetailAction = { key: string; label: string; run: () => void; danger?: boolean };
+  const apptEditable = detailAppt !== null && canModify(detailAppt);
+  let primaryAction: { key: "confirm" | "start" | "charge"; run: () => void } | null = null;
+  const moreActions: DetailAction[] = [];
+  if (detailAppt) {
+    const st = detailAppt.status;
+    if (apptEditable && st === "PENDING") {
+      primaryAction = { key: "confirm", run: () => void applyStatus("CONFIRMED") };
+    } else if (apptEditable && st === "CONFIRMED") {
+      primaryAction = { key: "start", run: () => void applyStatus("IN_PROGRESS") };
+    } else if (!isProfessional && (st === "IN_PROGRESS" || st === "COMPLETED")) {
+      primaryAction = { key: "charge", run: () => void chargeAppointment() };
+    }
+    if (apptEditable && EDITABLE_STATUSES.includes(st)) {
+      moreActions.push({ key: "edit", label: t("femme.calendar.detail.edit"), run: openEditForm });
+    }
+    if (detailAppt.clientId != null) {
+      moreActions.push({
+        key: "technical",
+        label: t("femme.clients.technicalSheet.open"),
+        run: () => setTechnicalSheetClientId(detailAppt.clientId as number),
+      });
+    }
+    if (apptEditable && (st === "PENDING" || st === "CONFIRMED" || st === "IN_PROGRESS")) {
+      moreActions.push({
+        key: "complete",
+        label: t("femme.calendar.action.complete"),
+        run: () => void applyStatus("COMPLETED"),
+      });
+    }
+    if (apptEditable && (st === "PENDING" || st === "CONFIRMED")) {
+      moreActions.push({
+        key: "noshow",
+        label: t("femme.calendar.action.noShow"),
+        run: () => void applyStatus("NO_SHOW"),
+      });
+    }
+    if (apptEditable && (st === "PENDING" || st === "CONFIRMED" || st === "IN_PROGRESS")) {
+      moreActions.push({
+        key: "cancel",
+        label: t("femme.calendar.action.cancelAppointment"),
+        run: openCancelDialog,
+        danger: true,
+      });
+    }
+  }
+
+  const navBtn =
+    "inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-line bg-surface text-lg leading-none text-ink-2 hover:bg-primary-lt";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       {/* ── Page topbar ── */}
-      <div
-        data-tour="calendar-header"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: isMobile ? 8 : 12,
-          paddingBottom: 16,
-          borderBottom: "var(--border-default)",
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 15,
-            fontWeight: 500,
-            color: "var(--color-ink)",
-            margin: 0,
-            flexShrink: 0,
-          }}
-        >
-          {t("femme.calendar.title")}
-        </h1>
-
-        {/* Professional filter — also for the professional role (issue #38 follow-up): they can
-            browse every agenda, but only modify their own appointments. */}
-        <div
-          data-tour="calendar-prof-filter"
-          style={{ flex: isMobile ? "1 1 100%" : "0 1 240px", minWidth: isMobile ? 0 : 180 }}
-        >
-          <SearchableSelect<number>
-            id="prof-filter"
-            className="w-full min-w-0"
-            labelSrOnly
-            label={t("femme.calendar.filterByProfessional")}
-            value={selectedProfessionalId ?? ""}
-            onChange={(v) => setSelectedProfessionalId(v === "" ? null : v)}
-            emptyOption={{ value: "", label: t("femme.calendar.allProfessionals") }}
-            options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-            filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-            noResultsText={t("femme.calendar.searchable.noResults")}
-          />
-        </div>
-
-        {/* Today */}
-        <button
-          data-tour="calendar-today"
-          type="button"
-          onClick={goToday}
-          style={{
-            padding: "6px 14px",
-            minHeight: isTouchLayout ? 44 : undefined,
-            border: "var(--border-default)",
-            borderRadius: "var(--radius-md)",
-            fontSize: 12,
-            background: "var(--color-white)",
-            color: "var(--color-ink-2)",
-            cursor: "pointer",
-          }}
-        >
-          {t("femme.calendar.today")}
-        </button>
-
-        {/* Week / Day navigation */}
-        <div
-          data-tour="calendar-week-nav"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            flex: isMobile ? "1 1 auto" : undefined,
-            minWidth: 0,
-          }}
-        >
-          {isMobile ? (
-            <>
-              <button type="button" onClick={goPrevDay} aria-label={t("femme.calendar.prevDay")} style={navBtnStyle}>
-                ‹
-              </button>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: "var(--color-ink)",
-                  minWidth: 0,
-                  flex: 1,
-                  textAlign: "center",
-                }}
-              >
-                {mobileDayLabel}
-              </span>
-              <button type="button" onClick={goNextDay} aria-label={t("femme.calendar.nextDay")} style={navBtnStyle}>
-                ›
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={goPrev} aria-label={t("femme.calendar.prev")} style={navBtnStyle}>
-                ‹
-              </button>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: "var(--color-ink)",
-                  minWidth: 160,
-                  textAlign: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {weekLabel}
-              </span>
-              <button type="button" onClick={goNext} aria-label={t("femme.calendar.next")} style={navBtnStyle}>
-                ›
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* New appointment — pushed right */}
-        <button
+      <div data-tour="calendar-header" className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-heading text-2xl font-extrabold text-ink">{t("femme.calendar.title")}</h1>
+        <Button
           data-tour="calendar-new-appointment"
           type="button"
+          variant="primary"
+          className="min-h-11 sm:h-11 sm:min-h-11"
           onClick={() => openNewForm()}
-          style={{
-            marginLeft: "auto",
-            background: "var(--color-rose)",
-            color: "var(--color-on-primary)",
-            border: "none",
-            borderRadius: "var(--radius-md)",
-            padding: "8px 16px",
-            minHeight: isTouchLayout ? 44 : undefined,
-            justifyContent: "center",
-            width: isMobile ? "100%" : undefined,
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            flexShrink: 0,
-          }}
         >
           {t("femme.calendar.newAppointment")}
-        </button>
+        </Button>
       </div>
+
+      {/* Navigation + Day | Week */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div data-tour="calendar-week-nav" className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={goPrev}
+            aria-label={activeView === "week" ? t("femme.calendar.prev") : t("femme.calendar.prevDay")}
+            className={navBtn}
+          >
+            ‹
+          </button>
+          <Button
+            data-tour="calendar-today"
+            type="button"
+            variant="outline"
+            className="min-h-11 sm:h-11 sm:min-h-11"
+            onClick={goToday}
+          >
+            {t("femme.calendar.today")}
+          </Button>
+          <button
+            type="button"
+            onClick={goNext}
+            aria-label={activeView === "week" ? t("femme.calendar.next") : t("femme.calendar.nextDay")}
+            className={navBtn}
+          >
+            ›
+          </button>
+          <span className="min-w-0 truncate font-heading text-lg font-extrabold text-ink" data-testid="calendar-range-label">
+            {rangeLabel}
+          </span>
+        </div>
+        {!isMobile && (
+          <div
+            role="tablist"
+            aria-label={t("femme.calendar.views.label")}
+            data-tour="calendar-views"
+            className="grid min-w-[200px] grid-cols-2 gap-1 rounded-2xl bg-primary-lt p-1"
+          >
+            {(["day", "week"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={view === v}
+                data-testid={`calendar-view-${v}`}
+                onClick={() => setView(v)}
+                className={`min-h-10 rounded-xl text-sm font-bold ${
+                  view === v ? "bg-surface text-primary shadow" : "text-ink-2"
+                }`}
+              >
+                {t(`femme.calendar.views.${v}`)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Professional filter (chips) — also for the professional role (issue #38 follow-up): they can
+          browse every agenda, but only modify their own appointments. */}
+      <div data-tour="calendar-prof-filter" className="flex gap-2 overflow-x-auto pb-0.5" role="group" aria-label={t("femme.calendar.filterByProfessional")}>
+        <button
+          type="button"
+          aria-pressed={selectedProfessionalId === null}
+          data-testid="calendar-prof-chip-all"
+          onClick={() => setSelectedProfessionalId(null)}
+          className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold ${
+            selectedProfessionalId === null
+              ? "border-primary bg-primary-lt text-primary"
+              : "border-line bg-surface text-ink"
+          }`}
+        >
+          {t("femme.calendar.allProfessionals")}
+        </button>
+        {professionals.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            aria-pressed={selectedProfessionalId === p.id}
+            data-testid={`calendar-prof-chip-${p.id}`}
+            onClick={() => setSelectedProfessionalId(p.id)}
+            className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold ${
+              selectedProfessionalId === p.id
+                ? "border-primary bg-primary-lt text-primary"
+                : "border-line bg-surface text-ink"
+            }`}
+          >
+            {p.fullName}
+          </button>
+        ))}
+      </div>
+
+      {/* Week strip: jump between the days of the week, with how busy each one is */}
+      {activeView === "day" && (
+        <div className="grid grid-cols-7 gap-1.5" data-testid="calendar-week-strip">
+          {weekDays.map(({ key, label, date }) => {
+            const n = appointments.filter(
+              (a) => isSameDay(a.startAt, date) && CALENDAR_GRID_STATUSES.includes(a.status),
+            ).length;
+            const selected = formatLocalYmd(cursor) === formatLocalYmd(date);
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={selected}
+                data-testid={`calendar-strip-${key}`}
+                onClick={() => setCursor(new Date(date.getFullYear(), date.getMonth(), date.getDate()))}
+                className={`flex min-h-16 flex-col items-center gap-0.5 rounded-2xl border px-0.5 py-2 ${
+                  selected ? "border-primary bg-primary text-on-primary" : "border-line bg-surface text-ink"
+                }`}
+              >
+                <small className={`text-[11px] font-bold uppercase tracking-wider ${selected ? "opacity-85" : "text-ink-3"}`}>
+                  {label}
+                </small>
+                <b className="font-heading text-lg tabular-nums">{date.getDate()}</b>
+                {isToday(date) && (
+                  <span aria-hidden className={`h-[3px] w-4 rounded ${selected ? "bg-on-primary" : "bg-primary"}`} />
+                )}
+                <i className={`text-[11px] not-italic ${selected ? "opacity-85" : "text-ink-3"}`}>
+                  {n > 0 ? t("femme.calendar.count", { count: n }) : t("femme.calendar.free")}
+                </i>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Errors */}
       {pageError && (
@@ -692,8 +746,98 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* ── Calendar grid ── */}
-      {!loading && (
+      {/* ── Day list ── */}
+      {!loading && activeView === "day" && (
+        <section
+          data-tour="calendar-grid"
+          className="rounded-card border border-line bg-surface shadow-sm"
+          data-testid="calendar-day-list"
+        >
+          {dayList.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 px-5 py-8 text-center text-ink-3">
+              <p>
+                {selectedProfessionalName
+                  ? t("femme.calendar.emptyDayFor", { name: selectedProfessionalName })
+                  : t("femme.calendar.emptyDay")}
+              </p>
+              <Button type="button" variant="primary" className="min-h-11" onClick={() => openNewForm()}>
+                {t("femme.calendar.newAppointment")}
+              </Button>
+            </div>
+          ) : (
+            <ul className="flex flex-col px-2 py-1">
+              {dayList.map((appt) => {
+                const start = new Date(appt.startAt);
+                const time = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+                const clientLabel = appt.clientName ?? t("femme.calendar.detail.occasionalClient");
+                return (
+                  <li key={appt.id} className="border-t border-line first:border-t-0">
+                    <button
+                      type="button"
+                      data-testid={`calendar-appt-${appt.id}`}
+                      onClick={() => openDetail(appt)}
+                      aria-label={`${clientLabel} – ${appt.serviceName}${appt.clientBirthdayOnDay ? ` – ${t("femme.calendar.clientBirthday")}` : ""}`}
+                      className={`grid w-full grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-2 py-3 text-left hover:bg-bg ${
+                        appt.status === "COMPLETED" ? "opacity-80" : ""
+                      }`}
+                    >
+                      <span className="col-start-1 row-span-2 row-start-1 font-heading text-[17px] font-extrabold tabular-nums text-ink">
+                        {time}
+                      </span>
+                      <span className="col-start-2 row-start-1 min-w-0 self-end break-words font-semibold text-ink">
+                        {clientLabel}
+                        {appt.status === "IN_PROGRESS" && (
+                          <span className="ml-1.5 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wider text-primary">
+                            · {t("femme.calendar.now")}
+                          </span>
+                        )}
+                        {appt.clientBirthdayOnDay && (
+                          <span
+                            data-testid={`birthday-badge-${appt.id}`}
+                            role="img"
+                            aria-label={t("femme.calendar.clientBirthday")}
+                            title={t("femme.calendar.clientBirthday")}
+                            className="ml-1.5 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wider text-primary"
+                          >
+                            🎂
+                          </span>
+                        )}
+                      </span>
+                      <span className="col-start-2 row-start-2 min-w-0 self-start break-words text-sm text-ink-3">
+                        <span className={`font-semibold ${STATUS_TEXT[appt.status] ?? "text-ink-3"}`}>
+                          {t(`femme.calendar.status.${appt.status}`)}
+                        </span>
+                        {appt.status === "CONFIRMED" && (
+                          <span aria-hidden data-testid={`confirmed-check-${appt.id}`} className="ml-1 text-success">
+                            ✓
+                          </span>
+                        )}
+                        {appt.reminderSentAt && (
+                          <span
+                            data-testid={`reminder-sent-badge-${appt.id}`}
+                            title={t("femme.calendar.detail.reminderSent")}
+                            className="ml-1"
+                          >
+                            ·{" "}
+                            <span aria-hidden>🔔</span>
+                          </span>
+                        )}{" "}
+                        · {appt.serviceName} · {appt.professionalName}
+                      </span>
+                      <span aria-hidden className="col-start-3 row-span-2 row-start-1 text-xl text-ink-3">
+                        ›
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* ── Calendar grid (week) ── */}
+      {!loading && activeView === "week" && (
         <div
           data-tour="calendar-grid"
           style={{
@@ -701,7 +845,6 @@ export default function CalendarPage() {
             borderRadius: "var(--radius-xl)",
             border: "var(--border-default)",
             overflow: "hidden",
-            marginTop: 16,
           }}
         >
           {/* Day header row */}
@@ -1073,27 +1216,32 @@ export default function CalendarPage() {
         }}
         title={t("femme.calendar.detail.title")}
         footer={
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="secondary" onClick={closeDetail}>
+          <div className="flex w-full flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary" className="min-h-11" onClick={closeDetail}>
               {t("femme.calendar.detail.close")}
             </Button>
-            {detailAppt?.clientId != null && (
+            {moreActions.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setTechnicalSheetClientId(detailAppt.clientId as number)}
+                className="min-h-11 min-w-11 px-0 text-lg leading-none"
+                aria-label={t("femme.calendar.action.more")}
+                aria-expanded={moreOpen}
+                data-testid="calendar-more-actions"
+                onClick={() => setMoreOpen((o) => !o)}
               >
-                {t("femme.clients.technicalSheet.open")}
+                ⋯
               </Button>
             )}
-            {detailAppt && canModify(detailAppt) && EDITABLE_STATUSES.includes(detailAppt.status) && (
-              <Button size="sm" variant="outline" onClick={openEditForm}>
-                {t("femme.calendar.detail.edit")}
-              </Button>
-            )}
-            {detailAppt && canModify(detailAppt) && (
-              <Button size="sm" variant="outline" onClick={openStatusModal}>
-                {t("femme.calendar.detail.changeStatus")}
+            {primaryAction && (
+              <Button
+                variant="primary"
+                className="min-h-11 flex-1"
+                disabled={actionBusy}
+                data-testid="calendar-next-step"
+                onClick={primaryAction.run}
+              >
+                {t(`femme.calendar.action.${primaryAction.key}`)}
               </Button>
             )}
           </div>
@@ -1148,27 +1296,52 @@ export default function CalendarPage() {
                 {detailAppt.cancelReason}
               </Row>
             )}
+            {moreOpen && moreActions.length > 0 && (
+              <div className="flex flex-col border-t border-line pt-2" data-testid="calendar-actions-panel">
+                {moreActions.map((a) => (
+                  <Button
+                    key={a.key}
+                    type="button"
+                    variant="ghost"
+                    disabled={actionBusy}
+                    data-testid={`calendar-action-${a.key}`}
+                    className={`min-h-11 justify-start ${a.danger ? "text-danger" : ""}`}
+                    onClick={a.run}
+                  >
+                    {a.label}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </Modal>
 
-      {/* ── Status change modal ── */}
+      {/* ── Cancel appointment (asks for a reason) ── */}
       <Modal
         open={statusModalOpen}
         onClose={() => setStatusModalOpen(false)}
-        title={t("femme.calendar.detail.changeStatus")}
+        title={t("femme.calendar.cancelTitle")}
         footer={
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="secondary"
+              className="min-h-11"
               onClick={() => setStatusModalOpen(false)}
               disabled={statusSaving}
             >
-              {t("femme.calendar.detail.cancel")}
+              {t("femme.calendar.cancelBack")}
             </Button>
-            <Button size="sm" onClick={saveStatus} disabled={statusSaving}>
-              {statusSaving ? <Spinner size="sm" /> : t("femme.calendar.detail.save")}
+            <Button
+              size="sm"
+              variant="danger"
+              className="min-h-11"
+              data-testid="calendar-cancel-confirm"
+              onClick={saveStatus}
+              disabled={statusSaving}
+            >
+              {statusSaving ? <Spinner size="sm" /> : t("femme.calendar.cancelConfirm")}
             </Button>
           </div>
         }
@@ -1180,31 +1353,15 @@ export default function CalendarPage() {
             </Alert>
           )}
           <div className="space-y-1">
-            <Label htmlFor="status-select">{t("femme.calendar.detail.status")}</Label>
-            <Select
-              id="status-select"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as AppointmentStatus)}
-            >
-              {ALL_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`femme.calendar.status.${s}`)}
-                </option>
-              ))}
-            </Select>
+            <Label htmlFor="cancel-reason">{t("femme.calendar.cancelDialog.reason")}</Label>
+            <Textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder={t("femme.calendar.cancelDialog.reasonPlaceholder")}
+              rows={3}
+            />
           </div>
-          {selectedStatus === "CANCELLED" && (
-            <div className="space-y-1">
-              <Label htmlFor="cancel-reason">{t("femme.calendar.cancelDialog.reason")}</Label>
-              <Textarea
-                id="cancel-reason"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder={t("femme.calendar.cancelDialog.reasonPlaceholder")}
-                rows={3}
-              />
-            </div>
-          )}
         </div>
       </Modal>
 
@@ -1242,6 +1399,94 @@ export default function CalendarPage() {
               <p role="alert">{availabilityWarning}</p>
             </Alert>
           )}
+          {/* Client (optional) */}
+          <div className="space-y-1">
+            <SearchableSelect<number>
+              id="form-client"
+              label={t("femme.calendar.form.client")}
+              value={formClientId}
+              onChange={(v) => setFormClientId(v)}
+              emptyOption={{ value: "", label: t("femme.calendar.form.occasionalClient") }}
+              options={clients.map((c) => ({ value: c.id, label: c.fullName }))}
+              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+              noResultsText={t("femme.calendar.searchable.noResults")}
+            />
+            {formClientId !== "" && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-11"
+                onClick={() => setTechnicalSheetClientId(formClientId as number)}
+              >
+                {t("femme.clients.technicalSheet.view")}
+              </Button>
+            )}
+          </div>
+          {/* Service */}
+          <div className="space-y-1">
+            <SearchableSelect<number>
+              id="form-service"
+              label={t("femme.calendar.form.service")}
+              value={formServiceId}
+              onChange={(v) => setFormServiceId(v)}
+              emptyOption={{ value: "", label: t("femme.calendar.form.selectService") }}
+              options={services.map((s) => ({
+                value: s.id,
+                label: `${s.name} (${s.durationMinutes} min)`,
+              }))}
+              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+              noResultsText={t("femme.calendar.searchable.noResults")}
+              invalid={!!formErrors.serviceId}
+              describedBy={formErrors.serviceId ? "form-svc-err" : undefined}
+            />
+            {formErrors.serviceId && (
+              <FieldValidationError id="form-svc-err">
+                {formErrors.serviceId}
+              </FieldValidationError>
+            )}
+          </div>
+          {/* Professional (locked to own profile for professional role) */}
+          <div className="space-y-1">
+            {isProfessional ? (
+              <div>
+                <Label>{t("femme.calendar.form.professional")}</Label>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    border: "var(--border-default)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: 13,
+                    color: "var(--color-ink-2)",
+                    background: "var(--color-stone)",
+                  }}
+                >
+                  {professionals.find((p) => p.id === me?.professionalId)?.fullName ??
+                    t("femme.calendar.form.selectProfessional")}
+                </div>
+              </div>
+            ) : (
+              <>
+                <SearchableSelect<number>
+                  id="form-professional"
+                  label={t("femme.calendar.form.professional")}
+                  value={formProfessionalId}
+                  onChange={(v) => setFormProfessionalId(v)}
+                  emptyOption={{ value: "", label: t("femme.calendar.form.selectProfessional") }}
+                  options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+                  filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
+                  noResultsText={t("femme.calendar.searchable.noResults")}
+                  invalid={!!formErrors.professionalId}
+                  describedBy={formErrors.professionalId ? "form-prof-err" : undefined}
+                />
+                {formErrors.professionalId && (
+                  <FieldValidationError id="form-prof-err">
+                    {formErrors.professionalId}
+                  </FieldValidationError>
+                )}
+              </>
+            )}
+          </div>
           {/* Date */}
           <div className="space-y-1">
             <Label htmlFor="form-date">{t("femme.calendar.form.date")}</Label>
@@ -1287,93 +1532,21 @@ export default function CalendarPage() {
               <FieldValidationError id="form-start-past-err">{formErrors.startInPast}</FieldValidationError>
             )}
           </div>
-          {/* Professional (locked to own profile for professional role) */}
-          <div className="space-y-1">
-            {isProfessional ? (
-              <div>
-                <Label>{t("femme.calendar.form.professional")}</Label>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    border: "var(--border-default)",
-                    borderRadius: "var(--radius-md)",
-                    fontSize: 13,
-                    color: "var(--color-ink-2)",
-                    background: "var(--color-stone)",
-                  }}
-                >
-                  {professionals.find((p) => p.id === me?.professionalId)?.fullName ??
-                    t("femme.calendar.form.selectProfessional")}
-                </div>
-              </div>
-            ) : (
-              <>
-                <SearchableSelect<number>
-                  id="form-professional"
-                  label={t("femme.calendar.form.professional")}
-                  value={formProfessionalId}
-                  onChange={(v) => setFormProfessionalId(v)}
-                  emptyOption={{ value: "", label: t("femme.calendar.form.selectProfessional") }}
-                  options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-                  filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-                  noResultsText={t("femme.calendar.searchable.noResults")}
-                  invalid={!!formErrors.professionalId}
-                  describedBy={formErrors.professionalId ? "form-prof-err" : undefined}
-                />
-                {formErrors.professionalId && (
-                  <FieldValidationError id="form-prof-err">
-                    {formErrors.professionalId}
-                  </FieldValidationError>
-                )}
-              </>
-            )}
-          </div>
-          {/* Service */}
-          <div className="space-y-1">
-            <SearchableSelect<number>
-              id="form-service"
-              label={t("femme.calendar.form.service")}
-              value={formServiceId}
-              onChange={(v) => setFormServiceId(v)}
-              emptyOption={{ value: "", label: t("femme.calendar.form.selectService") }}
-              options={services.map((s) => ({
-                value: s.id,
-                label: `${s.name} (${s.durationMinutes} min)`,
-              }))}
-              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-              noResultsText={t("femme.calendar.searchable.noResults")}
-              invalid={!!formErrors.serviceId}
-              describedBy={formErrors.serviceId ? "form-svc-err" : undefined}
-            />
-            {formErrors.serviceId && (
-              <FieldValidationError id="form-svc-err">
-                {formErrors.serviceId}
-              </FieldValidationError>
-            )}
-          </div>
-          {/* Client (optional) */}
-          <div className="space-y-1">
-            <SearchableSelect<number>
-              id="form-client"
-              label={t("femme.calendar.form.client")}
-              value={formClientId}
-              onChange={(v) => setFormClientId(v)}
-              emptyOption={{ value: "", label: t("femme.calendar.form.occasionalClient") }}
-              options={clients.map((c) => ({ value: c.id, label: c.fullName }))}
-              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-              noResultsText={t("femme.calendar.searchable.noResults")}
-            />
-            {formClientId !== "" && (
-              <Button
+          {/* Quick times */}
+          <div className="flex flex-wrap gap-2" data-testid="appointment-quick-times">
+            {["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"].map((q) => (
+              <button
+                key={q}
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="min-h-11"
-                onClick={() => setTechnicalSheetClientId(formClientId as number)}
+                onClick={() => setFormTime(q)}
+                aria-pressed={formTime === q}
+                className={`min-h-10 rounded-full border px-3 text-sm font-bold ${
+                  formTime === q ? "border-primary bg-primary-lt text-primary" : "border-line bg-surface text-ink"
+                }`}
               >
-                {t("femme.clients.technicalSheet.view")}
-              </Button>
-            )}
+                {q}
+              </button>
+            ))}
           </div>
         </div>
       </Modal>

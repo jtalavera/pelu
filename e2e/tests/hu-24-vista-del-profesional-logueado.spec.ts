@@ -56,13 +56,12 @@ async function setupProfessionalWithAccess(
   return profId;
 }
 
-/** Picks an option of the calendar's professional filter (a searchable combobox). */
+/** Picks a chip of the calendar's professional filter. */
 async function pickCalendarFilter(page: Page, label: string): Promise<void> {
-  const filter = page.locator("#prof-filter");
-  await filter.click();
-  await filter.fill(label);
-  await page.getByRole("option", { name: label, exact: true }).click();
-  await expect(filter).toHaveValue(label);
+  const group = page.locator("[data-tour='calendar-prof-filter']");
+  const chip = label === "All professionals" ? group.getByTestId("calendar-prof-chip-all") : group.getByRole("button", { name: label, exact: true });
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
 }
 
 /** Logs a professional in through the API and returns her JWT. */
@@ -91,7 +90,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, `E2E Cal ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     // "Today" button is always visible in the calendar header
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
   });
@@ -123,12 +122,15 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     });
 
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // The filter is there, preselected on her own agenda.
-    const filter = page.locator("#prof-filter");
+    const filter = page.locator("[data-tour='calendar-prof-filter']");
     await expect(filter).toBeVisible();
-    await expect(filter).toHaveValue(ownName.toUpperCase());
+    await expect(filter.getByRole("button", { name: ownName.toUpperCase(), exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await expect(page.getByTestId(`calendar-appt-${own.id}`)).toBeVisible();
     await expect(page.getByTestId(`calendar-appt-${other.id}`)).toHaveCount(0);
 
@@ -241,7 +243,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, name, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
 
     // Open new appointment form (first button = header button with visible text, not calendar slot buttons)
@@ -342,7 +344,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
 
     // UI: the other's appointment opens read-only (no edit / change status), hers does not.
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // Filter by the other professional (a crowded "all" grid can squeeze the block too thin to click).
     await pickCalendarFilter(page, salon.professionalFullName);
@@ -350,13 +352,14 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     let dlg = page.getByRole("dialog");
     await expect(dlg.getByTestId("appointment-read-only-notice")).toBeVisible();
     await expect(dlg.getByRole("button", { name: /edit appointment/i })).toHaveCount(0);
-    await expect(dlg.getByRole("button", { name: /change status/i })).toHaveCount(0);
+    await expect(dlg.getByTestId("calendar-next-step")).toHaveCount(0);
     await dlg.getByRole("button", { name: /close/i }).first().click();
 
     await pickCalendarFilter(page, `E2E RO ${suffix}`.toUpperCase());
     await page.getByTestId(`calendar-appt-${own.id}`).click();
     dlg = page.getByRole("dialog");
     await expect(dlg.getByTestId("appointment-read-only-notice")).toHaveCount(0);
-    await expect(dlg.getByRole("button", { name: /change status/i })).toBeVisible();
+    await expect(dlg.getByTestId("calendar-next-step")).toBeVisible();
+    await expect(dlg.getByTestId("calendar-more-actions")).toBeVisible();
   });
 });

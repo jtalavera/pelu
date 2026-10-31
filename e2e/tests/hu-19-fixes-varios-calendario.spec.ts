@@ -8,29 +8,34 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { bookingAppointmentDialog, ensureCalendarShowsAppointmentByTestId } from "../fixtures/ui";
+import { bookingAppointmentDialog, completeAppointmentFromDetail, ensureCalendarShowsAppointmentByTestId, filterAgendaByProfessional } from "../fixtures/ui";
 
 test.describe("HU-19 · Fixes varios del calendario", () => {
-  test("filtro de profesionales con placeholder de búsqueda", async ({ page }) => {
+  test("filtro de profesionales: chips «All professionals» y uno por profesional", async ({ page, request }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
-    await expect(page.getByPlaceholder("Type to filter…").first()).toBeVisible();
+    await page.goto("/app/calendar?view=week");
+    const group = page.locator("[data-tour='calendar-prof-filter']");
+    await expect(group.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "true");
+    await expect(group.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveCount(1);
   });
 
-  test("HU-19 · 4 filtro de profesional en vista principal reduce opciones", async ({
+  test("HU-19 · 4 filtro de profesional en vista principal marca el chip elegido", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
-    const fullName = seed.professionalFullName;
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
-    const cb = page.getByRole("combobox", { name: "Filter by professional" });
-    await cb.click();
-    await cb.fill(fullName);
-    const list = page.getByRole("listbox", { name: "Filter by professional" });
-    await expect(list.getByRole("button", { name: new RegExp(fullName) })).toHaveCount(1);
+    await page.goto("/app/calendar?view=week");
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    const group = page.locator("[data-tour='calendar-prof-filter']");
+    await expect(group.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(group.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "false");
   });
 
   test("HU-19 · 6 turno Completado no aparece en la grilla", async ({ page, request }) => {
@@ -45,11 +50,9 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await page.getByRole("button", { name: "Change status" }).click();
-    await page.locator("#status-select").selectOption("COMPLETED");
-    await page.getByRole("button", { name: "Save" }).click();
+    await completeAppointmentFromDetail(page);
     await page
       .getByRole("dialog", { name: "Appointment detail" })
       .getByRole("button", { name: "Close" })
@@ -62,7 +65,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     const col = page.getByTestId("calendar-day-col-wed");
     await expect(col).toBeVisible();
     const box = await col.boundingBox();
@@ -78,7 +81,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: /New appointment/ }).first().click();
     const dlg = bookingAppointmentDialog(page);
     await expect(dlg.getByRole("combobox", { name: /^Time$/ })).toBeVisible();
@@ -88,7 +91,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: /New appointment/ }).first().click();
     const dlg = bookingAppointmentDialog(page);
     // Localized date input renders a combobox; the popover dialog "Calendar" appears on focus.
@@ -119,7 +122,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
     const card = page.getByTestId(`calendar-appt-${appt.id}`);
     await expect(card).toBeVisible();

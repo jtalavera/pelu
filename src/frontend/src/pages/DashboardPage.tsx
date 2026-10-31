@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
+import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { listAppointments, type Appointment } from "../api/appointments";
-import { listServicesPaged } from "../api/services";
 import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { BirthdaysCard } from "../components/BirthdaysCard";
@@ -275,50 +275,7 @@ export default function DashboardPage() {
     setChargingId(appt.id);
     setChargeError(null);
     try {
-      let client: Record<string, unknown> | null = null;
-      if (appt.clientId != null) {
-        client = await femmeJson<Record<string, unknown>>(`/api/clients/${appt.clientId}`);
-      }
-      let unitPrice = "0";
-      try {
-        const page = await listServicesPaged<{ id: number; priceMinor: string | number }>({
-          q: appt.serviceName,
-          size: 50,
-        });
-        const found = page.content.find((svc) => svc.id === appt.serviceId);
-        if (found) unitPrice = String(found.priceMinor);
-      } catch {
-        // Best effort: the invoice still opens with the service and a price to confirm.
-      }
-      navigate("/app/billing", {
-        state: {
-          activeTab: "invoice",
-          prefillServiceRecord: {
-            serviceRecordId: null,
-            client: client
-              ? {
-                  id: appt.clientId,
-                  fullName: String(client.fullName ?? appt.clientName ?? ""),
-                  phone: (client.phone as string | null) ?? null,
-                  email: (client.email as string | null) ?? null,
-                  ruc: (client.ruc as string | null) ?? null,
-                  identityDocumentNumber: (client.identityDocumentNumber as string | null) ?? null,
-                  identityDocumentType: (client.identityDocumentType as string | null) ?? null,
-                  taxpayerType: (client.taxpayerType as string | null) ?? null,
-                }
-              : null,
-            lines: [
-              {
-                serviceId: appt.serviceId,
-                description: appt.serviceName,
-                unitPrice,
-                professionalId: appt.professionalId,
-              },
-            ],
-            tipsAmount: 0,
-          },
-        },
-      });
+      navigate("/app/billing", { state: await billingStateForAppointment(appt) });
     } catch {
       setChargeError(t("femme.dashboard.home.chargeError"));
     } finally {

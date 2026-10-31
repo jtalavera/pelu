@@ -30,7 +30,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     const client = await seedClient(request, token, `E2E Book ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);
@@ -65,7 +65,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await expect(page.getByText("Pending", { exact: true })).toBeVisible();
   });
@@ -86,7 +86,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);
@@ -126,7 +126,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     const client = await seedClient(request, token, `E2E Grid ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);

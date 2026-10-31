@@ -10,12 +10,12 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCalendarShowsClientCard, pickSearchableOption } from "../fixtures/ui";
+import { ensureCalendarShowsClientCard, filterAgendaByProfessional, pickSearchableOption } from "../fixtures/ui";
 
 test.describe("HU-06 · Calendario de turnos", () => {
   test("HU-06 · 1 y · 3 vista semanal y navegación de semanas", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     const range = page.locator("span").filter({ hasText: /–/ }).first();
     const before = await range.innerText();
     await page.getByRole("button", { name: "Next week" }).click();
@@ -43,7 +43,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
 
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     const appointmentButton = page.getByRole("button", { name: new RegExp(client.fullName) });
@@ -70,11 +70,11 @@ test.describe("HU-06 · Calendario de turnos", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
-    await pickSearchableOption(page, "Filter by professional", "E2E Prof B", /E2E Prof B/i);
+    await filterAgendaByProfessional(page, /E2E Prof B/i);
     await expect(page.getByRole("button", { name: client.fullName, exact: false })).toHaveCount(0);
-    await pickSearchableOption(page, "Filter by professional", "All", /All professionals/);
+    await filterAgendaByProfessional(page, "All");
     await ensureCalendarShowsClientCard(page, client.fullName);
   });
 
@@ -90,7 +90,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, client.fullName);
     await page.getByRole("button", { name: client.fullName, exact: false }).click();
     await expect(page.getByRole("heading", { name: "Appointment detail" })).toBeVisible();
@@ -132,7 +132,7 @@ test.describe("HU-06 · Calendario de turnos", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
 
     await ensureCalendarShowsClientCard(page, remindedClient.fullName);
     const remindedButton = page.getByRole("button", { name: remindedClient.fullName, exact: false });

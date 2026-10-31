@@ -126,11 +126,17 @@ for (const vp of VIEWPORTS) {
         await expectTouchTarget(page, "[data-tour='calendar-new-appointment']");
         await expectTouchTarget(page, "[data-tour='calendar-week-nav'] button");
       }
-      const filterBox = await page.locator("#prof-filter").boundingBox();
+      const filterBox = await page.locator("[data-tour='calendar-prof-filter']").boundingBox();
       expect(filterBox!.width).toBeGreaterThanOrEqual(160);
       expect(filterBox!.x + filterBox!.width).toBeLessThanOrEqual(vp.width);
-      // Phones show one day at a time; tablets the whole week.
-      await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(vp.phone ? 1 : 7);
+      // Phones only have the Day view; tablets can switch to the Week grid with its 7 days.
+      if (vp.phone) {
+        await expect(page.getByTestId("calendar-view-week")).toHaveCount(0);
+        await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(0);
+      } else {
+        await page.getByTestId("calendar-view-week").click();
+        await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(7);
+      }
 
       // The appointment form fits the screen.
       await page.locator("[data-tour='calendar-new-appointment']").click();
@@ -179,9 +185,10 @@ async function textControlFontSizes(page: Page): Promise<Array<{ id: string; px:
   );
 }
 
-async function expectAllAtLeast16px(page: Page, where: string) {
+async function expectAllAtLeast16px(page: Page, where: string, opts: { allowEmpty?: boolean } = {}) {
   const sizes = await textControlFontSizes(page);
-  expect(sizes.length, `${where}: text controls found`).toBeGreaterThan(0);
+  // The Agenda no longer has a text control of its own (the professional filter is chips).
+  if (!opts.allowEmpty) expect(sizes.length, `${where}: text controls found`).toBeGreaterThan(0);
   for (const { id, px } of sizes) {
     expect(px, `${where}: #${id} font-size`).toBeGreaterThanOrEqual(16);
   }
@@ -202,7 +209,7 @@ test.describe("Sin zoom automático de iPhone al tocar campos", () => {
 
       await loginAs(page, email, PASSWORD);
       await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
-      await expectAllAtLeast16px(page, "calendar");
+      await expectAllAtLeast16px(page, "calendar", { allowEmpty: true });
 
       await page.locator("[data-tour='calendar-new-appointment']").click();
       await expect(page.getByRole("dialog")).toBeVisible();

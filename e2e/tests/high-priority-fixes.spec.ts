@@ -632,7 +632,7 @@ test("Issue #51 · dropdown de clientes en formulario de turno flota sobre el fo
   await seedCategoryServiceProfessional(request, token);
 
   await loginAsDemo(page);
-  await page.goto("/app/calendar");
+  await page.goto("/app/calendar?view=week");
   await page.getByRole("button", { name: "New appointment" }).first().click();
 
   const dlg = page.getByRole("dialog");
@@ -770,7 +770,7 @@ test("Issue #58 · TimeCombobox en formulario de turno flota sobre el formulario
   await seedCategoryServiceProfessional(request, token);
 
   await loginAsDemo(page);
-  await page.goto("/app/calendar");
+  await page.goto("/app/calendar?view=week");
   await page.getByRole("button", { name: "New appointment" }).first().click();
 
   const dlg = page.getByRole("dialog");
@@ -810,7 +810,7 @@ test("Issue #58 · LocalizedDateInput en formulario de turno flota sobre el form
   await seedCategoryServiceProfessional(request, token);
 
   await loginAsDemo(page);
-  await page.goto("/app/calendar");
+  await page.goto("/app/calendar?view=week");
   await page.getByRole("button", { name: "New appointment" }).first().click();
 
   const dlg = page.getByRole("dialog");

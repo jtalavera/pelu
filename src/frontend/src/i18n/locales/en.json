@@ -2794,6 +2794,27 @@
       }
     },
     "calendar": {
+      "views": { "label": "View", "day": "Day", "week": "Week" },
+      "action": {
+        "confirm": "Confirm",
+        "start": "Start",
+        "charge": "Charge",
+        "complete": "Mark as completed",
+        "noShow": "No show",
+        "cancelAppointment": "Cancel appointment",
+        "restore": "Restore as pending",
+        "more": "More actions"
+      },
+      "count_one": "{{count}} appointment",
+      "count_other": "{{count}} appointments",
+      "free": "free",
+      "emptyDay": "No appointments this day.",
+      "emptyDayFor": "No appointments for {{name}} this day.",
+      "now": "now",
+      "cancelTitle": "Cancel appointment",
+      "cancelConfirm": "Cancel appointment",
+      "cancelBack": "Back",
+      "chargeError": "Could not prepare the payment. Please try again.",
       "clientBirthday": "Client's birthday",
       "title": "Appointments",
       "today": "Today",

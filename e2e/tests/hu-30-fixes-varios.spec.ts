@@ -278,7 +278,7 @@ test.describe("HU-30 · Fixes varios", () => {
 
     // Simulate a mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
 
     // On mobile, we should see day navigation (not "Week navigation")
     // The nav label should be the day label (not week range "Jun 1 – Jun 7")
@@ -287,13 +287,16 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(prevDayBtn).toBeVisible({ timeout: 20_000 });
     await expect(nextDayBtn).toBeVisible();
 
-    // Should NOT show 7 day columns — only 1
+    // Phones only have the Day view (a list of the day's turnos): no week grid, no 7 columns.
     const dayCols = page.locator("[data-testid^='calendar-day-col-']");
-    await expect(dayCols).toHaveCount(1, { timeout: 10_000 });
+    await expect(page.getByTestId("calendar-day-list")).toBeVisible({ timeout: 10_000 });
+    await expect(dayCols).toHaveCount(0);
 
     // Navigate to next day
+    const label = await page.getByTestId("calendar-range-label").textContent();
     await nextDayBtn.click();
-    await expect(dayCols).toHaveCount(1);
+    await expect(page.getByTestId("calendar-range-label")).not.toHaveText(label ?? "");
+    await expect(dayCols).toHaveCount(0);
 
     // "New appointment" button should still work (toolbar + per-day-column buttons both
     // expose this name on mobile, so assert the first).

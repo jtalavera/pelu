@@ -63,13 +63,12 @@ async function loginToken(request: APIRequestContext, email: string): Promise<st
   return ((await res.json()) as { accessToken: string }).accessToken;
 }
 
-/** Picks an option of the calendar's professional filter (a searchable combobox). */
+/** Picks a chip of the calendar's professional filter. */
 async function pickCalendarFilter(page: Page, label: string): Promise<void> {
-  const filter = page.locator("#prof-filter");
-  await filter.click();
-  await filter.fill(label);
-  await page.getByRole("option", { name: label, exact: true }).click();
-  await expect(filter).toHaveValue(label);
+  const group = page.locator("[data-tour='calendar-prof-filter']");
+  const chip = label === "All professionals" ? group.getByTestId("calendar-prof-chip-all") : group.getByRole("button", { name: label, exact: true });
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
 }
 
 test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
@@ -190,11 +189,12 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     ).find((p) => p.id === pro.id)!.fullName;
 
     await loginAs(page, pro.email, PASSWORD);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
 
     // AC6: own appointment → "Technical sheet".
     await page.getByTestId(`calendar-appt-${ownAppt.id}`).click();
+    await page.getByTestId("calendar-more-actions").click();
     await page.getByRole("button", { name: "Technical sheet", exact: true }).click();
     const sheetDialog = page.getByRole("dialog", { name: "Technical sheet" });
     const sheet = sheetDialog.getByTestId("client-technical-sheet");
@@ -222,6 +222,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     await pickCalendarFilter(page, salon.professionalFullName);
     await page.getByTestId(`calendar-appt-${otherAppt.id}`).click();
     await expect(page.getByTestId("appointment-read-only-notice")).toBeVisible();
+    await page.getByTestId("calendar-more-actions").click();
     await page.getByRole("button", { name: "Technical sheet", exact: true }).click();
     await expect(
       page.getByRole("dialog", { name: "Technical sheet" }).getByLabel("Notes"),
@@ -253,7 +254,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     await setSheet(request, token, client.id, { notes: "Nota desde el menú", colorFormula: null });
 
     await loginAs(page, pro.email, PASSWORD);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("link", { name: "Clients", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/clients$/);
     // Search by name, submitted with Enter.
@@ -369,7 +370,10 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     // No "Clients" menu in a PIN session, and the URL bounces to the calendar.
     await expect(page.getByRole("link", { name: "Clients", exact: true })).toHaveCount(0);
 
+    // The Agenda opens on the Day view: the seeded turno may be on another day of the week.
+    await page.getByTestId("calendar-view-week").click();
     await page.getByTestId(`calendar-appt-${appt.id}`).click();
+    await page.getByTestId("calendar-more-actions").click();
     await page.getByRole("button", { name: "Technical sheet", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Technical sheet" }).getByTestId("client-technical-sheet");
     await expect(sheet.getByLabel("Notes")).toHaveValue("Nota en la tablet");

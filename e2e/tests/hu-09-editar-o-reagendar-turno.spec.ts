@@ -1,11 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createAppointmentApi, calendarVisibleWeekSlotIso, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import {
-  bookingAppointmentDialog,
-  ensureCalendarShowsClientCard,
-  fillAppointmentTime,
-} from "../fixtures/ui";
+import { bookingAppointmentDialog, completeAppointmentFromDetail, ensureCalendarShowsClientCard, fillAppointmentTime, openEditFromDetail } from "../fixtures/ui";
 
 test.describe("HU-09 · Editar o reagendar turno", () => {
   test("HU-09 · 1 y 3 editar hora y ver cambio en la grilla", async ({ page, request }) => {
@@ -20,10 +16,10 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await page.getByRole("button", { name: "Edit appointment" }).click();
+    await openEditFromDetail(page);
     const dlg = bookingAppointmentDialog(page);
     await fillAppointmentTime(dlg, "11:15");
     await dlg.getByRole("button", { name: "Save" }).click();
@@ -42,12 +38,10 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await page.getByRole("button", { name: "Change status" }).click();
-    await page.locator("#status-select").selectOption("COMPLETED");
-    await page.getByRole("button", { name: "Save" }).click();
+    await completeAppointmentFromDetail(page);
     await expect(page.getByRole("button", { name: "Edit appointment" })).toHaveCount(0);
   });
 });

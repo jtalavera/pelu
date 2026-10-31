@@ -145,7 +145,7 @@ test.describe("Flowbit · identidad de marca", () => {
     expect(apiBaseUrl()).toBeTruthy();
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     const block = page.getByTestId(`calendar-appt-${id}`);
     await expect(block).toBeVisible({ timeout: 15_000 });
     const bg = await block.evaluate((el) => getComputedStyle(el).backgroundColor);

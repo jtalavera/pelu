@@ -143,7 +143,7 @@ test.describe("Issue #155 · Cambios varios", () => {
     await apiPostJson(request, token, `/api/clients/${inactive.id}/deactivate`, {});
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const cb = dlg.getByRole("combobox", { name: "Client", exact: true });
