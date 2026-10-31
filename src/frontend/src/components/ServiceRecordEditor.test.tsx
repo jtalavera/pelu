@@ -141,11 +141,13 @@ describe("ServiceRecordEditor", () => {
     expect(total.textContent).toMatch(/370\.000/);
   });
 
-  it("tips live under More options, one field per professional on the lines", async () => {
+  it("tips live in a folded \"Tips\" section (same title style as Client / Services), one field per professional", async () => {
     renderEditor(openRecord);
-    expect(screen.queryByLabelText(/tip/i)).toBeNull();
-    const toggle = screen.getByTestId("service-record-more-toggle");
+    expect(screen.queryByLabelText(/tip · /i)).toBeNull();
+    const toggle = screen.getByTestId("service-record-tips-toggle");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.textContent).toMatch(/tips/i);
+    expect(screen.queryByText(/more options/i)).toBeNull();
     await userEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByLabelText(/tip · Laura/i)).toBeTruthy();
@@ -215,7 +217,7 @@ describe("ServiceRecordEditor", () => {
 
   it("tips are compact: one inline field per professional, two per row on wide screens", async () => {
     renderEditor(openRecord);
-    await userEvent.click(screen.getByTestId("service-record-more-toggle"));
+    await userEvent.click(screen.getByTestId("service-record-tips-toggle"));
     const tips = screen.getByTestId("service-record-tips");
     expect(tips.className).toMatch(/sm:grid-cols-2/);
     expect(within(tips).getAllByRole("textbox")).toHaveLength(2);

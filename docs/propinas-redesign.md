@@ -5,13 +5,15 @@ Parte del rediseño general. Una sola pantalla (`/app/propinas`) en lugar de las
 - **Encabezado**: título y menú ⋯ con **Exportar PDF** (usa el período y el profesional elegidos).
 - **Período**: chips **7 / 30 / 90 días** (30 por defecto). "Filtros" (plegado) tiene desde, hasta y profesional; al
   editar las fechas se apaga el chip y el resumen pasa a decir "en el rango".
-- **Tarjetas por profesional** (solo activas): **propina acumulada** (saldo total retirable, `GET /api/propinas/balance`)
-  y botón **Retirar** (apagado si el saldo es 0). Con el filtro de profesional solo queda su tarjeta.
-- **Resumen del período**: "Propinas en N días" y "Retirado en N días" (`grandTotal` y `withdrawalsTotal` del reporte).
-  No es lo mismo que el saldo acumulado.
-- **Movimientos**: una lista compacta de una fila (~48 px) con fecha, `cliente · profesional` y monto; los retiros
-  van en la misma lista con la etiqueta "Retiro" y signo menos, sin colores de alerta. "Ver más" muestra 15 más.
-  Las propinas vienen del reporte y los retiros de `GET /api/propinas/withdrawals` (últimos 3 meses), filtrados al rango.
+- **Saldos compactos** (solo profesionales activas): una sola tarjeta con una fila por profesional (inicial, nombre,
+  **propina acumulada** y **Retirar**, apagado si el saldo es 0), ordenadas de mayor a menor saldo y **paginadas de a 5**
+  (pie `1–5 de 12 profesionales` con ‹ ›). Con el filtro de profesional solo queda su fila. El saldo acumulado
+  (`GET /api/propinas/balance`) no es lo mismo que las propinas del período.
+- **Movimientos**: una **tabla** (Fecha · Concepto · Profesional · Monto) con filas de 44 px y **paginación** estándar
+  (filas por página 5/10/20, "1–10 de N", Anterior/Siguiente); ya no hay "Ver más". Los retiros van en la misma tabla con
+  la etiqueta "Retiro" y signo menos. Los totales del período ("Gs. X propinas · Gs. Y retirado · en N días") van en una
+  línea junto al título. Las propinas vienen del reporte y los retiros de `GET /api/propinas/withdrawals` (últimos
+  3 meses), filtrados al rango. En celular la tabla se desliza horizontalmente.
 - **Retirar** (diálogo): saldo, monto, atajo **Retirar todo (Gs. …)**, validaciones ("mayor a cero", "no supera el
   saldo") y un solo botón. Al confirmar se cierra, se refrescan saldos y movimientos y un `Toast` de 4 s lo confirma.
 - Sin cambios de backend.

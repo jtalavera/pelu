@@ -123,7 +123,7 @@ describe("PropinasPage", () => {
     await userEvent.click(screen.getByTestId("propinas-period-7"));
     expect(screen.getByTestId("propinas-period-7").getAttribute("aria-pressed")).toBe("true");
     await waitFor(() => expect(calls("/api/propinas/report?").length).toBeGreaterThan(before));
-    expect(screen.getByTestId("propinas-summary").textContent).toMatch(/Tips in 7 days/);
+    expect(screen.getByTestId("propinas-summary").textContent).toMatch(/in 7 days/);
   });
 
   it("shows the period summary and one compact list mixing tips and withdrawals", async () => {
@@ -190,6 +190,75 @@ describe("PropinasPage", () => {
     // The card refreshes: nothing left to withdraw.
     await waitFor(() => expect(screen.getByTestId("propinas-balance-1").textContent).toMatch(/Gs\. 0/));
     expect((screen.getByTestId("propinas-withdraw-1") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("movements are a table with pagination (page size + pager), not an endless list", async () => {
+    const rows = Array.from({ length: 23 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - 1 - (i % 20));
+      d.setMinutes(d.getMinutes() - i);
+      return {
+        professionalId: 1,
+        professionalName: "Laura",
+        amount: 10000 + i,
+        clientName: `Cliente ${i}`,
+        serviceDateTime: d.toISOString(),
+      };
+    });
+    femmeJson.mockImplementation((url: unknown) => {
+      const s = String(url);
+      if (s === "/api/professionals") return Promise.resolve(pros);
+      if (s.startsWith("/api/propinas/balance")) return Promise.resolve({ balance: 0 });
+      if (s.startsWith("/api/propinas/report?")) return Promise.resolve(report(rows));
+      if (s.startsWith("/api/propinas/withdrawals?")) {
+        return Promise.resolve({ content: [], page: 0, size: 200, totalElements: 0, totalPages: 0 });
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+    const table = await screen.findByTestId("propinas-table");
+    expect(within(table).getAllByRole("columnheader").map((th) => th.textContent)).toEqual([
+      "Date",
+      "Concept",
+      "Professional",
+      "Amount",
+    ]);
+    await waitFor(() => expect(screen.getAllByTestId("propinas-movement")).toHaveLength(10));
+    expect(screen.queryByTestId("propinas-more")).toBeNull();
+    expect(screen.getByText(/^1.10 of 23$/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
+    await waitFor(() => expect(screen.getByText(/^11.20 of 23$/)).toBeTruthy());
+    await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
+    await waitFor(() => expect(screen.getAllByTestId("propinas-movement")).toHaveLength(3));
+  });
+
+  it("balances are listed most-to-withdraw first and paged five at a time", async () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({ id: 10 + i, fullName: `Pro ${i}`, active: true }));
+    femmeJson.mockImplementation((url: unknown) => {
+      const s = String(url);
+      if (s === "/api/professionals") return Promise.resolve(many);
+      if (s.startsWith("/api/propinas/balance")) {
+        const id = Number(new URL(s, "http://x").searchParams.get("professionalId"));
+        return Promise.resolve({ professionalId: id, professionalName: "x", balance: (id - 9) * 1000 });
+      }
+      if (s.startsWith("/api/propinas/report?")) return Promise.resolve(report([]));
+      if (s.startsWith("/api/propinas/withdrawals?")) {
+        return Promise.resolve({ content: [], page: 0, size: 200, totalElements: 0, totalPages: 0 });
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("propinas-balance-16").textContent).toMatch(/7\.000/));
+    // Highest balance first (Pro 6 = 7.000), five per page, the rest on page 2.
+    const cards = screen.getAllByTestId(/^propinas-card-/);
+    expect(cards).toHaveLength(5);
+    expect(cards[0].getAttribute("data-testid")).toBe("propinas-card-16");
+    expect(screen.queryByTestId("propinas-card-10")).toBeNull();
+    expect(screen.getByTestId("propinas-balances-pager").textContent).toMatch(/1.?5 of 7 professionals/);
+    await userEvent.click(screen.getByTestId("propinas-balances-next"));
+    await waitFor(() => expect(screen.getAllByTestId(/^propinas-card-/)).toHaveLength(2));
+    expect(screen.getByTestId("propinas-card-10")).toBeTruthy();
+    expect((screen.getByTestId("propinas-balances-next") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows an empty message when there are no movements", async () => {

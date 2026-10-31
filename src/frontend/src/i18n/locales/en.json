@@ -3080,6 +3080,15 @@
       }
     },
     "propinas": {
+      "colProfessional": "Professional",
+      "colDate": "Date",
+      "colConcept": "Concept",
+      "colAmount": "Amount",
+      "balancesRange": "{{from}}–{{to}} of {{total}} professionals",
+      "tipsLabel": "tips",
+      "withdrawnLabel": "withdrawn",
+      "inPeriod": "in {{count}} days",
+      "inRange": "in range",
       "moreActions": "More actions",
       "periodGroup": "Period",
       "periodDays": "{{count}} days",

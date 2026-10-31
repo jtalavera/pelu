@@ -427,7 +427,7 @@ test.describe("mt-ficha-propinas · service sheet & tips isolation", () => {
         .filter({ hasText: aClientName })
         .first();
       await expect(tipRow).toBeVisible({ timeout: 15_000 });
-      expectMoneyFormat(await tipRow.locator("b").first().innerText());
+      expectMoneyFormat(await tipRow.locator("td").last().innerText());
 
       // The period summary renders the same format.
       expectMoneyFormat(await pageA.getByTestId("propinas-tips-total").innerText());

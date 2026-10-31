@@ -22,8 +22,8 @@ Parte del rediseño general. Mismo sistema: una acción principal por estado, lo
 - **Servicios en filas en línea, sin cajas anidadas**: `SERVICIO · PROFESIONAL · CANT. · PRECIO · SUBTOTAL · ✕` con los
   títulos de columna una sola vez y una línea fina entre filas (en celular cada servicio se apila en dos renglones).
   La ✕ solo aparece con más de un servicio. Después: "+ Agregar otro servicio" y el **Total**.
-- **Más opciones**: propinas compactas, un campo en línea por profesional (`Propina · Laura  [  0 ]`), de a dos por fila
-  en pantallas anchas.
+- **Propinas**: sección plegada con el mismo estilo de título que CLIENTE y SERVICIOS (ya no se llama "Más opciones"); al abrirla,
+  un campo en línea por profesional (`Propina · Laura  [  0 ]`), de a dos por fila en pantallas anchas.
 - **Pie**: ficha **abierta** → **Anular ficha** a la izquierda (abre el motivo en el mismo lugar) y **Cerrar / Guardar /
   Cobrar** a la derecha. Ficha nueva: Cancelar / Guardar. Cobrada o anulada: solo lectura con el comprobante o el motivo.
 - Guardar o anular cierra el diálogo y un `Toast` de 4 s lo confirma en la lista.

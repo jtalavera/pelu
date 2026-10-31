@@ -129,7 +129,7 @@ export function ServiceRecordEditor({
     });
     return map;
   });
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
 
   const [clientError, setClientError] = useState<string | null>(null);
   const [lineErrors, setLineErrors] = useState<Record<number, { service?: string }>>({});
@@ -558,25 +558,22 @@ export function ServiceRecordEditor({
           </div>
         </section>
 
-        <div className="border-t border-line">
+        <section className="border-t border-line" aria-label={t("femme.serviceRecords.tipsSection")}>
           <button
             type="button"
-            data-testid="service-record-more-toggle"
-            aria-expanded={moreOpen}
-            aria-controls="service-record-more"
-            onClick={() => setMoreOpen((v) => !v)}
-            className="flex min-h-11 w-full items-center justify-between text-left font-semibold text-ink"
+            data-testid="service-record-tips-toggle"
+            aria-expanded={tipsOpen}
+            aria-controls="service-record-tips-body"
+            onClick={() => setTipsOpen((v) => !v)}
+            className="flex min-h-11 w-full items-center justify-between text-left"
           >
-            {t("femme.serviceRecords.moreOptions")}
-            <span aria-hidden="true" className={`transition-transform ${moreOpen ? "rotate-180" : ""}`}>
+            <span className={SECTION_TITLE}>{t("femme.serviceRecords.tipsSection")}</span>
+            <span aria-hidden="true" className={`text-ink-3 transition-transform ${tipsOpen ? "rotate-180" : ""}`}>
               ⌄
             </span>
           </button>
-          {moreOpen ? (
-            <div id="service-record-more" className="flex flex-col gap-1 pb-2">
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-ink-3">
-                {t("femme.serviceRecords.tipsSection")}
-              </h4>
+          {tipsOpen ? (
+            <div id="service-record-tips-body" className="flex flex-col gap-1 pb-2">
               {distinctProfessionalIds.length === 0 ? (
                 <Text variant="muted" className="text-sm">
                   {t("femme.serviceRecords.tipsNeedProfessional")}
@@ -610,7 +607,7 @@ export function ServiceRecordEditor({
               ) : null}
             </div>
           ) : null}
-        </div>
+        </section>
 
         {record && isOpen && showVoidForm ? (
           <div

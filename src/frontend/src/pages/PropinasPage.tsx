@@ -7,6 +7,8 @@ import {
   KebabMenu,
   Label,
   Modal,
+  PageSizeSelect,
+  Pagination,
   Select,
   Spinner,
   Text,
@@ -31,7 +33,7 @@ import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 type Professional = { id: number; fullName: string; active: boolean };
 type Period = 7 | 30 | 90;
 const PERIODS: Period[] = [7, 30, 90];
-const MOVEMENTS_PAGE = 15;
+const BALANCES_PAGE = 5;
 
 const fmtYmd = (dt: Date) =>
   `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
@@ -80,7 +82,9 @@ export default function PropinasPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
-  const [visible, setVisible] = useState(MOVEMENTS_PAGE);
+  const [movPage, setMovPage] = useState(0);
+  const [movPageSize, setMovPageSize] = useState(10);
+  const [balPage, setBalPage] = useState(0);
 
   const [exportError, setExportError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -93,12 +97,22 @@ export default function PropinasPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const activeProfessionals = useMemo(() => professionals.filter((p) => p.active), [professionals]);
-  const shownProfessionals = useMemo(
-    () =>
+  // Most to withdraw first; ties alphabetical.
+  const sortedProfessionals = useMemo(() => {
+    const list =
       professionalId === ""
         ? activeProfessionals
-        : activeProfessionals.filter((p) => p.id === professionalId),
-    [activeProfessionals, professionalId],
+        : activeProfessionals.filter((p) => p.id === professionalId);
+    return [...list].sort(
+      (a, b) =>
+        (balances[b.id] ?? 0) - (balances[a.id] ?? 0) || a.fullName.localeCompare(b.fullName),
+    );
+  }, [activeProfessionals, professionalId, balances]);
+  const balPages = Math.max(1, Math.ceil(sortedProfessionals.length / BALANCES_PAGE));
+  const safeBalPage = Math.min(balPage, balPages - 1);
+  const shownProfessionals = sortedProfessionals.slice(
+    safeBalPage * BALANCES_PAGE,
+    (safeBalPage + 1) * BALANCES_PAGE,
   );
 
   useEffect(() => {
@@ -146,7 +160,7 @@ export default function PropinasPage() {
         if (cancelled) return;
         setReport(rep);
         setWithdrawals(wds.content);
-        setVisible(MOVEMENTS_PAGE);
+        setMovPage(0);
       } catch (err) {
         if (!cancelled) {
           setLoadError(translateApiError(err, t, "femme.propinas.report.loadError"));
@@ -197,6 +211,12 @@ export default function PropinasPage() {
       }));
     return [...tips, ...wds].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   }, [report, withdrawals, range]);
+
+  const movPages = Math.max(1, Math.ceil(movements.length / movPageSize));
+  const safeMovPage = Math.min(movPage, movPages - 1);
+  const pagedMovements = movements.slice(safeMovPage * movPageSize, (safeMovPage + 1) * movPageSize);
+  const movFrom = movements.length === 0 ? 0 : safeMovPage * movPageSize + 1;
+  const movTo = Math.min((safeMovPage + 1) * movPageSize, movements.length);
 
   const tipsTotal = Number(report?.grandTotal ?? 0);
   const withdrawnTotal = Number(report?.withdrawalsTotal ?? 0);
@@ -345,7 +365,10 @@ export default function PropinasPage() {
               <Select
                 id="propinas-filter-professional"
                 value={professionalId === "" ? "" : String(professionalId)}
-                onChange={(e) => setProfessionalId(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => {
+                  setProfessionalId(e.target.value === "" ? "" : Number(e.target.value));
+                  setBalPage(0);
+                }}
               >
                 <option value="">{t("femme.propinas.allProfessionals")}</option>
                 {activeProfessionals.map((p) => (
@@ -368,37 +391,43 @@ export default function PropinasPage() {
       <section
         aria-label={t("femme.propinas.balancesTitle")}
         data-testid="propinas-cards"
-        className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]"
+        className="mb-4 rounded-card border border-line bg-surface px-4"
       >
+        <div
+          aria-hidden="true"
+          className="hidden grid-cols-[minmax(0,1fr)_auto_6rem] gap-3 pb-1 pt-2 text-[11px] font-extrabold uppercase tracking-wider text-ink-3 sm:grid"
+        >
+          <span>{t("femme.propinas.colProfessional")}</span>
+          <span className="text-right">{t("femme.propinas.withdrawal.balanceLabel")}</span>
+          <span />
+        </div>
         {shownProfessionals.map((p) => {
           const balance = balances[p.id] ?? 0;
           return (
             <div
               key={p.id}
               data-testid={`propinas-card-${p.id}`}
-              className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+              className="grid min-h-[3.25rem] grid-cols-[minmax(0,1fr)_auto_6rem] items-center gap-3 border-t border-line max-sm:[&:nth-child(2)]:border-t-0"
             >
-              <div className="flex items-center gap-3">
+              <span className="flex min-w-0 items-center gap-2.5 font-bold text-ink">
                 <span
                   aria-hidden="true"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading font-extrabold text-primary"
+                  className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading text-[13px] font-extrabold text-primary"
                 >
-                  {getInitials(p.fullName)}
+                  {getInitials(p.fullName).slice(0, 1)}
                 </span>
-                <span className="break-words font-heading font-extrabold text-ink">{p.fullName}</span>
-              </div>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wide text-ink-3">
-                  {t("femme.propinas.withdrawal.balanceLabel")}
-                </div>
-                <div className="font-heading text-2xl font-extrabold text-ink" data-testid={`propinas-balance-${p.id}`}>
-                  {formatGuaraniesGs(balance)}
-                </div>
-              </div>
+                <span className="truncate">{p.fullName}</span>
+              </span>
+              <b
+                className="whitespace-nowrap text-right font-heading text-ink"
+                data-testid={`propinas-balance-${p.id}`}
+              >
+                {formatGuaraniesGs(balance)}
+              </b>
               <Button
                 type="button"
                 variant={balance > 0 ? "primary" : "secondary"}
-                className="min-h-11 w-full"
+                className="min-h-11"
                 disabled={balance <= 0}
                 data-testid={`propinas-withdraw-${p.id}`}
                 aria-label={t("femme.propinas.withdrawFor", { name: p.fullName })}
@@ -409,38 +438,72 @@ export default function PropinasPage() {
             </div>
           );
         })}
+        {sortedProfessionals.length > BALANCES_PAGE ? (
+          <div
+            className="flex items-center justify-between gap-3 border-t border-line py-2 text-sm text-ink-3"
+            data-testid="propinas-balances-pager"
+          >
+            <span>
+              {t("femme.propinas.balancesRange", {
+                from: safeBalPage * BALANCES_PAGE + 1,
+                to: Math.min((safeBalPage + 1) * BALANCES_PAGE, sortedProfessionals.length),
+                total: sortedProfessionals.length,
+              })}
+            </span>
+            <span className="flex gap-1">
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11 min-w-11"
+                aria-label={t("femme.pagination.previous")}
+                disabled={safeBalPage === 0}
+                data-testid="propinas-balances-prev"
+                onClick={() => setBalPage(safeBalPage - 1)}
+              >
+                ‹
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11 min-w-11"
+                aria-label={t("femme.pagination.next")}
+                disabled={safeBalPage >= balPages - 1}
+                data-testid="propinas-balances-next"
+                onClick={() => setBalPage(safeBalPage + 1)}
+              >
+                ›
+              </Button>
+            </span>
+          </div>
+        ) : null}
       </section>
 
       <section
-        data-testid="propinas-summary"
-        className="mb-4 grid grid-cols-2 gap-3 rounded-card border border-line bg-surface p-4"
+        className="mb-4 flex flex-col gap-2 rounded-card border border-line bg-surface px-4 py-3"
+        data-testid="propinas-movements"
       >
-        <div className="flex flex-col gap-0.5 rounded-xl bg-primary-lt p-3">
-          <b className="font-heading text-lg font-extrabold text-ink" data-testid="propinas-tips-total">
-            {formatGuaraniesGs(tipsTotal)}
-          </b>
-          <span className="text-xs text-ink-2">
-            {period
-              ? t("femme.propinas.tipsInPeriod", { count: periodDays })
-              : t("femme.propinas.tipsInRange")}
-          </span>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-heading text-base font-extrabold text-ink">
+            {t("femme.propinas.movementsTitle")}
+          </h2>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2" data-testid="propinas-summary">
+            <span>
+              <b className="text-ink" data-testid="propinas-tips-total">
+                {formatGuaraniesGs(tipsTotal)}
+              </b>{" "}
+              {t("femme.propinas.tipsLabel")}
+            </span>
+            <span>
+              <b className="text-ink" data-testid="propinas-withdrawn-total">
+                {formatGuaraniesGs(withdrawnTotal)}
+              </b>{" "}
+              {t("femme.propinas.withdrawnLabel")}
+            </span>
+            <span className="text-ink-3">
+              {period ? t("femme.propinas.inPeriod", { count: periodDays }) : t("femme.propinas.inRange")}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col gap-0.5 rounded-xl bg-primary-lt p-3">
-          <b className="font-heading text-lg font-extrabold text-ink" data-testid="propinas-withdrawn-total">
-            {formatGuaraniesGs(withdrawnTotal)}
-          </b>
-          <span className="text-xs text-ink-2">
-            {period
-              ? t("femme.propinas.withdrawnInPeriod", { count: periodDays })
-              : t("femme.propinas.withdrawnInRange")}
-          </span>
-        </div>
-      </section>
-
-      <section className="rounded-card border border-line bg-surface px-4 py-3" data-testid="propinas-movements">
-        <h2 className="mb-2 font-heading text-base font-extrabold text-ink">
-          {t("femme.propinas.movementsTitle")}
-        </h2>
         {loading ? (
           <div className="flex items-center gap-2 py-4">
             <Spinner size="sm" />
@@ -451,53 +514,77 @@ export default function PropinasPage() {
             {t("femme.propinas.emptyMovements")}
           </Text>
         ) : (
-          <ul className="flex flex-col" role="list">
-            {movements.slice(0, visible).map((m) => (
-              <li
-                key={m.key}
-                data-testid="propinas-movement"
-                data-kind={m.kind}
-                className="grid min-h-12 grid-cols-[4rem_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-line py-1.5 first:border-t-0"
-              >
-                <span className="whitespace-nowrap font-heading text-sm font-extrabold text-ink">
-                  {fmtDay(m.at)}
-                </span>
-                {m.kind === "tip" ? (
-                  <span className="truncate text-ink">
-                    {m.client}
-                    <small className="text-sm text-ink-3"> · {m.professional}</small>
-                  </span>
-                ) : (
-                  <span className="truncate text-ink">
-                    <span className="mr-1.5 text-[11px] font-extrabold uppercase tracking-wider text-ink-3">
-                      {t("femme.propinas.withdrawalTag")}
-                    </span>
-                    {m.professional}
-                  </span>
-                )}
-                <b
-                  className={`whitespace-nowrap font-heading ${m.kind === "withdrawal" ? "text-ink-2" : "text-ink"}`}
-                >
-                  {m.kind === "withdrawal" ? "− " : ""}
-                  {formatGuaraniesGs(m.amount)}
-                </b>
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[26rem] border-collapse text-sm" data-testid="propinas-table">
+                <thead>
+                  <tr className="border-b border-line text-left text-[11px] font-extrabold uppercase tracking-wider text-ink-3">
+                    <th className="px-2 py-2">{t("femme.propinas.colDate")}</th>
+                    <th className="px-2 py-2">{t("femme.propinas.colConcept")}</th>
+                    <th className="px-2 py-2">{t("femme.propinas.colProfessional")}</th>
+                    <th className="px-2 py-2 text-right">{t("femme.propinas.colAmount")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedMovements.map((m) => (
+                    <tr
+                      key={m.key}
+                      data-testid="propinas-movement"
+                      data-kind={m.kind}
+                      className="h-11 border-t border-line first:border-t-0"
+                    >
+                      <td className="whitespace-nowrap px-2 font-heading font-extrabold text-ink">
+                        {fmtDay(m.at)}
+                      </td>
+                      <td className="whitespace-nowrap px-2 text-ink">
+                        {m.kind === "tip" ? (
+                          m.client
+                        ) : (
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-ink-3">
+                            {t("femme.propinas.withdrawalTag")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 text-ink">{m.professional}</td>
+                      <td
+                        className={`whitespace-nowrap px-2 text-right font-heading font-bold ${
+                          m.kind === "withdrawal" ? "text-ink-2" : "text-ink"
+                        }`}
+                      >
+                        {m.kind === "withdrawal" ? "− " : ""}
+                        {formatGuaraniesGs(m.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+              <PageSizeSelect
+                value={movPageSize}
+                onChange={(size) => {
+                  setMovPageSize(size);
+                  setMovPage(0);
+                }}
+                label={t("femme.pagination.rowsPerPage")}
+              />
+              <Text variant="small" className="text-[var(--color-ink-3)]">
+                {t("femme.pagination.showingRange", {
+                  from: movFrom,
+                  to: movTo,
+                  total: movements.length,
+                })}
+              </Text>
+              <Pagination
+                page={safeMovPage + 1}
+                pageCount={movPages}
+                onPageChange={(p) => setMovPage(p - 1)}
+                previousLabel={t("femme.pagination.previous")}
+                nextLabel={t("femme.pagination.next")}
+              />
+            </div>
+          </>
         )}
-        {!loading && movements.length > visible ? (
-          <div className="flex justify-center py-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              data-testid="propinas-more"
-              onClick={() => setVisible((v) => v + MOVEMENTS_PAGE)}
-            >
-              {t("femme.propinas.showMore")}
-            </Button>
-          </div>
-        ) : null}
       </section>
 
       <Modal
