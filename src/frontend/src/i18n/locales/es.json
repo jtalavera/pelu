@@ -27,6 +27,7 @@
   },
   "femme": {
     "commissions": {
+      "moreMenu": "Más",
       "assignLine": {
         "action": "Asignar profesional",
         "title": "Asignar profesional a la línea",
@@ -42,6 +43,8 @@
         "TAX_INCLUDED": "con IVA"
       },
       "movements": {
+        "filtersToggle": "Filtros",
+        "rowActions": "Acciones del movimiento",
         "hint": "Todas las comisiones registradas. Si una quedó asignada al profesional equivocado, usá «Cambiar profesional».",
         "empty": "No hay movimientos para esos filtros.",
         "movement": "Movimiento",
@@ -199,6 +202,7 @@
         "applied": "Cambio aplicado."
       },
       "settings": {
+        "intro": "Los cambios pueden aplicarse desde hoy o desde el próximo periodo; nunca modifican comisiones ya devengadas.",
         "baseTitle": "Base de cálculo",
         "baseExample": "Ejemplo: línea de 110.000 Gs con IVA 10 % y 40 % de comisión → sin IVA 40.000 Gs; con IVA 44.000 Gs.",
         "baseChangeSummary": "Cambiar la base de cálculo de «{{from}}» a «{{to}}». El cambio no es retroactivo salvo que lo apliques desde el inicio del periodo vigente.",
@@ -231,6 +235,9 @@
         "user": "Usuario"
       },
       "rules": {
+        "optionsToggle": "Más opciones",
+        "exceptionsCount_one": "{{count}} excepción",
+        "exceptionsCount_other": "{{count}} excepciones",
         "searchService": "Buscar servicio",
         "searchProduct": "Buscar producto",
         "searchServicePlaceholder": "Nombre del servicio, por ejemplo Corte",
@@ -322,6 +329,9 @@
         "cellTitle": "{{professional}} · {{item}}"
       },
       "settlements": {
+        "periodLine": "Liquidación {{periodicity}} · periodo vigente: {{range}}",
+        "filtersToggle": "Filtros y exportar",
+        "openAria": "Abrir la liquidación {{id}} de {{name}}",
         "generateTitle": "Generar liquidaciones",
         "generate": "Generar",
         "generateHint": "Se crea una liquidación en borrador por profesional con las comisiones aún no liquidadas hasta la fecha «Hasta».",
@@ -343,6 +353,10 @@
         }
       },
       "settlement": {
+        "subtitle": "Liquidación #{{id}} · {{from}} – {{to}}",
+        "moreActions": "Más acciones",
+        "lineActions": "Acciones de la línea",
+        "subtotals": "Subtotales por tipo e ítem",
         "title": "Liquidación #{{id}} · {{name}}",
         "approve": "Aprobar",
         "approveTitle": "Aprobar liquidación",
@@ -375,6 +389,9 @@
         "voidedInfo": "Anulada: {{reason}}"
       },
       "reports": {
+        "linesCount_one": "{{count}} línea",
+        "linesCount_other": "{{count}} líneas",
+        "moreFilters": "Más filtros",
         "total": "Total del periodo: {{amount}}",
         "byProfessional": "Por profesional",
         "byItem": "Por ítem",
