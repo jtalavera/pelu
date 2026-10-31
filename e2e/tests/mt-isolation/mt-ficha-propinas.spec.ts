@@ -282,9 +282,12 @@ test.describe("mt-ficha-propinas · service sheet & tips isolation", () => {
     try {
       await loginAs(pageA, world.tenantA.adminEmail, world.tenantA.adminPassword);
       await pageA.goto("/app/service-records");
-      await pageA.getByRole("tab", { name: "History" }).click();
+      // The list opens on "Open" (pending to charge): A's new ficha is OPEN, so it is right there.
       await pageA.locator("#service-record-history-text-filter").fill(aClientName);
-      const row = pageA.locator("tbody tr").filter({ hasText: aClientName }).first();
+      const row = pageA
+        .locator('[data-testid^="service-record-row-"]')
+        .filter({ hasText: aClientName })
+        .first();
       await expect(row).toBeVisible({ timeout: 15_000 });
       await row.click();
       await expect(pageA.getByRole("dialog", { name: "Service record detail" })).toBeVisible({
@@ -300,19 +303,23 @@ test.describe("mt-ficha-propinas · service sheet & tips isolation", () => {
     try {
       await loginAs(pageB, world.tenantB.adminEmail, world.tenantB.adminPassword);
       await pageB.goto("/app/service-records");
+      // "All" so a hidden OPEN-only filter can't make the absence trivially true.
+      await pageB.getByTestId("service-records-chip-all").click();
       await Promise.all([
         pageB.waitForResponse(
           (r) =>
             new URL(r.url()).pathname === "/api/service-records" &&
-            r.request().method() === "GET",
+            r.request().method() === "GET" &&
+            new URL(r.url()).searchParams.has("q"),
           { timeout: 25_000 },
         ),
-        pageB.getByRole("tab", { name: "History" }).click(),
+        pageB.locator("#service-record-history-text-filter").fill(aClientName),
       ]);
-      await pageB.locator("#service-record-history-text-filter").fill(aClientName);
       // The A client's name simply does not exist in B's tenant (B's clients are "MT Cliente
-      // Boreal N") — so it must never surface in B's ficha history table.
-      await expect(pageB.locator("tbody tr").filter({ hasText: aClientName })).toHaveCount(0);
+      // Boreal N") — so it must never surface in B's ficha list.
+      await expect(
+        pageB.locator('[data-testid^="service-record-row-"]').filter({ hasText: aClientName }),
+      ).toHaveCount(0);
     } finally {
       await ctxB.close();
     }
