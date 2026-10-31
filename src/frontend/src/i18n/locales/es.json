@@ -1067,6 +1067,16 @@
       "noPhone": "Sin teléfono"
     },
     "summary": {
+      "kpiRevenue_one": "Facturado en {{count}} día",
+      "kpiRevenue_other": "Facturado en {{count}} días",
+      "kpiClients_one": "Clientes atendidos en {{count}} día",
+      "kpiClients_other": "Clientes atendidos en {{count}} días",
+      "revenueTitleDay": "Facturación por día",
+      "revenueTitleWeek": "Facturación por semana",
+      "averageDay": "promedio {{amount}} por día",
+      "averageWeek": "promedio {{amount}} por semana",
+      "bestDay": "Mejor día",
+      "bestWeek": "Mejor semana",
       "periodLabel": "Período",
       "period_one": "{{count}} día",
       "period_other": "{{count}} días",

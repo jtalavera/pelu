@@ -3,9 +3,11 @@ import { useTranslation } from "react-i18next";
 import { Alert, Card, Heading, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import {
+  PaymentStack,
   RankedBars,
   RevenueBars,
   WeekdayBars,
+  revenueBuckets,
   trendTotal,
   type TrendPoint,
 } from "../components/charts/SummaryCharts";
@@ -16,6 +18,8 @@ import { capitalize } from "./billing/billingShared";
 type DashboardsResponse = {
   revenueWeek?: { invoiced: string | number; collected: string | number };
   clientsThisMonth?: number;
+  /** Distinct clients with appointments in the requested period. */
+  clientsInPeriod?: number;
   revenueTrend: TrendPoint[];
   revenueTrendDays: number;
   topServices: Array<{ serviceName: string; revenue: string | number }>;
@@ -35,7 +39,7 @@ const asNumber = (v: string | number): number => {
 };
 
 /**
- * Resumen (the "Dashboards" charts screen, redesigned): the week and month figures, ONE main chart
+ * Resumen (the "Dashboards" charts screen, redesigned): two figures that follow the period, ONE main chart
  * (invoicing, with a 7 / 30 / 90 day period) and everything else folded under "Ver más detalle" as
  * short ranked lists. Tips by professional live in the Propinas screen. Same `/api/dashboard`
  * aggregate as Inicio, asked for the chosen period (`?days=`).
@@ -73,6 +77,8 @@ export default function DashboardsPage() {
 
   const trend = useMemo(() => (Array.isArray(data?.revenueTrend) ? data!.revenueTrend : []), [data]);
   const total = trendTotal(trend);
+  const { buckets, unit } = useMemo(() => revenueBuckets(trend), [trend]);
+  const average = buckets.length > 0 ? total / buckets.length : 0;
 
   const services = useMemo(
     () =>
@@ -153,92 +159,94 @@ export default function DashboardsPage() {
                 {error}
               </Alert>
             )}
-            {/* Week and month totals (independent of the period). */}
-            <div className="flex flex-wrap items-baseline gap-x-7 gap-y-1" data-testid="summary-kpis">
+            {/* Two figures that follow the selected period. */}
+            <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2" data-testid="summary-kpis">
               <div className="flex flex-col">
-                <span className="text-sm text-ink-3">{t("femme.dashboard.revenueWeek")}</span>
-                <b className="font-heading text-xl font-extrabold tabular-nums" data-testid="dashboards-revenue-week">
-                  {formatGuaraniesGs(data.revenueWeek?.collected ?? 0)}
+                <span className="text-sm text-ink-3" data-testid="summary-kpi-revenue-label">
+                  {t("femme.summary.kpiRevenue", { count: days })}
+                </span>
+                <b className="font-heading text-2xl font-extrabold tabular-nums" data-testid="summary-kpi-revenue">
+                  {formatGuaraniesGs(total)}
                 </b>
               </div>
               <div className="flex flex-col">
-                <span className="text-sm text-ink-3">{t("femme.dashboard.metricClientsMonth")}</span>
-                <b className="font-heading text-xl font-extrabold tabular-nums" data-testid="dashboards-clients-month">
-                  {data.clientsThisMonth ?? 0}
+                <span className="text-sm text-ink-3" data-testid="summary-kpi-clients-label">
+                  {t("femme.summary.kpiClients", { count: days })}
+                </span>
+                <b className="font-heading text-2xl font-extrabold tabular-nums" data-testid="summary-kpi-clients">
+                  {data.clientsInPeriod ?? 0}
                 </b>
               </div>
             </div>
 
             <Card className={`p-4 sm:p-6 ${loading ? "opacity-70" : ""}`} data-testid="summary-revenue-card">
-              <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <Heading as="h2" className="text-lg">
-                    {t("femme.summary.revenueTitle")}
-                  </Heading>
-                  <Text variant="muted" className="text-sm" data-testid="summary-range">
-                    {t("femme.summary.lastDays", { count: days })}
-                  </Text>
-                </div>
-                <div className="font-heading text-3xl font-extrabold tabular-nums text-ink" data-testid="summary-revenue-total">
-                  {formatGuaraniesGs(total)}
-                </div>
-              </div>
-              <RevenueBars data={trend} locale={locale} />
+              <Heading as="h2" className="text-lg">
+                {t(unit === "week" ? "femme.summary.revenueTitleWeek" : "femme.summary.revenueTitleDay")}
+              </Heading>
+              <Text variant="muted" className="text-sm" data-testid="summary-range">
+                {t("femme.summary.lastDays", { count: days })}
+                {total > 0
+                  ? ` · ${t(unit === "week" ? "femme.summary.averageWeek" : "femme.summary.averageDay", {
+                      amount: formatGuaraniesGs(average),
+                    })}`
+                  : ""}
+              </Text>
+              <RevenueBars buckets={buckets} unit={unit} locale={locale} />
             </Card>
 
-            <Card className="p-0">
-              <button
-                type="button"
-                aria-expanded={moreOpen}
-                aria-controls="summary-more"
-                data-testid="summary-more-toggle"
-                onClick={() => setMoreOpen((o) => !o)}
-                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left font-bold text-ink sm:px-6"
-              >
-                {t("femme.summary.moreDetail")}
-                <span aria-hidden className={`text-ink-3 transition-transform ${moreOpen ? "rotate-180" : ""}`}>
-                  ⌄
-                </span>
-              </button>
-              {moreOpen && (
-                <div id="summary-more" className="grid gap-6 px-4 pb-5 sm:grid-cols-2 sm:px-6" data-testid="summary-more">
-                  {!hasDetail ? (
-                    <p className="text-ink-3 sm:col-span-2" data-testid="summary-more-empty">
+            <button
+              type="button"
+              aria-expanded={moreOpen}
+              aria-controls="summary-more"
+              data-testid="summary-more-toggle"
+              onClick={() => setMoreOpen((o) => !o)}
+              className="flex min-h-14 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink shadow-sm sm:px-6"
+            >
+              {t("femme.summary.moreDetail")}
+              <span aria-hidden className={`text-ink-3 transition-transform ${moreOpen ? "rotate-180" : ""}`}>
+                ⌄
+              </span>
+            </button>
+            {moreOpen && (
+              <div id="summary-more" className="flex flex-col gap-4" data-testid="summary-more">
+                {!hasDetail ? (
+                  <Card className="p-4 sm:p-6">
+                    <p className="text-ink-3" data-testid="summary-more-empty">
                       {t("femme.summary.noData")}
                     </p>
-                  ) : (
-                    <>
-                      <section>
-                        <Heading as="h3" className="mb-2 text-[15px]">
-                          {t("femme.summary.topServices")}
-                        </Heading>
-                        {services.length === 0 ? (
-                          <p className="text-sm text-ink-3">{t("femme.summary.noServices")}</p>
-                        ) : (
-                          <RankedBars items={services} testId="summary-top-services" />
-                        )}
-                      </section>
-                      <section>
-                        <Heading as="h3" className="mb-2 text-[15px]">
-                          {t("femme.summary.paymentMethods")}
-                        </Heading>
-                        {methods.length === 0 ? (
-                          <p className="text-sm text-ink-3">{t("femme.summary.noPayments")}</p>
-                        ) : (
-                          <RankedBars items={methods} asPercent testId="summary-payment-methods" />
-                        )}
-                      </section>
-                      <section className="sm:col-span-2">
-                        <Heading as="h3" className="mb-2 text-[15px]">
-                          {t("femme.summary.appointmentsByDay")}
-                        </Heading>
-                        <WeekdayBars items={weekdays} />
-                      </section>
-                    </>
-                  )}
-                </div>
-              )}
-            </Card>
+                  </Card>
+                ) : (
+                  <>
+                    <Card className="flex flex-col gap-4 p-4 sm:p-6">
+                      <Heading as="h3" className="text-base">
+                        {t("femme.summary.topServices")}
+                      </Heading>
+                      {services.length === 0 ? (
+                        <p className="text-sm text-ink-3">{t("femme.summary.noServices")}</p>
+                      ) : (
+                        <RankedBars items={services} testId="summary-top-services" />
+                      )}
+                    </Card>
+                    <Card className="flex flex-col gap-4 p-4 sm:p-6">
+                      <Heading as="h3" className="text-base">
+                        {t("femme.summary.paymentMethods")}
+                      </Heading>
+                      {methods.length === 0 ? (
+                        <p className="text-sm text-ink-3">{t("femme.summary.noPayments")}</p>
+                      ) : (
+                        <PaymentStack items={methods} testId="summary-payment-methods" />
+                      )}
+                    </Card>
+                    <Card className="flex flex-col gap-4 p-4 sm:p-6">
+                      <Heading as="h3" className="text-base">
+                        {t("femme.summary.appointmentsByDay")}
+                      </Heading>
+                      <WeekdayBars items={weekdays} />
+                    </Card>
+                  </>
+                )}
+              </div>
+            )}
           </>
         )
       )}

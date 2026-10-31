@@ -1067,6 +1067,16 @@
       "noPhone": "No phone"
     },
     "summary": {
+      "kpiRevenue_one": "Invoiced in {{count}} day",
+      "kpiRevenue_other": "Invoiced in {{count}} days",
+      "kpiClients_one": "Clients served in {{count}} day",
+      "kpiClients_other": "Clients served in {{count}} days",
+      "revenueTitleDay": "Invoicing per day",
+      "revenueTitleWeek": "Invoicing per week",
+      "averageDay": "average {{amount}} per day",
+      "averageWeek": "average {{amount}} per week",
+      "bestDay": "Best day",
+      "bestWeek": "Best week",
       "periodLabel": "Period",
       "period_one": "{{count}} day",
       "period_other": "{{count}} days",

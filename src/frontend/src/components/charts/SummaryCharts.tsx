@@ -19,18 +19,61 @@ export function trendTotal(points: TrendPoint[]): number {
   return points.reduce((s, p) => s + num(p.invoiced), 0);
 }
 
-/**
- * Resumen redesign: the one main chart. Plain SVG bars of the invoiced revenue per day, the busiest
- * day highlighted, a dashed line for the period average and one tap/hover line with the day's
- * figure. A period with no revenue shows a single short line instead of an empty chart.
- */
-export function RevenueBars({ data, locale }: { data: TrendPoint[]; locale: string }) {
-  const { t } = useTranslation();
-  const [picked, setPicked] = useState<number | null>(null);
-  const values = useMemo(() => data.map((p) => num(p.invoiced)), [data]);
-  const total = values.reduce((s, v) => s + v, 0);
+export type RevenueBucket = {
+  /** First day of the bucket (yyyy-MM-dd) — also its stable key. */
+  key: string;
+  /** Last day of the bucket (equal to `key` for a single day). */
+  endDate: string;
+  value: number;
+};
 
-  if (data.length === 0 || total === 0) {
+/**
+ * Up to a month the chart shows one bar per day; beyond that the days are grouped by week (7 days,
+ * the most recent week last) so 90 days are 13 readable bars instead of 90 slivers.
+ */
+export function revenueBuckets(data: TrendPoint[]): { buckets: RevenueBucket[]; unit: "day" | "week" } {
+  if (data.length <= 31) {
+    return {
+      unit: "day",
+      buckets: data.map((p) => ({ key: p.date, endDate: p.date, value: num(p.invoiced) })),
+    };
+  }
+  const buckets: RevenueBucket[] = [];
+  for (let end = data.length; end > 0; end -= 7) {
+    const chunk = data.slice(Math.max(0, end - 7), end);
+    buckets.unshift({
+      key: chunk[0].date,
+      endDate: chunk[chunk.length - 1].date,
+      value: chunk.reduce((s, p) => s + num(p.invoiced), 0),
+    });
+  }
+  return { buckets, unit: "week" };
+}
+
+/**
+ * Resumen redesign: the one main chart. Wide, soft bars of the invoiced revenue per day (per week
+ * for long periods) with three reference lines (0, half, max), the best bar highlighted and a
+ * single line with the figure of the bar tapped (or of the best one). A period with no revenue shows
+ * a short line instead of an empty chart.
+ */
+export function RevenueBars({
+  buckets,
+  unit,
+  locale,
+}: {
+  buckets: RevenueBucket[];
+  unit: "day" | "week";
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  const [picked, setPicked] = useState<string | null>(null);
+  const total = buckets.reduce((s, b) => s + b.value, 0);
+  const compact = useMemo(
+    () => new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }),
+    [locale],
+  );
+
+  if (buckets.length === 0 || total === 0) {
     return (
       <p className="py-5 text-ink-3" data-testid="summary-revenue-empty">
         {t("femme.summary.noRevenue")}
@@ -38,116 +81,146 @@ export function RevenueBars({ data, locale }: { data: TrendPoint[]; locale: stri
     );
   }
 
-  const W = 720;
-  const H = 220;
-  const pad = { l: 8, r: 8, t: 12, b: 24 };
-  const iw = W - pad.l - pad.r;
-  const ih = H - pad.t - pad.b;
-  const max = Math.max(...values, 1);
-  const bw = iw / values.length;
-  const avg = total / values.length;
-  const peak = values.indexOf(Math.max(...values));
-  const avgY = pad.t + ih - (avg / max) * ih;
-  const shown = picked ?? null;
+  const max = Math.max(...buckets.map((b) => b.value), 1);
+  // Round the top of the scale up to a tidy figure so the reference lines read well.
+  const mag = 10 ** Math.floor(Math.log10(max));
+  const top = Math.ceil(max / (mag / 2)) * (mag / 2);
+  const bestKey = buckets.reduce((best, b) => (b.value > best.value ? b : best), buckets[0]).key;
+  const shown = buckets.find((b) => b.key === picked) ?? buckets.find((b) => b.key === bestKey)!;
+  const range = (b: RevenueBucket) =>
+    b.key === b.endDate ? shortDate(b.key, locale) : `${shortDate(b.key, locale)} – ${shortDate(b.endDate, locale)}`;
 
   return (
-    <div data-testid="summary-revenue-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("femme.summary.revenueChartLabel")} className="block h-auto w-full">
-        {values.map((v, i) => {
-          const h = (v / max) * ih;
-          return (
-            <rect
-              key={data[i].date}
-              data-testid={`summary-bar-${data[i].date}`}
-              x={pad.l + i * bw + bw * 0.15}
-              y={pad.t + ih - h}
-              width={bw * 0.7}
-              height={v > 0 ? Math.max(h, 2) : 0}
-              rx={3}
-              className={i === peak ? "fill-primary" : "fill-primary/40 hover:fill-primary"}
-              onMouseEnter={() => setPicked(i)}
-              onClick={() => setPicked(i)}
-            >
-              <title>{`${shortDate(data[i].date, locale)}: ${formatGuaraniesGs(v)}`}</title>
-            </rect>
-          );
-        })}
-        <line
-          x1={pad.l}
-          x2={W - pad.r}
-          y1={avgY}
-          y2={avgY}
-          className="stroke-ink-3"
-          strokeDasharray="4 4"
-          strokeWidth={1.2}
-          data-testid="summary-average-line"
-        />
-        <text x={pad.l} y={H - 6} className="fill-ink-3" fontSize={11}>
-          {shortDate(data[0].date, locale)}
-        </text>
-        <text x={W - pad.r} y={H - 6} textAnchor="end" className="fill-ink-3" fontSize={11}>
-          {shortDate(data[data.length - 1].date, locale)}
-        </text>
-      </svg>
-      <p className="min-h-5 pt-1 text-sm font-semibold text-ink-2" aria-live="polite" data-testid="summary-bar-tip">
-        {shown !== null
-          ? `${shortDate(data[shown].date, locale)} · ${formatGuaraniesGs(values[shown])}`
-          : t("femme.summary.barHint")}
-      </p>
-      <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-ink-3">
-        <span>{t("femme.summary.legendDaily")}</span>
-        <span>{t("femme.summary.legendAverage", { amount: formatGuaraniesGs(avg) })}</span>
+    <div data-testid="summary-revenue-chart" role="group" aria-label={t("femme.summary.revenueChartLabel")}>
+      <div className="relative mt-2 h-44 pl-12">
+        {[1, 0.5, 0].map((f) => (
+          <div
+            key={f}
+            aria-hidden
+            className="absolute inset-x-0 flex items-center gap-2"
+            style={{ bottom: `${f * 100}%`, transform: "translateY(50%)" }}
+          >
+            <span className="w-10 shrink-0 text-right text-[11px] text-ink-3">{f === 0 ? "0" : compact.format(top * f)}</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
+        ))}
+        <div className="relative flex h-full items-end gap-1 sm:gap-1.5">
+          {buckets.map((b) => {
+            const isBest = b.key === bestKey;
+            const isPicked = picked === b.key;
+            return (
+              <button
+                key={b.key}
+                type="button"
+                data-testid={`summary-bar-${b.key}`}
+                aria-label={`${range(b)}: ${formatGuaraniesGs(b.value)}`}
+                aria-pressed={isPicked}
+                onClick={() => setPicked(b.key)}
+                onMouseEnter={() => setPicked(b.key)}
+                className="group flex h-full min-w-0 flex-1 items-end justify-center"
+              >
+                <span
+                  className={`block w-full max-w-7 rounded-t-md transition-colors ${
+                    isBest || isPicked ? "bg-primary" : "bg-primary/30 group-hover:bg-primary/60"
+                  }`}
+                  style={{ height: b.value > 0 ? `${Math.max((b.value / top) * 100, 2)}%` : 0 }}
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
+      <div className="flex justify-between pl-12 pt-1.5 text-xs text-ink-3" aria-hidden>
+        <span>{shortDate(buckets[0].key, locale)}</span>
+        <span>{shortDate(buckets[buckets.length - 1].endDate, locale)}</span>
+      </div>
+      <p className="mt-2 flex min-h-11 flex-wrap items-center gap-x-2 text-sm text-ink-2" aria-live="polite" data-testid="summary-bar-tip">
+        {picked === null ? (
+          <span>{t(unit === "week" ? "femme.summary.bestWeek" : "femme.summary.bestDay")}:</span>
+        ) : null}
+        <span>{range(shown)}</span>
+        <b className="font-heading text-base tabular-nums text-ink">{formatGuaraniesGs(shown.value)}</b>
+      </p>
     </div>
   );
 }
 
 export type RankedItem = { label: string; value: number };
 
-/** A short ranking: name, figure and a bar scaled to the first item. `asPercent` shows each item's share of the total. */
-export function RankedBars({
-  items,
-  asPercent = false,
-  testId,
-}: {
-  items: RankedItem[];
-  asPercent?: boolean;
-  testId: string;
-}) {
-  const total = items.reduce((s, i) => s + i.value, 0);
+/** A short ranking: name, figure and a thin bar scaled to the first item. */
+export function RankedBars({ items, testId }: { items: RankedItem[]; testId: string }) {
   const top = Math.max(...items.map((i) => i.value), 1);
   return (
-    <ul className="flex flex-col gap-2.5" data-testid={testId}>
+    <ul className="flex flex-col gap-4" data-testid={testId}>
       {items.map((i) => (
-        <li key={i.label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 text-sm">
-          <span className="break-words text-ink">{i.label}</span>
-          <span className="text-right font-bold tabular-nums text-ink">
-            {asPercent ? `${Math.round((i.value / (total || 1)) * 100)}%` : formatGuaraniesGs(i.value)}
-          </span>
-          <span className="col-span-2 h-2 overflow-hidden rounded bg-bg" aria-hidden>
-            <span className="block h-full rounded bg-primary" style={{ width: `${(i.value / top) * 100}%` }} />
-          </span>
+        <li key={i.label}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0 break-words text-ink">{i.label}</span>
+            <b className="shrink-0 font-heading tabular-nums text-ink">{formatGuaraniesGs(i.value)}</b>
+          </div>
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-primary-lt" aria-hidden>
+            <div className="h-full rounded-full bg-primary" style={{ width: `${(i.value / top) * 100}%` }} />
+          </div>
         </li>
       ))}
     </ul>
   );
 }
 
-/** Seven slim bars, Monday first; the busiest day is highlighted. */
+const PAYMENT_COLORS = ["#0E767E", "#E0783A", "#9CCBCF", "#B8C2CC", "#7A3E00", "#5F6B78"];
+
+/** One stacked bar with the share of each payment method, and a legend row per method. */
+export function PaymentStack({ items, testId }: { items: RankedItem[]; testId: string }) {
+  const total = items.reduce((s, i) => s + i.value, 0) || 1;
+  const parts = items.map((i, idx) => ({
+    ...i,
+    pct: Math.round((i.value / total) * 100),
+    share: (i.value / total) * 100,
+    color: PAYMENT_COLORS[idx % PAYMENT_COLORS.length],
+  }));
+  return (
+    <div data-testid={testId} className="flex flex-col gap-3">
+      <div className="flex h-3.5 gap-0.5 overflow-hidden rounded-full" aria-hidden>
+        {parts.map((p) => (
+          <span key={p.label} className="block h-full" style={{ width: `${p.share}%`, background: p.color }} />
+        ))}
+      </div>
+      <ul className="flex flex-col">
+        {parts.map((p) => (
+          <li key={p.label} className="flex min-h-10 items-center gap-2.5 border-t border-line first:border-t-0">
+            <span className="size-3 shrink-0 rounded-full" style={{ background: p.color }} aria-hidden />
+            <span className="min-w-0 flex-1 break-words text-ink">{p.label}</span>
+            <b className="font-heading tabular-nums text-ink">{p.pct}%</b>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Seven columns, Monday first: the count on top, the day below; the busiest day is highlighted. */
 export function WeekdayBars({ items }: { items: Array<{ label: string; count: number }> }) {
   const max = Math.max(...items.map((i) => i.count), 1);
   return (
-    <div className="grid h-28 grid-cols-7 items-end gap-2" data-testid="summary-weekday-bars">
-      {items.map((i) => (
-        <div key={i.label} className="flex h-full flex-col items-center justify-end gap-1 text-xs text-ink-3">
-          <b className="tabular-nums text-ink-2">{i.count}</b>
-          <i
-            className={`block w-full max-w-9 rounded-t-md ${i.count === max && i.count > 0 ? "bg-primary" : "bg-primary/40"}`}
-            style={{ height: `${Math.max(3, (i.count / max) * 70)}px` }}
-          />
-          <span>{i.label}</span>
-        </div>
-      ))}
+    <div data-testid="summary-weekday-bars">
+      <div className="grid h-36 grid-cols-7 items-end gap-2">
+        {items.map((i) => (
+          <div key={i.label} className="flex h-full flex-col items-center justify-end gap-1.5">
+            <b className="font-heading text-sm tabular-nums text-ink">{i.count}</b>
+            <span
+              className={`block w-full max-w-11 rounded-t-lg ${
+                i.count === max && i.count > 0 ? "bg-primary" : "bg-primary/25"
+              }`}
+              style={{ height: `${Math.max(4, (i.count / max) * 96)}px` }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-7 gap-2 text-center text-xs text-ink-3">
+        {items.map((i) => (
+          <span key={i.label}>{i.label}</span>
+        ))}
+      </div>
     </div>
   );
 }

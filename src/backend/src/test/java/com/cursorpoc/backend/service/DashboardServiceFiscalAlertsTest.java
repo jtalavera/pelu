@@ -57,6 +57,24 @@ class DashboardServiceFiscalAlertsTest {
   }
 
   @Test
+  void clientsInPeriodCountsDistinctClientsOverTheRequestedWindow() {
+    when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L)).thenReturn(Optional.empty());
+    // Month window (any other range) answers 0; each requested period answers its own figure.
+    when(appointmentRepository.countDistinctClientsWithAppointmentsBetween(eq(1L), any(), any()))
+        .thenAnswer(
+            inv -> {
+              java.time.Instant from = inv.getArgument(1);
+              java.time.Instant to = inv.getArgument(2);
+              long spanDays = java.time.Duration.between(from, to).toDays();
+              return spanDays == 7 ? 4L : spanDays == 90 ? 40L : 0L;
+            });
+
+    assertThat(dashboardService.build(1L, 7).clientsInPeriod()).isEqualTo(4L);
+    assertThat(dashboardService.build(1L, 90).clientsInPeriod()).isEqualTo(40L);
+  }
+
+  @Test
   void blockingAlertWhenNoActiveStampAndRucReady() {
     when(businessProfileService.isRucReadyForInvoicing(1L)).thenReturn(true);
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L)).thenReturn(Optional.empty());

@@ -16,7 +16,11 @@ public record DashboardResponse(
     List<TopService> topServices,
     List<PaymentMethodMix> paymentMethodMix,
     List<AppointmentsByDayOfWeek> appointmentsByDayOfWeek,
-    List<RevenueTrendPoint> revenueTrendLookback) {
+    List<RevenueTrendPoint> revenueTrendLookback,
+    /**
+     * Distinct clients with real appointment activity in the same {@code revenueTrendDays} window.
+     */
+    long clientsInPeriod) {
 
   public record AppointmentSummary(
       long total, long pending, long confirmed, long inProgress, long completed) {}

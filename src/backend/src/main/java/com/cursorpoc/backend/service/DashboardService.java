@@ -148,6 +148,12 @@ public class DashboardService {
         appointmentRepository.countDistinctClientsWithAppointmentsBetween(
             tenantId, monthStart, monthEnd);
 
+    // Same window as the trend and the charts: the last `days` calendar days including today.
+    Instant periodStart = today.minusDays(days - 1L).atStartOfDay(zone).toInstant();
+    long clientsInPeriod =
+        appointmentRepository.countDistinctClientsWithAppointmentsBetween(
+            tenantId, periodStart, dayEnd);
+
     long total = appointmentRepository.countByTenantIdAndDay(tenantId, dayStart, dayEnd);
     long pending =
         appointmentRepository.countByTenant_IdAndStatusAndStartAtGreaterThanEqualAndStartAtLessThan(
@@ -246,7 +252,8 @@ public class DashboardService {
         topServices,
         paymentMethodMix,
         appointmentsByDayOfWeek,
-        revenueTrendSeries.lookback());
+        revenueTrendSeries.lookback(),
+        clientsInPeriod);
   }
 
   /**
