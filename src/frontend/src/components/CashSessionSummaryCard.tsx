@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text } from "@design-system";
+import type { CashSessionDetail } from "../api/cashSessions";
 import { useDateLocale } from "../i18n/dateLocale";
-import { formatAmountDecimal } from "../lib/formatMoney";
+import { formatGuaraniesGs, formatSignedGs } from "../lib/formatMoney";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
-import type { CashMovementType, CashSessionDetail } from "../api/cashSessions";
+import { Disclosure, Row } from "./CashDisclosure";
+import { CashMovementRow } from "./CashMovementRow";
 
 function capitalizeSnake(s: string): string {
   if (!s) return "";
@@ -13,132 +16,126 @@ function capitalizeSnake(s: string): string {
     .join("");
 }
 
-function movementTypeKey(type: CashMovementType): string {
-  switch (type) {
-    case "MANUAL_IN":
-      return "ManualIn";
-    case "MANUAL_OUT":
-      return "ManualOut";
-    case "TIP_WITHDRAWAL_OUT":
-      return "TipWithdrawal";
-  }
-}
+type Section = "methods" | "movements" | "data";
 
 /**
- * Shared metrics/payment-breakdown/movements block, reused for the live open-session view, the
- * just-closed summary, and the historical detail modal (issue #259).
+ * Minimalist cash-session detail, shared by the historical detail dialog and the just-closed summary:
+ * the headline figures (expected cash while open; expected / counted / difference once closed), then
+ * the payment methods, the movements (cash out shown negative) and the opening/closing data, folded.
+ * `hideHero` drops the headline when the host already shows its own verdict.
  */
-export function CashSessionSummaryCard({ detail }: { detail: CashSessionDetail }) {
+export function CashSessionSummaryCard({
+  detail,
+  hideHero = false,
+}: {
+  detail: CashSessionDetail;
+  hideHero?: boolean;
+}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
+  const [open, setOpen] = useState<Section | null>("movements");
+  const toggle = (k: Section) => setOpen((o) => (o === k ? null : k));
   const diff = detail.cashDifference !== null ? parseFloat(detail.cashDifference) : null;
+  const expected = Number(detail.expectedCashAmount);
+  const methods = detail.paymentSummary ?? [];
+  const movements = detail.movements ?? [];
+  const dayLine = t("femme.billing.cash.invoicedLine", {
+    count: detail.invoiceCount,
+    amount: formatGuaraniesGs(detail.totalInvoiced),
+  });
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm max-w-sm">
-        <span className="text-[rgb(var(--color-muted-foreground))]">
-          {t("femme.billing.close.totalInvoiced")}
-        </span>
-        <span className="text-right">{formatAmountDecimal(detail.totalInvoiced)}</span>
-        <span className="text-[rgb(var(--color-muted-foreground))]">
-          {t("femme.billing.close.invoiceCount")}
-        </span>
-        <span className="text-right">{detail.invoiceCount}</span>
-        <span className="text-[rgb(var(--color-muted-foreground))]">
-          {t(
-            detail.isOpen
-              ? "femme.billing.session.liveExpectedCash"
-              : "femme.billing.close.expectedCash",
-          )}
-        </span>
-        <span className="text-right" data-testid="cash-summary-expected-cash">
-          {formatAmountDecimal(detail.expectedCashAmount)}
-        </span>
-        {detail.countedCashAmount !== null && (
-          <>
-            <span className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.billing.close.countedCash")}
-            </span>
-            <span className="text-right">{formatAmountDecimal(detail.countedCashAmount)}</span>
-          </>
-        )}
-        {diff !== null && (
-          <>
+    <div className="flex flex-col gap-3" data-testid="cash-session-summary">
+      {!hideHero &&
+        (detail.isOpen ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm text-ink-3">{t("femme.billing.session.liveExpectedCash")}</span>
             <span
-              className={`font-semibold ${diff < 0 ? "text-danger" : "text-success"}`}
+              className={`font-heading text-3xl font-extrabold tabular-nums ${expected < 0 ? "text-danger" : "text-ink"}`}
+              data-testid="cash-summary-expected-cash"
             >
-              {t("femme.billing.close.difference")}
+              {formatSignedGs(detail.expectedCashAmount)}
             </span>
-            <span
-              className={`text-right font-semibold ${diff < 0 ? "text-danger" : "text-success"}`}
-            >
-              {diff >= 0 ? "+" : ""}
-              {formatAmountDecimal(detail.cashDifference as string)}
-            </span>
-          </>
-        )}
-      </div>
-
-      {(detail.paymentSummary ?? []).length > 0 && (
-        <div className="pt-3" style={{ borderTop: "var(--border-default)" }}>
-          <Text className="font-medium text-sm mb-1">
-            {t("femme.billing.close.paymentBreakdown")}
-          </Text>
-          <div className="flex flex-col gap-1">
-            {(detail.paymentSummary ?? []).map((ps, i) => (
-              <div key={i} className="flex justify-between text-sm max-w-xs">
-                <span>{t(`femme.billing.invoice.paymentMethod${capitalizeSnake(ps.method)}`)}</span>
-                <span>{formatAmountDecimal(ps.total)}</span>
-              </div>
-            ))}
+            <span className="text-sm text-ink-3">{dayLine}</span>
           </div>
-        </div>
-      )}
-
-      <div className="pt-3" style={{ borderTop: "var(--border-default)" }}>
-        <Text className="font-medium text-sm mb-1">{t("femme.billing.movements.title")}</Text>
-        {(detail.movements ?? []).length === 0 ? (
-          <Text variant="muted" className="text-sm">
-            {t("femme.billing.movements.emptyToday")}
-          </Text>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="px-2 py-1 text-left text-xs uppercase text-[var(--color-ink-3)]">
-                    {t("femme.billing.movements.colTime")}
-                  </th>
-                  <th className="px-2 py-1 text-left text-xs uppercase text-[var(--color-ink-3)]">
-                    {t("femme.billing.movements.colType")}
-                  </th>
-                  <th className="px-2 py-1 text-right text-xs uppercase text-[var(--color-ink-3)]">
-                    {t("femme.billing.movements.colAmount")}
-                  </th>
-                  <th className="px-2 py-1 text-left text-xs uppercase text-[var(--color-ink-3)]">
-                    {t("femme.billing.movements.colReason")}
-                  </th>
-                  <th className="px-2 py-1 text-left text-xs uppercase text-[var(--color-ink-3)]">
-                    {t("femme.billing.movements.colCreatedBy")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {(detail.movements ?? []).map((m) => (
-                  <tr key={m.id} style={{ borderTop: "var(--border-default)" }}>
-                    <td className="px-2 py-1">{formatParaguayDateTime(m.createdAt, dateLocale)}</td>
-                    <td className="px-2 py-1">
-                      {t(`femme.billing.movements.type${movementTypeKey(m.type)}`)}
-                    </td>
-                    <td className="px-2 py-1 text-right">{formatAmountDecimal(m.amount)}</td>
-                    <td className="px-2 py-1">{m.reason ?? "—"}</td>
-                    <td className="px-2 py-1">{m.createdByEmail ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm text-ink-3">{t("femme.billing.close.expectedCash")}</span>
+                <b className="font-heading text-lg tabular-nums text-ink" data-testid="cash-summary-expected-cash">
+                  {formatSignedGs(detail.expectedCashAmount)}
+                </b>
+              </div>
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm text-ink-3">{t("femme.billing.close.countedCash")}</span>
+                <b className="font-heading text-lg tabular-nums text-ink">
+                  {detail.countedCashAmount !== null ? formatSignedGs(detail.countedCashAmount) : "—"}
+                </b>
+              </div>
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm text-ink-3">{t("femme.billing.close.difference")}</span>
+                <b
+                  className={`font-heading text-lg tabular-nums ${
+                    diff === null || diff === 0 ? "text-ink" : diff < 0 ? "text-danger" : "text-success"
+                  }`}
+                >
+                  {diff === null ? "—" : formatSignedGs(diff, true)}
+                </b>
+              </div>
+            </div>
+            <span className="text-sm text-ink-3">{dayLine}</span>
           </div>
-        )}
+        ))}
+
+      <div>
+        <Disclosure
+          id="methods"
+          label={t("femme.billing.cash.methods")}
+          open={open === "methods"}
+          onToggle={() => toggle("methods")}
+        >
+          {methods.length === 0 ? (
+            <Text variant="muted">{t("femme.billing.cash.noPayments")}</Text>
+          ) : (
+            methods.map((m, i) => (
+              <Row
+                key={i}
+                label={t(`femme.billing.invoice.paymentMethod${capitalizeSnake(m.method)}`)}
+                value={formatGuaraniesGs(m.total)}
+              />
+            ))
+          )}
+        </Disclosure>
+        <Disclosure
+          id="movements"
+          label={t("femme.billing.movements.title")}
+          count={movements.length}
+          open={open === "movements"}
+          onToggle={() => toggle("movements")}
+        >
+          {movements.length === 0 ? (
+            <Text variant="muted">{t("femme.billing.movements.emptyToday")}</Text>
+          ) : (
+            movements.map((m) => <CashMovementRow key={m.id} movement={m} showUser />)
+          )}
+        </Disclosure>
+        <Disclosure
+          id="data"
+          label={t("femme.billing.cashHistory.dataTitle")}
+          open={open === "data"}
+          onToggle={() => toggle("data")}
+        >
+          <Row label={t("femme.billing.session.metricOpenedAt")} value={formatParaguayDateTime(detail.openedAt, dateLocale)} />
+          <Row label={t("femme.billing.session.metricOpenedBy")} value={detail.openedByEmail} />
+          <Row label={t("femme.billing.session.metricOpeningAmount")} value={formatGuaraniesGs(detail.openingCashAmount)} />
+          {detail.closedAt && (
+            <>
+              <Row label={t("femme.billing.close.closedAt")} value={formatParaguayDateTime(detail.closedAt, dateLocale)} />
+              <Row label={t("femme.billing.close.closedBy")} value={detail.closedByEmail ?? "—"} />
+            </>
+          )}
+        </Disclosure>
       </div>
     </div>
   );

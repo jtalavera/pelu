@@ -1989,6 +1989,7 @@
         "statusOpenBadge": "Open",
         "statusClosedBadge": "Closed",
         "backToCaja": "Back to Cash Register",
+        "dataTitle": "Cash register data",
         "detailTitle": "Cash register detail",
         "filterStatusOpen": "Open",
         "filterStatusClosed": "Closed",

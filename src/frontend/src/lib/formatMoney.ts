@@ -47,3 +47,16 @@ export function formatGuaraniesGs(v: string | number | null | undefined): string
   }
   return `Gs. ${integerFormatter.format(Math.round(n))}`;
 }
+
+/**
+ * Guaraníes with an explicit sign: negatives render as `−Gs. 6.000` (true minus), and with
+ * `plus` positives render as `+Gs. 6.000`. Used where the direction of the amount matters
+ * (cash movements, expected cash).
+ */
+export function formatSignedGs(v: string | number | null | undefined, plus = false): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "Gs. —";
+  const body = `Gs. ${integerFormatter.format(Math.abs(Math.round(n)))}`;
+  if (Math.round(n) < 0) return `−${body}`;
+  return plus && Math.round(n) > 0 ? `+${body}` : body;
+}

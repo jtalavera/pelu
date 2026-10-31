@@ -3,19 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Badge, Button, Modal, Spinner, Text } from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { getSessionDetail, type CashSessionDetail } from "../api/cashSessions";
-import { useDateLocale } from "../i18n/dateLocale";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
-import { formatGuaraniesGs } from "../lib/formatMoney";
 import { CashSessionSummaryCard } from "./CashSessionSummaryCard";
-
-function MetaField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs uppercase tracking-wide text-[var(--color-ink-3)]">{label}</div>
-      <div className="text-sm font-medium text-[var(--color-ink)]">{value}</div>
-    </div>
-  );
-}
 
 export function CashSessionDetailModal({
   sessionId,
@@ -25,7 +13,6 @@ export function CashSessionDetailModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const dateLocale = useDateLocale();
   const [detail, setDetail] = useState<CashSessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -53,8 +40,17 @@ export function CashSessionDetailModal({
     <Modal
       open
       onClose={onClose}
-      title={t("femme.billing.cashHistory.detailTitle")}
-      className="max-w-2xl"
+      title={
+        <span className="flex flex-wrap items-center gap-2">
+          {t("femme.billing.cashHistory.detailTitle")}
+          {detail && (
+            <Badge variant={detail.isOpen ? "success" : "secondary"}>
+              {t(detail.isOpen ? "femme.billing.cashHistory.statusOpenBadge" : "femme.billing.cashHistory.statusClosedBadge")}
+            </Badge>
+          )}
+        </span>
+      }
+      className="max-w-lg"
       footer={
         <Button variant="secondary" onClick={onClose}>
           {t("femme.billing.movements.form.closeButton")}
@@ -73,56 +69,7 @@ export function CashSessionDetailModal({
             {loadError}
           </Alert>
         )}
-        {detail && (
-          <>
-            <div>
-              <Badge variant={detail.isOpen ? "success" : "secondary"}>
-                {t(
-                  detail.isOpen
-                    ? "femme.billing.cashHistory.statusOpenBadge"
-                    : "femme.billing.cashHistory.statusClosedBadge",
-                )}
-              </Badge>
-            </div>
-
-            <div
-              className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-[var(--radius-md)] p-3 text-sm sm:grid-cols-2"
-              style={{ background: "var(--color-stone)" }}
-            >
-              <MetaField
-                label={t("femme.billing.session.metricOpenedAt")}
-                value={formatParaguayDateTime(detail.openedAt, dateLocale)}
-              />
-              <MetaField
-                label={t("femme.billing.session.metricOpenedBy")}
-                value={detail.openedByEmail}
-              />
-              <MetaField
-                label={t("femme.billing.session.metricOpeningAmount")}
-                value={formatGuaraniesGs(detail.openingCashAmount)}
-              />
-              {detail.closedAt && (
-                <>
-                  <MetaField
-                    label={t("femme.billing.close.closedAt")}
-                    value={formatParaguayDateTime(detail.closedAt, dateLocale)}
-                  />
-                  <MetaField
-                    label={t("femme.billing.close.closedBy")}
-                    value={detail.closedByEmail ?? "—"}
-                  />
-                </>
-              )}
-            </div>
-
-            <div
-              className="rounded-[var(--radius-md)] p-3"
-              style={{ background: "var(--color-white)", border: "var(--border-default)" }}
-            >
-              <CashSessionSummaryCard detail={detail} />
-            </div>
-          </>
-        )}
+        {detail && <CashSessionSummaryCard detail={detail} />}
       </div>
     </Modal>
   );

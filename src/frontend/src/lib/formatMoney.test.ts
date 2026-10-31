@@ -19,3 +19,17 @@ describe("formatMoney", () => {
     expect(formatAmountDecimal("100.5")).toBe("101");
   });
 });
+
+import { formatSignedGs } from "./formatMoney";
+
+describe("formatSignedGs", () => {
+  it("shows negatives with a true minus before Gs.", () => {
+    expect(formatSignedGs(-6000)).toBe("−Gs. 6.000");
+    expect(formatSignedGs("-100000")).toBe("−Gs. 100.000");
+  });
+  it("leaves positives plain, or with + when asked", () => {
+    expect(formatSignedGs(10000)).toBe("Gs. 10.000");
+    expect(formatSignedGs(10000, true)).toBe("+Gs. 10.000");
+    expect(formatSignedGs(0, true)).toBe("Gs. 0");
+  });
+});

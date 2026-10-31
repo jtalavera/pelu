@@ -1,83 +1,15 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Card, Text } from "@design-system";
-import type { CashMovementType, CashSession, CashSessionDetail } from "../../api/cashSessions";
+import type { CashSession, CashSessionDetail } from "../../api/cashSessions";
 import { CashSessionSummaryCard } from "../../components/CashSessionSummaryCard";
+import { Disclosure, Row } from "../../components/CashDisclosure";
+import { CashMovementRow } from "../../components/CashMovementRow";
 import { useDateLocale } from "../../i18n/dateLocale";
-import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { formatGuaraniesGs, formatSignedGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { capitalize } from "./billingShared";
 
-function movementTypeKey(type: CashMovementType): string {
-  switch (type) {
-    case "MANUAL_IN":
-      return "ManualIn";
-    case "MANUAL_OUT":
-      return "ManualOut";
-    case "TIP_WITHDRAWAL_OUT":
-      return "TipWithdrawal";
-  }
-}
-
-/** One folded line of the cash screens: label, optional counter badge, chevron. */
-function Disclosure({
-  id,
-  label,
-  count,
-  open,
-  onToggle,
-  children,
-}: {
-  id: string;
-  label: string;
-  count?: number;
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="border-t border-line">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={`${id}-body`}
-        data-testid={`cash-section-${id}`}
-        onClick={onToggle}
-        className="flex min-h-12 w-full items-center justify-between gap-3 text-left font-bold text-ink"
-      >
-        <span>{label}</span>
-        <span className="flex items-center gap-2.5 text-ink-3">
-          {count !== undefined && (
-            <span
-              className={`inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full px-2 text-[13px] font-extrabold ${
-                count > 0 ? "bg-primary-lt text-primary" : "bg-line text-ink-3"
-              }`}
-            >
-              {count}
-            </span>
-          )}
-          <span aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`}>
-            ⌄
-          </span>
-        </span>
-      </button>
-      {open ? (
-        <div id={`${id}-body`} className="pb-3 text-sm">
-          {children}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-3 py-1">
-      <span className="text-ink-3">{label}</span>
-      <span className="min-w-0 break-words text-right font-semibold tabular-nums text-ink">{value}</span>
-    </div>
-  );
-}
 
 /**
  * Open cash register, minimalist: one number (the cash that should be in the drawer), a one-line
@@ -108,10 +40,10 @@ export function CashPanelSummary({
         <div className="flex flex-col gap-0.5">
           <span className="text-sm text-ink-3">{t("femme.billing.cash.expectedLabel")}</span>
           <span
-            className="font-heading text-4xl font-extrabold tabular-nums text-ink"
+            className={`font-heading text-4xl font-extrabold tabular-nums ${Number(detail.expectedCashAmount) < 0 ? "text-danger" : "text-ink"}`}
             data-testid="cash-summary-expected-cash"
           >
-            {formatGuaraniesGs(detail.expectedCashAmount)}
+            {formatSignedGs(detail.expectedCashAmount)}
           </span>
           <span className="text-sm tabular-nums text-ink-3" data-testid="cash-panel-day-line">
             {t("femme.billing.cash.invoicedLine", {
@@ -151,20 +83,7 @@ export function CashPanelSummary({
           {movements.length === 0 ? (
             <Text variant="muted">{t("femme.billing.movements.emptyToday")}</Text>
           ) : (
-            movements.map((m) => (
-              <div key={m.id} className="flex items-start justify-between gap-3 py-1.5">
-                <span className="min-w-0">
-                  <span className="font-semibold text-ink">
-                    {t(`femme.billing.movements.type${movementTypeKey(m.type)}`)}
-                  </span>
-                  <span className="block break-words text-ink-3">
-                    {formatParaguayDateTime(m.createdAt, dateLocale)}
-                    {m.reason ? ` · ${m.reason}` : ""}
-                  </span>
-                </span>
-                <span className="font-semibold tabular-nums text-ink">{formatGuaraniesGs(m.amount)}</span>
-              </div>
-            ))
+            movements.map((m) => <CashMovementRow key={m.id} movement={m} />)
           )}
         </Disclosure>
         <Disclosure
@@ -279,7 +198,7 @@ export function CashClosedSummary({
             <div className="text-sm text-ink-3">
               {t("femme.billing.close.closedBy")}: {detail.closedByEmail}
             </div>
-            <CashSessionSummaryCard detail={detail} />
+            <CashSessionSummaryCard detail={detail} hideHero />
           </div>
         ) : null}
       </div>

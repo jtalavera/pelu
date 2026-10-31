@@ -136,3 +136,7 @@ Al elegir un cliente en "Nueva factura" se busca su ficha de servicio **abierta,
 
 ## Ajuste: lista "Comprobantes de hoy" en dos renglones
 Cada fila ocupa dos renglones: a la izquierda nombre y `estado · número · forma de pago`; a la derecha el monto y, si requiere atención, **Corregir y reenviar** justo debajo (antes era un tercer renglón suelto). Los `data-testid` (`billing-today-row-*`, `today-row-correct-resend-*`) no cambian.
+
+## Ajuste: detalle de caja minimalista y egresos en negativo
+- `CashSessionSummaryCard` (diálogo "Detalle de caja" del historial y detalle de la caja recién cerrada): arriba las cifras clave (caja abierta: efectivo esperado en vivo; cerrada: esperado / contado / diferencia, la diferencia en rojo si falta y verde si sobra); debajo, secciones plegables **Cobros por medio de pago**, **Movimientos de caja** (abierta por defecto, con contador) y **Datos de la caja** (apertura y cierre). El estado ("Abierta"/"Cerrada") va junto al título; el diálogo pasa a `max-w-lg`.
+- Los movimientos son filas (`CashMovementRow`): tipo, `fecha · motivo · registrado por` y monto a la derecha. Egresos manuales y retiros de propina van **en negativo y rojo** (`−Gs. 10.000`), los ingresos con `+` en verde; vale también para el panel de caja abierta. El efectivo esperado negativo se muestra `−Gs. 6.000` en rojo (`formatSignedGs`).
