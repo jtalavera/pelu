@@ -134,6 +134,7 @@ for (const vp of VIEWPORTS) {
         await expect(page.getByTestId("calendar-view-week")).toHaveCount(0);
         await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(0);
       } else {
+        await page.getByTestId("calendar-view-week").click();
         await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(7);
       }
 
@@ -184,9 +185,10 @@ async function textControlFontSizes(page: Page): Promise<Array<{ id: string; px:
   );
 }
 
-async function expectAllAtLeast16px(page: Page, where: string) {
+async function expectAllAtLeast16px(page: Page, where: string, opts: { allowEmpty?: boolean } = {}) {
   const sizes = await textControlFontSizes(page);
-  expect(sizes.length, `${where}: text controls found`).toBeGreaterThan(0);
+  // The Agenda no longer has a text control of its own (the professional filter is chips).
+  if (!opts.allowEmpty) expect(sizes.length, `${where}: text controls found`).toBeGreaterThan(0);
   for (const { id, px } of sizes) {
     expect(px, `${where}: #${id} font-size`).toBeGreaterThanOrEqual(16);
   }
@@ -207,7 +209,7 @@ test.describe("Sin zoom automático de iPhone al tocar campos", () => {
 
       await loginAs(page, email, PASSWORD);
       await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
-      await expectAllAtLeast16px(page, "calendar");
+      await expectAllAtLeast16px(page, "calendar", { allowEmpty: true });
 
       await page.locator("[data-tour='calendar-new-appointment']").click();
       await expect(page.getByRole("dialog")).toBeVisible();

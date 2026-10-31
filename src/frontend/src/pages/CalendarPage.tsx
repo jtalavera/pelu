@@ -598,7 +598,7 @@ export default function CalendarPage() {
           data-tour="calendar-new-appointment"
           type="button"
           variant="primary"
-          className="min-h-11"
+          className="min-h-11 sm:h-11 sm:min-h-11"
           onClick={() => openNewForm()}
         >
           {t("femme.calendar.newAppointment")}
@@ -620,7 +620,7 @@ export default function CalendarPage() {
             data-tour="calendar-today"
             type="button"
             variant="outline"
-            className="min-h-11"
+            className="min-h-11 sm:h-11 sm:min-h-11"
             onClick={goToday}
           >
             {t("femme.calendar.today")}

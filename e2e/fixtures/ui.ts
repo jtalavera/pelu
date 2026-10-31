@@ -188,3 +188,9 @@ export async function cancelAppointmentFromDetail(page: Page, reason?: string): 
   if (reason) await page.locator("#cancel-reason").fill(reason);
   await page.getByTestId("calendar-cancel-confirm").click();
 }
+
+/** Detail dialog → "⋯" → "Edit appointment". */
+export async function openEditFromDetail(page: Page): Promise<void> {
+  await openAppointmentActions(page);
+  await page.getByTestId("calendar-action-edit").click();
+}

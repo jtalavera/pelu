@@ -352,13 +352,14 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     let dlg = page.getByRole("dialog");
     await expect(dlg.getByTestId("appointment-read-only-notice")).toBeVisible();
     await expect(dlg.getByRole("button", { name: /edit appointment/i })).toHaveCount(0);
-    await expect(dlg.getByRole("button", { name: /change status/i })).toHaveCount(0);
+    await expect(dlg.getByTestId("calendar-next-step")).toHaveCount(0);
     await dlg.getByRole("button", { name: /close/i }).first().click();
 
     await pickCalendarFilter(page, `E2E RO ${suffix}`.toUpperCase());
     await page.getByTestId(`calendar-appt-${own.id}`).click();
     dlg = page.getByRole("dialog");
     await expect(dlg.getByTestId("appointment-read-only-notice")).toHaveCount(0);
-    await expect(dlg.getByRole("button", { name: /change status/i })).toBeVisible();
+    await expect(dlg.getByTestId("calendar-next-step")).toBeVisible();
+    await expect(dlg.getByTestId("calendar-more-actions")).toBeVisible();
   });
 });
