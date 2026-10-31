@@ -6,47 +6,46 @@ import type { CSSProperties } from "react";
  * two-column field grid with a small label above and a hint below each field, and the registered
  * items in a white card.
  */
+const LINE = "rgb(var(--fb-border))";
+const SURFACE = "rgb(var(--fb-surface))";
+
 export const labelStyle: CSSProperties = {
   display: "block",
-  fontSize: 11,
-  fontWeight: 500,
-  color: "var(--color-ink-2)",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "rgb(var(--fb-ink-2))",
   marginBottom: 4,
 };
 
 export const hintStyle: CSSProperties = {
-  fontSize: 10,
-  color: "var(--color-ink-3)",
-  marginTop: 3,
+  fontSize: 13,
+  color: "rgb(var(--fb-ink-3))",
+  marginTop: 4,
   // Examples such as the 32-character CSC have no break opportunity: wrap them on a phone.
   overflowWrap: "anywhere",
 };
 
 export const sectionTitleStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 500,
-  letterSpacing: "0.06em",
-  color: "var(--color-ink-3)",
+  fontFamily: "var(--font-heading, inherit)",
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  color: "rgb(var(--fb-primary))",
   textTransform: "uppercase",
-  margin: "0 0 10px",
-  paddingBottom: 6,
-  borderBottom: "var(--border-default)",
+  margin: "0 0 8px",
 };
 
-/** White card: information (registered items, summary). */
+/** Card: information (registered items, summary). Border only, no tinted fill. */
 export const sectionCardStyle: CSSProperties = {
-  border: "var(--border-default)",
+  border: `1px solid ${LINE}`,
   borderRadius: "var(--radius-xl)",
   padding: 16,
-  marginBottom: 16,
-  background: "var(--color-white)",
+  marginBottom: 12,
+  background: SURFACE,
 };
 
-/** Stone card: the "add" form. */
-export const createSectionCardStyle: CSSProperties = {
-  ...sectionCardStyle,
-  background: "var(--color-stone)",
-};
+/** The "add" form: same card (no tinted fill). */
+export const createSectionCardStyle: CSSProperties = { ...sectionCardStyle };
 
 /** Two columns on wide screens, one on a phone. */
 export const formGridStyle: CSSProperties = {
@@ -58,47 +57,45 @@ export const formGridStyle: CSSProperties = {
 export const fullRowStyle: CSSProperties = { gridColumn: "1 / -1" };
 
 export const tableWrapStyle: CSSProperties = {
-  border: "var(--border-default)",
+  border: `1px solid ${LINE}`,
   borderRadius: "var(--radius-xl)",
   overflow: "hidden",
+  background: SURFACE,
 };
 
 export const thStyle: CSSProperties = {
   padding: "9px 12px",
-  fontSize: 10,
-  fontWeight: 500,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "var(--color-ink-3)",
-  background: "var(--color-stone)",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "rgb(var(--fb-ink-3))",
+  background: "transparent",
   textAlign: "left",
   whiteSpace: "nowrap",
 };
 
 export const tdStyle: CSSProperties = {
   padding: "10px 12px",
-  fontSize: 12,
-  borderTop: "var(--border-default)",
+  fontSize: 14,
+  borderTop: `1px solid ${LINE}`,
   verticalAlign: "middle",
 };
 
 export function buildInputStyle(hasError: boolean, focused: boolean): CSSProperties {
   const base: CSSProperties = {
-    padding: "8px 11px",
-    border: hasError ? "1px solid var(--color-danger)" : "1px solid var(--color-stone-md)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    background: "var(--color-white)",
+    minHeight: 44,
+    padding: "8px 12px",
+    border: hasError ? "1px solid rgb(var(--fb-danger))" : `1px solid ${LINE}`,
+    borderRadius: 12,
+    fontSize: 14,
+    color: "rgb(var(--fb-ink))",
+    background: SURFACE,
     width: "100%",
     outline: "none",
     boxSizing: "border-box",
   };
   if (focused) {
-    base.boxShadow = hasError
-      ? "0 0 0 3px var(--color-danger-lt)"
-      : "0 0 0 3px var(--color-rose-lt)";
-    if (!hasError) base.borderColor = "var(--color-rose)";
+    base.boxShadow = hasError ? "0 0 0 3px rgb(var(--fb-danger) / 0.2)" : "0 0 0 3px rgb(var(--fb-primary) / 0.2)";
+    if (!hasError) base.borderColor = "rgb(var(--fb-primary))";
   }
   return base;
 }

@@ -4,16 +4,19 @@ import {
   Alert,
   Button,
   Heading,
+  Input,
   Label,
   LocalityCombobox,
   Radio,
   RadioGroup,
   Spinner,
   Text,
+  Textarea,
   type Locality,
 } from "@design-system";
 import { femmeJson, femmePutJson } from "../api/femmeClient";
 import { looksLikeRucValidationError, parseApiErrorMessage, translateApiError } from "../api/parseApiErrorMessage";
+import { FieldValidationError } from "../components/FieldValidationError";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
 import {
   formatParaguayPhone,
@@ -66,53 +69,63 @@ function localityFromProfile(data: BusinessProfileResponse): Locality | null {
 
 const MAX_LOGO_BYTES = 1_500_000;
 
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 11,
-  fontWeight: 500,
-  color: "var(--color-ink-2)",
-  marginBottom: 4,
-};
+/** Everything the form edits, as one comparable string (drives the "unsaved changes" bar). */
+function formSnapshot(v: {
+  businessName: string;
+  ruc: string;
+  address: string;
+  phone: string;
+  contactEmail: string;
+  logoDataUrl: string | null;
+  taxpayerType: string;
+  economicActivityCode: string;
+  economicActivityDescription: string;
+  sifenFantasyName: string;
+  locality: Locality | null;
+}): string {
+  return JSON.stringify(v);
+}
 
-const hintStyle: React.CSSProperties = {
-  fontSize: 10,
-  color: "var(--color-ink-3)",
-  marginTop: 3,
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 500,
-  letterSpacing: "0.06em",
-  color: "var(--color-ink-3)",
-  textTransform: "uppercase",
-  margin: "14px 0 10px",
-  paddingBottom: 6,
-  borderBottom: "var(--border-default)",
-};
-
-function buildInputStyle(
-  hasError: boolean,
-  focused: boolean,
-): React.CSSProperties {
-  const base: React.CSSProperties = {
-    padding: "8px 11px",
-    border: hasError ? "1px solid var(--color-danger)" : "1px solid var(--color-stone-md)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    background: "var(--color-white)",
-    width: "100%",
-    outline: "none",
-    boxSizing: "border-box",
-  };
-  if (focused) {
-    base.boxShadow = hasError
-      ? "0 0 0 3px var(--color-danger-lt)"
-      : "0 0 0 3px var(--color-rose-lt)";
-    if (!hasError) base.borderColor = "var(--color-rose)";
-  }
-  return base;
+function SectionFold({
+  id,
+  title,
+  open,
+  onToggle,
+  tour,
+  children,
+}: {
+  id: string;
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  tour?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section data-tour={tour}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={`business-section-${id}`}
+        data-testid={`business-section-${id}-toggle`}
+        onClick={onToggle}
+        className="flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
+      >
+        {title}
+        <span aria-hidden className={`text-ink-3 transition-transform ${open ? "rotate-180" : ""}`}>
+          ⌄
+        </span>
+      </button>
+      {open ? (
+        <div
+          id={`business-section-${id}`}
+          className="mt-2 flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+        >
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 export default function BusinessSettingsPage() {
@@ -152,7 +165,8 @@ export default function BusinessSettingsPage() {
   const [businessNameError, setBusinessNameError] = useState<string | null>(null);
   const [logoFileLabel, setLogoFileLabel] = useState<string | null>(null);
   const [logoDims, setLogoDims] = useState<{ w: number; h: number } | null>(null);
-  const [focusField, setFocusField] = useState<string | null>(null);
+  const [baseline, setBaseline] = useState<string>("");
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ general: true });
 
   const load = useCallback(async () => {
     if (!isTenantAdmin) {
@@ -176,6 +190,21 @@ export default function BusinessSettingsPage() {
       setSifenFantasyName(data.sifenFantasyName ?? "");
       setKudeFooterMessage(data.kudeFooterMessage ?? null);
       setLocality(localityFromProfile(data));
+      setBaseline(
+        formSnapshot({
+          businessName: data.businessName,
+          ruc: data.ruc ?? "",
+          address: data.address ?? "",
+          phone: formatParaguayPhone(data.phone ?? ""),
+          contactEmail: data.contactEmail ?? "",
+          logoDataUrl: data.logoDataUrl ?? null,
+          taxpayerType: data.taxpayerType ?? "",
+          economicActivityCode: data.economicActivityCode ?? "",
+          economicActivityDescription: data.economicActivityDescription ?? "",
+          sifenFantasyName: data.sifenFantasyName ?? "",
+          locality: localityFromProfile(data),
+        }),
+      );
     } catch {
       setLoadError(t("femme.businessSettings.loadError"));
       setSuccess(false);
@@ -315,371 +344,286 @@ export default function BusinessSettingsPage() {
   }
 
   const logoPreview = logoDataUrl && logoDataUrl.length > 0 ? logoDataUrl : null;
+  const dirty =
+    baseline !== "" &&
+    formSnapshot({
+      businessName,
+      ruc,
+      address,
+      phone,
+      contactEmail,
+      logoDataUrl,
+      taxpayerType,
+      economicActivityCode,
+      economicActivityDescription,
+      sifenFantasyName,
+      locality,
+    }) !== baseline;
 
-  const ghostBtn: React.CSSProperties = {
-    background: "var(--color-white)",
-    color: "var(--color-ink-2)",
-    border: "var(--border-default)",
-    borderRadius: "var(--radius-md)",
-    padding: "7px 14px",
-    fontSize: 12,
-    cursor: "pointer",
+  const sectionHasError: Record<string, boolean> = {
+    general: !!businessNameError || !!rucError,
+    contact: !!phoneError || !!contactEmailError,
+    sifen: false,
+    logo: !!logoError,
   };
-
-  const errTextStyle: React.CSSProperties = {
-    fontSize: 10,
-    color: "var(--color-danger)",
-    marginTop: 3,
+  const isOpen = (k: string) => !!openSections[k] || sectionHasError[k];
+  const toggleSection = (k: string) => setOpenSections((o) => ({ ...o, [k]: !isOpen(k) }));
+  const touched = () => {
+    if (saveValidationError) setSaveValidationError(null);
   };
 
   if (!isTenantAdmin) {
     return (
       <div>
-        <Heading as="h2" className="text-[var(--color-ink)]">
+        <Heading as="h2" className="text-ink">
           {t("femme.businessSettings.title")}
         </Heading>
-        <p className="mt-2 text-sm text-[var(--color-ink-2)]" role="alert">
+        <p className="mt-2 text-sm text-ink-2" role="alert">
           {t("femme.businessSettings.forbidden")}
         </p>
       </div>
     );
   }
 
-  if (loading) {
+  if (loading && baseline === "") {
     return (
-      <div style={{ display: "flex", minHeight: "40vh", alignItems: "center", justifyContent: "center", gap: 12 }}>
+      <div className="flex min-h-[40vh] items-center justify-center gap-3">
         <Spinner size="lg" />
         <Text>{t("femme.businessSettings.loading")}</Text>
       </div>
     );
   }
 
-  const feedback = loadError || saveError || success;
+  const hint = "mt-1 text-sm text-ink-3";
 
   return (
-    <div>
-      {feedback ? (
-        <div
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 5,
-            marginBottom: 16,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            background: "var(--color-white)",
-            paddingBottom: 4,
-          }}
-        >
-          {loadError ? (
-            <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
-              {loadError}
-            </Alert>
-          ) : null}
-          {saveError ? (
-            <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
-              {saveError}
-            </Alert>
-          ) : null}
-          {success ? (
-            <Alert variant="success" title={t("femme.businessSettings.savedTitle")}>
-              {t("femme.businessSettings.savedBody")}
-            </Alert>
-          ) : null}
-        </div>
+    <div className="flex flex-col gap-3">
+      {loadError ? (
+        <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
+          {loadError}
+        </Alert>
+      ) : null}
+      {saveError ? (
+        <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
+          {saveError}
+        </Alert>
+      ) : null}
+      {success ? (
+        <Alert variant="success" title={t("femme.businessSettings.savedTitle")}>
+          {t("femme.businessSettings.savedBody")}
+        </Alert>
       ) : null}
 
-      <form data-tour="settings-nav" onSubmit={onSubmit} noValidate>
+      <p className="px-0.5 text-sm text-ink-3">{t("femme.businessSettings.intro")}</p>
+
+      <form data-tour="settings-nav" onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
         {saveValidationError ? (
-          <p role="alert" style={errTextStyle}>
+          <p role="alert" className="text-sm font-medium text-danger">
             {saveValidationError}
           </p>
         ) : null}
 
-        <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionGeneral")}</div>
-        <div
-          data-tour="settings-form"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-          }}
-        >
-          <div>
-            <label htmlFor="businessName" style={labelStyle}>
+        <SectionFold id="general" title={t("femme.businessSettings.sectionGeneral")} open={isOpen("general")} onToggle={() => toggleSection("general")} tour="settings-form">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="businessName" required>
               {t("femme.businessSettings.businessName")}
-              <span style={{ color: "var(--color-rose)" }}> *</span>
-            </label>
-            <input
+            </Label>
+            <Input
               id="businessName"
               value={businessName}
               onChange={(e) => {
                 setBusinessName(e.target.value);
                 if (businessNameError) setBusinessNameError(null);
-                if (saveValidationError) setSaveValidationError(null);
+                touched();
               }}
-              className="mt-0 w-full"
               autoComplete="organization"
-              aria-invalid={!!businessNameError}
+              invalid={!!businessNameError}
               aria-describedby={businessNameError ? "business-name-error" : undefined}
-              onFocus={() => setFocusField("businessName")}
-              onBlur={() => setFocusField(null)}
-              style={buildInputStyle(!!businessNameError, focusField === "businessName")}
             />
-            {businessNameError ? (
-              <p id="business-name-error" role="alert" style={errTextStyle}>
-                {businessNameError}
-              </p>
-            ) : null}
+            <FieldValidationError id="business-name-error">{businessNameError}</FieldValidationError>
           </div>
-          <div>
-            <label htmlFor="ruc" style={labelStyle}>
-              {t("femme.businessSettings.ruc")}
-            </label>
-            <input
-              id="ruc"
-              value={ruc}
-              onChange={(e) => {
-                setRuc(e.target.value);
-                if (rucError) setRucError(null);
-                if (saveValidationError) setSaveValidationError(null);
-              }}
-              placeholder="80000005-6"
-              aria-invalid={!!rucError}
-              aria-describedby={rucError ? "ruc-error" : "ruc-hint"}
-              onFocus={() => setFocusField("ruc")}
-              onBlur={() => setFocusField(null)}
-              style={buildInputStyle(!!rucError, focusField === "ruc")}
-            />
-            {rucError ? (
-              <p id="ruc-error" role="alert" style={errTextStyle}>
-                {rucError}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="ruc">{t("femme.businessSettings.ruc")}</Label>
+              <Input
+                id="ruc"
+                value={ruc}
+                onChange={(e) => {
+                  setRuc(e.target.value);
+                  if (rucError) setRucError(null);
+                  touched();
+                }}
+                placeholder="80000005-6"
+                invalid={!!rucError}
+                aria-describedby={rucError ? "ruc-error" : "ruc-hint"}
+              />
+              {rucError ? (
+                <FieldValidationError id="ruc-error">{rucError}</FieldValidationError>
+              ) : (
+                <p id="ruc-hint" className={hint}>
+                  {t("femme.businessSettings.rucHint")}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="sifenFantasyName">{t("femme.businessSettings.sifenFantasyName")}</Label>
+              <Input
+                id="sifenFantasyName"
+                value={sifenFantasyName}
+                onChange={(e) => {
+                  setSifenFantasyName(e.target.value);
+                  touched();
+                }}
+                aria-describedby="sifenFantasyName-hint"
+              />
+              <p id="sifenFantasyName-hint" className={hint}>
+                {t("femme.businessSettings.sifenFantasyNameHint")}
               </p>
-            ) : (
-              <p id="ruc-hint" style={hintStyle}>
-                {t("femme.businessSettings.rucHint")}
-              </p>
-            )}
+            </div>
           </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label htmlFor="sifenFantasyName" style={labelStyle}>
-              {t("femme.businessSettings.sifenFantasyName")}
-            </label>
-            <input
-              id="sifenFantasyName"
-              value={sifenFantasyName}
-              onChange={(e) => {
-                setSifenFantasyName(e.target.value);
-                if (saveValidationError) setSaveValidationError(null);
-              }}
-              aria-describedby="sifenFantasyName-hint"
-              onFocus={() => setFocusField("sifenFantasyName")}
-              onBlur={() => setFocusField(null)}
-              style={buildInputStyle(false, focusField === "sifenFantasyName")}
-            />
-            <p id="sifenFantasyName-hint" style={hintStyle}>
-              {t("femme.businessSettings.sifenFantasyNameHint")}
-            </p>
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label htmlFor="address" style={labelStyle}>
-              {t("femme.businessSettings.address")}
-            </label>
-            <textarea
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="address">{t("femme.businessSettings.address")}</Label>
+            <Textarea
               id="address"
               value={address}
               onChange={(e) => {
                 setAddress(e.target.value);
-                if (saveValidationError) setSaveValidationError(null);
+                touched();
               }}
-              rows={4}
-              onFocus={() => setFocusField("address")}
-              onBlur={() => setFocusField(null)}
-              style={{
-                ...buildInputStyle(false, focusField === "address"),
-                resize: "none",
-                minHeight: 88,
-              }}
+              rows={2}
             />
           </div>
-        </div>
+        </SectionFold>
 
-        <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionContact")}</div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-          }}
-        >
-          <div>
-            <label htmlFor="phone" style={labelStyle}>
-              {t("femme.businessSettings.phone")}
-            </label>
-            <input
-              id="phone"
-              value={phone}
-              onChange={(e) => {
-                setPhone(formatParaguayPhone(e.target.value));
-                if (phoneError) setPhoneError(null);
-                if (saveValidationError) setSaveValidationError(null);
-              }}
-              onBlur={() => {
-                setFocusField(null);
-                const trimmed = phone.trim();
-                if (trimmed.length > 0 && !isCompleteParaguayPhone(trimmed)) {
-                  setPhoneError(t("femme.businessSettings.phoneInvalid"));
-                }
-              }}
-              placeholder={t("femme.businessSettings.phonePlaceholder")}
-              autoComplete="tel"
-              inputMode="tel"
-              aria-invalid={!!phoneError}
-              aria-describedby={phoneError ? "phone-error" : undefined}
-              onFocus={() => setFocusField("phone")}
-              style={buildInputStyle(!!phoneError, focusField === "phone")}
-            />
-            {phoneError ? (
-              <p id="phone-error" role="alert" style={errTextStyle}>
-                {phoneError}
-              </p>
-            ) : null}
+        <SectionFold id="contact" title={t("femme.businessSettings.sectionContact")} open={isOpen("contact")} onToggle={() => toggleSection("contact")}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="phone">{t("femme.businessSettings.phone")}</Label>
+              <Input
+                id="phone"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(formatParaguayPhone(e.target.value));
+                  if (phoneError) setPhoneError(null);
+                  touched();
+                }}
+                onBlur={() => {
+                  const trimmed = phone.trim();
+                  if (trimmed.length > 0 && !isCompleteParaguayPhone(trimmed)) {
+                    setPhoneError(t("femme.businessSettings.phoneInvalid"));
+                  }
+                }}
+                placeholder={t("femme.businessSettings.phonePlaceholder")}
+                autoComplete="tel"
+                inputMode="tel"
+                invalid={!!phoneError}
+                aria-describedby={phoneError ? "phone-error" : undefined}
+              />
+              <FieldValidationError id="phone-error">{phoneError}</FieldValidationError>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="contactEmail">{t("femme.businessSettings.contactEmail")}</Label>
+              <Input
+                id="contactEmail"
+                type="email"
+                value={contactEmail}
+                onChange={(e) => {
+                  setContactEmail(e.target.value);
+                  if (contactEmailError) setContactEmailError(null);
+                  touched();
+                }}
+                onBlur={() => {
+                  const trimmed = contactEmail.trim();
+                  if (trimmed.length > 0 && !isValidEmail(trimmed)) {
+                    setContactEmailError(t("femme.businessSettings.contactEmailInvalid"));
+                  }
+                }}
+                autoComplete="email"
+                invalid={!!contactEmailError}
+                aria-describedby={contactEmailError ? "contactEmail-error" : undefined}
+              />
+              <FieldValidationError id="contactEmail-error">{contactEmailError}</FieldValidationError>
+            </div>
           </div>
-          <div>
-            <label htmlFor="contactEmail" style={labelStyle}>
-              {t("femme.businessSettings.contactEmail")}
-            </label>
-            <input
-              id="contactEmail"
-              type="email"
-              value={contactEmail}
-              onChange={(e) => {
-                setContactEmail(e.target.value);
-                if (contactEmailError) setContactEmailError(null);
-                if (saveValidationError) setSaveValidationError(null);
-              }}
-              onBlur={() => {
-                setFocusField(null);
-                const trimmed = contactEmail.trim();
-                if (trimmed.length > 0 && !isValidEmail(trimmed)) {
-                  setContactEmailError(
-                    t("femme.businessSettings.contactEmailInvalid"),
-                  );
-                }
-              }}
-              autoComplete="email"
-              aria-invalid={!!contactEmailError}
-              aria-describedby={contactEmailError ? "contactEmail-error" : undefined}
-              onFocus={() => setFocusField("contactEmail")}
-              style={buildInputStyle(!!contactEmailError, focusField === "contactEmail")}
-            />
-            {contactEmailError ? (
-              <p id="contactEmail-error" role="alert" style={errTextStyle}>
-                {contactEmailError}
-              </p>
-            ) : null}
-          </div>
-        </div>
+        </SectionFold>
 
         {sifenInvoicingEnabled ? (
-          <>
-            <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionSifen")}</div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
-              }}
-            >
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Label id="taxpayer-type-label">
-                  {t("femme.businessSettings.taxpayerTypeLabel")}
-                </Label>
-                <RadioGroup
-                  aria-labelledby="taxpayer-type-label"
-                  value={taxpayerType}
-                  onChange={(value) => {
-                    setTaxpayerType(value as TaxpayerType);
-                    if (saveValidationError) setSaveValidationError(null);
-                  }}
-                  className="flex-row gap-4 mt-1"
-                  name="taxpayer-type"
-                >
-                  <label className="flex items-center gap-2 text-sm">
-                    <Radio value="INDIVIDUAL" />
-                    {t("femme.businessSettings.taxpayerTypeIndividual")}
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Radio value="LEGAL_ENTITY" />
-                    {t("femme.businessSettings.taxpayerTypeLegalEntity")}
-                  </label>
-                </RadioGroup>
-              </div>
-              <div>
-                <label htmlFor="economicActivityCode" style={labelStyle}>
-                  {t("femme.businessSettings.economicActivityCode")}
+          <SectionFold id="sifen" title={t("femme.businessSettings.sectionSifen")} open={isOpen("sifen")} onToggle={() => toggleSection("sifen")}>
+            <div className="flex flex-col gap-1">
+              <Label id="taxpayer-type-label">{t("femme.businessSettings.taxpayerTypeLabel")}</Label>
+              <RadioGroup
+                aria-labelledby="taxpayer-type-label"
+                value={taxpayerType}
+                onChange={(value) => {
+                  setTaxpayerType(value as TaxpayerType);
+                  touched();
+                }}
+                className="mt-1 flex-row flex-wrap gap-4"
+                name="taxpayer-type"
+              >
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <Radio value="INDIVIDUAL" />
+                  {t("femme.businessSettings.taxpayerTypeIndividual")}
                 </label>
-                <input
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <Radio value="LEGAL_ENTITY" />
+                  {t("femme.businessSettings.taxpayerTypeLegalEntity")}
+                </label>
+              </RadioGroup>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="economicActivityCode">{t("femme.businessSettings.economicActivityCode")}</Label>
+                <Input
                   id="economicActivityCode"
                   value={economicActivityCode}
                   onChange={(e) => {
                     setEconomicActivityCode(e.target.value);
-                    if (saveValidationError) setSaveValidationError(null);
+                    touched();
                   }}
                   aria-describedby="economicActivityCode-hint"
-                  onFocus={() => setFocusField("economicActivityCode")}
-                  onBlur={() => setFocusField(null)}
-                  style={buildInputStyle(false, focusField === "economicActivityCode")}
                 />
-                <p id="economicActivityCode-hint" style={hintStyle}>
+                <p id="economicActivityCode-hint" className={hint}>
                   {t("femme.businessSettings.economicActivityCodeHint")}
                 </p>
               </div>
-              <div>
-                <label htmlFor="economicActivityDescription" style={labelStyle}>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="economicActivityDescription">
                   {t("femme.businessSettings.economicActivityDescription")}
-                </label>
-                <input
+                </Label>
+                <Input
                   id="economicActivityDescription"
                   value={economicActivityDescription}
                   onChange={(e) => {
                     setEconomicActivityDescription(e.target.value);
-                    if (saveValidationError) setSaveValidationError(null);
+                    touched();
                   }}
-                  onFocus={() => setFocusField("economicActivityDescription")}
-                  onBlur={() => setFocusField(null)}
-                  style={buildInputStyle(false, focusField === "economicActivityDescription")}
                 />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Label htmlFor="business-locality">{t("femme.clients.locality")}</Label>
-                <LocalityCombobox
-                  id="business-locality"
-                  value={locality}
-                  onChange={(next) => {
-                    setLocality(next);
-                    if (saveValidationError) setSaveValidationError(null);
-                  }}
-                  onSearch={localitySearch.search}
-                  options={localitySearch.options}
-                  loading={localitySearch.loading}
-                  placeholder={t("femme.clients.localityPlaceholder")}
-                  noResultsLabel={t("femme.clients.localityNoResults")}
-                />
-                <Text variant="muted" className="mt-1 text-sm">
-                  {t("femme.clients.localityHint")}
-                </Text>
               </div>
             </div>
-          </>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="business-locality">{t("femme.clients.locality")}</Label>
+              <LocalityCombobox
+                id="business-locality"
+                value={locality}
+                onChange={(next) => {
+                  setLocality(next);
+                  touched();
+                }}
+                onSearch={localitySearch.search}
+                options={localitySearch.options}
+                loading={localitySearch.loading}
+                placeholder={t("femme.clients.localityPlaceholder")}
+                noResultsLabel={t("femme.clients.localityNoResults")}
+              />
+              <Text variant="muted" className="mt-1 text-sm">
+                {t("femme.clients.localityHint")}
+              </Text>
+            </div>
+          </SectionFold>
         ) : null}
 
-        <div style={sectionTitleStyle}>{t("femme.businessSettings.sectionLogo")}</div>
-        <div data-tour="settings-logo" style={{ gridColumn: "1 / -1" }}>
-          <label htmlFor="logo-file-input" style={labelStyle}>
-            {t("femme.businessSettings.logo")}
-          </label>
+        <SectionFold id="logo" title={t("femme.businessSettings.sectionLogo")} open={isOpen("logo")} onToggle={() => toggleSection("logo")} tour="settings-logo">
           <input
             ref={logoInputRef}
             id="logo-file-input"
@@ -687,64 +631,33 @@ export default function BusinessSettingsPage() {
             accept="image/*"
             onChange={onLogoFile}
             className="sr-only"
+            aria-label={t("femme.businessSettings.logo")}
           />
           {logoPreview ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: 10,
-                background: "var(--color-stone)",
-                borderRadius: "var(--radius-md)",
-                border: "var(--border-default)",
-              }}
-            >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "var(--radius-md)",
-                  overflow: "hidden",
-                  flexShrink: 0,
-                  background: "var(--color-white)",
-                  border: "var(--border-default)",
-                }}
-              >
-                <img src={logoPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-surface">
+                <img src={logoPreview} alt="" className="size-full object-contain" />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 500 }}>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-ink">
                   {logoFileLabel
                     ? t("femme.businessSettings.logoFileName", { name: logoFileLabel })
                     : t("femme.businessSettings.logoUploaded")}
                 </div>
                 {logoDims ? (
-                  <div style={{ fontSize: 10, color: "var(--color-ink-3)", marginTop: 2 }}>
-                    {t("femme.businessSettings.logoDimensions", {
-                      width: logoDims.w,
-                      height: logoDims.h,
-                    })}
+                  <div className="text-sm text-ink-3">
+                    {t("femme.businessSettings.logoDimensions", { width: logoDims.w, height: logoDims.h })}
                   </div>
                 ) : null}
               </div>
-              <button type="button" style={ghostBtn} onClick={() => logoInputRef.current?.click()}>
-                {t("femme.businessSettings.changeLogo")}
-              </button>
-              <button
-                type="button"
-                onClick={clearLogo}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--color-danger)",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  padding: "4px 8px",
-                }}
-              >
-                {t("femme.businessSettings.removeLogo")}
-              </button>
+              <div className="flex gap-2">
+                <Button type="button" variant="secondary" className="min-h-11" onClick={() => logoInputRef.current?.click()}>
+                  {t("femme.businessSettings.changeLogo")}
+                </Button>
+                <Button type="button" variant="ghost" className="min-h-11 text-danger" onClick={clearLogo}>
+                  {t("femme.businessSettings.removeLogo")}
+                </Button>
+              </div>
             </div>
           ) : (
             <button
@@ -752,53 +665,39 @@ export default function BusinessSettingsPage() {
               onClick={() => logoInputRef.current?.click()}
               aria-invalid={!!logoError}
               aria-describedby={logoError ? "logo-err" : undefined}
-              style={{
-                width: "100%",
-                border: "1.5px dashed var(--color-stone-md)",
-                borderRadius: "var(--radius-md)",
-                padding: 20,
-                textAlign: "center",
-                cursor: "pointer",
-                background: "var(--color-stone)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--color-rose-md)";
-                e.currentTarget.style.background = "var(--color-rose-lt)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "var(--color-stone-md)";
-                e.currentTarget.style.background = "var(--color-stone)";
-              }}
+              className="min-h-20 w-full rounded-2xl border-[1.5px] border-dashed border-line px-4 py-5 text-center text-sm text-ink-2 hover:border-primary hover:bg-primary-lt"
             >
-              <span style={{ fontSize: 12, color: "var(--color-ink-2)" }}>
-                {t("femme.businessSettings.logo")}
-              </span>
+              {t("femme.businessSettings.logo")}
             </button>
           )}
-          {logoError ? (
-            <p id="logo-err" role="alert" style={errTextStyle}>
-              {logoError}
-            </p>
-          ) : null}
-        </div>
+          <FieldValidationError id="logo-err">{logoError}</FieldValidationError>
+        </SectionFold>
 
+        <div className="h-16" aria-hidden />
         <div
           data-tour="settings-save"
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 8,
-            marginTop: 16,
-            paddingTop: 12,
-            borderTop: "var(--border-default)",
-          }}
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface px-4 py-3 shadow-[0_-8px_24px_rgba(10,31,51,0.1)]"
+          data-testid="business-save-bar"
         >
-          <Button type="button" variant="secondary" onClick={() => void onCancel()} disabled={saving}>
-            {t("femme.businessSettings.cancel")}
-          </Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? t("femme.businessSettings.saving") : t("femme.businessSettings.saveChanges")}
-          </Button>
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-ink" data-testid="business-unsaved">
+              {dirty ? t("femme.businessSettings.unsaved") : ""}
+            </span>
+            <span className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                onClick={() => void onCancel()}
+                disabled={saving || !dirty}
+              >
+                {t("femme.businessSettings.cancel")}
+              </Button>
+              <Button type="submit" className="min-h-11" disabled={saving || !dirty}>
+                {saving ? t("femme.businessSettings.saving") : t("femme.businessSettings.saveChanges")}
+              </Button>
+            </span>
+          </div>
         </div>
       </form>
     </div>

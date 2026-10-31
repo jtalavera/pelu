@@ -90,10 +90,11 @@ describe("AuditLogPanel (Issue #284 · quién hizo qué)", () => {
     renderPanel();
     await screen.findAllByTestId("audit-row");
 
+    await userEvent.click(screen.getByTestId("audit-filters-toggle"));
     await userEvent.type(screen.getByLabelText("User"), "ana{Enter}");
     await userEvent.type(screen.getByLabelText("From"), "2026-10-01");
     await userEvent.selectOptions(screen.getByLabelText("What"), "invoices");
-    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await userEvent.click(screen.getByTestId("audit-search"));
 
     await waitFor(() => {
       const url = String(femmeJsonMock.mock.calls[femmeJsonMock.mock.calls.length - 1]?.[0]);
@@ -117,9 +118,10 @@ describe("AuditLogPanel (Issue #284 · quién hizo qué)", () => {
     await screen.findAllByTestId("audit-row");
     const calls = femmeJsonMock.mock.calls.length;
 
+    await userEvent.click(screen.getByTestId("audit-filters-toggle"));
     await userEvent.type(screen.getByLabelText("From"), "2026-10-09");
     await userEvent.type(screen.getByLabelText("To"), "2026-10-01");
-    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    await userEvent.click(screen.getByTestId("audit-search"));
 
     expect((await screen.findByRole("alert")).textContent).toContain("must be on or before");
     expect(femmeJsonMock.mock.calls.length).toBe(calls);

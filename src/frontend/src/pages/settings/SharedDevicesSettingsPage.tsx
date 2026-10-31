@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Alert, Button, Input, Label, Spinner, Text } from "@design-system";
+import { Alert, Button, Input, KebabMenu, Label, Modal, Spinner, Text } from "@design-system";
 import {
   activateSharedDevice,
   listSharedDevices,
@@ -19,6 +19,7 @@ import {
 } from "../../auth/sharedDevice";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { FieldValidationError } from "../../components/FieldValidationError";
+import { SettingsHeaderAction } from "./settingsContext";
 
 /**
  * HU-66: Configuración del negocio → Dispositivos compartidos (administrator only). Enable this
@@ -37,6 +38,7 @@ export default function SharedDevicesSettingsPage() {
   const [activating, setActivating] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<SharedDevice | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [activateOpen, setActivateOpen] = useState(false);
 
   const formatDateTime = useCallback(
     (iso: string) =>
@@ -93,6 +95,7 @@ export default function SharedDevicesSettingsPage() {
         token: activated.deviceToken,
       });
       setThisDevice(getSharedDevice());
+      setActivateOpen(false);
       setName("");
       setPassword("");
       setMessage(t("femme.sharedDevice.settings.activated", { name: activated.device.name }));
@@ -143,8 +146,15 @@ export default function SharedDevicesSettingsPage() {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-5" data-testid="shared-devices-settings">
-      <Text variant="muted">{t("femme.sharedDevice.settings.lead")}</Text>
+    <div className="flex min-w-0 flex-col gap-3" data-testid="shared-devices-settings">
+      {!thisDevice && (
+        <SettingsHeaderAction>
+          <Button type="button" className="min-h-11" onClick={() => setActivateOpen(true)} data-testid="activate-shared-device-open">
+            {t("femme.sharedDevice.settings.activateTitle")}
+          </Button>
+        </SettingsHeaderAction>
+      )}
+      <p className="px-0.5 text-sm text-ink-3">{t("femme.sharedDevice.settings.lead")}</p>
 
       {pageError ? <Alert variant="destructive">{pageError}</Alert> : null}
       {message ? (
@@ -155,27 +165,111 @@ export default function SharedDevicesSettingsPage() {
 
       {thisDevice ? (
         <div
-          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] bg-[var(--color-stone)] p-4"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-4"
           data-testid="this-device-active"
         >
-          <span className="min-w-0 text-sm">
+          <span className="min-w-0 text-sm text-ink">
             {t("femme.sharedDevice.settings.thisDeviceActive", { name: thisDevice.name })}
           </span>
           <Button type="button" className="min-h-11" onClick={openPicker} data-testid="open-shared-device">
             {t("femme.sharedDevice.settings.openPicker")}
           </Button>
         </div>
-      ) : (
+      ) : null}
+
+      <div className="rounded-card border border-line bg-surface shadow-sm">
+        {devices === null ? (
+          <div className="p-4">
+            <Spinner label={t("femme.platform.loading")} />
+          </div>
+        ) : devices.length === 0 ? (
+          <Text variant="muted" className="p-4">
+            {t("femme.sharedDevice.settings.empty")}
+          </Text>
+        ) : (
+          <ul data-testid="shared-devices-list">
+            {devices.map((d) => (
+              <li
+                key={d.id}
+                data-testid={`shared-device-row-${d.id}`}
+                className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-line px-4 py-2 first:border-t-0"
+              >
+                <div className="min-w-0 text-sm">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-ink">
+                    {d.name}
+                    {thisDevice?.deviceId === d.id ? (
+                      <span className="rounded-full bg-success-lt px-2.5 py-0.5 text-xs font-extrabold text-success">
+                        {t("femme.sharedDevice.settings.thisDevice")}
+                      </span>
+                    ) : null}
+                    {d.lockedUntil ? (
+                      <span
+                        className="rounded-full bg-warning-lt px-2.5 py-0.5 text-xs font-extrabold text-warning"
+                        data-testid={`shared-device-row-locked-${d.id}`}
+                      >
+                        {t("femme.sharedDevice.settings.lockedUntil", { time: formatTime(d.lockedUntil) })}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-ink-3">
+                    {t("femme.sharedDevice.settings.createdAt", { date: formatDateTime(d.createdAt) })}
+                    {" · "}
+                    {d.lastUsedAt
+                      ? t("femme.sharedDevice.settings.lastUsedAt", { date: formatDateTime(d.lastUsedAt) })
+                      : t("femme.sharedDevice.settings.neverUsed")}
+                  </div>
+                </div>
+                <KebabMenu
+                  id={`shared-device-${d.id}`}
+                  triggerAriaLabel={t("femme.sharedDevice.settings.rowActions", { name: d.name })}
+                  items={[
+                    ...(d.lockedUntil
+                      ? [{ id: "unlock", label: t("femme.sharedDevice.settings.unlock"), onSelect: () => void unlock(d) }]
+                      : []),
+                    {
+                      id: "revoke",
+                      label: t("femme.sharedDevice.settings.revoke"),
+                      destructive: true,
+                      onSelect: () => setRevokeTarget(d),
+                    },
+                  ]}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <Modal
+        open={activateOpen && !thisDevice}
+        onClose={() => setActivateOpen(false)}
+        title={t("femme.sharedDevice.settings.activateTitle")}
+        description={t("femme.sharedDevice.settings.activateHint")}
+        className="max-w-md"
+        footer={
+          <>
+            <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={() => setActivateOpen(false)}>
+              {t("femme.professionals.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="activate-shared-device-form"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={activating}
+              data-testid="activate-shared-device"
+            >
+              {t("femme.sharedDevice.settings.activate")}
+            </Button>
+          </>
+        }
+      >
         <form
+          id="activate-shared-device-form"
           onSubmit={(e) => void activate(e)}
-          className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] p-4"
+          className="flex flex-col gap-3"
           data-testid="activate-shared-device-form"
         >
-          <h3 className="text-sm font-medium">{t("femme.sharedDevice.settings.activateTitle")}</h3>
-          <Text variant="muted" className="text-xs">
-            {t("femme.sharedDevice.settings.activateHint")}
-          </Text>
-          <div>
+          <div className="flex flex-col gap-1">
             <Label htmlFor="shared-device-name">{t("femme.sharedDevice.settings.name")}</Label>
             <Input
               id="shared-device-name"
@@ -183,12 +277,12 @@ export default function SharedDevicesSettingsPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder={t("femme.sharedDevice.settings.namePlaceholder")}
               maxLength={100}
-              aria-invalid={formError.name ? true : undefined}
+              invalid={!!formError.name}
               aria-describedby={formError.name ? "shared-device-name-err" : undefined}
             />
             <FieldValidationError id="shared-device-name-err">{formError.name}</FieldValidationError>
           </div>
-          <div>
+          <div className="flex flex-col gap-1">
             <Label htmlFor="shared-device-password">{t("femme.sharedDevice.settings.password")}</Label>
             <Input
               id="shared-device-password"
@@ -196,86 +290,14 @@ export default function SharedDevicesSettingsPage() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              aria-invalid={formError.password ? true : undefined}
+              invalid={!!formError.password}
               aria-describedby={formError.password ? "shared-device-password-err" : undefined}
             />
             <FieldValidationError id="shared-device-password-err">{formError.password}</FieldValidationError>
           </div>
           {formError.other ? <Alert variant="destructive">{formError.other}</Alert> : null}
-          <div>
-            <Button type="submit" className="min-h-11" disabled={activating} data-testid="activate-shared-device">
-              {t("femme.sharedDevice.settings.activate")}
-            </Button>
-          </div>
         </form>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">{t("femme.sharedDevice.settings.listTitle")}</h3>
-        {devices === null ? (
-          <Spinner label={t("femme.platform.loading")} />
-        ) : devices.length === 0 ? (
-          <Text variant="muted">{t("femme.sharedDevice.settings.empty")}</Text>
-        ) : (
-          <ul className="flex flex-col gap-2" data-testid="shared-devices-list">
-            {devices.map((d) => (
-              <li
-                key={d.id}
-                data-testid={`shared-device-row-${d.id}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] p-3"
-              >
-                <div className="min-w-0 text-sm">
-                  <div className="font-medium">
-                    {d.name}
-                    {thisDevice?.deviceId === d.id ? (
-                      <span className="ml-2 text-xs font-normal text-[var(--color-ink-3)]">
-                        {t("femme.sharedDevice.settings.thisDevice")}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-xs text-[var(--color-ink-3)]">
-                    {t("femme.sharedDevice.settings.createdAt", { date: formatDateTime(d.createdAt) })}
-                    {" · "}
-                    {d.lastUsedAt
-                      ? t("femme.sharedDevice.settings.lastUsedAt", { date: formatDateTime(d.lastUsedAt) })
-                      : t("femme.sharedDevice.settings.neverUsed")}
-                  </div>
-                  {d.lockedUntil ? (
-                    <div
-                      className="text-xs font-medium text-danger"
-                      data-testid={`shared-device-row-locked-${d.id}`}
-                    >
-                      {t("femme.sharedDevice.settings.lockedUntil", { time: formatTime(d.lockedUntil) })}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {d.lockedUntil ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="min-h-11"
-                      onClick={() => void unlock(d)}
-                      data-testid={`shared-device-unlock-${d.id}`}
-                    >
-                      {t("femme.sharedDevice.settings.unlock")}
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="min-h-11"
-                    onClick={() => setRevokeTarget(d)}
-                    data-testid={`shared-device-revoke-${d.id}`}
-                  >
-                    {t("femme.sharedDevice.settings.revoke")}
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      </Modal>
 
       {revokeTarget ? (
         <ConfirmDialog
