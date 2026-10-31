@@ -28,6 +28,7 @@ https://claude.ai/artifact/SccBti8kzhxPJ2AweQhzee
   ve como resumen y **Cambiar** despliega los días. Detalles y horario son un solo formulario: al
   guardar se crea/actualiza el profesional y se guarda su horario (`PUT …/schedules`). Si un error cae
   en un campo de "Más opciones" (correo, PIN, foto), la sección se abre sola.
+- Al guardar (crear o **editar**) el formulario se cierra y el mensaje de éxito sale en la lista.
 - Las reglas de comisión (pestaña "Comisión" de un servicio con el módulo activo), el aviso de ítems
   sin comisión y los diálogos de confirmación para desactivar se conservan.
 

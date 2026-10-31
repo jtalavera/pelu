@@ -44,14 +44,26 @@ public class DashboardController {
     return response;
   }
 
+  /**
+   * @param days optional period of the revenue trend and its sibling charts (7, 30 or 90; default
+   *     30)
+   */
   @GetMapping
-  public DashboardResponse get(@AuthenticationPrincipal FemmeUserPrincipal principal) {
+  public DashboardResponse get(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(name = "days", required = false) Integer days) {
     if (principal == null) {
       log.error("GET /api/dashboard tenantId=unknown status=401");
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    log.info("GET /api/dashboard tenantId={}", principal.getTenantId());
-    DashboardResponse response = dashboardService.build(principal.getTenantId());
+    int period = days == null ? DashboardService.REVENUE_TREND_DAYS : days;
+    log.info("GET /api/dashboard tenantId={} days={}", principal.getTenantId(), period);
+    if (!DashboardService.isAllowedPeriod(period)) {
+      log.error(
+          "GET /api/dashboard tenantId={} days={} status=400", principal.getTenantId(), period);
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_DASHBOARD_PERIOD");
+    }
+    DashboardResponse response = dashboardService.build(principal.getTenantId(), period);
     log.info("GET /api/dashboard tenantId={} status=200", principal.getTenantId());
     return response;
   }

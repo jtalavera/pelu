@@ -1,124 +1,59 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Spinner, Text } from "@design-system";
+import { Alert, Card, Heading, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
-import { getTipsReport, type TipReportProfessionalTotal } from "../api/propinas";
-import { RevenueTrendChart } from "../components/charts/RevenueTrendChart";
-import { TopServicesChart } from "../components/charts/TopServicesChart";
-import { PaymentMethodMixChart } from "../components/charts/PaymentMethodMixChart";
-import { AppointmentsByDayOfWeekChart } from "../components/charts/AppointmentsByDayOfWeekChart";
-import { TipsByProfessionalChart } from "../components/charts/TipsByProfessionalChart";
-import { formatGuaraniesGs } from "../lib/formatMoney";
+import {
+  RankedBars,
+  RevenueBars,
+  WeekdayBars,
+  trendTotal,
+  type TrendPoint,
+} from "../components/charts/SummaryCharts";
 import { getDateLocale } from "../i18n/dateLocale";
-import { PARAGUAY_TIMEZONE } from "../lib/paraguayDateTime";
+import { formatGuaraniesGs } from "../lib/formatMoney";
+import { capitalize } from "./billing/billingShared";
 
 type DashboardsResponse = {
   revenueWeek?: { invoiced: string | number; collected: string | number };
   clientsThisMonth?: number;
-  revenueTrend: Array<{ date: string; invoiced: string | number }>;
+  revenueTrend: TrendPoint[];
   revenueTrendDays: number;
-  /** Days right before `revenueTrend` — only feed the 7-day average, never plotted as bars. */
-  revenueTrendLookback?: Array<{ date: string; invoiced: string | number }>;
   topServices: Array<{ serviceName: string; revenue: string | number }>;
   paymentMethodMix: Array<{ method: string; amount: string | number }>;
   appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>;
 };
 
-/**
- * Issue #222 code-review follow-up: `Y/M/D` of `date` as observed in `timeZone`, not the browser's
- * local timezone — used to compute the tips-by-professional window in the same *business* timezone
- * `DashboardService.revenueWindow` uses server-side, instead of a browser-local approximation
- * (which would shift the whole 30-day window by a day for part of each day whenever the viewer's
- * device timezone differs from `PARAGUAY_TIMEZONE`/`America/Asuncion`).
- */
-function zonedYmd(date: Date, timeZone: string): { y: number; m: number; d: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const map: Record<string, string> = {};
-  for (const p of parts) map[p.type] = p.value;
-  return { y: Number(map.year), m: Number(map.month), d: Number(map.day) };
-}
+const PERIODS = [7, 30, 90] as const;
+type Period = (typeof PERIODS)[number];
+
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+const TOP_SERVICES_SHOWN = 5;
+
+const asNumber = (v: string | number): number => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
 
 /**
- * Converts wall-clock date/time components *as they would read in `timeZone`* to the UTC instant
- * they denote — the "guess and correct" technique (no timezone-conversion library in this
- * frontend): treat the components as if they were already UTC to get a first guess, see what
- * wall-clock time that guess actually renders as in `timeZone`, and correct by the difference. A
- * second pass is cheap insurance against a guess landing right on a DST transition (irrelevant for
- * `America/Asuncion` today — no DST since 2024, see `paraguayDateTime.ts` — but this helper makes
- * no zone-specific assumption).
- */
-function zonedDateTimeToUtcMs(
-  y: number,
-  m: number,
-  d: number,
-  h: number,
-  mi: number,
-  s: number,
-  ms: number,
-  timeZone: string,
-): number {
-  let guess = Date.UTC(y, m - 1, d, h, mi, s, ms);
-  for (let i = 0; i < 2; i++) {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date(guess));
-    const map: Record<string, string> = {};
-    for (const p of parts) map[p.type] = p.value;
-    const observed = Date.UTC(
-      Number(map.year),
-      Number(map.month) - 1,
-      Number(map.day),
-      map.hour === "24" ? 0 : Number(map.hour),
-      Number(map.minute),
-      Number(map.second),
-      ms,
-    );
-    const diff = guess - observed;
-    if (diff === 0) break;
-    guess += diff;
-  }
-  return guess;
-}
-
-/**
- * Issue #220 follow-up — "Dashboards": dedicated screen for the dashboard's charts (revenue trend,
- * top services, payment method mix, appointments by day of week, tips by professional), split out
- * of `DashboardPage.tsx` so the main panel stays focused on today's operational snapshot. Reuses
- * the same `/api/dashboard` aggregate the main dashboard fetches — the chart data (`revenueTrend`/
- * `revenueTrendDays`/`topServices`/`paymentMethodMix`/`appointmentsByDayOfWeek`) already lives
- * there.
- *
- * Issue #223 — "Dashboard: gráfico de propinas por profesional" is the one exception: it adds no
- * new backend aggregation, so this page instead calls the already-existing
- * `GET /api/propinas/report` (`getTipsReport`) with a client-computed date range equivalent to the
- * same trailing window (`tipsWindowRangeIso` below), in the tenant's business timezone rather than
- * the browser's local one — see `zonedYmd`/`zonedDateTimeToUtcMs`.
+ * Resumen (the "Dashboards" charts screen, redesigned): the week and month figures, ONE main chart
+ * (invoicing, with a 7 / 30 / 90 day period) and everything else folded under "Ver más detalle" as
+ * short ranked lists. Tips by professional live in the Propinas screen. Same `/api/dashboard`
+ * aggregate as Inicio, asked for the chosen period (`?days=`).
  */
 export default function DashboardsPage() {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
 
+  const [days, setDays] = useState<Period>(30);
   const [data, setData] = useState<DashboardsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tipsByProfessional, setTipsByProfessional] = useState<TipReportProfessionalTotal[]>([]);
-  const [now] = useState(() => new Date());
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    femmeJson<DashboardsResponse>("/api/dashboard", { json: false })
+    // Keep the previous figures on screen while the next period loads (no spinner flash).
+    femmeJson<DashboardsResponse>(`/api/dashboard?days=${days}`, { json: false })
       .then((res) => {
         if (!cancelled) {
           setData(res);
@@ -134,127 +69,178 @@ export default function DashboardsPage() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [days, t]);
 
-  /**
-   * Client-side equivalent of `DashboardService.revenueWindow` (business-timezone trailing window
-   * ending today) — needed because `GET /api/propinas/report` takes an explicit `from`/`to`, unlike
-   * the sibling charts' shared window (computed entirely server-side, opaque to the frontend).
-   * `data?.revenueTrendDays` is read from the last `/api/dashboard` response (defaulting to the
-   * server's current constant, 30, before that first response lands) so this window always matches
-   * whatever the sibling charts are showing rather than a second hardcoded literal.
-   */
-  const tipsWindowRangeIso = useMemo(() => {
-    const windowDays = data?.revenueTrendDays ?? 30;
-    const today = zonedYmd(now, PARAGUAY_TIMEZONE);
-    // Pure calendar-day arithmetic — `Date.UTC` normalizes a negative day-of-month correctly — no
-    // zone conversion needed yet, this only walks back whole calendar days from "today in zone".
-    const startCalendar = new Date(Date.UTC(today.y, today.m - 1, today.d - (windowDays - 1)));
-    const startMs = zonedDateTimeToUtcMs(
-      startCalendar.getUTCFullYear(),
-      startCalendar.getUTCMonth() + 1,
-      startCalendar.getUTCDate(),
-      0,
-      0,
-      0,
-      0,
-      PARAGUAY_TIMEZONE,
+  const trend = useMemo(() => (Array.isArray(data?.revenueTrend) ? data!.revenueTrend : []), [data]);
+  const total = trendTotal(trend);
+
+  const services = useMemo(
+    () =>
+      (Array.isArray(data?.topServices) ? data!.topServices : [])
+        .map((s) => ({ label: s.serviceName, value: asNumber(s.revenue) }))
+        .filter((s) => s.value > 0)
+        .slice(0, TOP_SERVICES_SHOWN),
+    [data],
+  );
+  const methods = useMemo(
+    () =>
+      (Array.isArray(data?.paymentMethodMix) ? data!.paymentMethodMix : [])
+        .map((m) => ({
+          label: t(`femme.billing.invoice.paymentMethod${capitalize(m.method)}`),
+          value: asNumber(m.amount),
+        }))
+        .filter((m) => m.value > 0),
+    [data, t],
+  );
+  const weekdays = useMemo(() => {
+    const byDay = new Map(
+      (Array.isArray(data?.appointmentsByDayOfWeek) ? data!.appointmentsByDayOfWeek : []).map((d) => [
+        d.dayOfWeek,
+        asNumber(d.count),
+      ]),
     );
-    const endMs = zonedDateTimeToUtcMs(today.y, today.m, today.d, 23, 59, 59, 999, PARAGUAY_TIMEZONE);
-    return { from: new Date(startMs).toISOString(), to: new Date(endMs).toISOString() };
-  }, [now, data?.revenueTrendDays]);
-
-  useEffect(() => {
-    let cancelled = false;
-    getTipsReport({ from: tipsWindowRangeIso.from, to: tipsWindowRangeIso.to })
-      .then((r) => {
-        if (!cancelled) {
-          setTipsByProfessional(Array.isArray(r.professionalTotals) ? r.professionalTotals : []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setTipsByProfessional([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tipsWindowRangeIso.from, tipsWindowRangeIso.to]);
+    return DAY_KEYS.map((k) => ({
+      label: t(`femme.calendar.days.${k}`),
+      count: byDay.get(k) ?? 0,
+    }));
+  }, [data, t]);
+  const hasDetail = services.length > 0 || methods.length > 0 || weekdays.some((d) => d.count > 0);
 
   return (
-    <div>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Heading as="h1" className="text-2xl">
           {t("femme.dashboardsPage.pageTitle")}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-          {t("femme.dashboardsPage.pageSubtitle")}
+        </Heading>
+        <div
+          role="tablist"
+          aria-label={t("femme.summary.periodLabel")}
+          data-tour="summary-period"
+          className="grid min-w-[230px] grid-cols-3 gap-1 rounded-2xl bg-primary-lt p-1"
+        >
+          {PERIODS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="tab"
+              aria-selected={days === p}
+              data-testid={`summary-period-${p}`}
+              onClick={() => setDays(p)}
+              className={`min-h-10 rounded-xl text-sm font-bold ${
+                days === p ? "bg-surface text-primary shadow" : "text-ink-2"
+              }`}
+            >
+              {t("femme.summary.period", { count: p })}
+            </button>
+          ))}
         </div>
       </div>
 
-      {loading ? (
-        <div
-          style={{
-            display: "flex",
-            minHeight: "40vh",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-          }}
-        >
+      {loading && !data ? (
+        <div className="flex min-h-[30vh] items-center justify-center gap-3">
           <Spinner size="lg" />
           <Text>{t("femme.dashboard.loading")}</Text>
         </div>
-      ) : error || !data ? (
+      ) : error && !data ? (
         <Alert variant="destructive" title={t("femme.dashboard.error")}>
           {error}
         </Alert>
       ) : (
-        <div className="flex min-w-0 flex-col gap-4">
-          {/* Week and month totals moved here from Inicio (billing redesign). */}
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2" data-testid="dashboards-totals">
-            <div className="rounded-card border border-line bg-surface p-4">
-              <div className="text-sm text-ink-3">{t("femme.dashboard.metricRevenueWeek")}</div>
-              <div className="font-heading text-2xl font-extrabold tabular-nums text-ink" data-testid="dashboards-revenue-week">
-                {formatGuaraniesGs(data.revenueWeek?.collected ?? 0)}
+        data && (
+          <>
+            {error && (
+              <Alert variant="destructive" title={t("femme.dashboard.error")}>
+                {error}
+              </Alert>
+            )}
+            {/* Week and month totals (independent of the period). */}
+            <div className="flex flex-wrap items-baseline gap-x-7 gap-y-1" data-testid="summary-kpis">
+              <div className="flex flex-col">
+                <span className="text-sm text-ink-3">{t("femme.dashboard.revenueWeek")}</span>
+                <b className="font-heading text-xl font-extrabold tabular-nums" data-testid="dashboards-revenue-week">
+                  {formatGuaraniesGs(data.revenueWeek?.collected ?? 0)}
+                </b>
               </div>
-              <div className="text-xs text-ink-3">
-                {t("femme.dashboard.invoiced")}: {formatGuaraniesGs(data.revenueWeek?.invoiced ?? 0)}
+              <div className="flex flex-col">
+                <span className="text-sm text-ink-3">{t("femme.dashboard.metricClientsMonth")}</span>
+                <b className="font-heading text-xl font-extrabold tabular-nums" data-testid="dashboards-clients-month">
+                  {data.clientsThisMonth ?? 0}
+                </b>
               </div>
             </div>
-            <div className="rounded-card border border-line bg-surface p-4">
-              <div className="text-sm text-ink-3">{t("femme.dashboard.metricClientsMonth")}</div>
-              <div className="font-heading text-2xl font-extrabold tabular-nums text-ink" data-testid="dashboards-clients-month">
-                {data.clientsThisMonth ?? 0}
+
+            <Card className={`p-4 sm:p-6 ${loading ? "opacity-70" : ""}`} data-testid="summary-revenue-card">
+              <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <Heading as="h2" className="text-lg">
+                    {t("femme.summary.revenueTitle")}
+                  </Heading>
+                  <Text variant="muted" className="text-sm" data-testid="summary-range">
+                    {t("femme.summary.lastDays", { count: days })}
+                  </Text>
+                </div>
+                <div className="font-heading text-3xl font-extrabold tabular-nums text-ink" data-testid="summary-revenue-total">
+                  {formatGuaraniesGs(total)}
+                </div>
               </div>
-            </div>
-          </div>
+              <RevenueBars data={trend} locale={locale} />
+            </Card>
 
-          <RevenueTrendChart
-            data={Array.isArray(data.revenueTrend) ? data.revenueTrend : []}
-            lookback={Array.isArray(data.revenueTrendLookback) ? data.revenueTrendLookback : []}
-            days={data.revenueTrendDays ?? 30}
-            locale={locale}
-          />
-
-          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2">
-            <PaymentMethodMixChart
-              data={Array.isArray(data.paymentMethodMix) ? data.paymentMethodMix : []}
-              days={data.revenueTrendDays ?? 30}
-            />
-            <AppointmentsByDayOfWeekChart
-              data={Array.isArray(data.appointmentsByDayOfWeek) ? data.appointmentsByDayOfWeek : []}
-              days={data.revenueTrendDays ?? 30}
-            />
-          </div>
-
-          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2">
-            <TopServicesChart
-              data={Array.isArray(data.topServices) ? data.topServices : []}
-              days={data.revenueTrendDays ?? 30}
-            />
-            <TipsByProfessionalChart data={tipsByProfessional} days={data.revenueTrendDays ?? 30} />
-          </div>
-        </div>
+            <Card className="p-0">
+              <button
+                type="button"
+                aria-expanded={moreOpen}
+                aria-controls="summary-more"
+                data-testid="summary-more-toggle"
+                onClick={() => setMoreOpen((o) => !o)}
+                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left font-bold text-ink sm:px-6"
+              >
+                {t("femme.summary.moreDetail")}
+                <span aria-hidden className={`text-ink-3 transition-transform ${moreOpen ? "rotate-180" : ""}`}>
+                  ⌄
+                </span>
+              </button>
+              {moreOpen && (
+                <div id="summary-more" className="grid gap-6 px-4 pb-5 sm:grid-cols-2 sm:px-6" data-testid="summary-more">
+                  {!hasDetail ? (
+                    <p className="text-ink-3 sm:col-span-2" data-testid="summary-more-empty">
+                      {t("femme.summary.noData")}
+                    </p>
+                  ) : (
+                    <>
+                      <section>
+                        <Heading as="h3" className="mb-2 text-[15px]">
+                          {t("femme.summary.topServices")}
+                        </Heading>
+                        {services.length === 0 ? (
+                          <p className="text-sm text-ink-3">{t("femme.summary.noServices")}</p>
+                        ) : (
+                          <RankedBars items={services} testId="summary-top-services" />
+                        )}
+                      </section>
+                      <section>
+                        <Heading as="h3" className="mb-2 text-[15px]">
+                          {t("femme.summary.paymentMethods")}
+                        </Heading>
+                        {methods.length === 0 ? (
+                          <p className="text-sm text-ink-3">{t("femme.summary.noPayments")}</p>
+                        ) : (
+                          <RankedBars items={methods} asPercent testId="summary-payment-methods" />
+                        )}
+                      </section>
+                      <section className="sm:col-span-2">
+                        <Heading as="h3" className="mb-2 text-[15px]">
+                          {t("femme.summary.appointmentsByDay")}
+                        </Heading>
+                        <WeekdayBars items={weekdays} />
+                      </section>
+                    </>
+                  )}
+                </div>
+              )}
+            </Card>
+          </>
+        )
       )}
     </div>
   );

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "../test/renderWithTour";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "../test/renderWithTour";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
@@ -11,6 +11,8 @@ const femmeJson = vi.fn();
 vi.mock("../api/femmeClient", () => ({
   femmeJson: (...args: unknown[]) => femmeJson(...args),
 }));
+
+afterEach(() => cleanup());
 
 function renderPage() {
   return render(
@@ -24,237 +26,116 @@ function renderPage() {
   );
 }
 
-describe("DashboardsPage revenue trend chart (issue #219)", () => {
+function dashboard(over: Record<string, unknown> = {}, days = 30) {
+  return {
+    revenueWeek: { invoiced: "900000", collected: "800000" },
+    clientsThisMonth: 12,
+    revenueTrend: [
+      { date: "2026-08-01", invoiced: "0" },
+      { date: "2026-08-02", invoiced: "150000" },
+      { date: "2026-08-03", invoiced: "250000" },
+    ],
+    revenueTrendDays: days,
+    topServices: [
+      { serviceName: "Coloración", revenue: "400000" },
+      { serviceName: "Corte", revenue: "200000" },
+    ],
+    paymentMethodMix: [
+      { method: "CASH", amount: "300000" },
+      { method: "CREDIT_CARD", amount: "100000" },
+    ],
+    appointmentsByDayOfWeek: [
+      { dayOfWeek: "mon", count: 2 },
+      { dayOfWeek: "tue", count: 0 },
+      { dayOfWeek: "wed", count: 0 },
+      { dayOfWeek: "thu", count: 0 },
+      { dayOfWeek: "fri", count: 5 },
+      { dayOfWeek: "sat", count: 9 },
+      { dayOfWeek: "sun", count: 0 },
+    ],
+    ...over,
+  };
+}
+
+describe("DashboardsPage (Resumen)", () => {
   beforeEach(() => {
     void i18n.changeLanguage("en");
     femmeJson.mockReset();
   });
 
-  function baseDashboard(
-    revenueTrend: Array<{ date: string; invoiced: string | number }>,
-    revenueTrendDays = 30,
-  ) {
-    return {
-      revenueTrend,
-      revenueTrendDays,
-      topServices: [],
-    };
-  }
+  it("asks for the default 30-day period and shows the total and the main chart", async () => {
+    femmeJson.mockResolvedValue(dashboard());
+    renderPage();
+    expect((await screen.findByTestId("summary-revenue-total")).textContent).toMatch(/400\.000/);
+    expect(femmeJson).toHaveBeenCalledWith("/api/dashboard?days=30", expect.anything());
+    expect(screen.getByTestId("summary-revenue-chart")).toBeTruthy();
+    expect(screen.getByTestId("summary-range").textContent).toBe("Last 30 days");
+    expect(screen.getByTestId("dashboards-revenue-week").textContent).toMatch(/800\.000/);
+    expect(screen.getByTestId("dashboards-clients-month").textContent).toBe("12");
+  });
 
-  it("shows the empty state when every day in range has zero invoiced revenue", async () => {
-    femmeJson.mockResolvedValue(
-      baseDashboard([
-        { date: "2026-08-01", invoiced: "0" },
-        { date: "2026-08-02", invoiced: 0 },
-      ]),
+  it("changes the period with the 7 / 30 / 90 day selector", async () => {
+    femmeJson.mockImplementation((url: string) =>
+      Promise.resolve(dashboard({}, Number(new URL(url, "http://x").searchParams.get("days")))),
     );
     renderPage();
-    expect(await screen.findByText("No invoiced revenue in this period yet")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-revenue-trend-empty")).toBeTruthy();
+    await screen.findByTestId("summary-revenue-total");
+    fireEvent.click(screen.getByTestId("summary-period-7"));
+    await waitFor(() =>
+      expect(femmeJson).toHaveBeenCalledWith("/api/dashboard?days=7", expect.anything()),
+    );
+    expect(screen.getByTestId("summary-period-7").getAttribute("aria-selected")).toBe("true");
+    expect((await screen.findByTestId("summary-range")).textContent).toBe("Last 7 days");
+    fireEvent.click(screen.getByTestId("summary-period-90"));
+    await waitFor(() =>
+      expect(femmeJson).toHaveBeenCalledWith("/api/dashboard?days=90", expect.anything()),
+    );
   });
 
-  it("renders the chart section (no empty state) once there is invoiced revenue in range", async () => {
+  it("shows one short line (no chart) when there is no invoicing in the period", async () => {
     femmeJson.mockResolvedValue(
-      baseDashboard([
-        { date: "2026-08-01", invoiced: "0" },
-        { date: "2026-08-02", invoiced: "150000" },
-      ]),
+      dashboard({ revenueTrend: [{ date: "2026-08-01", invoiced: "0" }, { date: "2026-08-02", invoiced: 0 }] }),
     );
     renderPage();
-    expect(await screen.findByTestId("dashboard-revenue-trend")).toBeTruthy();
-    expect(screen.queryByTestId("dashboard-revenue-trend-empty")).toBeNull();
+    expect(await screen.findByTestId("summary-revenue-empty")).toBeTruthy();
+    expect(screen.queryByTestId("summary-revenue-chart")).toBeNull();
   });
 
-  it("still shows the empty state gracefully when revenueTrend is missing entirely (stale build)", async () => {
-    femmeJson.mockResolvedValue({});
+  it("still renders gracefully when revenueTrend is missing entirely (stale build)", async () => {
+    femmeJson.mockResolvedValue(dashboard({ revenueTrend: undefined }));
     renderPage();
-    expect(await screen.findByText("No invoiced revenue in this period yet")).toBeTruthy();
+    expect(await screen.findByTestId("summary-revenue-empty")).toBeTruthy();
   });
 
-  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
-    femmeJson.mockResolvedValue(baseDashboard([{ date: "2026-08-01", invoiced: "0" }], 45));
+  it("keeps the detail folded until 'See more detail' is opened", async () => {
+    femmeJson.mockResolvedValue(dashboard());
     renderPage();
-    expect(await screen.findByText("Invoiced revenue over the last 45 days")).toBeTruthy();
-  });
-});
-
-describe("DashboardsPage top services chart (issue #220)", () => {
-  beforeEach(() => {
-    void i18n.changeLanguage("en");
-    femmeJson.mockReset();
-  });
-
-  function baseDashboard(
-    topServices: Array<{ serviceName: string; revenue: string | number }>,
-    revenueTrendDays = 30,
-  ) {
-    return {
-      revenueTrend: [],
-      revenueTrendDays,
-      topServices,
-    };
-  }
-
-  it("shows the empty state when there is no service revenue in range", async () => {
-    femmeJson.mockResolvedValue(baseDashboard([]));
-    renderPage();
-    expect(await screen.findByText("No invoiced services in this period yet")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-top-services-empty")).toBeTruthy();
+    const toggle = await screen.findByTestId("summary-more-toggle");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("summary-top-services")).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("summary-top-services").textContent).toMatch(/Coloración/);
+    // Payment methods use the shared billing labels and show each one's share.
+    const methods = screen.getByTestId("summary-payment-methods").textContent ?? "";
+    expect(methods).toMatch(/75%/);
+    expect(methods).toMatch(/25%/);
+    expect(screen.getByTestId("summary-weekday-bars").textContent).toMatch(/9/);
   });
 
-  it("renders the chart section (no empty state) once there is service revenue in range", async () => {
+  it("shows a single line in the detail when there is no data at all", async () => {
     femmeJson.mockResolvedValue(
-      baseDashboard([
-        { serviceName: "Corte de cabello", revenue: "500000" },
-        { serviceName: "Manicura", revenue: "300000" },
-      ]),
+      dashboard({ topServices: [], paymentMethodMix: [], appointmentsByDayOfWeek: [] }),
     );
     renderPage();
-    expect(await screen.findByTestId("dashboard-top-services")).toBeTruthy();
-    expect(screen.queryByTestId("dashboard-top-services-empty")).toBeNull();
+    fireEvent.click(await screen.findByTestId("summary-more-toggle"));
+    expect(screen.getByTestId("summary-more-empty")).toBeTruthy();
   });
 
-  it("still shows the empty state gracefully when topServices is missing entirely (stale build)", async () => {
-    femmeJson.mockResolvedValue({ revenueTrend: [], revenueTrendDays: 30 });
+  it("has no tips section (tips live in the Propinas screen)", async () => {
+    femmeJson.mockResolvedValue(dashboard());
     renderPage();
-    expect(await screen.findByText("No invoiced services in this period yet")).toBeTruthy();
-  });
-
-  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
-    femmeJson.mockResolvedValue(
-      baseDashboard([{ serviceName: "Corte de cabello", revenue: "500000" }], 45),
-    );
-    renderPage();
-    expect(
-      await screen.findByText(
-        "Top services by revenue over the last 45 days (excludes custom line items not linked to a catalog service)",
-      ),
-    ).toBeTruthy();
-  });
-});
-
-describe("DashboardsPage payment method mix chart (issue #221)", () => {
-  beforeEach(() => {
-    void i18n.changeLanguage("en");
-    femmeJson.mockReset();
-  });
-
-  function baseDashboard(
-    paymentMethodMix: Array<{ method: string; amount: string | number }>,
-    revenueTrendDays = 30,
-  ) {
-    return {
-      revenueTrend: [],
-      revenueTrendDays,
-      topServices: [],
-      paymentMethodMix,
-    };
-  }
-
-  it("shows the empty state when there are no payment allocations in range", async () => {
-    femmeJson.mockResolvedValue(baseDashboard([]));
-    renderPage();
-    expect(await screen.findByText("No invoiced payments in this period yet")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-payment-method-mix-empty")).toBeTruthy();
-  });
-
-  it("renders the chart section (no empty state) with more than one payment method present, using the shared billing-UI labels", async () => {
-    femmeJson.mockResolvedValue(
-      baseDashboard([
-        { method: "CASH", amount: "500000" },
-        { method: "DEBIT_CARD", amount: "300000" },
-        { method: "TRANSFER", amount: "150000" },
-      ]),
-    );
-    renderPage();
-    expect(await screen.findByTestId("dashboard-payment-method-mix")).toBeTruthy();
-    expect(screen.queryByTestId("dashboard-payment-method-mix-empty")).toBeNull();
-  });
-
-  it("still shows the empty state gracefully when paymentMethodMix is missing entirely (stale build)", async () => {
-    femmeJson.mockResolvedValue({ revenueTrend: [], revenueTrendDays: 30, topServices: [] });
-    renderPage();
-    expect(await screen.findByText("No invoiced payments in this period yet")).toBeTruthy();
-  });
-
-  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
-    femmeJson.mockResolvedValue(baseDashboard([{ method: "CASH", amount: "500000" }], 45));
-    renderPage();
-    expect(
-      await screen.findByText("Invoiced revenue by payment method over the last 45 days"),
-    ).toBeTruthy();
-  });
-});
-
-describe("DashboardsPage appointments by day of week chart (issue #222)", () => {
-  beforeEach(() => {
-    void i18n.changeLanguage("en");
-    femmeJson.mockReset();
-  });
-
-  function baseDashboard(
-    appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>,
-    revenueTrendDays = 30,
-  ) {
-    return {
-      revenueTrend: [],
-      revenueTrendDays,
-      topServices: [],
-      paymentMethodMix: [],
-      appointmentsByDayOfWeek,
-    };
-  }
-
-  const allZero = [
-    { dayOfWeek: "mon", count: 0 },
-    { dayOfWeek: "tue", count: 0 },
-    { dayOfWeek: "wed", count: 0 },
-    { dayOfWeek: "thu", count: 0 },
-    { dayOfWeek: "fri", count: 0 },
-    { dayOfWeek: "sat", count: 0 },
-    { dayOfWeek: "sun", count: 0 },
-  ];
-
-  it("shows the empty state when every day in range has zero appointments", async () => {
-    femmeJson.mockResolvedValue(baseDashboard(allZero));
-    renderPage();
-    expect(await screen.findByText("No appointments in this period yet")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-appointments-by-day-of-week-empty")).toBeTruthy();
-  });
-
-  it("renders the chart section (no empty state) once there are appointments in range", async () => {
-    femmeJson.mockResolvedValue(
-      baseDashboard([
-        { dayOfWeek: "mon", count: 3 },
-        { dayOfWeek: "tue", count: 0 },
-        { dayOfWeek: "wed", count: "2" },
-        { dayOfWeek: "thu", count: 0 },
-        { dayOfWeek: "fri", count: 1 },
-        { dayOfWeek: "sat", count: 0 },
-        { dayOfWeek: "sun", count: 0 },
-      ]),
-    );
-    renderPage();
-    expect(await screen.findByTestId("dashboard-appointments-by-day-of-week")).toBeTruthy();
-    expect(screen.queryByTestId("dashboard-appointments-by-day-of-week-empty")).toBeNull();
-  });
-
-  it("still shows the empty state gracefully when appointmentsByDayOfWeek is missing entirely (stale build)", async () => {
-    femmeJson.mockResolvedValue({
-      revenueTrend: [],
-      revenueTrendDays: 30,
-      topServices: [],
-      paymentMethodMix: [],
-    });
-    renderPage();
-    expect(await screen.findByText("No appointments in this period yet")).toBeTruthy();
-  });
-
-  it("uses the server-provided window length in the subtitle copy, not a hardcoded frontend value", async () => {
-    femmeJson.mockResolvedValue(baseDashboard(allZero, 45));
-    renderPage();
-    expect(
-      await screen.findByText("Appointment count by day of week over the last 45 days"),
-    ).toBeTruthy();
+    fireEvent.click(await screen.findByTestId("summary-more-toggle"));
+    expect(screen.queryByText(/tips by professional/i)).toBeNull();
   });
 });

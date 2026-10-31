@@ -480,7 +480,7 @@
       "catalog": "Catálogo",
       "dashboard": "Panel",
       "calendar": "Calendario",
-      "dashboards": "Dashboards",
+      "dashboards": "Resumen",
       "services": "Servicios",
       "products": "Productos",
       "professionals": "Profesionales",
@@ -1066,8 +1066,28 @@
       "save": "Guardar",
       "noPhone": "Sin teléfono"
     },
+    "summary": {
+      "periodLabel": "Período",
+      "period_one": "{{count}} día",
+      "period_other": "{{count}} días",
+      "lastDays_one": "Último {{count}} día",
+      "lastDays_other": "Últimos {{count}} días",
+      "revenueTitle": "Facturación",
+      "revenueChartLabel": "Facturación por día",
+      "noRevenue": "Todavía no hay facturación en este período.",
+      "barHint": "Tocá una barra para ver ese día",
+      "legendDaily": "Facturado por día",
+      "legendAverage": "Promedio: {{amount}}",
+      "moreDetail": "Ver más detalle",
+      "noData": "Todavía no hay datos en este período.",
+      "topServices": "Servicios más vendidos",
+      "noServices": "Todavía no hay servicios facturados.",
+      "paymentMethods": "Medios de pago",
+      "noPayments": "Todavía no hay cobros.",
+      "appointmentsByDay": "Turnos por día de la semana"
+    },
     "dashboardsPage": {
-      "pageTitle": "Dashboards",
+      "pageTitle": "Resumen",
       "pageSubtitle": "Gráficos y tendencias del negocio de un vistazo."
     },
     "inactiveClients": {

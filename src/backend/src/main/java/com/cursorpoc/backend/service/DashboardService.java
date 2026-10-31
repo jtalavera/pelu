@@ -53,6 +53,17 @@ public class DashboardService {
   public static final int REVENUE_TREND_DAYS = 30;
 
   /**
+   * Resumen redesign: the periods (in days) the user can pick for the revenue trend and the charts
+   * that share its window ({@code GET /api/dashboard?days=}). {@link #REVENUE_TREND_DAYS} stays the
+   * default.
+   */
+  public static final List<Integer> ALLOWED_PERIOD_DAYS = List.of(7, 30, 90);
+
+  public static boolean isAllowedPeriod(int days) {
+    return ALLOWED_PERIOD_DAYS.contains(days);
+  }
+
+  /**
    * Days before the revenue-trend window that are also returned ({@code revenueTrendLookback}) so
    * the chart's 7-day moving average has a full week behind every plotted day, including the first
    * one. They are only used for that calculation — never plotted as bars.
@@ -108,8 +119,16 @@ public class DashboardService {
     this.sifenNumberVoidingService = sifenNumberVoidingService;
   }
 
-  @Transactional(readOnly = true)
+  /** The dashboard with the default {@link #REVENUE_TREND_DAYS}-day window. */
   public DashboardResponse build(long tenantId) {
+    return build(tenantId, REVENUE_TREND_DAYS);
+  }
+
+  /**
+   * @param days window of the trend and its sibling charts; one of {@link #ALLOWED_PERIOD_DAYS}
+   */
+  @Transactional(readOnly = true)
+  public DashboardResponse build(long tenantId, int days) {
     var zone = timeProperties.zoneId();
     ZonedDateTime now = ZonedDateTime.now(zone);
     Instant dayStart = now.toLocalDate().atStartOfDay(zone).toInstant();
@@ -204,15 +223,15 @@ public class DashboardService {
     List<DashboardResponse.InactiveClient> inactiveClients =
         buildInactiveClients(tenantId, zone, today);
 
-    RevenueTrendSeries revenueTrendSeries = buildRevenueTrend(tenantId, zone, today);
+    RevenueTrendSeries revenueTrendSeries = buildRevenueTrend(tenantId, zone, today, days);
 
-    List<DashboardResponse.TopService> topServices = buildTopServices(tenantId, zone, today);
+    List<DashboardResponse.TopService> topServices = buildTopServices(tenantId, zone, today, days);
 
     List<DashboardResponse.PaymentMethodMix> paymentMethodMix =
-        buildPaymentMethodMix(tenantId, zone, today);
+        buildPaymentMethodMix(tenantId, zone, today, days);
 
     List<DashboardResponse.AppointmentsByDayOfWeek> appointmentsByDayOfWeek =
-        buildAppointmentsByDayOfWeek(tenantId, zone, today);
+        buildAppointmentsByDayOfWeek(tenantId, zone, today, days);
 
     return new DashboardResponse(
         new DashboardResponse.AppointmentSummary(total, pending, confirmed, inProgress, completed),
@@ -223,7 +242,7 @@ public class DashboardService {
         inactiveClients,
         INACTIVE_CLIENT_THRESHOLD_DAYS,
         revenueTrendSeries.points(),
-        REVENUE_TREND_DAYS,
+        days,
         topServices,
         paymentMethodMix,
         appointmentsByDayOfWeek,
@@ -239,8 +258,8 @@ public class DashboardService {
    */
   private record RevenueWindow(LocalDate startDate, Instant start, Instant end) {}
 
-  private static RevenueWindow revenueWindow(ZoneId zone, LocalDate today) {
-    LocalDate startDate = today.minusDays(REVENUE_TREND_DAYS - 1L);
+  private static RevenueWindow revenueWindow(ZoneId zone, LocalDate today, int days) {
+    LocalDate startDate = today.minusDays(days - 1L);
     Instant start = startDate.atStartOfDay(zone).toInstant();
     Instant end = today.plusDays(1).atStartOfDay(zone).toInstant();
     return new RevenueWindow(startDate, start, end);
@@ -256,8 +275,9 @@ public class DashboardService {
    * window (same shape, oldest first), read with the same single query, so the 7-day moving average
    * can start on the window's first day.
    */
-  private RevenueTrendSeries buildRevenueTrend(long tenantId, ZoneId zone, LocalDate today) {
-    RevenueWindow window = revenueWindow(zone, today);
+  private RevenueTrendSeries buildRevenueTrend(
+      long tenantId, ZoneId zone, LocalDate today, int days) {
+    RevenueWindow window = revenueWindow(zone, today, days);
     LocalDate lookbackStartDate = window.startDate().minusDays(REVENUE_TREND_AVERAGE_LOOKBACK_DAYS);
     Instant lookbackStart = lookbackStartDate.atStartOfDay(zone).toInstant();
 
@@ -277,8 +297,8 @@ public class DashboardService {
           new DashboardResponse.RevenueTrendPoint(
               day.toString(), totalsByDay.getOrDefault(day, BigDecimal.ZERO)));
     }
-    List<DashboardResponse.RevenueTrendPoint> points = new ArrayList<>(REVENUE_TREND_DAYS);
-    for (int i = 0; i < REVENUE_TREND_DAYS; i++) {
+    List<DashboardResponse.RevenueTrendPoint> points = new ArrayList<>(days);
+    for (int i = 0; i < days; i++) {
       LocalDate day = window.startDate().plusDays(i);
       points.add(
           new DashboardResponse.RevenueTrendPoint(
@@ -304,8 +324,8 @@ public class DashboardService {
    * {@link #INACTIVE_CLIENTS_LIMIT}.
    */
   private List<DashboardResponse.TopService> buildTopServices(
-      long tenantId, ZoneId zone, LocalDate today) {
-    RevenueWindow window = revenueWindow(zone, today);
+      long tenantId, ZoneId zone, LocalDate today, int days) {
+    RevenueWindow window = revenueWindow(zone, today, days);
 
     return invoiceRepository
         .findServiceRevenueByTenantAndStatusAndIssuedBetween(
@@ -328,8 +348,8 @@ public class DashboardService {
    * subset.
    */
   private List<DashboardResponse.PaymentMethodMix> buildPaymentMethodMix(
-      long tenantId, ZoneId zone, LocalDate today) {
-    RevenueWindow window = revenueWindow(zone, today);
+      long tenantId, ZoneId zone, LocalDate today, int days) {
+    RevenueWindow window = revenueWindow(zone, today, days);
 
     return invoiceRepository
         .findPaymentMethodRevenueByTenantAndStatusAndIssuedBetween(
@@ -355,8 +375,8 @@ public class DashboardService {
    * #buildRevenueTrend}).
    */
   private List<DashboardResponse.AppointmentsByDayOfWeek> buildAppointmentsByDayOfWeek(
-      long tenantId, ZoneId zone, LocalDate today) {
-    RevenueWindow window = revenueWindow(zone, today);
+      long tenantId, ZoneId zone, LocalDate today, int days) {
+    RevenueWindow window = revenueWindow(zone, today, days);
 
     Map<DayOfWeek, Long> countsByDay = new HashMap<>();
     for (Instant startAt :
