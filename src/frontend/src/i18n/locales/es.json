@@ -3011,6 +3011,7 @@
       "statusVoided": "Anulada",
       "emptyOpen": "No hay fichas abiertas. ¡Todo cobrado!",
       "emptyAll": "Todavía no hay fichas.",
+      "noServices": "Sin servicios",
       "pay": "Cobrar",
       "payFor": "Cobrar la ficha de {{client}}",
       "lineSubtotal": "Subtotal",

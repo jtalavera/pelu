@@ -389,26 +389,34 @@ export default function ServiceRecordsPage() {
                     setSelectedId(r.id);
                   }
                 }}
-                className="flex min-h-14 cursor-pointer items-center gap-3 border-t border-line px-3 py-2.5 first:border-t-0 hover:bg-bg"
+                className="grid min-h-14 cursor-pointer grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 first:border-t-0 hover:bg-bg sm:grid-cols-[2.25rem_minmax(0,1fr)_auto_6.5rem]"
               >
                 <span
                   aria-hidden="true"
-                  className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading font-extrabold text-primary"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-lt text-xs font-heading font-extrabold text-primary"
                 >
                   {getInitials(r.clientFullName)}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <div className="break-words font-semibold text-ink">{r.clientFullName}</div>
-                  <div className="break-words text-sm text-ink-3">
-                    {[formatParaguayDateTime(r.createdAt, dateLocale), r.servicesSummary, r.professionalsSummary]
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-ink">{r.clientFullName}</div>
+                  <div className="truncate text-sm text-ink-3">
+                    {[
+                      formatParaguayDateTime(r.createdAt, dateLocale),
+                      r.servicesSummary || t("femme.serviceRecords.noServices"),
+                      r.professionalsSummary,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className="font-heading font-extrabold text-ink">
-                    {formatAmountDecimal(r.totalAmount)}
-                  </span>
+                <span
+                  className={`text-right font-heading font-extrabold ${
+                    Number(r.totalAmount) > 0 ? "text-ink" : "text-ink-3"
+                  }`}
+                >
+                  {Number(r.totalAmount) > 0 ? formatAmountDecimal(r.totalAmount) : "—"}
+                </span>
+                <div className="col-span-3 flex justify-end sm:col-span-1">
                   {r.status === "OPEN" ? (
                     <button
                       type="button"
@@ -419,7 +427,7 @@ export default function ServiceRecordsPage() {
                         void handlePay(r.id);
                       }}
                       onKeyDown={(e) => e.stopPropagation()}
-                      className="min-h-11 rounded-xl bg-primary px-4 font-extrabold text-primary-fg"
+                      className="min-h-11 w-full rounded-xl border-[1.5px] border-primary bg-transparent px-4 font-extrabold text-primary hover:bg-primary-lt sm:w-auto"
                     >
                       {t("femme.serviceRecords.pay")}
                     </button>
@@ -472,7 +480,7 @@ export default function ServiceRecordsPage() {
         open={newOpen}
         onClose={closeNew}
         title={t("femme.serviceRecords.newTitle")}
-        className="max-w-3xl"
+        className="max-w-xl"
       >
         {newOpen ? (
           <ServiceRecordEditor

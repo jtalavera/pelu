@@ -391,7 +391,8 @@ export function ServiceRecordEditor({
   }
 
   const GRID =
-    "grid items-center gap-2 grid-cols-[4rem_minmax(0,1fr)_auto_2.75rem] md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_4rem_minmax(0,1fr)_6.5rem_2.75rem]";
+    "grid items-end gap-x-2 gap-y-1 grid-cols-[4rem_minmax(0,1fr)_auto_2.75rem] sm:grid-cols-[minmax(0,1fr)_4rem_7rem_auto_2.75rem]";
+  const CAPTION = "text-xs font-semibold text-ink-3";
 
   return (
     <div ref={topRef} className="flex flex-col gap-3">
@@ -449,24 +450,13 @@ export function ServiceRecordEditor({
           <h3 id="sr-lines-h" className={SECTION_TITLE}>
             {t("femme.serviceRecords.linesSection")}
           </h3>
-          <div
-            aria-hidden="true"
-            className={`${GRID} hidden px-0 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-ink-3 md:grid`}
-          >
-            <span>{t("femme.serviceRecords.colService")}</span>
-            <span>{t("femme.serviceRecords.lineProfessionalLabel")}</span>
-            <span>{t("femme.serviceRecords.colQty")}</span>
-            <span>{t("femme.serviceRecords.colPrice")}</span>
-            <span className="text-right">{t("femme.serviceRecords.lineSubtotal")}</span>
-            <span />
-          </div>
           {lines.map((line, idx) => (
             <div
               key={line.key}
               data-testid="service-record-line"
-              className={`${GRID} border-t border-line py-1.5`}
+              className={`${GRID} border-t border-line py-2 first:border-t-0`}
             >
-              <div className="col-span-4 md:col-span-1">
+              <div className="col-span-4 sm:col-span-5">
                 <ServiceSearchField
                   id={`service-record-line-svc-${idx}`}
                   label={t("femme.serviceRecords.lineServiceAria", { n: idx + 1 })}
@@ -477,7 +467,10 @@ export function ServiceRecordEditor({
                   errorDescribedById={`service-record-line-svc-err-${idx}`}
                 />
               </div>
-              <div className="col-span-4 md:col-span-1">
+              <div className="col-span-4 flex min-w-0 flex-col gap-1 sm:col-span-1">
+                <span aria-hidden="true" className={CAPTION}>
+                  {t("femme.serviceRecords.lineProfessionalLabel")}
+                </span>
                 <SearchableSelect<number>
                   id={`service-record-line-prof-${idx}`}
                   label={t("femme.serviceRecords.lineProfessionalAria", { n: idx + 1 })}
@@ -489,7 +482,10 @@ export function ServiceRecordEditor({
                   noResultsText={t("femme.serviceRecords.lineProfessionalNoResults")}
                 />
               </div>
-              <div>
+              <div className="flex flex-col gap-1">
+                <span aria-hidden="true" className={CAPTION}>
+                  {t("femme.serviceRecords.colQty")}
+                </span>
                 <Label htmlFor={`service-record-line-qty-${idx}`} className="sr-only">
                   {t("femme.serviceRecords.lineQuantityLabel")}
                 </Label>
@@ -506,7 +502,10 @@ export function ServiceRecordEditor({
                   }
                 />
               </div>
-              <div>
+              <div className="flex flex-col gap-1">
+                <span aria-hidden="true" className={CAPTION}>
+                  {t("femme.serviceRecords.colPrice")}
+                </span>
                 <Label htmlFor={`service-record-line-price-${idx}`} className="sr-only">
                   {t("femme.serviceRecords.lineUnitPriceLabel")}
                 </Label>
@@ -519,7 +518,7 @@ export function ServiceRecordEditor({
                 />
               </div>
               <b
-                className="whitespace-nowrap text-right font-heading text-ink"
+                className="whitespace-nowrap pb-3 text-right font-heading text-ink"
                 data-testid="service-record-line-subtotal"
               >
                 {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
@@ -537,7 +536,7 @@ export function ServiceRecordEditor({
               ) : (
                 <span />
               )}
-              <div className="col-span-4 md:col-span-6">
+              <div className="col-span-4 sm:col-span-5">
                 <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
                   {lineErrors[idx]?.service}
                 </FieldValidationError>

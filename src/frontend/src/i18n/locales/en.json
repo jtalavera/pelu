@@ -3011,6 +3011,7 @@
       "statusVoided": "Voided",
       "emptyOpen": "No open records. Everything is paid!",
       "emptyAll": "No service records yet.",
+      "noServices": "No services",
       "pay": "Charge",
       "payFor": "Charge {{client}}'s record",
       "lineSubtotal": "Subtotal",

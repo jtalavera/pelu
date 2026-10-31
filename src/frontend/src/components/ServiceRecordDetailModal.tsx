@@ -50,7 +50,7 @@ export function ServiceRecordDetailModal({
           {record ? <ServiceRecordStatusPill status={record.status} /> : null}
         </span>
       }
-      className="max-w-3xl"
+      className="max-w-xl"
     >
       <div className="flex flex-col gap-4">
         {loading && (

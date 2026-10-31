@@ -31,3 +31,8 @@ Parte del rediseño general. Mismo sistema: una acción principal por estado, lo
 ## Tests
 Vitest: `ServiceRecordsPage.test.tsx`, `ServiceRecordEditor.test.tsx`; JUnit: `ServiceRecordServiceTest`.
 Los specs de Playwright se adaptan en la pasada final tras el rediseño de Configuración.
+
+## Ajuste: lista compacta y detalle más angosto
+
+- Lista: filas de una línea (avatar 36 px, nombre, `fecha · servicios · profesionales`), monto a la derecha ("—" si no hay servicios, con "Sin servicios") y "Cobrar" como botón de solo borde junto al monto. En celular el botón pasa a la línea de abajo.
+- Detalle: diálogo `max-w-xl`. Cada servicio ocupa dos renglones: servicio a todo el ancho y, debajo, Profesional | Cant. | Precio | subtotal | ✕ con rótulos pequeños. Se elimina la fila de cabeceras en mayúsculas que chocaba con el título "Servicios".
