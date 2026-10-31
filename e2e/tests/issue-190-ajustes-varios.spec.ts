@@ -154,7 +154,8 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
 
     const form = page.getByRole("dialog", { name: "Correct and resend" });
-    // AC5 — the permanent hint about the SIFEN restriction is always there.
+    // AC5 — the hint about the SIFEN restriction is always one tap away under "More information".
+    await form.getByTestId("sifen-correct-resend-info-toggle").click();
     await expect(form.getByTestId("sifen-correct-resend-window-hint")).toBeVisible();
     // AC4 — past the window, a warning shows…
     await expect(form.getByTestId("sifen-correct-resend-window-expired")).toBeVisible();

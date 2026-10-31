@@ -55,6 +55,7 @@ export function InvoiceCorrectionForm({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   // Issue #190: header data shown read-only above the client section + the SIFEN resend-window check.
   const [invoiceNumberFormatted, setInvoiceNumberFormatted] = useState("");
   const [issuedAt, setIssuedAt] = useState<string | null>(null);
@@ -399,11 +400,40 @@ export function InvoiceCorrectionForm({
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1 text-sm text-ink-3">
-          <p>{t("femme.billing.history.detail.sifen.correctResendExplanation")}</p>
-          <p data-testid="sifen-correct-resend-window-hint">
-            {t("femme.billing.history.detail.sifen.correctResendWindowHint")}
-          </p>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-sm text-ink-2">
+            <span
+              aria-hidden="true"
+              className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-lt text-xs font-extrabold text-primary"
+            >
+              i
+            </span>
+            <span>{t("femme.billing.history.detail.sifen.correctResendShort")}</span>
+          </div>
+          <button
+            type="button"
+            aria-expanded={infoOpen}
+            aria-controls="sifen-correct-resend-info"
+            data-testid="sifen-correct-resend-info-toggle"
+            onClick={() => setInfoOpen((o) => !o)}
+            className="flex min-h-11 w-full items-center justify-between text-left text-sm font-bold text-ink-2"
+          >
+            {t("femme.billing.history.detail.sifen.correctResendMoreInfo")}
+            <span aria-hidden className={`text-ink-3 transition-transform ${infoOpen ? "rotate-180" : ""}`}>
+              ⌄
+            </span>
+          </button>
+          {infoOpen ? (
+            <div
+              id="sifen-correct-resend-info"
+              className="flex flex-col gap-1.5 rounded-card border border-line px-3 py-2.5 text-sm text-ink-3"
+            >
+              <p>{t("femme.billing.history.detail.sifen.correctResendExplanation")}</p>
+              <p data-testid="sifen-correct-resend-window-hint">
+                {t("femme.billing.history.detail.sifen.correctResendWindowHint")}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         {loading && (

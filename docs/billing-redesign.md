@@ -145,3 +145,6 @@ Cada fila ocupa dos renglones: a la izquierda nombre y `estado · número · for
 - Historial de facturas: las filas usan el mismo diseño de dos renglones que "Comprobantes de hoy" (nombre y estado a la izquierda; monto y **Corregir y reenviar** a la derecha).
 - Detalle de caja: el monto de cada movimiento no se parte en dos líneas (`whitespace-nowrap`, ancho propio).
 - Formulario **Corregir y reenviar**: diálogo más angosto (`max-w-xl`) con botones en el pie, secciones separadas por línea (sin tarjetas con borde), servicios numerados con servicio a todo el ancho y cantidad / precio / subtotal debajo, "Descuento por ítem" como casilla simple, y "Agregar ítem / método de pago" como enlaces. Los `id` y `data-testid` se mantienen.
+
+## Ajuste: texto de "Corregir y reenviar"
+El diálogo muestra una línea con ícono ("Corregí lo que SIFEN rechazó y reenviá con el mismo CDC.") y un renglón plegable **Más información** (`sifen-correct-resend-info-toggle`) con el texto completo: qué se puede corregir y la ventana de 72 horas (`sifen-correct-resend-window-hint`). El aviso de ventana vencida sigue visible fuera del plegable.

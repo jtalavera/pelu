@@ -1867,6 +1867,8 @@
             "correctResendTitle": "Correct and resend",
             "correctResendTitleWithNumber": "Correct and resend — Invoice #{{number}}",
             "correctResendButton": "Correct and resend",
+            "correctResendShort": "Fix what SIFEN rejected and resend under the same CDC.",
+            "correctResendMoreInfo": "More information",
             "correctResendExplanation": "Fix the client, items, discount or payments of this rejected invoice and resend it to SIFEN under the same CDC. The number and CDC don't change.",
             "correctResendEmissionDateLabel": "Invoice emission date",
             "correctResendWindowHint": "SIFEN requires the document to be transmitted within 72 hours of its digital signature. After that window a resend is very likely to be rejected (e.g. \"malformed XML\" or late transmission); if it fails, void the invoice to report its number as unused (inutilizar la numeración).",

@@ -1867,6 +1867,8 @@
             "correctResendTitle": "Corregir y reenviar",
             "correctResendTitleWithNumber": "Corregir y reenviar — Comprobante #{{number}}",
             "correctResendButton": "Corregir y reenviar",
+            "correctResendShort": "Corregí lo que SIFEN rechazó y reenviá con el mismo CDC.",
+            "correctResendMoreInfo": "Más información",
             "correctResendExplanation": "Corregí el cliente, los ítems, el descuento o los pagos de esta factura rechazada y reenviala a SIFEN bajo el mismo CDC. La numeración y el CDC no cambian.",
             "correctResendEmissionDateLabel": "Fecha de emisión del comprobante",
             "correctResendWindowHint": "SIFEN exige transmitir el documento dentro de las 72 horas de su firma digital. Pasado ese plazo, es muy probable que el reenvío sea rechazado (p. ej. «XML mal formado» o transmisión extemporánea); si falla, anulá el comprobante para inutilizar su numeración.",
