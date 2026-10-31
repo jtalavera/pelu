@@ -282,6 +282,148 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
     });
   });
 
+  describe("Open ficha de servicio of the day (invoice ↔ ficha)", () => {
+    const client = {
+      id: 5,
+      fullName: "Marta Benítez",
+      phone: "0981123456",
+      email: "marta@example.com",
+      ruc: null,
+      active: true,
+    };
+    const record = (lines: Array<{ id: number; serviceId: number; description: string; unitPrice: string; quantity: number; professionalId: number | null }>) => ({
+      id: 70,
+      clientId: 5,
+      clientFullName: "Marta Benítez",
+      clientRuc: null,
+      status: "OPEN",
+      totalAmount: String(lines.reduce((a, l) => a + Number(l.unitPrice) * l.quantity, 0)),
+      tipsTotal: "0",
+      voidReason: null,
+      createdAt: new Date().toISOString(),
+      closedAt: null,
+      invoiceId: null,
+      invoiceNumberFormatted: null,
+      lines: lines.map((l) => ({ ...l, lineTotal: String(Number(l.unitPrice) * l.quantity), professionalName: null })),
+      tips: [],
+    });
+
+    function mockBackend(openRecord: ReturnType<typeof record> | null) {
+      femmeJson.mockImplementation((url: string) => {
+        if (url.includes("/api/cash-sessions/current")) return Promise.resolve(openSession);
+        if (url.startsWith("/api/clients")) return Promise.resolve([client]);
+        if (url.startsWith("/api/service-records?")) {
+          return Promise.resolve({
+            content: openRecord
+              ? [{ id: openRecord.id, clientId: 5, clientFullName: "Marta Benítez", status: "OPEN", totalAmount: openRecord.totalAmount, createdAt: openRecord.createdAt }]
+              : [],
+            page: 0,
+            size: 1,
+            totalElements: openRecord ? 1 : 0,
+            totalPages: openRecord ? 1 : 0,
+          });
+        }
+        if (url === "/api/service-records/70") return Promise.resolve(openRecord);
+        // The success screen's read-back of the issued invoice is a nicety: let it fail quietly.
+        if (/^\/api\/invoices\/\d+$/.test(url)) return Promise.reject(new Error("not needed here"));
+        if (url.includes("/api/invoices")) return Promise.resolve([]);
+        if (url === "/api/professionals") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
+        return Promise.resolve(undefined);
+      });
+    }
+
+    async function chooseClient() {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const input = document.querySelector("#billing-client-search") as HTMLElement;
+      fireEvent.focus(input);
+      fireEvent.click(await screen.findByRole("button", { name: /Marta Benítez/ }));
+    }
+
+    const withServices = record([
+      { id: 1, serviceId: 11, description: "Coloración", unitPrice: "250000", quantity: 2, professionalId: 3 },
+      { id: 2, serviceId: 12, description: "Brushing", unitPrice: "60000", quantity: 1, professionalId: null },
+    ]);
+
+    it("warns that the client already has an open ficha today and asks before bringing its services", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      const notice = await screen.findByTestId("billing-open-record-notice");
+      expect(notice.textContent).toMatch(/already has an open service record today/i);
+      expect(screen.getByTestId("billing-open-record-summary").textContent).toMatch(/2 services loaded/);
+      expect(screen.getByTestId("billing-open-record-import")).toBeTruthy();
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/closes the record/i);
+      // Only today's OPEN ficha of that client is looked up.
+      const call = femmeJson.mock.calls.map((c) => String(c[0])).find((u) => u.startsWith("/api/service-records?")) ?? "";
+      expect(call).toContain("clientId=5");
+      expect(call).toContain("status=OPEN");
+    });
+
+    it("'Bring services' fills the invoice form with the ficha's services and quantities", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      fireEvent.click(await screen.findByTestId("billing-open-record-import"));
+      expect(await screen.findByTestId("billing-open-record-imported")).toBeTruthy();
+      expect(screen.queryByTestId("billing-open-record-import")).toBeNull();
+      const html = document.body.textContent ?? "";
+      expect(html).toMatch(/Coloración/);
+      expect(html).toMatch(/Brushing/);
+      const qtys = Array.from(document.querySelectorAll('input[id^="line-qty-"]')).map((el) => (el as HTMLInputElement).value);
+      expect(qtys).toContain("2");
+    });
+
+    it("'No, thanks' keeps the form as is but the invoice is still linked to the ficha", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      fireEvent.click(await screen.findByTestId("billing-open-record-skip"));
+      expect(screen.queryByTestId("billing-open-record-import")).toBeNull();
+      expect(screen.queryByTestId("billing-open-record-imported")).toBeNull();
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/closes the record/i);
+    });
+
+    it("lets the user unlink the ficha, and link it again", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      const toggle = await screen.findByTestId("billing-open-record-toggle-link");
+      fireEvent.click(toggle);
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/will not be linked/i);
+      fireEvent.click(screen.getByTestId("billing-open-record-toggle-link"));
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/closes the record/i);
+    });
+
+    it("a ficha with no services is only announced (nothing to bring)", async () => {
+      mockBackend(record([]));
+      await chooseClient();
+      await screen.findByTestId("billing-open-record-notice");
+      expect(screen.getByTestId("billing-open-record-summary").textContent).toMatch(/no services loaded yet/i);
+      expect(screen.queryByTestId("billing-open-record-import")).toBeNull();
+    });
+
+    it("shows nothing when the client has no open ficha today", async () => {
+      mockBackend(null);
+      await chooseClient();
+      await waitFor(() =>
+        expect(femmeJson.mock.calls.some((c) => String(c[0]).startsWith("/api/service-records?"))).toBe(true),
+      );
+      expect(screen.queryByTestId("billing-open-record-notice")).toBeNull();
+    });
+
+    it("sends the ficha id with the invoice so issuing it closes the ficha", async () => {
+      mockBackend(withServices);
+      femmePostJson.mockResolvedValue({ id: 99, invoiceNumberFormatted: "001-001-0000099" });
+      await chooseClient();
+      fireEvent.click(await screen.findByTestId("billing-open-record-import"));
+      await screen.findByTestId("billing-open-record-imported");
+      fireEvent.click(screen.getByTestId("pay-method-CASH"));
+      const submit = screen.getByTestId("billing-invoice-submit") as HTMLButtonElement;
+      await waitFor(() => expect(submit.disabled).toBe(false));
+      fireEvent.click(submit);
+      await waitFor(() => expect(femmePostJson).toHaveBeenCalled());
+      const [, payload] = femmePostJson.mock.calls.find((c) => c[0] === "/api/invoices") ?? [];
+      expect(payload.serviceRecordId).toBe(70);
+    });
+  });
+
   describe("Invoice history (HU-16)", () => {
     it("lists invoices with status badges", async () => {
       const invoices = [

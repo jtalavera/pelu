@@ -34,6 +34,7 @@ export async function billServiceRecord(
           serviceId: l.serviceId,
           description: l.description,
           unitPrice: l.unitPrice,
+          quantity: l.quantity,
           professionalId: l.professionalId,
         })),
         tipsAmount: record.tipsTotal,

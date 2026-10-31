@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Card, Checkbox, Heading, Input, Label, Select, Text } from "@design-system";
 import { femmeJson, femmePostJson } from "../../api/femmeClient";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { downloadInvoicePdf } from "../../api/downloadInvoicePdf";
+import {
+  getServiceRecord,
+  listServiceRecordsPaged,
+  type ServiceRecordDetail,
+} from "../../api/serviceRecords";
 import { downloadSifenKude } from "../../api/downloadSifenKude";
 import { validateRuc } from "../../lib/validateRuc";
 import { isValidEmail } from "../../lib/validateEmail";
@@ -85,6 +90,8 @@ type PrefillServiceRecordLine = {
   serviceId: number;
   description: string;
   unitPrice: string;
+  /** Quantity of the ficha line (defaults to 1). */
+  quantity?: number;
   /** HU-COM-10: preloaded professional of the ficha line. */
   professionalId?: number | null;
 };
@@ -187,6 +194,13 @@ export function NewInvoiceFlow({
   const [serviceRecordId, setServiceRecordId] = useState<number | null>(
     initialPrefillServiceRecord?.serviceRecordId ?? null,
   );
+  // An OPEN ficha de servicio of the chosen client created today: found on client selection, linked
+  // to the invoice (issuing it closes the ficha) and — if it has services — offered as a prefill.
+  const [openRecord, setOpenRecord] = useState<ServiceRecordDetail | null>(null);
+  const [recordLinked, setRecordLinked] = useState(true);
+  const [recordImported, setRecordImported] = useState(false);
+  const [recordAskDismissed, setRecordAskDismissed] = useState(false);
+  const detectSeq = useRef(0);
   // Tips per professional ("Propinas" section), keyed by professional id. Prefilled from the ficha.
   const [tips, setTips] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -215,7 +229,7 @@ export function NewInvoiceFlow({
       ? [...initialPrefillServiceRecord.lines.map((l): InvoiceLineForm => ({
           serviceId: String(l.serviceId),
           description: l.description,
-          quantity: "1",
+          quantity: String(l.quantity && l.quantity > 0 ? l.quantity : 1),
           unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
           pickedService: {
             id: l.serviceId,
@@ -326,8 +340,107 @@ export function NewInvoiceFlow({
     setClientTaxpayerType(client.taxpayerType ?? "PERSONA_FISICA");
   }
 
+  /** Drops a ficha found by detection (the prefill from "Cobrar" is left alone). */
+  function clearDetectedRecord() {
+    detectSeq.current += 1;
+    setOpenRecord((prev) => {
+      if (prev && serviceRecordId === prev.id) setServiceRecordId(null);
+      return null;
+    });
+    setRecordLinked(true);
+    setRecordImported(false);
+    setRecordAskDismissed(false);
+  }
+
+  /** Looks for an OPEN ficha of this client created today; links it to the invoice if found. */
+  async function detectOpenRecord(clientId: number) {
+    const seq = (detectSeq.current += 1);
+    try {
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const page = await listServiceRecordsPaged({
+        from: from.toISOString(),
+        to: to.toISOString(),
+        clientId,
+        status: "OPEN",
+        page: 0,
+        size: 1,
+      });
+      const first = page.content[0];
+      if (!first || seq !== detectSeq.current) return;
+      if (first.id === serviceRecordId) return; // already the ficha this invoice came from
+      const record = await getServiceRecord(first.id);
+      if (seq !== detectSeq.current || record.status !== "OPEN") return;
+      setOpenRecord(record);
+      setRecordLinked(true);
+      setRecordImported(false);
+      setRecordAskDismissed(false);
+      setServiceRecordId(record.id);
+    } catch {
+      // Best effort: the invoice can still be issued without the link.
+    }
+  }
+
+  /** Brings the ficha's services (and tips) into the invoice form. */
+  function importOpenRecord(record: ServiceRecordDetail) {
+    const imported: InvoiceLineForm[] = record.lines.map((l) => ({
+      serviceId: String(l.serviceId),
+      description: l.description,
+      quantity: String(l.quantity > 0 ? l.quantity : 1),
+      unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
+      pickedService: {
+        id: l.serviceId,
+        categoryId: 0,
+        categoryName: "",
+        categoryAccentKey: "",
+        name: l.description,
+        priceMinor: l.unitPrice,
+        durationMinutes: 0,
+        active: true,
+      },
+      discountEnabled: false,
+      discountType: "PERCENT",
+      discountValue: "",
+      professionalId: l.professionalId != null ? String(l.professionalId) : "",
+    }));
+    const kept = lines.filter((l) => l.serviceId.trim() !== "");
+    setLines([...imported, ...kept, emptyLine()]);
+    setLinesKey((k) => k + 1);
+    setTips((prev) => {
+      const next = { ...prev };
+      record.tips.forEach((tp) => {
+        if (Number(tp.amount) > 0) {
+          next[String(tp.professionalId)] = maskMoneyInput(String(Math.round(Number(tp.amount))));
+        }
+      });
+      return next;
+    });
+    if (record.lines.some((l) => l.professionalId != null) || record.tips.length > 0) {
+      setMoreOpen(true);
+    }
+    setRecordImported(true);
+  }
+
+  function toggleRecordLink() {
+    if (!openRecord) return;
+    if (recordLinked) {
+      setRecordLinked(false);
+      setServiceRecordId(null);
+    } else {
+      setRecordLinked(true);
+      setServiceRecordId(openRecord.id);
+    }
+  }
+
   function handleClientSelectionChange(sel: ClientSelection) {
     setClientSelection(sel);
+    if (sel?.type === "client") {
+      clearDetectedRecord();
+      void detectOpenRecord(sel.client.id);
+    } else {
+      clearDetectedRecord();
+    }
     if (sel?.type === "client") {
       loadClientIdentity(sel.client);
     } else if (!sel) {
@@ -898,6 +1011,10 @@ export function NewInvoiceFlow({
       setMoreOpen(false);
       setTips({});
       setServiceRecordId(null);
+      setOpenRecord(null);
+      setRecordLinked(true);
+      setRecordImported(false);
+      setRecordAskDismissed(false);
       setLineErrors({});
       setPaymentErrors({});
       setGlobalErrors([]);
@@ -1313,6 +1430,70 @@ export function NewInvoiceFlow({
               label={t("femme.billing.invoice.clientSearchLabel")}
               placeholder={t("femme.billing.invoice.clientPlaceholder")}
             />
+            {openRecord ? (
+              <Alert
+                variant="info"
+                data-testid="billing-open-record-notice"
+                title={t("femme.billing.invoice.openRecord.title")}
+              >
+                <div className="flex flex-col gap-2">
+                  <span data-testid="billing-open-record-summary">
+                    {openRecord.lines.length > 0
+                      ? t("femme.billing.invoice.openRecord.summary", {
+                          count: openRecord.lines.length,
+                          amount: formatAmountDecimal(openRecord.totalAmount),
+                        })
+                      : t("femme.billing.invoice.openRecord.noServices")}
+                  </span>
+                  {openRecord.lines.length > 0 && !recordImported && !recordAskDismissed ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <span className="font-semibold">{t("femme.billing.invoice.openRecord.ask")}</span>
+                      <span className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="min-h-11"
+                          data-testid="billing-open-record-import"
+                          onClick={() => importOpenRecord(openRecord)}
+                        >
+                          {t("femme.billing.invoice.openRecord.import")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="min-h-11"
+                          data-testid="billing-open-record-skip"
+                          onClick={() => setRecordAskDismissed(true)}
+                        >
+                          {t("femme.billing.invoice.openRecord.skip")}
+                        </Button>
+                      </span>
+                    </div>
+                  ) : null}
+                  {recordImported ? (
+                    <span data-testid="billing-open-record-imported">
+                      {t("femme.billing.invoice.openRecord.imported")}
+                    </span>
+                  ) : null}
+                  <span data-testid="billing-open-record-link-note">
+                    {recordLinked
+                      ? t("femme.billing.invoice.openRecord.linkedNote")
+                      : t("femme.billing.invoice.openRecord.unlinkedNote")}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="billing-open-record-toggle-link"
+                    onClick={toggleRecordLink}
+                    className="min-h-11 self-start px-1 text-sm font-bold underline underline-offset-4"
+                  >
+                    {recordLinked
+                      ? t("femme.billing.invoice.openRecord.unlink")
+                      : t("femme.billing.invoice.openRecord.relink")}
+                  </button>
+                </div>
+              </Alert>
+            ) : null}
             {!identified && (
               <p className="text-sm text-ink-3" data-testid="billing-client-default">
                 <strong className="text-ink">{t("femme.billing.invoice.noName")}</strong> ·{" "}

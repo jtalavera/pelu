@@ -107,3 +107,18 @@ Maqueta aprobada: https://claude.ai/artifact/3WrgNQeGMHBx811AE2rshy
   (`goToBillingHome`, `goToInvoiceHistory`, `goToCashHistory`, `searchInvoiceHistory`, `openCashPanel`,
   `choosePaymentMethod`, `addPaymentMethodRow`, `showPaymentAmounts`, `fillPaymentAmount`,
   `openMoreOptions`, `ensureCashSessionOpen`).
+
+## Factura ↔ ficha de servicio abierta del día
+Al elegir un cliente en "Nueva factura" se busca su ficha de servicio **abierta, creada hoy**
+(`GET /api/service-records?clientId=…&status=OPEN&from=hoy&to=hoy`):
+- Si existe, aparece un aviso "Este cliente ya tiene una ficha de servicio abierta hoy" con el resumen
+  (cantidad de servicios y total).
+- La factura queda **asociada** a esa ficha (`serviceRecordId`): al emitirla, el backend la cierra
+  (comportamiento existente, `InvoiceService`). Se puede **desvincular** desde el mismo aviso ("No asociar
+  a la ficha") y volver a vincular.
+- Si la ficha tiene servicios, pregunta **"¿Querés traer los servicios al formulario de la factura?"**:
+  **Traer servicios** agrega sus líneas (con cantidad, precio, profesional y propinas) delante de lo que ya
+  hubiera cargado; **No, gracias** deja el formulario como está (la asociación se mantiene).
+- Si la ficha no tiene servicios, solo se avisa.
+- Entrar desde "Cobrar" (Inicio, Agenda o la lista de fichas) sigue funcionando igual: la ficha ya viene
+  elegida y no se vuelve a buscar. Ese prefill ahora también conserva la **cantidad** de cada línea.
