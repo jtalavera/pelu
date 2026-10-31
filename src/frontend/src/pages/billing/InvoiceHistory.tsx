@@ -558,21 +558,37 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
                         setSelectedInvoiceId(inv.id);
                       }
                     }}
-                    className="grid min-h-14 w-full cursor-pointer grid-cols-[1fr_auto] gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-primary-lt"
+                    className="grid min-h-14 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-primary-lt"
                   >
                     <span
                       data-testid="invoice-row-client"
-                      className="min-w-0 truncate font-semibold text-ink"
+                      className="col-start-1 min-w-0 truncate font-semibold text-ink"
                     >
                       {inv.clientDisplayName || t("femme.billing.invoice.noName")}
                     </span>
-                    <span
-                      data-testid="invoice-row-total"
-                      className="text-right font-bold tabular-nums text-ink"
-                    >
-                      {formatAmountDecimal(inv.total)}
+                    <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1.5">
+                      <span
+                        data-testid="invoice-row-total"
+                        className="text-right font-bold tabular-nums text-ink"
+                      >
+                        {formatAmountDecimal(inv.total)}
+                      </span>
+                      {deriveInvoiceState(inv) === "attention" && inv.status === "ISSUED" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          data-testid={`invoice-row-correct-resend-${inv.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCorrectionInvoiceId(inv.id);
+                          }}
+                        >
+                          {t("femme.billing.history.detail.sifen.correctResendButton")}
+                        </Button>
+                      )}
                     </span>
-                    <span className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+                    <span className="col-start-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
                       <InvoiceStatePill invoice={inv} />
                       <span data-testid="invoice-row-number" className="font-mono text-xs">
                         {inv.invoiceNumberFormatted}
@@ -590,22 +606,6 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
                         </span>
                       )}
                     </span>
-                    {deriveInvoiceState(inv) === "attention" && inv.status === "ISSUED" && (
-                      <span className="col-span-2 pt-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          data-testid={`invoice-row-correct-resend-${inv.id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCorrectionInvoiceId(inv.id);
-                          }}
-                        >
-                          {t("femme.billing.history.detail.sifen.correctResendButton")}
-                        </Button>
-                      </span>
-                    )}
                   </div>
                 </li>
               ))}

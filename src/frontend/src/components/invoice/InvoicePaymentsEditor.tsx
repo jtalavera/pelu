@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button, Heading, Input, Label, Select, Text } from "@design-system";
+import { Button, Input, Label, Select, Text } from "@design-system";
 import { FieldValidationError } from "../FieldValidationError";
 import { formatAmountDecimal } from "../../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../../lib/moneyInputMask";
@@ -63,21 +63,21 @@ export function InvoicePaymentsEditor({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Heading as="h3" className="text-base">
+    <div className="flex flex-col gap-3">
+      <h3 className="font-heading text-xs font-extrabold uppercase tracking-wider text-primary">
         {t("femme.billing.invoice.paymentsSection")}
-      </Heading>
+      </h3>
 
       <div className="flex flex-col gap-1 text-sm">
         <div className="flex justify-between">
-          <span className="text-[rgb(var(--color-muted-foreground))]">
+          <span className="text-ink-3">
             {t("femme.billing.invoice.subtotal")}
           </span>
           <span>{formatAmountDecimal(subtotal.toFixed(2))}</span>
         </div>
         {discountAmount > 0 && (
           <div className="flex justify-between">
-            <span className="text-[rgb(var(--color-muted-foreground))]">
+            <span className="text-ink-3">
               {t("femme.billing.invoice.discount")}
             </span>
             <span>-{formatAmountDecimal(discountAmount.toFixed(2))}</span>
@@ -217,16 +217,14 @@ export function InvoicePaymentsEditor({
         })}
       </div>
 
-      <Button
+      <button
         type="button"
-        variant="secondary"
-        size="sm"
-        className="w-fit"
+        className="min-h-11 w-fit px-1 text-sm font-bold text-primary underline underline-offset-4 disabled:opacity-50"
         onClick={addPayment}
         disabled={payments.length >= PAYMENT_METHODS.length}
       >
-        {t("femme.billing.invoice.addPayment")}
-      </Button>
+        + {t("femme.billing.invoice.addPayment")}
+      </button>
     </div>
   );
 }

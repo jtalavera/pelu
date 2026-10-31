@@ -140,3 +140,8 @@ Cada fila ocupa dos renglones: a la izquierda nombre y `estado · número · for
 ## Ajuste: detalle de caja minimalista y egresos en negativo
 - `CashSessionSummaryCard` (diálogo "Detalle de caja" del historial y detalle de la caja recién cerrada): arriba las cifras clave (caja abierta: efectivo esperado en vivo; cerrada: esperado / contado / diferencia, la diferencia en rojo si falta y verde si sobra); debajo, secciones plegables **Cobros por medio de pago**, **Movimientos de caja** (abierta por defecto, con contador) y **Datos de la caja** (apertura y cierre). El estado ("Abierta"/"Cerrada") va junto al título; el diálogo pasa a `max-w-lg`.
 - Los movimientos son filas (`CashMovementRow`): tipo, `fecha · motivo · registrado por` y monto a la derecha. Egresos manuales y retiros de propina van **en negativo y rojo** (`−Gs. 10.000`), los ingresos con `+` en verde; vale también para el panel de caja abierta. El efectivo esperado negativo se muestra `−Gs. 6.000` en rojo (`formatSignedGs`).
+
+## Ajuste: historial de facturas, monto de movimientos y "Corregir y reenviar"
+- Historial de facturas: las filas usan el mismo diseño de dos renglones que "Comprobantes de hoy" (nombre y estado a la izquierda; monto y **Corregir y reenviar** a la derecha).
+- Detalle de caja: el monto de cada movimiento no se parte en dos líneas (`whitespace-nowrap`, ancho propio).
+- Formulario **Corregir y reenviar**: diálogo más angosto (`max-w-xl`) con botones en el pie, secciones separadas por línea (sin tarjetas con borde), servicios numerados con servicio a todo el ancho y cantidad / precio / subtotal debajo, "Descuento por ítem" como casilla simple, y "Agregar ítem / método de pago" como enlaces. Los `id` y `data-testid` se mantienen.

@@ -42,7 +42,7 @@ export function CashMovementRow({ movement, showUser = false }: { movement: Cash
         </span>
       </span>
       <span
-        className={`font-semibold tabular-nums ${outgoing ? "text-danger" : "text-success"}`}
+        className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${outgoing ? "text-danger" : "text-success"}`}
         data-testid="cash-movement-amount"
       >
         {formatSignedGs(outgoing ? -amount : amount, !outgoing)}
