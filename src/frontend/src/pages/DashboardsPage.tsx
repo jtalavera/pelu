@@ -202,7 +202,7 @@ export default function DashboardsPage() {
               onClick={() => setMoreOpen((o) => !o)}
               className="flex min-h-14 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink shadow-sm sm:px-6"
             >
-              {t("femme.summary.moreDetail")}
+              {t(moreOpen ? "femme.summary.lessDetail" : "femme.summary.moreDetail")}
               <span aria-hidden className={`text-ink-3 transition-transform ${moreOpen ? "rotate-180" : ""}`}>
                 ⌄
               </span>

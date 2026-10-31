@@ -1089,6 +1089,7 @@
       "legendDaily": "Invoiced per day",
       "legendAverage": "Average: {{amount}}",
       "moreDetail": "See more detail",
+      "lessDetail": "See less detail",
       "noData": "There is no data in this period yet.",
       "topServices": "Most sold services",
       "noServices": "No services invoiced yet.",

@@ -1089,6 +1089,7 @@
       "legendDaily": "Facturado por día",
       "legendAverage": "Promedio: {{amount}}",
       "moreDetail": "Ver más detalle",
+      "lessDetail": "Ver menos detalle",
       "noData": "Todavía no hay datos en este período.",
       "topServices": "Servicios más vendidos",
       "noServices": "Todavía no hay servicios facturados.",
