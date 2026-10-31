@@ -194,6 +194,8 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
   const [activateTarget, setActivateTarget] = useState<Professional | null>(null);
   const [editSuccess, setEditSuccess] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
+  /** Saving an edit closes the form and says so here, on the list screen. */
+  const [updateSuccess, setUpdateSuccess] = useState(false);
   const [statusChangeSuccess, setStatusChangeSuccess] = useState<"activated" | "deactivated" | null>(
     null,
   );
@@ -279,6 +281,7 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
 
   function dismissProfessionalsPageSuccess() {
     setCreateSuccess(false);
+    setUpdateSuccess(false);
     setStatusChangeSuccess(null);
   }
 
@@ -445,7 +448,9 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
         setCreateSuccess(true);
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
-        setEditSuccess(true);
+        closeModal();
+        setUpdateSuccess(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch (e) {
       const rawCode = parseApiErrorMessage(e);
@@ -632,11 +637,16 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
       ) : null}
 
       {/* ── Success / Error ── */}
-      {(createSuccess || statusChangeSuccess || pageError) && (
+      {(createSuccess || updateSuccess || statusChangeSuccess || pageError) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
           {createSuccess && (
             <Alert variant="success" style={pageAlertStyle}>
               {t("femme.professionals.createSuccess")}
+            </Alert>
+          )}
+          {updateSuccess && (
+            <Alert variant="success" style={pageAlertStyle} data-testid="catalog-update-success">
+              {t("femme.professionals.editSuccess")}
             </Alert>
           )}
           {statusChangeSuccess && (

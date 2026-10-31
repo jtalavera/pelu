@@ -180,6 +180,8 @@ export default function CatalogItemsPage({
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
   const [editSuccess, setEditSuccess] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
+  /** Saving an edit closes the form and says so here, on the list screen. */
+  const [updateSuccess, setUpdateSuccess] = useState(false);
   const [serviceStatusSuccess, setServiceStatusSuccess] = useState<"activated" | "deactivated" | null>(
     null,
   );
@@ -382,6 +384,7 @@ export default function CatalogItemsPage({
 
   function dismissServicePageSuccess() {
     setCreateSuccess(false);
+    setUpdateSuccess(false);
     setServiceStatusSuccess(null);
   }
 
@@ -436,15 +439,11 @@ export default function CatalogItemsPage({
       } else {
         await femmePostJson<SalonService>("/api/services", payload);
       }
-      if (wasEdit) {
-        // Keep the modal open so the success message shows in the edit form itself,
-        // not on the main table page behind it.
-        setEditSuccess(true);
-      } else {
-        setServiceModalOpen(false);
-        setCreateSuccess(true);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
+      // Saved (new or edited): the form closes and the success message shows on the list screen.
+      setServiceModalOpen(false);
+      if (wasEdit) setUpdateSuccess(true);
+      else setCreateSuccess(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
     } catch (e) {
@@ -678,11 +677,16 @@ export default function CatalogItemsPage({
       ) : null}
 
       {/* ── Success / Error ── */}
-      {(createSuccess || serviceStatusSuccess || error || priceListError) && (
+      {(createSuccess || updateSuccess || serviceStatusSuccess || error || priceListError) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
           {createSuccess && (
             <Alert variant="success" style={pageAlertStyle}>
               {t("femme.services.createSuccess")}
+            </Alert>
+          )}
+          {updateSuccess && (
+            <Alert variant="success" style={pageAlertStyle} data-testid="catalog-update-success">
+              {t("femme.services.editSuccess")}
             </Alert>
           )}
           {serviceStatusSuccess && (
