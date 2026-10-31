@@ -13,6 +13,8 @@ export type InvoiceLineForm = {
   discountValue: string;
   /** HU-COM-10: professional / seller of the line ("" = none). */
   professionalId: string;
+  /** UI only: the line's own "More options" (professional, discount) is unfolded. */
+  optionsOpen?: boolean;
 };
 
 export type PaymentForm = {

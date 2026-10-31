@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "../test/renderWithTour";
+import { fireEvent, render, screen, waitFor, within } from "../test/renderWithTour";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@design-system";
@@ -233,10 +233,12 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(screen.getByTestId("billing-step-payment")).toBeTruthy();
       const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
       expect(more.open).toBe(false);
-      // Date, discount and tips all live inside the folded section.
-      for (const selector of ["#billing-issue-date", "#discount-type", '[data-testid="billing-tips-section"]']) {
+      // Discount and tips live inside the folded section; the date and the professional do not.
+      for (const selector of ["#discount-type", '[data-testid="billing-tips-section"]']) {
         expect(more.querySelector(selector)).not.toBeNull();
       }
+      expect(more.querySelector("#billing-issue-date")).toBeNull();
+      expect(more.querySelector('[data-testid="billing-per-item-options"]')).toBeNull();
     });
 
     it("issues the invoice 'No name' by default and blocks Issue until a payment method is chosen", async () => {
@@ -279,6 +281,111 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
           "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
         ),
       ).toBeNull();
+    });
+  });
+
+  describe("Emitir comprobante layout: Client → Services → Payment, date on top, per-service options", () => {
+    const client = { id: 5, fullName: "Marta Benítez", phone: "0981123456", email: "marta@example.com", ruc: null, active: true };
+    const record = {
+      id: 70,
+      clientId: 5,
+      clientFullName: "Marta Benítez",
+      clientRuc: null,
+      status: "OPEN",
+      totalAmount: "310000",
+      tipsTotal: "0",
+      voidReason: null,
+      createdAt: new Date().toISOString(),
+      closedAt: null,
+      invoiceId: null,
+      invoiceNumberFormatted: null,
+      lines: [
+        { id: 1, serviceId: 11, description: "Coloración", unitPrice: "250000", quantity: 1, lineTotal: "250000", professionalId: null, professionalName: null },
+      ],
+      tips: [],
+    };
+
+    beforeEach(() => {
+      femmeJson.mockImplementation((url: string) => {
+        if (url.includes("/api/cash-sessions/current")) return Promise.resolve(openSession);
+        if (url.startsWith("/api/clients")) return Promise.resolve([client]);
+        if (url.startsWith("/api/service-records?")) {
+          return Promise.resolve({
+            content: [{ id: 70, clientId: 5, clientFullName: "Marta Benítez", status: "OPEN", totalAmount: "250000", createdAt: record.createdAt }],
+            page: 0,
+            size: 1,
+            totalElements: 1,
+            totalPages: 1,
+          });
+        }
+        if (url === "/api/service-records/70") return Promise.resolve(record);
+        if (url === "/api/professionals") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
+        if (/^\/api\/invoices\/\d+$/.test(url)) return Promise.reject(new Error("not needed"));
+        if (url.includes("/api/invoices")) return Promise.resolve([]);
+        return Promise.resolve(undefined);
+      });
+    });
+
+    async function openFormWithServiceLine() {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      fireEvent.focus(document.querySelector("#billing-client-search") as HTMLElement);
+      fireEvent.click(await screen.findByRole("button", { name: /Marta Benítez/ }));
+      fireEvent.click(await screen.findByTestId("billing-open-record-import"));
+      await screen.findByTestId("billing-line-0");
+    }
+
+    it("orders the steps Client, then Services, then Payment", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const order = ["billing-step-client", "billing-step-items", "billing-step-payment"].map((id) =>
+        screen.getByTestId(id),
+      );
+      for (let i = 0; i < order.length - 1; i++) {
+        expect(order[i].compareDocumentPosition(order[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+    });
+
+    it("shows the emission date on top as 'Today · date' and lets the user change it", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const control = screen.getByTestId("billing-issue-date-control");
+      expect(within(control).getByTestId("billing-issue-date-label").textContent).toMatch(/^Today · /);
+      expect(document.querySelector("#billing-issue-date")).toBeNull();
+      fireEvent.click(screen.getByTestId("billing-issue-date-open"));
+      const input = document.querySelector("#billing-issue-date") as HTMLInputElement;
+      expect(input).not.toBeNull();
+      expect(sifenEnabledFlag).toBe(true);
+      expect(within(control).getByText(/30 days in the past or 5 days in the future/i)).toBeTruthy();
+      // "Today" puts it back to the plain label.
+      fireEvent.click(screen.getByTestId("billing-issue-date-today"));
+      expect(document.querySelector("#billing-issue-date")).toBeNull();
+      expect(screen.getByTestId("billing-issue-date-label")).toBeTruthy();
+    });
+
+    it("each service has its own folded 'More options' with the professional and the item discount", async () => {
+      await openFormWithServiceLine();
+      const toggle = screen.getByTestId("billing-line-more-0");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(document.querySelector("#line-professional-0")).toBeNull();
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(document.querySelector("#line-professional-0")).not.toBeNull();
+      expect(document.querySelector("#line-disc-toggle-0")).not.toBeNull();
+    });
+
+    it("an assigned professional is named next to the service and unlocks their tip in the general More options", async () => {
+      await openFormWithServiceLine();
+      expect(screen.queryByTestId("billing-line-professional-name-0")).toBeNull();
+      fireEvent.click(screen.getByTestId("billing-line-more-0"));
+      await waitFor(() => expect(document.querySelectorAll("#line-professional-0 option").length).toBeGreaterThan(1));
+      fireEvent.change(document.querySelector("#line-professional-0") as HTMLSelectElement, {
+        target: { value: "3" },
+      });
+      expect((await screen.findByTestId("billing-line-professional-name-0")).textContent).toMatch(/Laura/);
+      const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
+      fireEvent.click(more.querySelector("summary") as HTMLElement);
+      expect(await screen.findByLabelText(/tip.*Laura/i)).toBeTruthy();
     });
   });
 

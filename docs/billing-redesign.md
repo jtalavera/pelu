@@ -122,3 +122,14 @@ Al elegir un cliente en "Nueva factura" se busca su ficha de servicio **abierta,
 - Si la ficha no tiene servicios, solo se avisa.
 - Entrar desde "Cobrar" (Inicio, Agenda o la lista de fichas) sigue funcionando igual: la ficha ya viene
   elegida y no se vuelve a buscar. Ese prefill ahora también conserva la **cantidad** de cada línea.
+
+## Emitir comprobante: orden y "Más opciones" por servicio
+- **Orden**: ¿A quién? (cliente) → ¿Qué servicios o productos facturamos? → ¿Cómo paga?. El resumen y la barra con el
+  total y "Emitir comprobante" no cambian.
+- **Fecha de emisión arriba**: en la fila del título, una línea mínima "📅 Hoy · 31 oct  Cambiar". Al tocar "Cambiar"
+  aparece el campo de fecha (con la leyenda de la ventana de SIFEN y el botón "Hoy" para volver a la fecha actual).
+  Si la fecha elegida es hoy, no se envía `issuedAt` (se usa el momento de emisión). Ya no está en "Más opciones".
+- **Cada servicio tiene su "Más opciones"** (plegado, con la pista "profesional, descuento"): **Profesional / Vendedor**
+  y **descuento del ítem**. Con un profesional asignado su nombre se ve junto al servicio sin abrir. Se abre solo si el
+  descuento del ítem tiene un error.
+- **"Más opciones" general**: solo **Descuento** (global) y **Propinas** (una por profesional asignado a los servicios).

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Card, Checkbox, Heading, Input, Label, Select, Text } from "@design-system";
 import { femmeJson, femmePostJson } from "../../api/femmeClient";
+import { useDateLocale } from "../../i18n/dateLocale";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { downloadInvoicePdf } from "../../api/downloadInvoicePdf";
 import {
@@ -140,6 +141,7 @@ export function NewInvoiceFlow({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const dateLocale = useDateLocale();
   /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
   // HU-COM-10: professional / seller per line. The commission only accrues when the commissions
@@ -935,7 +937,7 @@ export function NewInvoiceFlow({
       // Issue #174 AC-04: only sent when the user opted to edit the emission date — noon local
       // time on the picked day, well inside SIFEN's hour-granular window.
       issuedAt:
-        issueDateEditable && issueDate
+        issueDateEditable && issueDate && issueDate !== localTodayYmd()
           ? new Date(`${issueDate}T12:00:00`).toISOString()
           : null,
       discountType: discountType !== "NONE" ? discountType : null,
@@ -1271,6 +1273,70 @@ export function NewInvoiceFlow({
         <Heading as="h1" className="text-xl">
           {t("femme.billing.invoice.title")}
         </Heading>
+        {/* Issue #174 AC-04: emission date — "today" unless the user explicitly changes it. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2" data-testid="billing-issue-date-control">
+          {!issueDateEditable ? (
+            <button
+              type="button"
+              data-testid="billing-issue-date-open"
+              aria-label={t("femme.billing.invoice.issueDateChangeAria")}
+              onClick={() => {
+                setIssueDateEditable(true);
+                setIssueDateError(null);
+              }}
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-bold text-ink-2 hover:bg-bg"
+            >
+              <span aria-hidden="true">📅</span>
+              <b className="text-ink" data-testid="billing-issue-date-label">
+                {t("femme.billing.invoice.issueDateToday", {
+                  date: new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short" }).format(new Date()),
+                })}
+              </b>
+              <span className="text-primary underline underline-offset-4">
+                {t("femme.billing.invoice.issueDateChange")}
+              </span>
+            </button>
+          ) : (
+            <>
+              <Label htmlFor="billing-issue-date" className="text-sm font-bold">
+                {t("femme.billing.invoice.issueDateLabel")}
+              </Label>
+              <Input
+                id="billing-issue-date"
+                type="date"
+                value={issueDate}
+                onChange={(e) => {
+                  setIssueDate(e.target.value);
+                  setIssueDateError(null);
+                }}
+                aria-invalid={issueDateError ? true : undefined}
+                aria-describedby={issueDateError ? "billing-issue-date-err" : undefined}
+                className="w-auto"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                className="min-h-11 text-primary"
+                data-testid="billing-issue-date-today"
+                onClick={() => {
+                  setIssueDateEditable(false);
+                  setIssueDate(localTodayYmd());
+                  setIssueDateError(null);
+                }}
+              >
+                {t("femme.billing.invoice.issueDateBackToToday")}
+              </Button>
+              <div className="w-full text-right">
+                <FieldValidationError id="billing-issue-date-err">{issueDateError}</FieldValidationError>
+                {sifenEnabled && (
+                  <Text variant="muted" className="text-xs">
+                    {t("femme.billing.invoice.issueDateLegend")}
+                  </Text>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {globalErrors
@@ -1298,115 +1364,7 @@ export function NewInvoiceFlow({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
         <div className="flex min-w-0 flex-col gap-4">
-          {/* Step 1 — what was done */}
-          <Card className="flex flex-col gap-3 p-4 sm:p-6" data-testid="billing-step-items">
-            <Heading as="h2" className="text-lg">
-              {t("femme.billing.invoice.stepItems")}
-            </Heading>
-            <div className="flex flex-col">
-              {lines.map((line, idx) =>
-                line.pickedService ? (
-                  <div
-                    key={`${linesKey}-${idx}`}
-                    className="flex flex-col gap-2 border-b border-line py-3 first:pt-0"
-                    data-testid={`billing-line-${idx}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="min-w-0 break-words font-semibold text-ink">
-                        {line.pickedService.name}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeLine(idx)}
-                        aria-label={t("femme.billing.invoice.removeLine")}
-                      >
-                        ×
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-[5rem_minmax(0,1fr)_auto] items-start gap-3">
-                      <div>
-                        <Label htmlFor={`line-qty-${idx}`}>{t("femme.billing.invoice.lineQuantity")}</Label>
-                        <Input
-                          id={`line-qty-${idx}`}
-                          type="number"
-                          min="1"
-                          value={line.quantity}
-                          onChange={(e) => updateLine(idx, "quantity", e.target.value)}
-                          className="mt-1 w-full"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <Label htmlFor={`line-price-${idx}`}>{t("femme.billing.invoice.lineUnitPrice")}</Label>
-                        <Input
-                          id={`line-price-${idx}`}
-                          inputMode="numeric"
-                          value={line.unitPrice}
-                          onChange={(e) => updateLine(idx, "unitPrice", e.target.value)}
-                          placeholder={t("femme.billing.invoice.lineUnitPricePlaceholder")}
-                          className="mt-1 w-full"
-                          aria-invalid={!!lineErrors[idx]?.unitPrice}
-                          aria-describedby={lineErrors[idx]?.unitPrice ? `line-price-err-${idx}` : undefined}
-                        />
-                        <FieldValidationError id={`line-price-err-${idx}`}>
-                          {lineErrors[idx]?.unitPrice}
-                        </FieldValidationError>
-                      </div>
-                      <span
-                        className="pt-8 text-right font-bold tabular-nums text-ink"
-                        data-testid={`line-total-${idx}`}
-                      >
-                        {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
-                      </span>
-                    </div>
-                    {line.discountEnabled && line.discountValue && (
-                      <p
-                        data-testid={`line-discounted-total-${idx}`}
-                        className="text-sm font-medium tabular-nums text-success"
-                      >
-                        {t("femme.billing.invoice.lineDiscountedTotal")}:{" "}
-                        {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
-                      </p>
-                    )}
-                    {line.serviceId && stockAvailability.has(Number(line.serviceId)) ? (
-                      <StockAvailabilityHint
-                        item={stockAvailability.get(Number(line.serviceId))}
-                        requested={requestedByService.get(Number(line.serviceId)) ?? 0}
-                        testId={`line-stock-${idx}`}
-                      />
-                    ) : null}
-                    {commissionsEnabled && !line.professionalId && line.serviceId ? (
-                      <p className="text-xs text-warning" data-testid={`line-no-commission-${idx}`}>
-                        {t("femme.billing.invoice.lineNoCommission")}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div key={`${linesKey}-${idx}`} className="pt-3 first:pt-0">
-                    <ServiceSearchField
-                      id={`billing-line-svc-${idx}`}
-                      value={line.pickedService}
-                      onChange={(svc) => handleLineServiceChange(idx, svc)}
-                      label={
-                        filledLines.length > 0
-                          ? t("femme.billing.invoice.addLine")
-                          : t("femme.billing.invoice.lineServiceLabel")
-                      }
-                      placeholder={t("femme.billing.invoice.lineServicePlaceholder")}
-                      invalid={!!lineErrors[idx]?.service}
-                      errorDescribedById={`line-svc-err-${idx}`}
-                    />
-                    <FieldValidationError id={`line-svc-err-${idx}`}>
-                      {lineErrors[idx]?.service}
-                    </FieldValidationError>
-                  </div>
-                ),
-              )}
-            </div>
-          </Card>
-
-          {/* Step 2 — who is it for */}
+          {/* Step 1 — who is it for */}
           <Card className="flex flex-col gap-3 p-4 sm:p-6" data-testid="billing-step-client">
             <Heading as="h2" className="text-lg">
               {t("femme.billing.invoice.stepClient")}
@@ -1587,6 +1545,219 @@ export function NewInvoiceFlow({
             )}
           </Card>
 
+          {/* Step 2 — what was done */}
+          <Card className="flex flex-col gap-3 p-4 sm:p-6" data-testid="billing-step-items">
+            <Heading as="h2" className="text-lg">
+              {t("femme.billing.invoice.stepItems")}
+            </Heading>
+            <div className="flex flex-col">
+              {lines.map((line, idx) =>
+                line.pickedService ? (
+                  <div
+                    key={`${linesKey}-${idx}`}
+                    className="flex flex-col gap-2 border-b border-line py-3 first:pt-0"
+                    data-testid={`billing-line-${idx}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 break-words font-semibold text-ink">
+                        {line.pickedService.name}
+                        {line.professionalId ? (
+                          <span
+                            className="ml-1.5 text-sm font-semibold text-ink-3"
+                            data-testid={`billing-line-professional-name-${idx}`}
+                          >
+                            · {tipProfessionalName(line.professionalId)}
+                          </span>
+                        ) : null}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeLine(idx)}
+                        aria-label={t("femme.billing.invoice.removeLine")}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-[5rem_minmax(0,1fr)_auto] items-start gap-3">
+                      <div>
+                        <Label htmlFor={`line-qty-${idx}`}>{t("femme.billing.invoice.lineQuantity")}</Label>
+                        <Input
+                          id={`line-qty-${idx}`}
+                          type="number"
+                          min="1"
+                          value={line.quantity}
+                          onChange={(e) => updateLine(idx, "quantity", e.target.value)}
+                          className="mt-1 w-full"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <Label htmlFor={`line-price-${idx}`}>{t("femme.billing.invoice.lineUnitPrice")}</Label>
+                        <Input
+                          id={`line-price-${idx}`}
+                          inputMode="numeric"
+                          value={line.unitPrice}
+                          onChange={(e) => updateLine(idx, "unitPrice", e.target.value)}
+                          placeholder={t("femme.billing.invoice.lineUnitPricePlaceholder")}
+                          className="mt-1 w-full"
+                          aria-invalid={!!lineErrors[idx]?.unitPrice}
+                          aria-describedby={lineErrors[idx]?.unitPrice ? `line-price-err-${idx}` : undefined}
+                        />
+                        <FieldValidationError id={`line-price-err-${idx}`}>
+                          {lineErrors[idx]?.unitPrice}
+                        </FieldValidationError>
+                      </div>
+                      <span
+                        className="pt-8 text-right font-bold tabular-nums text-ink"
+                        data-testid={`line-total-${idx}`}
+                      >
+                        {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
+                      </span>
+                    </div>
+                    {line.discountEnabled && line.discountValue && (
+                      <p
+                        data-testid={`line-discounted-total-${idx}`}
+                        className="text-sm font-medium tabular-nums text-success"
+                      >
+                        {t("femme.billing.invoice.lineDiscountedTotal")}:{" "}
+                        {formatDecimalGs(Math.max(0, lineGross(line) - lineDiscountAmount(line)))}
+                      </p>
+                    )}
+                    {line.serviceId && stockAvailability.has(Number(line.serviceId)) ? (
+                      <StockAvailabilityHint
+                        item={stockAvailability.get(Number(line.serviceId))}
+                        requested={requestedByService.get(Number(line.serviceId)) ?? 0}
+                        testId={`line-stock-${idx}`}
+                      />
+                    ) : null}
+                    {commissionsEnabled && !line.professionalId && line.serviceId ? (
+                      <p className="text-xs text-warning" data-testid={`line-no-commission-${idx}`}>
+                        {t("femme.billing.invoice.lineNoCommission")}
+                      </p>
+                    ) : null}
+                    {/* Per-service "More options": who served it and the item's own discount. */}
+                    {(() => {
+                      const open = !!line.optionsOpen || !!lineErrors[idx]?.discountValue;
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            data-testid={`billing-line-more-${idx}`}
+                            aria-expanded={open}
+                            aria-controls={`billing-line-more-body-${idx}`}
+                            onClick={() =>
+                              setLines((prev) =>
+                                prev.map((l, i) => (i === idx ? { ...l, optionsOpen: !open } : l)),
+                              )
+                            }
+                            className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-md px-1 text-sm font-bold text-primary"
+                          >
+                            {t("femme.billing.invoice.moreOptions")}
+                            <span aria-hidden="true">{open ? "⌃" : "⌄"}</span>
+                            <span className="font-normal text-ink-3">
+                              {t("femme.billing.invoice.lineMoreHint")}
+                            </span>
+                          </button>
+                          {open ? (
+                            <div
+                              id={`billing-line-more-body-${idx}`}
+                              className="grid grid-cols-1 gap-3 pb-2 sm:grid-cols-2 sm:items-end"
+                            >
+                              <div className="flex flex-col gap-1">
+                                <Label htmlFor={`line-professional-${idx}`}>
+                                  {t("femme.billing.invoice.lineProfessional")}
+                                </Label>
+                                <Select
+                                  id={`line-professional-${idx}`}
+                                  value={line.professionalId}
+                                  onChange={(e) =>
+                                    setLines((prev) =>
+                                      prev.map((l, i) =>
+                                        i === idx ? { ...l, professionalId: e.target.value } : l,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <option value="">{t("femme.billing.invoice.lineProfessionalNone")}</option>
+                                  {lineProfessionals.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.fullName}
+                                    </option>
+                                  ))}
+                                </Select>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink-2">
+                                  <Checkbox
+                                    checked={line.discountEnabled}
+                                    onChange={() => toggleLineDiscount(idx)}
+                                    id={`line-disc-toggle-${idx}`}
+                                  />
+                                  {t("femme.billing.invoice.lineDiscountToggle")}
+                                </label>
+                                {line.discountEnabled ? (
+                                  <div className="flex items-center gap-2">
+                                    <select
+                                      value={line.discountType}
+                                      onChange={(e) =>
+                                        setLineDiscountType(idx, e.target.value as "FIXED" | "PERCENT")
+                                      }
+                                      aria-label={t("femme.billing.invoice.lineDiscountType")}
+                                      className="min-h-11 rounded-md border border-line bg-surface px-2 text-sm"
+                                    >
+                                      <option value="PERCENT">{t("femme.billing.invoice.discountTypePercent")}</option>
+                                      <option value="FIXED">{t("femme.billing.invoice.discountTypeFixed")}</option>
+                                    </select>
+                                    <Input
+                                      id={`line-disc-val-${idx}`}
+                                      inputMode={line.discountType === "FIXED" ? "numeric" : "decimal"}
+                                      value={line.discountValue}
+                                      onChange={(e) => updateLine(idx, "discountValue", e.target.value)}
+                                      placeholder="0"
+                                      aria-label={t("femme.billing.invoice.lineDiscountValue")}
+                                      aria-invalid={!!lineErrors[idx]?.discountValue}
+                                      aria-describedby={
+                                        lineErrors[idx]?.discountValue ? `line-disc-amt-err-${idx}` : undefined
+                                      }
+                                      className="w-28"
+                                    />
+                                  </div>
+                                ) : null}
+                                <FieldValidationError id={`line-disc-amt-err-${idx}`}>
+                                  {lineErrors[idx]?.discountValue}
+                                </FieldValidationError>
+                              </div>
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div key={`${linesKey}-${idx}`} className="pt-3 first:pt-0">
+                    <ServiceSearchField
+                      id={`billing-line-svc-${idx}`}
+                      value={line.pickedService}
+                      onChange={(svc) => handleLineServiceChange(idx, svc)}
+                      label={
+                        filledLines.length > 0
+                          ? t("femme.billing.invoice.addLine")
+                          : t("femme.billing.invoice.lineServiceLabel")
+                      }
+                      placeholder={t("femme.billing.invoice.lineServicePlaceholder")}
+                      invalid={!!lineErrors[idx]?.service}
+                      errorDescribedById={`line-svc-err-${idx}`}
+                    />
+                    <FieldValidationError id={`line-svc-err-${idx}`}>
+                      {lineErrors[idx]?.service}
+                    </FieldValidationError>
+                  </div>
+                ),
+              )}
+            </div>
+          </Card>
+
           {/* Step 3 — how does the client pay */}
           <Card className="flex flex-col gap-3 p-4 sm:p-6" data-testid="billing-step-payment">
             <Heading as="h2" className="text-lg">
@@ -1755,53 +1926,6 @@ export function NewInvoiceFlow({
               </span>
             </summary>
             <div className="flex flex-col gap-6 px-4 pb-5 pt-2 sm:px-6">
-              {/* Issue #174 AC-04: emission date — read-only unless explicitly unlocked. */}
-              <section className="flex flex-col gap-2">
-                <Heading as="h3" className="text-base">
-                  {t("femme.billing.invoice.issueDateSection")}
-                </Heading>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="min-w-[160px]">
-                    <Label htmlFor="billing-issue-date">{t("femme.billing.invoice.issueDateLabel")}</Label>
-                    <Input
-                      id="billing-issue-date"
-                      type="date"
-                      value={issueDate}
-                      onChange={(e) => {
-                        setIssueDate(e.target.value);
-                        setIssueDateError(null);
-                      }}
-                      disabled={!issueDateEditable}
-                      aria-invalid={issueDateError ? true : undefined}
-                      aria-describedby={issueDateError ? "billing-issue-date-err" : undefined}
-                      className="mt-1 w-full"
-                    />
-                  </div>
-                  <label
-                    htmlFor="billing-issue-date-editable"
-                    className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
-                  >
-                    <Checkbox
-                      id="billing-issue-date-editable"
-                      checked={issueDateEditable}
-                      onChange={(e) => {
-                        const on = e.target.checked;
-                        setIssueDateEditable(on);
-                        setIssueDateError(null);
-                        if (!on) setIssueDate(localTodayYmd());
-                      }}
-                    />
-                    {t("femme.billing.invoice.issueDateEditableToggle")}
-                  </label>
-                </div>
-                <FieldValidationError id="billing-issue-date-err">{issueDateError}</FieldValidationError>
-                {sifenEnabled && (
-                  <Text variant="muted" className="text-sm">
-                    {t("femme.billing.invoice.issueDateLegend")}
-                  </Text>
-                )}
-              </section>
-
               <section className="flex flex-col gap-2">
                 <Heading as="h3" className="text-base">
                   {t("femme.billing.invoice.discountSection")}
@@ -1845,78 +1969,6 @@ export function NewInvoiceFlow({
                   )}
                 </div>
               </section>
-
-              {filledLines.length > 0 && (
-                <section className="flex flex-col gap-3" data-testid="billing-per-item-options">
-                  <Heading as="h3" className="text-base">
-                    {t("femme.billing.invoice.perItemOptions")}
-                  </Heading>
-                  {lines.map((line, idx) =>
-                    line.pickedService ? (
-                      <div key={`${linesKey}-opt-${idx}`} className="flex flex-col gap-2 rounded-md border border-line p-3">
-                        <span className="font-semibold text-ink">{line.pickedService.name}</span>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-ink-2">
-                            <input
-                              type="checkbox"
-                              checked={line.discountEnabled}
-                              onChange={() => toggleLineDiscount(idx)}
-                              id={`line-disc-toggle-${idx}`}
-                            />
-                            {t("femme.billing.invoice.lineDiscountToggle")}
-                          </label>
-                          {line.discountEnabled && (
-                            <>
-                              <select
-                                value={line.discountType}
-                                onChange={(e) => setLineDiscountType(idx, e.target.value as "FIXED" | "PERCENT")}
-                                aria-label={t("femme.billing.invoice.lineDiscountType")}
-                                className="min-h-11 rounded-md border border-line bg-surface px-2 text-sm"
-                              >
-                                <option value="PERCENT">{t("femme.billing.invoice.discountTypePercent")}</option>
-                                <option value="FIXED">{t("femme.billing.invoice.discountTypeFixed")}</option>
-                              </select>
-                              <Input
-                                id={`line-disc-val-${idx}`}
-                                inputMode={line.discountType === "FIXED" ? "numeric" : "decimal"}
-                                value={line.discountValue}
-                                onChange={(e) => updateLine(idx, "discountValue", e.target.value)}
-                                placeholder="0"
-                                aria-label={t("femme.billing.invoice.lineDiscountValue")}
-                                aria-invalid={!!lineErrors[idx]?.discountValue}
-                                aria-describedby={lineErrors[idx]?.discountValue ? `line-disc-amt-err-${idx}` : undefined}
-                                className="w-28"
-                              />
-                            </>
-                          )}
-                        </div>
-                        <FieldValidationError id={`line-disc-amt-err-${idx}`}>
-                          {lineErrors[idx]?.discountValue}
-                        </FieldValidationError>
-                        <div className="flex flex-col gap-1 sm:max-w-sm">
-                          <Label htmlFor={`line-professional-${idx}`}>{t("femme.billing.invoice.lineProfessional")}</Label>
-                          <Select
-                            id={`line-professional-${idx}`}
-                            value={line.professionalId}
-                            onChange={(e) =>
-                              setLines((prev) =>
-                                prev.map((l, i) => (i === idx ? { ...l, professionalId: e.target.value } : l)),
-                              )
-                            }
-                          >
-                            <option value="">{t("femme.billing.invoice.lineProfessionalNone")}</option>
-                            {lineProfessionals.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.fullName}
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-                      </div>
-                    ) : null,
-                  )}
-                </section>
-              )}
 
               {/* Tips — one per professional who served a service line; never added to the total. */}
               <section className="flex flex-col gap-2" data-testid="billing-tips-section">
