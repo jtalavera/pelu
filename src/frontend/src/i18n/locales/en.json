@@ -3047,6 +3047,8 @@
       "clientPlaceholder": "Search or select a client…",
       "clientRequired": "Select a client.",
       "linesSection": "Services",
+      "newServiceLine": "New service",
+      "lineFillIn": "Fill in the details",
       "addLine": "Add service",
       "removeLine": "Remove",
       "lineServiceRequired": "Select a service.",

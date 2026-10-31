@@ -36,3 +36,6 @@ Los specs de Playwright se adaptan en la pasada final tras el rediseño de Confi
 
 - Lista: filas de una línea (avatar 36 px, nombre, `fecha · servicios · profesionales`), monto a la derecha ("—" si no hay servicios, con "Sin servicios") y "Cobrar" como botón de solo borde junto al monto. En celular el botón pasa a la línea de abajo.
 - Detalle: diálogo `max-w-xl`. Cada servicio ocupa dos renglones: servicio a todo el ancho y, debajo, Profesional | Cant. | Precio | subtotal | ✕ con rótulos pequeños. Se elimina la fila de cabeceras en mayúsculas que chocaba con el título "Servicios".
+
+## Ajuste: servicios plegables en el detalle
+Cada servicio de la ficha es una tarjeta con borde (sin relleno): una fila resumen con número, nombre, `profesional · cant × precio` y subtotal, que se abre/cierra con un toque (`service-record-line-toggle`, `aria-expanded`). Abierta muestra servicio, profesional, cantidad, precio y "✕ Quitar". Por defecto está abierta si es el único servicio, si aún no tiene servicio elegido o si tiene un error de validación; el usuario puede cerrarla igual (salvo con error). Con varios servicios ya cargados arranca plegada.

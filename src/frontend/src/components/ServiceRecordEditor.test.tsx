@@ -134,7 +134,9 @@ describe("ServiceRecordEditor", () => {
     renderEditor(openRecord);
     const total = screen.getByTestId("service-record-total");
     expect(total.textContent).toMatch(/310\.000/);
-    const qty = screen.getAllByLabelText(/quantity/i)[1] as HTMLInputElement;
+    // Several services start collapsed (summary rows); open the second one to edit it.
+    await userEvent.click(screen.getAllByTestId("service-record-line-toggle")[1]);
+    const qty = screen.getByLabelText(/quantity/i) as HTMLInputElement;
     await userEvent.clear(qty);
     await userEvent.type(qty, "2");
     expect(screen.getAllByTestId("service-record-line-subtotal")[1].textContent).toMatch(/120\.000/);
@@ -159,7 +161,8 @@ describe("ServiceRecordEditor", () => {
     femmePutJson.mockResolvedValue(saved);
     const onSaved = vi.fn();
     renderEditor(openRecord, { onSaved });
-    const qty = screen.getAllByLabelText(/quantity/i)[1];
+    await userEvent.click(screen.getAllByTestId("service-record-line-toggle")[1]);
+    const qty = screen.getByLabelText(/quantity/i);
     await userEvent.clear(qty);
     await userEvent.type(qty, "2");
     await userEvent.click(screen.getByTestId("service-record-submit"));
@@ -204,15 +207,36 @@ describe("ServiceRecordEditor", () => {
     expect(row.textContent).toMatch(/Marta Benítez/);
   });
 
-  it("each service is one in-line row; the remove ✕ only shows with several lines", async () => {
+  it("each service is a numbered summary row (name, professional, subtotal) that opens to edit and remove", async () => {
     renderEditor(openRecord);
     const rows = screen.getAllByTestId("service-record-line");
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      expect(within(row).getByLabelText(/quantity/i)).toBeTruthy();
-      expect(within(row).getByLabelText(/unit price/i)).toBeTruthy();
-      expect(within(row).getByTestId("service-record-line-remove")).toBeTruthy();
+      const toggle = within(row).getByTestId("service-record-line-toggle");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(within(row).queryByLabelText(/quantity/i)).toBeNull();
+      expect(within(row).getByTestId("service-record-line-subtotal")).toBeTruthy();
     }
+    expect(within(rows[0]).getByTestId("service-record-line-toggle").textContent).toMatch(/Laura/);
+    // Open, then close again with the same control.
+    await userEvent.click(within(rows[0]).getByTestId("service-record-line-toggle"));
+    expect(within(rows[0]).getByLabelText(/quantity/i)).toBeTruthy();
+    expect(within(rows[0]).getByLabelText(/unit price/i)).toBeTruthy();
+    expect(within(rows[0]).getByTestId("service-record-line-remove")).toBeTruthy();
+    await userEvent.click(within(rows[0]).getByTestId("service-record-line-toggle"));
+    expect(within(rows[0]).queryByLabelText(/quantity/i)).toBeNull();
+  });
+
+  it("a service without a chosen item stays open until the user closes it", async () => {
+    renderEditor(null);
+    await userEvent.click(screen.getByTestId("service-record-add-line"));
+    const rows = screen.getAllByTestId("service-record-line");
+    for (const row of rows) {
+      const toggle = within(row).getByTestId("service-record-line-toggle");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    }
+    await userEvent.click(within(rows[1]).getByTestId("service-record-line-toggle"));
+    expect(within(rows[1]).getByTestId("service-record-line-toggle").getAttribute("aria-expanded")).toBe("false");
   });
 
   it("tips are compact: one inline field per professional, two per row on wide screens", async () => {

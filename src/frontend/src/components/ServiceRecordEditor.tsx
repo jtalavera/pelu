@@ -132,6 +132,8 @@ export function ServiceRecordEditor({
   const [tipsOpen, setTipsOpen] = useState(false);
 
   const [clientError, setClientError] = useState<string | null>(null);
+  /** Per-line expand/collapse chosen by the user; a line never touched is open when it is the only one or has no service yet. */
+  const [openLines, setOpenLines] = useState<Record<string, boolean>>({});
   const [lineErrors, setLineErrors] = useState<Record<number, { service?: string }>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -390,8 +392,6 @@ export function ServiceRecordEditor({
     );
   }
 
-  const GRID =
-    "grid items-end gap-x-2 gap-y-1 grid-cols-[4rem_minmax(0,1fr)_auto_2.75rem] sm:grid-cols-[minmax(0,1fr)_4rem_7rem_auto_2.75rem]";
   const CAPTION = "text-xs font-semibold text-ink-3";
 
   return (
@@ -450,99 +450,138 @@ export function ServiceRecordEditor({
           <h3 id="sr-lines-h" className={SECTION_TITLE}>
             {t("femme.serviceRecords.linesSection")}
           </h3>
-          {lines.map((line, idx) => (
-            <div
-              key={line.key}
-              data-testid="service-record-line"
-              className={`${GRID} border-t border-line py-2 first:border-t-0`}
-            >
-              <div className="col-span-4 sm:col-span-5">
-                <ServiceSearchField
-                  id={`service-record-line-svc-${idx}`}
-                  label={t("femme.serviceRecords.lineServiceAria", { n: idx + 1 })}
-                  labelSrOnly
-                  value={line.pickedService}
-                  onChange={(svc) => updateLineService(line.key, svc)}
-                  invalid={!!lineErrors[idx]?.service}
-                  errorDescribedById={`service-record-line-svc-err-${idx}`}
-                />
-              </div>
-              <div className="col-span-4 flex min-w-0 flex-col gap-1 sm:col-span-1">
-                <span aria-hidden="true" className={CAPTION}>
-                  {t("femme.serviceRecords.lineProfessionalLabel")}
-                </span>
-                <SearchableSelect<number>
-                  id={`service-record-line-prof-${idx}`}
-                  label={t("femme.serviceRecords.lineProfessionalAria", { n: idx + 1 })}
-                  labelSrOnly
-                  value={line.professionalId}
-                  onChange={(v) => updateLineProfessional(line.key, v)}
-                  options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-                  filterPlaceholder={t("femme.serviceRecords.lineProfessionalPlaceholder")}
-                  noResultsText={t("femme.serviceRecords.lineProfessionalNoResults")}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span aria-hidden="true" className={CAPTION}>
-                  {t("femme.serviceRecords.colQty")}
-                </span>
-                <Label htmlFor={`service-record-line-qty-${idx}`} className="sr-only">
-                  {t("femme.serviceRecords.lineQuantityLabel")}
-                </Label>
-                <Input
-                  id={`service-record-line-qty-${idx}`}
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  aria-label={t("femme.serviceRecords.lineQuantityLabel")}
-                  value={line.quantity}
-                  onChange={(e) =>
-                    updateLineQuantity(line.key, Math.max(0, Math.floor(Number(e.target.value))))
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span aria-hidden="true" className={CAPTION}>
-                  {t("femme.serviceRecords.colPrice")}
-                </span>
-                <Label htmlFor={`service-record-line-price-${idx}`} className="sr-only">
-                  {t("femme.serviceRecords.lineUnitPriceLabel")}
-                </Label>
-                <Input
-                  id={`service-record-line-price-${idx}`}
-                  inputMode="numeric"
-                  value={line.unitPrice}
-                  placeholder="0"
-                  onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
-                />
-              </div>
-              <b
-                className="whitespace-nowrap pb-3 text-right font-heading text-ink"
-                data-testid="service-record-line-subtotal"
+          {lines.map((line, idx) => {
+            const professionalName =
+              professionals.find((p) => p.id === line.professionalId)?.fullName ??
+              record?.lines.find((l) => l.professionalId === line.professionalId)?.professionalName ??
+              undefined;
+            const expanded =
+              !!lineErrors[idx]?.service ||
+              (openLines[line.key] ?? (lines.length === 1 || !line.pickedService));
+            const bodyId = `service-record-line-body-${idx}`;
+            const summaryName = line.pickedService?.name ?? t("femme.serviceRecords.newServiceLine");
+            const summarySub =
+              [professionalName, line.quantity > 1 ? `${line.quantity} × ${line.unitPrice || "0"}` : ""]
+                .filter(Boolean)
+                .join(" · ") || t("femme.serviceRecords.lineFillIn");
+            return (
+              <div
+                key={line.key}
+                data-testid="service-record-line"
+                className="mt-2 overflow-hidden rounded-card border border-line first:mt-1"
               >
-                {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
-              </b>
-              {lines.length > 1 ? (
                 <button
                   type="button"
-                  onClick={() => removeLine(line.key)}
-                  aria-label={t("femme.serviceRecords.removeLine")}
-                  data-testid="service-record-line-remove"
-                  className="size-11 justify-self-end rounded-lg text-base text-ink-3 hover:bg-bg hover:text-danger"
+                  aria-expanded={expanded}
+                  aria-controls={bodyId}
+                  data-testid="service-record-line-toggle"
+                  onClick={() => setOpenLines((o) => ({ ...o, [line.key]: !expanded }))}
+                  className="grid min-h-14 w-full grid-cols-[1.5rem_minmax(0,1fr)_auto_1.25rem] items-center gap-3 px-3.5 py-2.5 text-left hover:bg-bg"
                 >
-                  ✕
+                  <span
+                    aria-hidden="true"
+                    className="flex size-6 items-center justify-center rounded-full bg-primary font-heading text-[13px] font-extrabold text-primary-fg"
+                  >
+                    {idx + 1}
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <b className="truncate text-ink">{summaryName}</b>
+                    <span className="truncate text-sm text-ink-3">{summarySub}</span>
+                  </span>
+                  <b
+                    className="whitespace-nowrap font-heading text-ink"
+                    data-testid="service-record-line-subtotal"
+                  >
+                    {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
+                  </b>
+                  <span
+                    aria-hidden="true"
+                    className={`text-ink-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+                  >
+                    ⌄
+                  </span>
                 </button>
-              ) : (
-                <span />
-              )}
-              <div className="col-span-4 sm:col-span-5">
-                <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
-                  {lineErrors[idx]?.service}
-                </FieldValidationError>
+                {expanded ? (
+                  <div id={bodyId} className="flex flex-col gap-2 border-t border-line px-3.5 pb-3 pt-3">
+                    <ServiceSearchField
+                      id={`service-record-line-svc-${idx}`}
+                      label={t("femme.serviceRecords.lineServiceAria", { n: idx + 1 })}
+                      labelSrOnly
+                      value={line.pickedService}
+                      onChange={(svc) => updateLineService(line.key, svc)}
+                      invalid={!!lineErrors[idx]?.service}
+                      errorDescribedById={`service-record-line-svc-err-${idx}`}
+                    />
+                    <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
+                      {lineErrors[idx]?.service}
+                    </FieldValidationError>
+                    <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-end gap-x-2 gap-y-2 sm:grid-cols-[minmax(0,1fr)_4rem_7rem]">
+                      <div className="order-last col-span-2 flex min-w-0 flex-col gap-1 sm:order-none sm:col-span-1">
+                        <span aria-hidden="true" className={CAPTION}>
+                          {t("femme.serviceRecords.lineProfessionalLabel")}
+                        </span>
+                        <SearchableSelect<number>
+                          id={`service-record-line-prof-${idx}`}
+                          label={t("femme.serviceRecords.lineProfessionalAria", { n: idx + 1 })}
+                          labelSrOnly
+                          value={line.professionalId}
+                          onChange={(v) => updateLineProfessional(line.key, v)}
+                          options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+                          filterPlaceholder={t("femme.serviceRecords.lineProfessionalPlaceholder")}
+                          noResultsText={t("femme.serviceRecords.lineProfessionalNoResults")}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span aria-hidden="true" className={CAPTION}>
+                          {t("femme.serviceRecords.colQty")}
+                        </span>
+                        <Label htmlFor={`service-record-line-qty-${idx}`} className="sr-only">
+                          {t("femme.serviceRecords.lineQuantityLabel")}
+                        </Label>
+                        <Input
+                          id={`service-record-line-qty-${idx}`}
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          aria-label={t("femme.serviceRecords.lineQuantityLabel")}
+                          value={line.quantity}
+                          onChange={(e) =>
+                            updateLineQuantity(line.key, Math.max(0, Math.floor(Number(e.target.value))))
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span aria-hidden="true" className={CAPTION}>
+                          {t("femme.serviceRecords.colPrice")}
+                        </span>
+                        <Label htmlFor={`service-record-line-price-${idx}`} className="sr-only">
+                          {t("femme.serviceRecords.lineUnitPriceLabel")}
+                        </Label>
+                        <Input
+                          id={`service-record-line-price-${idx}`}
+                          inputMode="numeric"
+                          value={line.unitPrice}
+                          placeholder="0"
+                          onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    {lines.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => removeLine(line.key)}
+                        data-testid="service-record-line-remove"
+                        className="min-h-11 self-end rounded-lg px-3 text-sm font-semibold text-ink-3 hover:bg-bg hover:text-danger"
+                      >
+                        ✕ {t("femme.serviceRecords.removeLine")}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-            </div>
-          ))}
+            );
+          })}
           <button
             type="button"
             onClick={addLine}
