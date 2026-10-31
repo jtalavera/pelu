@@ -92,7 +92,7 @@ export function RevenueBars({
 
   return (
     <div data-testid="summary-revenue-chart" role="group" aria-label={t("femme.summary.revenueChartLabel")}>
-      <div className="relative mt-2 h-44 pl-12">
+      <div className="relative mt-7 h-44 pl-12">
         {[1, 0.5, 0].map((f) => (
           <div
             key={f}
