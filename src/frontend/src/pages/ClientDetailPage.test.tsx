@@ -147,7 +147,7 @@ describe("ClientDetailPage", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Details" }));
   }
 
-  it("shows the facts line: visits, last visit, spent in 12 months and usual professional", async () => {
+  it("header is one simple line: visits and last visit only (spend and usual professional live in History)", async () => {
     femmeJson.mockImplementation((url) => {
       if (String(url).endsWith("/summary")) {
         return Promise.resolve({
@@ -161,10 +161,10 @@ describe("ClientDetailPage", () => {
     });
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
-    const facts = await screen.findByText(/Usual: Laura/);
-    expect(facts.parentElement?.textContent).toMatch(/3 visits/);
-    expect(facts.parentElement?.textContent).toMatch(/Last visit/);
-    expect(facts.parentElement?.textContent).toMatch(/Spent Gs\./);
+    const facts = screen.getByTestId("client-header-facts");
+    await waitFor(() => expect(facts.textContent).toMatch(/Last visit/));
+    expect(facts.textContent).toMatch(/3 visits/);
+    expect(facts.textContent).not.toMatch(/Spent|Usual/);
     expect(screen.getByTestId("client-contact-actions")).toBeTruthy();
   });
 
@@ -263,22 +263,33 @@ describe("ClientDetailPage", () => {
     expect(await screen.findByText("Clients list")).toBeTruthy();
   });
 
-  it("shows the deactivate link for an active client and confirms before deactivating", async () => {
+  it("the Active switch in the header deactivates (after confirming) and returns to the list", async () => {
     femmePostJson.mockResolvedValue({ ...sampleClient, active: false });
     renderPage();
-    await openDataTab();
-    await userEvent.click(screen.getByTestId("client-edit-deactivate"));
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const sw = screen.getByTestId("client-active-switch") as HTMLInputElement;
+    expect(sw.checked).toBe(true);
+    expect(screen.getByTestId("client-active-label").textContent).toBe("Active");
+    // Available from any tab, not only Details.
+    await userEvent.click(screen.getByRole("tab", { name: "Technical sheet" }));
+    await userEvent.click(sw);
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: /^deactivate$/i }),
-    );
+    await userEvent.click(within(dialog).getByRole("button", { name: /^deactivate$/i }));
     await waitFor(() =>
       expect(femmePostJson).toHaveBeenCalledWith("/api/clients/1/deactivate", {}),
     );
     expect(await screen.findByText("Clients list")).toBeTruthy();
   });
 
-  it("inactive client shows inactive badge, reactivate link, and no deactivate link", async () => {
+  it("there is no red deactivate link inside the Details form anymore", async () => {
+    renderPage();
+    await openDataTab();
+    expect(screen.queryByRole("button", { name: /deactivate client/i })).toBeNull();
+    expect(screen.queryByTestId("client-edit-deactivate")).toBeNull();
+  });
+
+  it("an inactive client shows 'Inactive' with the switch off; turning it on reactivates directly", async () => {
+    femmePostJson.mockResolvedValue({ ...sampleClient, active: true });
     femmeJson.mockImplementation((url) => {
       if (String(url).startsWith("/api/clients/") && !String(url).includes("?") && !String(url).endsWith("/summary") && !String(url).endsWith("/technical-sheet")) {
         return Promise.resolve({ ...sampleClient, active: false });
@@ -286,17 +297,22 @@ describe("ClientDetailPage", () => {
       return defaultFemmeJsonImpl(url);
     });
     renderPage();
-    await openDataTab();
-    expect(screen.getByText(/inactive/i)).toBeTruthy();
-    expect(screen.queryByTestId("client-edit-deactivate")).toBeNull();
-    expect(screen.getByTestId("client-edit-reactivate")).toBeTruthy();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const sw = screen.getByTestId("client-active-switch") as HTMLInputElement;
+    expect(sw.checked).toBe(false);
+    expect(screen.getByTestId("client-active-label").textContent).toBe("Inactive");
+    await userEvent.click(sw);
+    await waitFor(() =>
+      expect(femmePostJson).toHaveBeenCalledWith("/api/clients/1/activate", {}),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("five tabs in order: Details (default), Appointments, Invoices, Technical sheet, Snapshot", async () => {
+  it("five tabs in order: Details (default), Appointments, Invoices, Technical sheet, History", async () => {
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     const tabs = screen.getAllByRole("tab").map((el) => el.textContent);
-    expect(tabs).toEqual(["Details", "Appointments", "Invoices", "Technical sheet", "✦ Snapshot"]);
+    expect(tabs).toEqual(["Details", "Appointments", "Invoices", "Technical sheet", "✦ History"]);
     expect(screen.getByRole("tab", { name: "Details" }).getAttribute("aria-selected")).toBe("true");
     // Appointments / invoices load only when their tab is opened.
     const urls = femmeJson.mock.calls.map((c) => String(c[0]));
@@ -316,18 +332,28 @@ describe("ClientDetailPage", () => {
     expect(screen.getByRole("tab", { name: "Details" }).getAttribute("aria-selected")).toBe("true");
   });
 
-  it("Call is a tel: link and WhatsApp opens WhatsApp Web directly (no app/web chooser)", async () => {
+  it("Call is only offered on mobile devices; WhatsApp opens WhatsApp Web directly on desktop", async () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
-    const call = screen.getByTestId("client-call") as HTMLAnchorElement;
-    expect(call.getAttribute("href")).toBe("tel:0981000001");
+    expect(screen.queryByTestId("client-call")).toBeNull();
     await userEvent.click(screen.getByTestId("client-whatsapp"));
     expect(open).toHaveBeenCalledTimes(1);
     const [url, target] = open.mock.calls[0];
     expect(String(url)).toContain("https://web.whatsapp.com/send?phone=595981000001");
     expect(target).toBe("femme-whatsapp");
     open.mockRestore();
+  });
+
+  it("on a phone the Call button is a tel: link", async () => {
+    const ua = vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148",
+    );
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const call = screen.getByTestId("client-call") as HTMLAnchorElement;
+    expect(call.getAttribute("href")).toBe("tel:0981000001");
+    ua.mockRestore();
   });
 
   it("appointments tab: next appointment and past appointments, no invoices mixed in", async () => {
@@ -371,10 +397,12 @@ describe("ClientDetailPage", () => {
     const next = await screen.findByTestId("client-next-appointment");
     expect(within(next).getByText("Cut")).toBeTruthy();
     const items = await screen.findAllByTestId("client-appointment-item");
-    expect(items.map((el) => within(el).getByText(/Coloring|Brushing/).textContent)).toEqual([
+    expect(items.map((el) => (el.textContent ?? "").match(/Coloring|Brushing/)?.[0])).toEqual([
       "Coloring",
       "Brushing",
     ]);
+    // Compact: the professional sits on the same row as the service.
+    expect(items[0].textContent).toMatch(/Coloring\s*·\s*Pro/);
     expect(screen.queryByTestId("client-invoice-item")).toBeNull();
   });
 
@@ -383,7 +411,6 @@ describe("ClientDetailPage", () => {
     await screen.findByRole("heading", { name: /Ana García/i });
     await userEvent.click(screen.getByRole("tab", { name: "Appointments" }));
     expect(await screen.findByTestId("client-appointments-empty")).toBeTruthy();
-    expect(screen.getByText(/no upcoming appointments/i)).toBeTruthy();
   });
 
   it("invoices tab lists the client's invoices and opens them", async () => {
@@ -425,7 +452,7 @@ describe("ClientDetailPage", () => {
     expect(await screen.findByTestId("client-invoices-empty")).toBeTruthy();
   });
 
-  it("snapshot: the header button opens the tab with top services, professionals and latest services", async () => {
+  it("history summary: the header button opens the tab with top services, professionals and latest services", async () => {
     femmeJson.mockImplementation((url) => {
       if (String(url).endsWith("/summary")) {
         return Promise.resolve({
@@ -468,7 +495,7 @@ describe("ClientDetailPage", () => {
     expect(screen.getByTestId("client-radiography-ticket").textContent).toMatch(/89/);
   });
 
-  it("snapshot shows an empty message when the client has no completed services", async () => {
+  it("history summary shows an empty message when the client has no completed services", async () => {
     renderPage("1", "?tab=radiography");
     await screen.findByRole("heading", { name: /Ana García/i });
     expect(await screen.findByTestId("client-radiography-empty")).toBeTruthy();

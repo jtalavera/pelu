@@ -1984,12 +1984,15 @@
       }
     },
     "clients": {
+      "activeLabel": "Active",
+      "inactiveLabel": "Inactive",
+      "activeSwitchAria": "Client active: {{name}}",
       "call": "Call",
       "noNextAppointment": "No upcoming appointments.",
       "pastAppointments": "Past appointments",
       "radiography": {
-        "cta": "See profile snapshot",
-        "title": "{{name}}'s snapshot",
+        "cta": "View client history",
+        "title": "Client history",
         "visits": "Visits",
         "spent": "Spent in 12 months",
         "ticket": "Average ticket",
@@ -1998,7 +2001,7 @@
         "times_other": "{{count}} times",
         "professionals": "Who usually attends",
         "lastServices": "Latest services",
-        "empty": "No completed services yet to build the snapshot."
+        "empty": "No completed services yet to build the history."
       },
       "moreActions": "More actions",
       "filterGroup": "Filter clients",
@@ -2163,7 +2166,7 @@
         "sheet": "Technical sheet",
         "appointments": "Appointments",
         "invoices": "Invoices",
-        "radiography": "Snapshot"
+        "radiography": "History"
       },
       "sections": {
         "contact": "Contact",

@@ -12,6 +12,7 @@ import {
   LocalityCombobox,
   Select,
   Spinner,
+  Switch,
   Tabs,
   TabsContent,
   TabsList,
@@ -92,8 +93,19 @@ const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
 /** Client tabs: "data" is the default and not written to the URL. */
 const CLIENT_TABS = ["data", "appointments", "invoices", "sheet", "radiography"] as const;
 type ClientTab = (typeof CLIENT_TABS)[number];
-/** ≥44 px touch targets on phones (the design-system trigger is shorter). */
-const TAB_TRIGGER_CLASS = "min-h-11 shrink-0 whitespace-nowrap sm:min-h-0";
+/**
+ * Segmented tab bar (same look as the approved mockup): a soft container, transparent tabs and a
+ * white "raised" pill for the selected one. The last tab (client history) carries the only orange
+ * accent on the screen.
+ */
+const TAB_LIST_CLASS =
+  "w-full rounded-2xl p-1 gap-1 sm:h-auto sm:min-h-0 sm:justify-start";
+const TAB_TRIGGER_CLASS =
+  "min-h-11 flex-1 rounded-[10px] bg-transparent px-4 py-2 font-bold text-ink-2 hover:bg-transparent sm:py-2 " +
+  "aria-selected:bg-surface aria-selected:text-primary aria-selected:shadow-[0_1px_2px_rgba(10,31,51,0.12)]";
+const TAB_TRIGGER_ACCENT_CLASS =
+  "bg-gradient-to-br from-[#FBE3CC] to-[#F7C9A6] font-extrabold text-[#7A3E00] " +
+  "aria-selected:bg-gradient-to-br aria-selected:from-[#F3A66B] aria-selected:to-[#E0783A] aria-selected:text-white";
 const HISTORY_PAGE_SIZE = 10;
 
 /** Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve). */
@@ -242,7 +254,6 @@ function ClientRadiography({
       </div>
     );
   }
-  const firstName = client.fullName.trim().split(/\s+/)[0];
   const totalPro = summary.professionalRanking.reduce((acc, p) => acc + p.serviceCount, 0);
   const empty = summary.topServices.length === 0 && summary.lastServices.length === 0;
   const stat = (label: string, value: string, id: string) => (
@@ -255,7 +266,7 @@ function ClientRadiography({
     <div className="flex flex-col gap-4" data-testid="client-radiography">
       <Card className="flex flex-col gap-3 p-4 sm:p-5">
         <Heading as="h2" className="text-base">
-          {t("femme.clients.radiography.title", { name: firstName })}
+          {t("femme.clients.radiography.title")}
         </Heading>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {stat(t("femme.clients.radiography.visits"), String(client.visitCount), "client-radiography-visits")}
@@ -676,8 +687,6 @@ export default function ClientDetailPage() {
   }
 
   const { summary } = summaryState;
-  const usual = summary?.usualProfessionals?.[0] ?? null;
-  const spent = summary?.spentLast12Months;
   const phoneDigits = client.phone ? client.phone.replace(/[^\d+]/g, "") : "";
 
   return (
@@ -694,27 +703,39 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Heading as="h1">{client.fullName}</Heading>
-          {!client.active ? <Badge variant="secondary">{t("femme.clients.inactive")}</Badge> : null}
-          {isBirthdayOn(client.birthdayDay ?? null, client.birthdayMonth ?? null, new Date()) ? (
-            <Badge data-testid="client-birthday-today">{t("femme.clients.birthday.today")}</Badge>
-          ) : null}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Heading as="h1" className="break-words">
+              {client.fullName}
+            </Heading>
+            {isBirthdayOn(client.birthdayDay ?? null, client.birthdayMonth ?? null, new Date()) ? (
+              <Badge data-testid="client-birthday-today">{t("femme.clients.birthday.today")}</Badge>
+            ) : null}
+          </div>
+          <div data-tour="client-detail-status" className="flex shrink-0 items-center gap-2">
+            <span className="text-sm font-bold text-ink-2" data-testid="client-active-label">
+              {client.active ? t("femme.clients.activeLabel") : t("femme.clients.inactiveLabel")}
+            </span>
+            <Switch
+              className="min-h-11 min-w-11 justify-center"
+              checked={client.active}
+              disabled={deactivating || reactivating}
+              aria-label={t("femme.clients.activeSwitchAria", { name: client.fullName })}
+              data-testid="client-active-switch"
+              onChange={() => (client.active ? setDeactivateTarget(client) : void activateClient())}
+            />
+          </div>
         </div>
-        <Text variant="muted" data-testid="client-header-facts" className="flex flex-wrap gap-x-3">
+        <Text variant="muted" data-testid="client-header-facts" className="flex flex-wrap gap-x-4">
           <span>{t("femme.clients.visits", { count: client.visitCount })}</span>
           {summary?.lastVisitAt ? (
             <span>
               {t("femme.clients.lastVisit", { date: formatLongDate(summary.lastVisitAt, dateLocale) })}
             </span>
           ) : null}
-          {spent != null && Number(spent) > 0 ? (
-            <span>{t("femme.clients.spent12m", { amount: `Gs. ${formatAmountDecimal(spent)}` })}</span>
-          ) : null}
-          {usual ? <span>{t("femme.clients.usualProfessional", { name: usual.fullName })}</span> : null}
         </Text>
         <div className="flex flex-wrap gap-2" data-testid="client-contact-actions">
-          {client.phone ? (
+          {client.phone && isMobileDevice() ? (
             <a
               href={`tel:${phoneDigits}`}
               aria-label={t("femme.clients.keyInfo.call", { phone: client.phone })}
@@ -746,7 +767,7 @@ export default function ClientDetailPage() {
       </div>
 
       <Tabs data-tour="client-detail-tabs" value={tab} onValueChange={setTab}>
-        <TabsList className="w-full overflow-x-auto">
+        <TabsList className={TAB_LIST_CLASS}>
           <TabsTrigger value="data" className={TAB_TRIGGER_CLASS}>
             {t("femme.clients.tabs.data")}
           </TabsTrigger>
@@ -761,7 +782,7 @@ export default function ClientDetailPage() {
           </TabsTrigger>
           <TabsTrigger
             value="radiography"
-            className={`${TAB_TRIGGER_CLASS} font-extrabold text-[#7A3E00] data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#F3A66B] data-[state=active]:to-[#E0783A] data-[state=active]:text-white`}
+            className={`${TAB_TRIGGER_CLASS} ${TAB_TRIGGER_ACCENT_CLASS}`}
             data-testid="client-tab-radiography"
           >
             ✦ {t("femme.clients.tabs.radiography")}
@@ -782,74 +803,65 @@ export default function ClientDetailPage() {
               </div>
             ) : null}
             {apptsLoaded && !apptsError ? (
-              <>
-                <Card className="p-4" data-testid="client-next-appointment">
-                  <Heading as="h2" className="mb-3 text-base">
-                    {t("femme.clients.nextAppointment")}
-                  </Heading>
-                  {nextAppointment ? (
-                    <div className="flex items-start gap-3">
-                      <div className="w-16 shrink-0 font-semibold text-ink">
-                        {formatShortDate(nextAppointment.startAt, dateLocale)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-ink">{nextAppointment.serviceName}</div>
-                        <div className="text-sm text-ink-3">
-                          {formatTime(nextAppointment.startAt, dateLocale)} ·{" "}
-                          {nextAppointment.professionalName}
-                        </div>
-                      </div>
-                      <StatusBadge status={nextAppointment.status} />
-                    </div>
-                  ) : (
-                    <Text variant="muted">{t("femme.clients.noNextAppointment")}</Text>
-                  )}
-                </Card>
-
-                <Card className="p-4" data-testid="client-past-appointments">
-                  <Heading as="h2" className="mb-3 text-base">
-                    {t("femme.clients.pastAppointments")}
-                  </Heading>
-                  {pastSorted.length === 0 ? (
-                    <Text variant="muted" data-testid="client-appointments-empty">
-                      {t("femme.clients.noAppointments")}
-                    </Text>
-                  ) : (
-                    <ul className="flex flex-col" role="list">
-                      {pastSorted.map((appt) => (
-                        <li
-                          key={appt.id}
-                          data-testid="client-appointment-item"
-                          className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
-                        >
-                          <div className="w-16 shrink-0 font-semibold text-ink">
-                            {formatShortDate(appt.startAt, dateLocale)}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-ink">{appt.serviceName}</div>
-                            <div className="text-sm text-ink-3">{appt.professionalName}</div>
-                          </div>
-                          <StatusBadge status={appt.status} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {pastPage + 1 < pastTotalPages ? (
-                    <div className="mt-3 flex justify-center">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="min-h-11"
-                        disabled={loadingMore}
-                        data-testid="client-appointments-more"
-                        onClick={() => void loadMorePastAppointments()}
+              <Card className="px-4 py-2" data-testid="client-appointments">
+                {!nextAppointment && pastSorted.length === 0 ? (
+                  <Text variant="muted" className="py-3" data-testid="client-appointments-empty">
+                    {t("femme.clients.noAppointments")}
+                  </Text>
+                ) : (
+                  <ul className="flex flex-col" role="list">
+                    {nextAppointment ? (
+                      <li
+                        data-testid="client-next-appointment"
+                        className="mb-1 grid min-h-11 grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-[10px] bg-primary-lt px-2.5 py-1.5"
                       >
-                        {loadingMore ? t("femme.clients.loading") : t("femme.clients.historyMore")}
-                      </Button>
-                    </div>
-                  ) : null}
-                </Card>
-              </>
+                        <span className="whitespace-nowrap font-heading text-sm font-extrabold text-ink">
+                          {formatShortDate(nextAppointment.startAt, dateLocale)}
+                        </span>
+                        <span className="truncate text-ink">
+                          <b>{nextAppointment.serviceName}</b>
+                          <small className="text-sm text-ink-3">
+                            {" "}
+                            · {formatTime(nextAppointment.startAt, dateLocale)} ·{" "}
+                            {nextAppointment.professionalName}
+                          </small>
+                        </span>
+                        <StatusBadge status={nextAppointment.status} />
+                      </li>
+                    ) : null}
+                    {pastSorted.map((appt) => (
+                      <li
+                        key={appt.id}
+                        data-testid="client-appointment-item"
+                        className="grid min-h-11 grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-line py-1.5 first:border-t-0"
+                      >
+                        <span className="whitespace-nowrap font-heading text-sm font-extrabold text-ink">
+                          {formatShortDate(appt.startAt, dateLocale)}
+                        </span>
+                        <span className="truncate text-ink">
+                          {appt.serviceName}
+                          <small className="text-sm text-ink-3"> · {appt.professionalName}</small>
+                        </span>
+                        <StatusBadge status={appt.status} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {pastPage + 1 < pastTotalPages ? (
+                  <div className="flex justify-center py-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="min-h-11"
+                      disabled={loadingMore}
+                      data-testid="client-appointments-more"
+                      onClick={() => void loadMorePastAppointments()}
+                    >
+                      {loadingMore ? t("femme.clients.loading") : t("femme.clients.historyMore")}
+                    </Button>
+                  </div>
+                ) : null}
+              </Card>
             ) : null}
           </div>
         </TabsContent>
@@ -868,49 +880,41 @@ export default function ClientDetailPage() {
               </div>
             ) : null}
             {invLoaded && !invError ? (
-              <Card className="p-4" data-testid="client-invoices">
-                <Heading as="h2" className="mb-3 text-base">
-                  {t("femme.clients.invoices")}
-                </Heading>
+              <Card className="px-4 py-2" data-testid="client-invoices">
                 {invoices.length === 0 ? (
-                  <Text variant="muted" data-testid="client-invoices-empty">
+                  <Text variant="muted" className="py-3" data-testid="client-invoices-empty">
                     {t("femme.clients.noInvoices")}
                   </Text>
                 ) : (
                   <ul className="flex flex-col" role="list">
                     {invoices.map((inv) => (
-                      <li
-                        key={inv.id}
-                        data-testid="client-invoice-item"
-                        className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
-                      >
-                        <div className="w-16 shrink-0 font-semibold text-ink">
-                          {formatShortDate(inv.issuedAt, dateLocale)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedInvoiceId(inv.id)}
-                            aria-label={t("femme.clients.openInvoice", {
-                              number: inv.invoiceNumberFormatted,
-                            })}
-                            className="min-h-11 text-left font-semibold text-ink"
-                          >
-                            #{inv.invoiceNumberFormatted}
-                          </button>
-                          <div>
+                      <li key={inv.id} className="border-t border-line first:border-t-0">
+                        <button
+                          type="button"
+                          data-testid="client-invoice-item"
+                          onClick={() => setSelectedInvoiceId(inv.id)}
+                          aria-label={t("femme.clients.openInvoice", {
+                            number: inv.invoiceNumberFormatted,
+                          })}
+                          className="grid min-h-11 w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2.5 py-1.5 text-left hover:bg-bg"
+                        >
+                          <span className="whitespace-nowrap font-heading text-sm font-extrabold text-ink">
+                            {formatShortDate(inv.issuedAt, dateLocale)}
+                          </span>
+                          <span className="flex min-w-0 items-center gap-2 text-ink">
+                            <span className="truncate">#{inv.invoiceNumberFormatted}</span>
                             <InvoiceStatePill invoice={inv} />
-                          </div>
-                        </div>
-                        <div className="shrink-0 pt-2 font-semibold text-ink">
-                          Gs. {formatAmountDecimal(inv.total)}
-                        </div>
+                          </span>
+                          <b className="whitespace-nowrap font-heading text-ink">
+                            Gs. {formatAmountDecimal(inv.total)}
+                          </b>
+                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
                 {invoicePage + 1 < invoiceTotalPages ? (
-                  <div className="mt-3 flex justify-center">
+                  <div className="flex justify-center py-2">
                     <Button
                       type="button"
                       variant="secondary"
@@ -1173,31 +1177,6 @@ export default function ClientDetailPage() {
                 </Button>
               </div>
 
-              <div data-tour="client-detail-status" className="flex justify-center">
-                {client.active ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setDeactivateTarget(client)}
-                    disabled={deactivating}
-                    className="min-h-11 text-danger hover:bg-danger/10"
-                    data-testid="client-edit-deactivate"
-                  >
-                    {t("femme.clients.deactivateClient")}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => void activateClient()}
-                    disabled={reactivating}
-                    className="min-h-11"
-                    data-testid="client-edit-reactivate"
-                  >
-                    {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivateClient")}
-                  </Button>
-                )}
-              </div>
             </div>
           </Card>
         </TabsContent>

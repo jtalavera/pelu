@@ -1984,12 +1984,15 @@
       }
     },
     "clients": {
+      "activeLabel": "Activo",
+      "inactiveLabel": "Inactivo",
+      "activeSwitchAria": "Cliente activo: {{name}}",
       "call": "Llamar",
       "noNextAppointment": "No hay turnos próximos.",
       "pastAppointments": "Turnos anteriores",
       "radiography": {
-        "cta": "Ver radiografía",
-        "title": "Radiografía de {{name}}",
+        "cta": "Ver historial del cliente",
+        "title": "Historial del cliente",
         "visits": "Visitas",
         "spent": "Gastó en 12 meses",
         "ticket": "Ticket promedio",
@@ -1998,7 +2001,7 @@
         "times_other": "{{count}} veces",
         "professionals": "Quiénes la atienden",
         "lastServices": "Últimos servicios",
-        "empty": "Todavía no hay servicios cobrados para armar la radiografía."
+        "empty": "Todavía no hay servicios cobrados para armar el historial."
       },
       "moreActions": "Más acciones",
       "filterGroup": "Filtrar clientes",
@@ -2162,7 +2165,8 @@
         "summary": "Resumen",
         "sheet": "Ficha técnica",
         "appointments": "Turnos",
-        "invoices": "Facturas"
+        "invoices": "Facturas",
+        "radiography": "Historial"
       },
       "sections": {
         "contact": "Contacto",
@@ -2199,7 +2203,6 @@
       "historyLoadError": "No se pudieron cargar turnos ni comprobantes.",
       "appointments": "Turnos",
       "invoices": "Facturas",
-        "radiography": "Radiografía",
       "noAppointments": "Sin turnos registrados.",
       "noInvoices": "Sin facturas registradas.",
       "inlineSearch": {

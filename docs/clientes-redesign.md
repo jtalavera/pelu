@@ -14,26 +14,27 @@ Solo **nombre y teléfono**. "Más opciones" despliega correo, tipo y número de
 contribuyente, dirección, departamento/ciudad, cumpleaños y cómo nos conoció.
 
 ## Ficha (`/app/clients/:id`)
-- Encabezado: nombre, `N visitas · Última visita · Gastó Gs. X en 12 meses · Habitual: Y`
-  (viene de `/api/clients/{id}/summary`) y tres botones:
-  - **📞 Llamar** (`tel:`): abre el marcador del teléfono, no WhatsApp.
-  - **WhatsApp**: misma solución que el envío del KuDE (`lib/whatsappShare`): en escritorio abre
-    WhatsApp Web directo (sin la pantalla "app o web") reutilizando una sola pestaña; en celular abre la app.
-  - **✦ Ver radiografía**: acento naranja, lleva a la pestaña Radiografía.
-- Pestañas (`?tab=`): **Datos** (por defecto, sin parámetro), **Turnos** (`appointments`),
-  **Facturas** (`invoices`), **Ficha técnica** (`sheet`) y **✦ Radiografía** (`radiography`).
-  - **Datos**: nombre, teléfono y correo; "Datos fiscales" y "Perfil" plegados; Cancelar/Guardar y
-    el enlace "Desactivar cliente" / "Reactivar cliente".
-  - **Turnos**: "Próximo turno" y "Turnos anteriores" (con "Ver más"). Carga al abrir la pestaña.
-  - **Facturas**: lista de facturas con estado y monto; tocar una abre su detalle. Carga al abrir la pestaña.
+- Encabezado simple: nombre, una línea `N visitas · Última visita …` y, a la derecha del nombre, el
+  interruptor **Activo / Inactivo** (visible desde cualquier pestaña; desactivar pide confirmación,
+  reactivar es directo; actúa de inmediato, sin "Guardar"). Ya no hay enlace rojo "Desactivar cliente".
+- Botones: **Llamar** (`tel:`, **solo en teléfonos y tablets**, según `isMobileDevice()`), **WhatsApp**
+  (misma solución que el envío del KuDE, `lib/whatsappShare`: en escritorio abre WhatsApp Web directo
+  y reutiliza una pestaña; en celular abre la app) y **✦ Ver historial del cliente** (acento naranja).
+- Barra de pestañas como en la maqueta: contenedor suave, pestaña activa "elevada" en blanco; la última
+  lleva el único acento naranja. Pestañas (`?tab=`): **Datos** (por defecto, sin parámetro), **Turnos**
+  (`appointments`), **Facturas** (`invoices`), **Ficha técnica** (`sheet`) y **✦ Historial**
+  (`radiography`, resumen del cliente).
+  - **Datos**: nombre, teléfono y correo; "Datos fiscales" y "Perfil" plegados; Cancelar/Guardar.
+  - **Turnos** y **Facturas**: listas compactas de una fila (~44 px): `fecha · servicio · profesional`
+    con el estado, y `fecha · #número · estado` con el monto. El próximo turno va resaltado como primera
+    fila de la misma tarjeta. Cargan al abrir la pestaña; "Ver más" pagina.
   - **Ficha técnica**: notas y fórmula de color.
-  - **Radiografía**: visitas, gasto 12 meses y ticket promedio; servicios que más se hace (barras);
-    quiénes la atienden (porcentaje por profesional); últimos servicios. Usa
-    `topServices` y `professionalRanking`, campos nuevos de `/api/clients/{id}/summary`
-    (todo el historial de fichas cerradas, máx. 5 por ranking).
+  - **Historial** (resumen del cliente): visitas, gasto 12 meses y ticket promedio; servicios que más se
+    hace (barras); quiénes la atienden (%); últimos servicios. Usa `topServices` y `professionalRanking`
+    de `/api/clients/{id}/summary` (todo el historial de fichas cerradas, máx. 5 por ranking).
 - Guardar, desactivar o reactivar cierra la ficha y vuelve a la lista con el aviso de éxito
   (`location.state.notice`).
 
 ## Tests
-Vitest actualizado (`ClientsPage.test.tsx`, `ClientDetailPage.test.tsx`). Los specs de Playwright se
+Vitest actualizado (`ClientsPage.test.tsx`, `ClientDetailPage.test.tsx`) y `i18n/locales.test.ts`, que falla si un archivo de traducción tiene claves duplicadas (una clave repetida pisa el objeto anterior en silencio) o si la sección de clientes difiere entre es/en. Los specs de Playwright se
 adaptan en la pasada final tras el rediseño de Configuración.
