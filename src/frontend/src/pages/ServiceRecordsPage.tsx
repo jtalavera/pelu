@@ -1,19 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Heading, Input, Label, PageSizeSelect, Pagination, Select, Spinner, Text } from "@design-system";
+import {
+  Alert,
+  Button,
+  Input,
+  Label,
+  Modal,
+  PageSizeSelect,
+  Pagination,
+  Select,
+  Spinner,
+  Text,
+  Toast,
+} from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import {
+  getServiceRecord,
   listServiceRecordsPaged,
   type PagedServiceRecordsResponse,
 } from "../api/serviceRecords";
 import { ServiceRecordEditor } from "../components/ServiceRecordEditor";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
-import { ListSearchField } from "../components/ListSearchField";
-import { StatusBadge } from "../components/StatusBadge";
+import { SearchInput } from "../components/ui/SearchInput";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { billServiceRecord } from "../lib/serviceRecordBilling";
 
 type InitialClientForRecord = {
   id: number;
@@ -28,14 +41,25 @@ type NavState = {
   selectedClient?: InitialClientForRecord;
 } | null;
 
+type Chip = "open" | "today" | "all";
+type Notice = "created" | "updated" | "voided";
+
+const fmtYmd = (dt: Date) =>
+  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+
 /** Local calendar dates: 6 months ago through today. */
 function getDefaultHistoryDateRange(): { from: string; to: string } {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-  const fmtYmd = (dt: Date) =>
-    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
   return { from: fmtYmd(sixMonthsAgo), to: fmtYmd(today) };
+}
+
+function presetFilters(chip: Chip): { from: string; to: string; status: string } {
+  const def = getDefaultHistoryDateRange();
+  if (chip === "today") return { from: def.to, to: def.to, status: "" };
+  if (chip === "open") return { ...def, status: "OPEN" };
+  return { ...def, status: "" };
 }
 
 function isFromOlderThan6Months(fromYmd: string): boolean {
@@ -64,40 +88,70 @@ function historyRangeErrorKey(from: string, to: string): string | null {
   return null;
 }
 
-function ServiceRecordHistoryTab() {
+function getInitials(name: string): string {
+  const p = name.trim().split(/\s+/);
+  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+}
+
+export default function ServiceRecordsPage() {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
-  const [page, setPage] = useState<PagedServiceRecordsResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [rangeError, setRangeError] = useState<string | null>(null);
-  const [filterFrom, setFilterFrom] = useState(() => getDefaultHistoryDateRange().from);
-  const [filterTo, setFilterTo] = useState(() => getDefaultHistoryDateRange().to);
-  const [filterStatus, setFilterStatus] = useState("");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navState = location.state as NavState;
+
+  const [chip, setChip] = useState<Chip | null>(() =>
+    navState?.activeTab === "history" ? "all" : "open",
+  );
+  const [filters, setFilters] = useState(() =>
+    presetFilters(navState?.activeTab === "history" ? "all" : "open"),
+  );
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [listTextQuery, setListTextQuery] = useState("");
   const [pageNum, setPageNum] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const [page, setPage] = useState<PagedServiceRecordsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [newOpen, setNewOpen] = useState(Boolean(navState?.selectedClient));
+  const [pendingClient, setPendingClient] = useState<InitialClientForRecord | null>(
+    navState?.selectedClient ?? null,
+  );
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (navState && (navState.activeTab || navState.selectedClient)) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const load = useCallback(
-    async (from: string, to: string, status: string, q: string, pageN: number, size: number) => {
+    async (f: { from: string; to: string; status: string }, q: string, pageN: number, size: number) => {
       setLoadError(null);
       setRangeError(null);
-      const errKey = historyRangeErrorKey(from, to);
+      const errKey = historyRangeErrorKey(f.from, f.to);
       if (errKey) {
         setRangeError(
           t(`femme.serviceRecords.history.rangeError${errKey.charAt(0).toUpperCase()}${errKey.slice(1)}`),
         );
         setPage(null);
+        setLoading(false);
         return;
       }
       setLoading(true);
       try {
         const data = await listServiceRecordsPaged({
-          from: localDateYmdToIsoStart(from),
-          to: localDateYmdToIsoEnd(to),
-          status: status || undefined,
+          from: localDateYmdToIsoStart(f.from),
+          to: localDateYmdToIsoEnd(f.to),
+          status: f.status || undefined,
           q: q || undefined,
           page: pageN,
           size,
@@ -115,26 +169,40 @@ function ServiceRecordHistoryTab() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      void load(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize);
+      void load(filters, listTextQuery, pageNum, pageSize);
     }, 350);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize, load]);
+  }, [filters, listTextQuery, pageNum, pageSize, reloadTick, load]);
 
-  function handleFilterChange(cb: () => void) {
-    cb();
+  const reload = () => setReloadTick((n) => n + 1);
+
+  function selectChip(next: Chip) {
+    setChip(next);
+    setFilters(presetFilters(next));
     setPageNum(0);
   }
 
-  function handleClear() {
-    const d = getDefaultHistoryDateRange();
-    setFilterFrom(d.from);
-    setFilterTo(d.to);
-    setFilterStatus("");
-    setListTextQuery("");
-    setRangeError(null);
+  function changeFilter(patch: Partial<{ from: string; to: string; status: string }>) {
+    setChip(null);
+    setFilters((prev) => ({ ...prev, ...patch }));
     setPageNum(0);
+  }
+
+  async function handlePay(id: number) {
+    setPayError(null);
+    try {
+      const record = await getServiceRecord(id);
+      await billServiceRecord(navigate, record);
+    } catch (err) {
+      setPayError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    }
+  }
+
+  function closeNew() {
+    setNewOpen(false);
+    setPendingClient(null);
   }
 
   const records = page?.content ?? [];
@@ -142,275 +210,307 @@ function ServiceRecordHistoryTab() {
   const totalPages = page?.totalPages ?? 0;
   const showingFrom = totalElements === 0 ? 0 : pageNum * pageSize + 1;
   const showingTo = Math.min((pageNum + 1) * pageSize, totalElements);
+  const hasFilters = listTextQuery.trim().length > 0 || chip !== "all";
+  const CHIPS: { key: Chip; label: string }[] = [
+    { key: "open", label: t("femme.serviceRecords.chips.open") },
+    { key: "today", label: t("femme.serviceRecords.chips.today") },
+    { key: "all", label: t("femme.serviceRecords.chips.all") },
+  ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <Heading as="h2" className="text-lg">
-        {t("femme.serviceRecords.history.title")}
-      </Heading>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-        <ListSearchField
-          id="service-record-history-text-filter"
-          value={listTextQuery}
-          onChange={(v) => handleFilterChange(() => setListTextQuery(v))}
-          label={t("femme.listFilter.label")}
-          placeholder={t("femme.listFilter.placeholder")}
-          className="w-full min-w-0 sm:max-w-[min(100%,280px)]"
-        />
-        <form onSubmit={(e) => e.preventDefault()} className="flex flex-wrap gap-3 items-end" noValidate>
-          <div className="flex flex-col gap-1 min-w-[140px]">
-            <Label htmlFor="service-record-filter-from">{t("femme.serviceRecords.history.filterFrom")}</Label>
-            <Input
-              id="service-record-filter-from"
-              type="date"
-              value={filterFrom}
-              onChange={(e) => handleFilterChange(() => setFilterFrom(e.target.value))}
-            />
-          </div>
-          <div className="flex flex-col gap-1 min-w-[140px]">
-            <Label htmlFor="service-record-filter-to">{t("femme.serviceRecords.history.filterTo")}</Label>
-            <Input
-              id="service-record-filter-to"
-              type="date"
-              value={filterTo}
-              onChange={(e) => handleFilterChange(() => setFilterTo(e.target.value))}
-            />
-          </div>
-          <div className="flex flex-col gap-1 min-w-[140px]">
-            <Label htmlFor="service-record-filter-status">{t("femme.serviceRecords.history.filterStatus")}</Label>
-            <Select
-              id="service-record-filter-status"
-              value={filterStatus}
-              onChange={(e) => handleFilterChange(() => setFilterStatus(e.target.value))}
-            >
-              <option value="">{t("femme.serviceRecords.history.filterStatusAll")}</option>
-              <option value="OPEN">{t("femme.status.OPEN")}</option>
-              <option value="CLOSED">{t("femme.status.CLOSED")}</option>
-              <option value="VOIDED">{t("femme.status.VOIDED")}</option>
-            </Select>
-          </div>
-          <Button type="button" variant="secondary" size="sm" onClick={handleClear}>
-            {t("femme.serviceRecords.history.clearFilters")}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={() => void load(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize)}
-            disabled={loading}
-          >
-            {t("femme.serviceRecords.history.refresh")}
-          </Button>
-        </form>
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="font-heading text-2xl font-extrabold text-ink">
+          {t("femme.serviceRecords.pageTitle")}
+        </h1>
+        <Button
+          type="button"
+          className="min-h-11"
+          data-testid="service-records-new"
+          onClick={() => setNewOpen(true)}
+        >
+          {t("femme.serviceRecords.newRecord")}
+        </Button>
       </div>
 
-      {rangeError && (
-        <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
+      {payError ? (
+        <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")} className="mb-4">
+          {payError}
+        </Alert>
+      ) : null}
+
+      <div className="mb-3">
+        <SearchInput
+          id="service-record-history-text-filter"
+          value={listTextQuery}
+          onChange={(v) => {
+            setListTextQuery(v);
+            setPageNum(0);
+          }}
+          placeholder={t("femme.serviceRecords.searchPlaceholder")}
+          resultCount={totalElements}
+          totalCount={totalElements}
+        />
+      </div>
+
+      <div role="group" aria-label={t("femme.serviceRecords.chips.group")} className="mb-4 flex flex-wrap gap-2">
+        {CHIPS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={chip === key}
+            data-testid={`service-records-chip-${key}`}
+            onClick={() => selectChip(key)}
+            className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+              chip === key
+                ? "border-primary bg-primary-lt text-primary"
+                : "border-line bg-surface text-ink hover:bg-bg"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4 overflow-hidden rounded-card border border-line bg-surface">
+        <button
+          type="button"
+          data-testid="service-records-filters-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="service-records-filters"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="flex min-h-11 w-full items-center justify-between px-4 text-left font-semibold text-ink"
+        >
+          {t("femme.serviceRecords.filters")}
+          <span aria-hidden="true" className={`transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
+            ⌄
+          </span>
+        </button>
+        {filtersOpen ? (
+          <div id="service-records-filters" className="px-4 pb-3">
+            <form
+              onSubmit={(e) => e.preventDefault()}
+              noValidate
+              className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+            >
+              <div>
+                <Label htmlFor="service-record-filter-from">
+                  {t("femme.serviceRecords.history.filterFrom")}
+                </Label>
+                <Input
+                  id="service-record-filter-from"
+                  type="date"
+                  value={filters.from}
+                  onChange={(e) => changeFilter({ from: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="service-record-filter-to">
+                  {t("femme.serviceRecords.history.filterTo")}
+                </Label>
+                <Input
+                  id="service-record-filter-to"
+                  type="date"
+                  value={filters.to}
+                  onChange={(e) => changeFilter({ to: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="service-record-filter-status">
+                  {t("femme.serviceRecords.history.filterStatus")}
+                </Label>
+                <Select
+                  id="service-record-filter-status"
+                  value={filters.status}
+                  onChange={(e) => changeFilter({ status: e.target.value })}
+                >
+                  <option value="">{t("femme.serviceRecords.history.filterStatusAll")}</option>
+                  <option value="OPEN">{t("femme.serviceRecords.statusOpen")}</option>
+                  <option value="CLOSED">{t("femme.serviceRecords.statusClosed")}</option>
+                  <option value="VOIDED">{t("femme.serviceRecords.statusVoided")}</option>
+                </Select>
+              </div>
+            </form>
+            <Text variant="muted" className="mt-2 text-sm">
+              {t("femme.serviceRecords.filtersHint")}
+            </Text>
+          </div>
+        ) : null}
+      </div>
+
+      {rangeError ? (
+        <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")} className="mb-4">
           {rangeError}
         </Alert>
-      )}
-      {loadError && (
-        <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
+      ) : null}
+      {loadError ? (
+        <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")} className="mb-4">
           {loadError}
         </Alert>
-      )}
+      ) : null}
 
-      {loading ? (
-        <div className="flex items-center gap-2">
-          <Spinner size="sm" />
-          <Text>{t("femme.serviceRecords.history.loading")}</Text>
-        </div>
-      ) : rangeError ? null : records.length === 0 ? (
-        <Text variant="muted">{t("femme.serviceRecords.history.empty")}</Text>
-      ) : (
-        <div
-          style={{
-            background: "var(--color-white)",
-            borderRadius: "var(--radius-xl)",
-            border: "var(--border-default)",
-            overflow: "hidden",
-          }}
-        >
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm" style={{ tableLayout: "fixed" }}>
-              <colgroup>
-                <col style={{ width: "24%" }} />
-                <col style={{ width: "40%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "18%" }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  {["colDate", "colClient", "colTotal", "colStatus"].map((key, i) => (
-                    <th
-                      key={i}
-                      style={{
-                        padding: "9px 12px",
-                        fontSize: 10,
-                        fontWeight: 500,
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase",
-                        color: "var(--color-ink-3)",
-                        background: "var(--color-stone)",
-                        textAlign: i === 2 ? "right" : i === 3 ? "center" : "left",
-                        whiteSpace: "nowrap",
+      <div
+        data-testid="service-records-list"
+        className="overflow-hidden rounded-card border border-line bg-surface"
+      >
+        {loading && !page ? (
+          <div className="flex items-center gap-2 px-4 py-6">
+            <Spinner size="sm" />
+            <Text>{t("femme.serviceRecords.history.loading")}</Text>
+          </div>
+        ) : rangeError ? null : records.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-8 text-center text-sm text-ink-3">
+            <span data-testid="service-records-empty">
+              {hasFilters
+                ? chip === "open" && listTextQuery.trim() === ""
+                  ? t("femme.serviceRecords.emptyOpen")
+                  : t("femme.serviceRecords.history.empty")
+                : t("femme.serviceRecords.emptyAll")}
+            </span>
+            <Button type="button" className="min-h-11" onClick={() => setNewOpen(true)}>
+              {t("femme.serviceRecords.newRecord")}
+            </Button>
+          </div>
+        ) : (
+          <ul className="flex flex-col px-1 sm:px-2">
+            {records.map((r) => (
+              <li
+                key={r.id}
+                role="button"
+                tabIndex={0}
+                aria-label={t("femme.serviceRecords.history.openDetail", { client: r.clientFullName })}
+                data-testid={`service-record-row-${r.id}`}
+                data-status={r.status}
+                onClick={() => setSelectedId(r.id)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedId(r.id);
+                  }
+                }}
+                className="flex min-h-14 cursor-pointer items-center gap-3 border-t border-line px-3 py-2.5 first:border-t-0 hover:bg-bg"
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading font-extrabold text-primary"
+                >
+                  {getInitials(r.clientFullName)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="break-words font-semibold text-ink">{r.clientFullName}</div>
+                  <div className="break-words text-sm text-ink-3">
+                    {[formatParaguayDateTime(r.createdAt, dateLocale), r.servicesSummary, r.professionalsSummary]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="font-heading font-extrabold text-ink">
+                    {formatAmountDecimal(r.totalAmount)}
+                  </span>
+                  {r.status === "OPEN" ? (
+                    <button
+                      type="button"
+                      data-testid={`service-record-pay-${r.id}`}
+                      aria-label={t("femme.serviceRecords.payFor", { client: r.clientFullName })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handlePay(r.id);
                       }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      className="min-h-11 rounded-xl bg-primary px-4 font-extrabold text-primary-fg"
                     >
-                      {key ? t(`femme.serviceRecords.history.${key}`) : ""}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((r) => (
-                  <tr
-                    key={r.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={t("femme.serviceRecords.history.openDetail", {
-                      client: r.clientFullName,
-                    })}
-                    onClick={() => setSelectedId(r.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelectedId(r.id);
-                      }
-                    }}
-                    style={{
-                      borderTop: "var(--border-default)",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLTableRowElement).style.background =
-                        "var(--color-rose-lt)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLTableRowElement).style.background = "";
-                    }}
-                  >
-                    <td style={{ padding: "10px 12px" }}>{formatParaguayDateTime(r.createdAt, dateLocale)}</td>
-                    <td style={{ padding: "10px 12px" }}>{r.clientFullName}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                      {formatAmountDecimal(r.totalAmount)}
-                    </td>
-                    <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                      <StatusBadge status={r.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-default)]">
-            <PageSizeSelect
-              value={pageSize}
-              onChange={(s) => {
-                setPageSize(s);
-                setPageNum(0);
-              }}
-              label={t("femme.pagination.rowsPerPage")}
-            />
-            <Text variant="small" className="text-[var(--color-ink-3)]">
-              {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: totalElements })}
-            </Text>
-            <Pagination
-              page={pageNum + 1}
-              pageCount={totalPages}
-              onPageChange={(p) => setPageNum(p - 1)}
-              previousLabel={t("femme.pagination.previous")}
-              nextLabel={t("femme.pagination.next")}
-            />
-          </div>
+                      {t("femme.serviceRecords.pay")}
+                    </button>
+                  ) : (
+                    <span
+                      data-testid="service-record-state"
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                        r.status === "CLOSED"
+                          ? "bg-success-lt text-success"
+                          : "border border-line bg-bg text-ink-3"
+                      }`}
+                    >
+                      {r.status === "CLOSED"
+                        ? t("femme.serviceRecords.statusClosed")
+                        : t("femme.serviceRecords.statusVoided")}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+          style={{ borderTop: "var(--border-default)" }}
+        >
+          <PageSizeSelect
+            value={pageSize}
+            onChange={(s) => {
+              setPageSize(s);
+              setPageNum(0);
+            }}
+            label={t("femme.pagination.rowsPerPage")}
+          />
+          <Text variant="small" className="text-[var(--color-ink-3)]">
+            {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: totalElements })}
+          </Text>
+          <Pagination
+            page={pageNum + 1}
+            pageCount={Math.max(1, totalPages)}
+            onPageChange={(p) => setPageNum(p - 1)}
+            previousLabel={t("femme.pagination.previous")}
+            nextLabel={t("femme.pagination.next")}
+          />
         </div>
-      )}
+      </div>
+
+      <Modal open={newOpen} onClose={closeNew} title={t("femme.serviceRecords.newTitle")}>
+        {newOpen ? (
+          <ServiceRecordEditor
+            initial={null}
+            allowClientCreateNew
+            initialClientOverride={pendingClient}
+            onInitialClientOverrideConsumed={() => setPendingClient(null)}
+            onSaved={() => {
+              closeNew();
+              reload();
+              setNotice("created");
+            }}
+            onClose={closeNew}
+          />
+        ) : null}
+      </Modal>
 
       {selectedId !== null && (
         <ServiceRecordDetailModal
           serviceRecordId={selectedId}
           onClose={() => setSelectedId(null)}
-          onChanged={() => void load(filterFrom, filterTo, filterStatus, listTextQuery, pageNum, pageSize)}
+          onChanged={(kind) => {
+            reload();
+            setNotice(kind === "voided" ? "voided" : "updated");
+          }}
         />
       )}
-    </div>
-  );
-}
 
-export default function ServiceRecordsPage() {
-  const { t } = useTranslation();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const navState = location.state as NavState;
-
-  const [activeTab, setActiveTab] = useState<"new" | "history">(navState?.activeTab ?? "new");
-  const [pendingClient, setPendingClient] = useState<InitialClientForRecord | null>(
-    navState?.selectedClient ?? null,
-  );
-
-  useEffect(() => {
-    if (navState && (navState.activeTab || navState.selectedClient)) {
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const tabBase: React.CSSProperties = {
-    padding: "6px 14px",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    cursor: "pointer",
-    border: "var(--border-default)",
-    background: "var(--color-white)",
-    color: "var(--color-ink-2)",
-  };
-  const tabActive: React.CSSProperties = {
-    ...tabBase,
-    background: "var(--color-rose-lt)",
-    border: "1px solid var(--color-rose-md)",
-    color: "var(--color-rose-dk)",
-    fontWeight: 500,
-  };
-
-  return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
-          {t("femme.serviceRecords.pageTitle")}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-          {t("femme.serviceRecords.pageSubtitle")}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 4, marginBottom: 14 }} role="tablist" aria-label={t("femme.serviceRecords.pageTitle")}>
-        {(["new", "history"] as const).map((tabKey) => (
-          <button
-            key={tabKey}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tabKey}
-            style={activeTab === tabKey ? tabActive : tabBase}
-            onClick={() => setActiveTab(tabKey)}
-          >
-            {t(`femme.serviceRecords.tabs.${tabKey}`)}
-          </button>
-        ))}
-      </div>
-
-      <div hidden={activeTab !== "new"}>
-        <ServiceRecordEditor
-          initial={null}
-          allowClientCreateNew
-          initialClientOverride={pendingClient}
-          onInitialClientOverrideConsumed={() => setPendingClient(null)}
-          active={activeTab === "new"}
-        />
-      </div>
-
-      <div hidden={activeTab !== "history"}>
-        <ServiceRecordHistoryTab />
-      </div>
+      <Toast
+        open={notice !== null}
+        onOpenChange={(o) => {
+          if (!o) setNotice(null);
+        }}
+        variant="success"
+        duration={4000}
+        data-testid="service-records-toast"
+      >
+        {notice === "created"
+          ? t("femme.serviceRecords.createdSuccess")
+          : notice === "voided"
+            ? t("femme.serviceRecords.voidedSuccess")
+            : t("femme.serviceRecords.updatedSuccess")}
+      </Toast>
     </div>
   );
 }

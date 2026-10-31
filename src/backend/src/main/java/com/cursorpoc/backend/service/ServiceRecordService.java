@@ -312,7 +312,18 @@ public class ServiceRecordService {
         r.getClient().getFullName(),
         r.getStatus().name(),
         r.getTotalAmount(),
-        r.getCreatedAt());
+        r.getCreatedAt(),
+        distinctJoined(r.getLines().stream().map(l -> l.getSalonService().getName())),
+        distinctJoined(
+            r.getLines().stream()
+                .map(l -> l.getProfessional() == null ? null : l.getProfessional().getFullName())));
+  }
+
+  private static String distinctJoined(java.util.stream.Stream<String> names) {
+    return names
+        .filter(n -> n != null && !n.isBlank())
+        .distinct()
+        .collect(Collectors.joining(", "));
   }
 
   private static ServiceRecordResponse toDetailDto(ServiceRecord r, Invoice linkedInvoice) {

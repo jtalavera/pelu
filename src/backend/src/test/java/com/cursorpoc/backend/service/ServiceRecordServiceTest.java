@@ -224,6 +224,51 @@ class ServiceRecordServiceTest {
   }
 
   @Test
+  void listServiceRecords_includesServicesAndProfessionalsSummary() {
+    ServiceRecord record = new ServiceRecord();
+    record.setId(55L);
+    record.setTenant(tenant);
+    record.setClient(client);
+    record.setStatus(ServiceRecordStatus.OPEN);
+    record.setTotalAmount(new BigDecimal("100000"));
+    record.setCreatedAt(Instant.parse("2026-10-26T13:30:00Z"));
+    SalonService brushing = new SalonService();
+    brushing.setId(10L);
+    brushing.setName("Brushing");
+    Professional ana = new Professional();
+    ana.setId(4L);
+    ana.setFullName("Ana");
+    for (Object[] spec :
+        new Object[][] {
+          {salonService, professional},
+          {brushing, ana},
+          {salonService, professional},
+          {brushing, null}
+        }) {
+      ServiceRecordLine l = new ServiceRecordLine();
+      l.setServiceRecord(record);
+      l.setSalonService((SalonService) spec[0]);
+      l.setProfessional((Professional) spec[1]);
+      record.getLines().add(l);
+    }
+    when(serviceRecordRepository.findByTenantWithFiltersPaged(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(record)));
+
+    var page = serviceRecordService.listServiceRecords(1L, null, null, null, null, null, 0, 10);
+
+    assertThat(page.content()).hasSize(1);
+    assertThat(page.content().get(0).servicesSummary()).isEqualTo("Corte, Brushing");
+    assertThat(page.content().get(0).professionalsSummary()).isEqualTo("Bea Stylist, Ana");
+  }
+
+  @Test
   void toDetailDto_includesClientRuc() {
     client.setRuc("80000005-6");
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
