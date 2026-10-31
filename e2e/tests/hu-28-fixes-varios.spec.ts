@@ -58,6 +58,9 @@ test.describe("HU-28 · Fixes varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await page.goto("/app/professionals");
+    // The list is server-side paginated: search so the seeded professional is on the first page
+    // however many professionals other specs have created.
+    await page.locator("#professionals-inline-search").fill(seed.professionalFullName);
     const nameCell = page.locator('[data-testid^="prof-row-"]').filter({ hasText: seed.professionalFullName }).first();
     await expect(nameCell).toBeVisible({ timeout: 15_000 });
     await nameCell.click();
