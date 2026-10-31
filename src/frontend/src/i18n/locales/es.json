@@ -1984,6 +1984,24 @@
       }
     },
     "clients": {
+      "moreActions": "Más acciones",
+      "filterGroup": "Filtrar clientes",
+      "openClient": "Abrir {{name}}",
+      "toggleAria": "Activo: {{name}}",
+      "noPhone": "Sin teléfono",
+      "lastVisit": "Última visita {{date}}",
+      "noVisits": "Sin visitas",
+      "moreOptions": "Más opciones",
+      "spent12m": "Gastó {{amount}} en 12 meses",
+      "usualProfessional": "Habitual: {{name}}",
+      "whatsapp": "Escribir por WhatsApp",
+      "nextAppointment": "Próximo turno",
+      "noHistory": "Todavía no hay turnos ni facturas.",
+      "historyMore": "Ver más",
+      "openInvoice": "Abrir factura {{number}}",
+      "deactivateClient": "Desactivar cliente",
+      "reactivateClient": "Reactivar cliente",
+      "historyKind": { "appointment": "Turno", "invoice": "Factura" },
       "birthday": {
         "label": "Cumpleaños",
         "day": "Día",
@@ -2035,7 +2053,7 @@
       "subtitle": "{{count}} clientes registrados",
       "export": "Exportar",
       "newClient": "+ Nuevo cliente",
-      "filterAll": "Todas",
+      "filterAll": "Todos",
       "filterActive": "Activos",
       "filterWithRuc": "Con RUC",
       "filterNew": "Nuevos este mes",
@@ -2122,6 +2140,8 @@
         "noResults": "No hay clientes que coincidan con la búsqueda."
       },
       "tabs": {
+        "history": "Historial",
+        "data": "Datos",
         "info": "Datos",
         "summary": "Resumen",
         "sheet": "Ficha técnica",

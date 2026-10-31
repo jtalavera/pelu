@@ -1984,6 +1984,24 @@
       }
     },
     "clients": {
+      "moreActions": "More actions",
+      "filterGroup": "Filter clients",
+      "openClient": "Open {{name}}",
+      "toggleAria": "Active: {{name}}",
+      "noPhone": "No phone",
+      "lastVisit": "Last visit {{date}}",
+      "noVisits": "No visits yet",
+      "moreOptions": "More options",
+      "spent12m": "Spent {{amount}} in 12 months",
+      "usualProfessional": "Usual: {{name}}",
+      "whatsapp": "WhatsApp",
+      "nextAppointment": "Next appointment",
+      "noHistory": "No appointments or invoices yet.",
+      "historyMore": "Show more",
+      "openInvoice": "Open invoice {{number}}",
+      "deactivateClient": "Deactivate client",
+      "reactivateClient": "Reactivate client",
+      "historyKind": { "appointment": "Appointment", "invoice": "Invoice" },
       "birthday": {
         "label": "Birthday",
         "day": "Day",
@@ -2122,6 +2140,8 @@
         "noResults": "No clients match the search."
       },
       "tabs": {
+        "history": "History",
+        "data": "Details",
         "info": "Details",
         "summary": "Summary",
         "sheet": "Technical sheet",
