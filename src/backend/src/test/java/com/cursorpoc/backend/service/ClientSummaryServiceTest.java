@@ -144,6 +144,42 @@ class ClientSummaryServiceTest {
   }
 
   @Test
+  void radiographyRanksServicesAndProfessionalsOverTheWholeHistory() {
+    Professional laura = prof(1, "Laura", true);
+    Professional ana = prof(2, "Ana", true);
+    SalonService color = item("Coloración", ServiceKind.SERVICE);
+    SalonService cut = item("Corte", ServiceKind.SERVICE);
+    SalonService shampoo = item("Shampoo", ServiceKind.PRODUCT);
+    record(10, 100, line(color, laura, 100L, 1), line(shampoo, laura, 50L, 1));
+    record(30, 100, line(color, laura, 100L, 1), line(cut, ana, 100L, 1));
+    // Old visits still count: the radiography looks at the whole history.
+    record(500, 100, line(cut, ana, 100L, 1), line(cut, ana, 100L, 1));
+
+    ClientSummaryResponse res = service.getSummary(TENANT, CLIENT);
+
+    assertThat(res.topServices())
+        .extracting(ClientSummaryResponse.TopService::serviceName)
+        .containsExactly("Corte", "Coloración");
+    assertThat(res.topServices().get(0).count()).isEqualTo(3);
+    assertThat(res.topServices().get(1).count()).isEqualTo(2);
+    // Products never count as services.
+    assertThat(res.topServices())
+        .extracting(ClientSummaryResponse.TopService::serviceName)
+        .doesNotContain("Shampoo");
+    assertThat(res.professionalRanking())
+        .extracting(ClientSummaryResponse.ProfessionalRank::fullName)
+        .containsExactly("Ana", "Laura");
+    assertThat(res.professionalRanking().get(0).serviceCount()).isEqualTo(3);
+  }
+
+  @Test
+  void emptyHistoryHasEmptyRadiography() {
+    ClientSummaryResponse res = service.getSummary(TENANT, CLIENT);
+    assertThat(res.topServices()).isEmpty();
+    assertThat(res.professionalRanking()).isEmpty();
+  }
+
+  @Test
   void unknownClientIs404() {
     when(clientRepository.findByIdAndTenant_Id(CLIENT, TENANT)).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.getSummary(TENANT, CLIENT))

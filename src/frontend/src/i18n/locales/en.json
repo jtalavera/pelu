@@ -1984,6 +1984,22 @@
       }
     },
     "clients": {
+      "call": "Call",
+      "noNextAppointment": "No upcoming appointments.",
+      "pastAppointments": "Past appointments",
+      "radiography": {
+        "cta": "See profile snapshot",
+        "title": "{{name}}'s snapshot",
+        "visits": "Visits",
+        "spent": "Spent in 12 months",
+        "ticket": "Average ticket",
+        "topServices": "Most frequent services",
+        "times_one": "{{count}} time",
+        "times_other": "{{count}} times",
+        "professionals": "Who usually attends",
+        "lastServices": "Latest services",
+        "empty": "No completed services yet to build the snapshot."
+      },
       "moreActions": "More actions",
       "filterGroup": "Filter clients",
       "openClient": "Open {{name}}",
@@ -2146,7 +2162,8 @@
         "summary": "Summary",
         "sheet": "Technical sheet",
         "appointments": "Appointments",
-        "invoices": "Invoices"
+        "invoices": "Invoices",
+        "radiography": "Snapshot"
       },
       "sections": {
         "contact": "Contact",

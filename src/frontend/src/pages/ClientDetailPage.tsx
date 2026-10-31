@@ -37,7 +37,7 @@ import {
   validateProfileExtras,
   type ClientProfileExtras,
 } from "../components/ClientProfileExtrasFields";
-import { useClientSummary } from "../components/ClientSummary";
+import { useClientSummary, type ClientSummary } from "../components/ClientSummary";
 import { ClientTechnicalSheetForm } from "../components/ClientTechnicalSheetForm";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
@@ -47,7 +47,8 @@ import { useDateLocale } from "../i18n/dateLocale";
 import { useLocalitySearch } from "../hooks/useLocalitySearch";
 import { isBirthdayOn } from "../lib/clientBirthday";
 import { formatAmountDecimal } from "../lib/formatMoney";
-import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
+import { formatParaguayPhone, isCompleteParaguayPhone, toWhatsAppPhone } from "../lib/paraguayPhone";
+import { buildWhatsAppUrl, isMobileDevice, WHATSAPP_WINDOW_NAME } from "../lib/whatsappShare";
 import { isValidEmail } from "../lib/validateEmail";
 import { validateRuc } from "../lib/validateRuc";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -88,11 +89,11 @@ const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
   { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
 ] as const;
 
-/** Client redesign: three tabs; "history" is the default and not written to the URL. */
-const CLIENT_TABS = ["history", "sheet", "data"] as const;
+/** Client tabs: "data" is the default and not written to the URL. */
+const CLIENT_TABS = ["data", "appointments", "invoices", "sheet", "radiography"] as const;
 type ClientTab = (typeof CLIENT_TABS)[number];
 /** ≥44 px touch targets on phones (the design-system trigger is shorter). */
-const TAB_TRIGGER_CLASS = "min-h-11 flex-1 sm:min-h-0";
+const TAB_TRIGGER_CLASS = "min-h-11 shrink-0 whitespace-nowrap sm:min-h-0";
 const HISTORY_PAGE_SIZE = 10;
 
 /** Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve). */
@@ -145,17 +146,6 @@ function formatTime(iso: string, locale: string): string {
   }
 }
 
-/** Phone digits in international format for wa.me (Paraguay: 0981… → 595981…). */
-function whatsappDigits(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("595")) return digits;
-  return `595${digits.replace(/^0/, "")}`;
-}
-
-type HistoryEntry =
-  | { kind: "appointment"; key: string; at: string; appt: Appointment }
-  | { kind: "invoice"; key: string; at: string; invoice: InvoiceListItem };
-
 function Disclosure({
   id,
   label,
@@ -195,6 +185,163 @@ function Disclosure({
   );
 }
 
+function RankBars({
+  rows,
+  tone,
+  testId,
+}: {
+  rows: Array<{ key: string; label: string; value: number; display: string }>;
+  tone: "orange" | "primary";
+  testId: string;
+}) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <ul className="flex flex-col gap-3" data-testid={testId} role="list">
+      {rows.map((r) => (
+        <li key={r.key} data-testid={`${testId}-item`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1">
+          <span className="break-words font-semibold text-ink">{r.label}</span>
+          <span className="text-sm font-semibold text-ink-3">{r.display}</span>
+          <span className="col-span-2 h-2.5 overflow-hidden rounded-full bg-primary-lt">
+            <span
+              className={`block h-full rounded-full ${
+                tone === "orange" ? "bg-gradient-to-r from-[#F3A66B] to-[#E0783A]" : "bg-primary"
+              }`}
+              style={{ width: `${Math.round((r.value / max) * 100)}%` }}
+            />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Client "radiography": spend, most-used services, usual professionals and the latest services. */
+function ClientRadiography({
+  client,
+  summaryState,
+  locale,
+}: {
+  client: Client;
+  summaryState: { summary: ClientSummary | null; error: string | null };
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  const { summary, error } = summaryState;
+  if (error) {
+    return (
+      <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
+        {error}
+      </Alert>
+    );
+  }
+  if (!summary) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-6">
+        <Spinner size="md" />
+        <Text>{t("femme.clients.loading")}</Text>
+      </div>
+    );
+  }
+  const firstName = client.fullName.trim().split(/\s+/)[0];
+  const totalPro = summary.professionalRanking.reduce((acc, p) => acc + p.serviceCount, 0);
+  const empty = summary.topServices.length === 0 && summary.lastServices.length === 0;
+  const stat = (label: string, value: string, id: string) => (
+    <div data-testid={id} className="flex flex-col gap-0.5 rounded-xl bg-primary-lt p-3">
+      <b className="font-heading text-xl font-extrabold text-ink">{value}</b>
+      <span className="text-xs text-ink-2">{label}</span>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-4" data-testid="client-radiography">
+      <Card className="flex flex-col gap-3 p-4 sm:p-5">
+        <Heading as="h2" className="text-base">
+          {t("femme.clients.radiography.title", { name: firstName })}
+        </Heading>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {stat(t("femme.clients.radiography.visits"), String(client.visitCount), "client-radiography-visits")}
+          {stat(
+            t("femme.clients.radiography.spent"),
+            `Gs. ${formatAmountDecimal(summary.spentLast12Months ?? 0)}`,
+            "client-radiography-spent",
+          )}
+          {stat(
+            t("femme.clients.radiography.ticket"),
+            `Gs. ${formatAmountDecimal(summary.averageTicketLast12Months ?? 0)}`,
+            "client-radiography-ticket",
+          )}
+        </div>
+      </Card>
+
+      {empty ? (
+        <Card className="p-4">
+          <Text variant="muted" data-testid="client-radiography-empty">
+            {t("femme.clients.radiography.empty")}
+          </Text>
+        </Card>
+      ) : (
+        <>
+          <Card className="flex flex-col gap-3 p-4 sm:p-5">
+            <Heading as="h2" className="text-base">
+              {t("femme.clients.radiography.topServices")}
+            </Heading>
+            <RankBars
+              testId="client-radiography-services"
+              tone="orange"
+              rows={summary.topServices.map((s) => ({
+                key: s.serviceName,
+                label: s.serviceName,
+                value: s.count,
+                display: t("femme.clients.radiography.times", { count: s.count }),
+              }))}
+            />
+          </Card>
+
+          <Card className="flex flex-col gap-3 p-4 sm:p-5">
+            <Heading as="h2" className="text-base">
+              {t("femme.clients.radiography.professionals")}
+            </Heading>
+            <RankBars
+              testId="client-radiography-professionals"
+              tone="primary"
+              rows={summary.professionalRanking.map((p) => ({
+                key: String(p.id),
+                label: p.fullName,
+                value: p.serviceCount,
+                display: `${Math.round((p.serviceCount / Math.max(1, totalPro)) * 100)}%`,
+              }))}
+            />
+          </Card>
+
+          <Card className="flex flex-col gap-1 p-4 sm:p-5">
+            <Heading as="h2" className="mb-2 text-base">
+              {t("femme.clients.radiography.lastServices")}
+            </Heading>
+            <ul className="flex flex-col" role="list" data-testid="client-radiography-last">
+              {summary.lastServices.map((s, i) => (
+                <li
+                  key={`${s.performedAt}-${i}`}
+                  className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
+                >
+                  <div className="w-16 shrink-0 font-semibold text-ink">
+                    {formatShortDate(s.performedAt, locale)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-ink">{s.serviceName}</div>
+                    {s.professionalName ? (
+                      <div className="text-sm text-ink-3">{s.professionalName}</div>
+                    ) : null}
+                  </div>
+                  <div className="shrink-0 font-semibold text-ink">Gs. {formatAmountDecimal(s.price)}</div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ClientDetailPage() {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
@@ -207,15 +354,15 @@ export default function ClientDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [client, setClient] = useState<Client | null>(null);
 
-  // The active tab lives in the URL (?tab=…); no / unknown value = "Historial".
+  // The active tab lives in the URL (?tab=…); no / unknown value = "Datos".
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab = CLIENT_TABS.includes(tabParam as ClientTab) ? (tabParam as ClientTab) : "history";
+  const tab = CLIENT_TABS.includes(tabParam as ClientTab) ? (tabParam as ClientTab) : "data";
   const setTab = (next: string) => {
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev);
-        if (next === "history") params.delete("tab");
+        if (next === "data") params.delete("tab");
         else params.set("tab", next);
         return params;
       },
@@ -251,13 +398,17 @@ export default function ClientDetailPage() {
   const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
   const [reactivating, setReactivating] = useState(false);
 
-  // History: upcoming + past appointments + invoices, merged into one timeline.
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  // Appointments and invoices load only once their tab is opened.
+  const [apptsLoading, setApptsLoading] = useState(false);
+  const [apptsError, setApptsError] = useState<string | null>(null);
+  const [apptsLoaded, setApptsLoaded] = useState(false);
   const [upcoming, setUpcoming] = useState<Appointment[]>([]);
   const [pastAppts, setPastAppts] = useState<Appointment[]>([]);
   const [pastPage, setPastPage] = useState(0);
   const [pastTotalPages, setPastTotalPages] = useState(0);
+  const [invLoading, setInvLoading] = useState(false);
+  const [invError, setInvError] = useState<string | null>(null);
+  const [invLoaded, setInvLoaded] = useState(false);
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [invoicePage, setInvoicePage] = useState(0);
   const [invoiceTotalPages, setInvoiceTotalPages] = useState(0);
@@ -295,74 +446,89 @@ export default function ClientDetailPage() {
   const clientIdNum = id ? Number(id) : NaN;
   const summaryState = useClientSummary(clientIdNum);
 
-  // The history is the default tab, so it loads as soon as the client id is known.
   useEffect(() => {
-    if (!id || Number.isNaN(clientIdNum)) return;
+    if (tab !== "appointments" || apptsLoaded || !id || Number.isNaN(clientIdNum)) return;
     let cancelled = false;
     (async () => {
-      setHistoryLoading(true);
-      setHistoryError(null);
+      setApptsLoading(true);
+      setApptsError(null);
       const now = new Date();
       const futureEnd = new Date(now);
       futureEnd.setMonth(futureEnd.getMonth() + 6);
       futureEnd.setHours(23, 59, 59, 999);
       try {
-        const [next, past, inv] = await Promise.all([
+        const [next, past] = await Promise.all([
           listAppointments(now.toISOString(), futureEnd.toISOString(), null, clientIdNum),
           listClientAppointmentHistory(clientIdNum, 0, HISTORY_PAGE_SIZE),
-          listInvoicesPaged({ clientId: clientIdNum, page: 0, size: HISTORY_PAGE_SIZE }),
         ]);
         if (cancelled) return;
         setUpcoming(next);
         setPastAppts(past.content);
         setPastPage(0);
         setPastTotalPages(past.totalPages);
-        setInvoices(inv.content);
-        setInvoicePage(0);
-        setInvoiceTotalPages(inv.totalPages);
+        setApptsLoaded(true);
       } catch (e) {
-        if (!cancelled) {
-          setHistoryError(translateApiError(e, t, "femme.clients.historyLoadError"));
-          setUpcoming([]);
-          setPastAppts([]);
-          setInvoices([]);
-        }
+        if (!cancelled) setApptsError(translateApiError(e, t, "femme.clients.historyLoadError"));
       } finally {
-        if (!cancelled) setHistoryLoading(false);
+        if (!cancelled) setApptsLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [id, clientIdNum, t]);
+  }, [tab, apptsLoaded, id, clientIdNum, t]);
 
-  const hasMoreHistory = pastPage + 1 < pastTotalPages || invoicePage + 1 < invoiceTotalPages;
+  useEffect(() => {
+    if (tab !== "invoices" || invLoaded || !id || Number.isNaN(clientIdNum)) return;
+    let cancelled = false;
+    (async () => {
+      setInvLoading(true);
+      setInvError(null);
+      try {
+        const inv = await listInvoicesPaged({ clientId: clientIdNum, page: 0, size: HISTORY_PAGE_SIZE });
+        if (cancelled) return;
+        setInvoices(inv.content);
+        setInvoicePage(0);
+        setInvoiceTotalPages(inv.totalPages);
+        setInvLoaded(true);
+      } catch (e) {
+        if (!cancelled) setInvError(translateApiError(e, t, "femme.clients.historyLoadError"));
+      } finally {
+        if (!cancelled) setInvLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, invLoaded, id, clientIdNum, t]);
 
-  async function loadMoreHistory() {
+  async function loadMorePastAppointments() {
     setLoadingMore(true);
     try {
-      const wantPast = pastPage + 1 < pastTotalPages;
-      const wantInv = invoicePage + 1 < invoiceTotalPages;
-      const [past, inv] = await Promise.all([
-        wantPast
-          ? listClientAppointmentHistory(clientIdNum, pastPage + 1, HISTORY_PAGE_SIZE)
-          : Promise.resolve(null),
-        wantInv
-          ? listInvoicesPaged({ clientId: clientIdNum, page: invoicePage + 1, size: HISTORY_PAGE_SIZE })
-          : Promise.resolve(null),
-      ]);
-      if (past) {
-        setPastAppts((prev) => [...prev, ...past.content]);
-        setPastPage(pastPage + 1);
-        setPastTotalPages(past.totalPages);
-      }
-      if (inv) {
-        setInvoices((prev) => [...prev, ...inv.content]);
-        setInvoicePage(invoicePage + 1);
-        setInvoiceTotalPages(inv.totalPages);
-      }
+      const past = await listClientAppointmentHistory(clientIdNum, pastPage + 1, HISTORY_PAGE_SIZE);
+      setPastAppts((prev) => [...prev, ...past.content]);
+      setPastPage(pastPage + 1);
+      setPastTotalPages(past.totalPages);
     } catch (e) {
-      setHistoryError(translateApiError(e, t, "femme.clients.historyLoadError"));
+      setApptsError(translateApiError(e, t, "femme.clients.historyLoadError"));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  async function loadMoreInvoices() {
+    setLoadingMore(true);
+    try {
+      const inv = await listInvoicesPaged({
+        clientId: clientIdNum,
+        page: invoicePage + 1,
+        size: HISTORY_PAGE_SIZE,
+      });
+      setInvoices((prev) => [...prev, ...inv.content]);
+      setInvoicePage(invoicePage + 1);
+      setInvoiceTotalPages(inv.totalPages);
+    } catch (e) {
+      setInvError(translateApiError(e, t, "femme.clients.historyLoadError"));
     } finally {
       setLoadingMore(false);
     }
@@ -375,23 +541,22 @@ export default function ClientDetailPage() {
     [upcoming],
   );
 
-  const timeline = useMemo<HistoryEntry[]>(() => {
-    const entries: HistoryEntry[] = [
-      ...pastAppts.map((appt) => ({
-        kind: "appointment" as const,
-        key: `a-${appt.id}`,
-        at: appt.startAt,
-        appt,
-      })),
-      ...invoices.map((invoice) => ({
-        kind: "invoice" as const,
-        key: `i-${invoice.id}`,
-        at: invoice.issuedAt,
-        invoice,
-      })),
-    ];
-    return entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  }, [pastAppts, invoices]);
+  const pastSorted = useMemo(
+    () => [...pastAppts].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()),
+    [pastAppts],
+  );
+
+  /** Desktop opens WhatsApp Web directly (no "app or web" chooser), reusing one tab; phones open the app. */
+  function openWhatsApp(phone: string | null) {
+    const wa = toWhatsAppPhone(phone);
+    if (!wa) return;
+    const mobile = isMobileDevice();
+    window.open(
+      buildWhatsAppUrl(wa, "", mobile),
+      mobile ? "_blank" : WHATSAPP_WINDOW_NAME,
+      mobile ? "noopener,noreferrer" : undefined,
+    );
+  }
 
   useEffect(() => {
     if (saveError) focusMessageBox(saveMessagesRef.current);
@@ -514,7 +679,6 @@ export default function ClientDetailPage() {
   const usual = summary?.usualProfessionals?.[0] ?? null;
   const spent = summary?.spentLast12Months;
   const phoneDigits = client.phone ? client.phone.replace(/[^\d+]/g, "") : "";
-  const hasHistory = timeline.length > 0;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
@@ -549,60 +713,81 @@ export default function ClientDetailPage() {
           ) : null}
           {usual ? <span>{t("femme.clients.usualProfessional", { name: usual.fullName })}</span> : null}
         </Text>
-        {client.phone ? (
-          <div className="flex flex-wrap gap-2" data-testid="client-contact-actions">
+        <div className="flex flex-wrap gap-2" data-testid="client-contact-actions">
+          {client.phone ? (
             <a
               href={`tel:${phoneDigits}`}
               aria-label={t("femme.clients.keyInfo.call", { phone: client.phone })}
+              data-testid="client-call"
               className="inline-flex min-h-11 items-center rounded-md border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-bg"
             >
-              {client.phone}
+              📞 {t("femme.clients.call")}
             </a>
-            <a
-              href={`https://wa.me/${whatsappDigits(client.phone)}`}
-              target="_blank"
-              rel="noreferrer"
+          ) : null}
+          {toWhatsAppPhone(client.phone) ? (
+            <button
+              type="button"
+              data-testid="client-whatsapp"
+              onClick={() => openWhatsApp(client.phone)}
               className="inline-flex min-h-11 items-center rounded-md border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-bg"
             >
               {t("femme.clients.whatsapp")}
-            </a>
-          </div>
-        ) : null}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            data-testid="client-radiography-cta"
+            onClick={() => setTab("radiography")}
+            className="inline-flex min-h-11 items-center rounded-md bg-gradient-to-br from-[#F3A66B] to-[#E0783A] px-4 text-sm font-extrabold text-white hover:opacity-90"
+          >
+            ✦ {t("femme.clients.radiography.cta")}
+          </button>
+        </div>
       </div>
 
       <Tabs data-tour="client-detail-tabs" value={tab} onValueChange={setTab}>
-        <TabsList className="w-full">
-          <TabsTrigger value="history" className={TAB_TRIGGER_CLASS}>
-            {t("femme.clients.tabs.history")}
+        <TabsList className="w-full overflow-x-auto">
+          <TabsTrigger value="data" className={TAB_TRIGGER_CLASS}>
+            {t("femme.clients.tabs.data")}
+          </TabsTrigger>
+          <TabsTrigger value="appointments" className={TAB_TRIGGER_CLASS}>
+            {t("femme.clients.tabs.appointments")}
+          </TabsTrigger>
+          <TabsTrigger value="invoices" className={TAB_TRIGGER_CLASS}>
+            {t("femme.clients.tabs.invoices")}
           </TabsTrigger>
           <TabsTrigger value="sheet" className={TAB_TRIGGER_CLASS}>
             {t("femme.clients.tabs.sheet")}
           </TabsTrigger>
-          <TabsTrigger value="data" className={TAB_TRIGGER_CLASS}>
-            {t("femme.clients.tabs.data")}
+          <TabsTrigger
+            value="radiography"
+            className={`${TAB_TRIGGER_CLASS} font-extrabold text-[#7A3E00] data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#F3A66B] data-[state=active]:to-[#E0783A] data-[state=active]:text-white`}
+            data-testid="client-tab-radiography"
+          >
+            ✦ {t("femme.clients.tabs.radiography")}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="history">
+        <TabsContent value="appointments">
           <div className="flex flex-col gap-4">
-            {historyError ? (
+            {apptsError ? (
               <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
-                {historyError}
+                {apptsError}
               </Alert>
             ) : null}
-            {historyLoading ? (
+            {apptsLoading ? (
               <div className="flex items-center justify-center gap-2 py-6">
                 <Spinner size="md" />
                 <Text>{t("femme.clients.loading")}</Text>
               </div>
             ) : null}
-            {!historyLoading && !historyError ? (
+            {apptsLoaded && !apptsError ? (
               <>
-                {nextAppointment ? (
-                  <Card className="p-4" data-testid="client-next-appointment">
-                    <Heading as="h2" className="mb-3 text-base">
-                      {t("femme.clients.nextAppointment")}
-                    </Heading>
+                <Card className="p-4" data-testid="client-next-appointment">
+                  <Heading as="h2" className="mb-3 text-base">
+                    {t("femme.clients.nextAppointment")}
+                  </Heading>
+                  {nextAppointment ? (
                     <div className="flex items-start gap-3">
                       <div className="w-16 shrink-0 font-semibold text-ink">
                         {formatShortDate(nextAppointment.startAt, dateLocale)}
@@ -616,88 +801,48 @@ export default function ClientDetailPage() {
                       </div>
                       <StatusBadge status={nextAppointment.status} />
                     </div>
-                  </Card>
-                ) : null}
+                  ) : (
+                    <Text variant="muted">{t("femme.clients.noNextAppointment")}</Text>
+                  )}
+                </Card>
 
-                <Card className="p-4" data-testid="client-history">
+                <Card className="p-4" data-testid="client-past-appointments">
                   <Heading as="h2" className="mb-3 text-base">
-                    {t("femme.clients.history")}
+                    {t("femme.clients.pastAppointments")}
                   </Heading>
-                  {!hasHistory ? (
-                    <Text variant="muted" data-testid="client-history-empty">
-                      {t("femme.clients.noHistory")}
+                  {pastSorted.length === 0 ? (
+                    <Text variant="muted" data-testid="client-appointments-empty">
+                      {t("femme.clients.noAppointments")}
                     </Text>
                   ) : (
                     <ul className="flex flex-col" role="list">
-                      {timeline.map((entry) =>
-                        entry.kind === "appointment" ? (
-                          <li
-                            key={entry.key}
-                            data-testid="client-history-item"
-                            data-kind="appointment"
-                            className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
-                          >
-                            <div className="w-16 shrink-0 font-semibold text-ink">
-                              {formatShortDate(entry.at, dateLocale)}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-ink">
-                                <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-ink-3">
-                                  {t("femme.clients.historyKind.appointment")}
-                                </span>
-                                <span className="font-semibold">{entry.appt.serviceName}</span>
-                              </div>
-                              <div className="text-sm text-ink-3">{entry.appt.professionalName}</div>
-                            </div>
-                            <StatusBadge status={entry.appt.status} />
-                          </li>
-                        ) : (
-                          <li
-                            key={entry.key}
-                            data-testid="client-history-item"
-                            data-kind="invoice"
-                            className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
-                          >
-                            <div className="w-16 shrink-0 font-semibold text-ink">
-                              {formatShortDate(entry.at, dateLocale)}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedInvoiceId(entry.invoice.id)}
-                                aria-label={t("femme.clients.openInvoice", {
-                                  number: entry.invoice.invoiceNumberFormatted,
-                                })}
-                                className="min-h-11 text-left text-ink"
-                              >
-                                <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                                  {t("femme.clients.historyKind.invoice")}
-                                </span>
-                                <span className="font-semibold">
-                                  #{entry.invoice.invoiceNumberFormatted}
-                                </span>
-                              </button>
-                              <div>
-                                <InvoiceStatePill invoice={entry.invoice} />
-                              </div>
-                            </div>
-                            <div className="shrink-0 pt-2 font-semibold text-ink">
-                              Gs. {formatAmountDecimal(entry.invoice.total)}
-                            </div>
-                          </li>
-                        ),
-                      )}
+                      {pastSorted.map((appt) => (
+                        <li
+                          key={appt.id}
+                          data-testid="client-appointment-item"
+                          className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
+                        >
+                          <div className="w-16 shrink-0 font-semibold text-ink">
+                            {formatShortDate(appt.startAt, dateLocale)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-ink">{appt.serviceName}</div>
+                            <div className="text-sm text-ink-3">{appt.professionalName}</div>
+                          </div>
+                          <StatusBadge status={appt.status} />
+                        </li>
+                      ))}
                     </ul>
                   )}
-                  {hasMoreHistory ? (
+                  {pastPage + 1 < pastTotalPages ? (
                     <div className="mt-3 flex justify-center">
                       <Button
                         type="button"
                         variant="secondary"
                         className="min-h-11"
                         disabled={loadingMore}
-                        data-testid="client-history-more"
-                        onClick={() => void loadMoreHistory()}
+                        data-testid="client-appointments-more"
+                        onClick={() => void loadMorePastAppointments()}
                       >
                         {loadingMore ? t("femme.clients.loading") : t("femme.clients.historyMore")}
                       </Button>
@@ -707,6 +852,84 @@ export default function ClientDetailPage() {
               </>
             ) : null}
           </div>
+        </TabsContent>
+
+        <TabsContent value="invoices">
+          <div className="flex flex-col gap-4">
+            {invError ? (
+              <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
+                {invError}
+              </Alert>
+            ) : null}
+            {invLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6">
+                <Spinner size="md" />
+                <Text>{t("femme.clients.loading")}</Text>
+              </div>
+            ) : null}
+            {invLoaded && !invError ? (
+              <Card className="p-4" data-testid="client-invoices">
+                <Heading as="h2" className="mb-3 text-base">
+                  {t("femme.clients.invoices")}
+                </Heading>
+                {invoices.length === 0 ? (
+                  <Text variant="muted" data-testid="client-invoices-empty">
+                    {t("femme.clients.noInvoices")}
+                  </Text>
+                ) : (
+                  <ul className="flex flex-col" role="list">
+                    {invoices.map((inv) => (
+                      <li
+                        key={inv.id}
+                        data-testid="client-invoice-item"
+                        className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
+                      >
+                        <div className="w-16 shrink-0 font-semibold text-ink">
+                          {formatShortDate(inv.issuedAt, dateLocale)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedInvoiceId(inv.id)}
+                            aria-label={t("femme.clients.openInvoice", {
+                              number: inv.invoiceNumberFormatted,
+                            })}
+                            className="min-h-11 text-left font-semibold text-ink"
+                          >
+                            #{inv.invoiceNumberFormatted}
+                          </button>
+                          <div>
+                            <InvoiceStatePill invoice={inv} />
+                          </div>
+                        </div>
+                        <div className="shrink-0 pt-2 font-semibold text-ink">
+                          Gs. {formatAmountDecimal(inv.total)}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {invoicePage + 1 < invoiceTotalPages ? (
+                  <div className="mt-3 flex justify-center">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="min-h-11"
+                      disabled={loadingMore}
+                      data-testid="client-invoices-more"
+                      onClick={() => void loadMoreInvoices()}
+                    >
+                      {loadingMore ? t("femme.clients.loading") : t("femme.clients.historyMore")}
+                    </Button>
+                  </div>
+                ) : null}
+              </Card>
+            ) : null}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="radiography">
+          <ClientRadiography client={client} summaryState={summaryState} locale={dateLocale} />
         </TabsContent>
 
         {/* HU-68 AC5: technical sheet, saved independently of the basic data form. */}

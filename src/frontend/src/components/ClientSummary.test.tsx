@@ -51,6 +51,8 @@ describe("ClientSummary (HU-67 / HU-70)", () => {
       averageTicketLast12Months: null,
       lastServices: [],
       lastProducts: [],
+      topServices: [],
+      professionalRanking: [],
     } satisfies ClientSummary);
     renderCard();
     expect(await screen.findByText("Sin servicios en los últimos 12 meses")).toBeTruthy();
@@ -88,6 +90,8 @@ describe("ClientSummary (HU-67 / HU-70)", () => {
           unitPrice: 50000,
         },
       ],
+      topServices: [],
+      professionalRanking: [],
     } satisfies ClientSummary);
     renderCard();
     const usual = await screen.findByTestId("client-summary-usual");

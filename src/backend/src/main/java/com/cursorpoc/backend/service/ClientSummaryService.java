@@ -10,7 +10,9 @@ import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.web.dto.ClientSummaryResponse;
 import com.cursorpoc.backend.web.dto.ClientSummaryResponse.ProductItem;
+import com.cursorpoc.backend.web.dto.ClientSummaryResponse.ProfessionalRank;
 import com.cursorpoc.backend.web.dto.ClientSummaryResponse.ServiceItem;
+import com.cursorpoc.backend.web.dto.ClientSummaryResponse.TopService;
 import com.cursorpoc.backend.web.dto.ClientSummaryResponse.UsualProfessional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -19,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ClientSummaryService {
 
   static final int LAST_ITEMS_LIMIT = 5;
+  static final int RANKING_LIMIT = 5;
   static final int USUAL_PROFESSIONAL_WINDOW_MONTHS = 12;
 
   private final ClientRepository clientRepository;
@@ -113,10 +117,52 @@ public class ClientSummaryService {
         spent,
         averageTicket,
         serviceLines.stream().limit(LAST_ITEMS_LIMIT).map(ClientSummaryService::toService).toList(),
-        productLines.stream()
-            .limit(LAST_ITEMS_LIMIT)
-            .map(ClientSummaryService::toProduct)
-            .toList());
+        productLines.stream().limit(LAST_ITEMS_LIMIT).map(ClientSummaryService::toProduct).toList(),
+        topServices(serviceLines),
+        professionalRanking(serviceLines));
+  }
+
+  /** Services the client gets most often (all closed visits); ties A→Z. */
+  private static List<TopService> topServices(List<ServiceRecordLine> serviceLines) {
+    Map<String, Integer> counts = new LinkedHashMap<>();
+    for (ServiceRecordLine line : serviceLines) {
+      counts.merge(line.getSalonService().getName(), quantity(line), Integer::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(
+            Comparator.comparing((Map.Entry<String, Integer> e) -> e.getValue())
+                .reversed()
+                .thenComparing(Map.Entry::getKey, String.CASE_INSENSITIVE_ORDER))
+        .limit(RANKING_LIMIT)
+        .map(e -> new TopService(e.getKey(), e.getValue()))
+        .toList();
+  }
+
+  /** Professionals who attend the client, most services first; ties A→Z. */
+  private static List<ProfessionalRank> professionalRanking(List<ServiceRecordLine> serviceLines) {
+    Map<Long, Professional> byId = new HashMap<>();
+    Map<Long, Integer> counts = new HashMap<>();
+    for (ServiceRecordLine line : serviceLines) {
+      Professional p = line.getProfessional();
+      if (p == null) {
+        continue;
+      }
+      byId.put(p.getId(), p);
+      counts.merge(p.getId(), 1, Integer::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(
+            Comparator.comparing((Map.Entry<Long, Integer> e) -> e.getValue())
+                .reversed()
+                .thenComparing(
+                    e -> byId.get(e.getKey()).getFullName(), String.CASE_INSENSITIVE_ORDER))
+        .limit(RANKING_LIMIT)
+        .map(
+            e -> {
+              Professional p = byId.get(e.getKey());
+              return new ProfessionalRank(p.getId(), p.getFullName(), p.isActive(), e.getValue());
+            })
+        .toList();
   }
 
   /** The professional(s) with the most services in the window; ties are all returned, A→Z. */

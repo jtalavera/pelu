@@ -65,6 +65,8 @@ const emptyPagedAppointments = {
 };
 
 const emptySummary = {
+  topServices: [],
+  professionalRanking: [],
   usualProfessionals: [],
   lastVisitAt: null,
   spentLast12Months: null,
@@ -290,21 +292,19 @@ describe("ClientDetailPage", () => {
     expect(screen.getByTestId("client-edit-reactivate")).toBeTruthy();
   });
 
-  it("three tabs in order: History (default), Technical sheet, Details", async () => {
+  it("five tabs in order: Details (default), Appointments, Invoices, Technical sheet, Snapshot", async () => {
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
     const tabs = screen.getAllByRole("tab").map((el) => el.textContent);
-    expect(tabs).toEqual(["History", "Technical sheet", "Details"]);
-    expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
+    expect(tabs).toEqual(["Details", "Appointments", "Invoices", "Technical sheet", "✦ Snapshot"]);
+    expect(screen.getByRole("tab", { name: "Details" }).getAttribute("aria-selected")).toBe("true");
+    // Appointments / invoices load only when their tab is opened.
+    const urls = femmeJson.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.startsWith("/api/appointments"))).toBe(false);
+    expect(urls.some((u) => u.startsWith("/api/invoices"))).toBe(false);
   });
 
-  it("history is empty when there are no appointments or invoices", async () => {
-    renderPage();
-    await screen.findByRole("heading", { name: /Ana García/i });
-    expect(await screen.findByTestId("client-history-empty")).toBeTruthy();
-  });
-
-  it("?tab= in the URL opens that tab; unknown values fall back to History", async () => {
+  it("?tab= in the URL opens that tab; unknown values fall back to Details", async () => {
     renderPage("1", "?tab=sheet");
     await screen.findByRole("heading", { name: /Ana García/i });
     expect(screen.getByRole("tab", { name: "Technical sheet" }).getAttribute("aria-selected")).toBe(
@@ -313,10 +313,24 @@ describe("ClientDetailPage", () => {
     cleanup();
     renderPage("1", "?tab=nope");
     await screen.findByRole("heading", { name: /Ana García/i });
-    expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Details" }).getAttribute("aria-selected")).toBe("true");
   });
 
-  it("history shows the next appointment and one merged timeline of appointments and invoices", async () => {
+  it("Call is a tel: link and WhatsApp opens WhatsApp Web directly (no app/web chooser)", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    const call = screen.getByTestId("client-call") as HTMLAnchorElement;
+    expect(call.getAttribute("href")).toBe("tel:0981000001");
+    await userEvent.click(screen.getByTestId("client-whatsapp"));
+    expect(open).toHaveBeenCalledTimes(1);
+    const [url, target] = open.mock.calls[0];
+    expect(String(url)).toContain("https://web.whatsapp.com/send?phone=595981000001");
+    expect(target).toBe("femme-whatsapp");
+    open.mockRestore();
+  });
+
+  it("appointments tab: next appointment and past appointments, no invoices mixed in", async () => {
     const future = new Date();
     future.setFullYear(future.getFullYear() + 1);
     const appt = (id: number, startAt: string, serviceName: string, status: string) => ({
@@ -335,9 +349,6 @@ describe("ClientDetailPage", () => {
     });
     femmeJson.mockImplementation((url) => {
       const s = String(url);
-      if (s.startsWith("/api/clients/") && !s.includes("?") && !s.endsWith("/summary") && !s.endsWith("/technical-sheet")) {
-        return Promise.resolve(sampleClient);
-      }
       if (s.startsWith("/api/appointments?")) {
         return Promise.resolve([appt(50, future.toISOString(), "Cut", "CONFIRMED")]);
       }
@@ -345,14 +356,39 @@ describe("ClientDetailPage", () => {
         return Promise.resolve({
           ...emptyPagedAppointments,
           content: [
-            appt(40, "2026-10-26T15:00:00Z", "Coloring", "COMPLETED"),
             appt(41, "2026-09-14T15:00:00Z", "Brushing", "COMPLETED"),
+            appt(40, "2026-10-26T15:00:00Z", "Coloring", "COMPLETED"),
           ],
           totalElements: 2,
           totalPages: 1,
         });
       }
-      if (s.startsWith("/api/invoices?")) {
+      return defaultFemmeJsonImpl(url);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    await userEvent.click(screen.getByRole("tab", { name: "Appointments" }));
+    const next = await screen.findByTestId("client-next-appointment");
+    expect(within(next).getByText("Cut")).toBeTruthy();
+    const items = await screen.findAllByTestId("client-appointment-item");
+    expect(items.map((el) => within(el).getByText(/Coloring|Brushing/).textContent)).toEqual([
+      "Coloring",
+      "Brushing",
+    ]);
+    expect(screen.queryByTestId("client-invoice-item")).toBeNull();
+  });
+
+  it("appointments tab shows empty states", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    await userEvent.click(screen.getByRole("tab", { name: "Appointments" }));
+    expect(await screen.findByTestId("client-appointments-empty")).toBeTruthy();
+    expect(screen.getByText(/no upcoming appointments/i)).toBeTruthy();
+  });
+
+  it("invoices tab lists the client's invoices and opens them", async () => {
+    femmeJson.mockImplementation((url) => {
+      if (String(url).startsWith("/api/invoices?")) {
         return Promise.resolve({
           ...emptyPagedInvoices,
           content: [
@@ -375,17 +411,67 @@ describe("ClientDetailPage", () => {
     });
     renderPage();
     await screen.findByRole("heading", { name: /Ana García/i });
-    const next = await screen.findByTestId("client-next-appointment");
-    expect(within(next).getByText("Cut")).toBeTruthy();
-    const items = await screen.findAllByTestId("client-history-item");
-    expect(items.map((el) => el.getAttribute("data-kind"))).toEqual([
-      "invoice",
-      "appointment",
-      "appointment",
-    ]);
+    await userEvent.click(screen.getByRole("tab", { name: "Invoices" }));
+    const items = await screen.findAllByTestId("client-invoice-item");
+    expect(items).toHaveLength(1);
     expect(within(items[0]).getByText(/#001-001-0000123/)).toBeTruthy();
-    expect(within(items[1]).getByText("Coloring")).toBeTruthy();
-    expect(screen.queryByTestId("client-history-more")).toBeNull();
+    expect(screen.queryByTestId("client-appointment-item")).toBeNull();
+  });
+
+  it("invoices tab shows an empty state", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    await userEvent.click(screen.getByRole("tab", { name: "Invoices" }));
+    expect(await screen.findByTestId("client-invoices-empty")).toBeTruthy();
+  });
+
+  it("snapshot: the header button opens the tab with top services, professionals and latest services", async () => {
+    femmeJson.mockImplementation((url) => {
+      if (String(url).endsWith("/summary")) {
+        return Promise.resolve({
+          ...emptySummary,
+          lastVisitAt: "2026-10-26T15:00:00Z",
+          spentLast12Months: "1250000",
+          averageTicketLast12Months: "89000",
+          lastServices: [
+            {
+              performedAt: "2026-10-26T15:00:00Z",
+              serviceName: "Coloring",
+              professionalId: 2,
+              professionalName: "Laura",
+              price: "250000",
+            },
+          ],
+          topServices: [
+            { serviceName: "Coloring", count: 6 },
+            { serviceName: "Cut", count: 3 },
+          ],
+          professionalRanking: [
+            { id: 2, fullName: "Laura", active: true, serviceCount: 9 },
+            { id: 3, fullName: "Ana", active: true, serviceCount: 3 },
+          ],
+        });
+      }
+      return defaultFemmeJsonImpl(url);
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: /Ana García/i });
+    await userEvent.click(screen.getByTestId("client-radiography-cta"));
+    expect(screen.getByTestId("client-tab-radiography").getAttribute("aria-selected")).toBe("true");
+    const services = await screen.findByTestId("client-radiography-services");
+    expect(within(services).getAllByTestId("client-radiography-services-item")).toHaveLength(2);
+    expect(within(services).getByText("6 times")).toBeTruthy();
+    const pros = screen.getByTestId("client-radiography-professionals");
+    expect(within(pros).getByText("75%")).toBeTruthy();
+    expect(within(pros).getByText("25%")).toBeTruthy();
+    expect(within(screen.getByTestId("client-radiography-last")).getByText("Coloring")).toBeTruthy();
+    expect(screen.getByTestId("client-radiography-ticket").textContent).toMatch(/89/);
+  });
+
+  it("snapshot shows an empty message when the client has no completed services", async () => {
+    renderPage("1", "?tab=radiography");
+    await screen.findByRole("heading", { name: /Ana García/i });
+    expect(await screen.findByTestId("client-radiography-empty")).toBeTruthy();
   });
 
   it("navigates back to client list when back button clicked", async () => {

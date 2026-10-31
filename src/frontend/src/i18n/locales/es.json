@@ -1984,6 +1984,22 @@
       }
     },
     "clients": {
+      "call": "Llamar",
+      "noNextAppointment": "No hay turnos próximos.",
+      "pastAppointments": "Turnos anteriores",
+      "radiography": {
+        "cta": "Ver radiografía",
+        "title": "Radiografía de {{name}}",
+        "visits": "Visitas",
+        "spent": "Gastó en 12 meses",
+        "ticket": "Ticket promedio",
+        "topServices": "Servicios que más se hace",
+        "times_one": "{{count}} vez",
+        "times_other": "{{count}} veces",
+        "professionals": "Quiénes la atienden",
+        "lastServices": "Últimos servicios",
+        "empty": "Todavía no hay servicios cobrados para armar la radiografía."
+      },
       "moreActions": "Más acciones",
       "filterGroup": "Filtrar clientes",
       "openClient": "Abrir {{name}}",
@@ -1994,7 +2010,7 @@
       "moreOptions": "Más opciones",
       "spent12m": "Gastó {{amount}} en 12 meses",
       "usualProfessional": "Habitual: {{name}}",
-      "whatsapp": "Escribir por WhatsApp",
+      "whatsapp": "WhatsApp",
       "nextAppointment": "Próximo turno",
       "noHistory": "Todavía no hay turnos ni facturas.",
       "historyMore": "Ver más",
@@ -2146,7 +2162,7 @@
         "summary": "Resumen",
         "sheet": "Ficha técnica",
         "appointments": "Turnos",
-        "invoices": "Comprobantes"
+        "invoices": "Facturas"
       },
       "sections": {
         "contact": "Contacto",
@@ -2182,9 +2198,10 @@
       "sectionHints": {"contact": "Nombre y datos para comunicarse.", "fiscal": "Se usan para emitir la factura electrónica.", "profile": "Cumpleaños y cómo nos conoció."},
       "historyLoadError": "No se pudieron cargar turnos ni comprobantes.",
       "appointments": "Turnos",
-      "invoices": "Comprobantes",
+      "invoices": "Facturas",
+        "radiography": "Radiografía",
       "noAppointments": "Sin turnos registrados.",
-      "noInvoices": "Sin comprobantes registrados.",
+      "noInvoices": "Sin facturas registradas.",
       "inlineSearch": {
         "label": "Cliente",
         "placeholder": "Buscar por nombre, teléfono o RUC…",

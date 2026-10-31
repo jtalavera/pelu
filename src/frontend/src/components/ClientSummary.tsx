@@ -30,6 +30,15 @@ export type ClientSummary = {
     quantity: number;
     unitPrice: string | number;
   }>;
+  /** Client radiography: services the client gets most often (whole history). */
+  topServices: Array<{ serviceName: string; count: number }>;
+  /** Client radiography: professionals who attend the client, most services first. */
+  professionalRanking: Array<{
+    id: number;
+    fullName: string;
+    active: boolean;
+    serviceCount: number;
+  }>;
 };
 
 function formatDate(iso: string, locale: string): string {
