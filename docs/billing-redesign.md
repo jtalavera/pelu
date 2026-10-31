@@ -148,3 +148,6 @@ Cada fila ocupa dos renglones: a la izquierda nombre y `estado · número · for
 
 ## Ajuste: texto de "Corregir y reenviar"
 El diálogo muestra una línea con ícono ("Corregí lo que SIFEN rechazó y reenviá con el mismo CDC.") y un renglón plegable **Más información** (`sifen-correct-resend-info-toggle`) con el texto completo: qué se puede corregir y la ventana de 72 horas (`sifen-correct-resend-window-hint`). El aviso de ventana vencida sigue visible fuera del plegable.
+
+## Ajuste: Compartir KuDE
+En "Compartir KuDE por mail o WhatsApp" el botón principal dice **✉ Enviar por correo** y queda junto al campo de correo (debajo en celular); "Enviar por WhatsApp" va aparte, bajo un separador "o", para que se vea que es independiente del correo. Los `data-testid` (`sifen-kude-send-email-button`, `sifen-kude-send-whatsapp-button`) no cambian.

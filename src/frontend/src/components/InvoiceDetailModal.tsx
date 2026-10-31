@@ -1033,12 +1033,13 @@ export function InvoiceDetailModal({
                   title={t("femme.billing.history.detail.sifen.kudeShareLabel")}
                 >
                   <form
-                    className="flex flex-wrap items-end gap-2"
+                    className="flex flex-col gap-2 sm:flex-row sm:items-end"
                     onSubmit={(e) => void handleSendKudeEmail(e)}
                     noValidate
                   >
-                    <div className="flex-1 min-w-[200px]">
+                    <div className="min-w-0 flex-1">
                       <Label htmlFor="kude-email">
+                        <span aria-hidden="true">✉ </span>
                         {t("femme.billing.history.detail.sifen.kudeEmailFieldLabel")}
                       </Label>
                       <Input
@@ -1055,8 +1056,8 @@ export function InvoiceDetailModal({
                     </div>
                     <Button
                       type="submit"
-                      variant="secondary"
-                      size="sm"
+                      variant="primary"
+                      className="min-h-11 w-full whitespace-nowrap sm:w-auto"
                       disabled={kudeEmailSending}
                       data-testid="sifen-kude-send-email-button"
                     >
@@ -1064,21 +1065,26 @@ export function InvoiceDetailModal({
                         ? t("femme.billing.history.detail.sifen.kudeEmailSending")
                         : t("femme.billing.history.detail.sifen.kudeEmailButton")}
                     </Button>
-                    {/* Issue #215: "Enviar por WhatsApp" — next to the email send button. Plain
-                        type="button" so it never submits the email form above. */}
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={kudeWhatsappSending}
-                      data-testid="sifen-kude-send-whatsapp-button"
-                      onClick={() => void handleSendKudeWhatsapp()}
-                    >
-                      {kudeWhatsappSending
-                        ? t("femme.billing.history.detail.sifen.kudeWhatsappSending")
-                        : t("femme.billing.history.detail.sifen.kudeWhatsappButton")}
-                    </Button>
                   </form>
+                  <div className="flex items-center gap-3 text-sm text-ink-3" aria-hidden="true">
+                    <span className="h-px flex-1 bg-line" />
+                    {t("femme.billing.history.detail.sifen.kudeShareOr")}
+                    <span className="h-px flex-1 bg-line" />
+                  </div>
+                  {/* Issue #215: "Enviar por WhatsApp" — independent of the email field above. Plain
+                      type="button" so it never submits the email form. */}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="min-h-11 w-full sm:w-auto sm:self-start"
+                    disabled={kudeWhatsappSending}
+                    data-testid="sifen-kude-send-whatsapp-button"
+                    onClick={() => void handleSendKudeWhatsapp()}
+                  >
+                    {kudeWhatsappSending
+                      ? t("femme.billing.history.detail.sifen.kudeWhatsappSending")
+                      : t("femme.billing.history.detail.sifen.kudeWhatsappButton")}
+                  </Button>
                   {kudeEmailError && (
                     <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
                       {kudeEmailError}
