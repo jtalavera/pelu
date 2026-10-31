@@ -156,3 +156,35 @@ export async function setControlledInputValue(locator: Locator, value: string): 
   await page.keyboard.press("Backspace");
   await page.keyboard.type(value, { delay: 25 });
 }
+
+// ── Agenda redesign: professional chips and status actions in the appointment detail ───────────
+
+/** Picks a professional chip of the Agenda ("All professionals" for no filter). */
+export async function filterAgendaByProfessional(page: Page, name: string | RegExp): Promise<void> {
+  const group = page.locator("[data-tour='calendar-prof-filter']");
+  if (name === "All") {
+    await group.getByTestId("calendar-prof-chip-all").click();
+    return;
+  }
+  const chip = group.getByRole("button", { name }).first();
+  await chip.click();
+}
+
+async function openAppointmentActions(page: Page): Promise<void> {
+  const more = page.getByTestId("calendar-more-actions");
+  if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
+}
+
+/** Detail dialog → "⋯" → "Mark as completed". */
+export async function completeAppointmentFromDetail(page: Page): Promise<void> {
+  await openAppointmentActions(page);
+  await page.getByTestId("calendar-action-complete").click();
+}
+
+/** Detail dialog → "⋯" → "Cancel appointment" → reason → confirm. */
+export async function cancelAppointmentFromDetail(page: Page, reason?: string): Promise<void> {
+  await openAppointmentActions(page);
+  await page.getByTestId("calendar-action-cancel").click();
+  if (reason) await page.locator("#cancel-reason").fill(reason);
+  await page.getByTestId("calendar-cancel-confirm").click();
+}

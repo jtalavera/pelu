@@ -63,13 +63,12 @@ async function loginToken(request: APIRequestContext, email: string): Promise<st
   return ((await res.json()) as { accessToken: string }).accessToken;
 }
 
-/** Picks an option of the calendar's professional filter (a searchable combobox). */
+/** Picks a chip of the calendar's professional filter. */
 async function pickCalendarFilter(page: Page, label: string): Promise<void> {
-  const filter = page.locator("#prof-filter");
-  await filter.click();
-  await filter.fill(label);
-  await page.getByRole("option", { name: label, exact: true }).click();
-  await expect(filter).toHaveValue(label);
+  const group = page.locator("[data-tour='calendar-prof-filter']");
+  const chip = label === "All professionals" ? group.getByTestId("calendar-prof-chip-all") : group.getByRole("button", { name: label, exact: true });
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
 }
 
 test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {

@@ -10,7 +10,7 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCalendarShowsClientCard, pickSearchableOption } from "../fixtures/ui";
+import { ensureCalendarShowsClientCard, filterAgendaByProfessional, pickSearchableOption } from "../fixtures/ui";
 
 test.describe("HU-06 · Calendario de turnos", () => {
   test("HU-06 · 1 y · 3 vista semanal y navegación de semanas", async ({ page }) => {
@@ -72,9 +72,9 @@ test.describe("HU-06 · Calendario de turnos", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
     // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
-    await pickSearchableOption(page, "Filter by professional", "E2E Prof B", /E2E Prof B/i);
+    await filterAgendaByProfessional(page, /E2E Prof B/i);
     await expect(page.getByRole("button", { name: client.fullName, exact: false })).toHaveCount(0);
-    await pickSearchableOption(page, "Filter by professional", "All", /All professionals/);
+    await filterAgendaByProfessional(page, "All");
     await ensureCalendarShowsClientCard(page, client.fullName);
   });
 

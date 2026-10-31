@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createAppointmentApi, calendarVisibleWeekSlotIso, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCalendarShowsClientCard } from "../fixtures/ui";
+import { cancelAppointmentFromDetail, completeAppointmentFromDetail, ensureCalendarShowsClientCard } from "../fixtures/ui";
 
 test.describe("HU-08 · Cambiar estado de un turno", () => {
   test("HU-08 · 1 y 2 cambiar estado desde detalle a Completado", async ({ page, request }) => {
@@ -19,9 +19,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
     await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await page.getByRole("button", { name: "Change status" }).click();
-    await page.locator("#status-select").selectOption("COMPLETED");
-    await page.getByRole("button", { name: "Save" }).click();
+    await completeAppointmentFromDetail(page);
     await expect(page.getByText("Completed", { exact: true })).toBeVisible();
   });
 
@@ -40,10 +38,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
     await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await page.getByRole("button", { name: "Change status" }).click();
-    await page.locator("#status-select").selectOption("CANCELLED");
-    await page.locator("#cancel-reason").fill("E2E: client cancelled");
-    await page.getByRole("button", { name: "Save" }).click();
+    await cancelAppointmentFromDetail(page, "E2E: client cancelled");
     await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
     await expect(page.getByText("E2E: client cancelled", { exact: true })).toBeVisible();
   });
@@ -63,9 +58,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
     await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await page.getByRole("button", { name: "Change status" }).click();
-    await page.locator("#status-select").selectOption("COMPLETED");
-    await page.getByRole("button", { name: "Save" }).click();
+    await completeAppointmentFromDetail(page);
     const badge = page.locator("span").filter({ hasText: /^Completed$/ });
     await expect(badge.first()).toBeVisible();
   });

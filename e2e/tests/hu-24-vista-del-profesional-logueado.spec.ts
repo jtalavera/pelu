@@ -56,13 +56,12 @@ async function setupProfessionalWithAccess(
   return profId;
 }
 
-/** Picks an option of the calendar's professional filter (a searchable combobox). */
+/** Picks a chip of the calendar's professional filter. */
 async function pickCalendarFilter(page: Page, label: string): Promise<void> {
-  const filter = page.locator("#prof-filter");
-  await filter.click();
-  await filter.fill(label);
-  await page.getByRole("option", { name: label, exact: true }).click();
-  await expect(filter).toHaveValue(label);
+  const group = page.locator("[data-tour='calendar-prof-filter']");
+  const chip = label === "All professionals" ? group.getByTestId("calendar-prof-chip-all") : group.getByRole("button", { name: label, exact: true });
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
 }
 
 /** Logs a professional in through the API and returns her JWT. */
@@ -126,9 +125,12 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // The filter is there, preselected on her own agenda.
-    const filter = page.locator("#prof-filter");
+    const filter = page.locator("[data-tour='calendar-prof-filter']");
     await expect(filter).toBeVisible();
-    await expect(filter).toHaveValue(ownName.toUpperCase());
+    await expect(filter.getByRole("button", { name: ownName.toUpperCase(), exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await expect(page.getByTestId(`calendar-appt-${own.id}`)).toBeVisible();
     await expect(page.getByTestId(`calendar-appt-${other.id}`)).toHaveCount(0);
 

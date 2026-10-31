@@ -126,11 +126,16 @@ for (const vp of VIEWPORTS) {
         await expectTouchTarget(page, "[data-tour='calendar-new-appointment']");
         await expectTouchTarget(page, "[data-tour='calendar-week-nav'] button");
       }
-      const filterBox = await page.locator("#prof-filter").boundingBox();
+      const filterBox = await page.locator("[data-tour='calendar-prof-filter']").boundingBox();
       expect(filterBox!.width).toBeGreaterThanOrEqual(160);
       expect(filterBox!.x + filterBox!.width).toBeLessThanOrEqual(vp.width);
-      // Phones show one day at a time; tablets the whole week.
-      await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(vp.phone ? 1 : 7);
+      // Phones only have the Day view; tablets can switch to the Week grid with its 7 days.
+      if (vp.phone) {
+        await expect(page.getByTestId("calendar-view-week")).toHaveCount(0);
+        await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(0);
+      } else {
+        await expect(page.locator("[data-testid^='calendar-day-col-']")).toHaveCount(7);
+      }
 
       // The appointment form fits the screen.
       await page.locator("[data-tour='calendar-new-appointment']").click();

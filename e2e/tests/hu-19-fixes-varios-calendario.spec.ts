@@ -8,29 +8,34 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { bookingAppointmentDialog, ensureCalendarShowsAppointmentByTestId } from "../fixtures/ui";
+import { bookingAppointmentDialog, completeAppointmentFromDetail, ensureCalendarShowsAppointmentByTestId, filterAgendaByProfessional } from "../fixtures/ui";
 
 test.describe("HU-19 · Fixes varios del calendario", () => {
-  test("filtro de profesionales con placeholder de búsqueda", async ({ page }) => {
+  test("filtro de profesionales: chips «All professionals» y uno por profesional", async ({ page, request }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
-    await expect(page.getByPlaceholder("Type to filter…").first()).toBeVisible();
+    const group = page.locator("[data-tour='calendar-prof-filter']");
+    await expect(group.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "true");
+    await expect(group.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveCount(1);
   });
 
-  test("HU-19 · 4 filtro de profesional en vista principal reduce opciones", async ({
+  test("HU-19 · 4 filtro de profesional en vista principal marca el chip elegido", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
-    const fullName = seed.professionalFullName;
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
-    const cb = page.getByRole("combobox", { name: "Filter by professional" });
-    await cb.click();
-    await cb.fill(fullName);
-    const list = page.getByRole("listbox", { name: "Filter by professional" });
-    await expect(list.getByRole("button", { name: new RegExp(fullName) })).toHaveCount(1);
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    const group = page.locator("[data-tour='calendar-prof-filter']");
+    await expect(group.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(group.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "false");
   });
 
   test("HU-19 · 6 turno Completado no aparece en la grilla", async ({ page, request }) => {
@@ -47,9 +52,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await page.getByRole("button", { name: "Change status" }).click();
-    await page.locator("#status-select").selectOption("COMPLETED");
-    await page.getByRole("button", { name: "Save" }).click();
+    await completeAppointmentFromDetail(page);
     await page
       .getByRole("dialog", { name: "Appointment detail" })
       .getByRole("button", { name: "Close" })
