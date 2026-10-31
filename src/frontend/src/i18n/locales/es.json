@@ -2966,6 +2966,11 @@
       "error": "No se pudieron cargar los turnos."
     },
     "serviceRecords": {
+      "colService": "Servicio",
+      "colQty": "Cant.",
+      "colPrice": "Precio",
+      "lineServiceAria": "Servicio {{n}}",
+      "lineProfessionalAria": "Profesional {{n}}",
       "newRecord": "+ Nueva ficha",
       "newTitle": "Nueva ficha",
       "searchPlaceholder": "Buscar por cliente o servicio",

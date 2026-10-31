@@ -7,7 +7,8 @@ import { Button } from "./Button";
 export type ModalProps = {
   open: boolean;
   onClose?: () => void;
-  title?: string;
+  /** Usually a string; a node lets a screen add a status chip next to the title. */
+  title?: ReactNode;
   description?: string;
   children: ReactNode;
   footer?: ReactNode;

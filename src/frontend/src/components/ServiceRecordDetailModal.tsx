@@ -4,6 +4,7 @@ import { Alert, Button, Modal, Spinner, Text } from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { getServiceRecord, type ServiceRecordDetail } from "../api/serviceRecords";
 import { ServiceRecordEditor } from "./ServiceRecordEditor";
+import { ServiceRecordStatusPill } from "./ServiceRecordStatusPill";
 
 export function ServiceRecordDetailModal({
   serviceRecordId,
@@ -43,8 +44,13 @@ export function ServiceRecordDetailModal({
     <Modal
       open
       onClose={onClose}
-      title={t("femme.serviceRecords.detailTitle")}
-      className="max-w-4xl"
+      title={
+        <span className="flex flex-wrap items-center gap-3">
+          {t("femme.serviceRecords.detailTitle")}
+          {record ? <ServiceRecordStatusPill status={record.status} /> : null}
+        </span>
+      }
+      className="max-w-3xl"
     >
       <div className="flex flex-col gap-4">
         {loading && (

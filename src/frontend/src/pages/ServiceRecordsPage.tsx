@@ -468,7 +468,12 @@ export default function ServiceRecordsPage() {
         </div>
       </div>
 
-      <Modal open={newOpen} onClose={closeNew} title={t("femme.serviceRecords.newTitle")}>
+      <Modal
+        open={newOpen}
+        onClose={closeNew}
+        title={t("femme.serviceRecords.newTitle")}
+        className="max-w-3xl"
+      >
         {newOpen ? (
           <ServiceRecordEditor
             initial={null}

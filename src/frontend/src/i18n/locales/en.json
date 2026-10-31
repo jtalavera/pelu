@@ -2966,6 +2966,11 @@
       "error": "Could not load appointments."
     },
     "serviceRecords": {
+      "colService": "Service",
+      "colQty": "Qty",
+      "colPrice": "Price",
+      "lineServiceAria": "Service {{n}}",
+      "lineProfessionalAria": "Professional {{n}}",
       "newRecord": "+ New record",
       "newTitle": "New service record",
       "searchPlaceholder": "Search by client or service",

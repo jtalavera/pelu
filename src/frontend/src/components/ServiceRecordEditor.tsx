@@ -14,7 +14,6 @@ import { ClientSearchField, type ClientSelection } from "./ClientSearchField";
 import { ServiceSearchField, type SalonServiceOption } from "./ServiceSearchField";
 import { SearchableSelect } from "./SearchableSelect";
 import { FieldValidationError } from "./FieldValidationError";
-import { StatusBadge } from "./StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
@@ -137,7 +136,6 @@ export function ServiceRecordEditor({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [showVoidForm, setShowVoidForm] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [voidReasonError, setVoidReasonError] = useState<string | null>(null);
@@ -316,39 +314,33 @@ export function ServiceRecordEditor({
     }
   }
 
-  const statusLine = record ? (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span data-testid="service-record-status">
-        <StatusBadge status={record.status} />
-      </span>
-      {record.status === "VOIDED" && record.voidReason ? (
-        <Text variant="small" className="text-ink-3">
-          {t("femme.serviceRecords.voidedReasonLabel")}: {record.voidReason}
-        </Text>
-      ) : null}
-      {record.status === "CLOSED" && record.invoiceNumberFormatted ? (
-        <Text variant="small" className="text-ink-3">
-          {t("femme.serviceRecords.linkedInvoice")}: {record.invoiceNumberFormatted}
-        </Text>
-      ) : null}
-      <Text variant="small" className="text-ink-3">
-        {t("femme.serviceRecords.createdAt")}: {formatParaguayDateTime(record.createdAt, dateLocale)}
-      </Text>
-    </div>
+  const dateText = record ? formatParaguayDateTime(record.createdAt, dateLocale) : null;
+
+  /** One compact line: CLIENTE · name · created date (existing records show the name, new ones the search). */
+  const clientRow = record ? (
+    <section className="flex flex-wrap items-baseline gap-x-3 gap-y-1" aria-label={t("femme.serviceRecords.clientSection")}>
+      <span className={SECTION_TITLE}>{t("femme.serviceRecords.clientSection")}</span>
+      <b className="break-words text-base text-ink">{record.clientFullName}</b>
+      <span className="ml-auto text-sm text-ink-3">{dateText}</span>
+    </section>
   ) : null;
 
   if (isReadOnly && record) {
     const tipRows = record.tips.filter((tp) => Number(tp.amount) > 0);
     return (
-      <div ref={topRef} className="flex flex-col gap-4" data-testid="service-record-readonly">
-        {statusLine}
-        <section className="flex flex-col gap-2" aria-labelledby="sr-client-h">
-          <h3 id="sr-client-h" className={SECTION_TITLE}>
-            {t("femme.serviceRecords.clientSection")}
-          </h3>
-          <div className="font-semibold text-ink">{record.clientFullName}</div>
-        </section>
-        <section className="flex flex-col gap-2 border-t border-line pt-4" aria-labelledby="sr-lines-h">
+      <div ref={topRef} className="flex flex-col gap-3" data-testid="service-record-readonly">
+        {clientRow}
+        {record.status === "VOIDED" && record.voidReason ? (
+          <Text variant="small" className="text-ink-3">
+            {t("femme.serviceRecords.voidedReasonLabel")}: {record.voidReason}
+          </Text>
+        ) : null}
+        {record.status === "CLOSED" && record.invoiceNumberFormatted ? (
+          <Text variant="small" className="text-ink-3">
+            {t("femme.serviceRecords.linkedInvoice")}: {record.invoiceNumberFormatted}
+          </Text>
+        ) : null}
+        <section className="flex flex-col gap-2 border-t border-line pt-3" aria-labelledby="sr-lines-h">
           <h3 id="sr-lines-h" className={SECTION_TITLE}>
             {t("femme.serviceRecords.linesSection")}
           </h3>
@@ -398,9 +390,11 @@ export function ServiceRecordEditor({
     );
   }
 
+  const GRID =
+    "grid items-center gap-2 grid-cols-[4rem_minmax(0,1fr)_auto_2.75rem] md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_4rem_minmax(0,1fr)_6.5rem_2.75rem]";
+
   return (
-    <div ref={topRef} className="flex flex-col gap-4">
-      {statusLine}
+    <div ref={topRef} className="flex flex-col gap-3">
       {saveError ? (
         <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
           {saveError}
@@ -413,66 +407,81 @@ export function ServiceRecordEditor({
           void handleSave();
         }}
         noValidate
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
       >
-        <section className="flex flex-col gap-2" aria-labelledby="sr-client-h">
-          <h3 id="sr-client-h" className={SECTION_TITLE}>
-            {t("femme.serviceRecords.clientSection")}
-          </h3>
-          <ClientSearchField
-            id="service-record-client-search"
-            value={clientSelection}
-            onChange={(sel) => {
-              setClientSelection(sel);
-              setClientError(null);
-            }}
-            activeOnly
-            hideOccasional
-            onCreateNew={
-              allowClientCreateNew
-                ? (q) =>
-                    navigate("/app/clients", {
-                      state: {
-                        openCreateClient: true,
-                        prefilledName: q,
-                        returnTo: "/app/service-records",
-                        returnTab: "new",
-                      },
-                    })
-                : undefined
-            }
-            label={t("femme.serviceRecords.clientSearchLabel")}
-            placeholder={t("femme.serviceRecords.clientPlaceholder")}
-          />
-          <FieldValidationError id="service-record-client-err">{clientError}</FieldValidationError>
-        </section>
+        {record ? (
+          clientRow
+        ) : (
+          <section className="flex flex-col gap-2" aria-labelledby="sr-client-h">
+            <h3 id="sr-client-h" className={SECTION_TITLE}>
+              {t("femme.serviceRecords.clientSection")}
+            </h3>
+            <ClientSearchField
+              id="service-record-client-search"
+              value={clientSelection}
+              onChange={(sel) => {
+                setClientSelection(sel);
+                setClientError(null);
+              }}
+              activeOnly
+              hideOccasional
+              onCreateNew={
+                allowClientCreateNew
+                  ? (q) =>
+                      navigate("/app/clients", {
+                        state: {
+                          openCreateClient: true,
+                          prefilledName: q,
+                          returnTo: "/app/service-records",
+                          returnTab: "new",
+                        },
+                      })
+                  : undefined
+              }
+              label={t("femme.serviceRecords.clientSearchLabel")}
+              placeholder={t("femme.serviceRecords.clientPlaceholder")}
+            />
+            <FieldValidationError id="service-record-client-err">{clientError}</FieldValidationError>
+          </section>
+        )}
 
-        <section className="flex flex-col gap-3 border-t border-line pt-4" aria-labelledby="sr-lines-h">
+        <section className="flex flex-col gap-1 border-t border-line pt-3" aria-labelledby="sr-lines-h">
           <h3 id="sr-lines-h" className={SECTION_TITLE}>
             {t("femme.serviceRecords.linesSection")}
           </h3>
+          <div
+            aria-hidden="true"
+            className={`${GRID} hidden px-0 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-ink-3 md:grid`}
+          >
+            <span>{t("femme.serviceRecords.colService")}</span>
+            <span>{t("femme.serviceRecords.lineProfessionalLabel")}</span>
+            <span>{t("femme.serviceRecords.colQty")}</span>
+            <span>{t("femme.serviceRecords.colPrice")}</span>
+            <span className="text-right">{t("femme.serviceRecords.lineSubtotal")}</span>
+            <span />
+          </div>
           {lines.map((line, idx) => (
             <div
               key={line.key}
               data-testid="service-record-line"
-              className="flex flex-col gap-3 rounded-xl border border-line p-3"
+              className={`${GRID} border-t border-line py-1.5`}
             >
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <ServiceSearchField
-                    id={`service-record-line-svc-${idx}`}
-                    value={line.pickedService}
-                    onChange={(svc) => updateLineService(line.key, svc)}
-                    invalid={!!lineErrors[idx]?.service}
-                    errorDescribedById={`service-record-line-svc-err-${idx}`}
-                  />
-                  <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
-                    {lineErrors[idx]?.service}
-                  </FieldValidationError>
-                </div>
+              <div className="col-span-4 md:col-span-1">
+                <ServiceSearchField
+                  id={`service-record-line-svc-${idx}`}
+                  label={t("femme.serviceRecords.lineServiceAria", { n: idx + 1 })}
+                  labelSrOnly
+                  value={line.pickedService}
+                  onChange={(svc) => updateLineService(line.key, svc)}
+                  invalid={!!lineErrors[idx]?.service}
+                  errorDescribedById={`service-record-line-svc-err-${idx}`}
+                />
+              </div>
+              <div className="col-span-4 md:col-span-1">
                 <SearchableSelect<number>
                   id={`service-record-line-prof-${idx}`}
-                  label={t("femme.serviceRecords.lineProfessionalLabel")}
+                  label={t("femme.serviceRecords.lineProfessionalAria", { n: idx + 1 })}
+                  labelSrOnly
                   value={line.professionalId}
                   onChange={(v) => updateLineProfessional(line.key, v)}
                   options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
@@ -480,54 +489,59 @@ export function ServiceRecordEditor({
                   noResultsText={t("femme.serviceRecords.lineProfessionalNoResults")}
                 />
               </div>
-              <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto]">
-                <div>
-                  <Label htmlFor={`service-record-line-qty-${idx}`}>
-                    {t("femme.serviceRecords.lineQuantityLabel")}
-                  </Label>
-                  <Input
-                    id={`service-record-line-qty-${idx}`}
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    value={line.quantity}
-                    onChange={(e) =>
-                      updateLineQuantity(line.key, Math.max(0, Math.floor(Number(e.target.value))))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`service-record-line-price-${idx}`}>
-                    {t("femme.serviceRecords.lineUnitPriceLabel")}
-                  </Label>
-                  <Input
-                    id={`service-record-line-price-${idx}`}
-                    inputMode="numeric"
-                    value={line.unitPrice}
-                    placeholder="0"
-                    onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
-                  />
-                </div>
-                <div
-                  className="col-span-2 flex items-center justify-between sm:col-span-1 sm:flex-col sm:items-end sm:justify-end"
-                  data-testid="service-record-line-subtotal"
-                >
-                  <span className="text-xs text-ink-3">{t("femme.serviceRecords.lineSubtotal")}</span>
-                  <b className="font-heading">{formatAmountDecimal(lineSubtotal(line).toFixed(2))}</b>
-                </div>
+              <div>
+                <Label htmlFor={`service-record-line-qty-${idx}`} className="sr-only">
+                  {t("femme.serviceRecords.lineQuantityLabel")}
+                </Label>
+                <Input
+                  id={`service-record-line-qty-${idx}`}
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  aria-label={t("femme.serviceRecords.lineQuantityLabel")}
+                  value={line.quantity}
+                  onChange={(e) =>
+                    updateLineQuantity(line.key, Math.max(0, Math.floor(Number(e.target.value))))
+                  }
+                />
               </div>
+              <div>
+                <Label htmlFor={`service-record-line-price-${idx}`} className="sr-only">
+                  {t("femme.serviceRecords.lineUnitPriceLabel")}
+                </Label>
+                <Input
+                  id={`service-record-line-price-${idx}`}
+                  inputMode="numeric"
+                  value={line.unitPrice}
+                  placeholder="0"
+                  onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
+                />
+              </div>
+              <b
+                className="whitespace-nowrap text-right font-heading text-ink"
+                data-testid="service-record-line-subtotal"
+              >
+                {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
+              </b>
               {lines.length > 1 ? (
                 <button
                   type="button"
                   onClick={() => removeLine(line.key)}
                   aria-label={t("femme.serviceRecords.removeLine")}
                   data-testid="service-record-line-remove"
-                  className="min-h-11 self-end px-1 text-sm font-semibold text-danger underline underline-offset-4"
+                  className="size-11 justify-self-end rounded-lg text-base text-ink-3 hover:bg-bg hover:text-danger"
                 >
-                  {t("femme.serviceRecords.removeLine")}
+                  ✕
                 </button>
-              ) : null}
+              ) : (
+                <span />
+              )}
+              <div className="col-span-4 md:col-span-6">
+                <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
+                  {lineErrors[idx]?.service}
+                </FieldValidationError>
+              </div>
             </div>
           ))}
           <button
@@ -559,29 +573,34 @@ export function ServiceRecordEditor({
             </span>
           </button>
           {moreOpen ? (
-            <div id="service-record-more" className="flex flex-col gap-3 pb-2">
-              <h4 className="font-heading text-base font-bold">{t("femme.serviceRecords.tipsSection")}</h4>
+            <div id="service-record-more" className="flex flex-col gap-1 pb-2">
+              <h4 className="text-xs font-extrabold uppercase tracking-wider text-ink-3">
+                {t("femme.serviceRecords.tipsSection")}
+              </h4>
               {distinctProfessionalIds.length === 0 ? (
                 <Text variant="muted" className="text-sm">
                   {t("femme.serviceRecords.tipsNeedProfessional")}
                 </Text>
               ) : (
-                distinctProfessionalIds.map((id) => (
-                  <div key={id}>
-                    <Label htmlFor={`service-record-tip-${id}`}>
-                      {t("femme.serviceRecords.tipsAmountLabel")} · {professionalName(id)}
-                    </Label>
-                    <Input
-                      id={`service-record-tip-${id}`}
-                      inputMode="numeric"
-                      value={tips[id] ?? ""}
-                      onChange={(e) =>
-                        setTips((prev) => ({ ...prev, [id]: maskMoneyInput(e.target.value) }))
-                      }
-                      placeholder="0"
-                    />
-                  </div>
-                ))
+                <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2" data-testid="service-record-tips">
+                  {distinctProfessionalIds.map((id) => (
+                    <div key={id} className="flex items-center justify-between gap-3 border-t border-line py-1.5">
+                      <Label htmlFor={`service-record-tip-${id}`} className="min-w-0 truncate">
+                        {t("femme.serviceRecords.tipsAmountLabel")} · {professionalName(id)}
+                      </Label>
+                      <Input
+                        id={`service-record-tip-${id}`}
+                        inputMode="numeric"
+                        className="w-32 shrink-0 text-right"
+                        value={tips[id] ?? ""}
+                        onChange={(e) =>
+                          setTips((prev) => ({ ...prev, [id]: maskMoneyInput(e.target.value) }))
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                  ))}
+                </div>
               )}
               {tipsTotal > 0 ? (
                 <div className="flex justify-between text-sm">
@@ -593,87 +612,70 @@ export function ServiceRecordEditor({
           ) : null}
         </div>
 
-        {record && isOpen && actionsOpen ? (
-          <div className="flex flex-col gap-3 rounded-xl border border-line bg-bg p-3" data-testid="service-record-actions-panel">
+        {record && isOpen && showVoidForm ? (
+          <div
+            className="flex flex-col gap-3 rounded-xl border border-line p-3"
+            data-testid="service-record-void-form"
+          >
             {voidError ? (
               <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
                 {voidError}
               </Alert>
             ) : null}
-            {showVoidForm ? (
-              <div className="flex flex-col gap-3" data-testid="service-record-void-form">
-                <div>
-                  <Label htmlFor="service-record-void-reason">{t("femme.serviceRecords.voidReason")}</Label>
-                  <Textarea
-                    id="service-record-void-reason"
-                    value={voidReason}
-                    onChange={(e) => {
-                      setVoidReason(e.target.value);
-                      setVoidReasonError(null);
-                    }}
-                    placeholder={t("femme.serviceRecords.voidReasonPlaceholder")}
-                    rows={2}
-                    aria-invalid={!!voidReasonError}
-                    aria-describedby={voidReasonError ? "service-record-void-reason-err" : undefined}
-                    className="mt-1 w-full"
-                  />
-                  <FieldValidationError id="service-record-void-reason-err">
-                    {voidReasonError}
-                  </FieldValidationError>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="min-h-11"
-                    onClick={() => {
-                      setShowVoidForm(false);
-                      setActionsOpen(false);
-                    }}
-                  >
-                    {t("femme.serviceRecords.voidCancel")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    className="min-h-11"
-                    disabled={voiding}
-                    data-testid="service-record-void-confirm"
-                    onClick={(e) => void handleVoid(e)}
-                  >
-                    {voiding ? t("femme.serviceRecords.voiding") : t("femme.serviceRecords.voidConfirm")}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <button
+            <div>
+              <Label htmlFor="service-record-void-reason">{t("femme.serviceRecords.voidReason")}</Label>
+              <Textarea
+                id="service-record-void-reason"
+                value={voidReason}
+                onChange={(e) => {
+                  setVoidReason(e.target.value);
+                  setVoidReasonError(null);
+                }}
+                placeholder={t("femme.serviceRecords.voidReasonPlaceholder")}
+                rows={2}
+                aria-invalid={!!voidReasonError}
+                aria-describedby={voidReasonError ? "service-record-void-reason-err" : undefined}
+                className="mt-1 w-full"
+              />
+              <FieldValidationError id="service-record-void-reason-err">
+                {voidReasonError}
+              </FieldValidationError>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
                 type="button"
-                data-testid="service-record-void-open"
-                onClick={() => setShowVoidForm(true)}
-                className="min-h-11 self-start px-1 text-sm font-bold text-danger underline underline-offset-4"
+                variant="secondary"
+                className="min-h-11"
+                onClick={() => setShowVoidForm(false)}
               >
-                {t("femme.serviceRecords.voidButton")}
-              </button>
-            )}
+                {t("femme.serviceRecords.voidCancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                className="min-h-11"
+                disabled={voiding}
+                data-testid="service-record-void-confirm"
+                onClick={(e) => void handleVoid(e)}
+              >
+                {voiding ? t("femme.serviceRecords.voiding") : t("femme.serviceRecords.voidConfirm")}
+              </Button>
+            </div>
           </div>
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            {record && isOpen ? (
-              <button
+            {record && isOpen && !showVoidForm ? (
+              <Button
                 type="button"
-                data-testid="service-record-actions-toggle"
-                aria-label={t("femme.serviceRecords.moreActions")}
-                aria-expanded={actionsOpen}
-                onClick={() => {
-                  setActionsOpen((v) => !v);
-                  setShowVoidForm(false);
-                }}
-                className="min-h-11 min-w-11 rounded-xl border border-line bg-surface text-lg"
+                variant="secondary"
+                className="min-h-11 text-danger"
+                data-testid="service-record-void-open"
+                onClick={() => setShowVoidForm(true)}
               >
-                ⋯
-              </button>
+                {t("femme.serviceRecords.voidButton")}
+              </Button>
             ) : null}
           </div>
           <div className="flex flex-wrap justify-end gap-2">

@@ -199,7 +199,9 @@ describe("ServiceRecordsPage", () => {
     renderPage();
     await userEvent.click(await screen.findByTestId("service-record-row-1"));
     const dialog = await screen.findByRole("dialog");
-    await within(dialog).findByTestId("service-record-status");
+    const pill = await within(dialog).findByTestId("service-record-status");
+    expect(pill.getAttribute("data-status")).toBe("OPEN");
+    expect(pill.textContent).toMatch(/Open/);
     await userEvent.click(within(dialog).getByTestId("service-record-submit"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(await screen.findByTestId("service-records-toast")).toBeTruthy();

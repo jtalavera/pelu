@@ -22,6 +22,8 @@ type Props = {
   onChange: (service: SalonServiceOption | null) => void;
   id?: string;
   label?: string;
+  /** Visually hide the label (it stays available to screen readers) — for dense row layouts. */
+  labelSrOnly?: boolean;
   placeholder?: string;
   /** When set with `invalid`, links the input to a `FieldValidationError` id for accessibility. */
   errorDescribedById?: string;
@@ -50,6 +52,7 @@ export function ServiceSearchField({
   onChange,
   id,
   label,
+  labelSrOnly,
   placeholder,
   errorDescribedById,
   invalid,
@@ -146,7 +149,9 @@ export function ServiceSearchField({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <Label htmlFor={inputId}>{labelText}</Label>
+      <Label htmlFor={inputId} className={labelSrOnly ? "sr-only" : undefined}>
+        {labelText}
+      </Label>
       <div className="relative">
         <Input
           id={inputId}

@@ -177,14 +177,15 @@ describe("ServiceRecordEditor", () => {
     expect(await screen.findByText("Billing page")).toBeTruthy();
   });
 
-  it("voiding lives behind the ⋯ menu and needs a reason", async () => {
+  it("Void is a footer button (no ⋯ menu), opens the reason form in place and needs a reason", async () => {
     const voided = { ...openRecord, status: "VOIDED" as const, voidReason: "Left early" };
     femmePostJson.mockResolvedValue(voided);
     const onVoided = vi.fn();
     renderEditor(openRecord, { onVoided });
-    expect(screen.queryByTestId("service-record-void-open")).toBeNull();
-    await userEvent.click(screen.getByTestId("service-record-actions-toggle"));
+    expect(screen.queryByTestId("service-record-actions-toggle")).toBeNull();
+    expect(screen.queryByTestId("service-record-void-form")).toBeNull();
     await userEvent.click(screen.getByTestId("service-record-void-open"));
+    expect(screen.getByTestId("service-record-void-form")).toBeTruthy();
     await userEvent.click(screen.getByTestId("service-record-void-confirm"));
     expect(await screen.findByText(/enter a reason/i)).toBeTruthy();
     expect(femmePostJson).not.toHaveBeenCalled();
@@ -192,6 +193,32 @@ describe("ServiceRecordEditor", () => {
     await userEvent.click(screen.getByTestId("service-record-void-confirm"));
     await waitFor(() => expect(femmePostJson).toHaveBeenCalledWith("/api/service-records/7/void", { voidReason: "Left early" }));
     await waitFor(() => expect(onVoided).toHaveBeenCalledWith(voided));
+  });
+
+  it("an existing record shows the client and date on one line (no client search)", async () => {
+    renderEditor(openRecord);
+    expect(screen.queryByLabelText(/search or select client/i)).toBeNull();
+    const row = screen.getByLabelText(/^client$/i);
+    expect(row.textContent).toMatch(/Marta Benítez/);
+  });
+
+  it("each service is one in-line row; the remove ✕ only shows with several lines", async () => {
+    renderEditor(openRecord);
+    const rows = screen.getAllByTestId("service-record-line");
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(within(row).getByLabelText(/quantity/i)).toBeTruthy();
+      expect(within(row).getByLabelText(/unit price/i)).toBeTruthy();
+      expect(within(row).getByTestId("service-record-line-remove")).toBeTruthy();
+    }
+  });
+
+  it("tips are compact: one inline field per professional, two per row on wide screens", async () => {
+    renderEditor(openRecord);
+    await userEvent.click(screen.getByTestId("service-record-more-toggle"));
+    const tips = screen.getByTestId("service-record-tips");
+    expect(tips.className).toMatch(/sm:grid-cols-2/);
+    expect(within(tips).getAllByRole("textbox")).toHaveLength(2);
   });
 
   it("a paid record is read-only and shows its linked invoice", async () => {

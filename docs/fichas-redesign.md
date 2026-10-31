@@ -14,14 +14,19 @@ Parte del rediseño general. Mismo sistema: una acción principal por estado, lo
   confirma en la lista. El enlace "Ver historial" del Inicio abre la lista en **Todas**.
 
 ## Ficha (diálogo)
-- Bloque **CLIENTE** (buscar o crear; al volver de "crear cliente" el cliente queda elegido) y bloque
-  **SERVICIOS**, separados por una línea y títulos en color principal (sin fondos de color).
-- Cada línea: servicio, profesional, **cantidad** (1 por defecto, editable), precio unitario y subtotal.
-  "+ Agregar otro servicio", "Quitar" cuando hay más de una, y el **Total**.
-- **Más opciones**: propinas por profesional (solo los que están en las líneas).
-- Ficha **abierta**: **Cobrar** (guarda los cambios y abre Facturación), **Guardar** (secundario), **Cerrar**
-  y un menú ⋯ con **Anular ficha** (motivo en el mismo lugar). Ficha nueva: Cancelar / Guardar.
-- Ficha **cobrada** o **anulada**: solo lectura, con el comprobante vinculado o el motivo.
+- **Cabecera**: título "Ficha de servicio" y, a su lado, el **estado destacado** (● Abierta en ámbar, ● Cobrada en verde,
+  ● Anulada en gris; `ServiceRecordStatusPill`). Para poder poner el chip junto al título, `Modal.title` del sistema de
+  diseño acepta ahora un nodo además de texto (cambio de tipo, sin cambios visuales para el resto).
+- **Cliente**: en una fichas ya creada, una sola línea `CLIENTE · nombre ....... fecha`. En una ficha nueva, el
+  buscador (o crear cliente; al volver queda elegido). Una ficha existente ya no permite cambiar de cliente.
+- **Servicios en filas en línea, sin cajas anidadas**: `SERVICIO · PROFESIONAL · CANT. · PRECIO · SUBTOTAL · ✕` con los
+  títulos de columna una sola vez y una línea fina entre filas (en celular cada servicio se apila en dos renglones).
+  La ✕ solo aparece con más de un servicio. Después: "+ Agregar otro servicio" y el **Total**.
+- **Más opciones**: propinas compactas, un campo en línea por profesional (`Propina · Laura  [  0 ]`), de a dos por fila
+  en pantallas anchas.
+- **Pie**: ficha **abierta** → **Anular ficha** a la izquierda (abre el motivo en el mismo lugar) y **Cerrar / Guardar /
+  Cobrar** a la derecha. Ficha nueva: Cancelar / Guardar. Cobrada o anulada: solo lectura con el comprobante o el motivo.
+- Guardar o anular cierra el diálogo y un `Toast` de 4 s lo confirma en la lista.
 
 ## Tests
 Vitest: `ServiceRecordsPage.test.tsx`, `ServiceRecordEditor.test.tsx`; JUnit: `ServiceRecordServiceTest`.
