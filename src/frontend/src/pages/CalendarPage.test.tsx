@@ -75,10 +75,11 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
     it("renders navigation buttons", async () => {
       renderPage();
       await waitFor(() => {
-        const prevButtons = screen.getAllByRole("button", { name: /previous week/i });
+        // The Day view is the default: the arrows move one day.
+        const prevButtons = screen.getAllByRole("button", { name: /previous day/i });
         expect(prevButtons.length).toBeGreaterThan(0);
       });
-      const nextButtons = screen.getAllByRole("button", { name: /next week/i });
+      const nextButtons = screen.getAllByRole("button", { name: /next day/i });
       expect(nextButtons.length).toBeGreaterThan(0);
     });
 
@@ -90,12 +91,21 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("renders professional filter", async () => {
+    it("renders the professional filter as chips", async () => {
       renderPage();
-      await waitFor(() => {
-        const filter = screen.getAllByRole("combobox");
-        expect(filter.length).toBeGreaterThan(0);
-      });
+      expect(await screen.findByRole("button", { name: /^all professionals$/i })).toBeTruthy();
+      expect(await screen.findByRole("button", { name: /^ana gomez$/i })).toBeTruthy();
+    });
+
+    it("opens on the Day view and switches to the Week grid with one tap", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      expect(await screen.findByTestId("calendar-week-strip")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-day-col-mon")).toBeNull();
+      await user.click(screen.getAllByTestId("calendar-view-week")[0]);
+      expect(await screen.findByTestId("calendar-day-col-mon")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-week-strip")).toBeNull();
+      expect(screen.getAllByRole("button", { name: /next week/i }).length).toBeGreaterThan(0);
     });
 
     it("shows appointment in calendar when appointments are loaded", async () => {
@@ -115,21 +125,20 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("shows professional options in filter combobox (HU-19)", async () => {
+    it("filters the day by professional with the chips (HU-19)", async () => {
       const user = userEvent.setup();
       renderPage();
+      const chip = await screen.findByRole("button", { name: /^ana gomez$/i });
+      expect(chip.getAttribute("aria-pressed")).toBe("false");
+      await user.click(chip);
+      expect(chip.getAttribute("aria-pressed")).toBe("true");
       await waitFor(() => {
-        expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0);
+        const urls = femmeJsonMock.mock.calls.map((c) => String(c[0]));
+        expect(urls.some((u) => u.includes("/api/appointments") && u.includes("professionalId=10"))).toBe(true);
       });
-      const filterCombo = screen.getByRole("combobox", {
-        name: /filter by professional/i,
-      });
-      await user.click(filterCombo);
-      expect(await screen.findByRole("listbox", { name: /filter by professional/i })).toBeTruthy();
-      expect(await screen.findByRole("button", { name: /^ana gomez$/i })).toBeTruthy();
     });
 
-    it("does not show non-grid statuses in the week view (HU-19)", async () => {
+    it("does not list non-grid statuses (HU-19)", async () => {
       const completedAppt = {
         ...MOCK_APPOINTMENT,
         id: 99,
@@ -179,7 +188,10 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       fireEvent.blur(timeInput);
 
       await user.click(screen.getByRole("combobox", { name: /^professional$/i }));
-      await user.click(await screen.findByRole("button", { name: /^ana gomez$/i }));
+      // The page also has an "Ana Gomez" filter chip: pick the option inside the opened list.
+      await user.click(
+        within(await screen.findByRole("listbox")).getByRole("button", { name: /^ana gomez$/i }),
+      );
 
       await user.click(screen.getByRole("combobox", { name: /^service$/i }));
       await user.click(await screen.findByRole("button", { name: /^haircut/i }));
@@ -248,7 +260,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
   });
 
   describe("HU-09 - Edit appointment restriction", () => {
-    it("shows edit button for PENDING appointments in detail modal", async () => {
+    it("offers Confirm as the main step and Edit behind the ⋯ menu for PENDING appointments", async () => {
       femmeJsonMock.mockImplementation((url: string) => {
         if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
         if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
@@ -263,10 +275,12 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       const apptBtn = await screen.findByRole("button", { name: /haircut/i });
       await user.click(apptBtn);
 
-      await waitFor(() => {
-        const editBtns = screen.queryAllByRole("button", { name: /edit appointment/i });
-        expect(editBtns.length).toBeGreaterThan(0);
-      });
+      const next = await screen.findByTestId("calendar-next-step");
+      expect(next.textContent).toMatch(/confirm/i);
+      await user.click(screen.getByTestId("calendar-more-actions"));
+      expect(await screen.findByRole("button", { name: /edit appointment/i })).toBeTruthy();
+      expect(screen.getByTestId("calendar-action-cancel")).toBeTruthy();
+      expect(screen.getByTestId("calendar-action-noshow")).toBeTruthy();
     });
 
     // COMPLETED appointments are excluded from the week grid entirely since HU-19

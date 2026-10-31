@@ -190,7 +190,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     ).find((p) => p.id === pro.id)!.fullName;
 
     await loginAs(page, pro.email, PASSWORD);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
 
     // AC6: own appointment → "Technical sheet".
@@ -253,7 +253,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     await setSheet(request, token, client.id, { notes: "Nota desde el menú", colorFormula: null });
 
     await loginAs(page, pro.email, PASSWORD);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("link", { name: "Clients", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/clients$/);
     // Search by name, submitted with Enter.

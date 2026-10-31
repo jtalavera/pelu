@@ -271,7 +271,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
 
     // Admin.
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     const badge = page.getByTestId(`birthday-badge-${withBirthday.id}`);
     await expect(badge).toBeVisible();
     await expect(badge).toHaveAttribute("aria-label", "Client's birthday");
@@ -281,7 +281,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     await page.context().clearCookies();
     await page.evaluate(() => sessionStorage.clear());
     await loginAs(page, pro.email, PASSWORD);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByTestId(`birthday-badge-${withBirthday.id}`)).toBeVisible();
     await page.getByTestId(`calendar-appt-${withBirthday.id}`).click();
     const detail = page.getByRole("dialog", { name: "Appointment detail" });

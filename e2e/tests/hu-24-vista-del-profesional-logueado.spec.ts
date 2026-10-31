@@ -91,7 +91,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, `E2E Cal ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     // "Today" button is always visible in the calendar header
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
   });
@@ -123,7 +123,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     });
 
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // The filter is there, preselected on her own agenda.
     const filter = page.locator("#prof-filter");
@@ -241,7 +241,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, name, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
 
     // Open new appointment form (first button = header button with visible text, not calendar slot buttons)
@@ -342,7 +342,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
 
     // UI: the other's appointment opens read-only (no edit / change status), hers does not.
     await loginAs(page, email, "ValidPass1!");
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // Filter by the other professional (a crowded "all" grid can squeeze the block too thin to click).
     await pickCalendarFilter(page, salon.professionalFullName);

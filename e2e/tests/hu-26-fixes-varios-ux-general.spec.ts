@@ -19,7 +19,7 @@ test.describe("HU-26 · Fixes varios UX general", () => {
   // Req 1: Calendar time picker shows 06:00–20:00
   test("HU-26 · 1 combobox de hora en nuevo turno muestra rango 06:00–20:00", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: /New appointment/ }).first().click();
     const dlg = bookingAppointmentDialog(page);
     await expect(dlg).toBeVisible();

@@ -75,7 +75,7 @@ test.describe("HU-28 · Fixes varios", () => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     // Open the new appointment dialog
     await page.getByRole("button", { name: /New appointment|Nuevo turno/ }).first().click();
     const dlg = page.getByRole("dialog");
@@ -279,7 +279,7 @@ test.describe("HU-28 · Fixes varios", () => {
       startAt: calendarVisibleWeekSlotIso(10, 0),
     });
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
     // Check PENDING block has dotted border style (status is reflected via inline borderLeft style)
     const pendingBlock = page.getByTestId(`calendar-appt-${appt.id}`);

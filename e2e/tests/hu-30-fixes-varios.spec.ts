@@ -278,7 +278,7 @@ test.describe("HU-30 · Fixes varios", () => {
 
     // Simulate a mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
 
     // On mobile, we should see day navigation (not "Week navigation")
     // The nav label should be the day label (not week range "Jun 1 – Jun 7")

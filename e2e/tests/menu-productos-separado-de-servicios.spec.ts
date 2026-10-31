@@ -305,7 +305,7 @@ test.describe("Menú Productos separado de Servicios", () => {
   test("el calendario ofrece solo servicios al agendar (no productos)", async ({ page }) => {
     await loginAsDemo(page);
     const request = page.waitForRequest((r) => r.url().includes("/api/services?kind=SERVICE"));
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await request;
   });
 });

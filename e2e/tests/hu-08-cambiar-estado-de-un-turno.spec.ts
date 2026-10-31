@@ -16,7 +16,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
@@ -37,7 +37,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
@@ -60,7 +60,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();

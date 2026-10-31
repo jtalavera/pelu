@@ -13,7 +13,7 @@ import { bookingAppointmentDialog, ensureCalendarShowsAppointmentByTestId } from
 test.describe("HU-19 · Fixes varios del calendario", () => {
   test("filtro de profesionales con placeholder de búsqueda", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await expect(page.getByPlaceholder("Type to filter…").first()).toBeVisible();
   });
 
@@ -25,7 +25,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     const fullName = seed.professionalFullName;
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     const cb = page.getByRole("combobox", { name: "Filter by professional" });
     await cb.click();
     await cb.fill(fullName);
@@ -45,7 +45,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
     await page.locator("#status-select").selectOption("COMPLETED");
@@ -62,7 +62,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     const col = page.getByTestId("calendar-day-col-wed");
     await expect(col).toBeVisible();
     const box = await col.boundingBox();
@@ -78,7 +78,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: /New appointment/ }).first().click();
     const dlg = bookingAppointmentDialog(page);
     await expect(dlg.getByRole("combobox", { name: /^Time$/ })).toBeVisible();
@@ -88,7 +88,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: /New appointment/ }).first().click();
     const dlg = bookingAppointmentDialog(page);
     // Localized date input renders a combobox; the popover dialog "Calendar" appears on focus.
@@ -119,7 +119,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
     const card = page.getByTestId(`calendar-appt-${appt.id}`);
     await expect(card).toBeVisible();

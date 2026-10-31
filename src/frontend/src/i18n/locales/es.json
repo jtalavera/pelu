@@ -2794,6 +2794,27 @@
       }
     },
     "calendar": {
+      "views": { "label": "Vista", "day": "Día", "week": "Semana" },
+      "action": {
+        "confirm": "Confirmar",
+        "start": "Iniciar",
+        "charge": "Cobrar",
+        "complete": "Marcar como atendido",
+        "noShow": "No asistió",
+        "cancelAppointment": "Cancelar turno",
+        "restore": "Volver a pendiente",
+        "more": "Más acciones"
+      },
+      "count_one": "{{count}} turno",
+      "count_other": "{{count}} turnos",
+      "free": "libre",
+      "emptyDay": "No hay turnos este día.",
+      "emptyDayFor": "No hay turnos de {{name}} este día.",
+      "now": "ahora",
+      "cancelTitle": "Cancelar turno",
+      "cancelConfirm": "Cancelar turno",
+      "cancelBack": "Volver",
+      "chargeError": "No se pudo preparar el cobro. Probá de nuevo.",
       "clientBirthday": "Cumpleaños de la cliente",
       "title": "Turnos",
       "today": "Hoy",

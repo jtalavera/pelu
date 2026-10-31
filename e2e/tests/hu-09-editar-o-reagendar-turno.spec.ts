@@ -20,7 +20,7 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Edit appointment" }).click();
@@ -42,7 +42,7 @@ test.describe("HU-09 · Editar o reagendar turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await page.getByRole("button", { name: "Change status" }).click();
