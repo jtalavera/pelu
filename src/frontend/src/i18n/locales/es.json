@@ -3120,6 +3120,9 @@
       }
     },
     "propinas": {
+      "balancesCaption": "Propina acumulada a hoy · no cambia con el período",
+      "lastDays": "Últimos {{count}} días",
+      "activeFilter": "{{period}} · {{professional}}",
       "colProfessional": "Profesional",
       "colDate": "Fecha",
       "colConcept": "Concepto",

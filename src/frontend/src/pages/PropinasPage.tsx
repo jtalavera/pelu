@@ -99,15 +99,13 @@ export default function PropinasPage() {
   const activeProfessionals = useMemo(() => professionals.filter((p) => p.active), [professionals]);
   // Most to withdraw first; ties alphabetical.
   const sortedProfessionals = useMemo(() => {
-    const list =
-      professionalId === ""
-        ? activeProfessionals
-        : activeProfessionals.filter((p) => p.id === professionalId);
-    return [...list].sort(
+    // The balances are what each professional has accumulated today: neither the period nor the
+    // professional filter (both belong to «Movimientos») change them.
+    return [...activeProfessionals].sort(
       (a, b) =>
         (balances[b.id] ?? 0) - (balances[a.id] ?? 0) || a.fullName.localeCompare(b.fullName),
     );
-  }, [activeProfessionals, professionalId, balances]);
+  }, [activeProfessionals, balances]);
   const balPages = Math.max(1, Math.ceil(sortedProfessionals.length / BALANCES_PAGE));
   const safeBalPage = Math.min(balPage, balPages - 1);
   const shownProfessionals = sortedProfessionals.slice(
@@ -307,83 +305,6 @@ export default function PropinasPage() {
         </Alert>
       ) : null}
 
-      <div role="group" aria-label={t("femme.propinas.periodGroup")} className="mb-4 flex flex-wrap gap-2">
-        {PERIODS.map((d) => (
-          <button
-            key={d}
-            type="button"
-            aria-pressed={period === d}
-            data-testid={`propinas-period-${d}`}
-            onClick={() => selectPeriod(d)}
-            className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
-              period === d
-                ? "border-primary bg-primary-lt text-primary"
-                : "border-line bg-surface text-ink hover:bg-bg"
-            }`}
-          >
-            {t("femme.propinas.periodDays", { count: d })}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-4 overflow-hidden rounded-card border border-line bg-surface">
-        <button
-          type="button"
-          data-testid="propinas-filters-toggle"
-          aria-expanded={filtersOpen}
-          aria-controls="propinas-filters"
-          onClick={() => setFiltersOpen((v) => !v)}
-          className="flex min-h-11 w-full items-center justify-between px-4 text-left font-semibold text-ink"
-        >
-          {t("femme.propinas.filters")}
-          <span aria-hidden="true" className={`transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
-            ⌄
-          </span>
-        </button>
-        {filtersOpen ? (
-          <div id="propinas-filters" className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-3">
-            <div>
-              <Label htmlFor="propinas-filter-from">{t("femme.propinas.report.filterFrom")}</Label>
-              <Input
-                id="propinas-filter-from"
-                type="date"
-                value={range.from}
-                onChange={(e) => changeRange({ from: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="propinas-filter-to">{t("femme.propinas.report.filterTo")}</Label>
-              <Input
-                id="propinas-filter-to"
-                type="date"
-                value={range.to}
-                onChange={(e) => changeRange({ to: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="propinas-filter-professional">
-                {t("femme.propinas.report.filterProfessional")}
-              </Label>
-              <Select
-                id="propinas-filter-professional"
-                value={professionalId === "" ? "" : String(professionalId)}
-                onChange={(e) => {
-                  setProfessionalId(e.target.value === "" ? "" : Number(e.target.value));
-                  setBalPage(0);
-                }}
-              >
-                <option value="">{t("femme.propinas.allProfessionals")}</option>
-                {activeProfessionals.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.fullName}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
       {loadError ? (
         <Alert variant="destructive" title={t("femme.propinas.errorTitle")} className="mb-4">
           {loadError}
@@ -395,6 +316,12 @@ export default function PropinasPage() {
         data-testid="propinas-cards"
         className="mb-4 rounded-card border border-line bg-surface px-4"
       >
+        <div className="pt-3">
+          <h2 className="font-heading text-base font-extrabold text-ink">{t("femme.propinas.balancesTitle")}</h2>
+          <p className="text-sm text-ink-3" data-testid="propinas-balances-caption">
+            {t("femme.propinas.balancesCaption")}
+          </p>
+        </div>
         <div
           aria-hidden="true"
           className="hidden grid-cols-[minmax(0,1fr)_auto_6rem] gap-3 pb-1 pt-2 text-[11px] font-extrabold uppercase tracking-wider text-ink-3 sm:grid"
@@ -506,6 +433,95 @@ export default function PropinasPage() {
             </span>
           </div>
         </div>
+        <span
+          className="w-fit rounded-full bg-primary-lt px-2.5 py-0.5 text-xs font-extrabold text-primary"
+          data-testid="propinas-active-filter"
+        >
+          {t("femme.propinas.activeFilter", {
+            period: period
+              ? t("femme.propinas.lastDays", { count: periodDays })
+              : `${range.from} – ${range.to}`,
+            professional:
+              professionalId === ""
+                ? t("femme.propinas.allProfessionals")
+                : (activeProfessionals.find((p) => p.id === professionalId)?.fullName ?? ""),
+          })}
+        </span>
+      <div role="group" aria-label={t("femme.propinas.periodGroup")} className="flex flex-wrap gap-2">
+        {PERIODS.map((d) => (
+          <button
+            key={d}
+            type="button"
+            aria-pressed={period === d}
+            data-testid={`propinas-period-${d}`}
+            onClick={() => selectPeriod(d)}
+            className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+              period === d
+                ? "border-primary bg-primary-lt text-primary"
+                : "border-line bg-surface text-ink hover:bg-bg"
+            }`}
+          >
+            {t("femme.propinas.periodDays", { count: d })}
+          </button>
+        ))}
+      </div>
+      <div className="overflow-hidden rounded-card border border-line bg-surface">
+        <button
+          type="button"
+          data-testid="propinas-filters-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="propinas-filters"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="flex min-h-11 w-full items-center justify-between px-4 text-left font-semibold text-ink"
+        >
+          {t("femme.propinas.filters")}
+          <span aria-hidden="true" className={`transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
+            ⌄
+          </span>
+        </button>
+        {filtersOpen ? (
+          <div id="propinas-filters" className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-3">
+            <div>
+              <Label htmlFor="propinas-filter-from">{t("femme.propinas.report.filterFrom")}</Label>
+              <Input
+                id="propinas-filter-from"
+                type="date"
+                value={range.from}
+                onChange={(e) => changeRange({ from: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="propinas-filter-to">{t("femme.propinas.report.filterTo")}</Label>
+              <Input
+                id="propinas-filter-to"
+                type="date"
+                value={range.to}
+                onChange={(e) => changeRange({ to: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="propinas-filter-professional">
+                {t("femme.propinas.report.filterProfessional")}
+              </Label>
+              <Select
+                id="propinas-filter-professional"
+                value={professionalId === "" ? "" : String(professionalId)}
+                onChange={(e) => {
+                  setProfessionalId(e.target.value === "" ? "" : Number(e.target.value));
+                  setBalPage(0);
+                }}
+              >
+                <option value="">{t("femme.propinas.allProfessionals")}</option>
+                {activeProfessionals.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.fullName}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+        ) : null}
+      </div>
         {loading ? (
           <div className="flex items-center gap-2 py-4">
             <Spinner size="sm" />

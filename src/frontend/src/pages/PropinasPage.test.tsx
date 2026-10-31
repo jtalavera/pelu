@@ -160,9 +160,12 @@ describe("PropinasPage", () => {
     await waitFor(() =>
       expect(calls("/api/propinas/report?").some((u) => u.includes("professionalIds=2"))).toBe(true),
     );
-    // Only the filtered professional's card remains.
-    await waitFor(() => expect(screen.queryByTestId("propinas-card-1")).toBeNull());
+    // The filter belongs to «Movimientos»: the balances list is untouched and the active filter is labelled.
+    expect(screen.getByTestId("propinas-card-1")).toBeTruthy();
     expect(screen.getByTestId("propinas-card-2")).toBeTruthy();
+    expect(screen.getByTestId("propinas-balances-caption").textContent).toMatch(/does not change with the period/i);
+    expect(screen.getByTestId("propinas-active-filter").textContent).toMatch(/Last 30 days/);
+    expect(within(screen.getByTestId("propinas-movements")).getByTestId("propinas-filters-toggle")).toBeTruthy();
   });
 
   it("withdrawing: validates, 'withdraw all' fills the balance, and confirming posts and shows a toast", async () => {

@@ -3120,6 +3120,9 @@
       }
     },
     "propinas": {
+      "balancesCaption": "Tips accumulated today · does not change with the period",
+      "lastDays": "Last {{count}} days",
+      "activeFilter": "{{period}} · {{professional}}",
       "colProfessional": "Professional",
       "colDate": "Date",
       "colConcept": "Concept",

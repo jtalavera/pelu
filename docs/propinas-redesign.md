@@ -20,3 +20,8 @@ Parte del rediseño general. Una sola pantalla (`/app/propinas`) en lugar de las
 
 ## Tests
 Vitest: `PropinasPage.test.tsx`. Los specs de Playwright de propinas se adaptan en la pasada final tras Configuración.
+
+## Ajuste: período y filtros dentro de Movimientos
+- Los chips 7 / 30 / 90 días y "Filtros" (desde, hasta, profesional) pasan a la tarjeta **Movimientos**, encima de la lista, porque solo filtran esa lista.
+- **Saldos** tiene título y la leyenda "Propina acumulada a hoy · no cambia con el período"; ya no lo afecta ningún filtro (tampoco el de profesional) y sigue paginado de a 5.
+- Movimientos muestra una etiqueta con lo aplicado (`Últimos 30 días · Todas las profesionales`, o el rango y la profesional elegidos). Los `data-testid` se mantienen; se agregan `propinas-balances-caption` y `propinas-active-filter`.
