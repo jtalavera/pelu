@@ -13,7 +13,9 @@ import {
   Pagination,
   Select,
   Spinner,
+  Switch,
   Text,
+  Toast,
   type Locality,
 } from "@design-system";
 import { femmePostJson } from "../api/femmeClient";
@@ -30,7 +32,6 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { focusMessageBox } from "../util/focusMessageBox";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { SearchInput } from "../components/ui/SearchInput";
-import { StatusBadge } from "../components/StatusBadge";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useLocalitySearch } from "../hooks/useLocalitySearch";
@@ -73,11 +74,10 @@ const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
   { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
 ] as const;
 
-type FilterKey = "all" | "active" | "ruc" | "new";
+type FilterKey = "all" | "active" | "new";
 
 function pillFilterParams(filter: FilterKey): ClientListFilterParams {
   if (filter === "active") return { active: true };
-  if (filter === "ruc") return { withRuc: true };
   if (filter === "new") return { isNew: true };
   return {};
 }
@@ -87,12 +87,6 @@ function pillFilterParams(filter: FilterKey): ClientListFilterParams {
 function getInitials(name: string): string {
   const p = name.trim().split(/\s+/);
   return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
-}
-
-function avatarStyle(client: Client): { bg: string; color: string } {
-  if (client.visitCount > 5) return { bg: "var(--color-rose-lt)",  color: "var(--color-rose-dk)"  };
-  if (client.ruc)             return { bg: "var(--color-mauve-lt)", color: "var(--color-mauve-dk)" };
-  return                             { bg: "var(--color-stone-md)", color: "var(--color-ink-2)"    };
 }
 
 function fmtDate(iso: string, locale: string): string {
@@ -141,12 +135,10 @@ export default function ClientsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [reloadTick, setReloadTick] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
-  const [rowStatusSuccess, setRowStatusSuccess] = useState<"activated" | "deactivated" | null>(
-    null,
-  );
+  const [notice, setNotice] = useState<"created" | "updated" | "activated" | "deactivated" | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   // Modal state
   const [modalOpen, setModalOpen]   = useState(false);
@@ -169,7 +161,6 @@ export default function ClientsPage() {
     acquisitionOther?: string;
   } | null>(null);
   const [saveError, setSaveError]   = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const resultMessagesRef = useRef<HTMLDivElement | null>(null);
   const modalErrorRef = useRef<HTMLDivElement | null>(null);
   const [saving, setSaving]         = useState(false);
@@ -219,8 +210,16 @@ export default function ClientsPage() {
           prefilledName?: string;
           returnTo?: string;
           returnTab?: "session" | "invoice" | "history" | "new";
+          notice?: "updated" | "activated" | "deactivated";
         }
       | undefined;
+    if (st?.notice) {
+      // The client detail closes after saving / (de)activating and reports the outcome here.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNotice(st.notice);
+      navigate(location.pathname, { replace: true, state: {} });
+      return;
+    }
     if (st?.openCreateClient) {
       // Open the create-client modal pre-filled from router navigation state.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -234,8 +233,8 @@ export default function ClientsPage() {
       setLocality(null);
       setFieldError(null);
       setSaveError(null);
-      setSaveSuccess(false);
-      setRowStatusSuccess(null);
+      setNotice(null);
+      setMoreOpen(false);
       setModalOpen(true);
       if (st.returnTo) {
         setReturnAfterCreate({ path: st.returnTo, tab: st.returnTab });
@@ -259,16 +258,15 @@ export default function ClientsPage() {
     setExtras(EMPTY_PROFILE_EXTRAS);
     setFieldError(null);
     setSaveError(null);
-    setSaveSuccess(false);
-    setRowStatusSuccess(null);
+    setNotice(null);
+    setMoreOpen(false);
     setModalOpen(true);
   }
 
   async function saveClient() {
     setFieldError(null);
     setSaveError(null);
-    setSaveSuccess(false);
-    setRowStatusSuccess(null);
+    setNotice(null);
     const nextErr: NonNullable<typeof fieldError> = {};
     if (!fullName.trim()) nextErr.fullName = t("femme.clients.fullNameRequired");
     const isRucType = identityDocumentType === "RUC";
@@ -326,7 +324,7 @@ export default function ClientsPage() {
         return;
       }
       reload();
-      setSaveSuccess(true);
+      setNotice("created");
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
     } finally {
@@ -336,8 +334,8 @@ export default function ClientsPage() {
 
   // After saving, move the user to the result message so the outcome is seen right away.
   useEffect(() => {
-    if (saveSuccess) focusMessageBox(resultMessagesRef.current);
-  }, [saveSuccess]);
+    if (error) focusMessageBox(resultMessagesRef.current);
+  }, [error]);
 
   useEffect(() => {
     if (saveError) focusMessageBox(modalErrorRef.current);
@@ -346,13 +344,12 @@ export default function ClientsPage() {
   // ── Deactivate / activate ───────────────────────────────────────────────────
   async function confirmDeactivateFromList() {
     if (!deactivateTarget) return;
-    setSaveSuccess(false);
-    setRowStatusSuccess(null);
+    setNotice(null);
     try {
       await femmePostJson<Client>(`/api/clients/${deactivateTarget.id}/deactivate`, {});
       setDeactivateTarget(null);
       reload();
-      setRowStatusSuccess("deactivated");
+      setNotice("deactivated");
     } catch (e) {
       setError(translateApiError(e, t, "femme.clients.saveError"));
       setDeactivateTarget(null);
@@ -360,12 +357,11 @@ export default function ClientsPage() {
   }
 
   async function activateClientRow(client: Client) {
-    setSaveSuccess(false);
-    setRowStatusSuccess(null);
+    setNotice(null);
     try {
       await femmePostJson<Client>(`/api/clients/${client.id}/activate`, {});
       reload();
-      setRowStatusSuccess("activated");
+      setNotice("activated");
     } catch (e) {
       setError(translateApiError(e, t, "femme.clients.saveError"));
     }
@@ -402,54 +398,16 @@ export default function ClientsPage() {
     }
   }
 
-  // ── Shared styles ───────────────────────────────────────────────────────────
-  const primaryBtn: React.CSSProperties = {
-    background: "var(--color-rose)",
-    color: "var(--color-on-primary)",
-    border: "none",
-    borderRadius: "var(--radius-md)",
-    padding: "8px 16px",
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  };
-
-  const ghostBtn: React.CSSProperties = {
-    background: "var(--color-white)",
-    color: "var(--color-ink-2)",
-    border: "var(--border-default)",
-    borderRadius: "var(--radius-md)",
-    padding: "7px 14px",
-    fontSize: 12,
-    cursor: "pointer",
-  };
-
   const FILTERS: { key: FilterKey; label: string }[] = [
     { key: "all",    label: t("femme.clients.filterAll")     },
     { key: "active", label: t("femme.clients.filterActive")  },
-    { key: "ruc",    label: t("femme.clients.filterWithRuc") },
     { key: "new",    label: t("femme.clients.filterNew")     },
   ];
-
-  const thStyle: React.CSSProperties = {
-    padding: "9px 12px",
-    fontSize: 10,
-    fontWeight: 500,
-    color: "var(--color-ink-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    textAlign: "left",
-    background: "var(--color-stone)",
-    whiteSpace: "nowrap",
-  };
 
   // ── Loading state ───────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ display: "flex", minHeight: "40vh", alignItems: "center", justifyContent: "center", gap: 12 }}>
+      <div className="flex min-h-[40vh] items-center justify-center gap-3">
         <Spinner size="lg" />
         <Text>{t("femme.clients.loading")}</Text>
       </div>
@@ -457,72 +415,39 @@ export default function ClientsPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-3xl">
       {/* ── Page header ── */}
-      <div
-        data-tour="clients-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 16,
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 15,
-              fontWeight: 500,
-              color: "var(--color-ink)",
-              margin: 0,
-              lineHeight: 1.3,
-            }}
-          >
-            {t("femme.clients.title")}
-          </h1>
-          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-            {t("femme.clients.subtitle", { count: totalElements })}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="button" style={ghostBtn} onClick={() => void exportFilteredCsv()}>
-            {t("femme.clients.export")}
-          </button>
-          <button data-tour="clients-new" type="button" style={primaryBtn} onClick={openNew}>
+      <div data-tour="clients-header" className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="font-heading text-2xl font-extrabold text-ink">{t("femme.clients.title")}</h1>
+        <div className="flex items-center gap-2">
+          <Button data-tour="clients-new" data-testid="clients-new" type="button" className="min-h-11" onClick={openNew}>
             {t("femme.clients.newClient")}
-          </button>
+          </Button>
+          <KebabMenu
+            id="clients-more"
+            triggerAriaLabel={t("femme.clients.moreActions")}
+            items={[
+              {
+                id: "export",
+                label: t("femme.clients.export"),
+                onSelect: () => void exportFilteredCsv(),
+              },
+            ]}
+          />
         </div>
       </div>
 
-      {/* ── Success / Error ── */}
-      {(saveSuccess || rowStatusSuccess || error) && (
-        <div
-          ref={resultMessagesRef}
-          tabIndex={-1}
-          style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, outline: "none" }}
-        >
-          {saveSuccess && (
-            <Alert variant="success" title={t("femme.clients.createSuccessTitle")}>
-              {t("femme.clients.createSuccessBody")}
-            </Alert>
-          )}
-          {rowStatusSuccess && (
-            <Alert variant="success">
-              {rowStatusSuccess === "activated"
-                ? t("femme.clients.rowActivateSuccess")
-                : t("femme.clients.rowDeactivateSuccess")}
-            </Alert>
-          )}
-          {error && (
-            <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
-              {error}
-            </Alert>
-          )}
+      {/* ── Notices ── */}
+      {error && (
+        <div ref={resultMessagesRef} tabIndex={-1} className="mb-4 outline-none">
+          <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
+            {error}
+          </Alert>
         </div>
       )}
 
       {/* ── Toolbar ── */}
-      <div data-tour="clients-search" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <div data-tour="clients-search" className="mb-3">
         <SearchInput
           id="clients-inline-search"
           value={listQuery}
@@ -531,248 +456,115 @@ export default function ClientsPage() {
           resultCount={totalElements}
           totalCount={totalElements}
         />
-
-        {/* Filter pills */}
-        <div data-tour="clients-filter-tabs" role="group" aria-label={t("femme.clients.filterAll")} style={{ display: "flex", gap: 6 }}>
-          {FILTERS.map(({ key, label }) => {
-            const isActive = filter === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handlePillChange(key)}
-                aria-pressed={isActive}
-                style={{
-                  padding: "5px 12px",
-                  borderRadius: "var(--radius-pill)",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  border: isActive ? `1px solid var(--color-rose-md)` : "var(--border-default)",
-                  background: isActive ? "var(--color-rose-lt)" : "var(--color-white)",
-                  color: isActive ? "var(--color-rose-dk)" : "var(--color-ink-2)",
-                  fontWeight: isActive ? 500 : 400,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+      </div>
+      <div
+        data-tour="clients-filter-tabs"
+        role="group"
+        aria-label={t("femme.clients.filterGroup")}
+        className="mb-4 flex flex-wrap gap-2"
+      >
+        {FILTERS.map(({ key, label }) => {
+          const isActive = filter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => handlePillChange(key)}
+              aria-pressed={isActive}
+              data-testid={`clients-filter-${key}`}
+              className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+                isActive
+                  ? "border-primary bg-primary-lt text-primary"
+                  : "border-line bg-surface text-ink hover:bg-bg"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Table ── */}
+      {/* ── List ── */}
       <div
         data-tour="clients-list"
-        style={{
-          background: "var(--color-white)",
-          borderRadius: "var(--radius-xl)",
-          border: "var(--border-default)",
-          overflow: "hidden",
-        }}
+        data-testid="clients-list"
+        className="overflow-hidden rounded-card border border-line bg-surface"
       >
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
-            <colgroup>
-              <col style={{ width: "27%" }} />
-              <col style={{ width: "15%" }} />
-              <col style={{ width: "15%" }} />
-              <col style={{ width: "9%"  }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "9%"  }} />
-              <col style={{ width: "12%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={thStyle}>{t("femme.clients.colClient")}</th>
-                <th style={thStyle}>{t("femme.clients.colPhone")}</th>
-                <th style={thStyle}>{t("femme.clients.ruc")}</th>
-                <th style={thStyle}>{t("femme.clients.colVisits")}</th>
-                <th style={thStyle}>{t("femme.clients.colLastVisit")}</th>
-                <th style={thStyle}>{t("femme.clients.colStatus")}</th>
-                <th style={thStyle} />
-              </tr>
-            </thead>
-            <tbody>
-              {pageClients.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      padding: "24px 12px",
-                      textAlign: "center",
-                      fontSize: 12,
-                      color: "var(--color-ink-3)",
-                    }}
-                  >
-                    {hasActiveFilters ? t("femme.clients.emptySearch") : t("femme.clients.emptyTitle")}
-                  </td>
-                </tr>
-              ) : (
-                pageClients.map((client) => {
-                  const av = avatarStyle(client);
-                  const isHov = hoveredId === client.id;
-                  const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
-                  const tdStyle: React.CSSProperties = {
-                    padding: "10px 12px",
-                    fontSize: 12,
-                    color: "var(--color-ink)",
-                    verticalAlign: "middle",
-                    borderBottom: "0.5px solid var(--color-stone)",
-                    background: tdBg,
-                  };
-
-                  return (
-                    <tr
-                      key={client.id}
-                      style={{ cursor: "pointer" }}
-                      onMouseEnter={() => setHoveredId(client.id)}
-                      onMouseLeave={() => setHoveredId(null)}
-                      onClick={() => navigate(`/app/clients/${client.id}`)}
-                    >
-                      <td style={tdStyle}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                          <div
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: "var(--radius-pill)",
-                              background: av.bg,
-                              color: av.color,
-                              fontSize: 10,
-                              fontWeight: 500,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {getInitials(client.fullName)}
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontWeight: 500,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {client.fullName}
-                            </div>
-                            {client.email ? (
-                              <div
-                                style={{
-                                  fontSize: 10,
-                                  color: "var(--color-ink-3)",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {client.email}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                        {client.phone ?? "—"}
-                      </td>
-
-                      <td style={tdStyle}>
-                        {client.ruc ? (
-                          <span
-                            style={{
-                              fontFamily: "monospace",
-                              fontSize: 11,
-                              color: "var(--color-ink-2)",
-                            }}
-                          >
-                            {client.ruc}
-                          </span>
-                        ) : (
-                          <span style={{ color: "var(--color-ink-3)" }}>
-                            {t("femme.clients.noRuc")}
-                          </span>
-                        )}
-                      </td>
-
-                      <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                        {t("femme.clients.visits", { count: client.visitCount })}
-                      </td>
-
-                      <td style={{ ...tdStyle, color: "var(--color-ink-2)" }}>
-                        {client.lastVisitAt ? fmtDate(client.lastVisitAt, locale) : "—"}
-                      </td>
-
-                      <td style={tdStyle}>
-                        <StatusBadge status={client.active ? "ACTIVE" : "INACTIVE"} />
-                      </td>
-
-                      <td
-                        style={{ ...tdStyle, textAlign: "center" }}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            justifyContent: "center",
-                            alignItems: "center",
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          <KebabMenu
-                            id={`clients-row-${client.id}`}
-                            triggerAriaLabel={t("femme.rowActions.trigger")}
-                            items={
-                              client.active
-                                ? [
-                                    {
-                                      id: "edit-info",
-                                      label: t("femme.rowActions.clients.editInfo"),
-                                      onSelect: () =>
-                                        navigate(`/app/clients/${client.id}`),
-                                    },
-                                    {
-                                      id: "deactivate",
-                                      label: t("femme.rowActions.clients.deactivate"),
-                                      destructive: true,
-                                      onSelect: () => setDeactivateTarget(client),
-                                    },
-                                  ]
-                                : [
-                                    {
-                                      id: "edit-info",
-                                      label: t("femme.rowActions.clients.editInfo"),
-                                      onSelect: () =>
-                                        navigate(`/app/clients/${client.id}`),
-                                    },
-                                    {
-                                      id: "activate",
-                                      label: t("femme.rowActions.clients.activate"),
-                                      onSelect: () => void activateClientRow(client),
-                                    },
-                                  ]
-                            }
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        {pageClients.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-8 text-center text-sm text-ink-3">
+            <span>{hasActiveFilters ? t("femme.clients.emptySearch") : t("femme.clients.emptyTitle")}</span>
+            {!hasActiveFilters && (
+              <Button type="button" className="min-h-11" onClick={openNew}>
+                {t("femme.clients.newClient")}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <ul className="flex flex-col px-1 sm:px-2">
+            {pageClients.map((client) => (
+              <li
+                key={client.id}
+                role="button"
+                tabIndex={0}
+                aria-label={t("femme.clients.openClient", { name: client.fullName })}
+                data-testid={`client-row-${client.id}`}
+                data-active={client.active ? "true" : "false"}
+                onClick={() => navigate(`/app/clients/${client.id}`)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/app/clients/${client.id}`);
+                  }
+                }}
+                className="flex min-h-14 cursor-pointer items-center gap-3 border-t border-line px-3 py-2.5 first:border-t-0 hover:bg-bg"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading font-extrabold text-primary ${
+                    client.active ? "" : "opacity-60"
+                  }`}
+                >
+                  {getInitials(client.fullName)}
+                </span>
+                <div className={`min-w-0 flex-1 ${client.active ? "" : "opacity-60"}`}>
+                  <div className="break-words font-semibold text-ink">{client.fullName}</div>
+                  <div className="break-words text-sm text-ink-3">
+                    {[
+                      client.phone || t("femme.clients.noPhone"),
+                      client.lastVisitAt
+                        ? t("femme.clients.lastVisit", { date: fmtDate(client.lastVisitAt, locale) })
+                        : t("femme.clients.noVisits"),
+                      client.active ? null : t("femme.status.INACTIVE"),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                </div>
+                <div
+                  className="shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <Switch
+                    className="min-h-11 min-w-11 justify-center"
+                    checked={client.active}
+                    aria-label={t("femme.clients.toggleAria", { name: client.fullName })}
+                    data-testid={`client-switch-${client.id}`}
+                    onChange={() =>
+                      client.active ? setDeactivateTarget(client) : void activateClientRow(client)
+                    }
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {/* ── Pagination footer ── */}
         <div
-          className="flex flex-wrap items-center justify-between gap-3 px-3 py-2"
-          style={{ background: "var(--color-stone)", borderTop: "var(--border-default)" }}
+          className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+          style={{ borderTop: "var(--border-default)" }}
         >
           <PageSizeSelect
             value={pageSize}
@@ -852,128 +644,146 @@ export default function ClientsPage() {
             <FieldValidationError id="client-phone-err">{fieldError?.phone}</FieldValidationError>
           </div>
 
-          <div>
-            <Label htmlFor="client-email">{t("femme.clients.email")}</Label>
-            <Input
-              id="client-email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setFieldError((prev) => (prev ? { ...prev, email: undefined } : prev));
-              }}
-              onBlur={() => {
-                const trimmed = email.trim();
-                if (trimmed && !isValidEmail(trimmed)) {
-                  setFieldError((prev) => ({
-                    ...(prev ?? {}),
-                    email: t("femme.clients.emailInvalid"),
-                  }));
-                }
-              }}
-              placeholder={t("femme.clients.emailPlaceholder")}
-              aria-invalid={fieldError?.email ? "true" : "false"}
-              aria-describedby={fieldError?.email ? "client-email-err" : undefined}
-            />
-            <FieldValidationError id="client-email-err">{fieldError?.email}</FieldValidationError>
-          </div>
+          <button
+            type="button"
+            data-testid="client-more-toggle"
+            aria-expanded={moreOpen}
+            aria-controls="client-more-options"
+            onClick={() => setMoreOpen((v) => !v)}
+            className="flex min-h-11 w-full items-center justify-between border-t border-line pt-2 text-left font-semibold text-ink"
+          >
+            {t("femme.clients.moreOptions")}
+            <span aria-hidden="true" className={`transition-transform ${moreOpen ? "rotate-180" : ""}`}>
+              ⌄
+            </span>
+          </button>
 
-          <div>
-            <Label htmlFor="client-identity-document-type">
-              {t("femme.clients.identityDocumentType")}
-            </Label>
-            <Select
-              id="client-identity-document-type"
-              value={identityDocumentType}
-              onChange={(e) => setIdentityDocumentType(e.target.value)}
-            >
-              {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {t(opt.labelKey)}
-                </option>
-              ))}
-            </Select>
-          </div>
+          {moreOpen && (
+            <div id="client-more-options" className="flex flex-col gap-4">
+              <div>
+                <Label htmlFor="client-email">{t("femme.clients.email")}</Label>
+                <Input
+                  id="client-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setFieldError((prev) => (prev ? { ...prev, email: undefined } : prev));
+                  }}
+                  onBlur={() => {
+                    const trimmed = email.trim();
+                    if (trimmed && !isValidEmail(trimmed)) {
+                      setFieldError((prev) => ({
+                        ...(prev ?? {}),
+                        email: t("femme.clients.emailInvalid"),
+                      }));
+                    }
+                  }}
+                  placeholder={t("femme.clients.emailPlaceholder")}
+                  aria-invalid={fieldError?.email ? "true" : "false"}
+                  aria-describedby={fieldError?.email ? "client-email-err" : undefined}
+                />
+                <FieldValidationError id="client-email-err">{fieldError?.email}</FieldValidationError>
+              </div>
 
-          {identityDocumentType === "RUC" && (
-            <div>
-              <Label htmlFor="client-taxpayer-type">{t("femme.clients.taxpayerType")}</Label>
-              <Select
-                id="client-taxpayer-type"
-                value={taxpayerType}
-                onChange={(e) => setTaxpayerType(e.target.value)}
-              >
-                <option value="PERSONA_FISICA">
-                  {t("femme.clients.taxpayerTypePersonaFisica")}
-                </option>
-                <option value="PERSONA_JURIDICA">
-                  {t("femme.clients.taxpayerTypePersonaJuridica")}
-                </option>
-              </Select>
+              <div>
+                <Label htmlFor="client-identity-document-type">
+                  {t("femme.clients.identityDocumentType")}
+                </Label>
+                <Select
+                  id="client-identity-document-type"
+                  value={identityDocumentType}
+                  onChange={(e) => setIdentityDocumentType(e.target.value)}
+                >
+                  {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {t(opt.labelKey)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              {identityDocumentType === "RUC" && (
+                <div>
+                  <Label htmlFor="client-taxpayer-type">{t("femme.clients.taxpayerType")}</Label>
+                  <Select
+                    id="client-taxpayer-type"
+                    value={taxpayerType}
+                    onChange={(e) => setTaxpayerType(e.target.value)}
+                  >
+                    <option value="PERSONA_FISICA">
+                      {t("femme.clients.taxpayerTypePersonaFisica")}
+                    </option>
+                    <option value="PERSONA_JURIDICA">
+                      {t("femme.clients.taxpayerTypePersonaJuridica")}
+                    </option>
+                  </Select>
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="client-identity-document-number">
+                  {t("femme.clients.identityDocumentNumber")}
+                </Label>
+                <Input
+                  id="client-identity-document-number"
+                  value={identityDocumentNumber}
+                  onChange={(e) => setIdentityDocumentNumber(e.target.value)}
+                  placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                  disabled={identityDocumentType === "INNOMINADO"}
+                  aria-invalid={fieldError?.identityDocumentNumber ? "true" : "false"}
+                  aria-describedby={
+                    fieldError?.identityDocumentNumber ? "client-identity-document-number-err" : undefined
+                  }
+                />
+                {identityDocumentType === "RUC" && (
+                  <Text variant="muted" className="mt-1 text-sm">
+                    {t("femme.clients.rucHint")}
+                  </Text>
+                )}
+                <FieldValidationError id="client-identity-document-number-err">
+                  {fieldError?.identityDocumentNumber}
+                </FieldValidationError>
+              </div>
+
+              <div>
+                <Label htmlFor="client-address">{t("femme.clients.address")}</Label>
+                <Input
+                  id="client-address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder={t("femme.clients.addressPlaceholder")}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="client-locality">{t("femme.clients.locality")}</Label>
+                <LocalityCombobox
+                  id="client-locality"
+                  value={locality}
+                  onChange={setLocality}
+                  onSearch={localitySearch.search}
+                  options={localitySearch.options}
+                  loading={localitySearch.loading}
+                  placeholder={t("femme.clients.localityPlaceholder")}
+                  noResultsLabel={t("femme.clients.localityNoResults")}
+                />
+                <Text variant="muted" className="mt-1 text-sm">
+                  {t("femme.clients.localityHint")}
+                </Text>
+              </div>
+
+              <ClientProfileExtrasFields
+                idPrefix="client"
+                value={extras}
+                onChange={setExtras}
+                birthdayError={fieldError?.birthday}
+                otherError={fieldError?.acquisitionOther}
+              />
             </div>
           )}
-
-          <div>
-            <Label htmlFor="client-identity-document-number">
-              {t("femme.clients.identityDocumentNumber")}
-            </Label>
-            <Input
-              id="client-identity-document-number"
-              value={identityDocumentNumber}
-              onChange={(e) => setIdentityDocumentNumber(e.target.value)}
-              placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
-              disabled={identityDocumentType === "INNOMINADO"}
-              aria-invalid={fieldError?.identityDocumentNumber ? "true" : "false"}
-              aria-describedby={
-                fieldError?.identityDocumentNumber ? "client-identity-document-number-err" : undefined
-              }
-            />
-            {identityDocumentType === "RUC" && (
-              <Text variant="muted" className="mt-1 text-sm">
-                {t("femme.clients.rucHint")}
-              </Text>
-            )}
-            <FieldValidationError id="client-identity-document-number-err">
-              {fieldError?.identityDocumentNumber}
-            </FieldValidationError>
-          </div>
-
-          <div>
-            <Label htmlFor="client-address">{t("femme.clients.address")}</Label>
-            <Input
-              id="client-address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder={t("femme.clients.addressPlaceholder")}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="client-locality">{t("femme.clients.locality")}</Label>
-            <LocalityCombobox
-              id="client-locality"
-              value={locality}
-              onChange={setLocality}
-              onSearch={localitySearch.search}
-              options={localitySearch.options}
-              loading={localitySearch.loading}
-              placeholder={t("femme.clients.localityPlaceholder")}
-              noResultsLabel={t("femme.clients.localityNoResults")}
-            />
-            <Text variant="muted" className="mt-1 text-sm">
-              {t("femme.clients.localityHint")}
-            </Text>
-          </div>
-
-          <ClientProfileExtrasFields
-            idPrefix="client"
-            value={extras}
-            onChange={setExtras}
-            birthdayError={fieldError?.birthday}
-            otherError={fieldError?.acquisitionOther}
-          />
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
@@ -1009,6 +819,24 @@ export default function ClientsPage() {
           onConfirm={() => void confirmDeactivateFromList()}
         />
       ) : null}
+
+      <Toast
+        open={notice !== null}
+        onOpenChange={(o) => {
+          if (!o) setNotice(null);
+        }}
+        variant="success"
+        duration={4000}
+        data-testid="clients-toast"
+      >
+        {notice === "created"
+          ? t("femme.clients.createSuccessBody")
+          : notice === "updated"
+            ? t("femme.clients.editSuccess")
+            : notice === "activated"
+            ? t("femme.clients.rowActivateSuccess")
+            : t("femme.clients.rowDeactivateSuccess")}
+      </Toast>
     </div>
   );
 }

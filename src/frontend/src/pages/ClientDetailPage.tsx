@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -10,8 +10,6 @@ import {
   Input,
   Label,
   LocalityCombobox,
-  PageSizeSelect,
-  Pagination,
   Select,
   Spinner,
   Tabs,
@@ -26,9 +24,8 @@ import {
   listAppointments,
   listClientAppointmentHistory,
   type Appointment,
-  type PageResponse,
 } from "../api/appointments";
-import { listInvoicesPaged, type PagedInvoicesResponse } from "../api/invoices";
+import { listInvoicesPaged, type InvoiceListItem } from "../api/invoices";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { focusMessageBox } from "../util/focusMessageBox";
 import { FieldValidationError } from "../components/FieldValidationError";
@@ -40,19 +37,15 @@ import {
   validateProfileExtras,
   type ClientProfileExtras,
 } from "../components/ClientProfileExtrasFields";
-import {
-  ClientSummaryLists,
-  ClientSummaryStats,
-  useClientSummary,
-} from "../components/ClientSummary";
+import { useClientSummary } from "../components/ClientSummary";
 import { ClientTechnicalSheetForm } from "../components/ClientTechnicalSheetForm";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
-import { SifenStatusBadge } from "../components/SifenStatusBadge";
+import { InvoiceStatePill } from "../components/InvoiceStatePill";
 import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { useLocalitySearch } from "../hooks/useLocalitySearch";
-import { ageOn, formatBirthday, isBirthdayOn } from "../lib/clientBirthday";
+import { isBirthdayOn } from "../lib/clientBirthday";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayPhone, isCompleteParaguayPhone } from "../lib/paraguayPhone";
 import { isValidEmail } from "../lib/validateEmail";
@@ -95,11 +88,12 @@ const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
   { value: "INNOMINADO", labelKey: "femme.clients.identityDocumentTypeInnominado" },
 ] as const;
 
-/** HU-70: tab ids, in display order ("info" = "Datos", the default). */
-const CLIENT_TABS = ["info", "summary", "sheet", "appointments", "invoices"] as const;
+/** Client redesign: three tabs; "history" is the default and not written to the URL. */
+const CLIENT_TABS = ["history", "sheet", "data"] as const;
 type ClientTab = (typeof CLIENT_TABS)[number];
-/** HU-70 AC12: ≥44 px touch targets on phones (the design-system trigger is shorter). */
-const TAB_TRIGGER_CLASS = "min-h-11 sm:min-h-0";
+/** ≥44 px touch targets on phones (the design-system trigger is shorter). */
+const TAB_TRIGGER_CLASS = "min-h-11 flex-1 sm:min-h-0";
+const HISTORY_PAGE_SIZE = 10;
 
 /** Same legacy derivation the backend uses (ClientIdentityDocumentType.resolve). */
 function resolveIdentityDocumentTypeAndNumber(client: Client): { type: string; number: string } {
@@ -127,245 +121,77 @@ function localityFromClient(c: Client): Locality | null {
   };
 }
 
-function formatHistoryDateTime(iso: string, locale: string): string {
+function formatShortDate(iso: string, locale: string): string {
   try {
-    return new Intl.DateTimeFormat(locale, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(iso));
+    return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(new Date(iso));
   } catch {
     return iso;
   }
 }
 
-
-const SECTION_CLASS = "flex flex-col gap-4 rounded-xl border p-4 sm:p-5";
-
-function ClientSectionHeader({
-  id,
-  title,
-  hint,
-  emphasis = false,
-}: {
-  id: string;
-  title: string;
-  hint: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span
-        aria-hidden
-        className={`mt-0.5 h-9 w-1 shrink-0 rounded-full ${emphasis ? "bg-primary" : "bg-line"}`}
-      />
-      <div className="min-w-0">
-        <Heading as="h2" id={id} className="text-base">
-          {title}
-        </Heading>
-        <Text variant="muted" className="text-sm">
-          {hint}
-        </Text>
-      </div>
-    </div>
-  );
-}
-
-/** Read-only "at a glance" strip with the client's most-used data (saved values). */
-function ClientKeyInfo({ client }: { client: Client }) {
-  const { t } = useTranslation();
-  const notSet = (
-    <span className="text-base font-normal text-ink-3">{t("femme.clients.keyInfo.notSet")}</span>
-  );
-  const docType = client.identityDocumentType ?? null;
-  const docNumber = client.identityDocumentNumber ?? client.ruc ?? null;
-  const hasDocNumber = Boolean(docNumber) && docType !== "INNOMINADO";
-  const docTypeLabel =
-    docType === "INNOMINADO"
-      ? t("femme.clients.identityDocumentTypeInnominado")
-      : docType
-        ? t(
-            IDENTITY_DOCUMENT_TYPE_OPTIONS.find((o) => o.value === docType)?.labelKey ??
-              "femme.clients.identityDocumentTypeOtro",
-          )
-        : null;
-  const tiles: Array<{ key: string; label: string; value: ReactNode; sub?: string | null }> = [
-    {
-      key: "phone",
-      label: t("femme.clients.phone"),
-      value: client.phone ? (
-        <a
-          href={`tel:${client.phone.replace(/[^\d+]/g, "")}`}
-          className="text-primary hover:underline"
-          aria-label={t("femme.clients.keyInfo.call", { phone: client.phone })}
-        >
-          {client.phone}
-        </a>
-      ) : (
-        notSet
-      ),
-    },
-    {
-      key: "email",
-      label: t("femme.clients.email"),
-      value: client.email ? (
-        <a
-          href={`mailto:${client.email}`}
-          className="break-all text-primary hover:underline"
-          aria-label={t("femme.clients.keyInfo.sendEmail", { email: client.email })}
-        >
-          {client.email}
-        </a>
-      ) : (
-        notSet
-      ),
-    },
-    {
-      key: "document",
-      label: t("femme.clients.keyInfo.document"),
-      value: hasDocNumber ? docNumber : docType === "INNOMINADO" ? docTypeLabel : notSet,
-      sub: hasDocNumber ? docTypeLabel : null,
-    },
-  ];
-  return (
-    <dl data-testid="client-key-info" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {tiles.map((tile) => (
-        <div
-          key={tile.key}
-          data-testid={`client-key-info-${tile.key}`}
-          className="flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface p-3 sm:p-4"
-        >
-          <dt className="text-xs font-semibold uppercase tracking-wide text-ink-3">{tile.label}</dt>
-          <dd className="min-w-0 text-lg font-semibold leading-snug text-ink">{tile.value}</dd>
-          {tile.sub ? <dd className="text-sm text-ink-3">{tile.sub}</dd> : null}
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-type ClientApptVariant = "upcoming" | "past";
-
-function ClientApptSectionHeader({
-  id,
-  variant,
-  title,
-  count,
-}: {
-  id: string;
-  variant: ClientApptVariant;
-  title: string;
-  count: number;
-}) {
-  const upcoming = variant === "upcoming";
-  return (
-    <h3
-      id={id}
-      className={`mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide ${
-        upcoming ? "text-primary" : "text-ink-3"
-      }`}
-    >
-      <span
-        aria-hidden
-        className={`inline-block size-2.5 rounded-full ${upcoming ? "bg-primary" : "bg-ink-3/60"}`}
-      />
-      <span>{title}</span>
-      <span
-        className={`rounded-full px-2 py-0.5 text-xs font-semibold normal-case tracking-normal ${
-          upcoming ? "bg-primary/15 text-primary" : "bg-line text-ink-2"
-        }`}
-      >
-        {count}
-      </span>
-    </h3>
-  );
-}
-
-function ClientApptItem({
-  appt,
-  variant,
-  locale,
-}: {
-  appt: Appointment;
-  variant: ClientApptVariant;
-  locale: string;
-}) {
-  const upcoming = variant === "upcoming";
-  const start = new Date(appt.startAt);
-  let day = "";
-  let month = "";
+function formatLongDate(iso: string, locale: string): string {
   try {
-    day = new Intl.DateTimeFormat(locale, { day: "2-digit" }).format(start);
-    month = new Intl.DateTimeFormat(locale, { month: "short" }).format(start).replace(".", "");
+    return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(iso));
   } catch {
-    /* fall back to the full date line only */
+    return iso;
   }
+}
+
+function formatTime(iso: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+/** Phone digits in international format for wa.me (Paraguay: 0981… → 595981…). */
+function whatsappDigits(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("595")) return digits;
+  return `595${digits.replace(/^0/, "")}`;
+}
+
+type HistoryEntry =
+  | { kind: "appointment"; key: string; at: string; appt: Appointment }
+  | { kind: "invoice"; key: string; at: string; invoice: InvoiceListItem };
+
+function Disclosure({
+  id,
+  label,
+  open,
+  onToggle,
+  testId,
+  children,
+}: {
+  id: string;
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  testId: string;
+  children: React.ReactNode;
+}) {
   return (
-    <li
-      data-testid="client-appt-item"
-      data-variant={variant}
-      className={`flex items-center gap-3 rounded-lg border border-l-4 p-3 ${
-        upcoming
-          ? "border-primary/30 border-l-primary bg-primary/5 shadow-sm"
-          : "border-line border-l-ink-3/40 bg-page/60"
-      }`}
-    >
-      {day ? (
-        <div
-          aria-hidden
-          className={`flex w-12 shrink-0 flex-col items-center rounded-md py-1 leading-tight ${
-            upcoming ? "bg-primary text-primary-fg" : "bg-line/70 text-ink-2"
-          }`}
-        >
-          <span className="text-lg font-bold">{day}</span>
-          <span className="text-[11px] font-semibold uppercase">{month}</span>
+    <section data-testid={testId} className="border-t border-line">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        data-testid={`${testId}-toggle`}
+        onClick={onToggle}
+        className="flex min-h-11 w-full items-center justify-between py-2 text-left font-semibold text-ink"
+      >
+        {label}
+        <span aria-hidden="true" className={`transition-transform ${open ? "rotate-180" : ""}`}>
+          ⌄
+        </span>
+      </button>
+      {open ? (
+        <div id={id} className="flex flex-col gap-4 pb-4">
+          {children}
         </div>
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <Text className={upcoming ? "font-semibold text-ink" : "font-medium text-ink-2"}>
-            {appt.serviceName}
-          </Text>
-          <Text variant="muted" className="text-sm">
-            {formatHistoryDateTime(appt.startAt, locale)} · {appt.professionalName}
-          </Text>
-        </div>
-        <div className="self-start sm:self-center">
-          <StatusBadge status={appt.status} />
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function HistoryInvoiceStatusPill({ status }: { status: string }) {
-  const { t } = useTranslation();
-  let bg = "var(--color-warning-lt)";
-  let color = "var(--color-warning)";
-  let label = t("femme.billing.session.statusPending");
-  if (status === "ISSUED") {
-    bg = "var(--color-success-lt)";
-    color = "var(--color-success)";
-    label = t("femme.billing.session.statusIssued");
-  } else if (status === "VOIDED") {
-    bg = "var(--color-danger-lt)";
-    color = "var(--color-danger)";
-    label = t("femme.billing.session.statusVoided");
-  }
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        fontWeight: 500,
-        padding: "2px 8px",
-        borderRadius: "var(--radius-pill)",
-        display: "inline-block",
-        whiteSpace: "nowrap",
-        background: bg,
-        color,
-      }}
-    >
-      {label}
-    </span>
+    </section>
   );
 }
 
@@ -381,23 +207,21 @@ export default function ClientDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [client, setClient] = useState<Client | null>(null);
 
-  // HU-70 AC5/AC11: the active tab lives in the URL (?tab=…); no / unknown value = "Datos".
+  // The active tab lives in the URL (?tab=…); no / unknown value = "Historial".
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab = CLIENT_TABS.includes(tabParam as ClientTab) ? (tabParam as ClientTab) : "info";
+  const tab = CLIENT_TABS.includes(tabParam as ClientTab) ? (tabParam as ClientTab) : "history";
   const setTab = (next: string) => {
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev);
-        if (next === "info") params.delete("tab");
+        if (next === "history") params.delete("tab");
         else params.set("tab", next);
         return params;
       },
       { replace: false },
     );
   };
-  // HU-70 AC13: appointments and invoices load only once one of their tabs is opened.
-  const historyTab = tab === "appointments" || tab === "invoices";
 
   // Edit form state
   const [fullName, setFullName] = useState("");
@@ -409,6 +233,7 @@ export default function ClientDetailPage() {
   const [address, setAddress] = useState("");
   const [locality, setLocality] = useState<Locality | null>(null);
   const [extras, setExtras] = useState<ClientProfileExtras>(EMPTY_PROFILE_EXTRAS);
+  const [openSection, setOpenSection] = useState<"fiscal" | "profile" | null>(null);
   const localitySearch = useLocalitySearch();
   const [fieldError, setFieldError] = useState<{
     fullName?: string;
@@ -419,31 +244,24 @@ export default function ClientDetailPage() {
     acquisitionOther?: string;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const saveMessagesRef = useRef<HTMLDivElement | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [deactivating, setDeactivating] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<Client | null>(null);
   const [reactivating, setReactivating] = useState(false);
-  const [statusSuccessKind, setStatusSuccessKind] = useState<"deactivated" | "reactivated" | null>(
-    null,
-  );
 
+  // History: upcoming + past appointments + invoices, merged into one timeline.
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  // Upcoming appointments (unmodified — small list fetched via existing endpoint)
-  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[] | null>(null);
-  // Past appointments — paginated via /api/appointments/history
-  const [pastApptPage, setPastApptPage] = useState<PageResponse<Appointment> | null>(null);
-  const [pastApptPageNum, setPastApptPageNum] = useState(0);
-  const [pastApptPageSize, setPastApptPageSize] = useState(10);
-  const [pastApptLoading, setPastApptLoading] = useState(false);
-  // Client invoices — paginated via /api/invoices
-  const [invoicesPage, setInvoicesPage] = useState<PagedInvoicesResponse | null>(null);
-  const [invoicePageNum, setInvoicePageNum] = useState(0);
-  const [invoicePageSize, setInvoicePageSize] = useState(10);
-  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [upcoming, setUpcoming] = useState<Appointment[]>([]);
+  const [pastAppts, setPastAppts] = useState<Appointment[]>([]);
+  const [pastPage, setPastPage] = useState(0);
+  const [pastTotalPages, setPastTotalPages] = useState(0);
+  const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
+  const [invoicePage, setInvoicePage] = useState(0);
+  const [invoiceTotalPages, setInvoiceTotalPages] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -474,49 +292,40 @@ export default function ClientDetailPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    // Reset paginated/history state when navigating to a different client.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUpcomingAppointments(null);
-    setPastApptPage(null);
-    setPastApptPageNum(0);
-    setInvoicesPage(null);
-    setInvoicePageNum(0);
-    setHistoryError(null);
-  }, [id]);
-
   const clientIdNum = id ? Number(id) : NaN;
   const summaryState = useClientSummary(clientIdNum);
 
-  // Initial history load: upcoming appointments (unchanged) + first page of past + invoices
+  // The history is the default tab, so it loads as soon as the client id is known.
   useEffect(() => {
-    if (!historyTab || !id || Number.isNaN(clientIdNum)) return;
+    if (!id || Number.isNaN(clientIdNum)) return;
     let cancelled = false;
     (async () => {
       setHistoryLoading(true);
       setHistoryError(null);
-      // Upcoming: from now to +6 months
       const now = new Date();
       const futureEnd = new Date(now);
       futureEnd.setMonth(futureEnd.getMonth() + 6);
       futureEnd.setHours(23, 59, 59, 999);
       try {
-        const [upcoming, pastPage, invPage] = await Promise.all([
+        const [next, past, inv] = await Promise.all([
           listAppointments(now.toISOString(), futureEnd.toISOString(), null, clientIdNum),
-          listClientAppointmentHistory(clientIdNum, 0, pastApptPageSize),
-          listInvoicesPaged({ clientId: clientIdNum, page: 0, size: invoicePageSize }),
+          listClientAppointmentHistory(clientIdNum, 0, HISTORY_PAGE_SIZE),
+          listInvoicesPaged({ clientId: clientIdNum, page: 0, size: HISTORY_PAGE_SIZE }),
         ]);
-        if (!cancelled) {
-          setUpcomingAppointments(upcoming);
-          setPastApptPage(pastPage);
-          setInvoicesPage(invPage);
-        }
+        if (cancelled) return;
+        setUpcoming(next);
+        setPastAppts(past.content);
+        setPastPage(0);
+        setPastTotalPages(past.totalPages);
+        setInvoices(inv.content);
+        setInvoicePage(0);
+        setInvoiceTotalPages(inv.totalPages);
       } catch (e) {
         if (!cancelled) {
           setHistoryError(translateApiError(e, t, "femme.clients.historyLoadError"));
-          setUpcomingAppointments(null);
-          setPastApptPage(null);
-          setInvoicesPage(null);
+          setUpcoming([]);
+          setPastAppts([]);
+          setInvoices([]);
         }
       } finally {
         if (!cancelled) setHistoryLoading(false);
@@ -525,48 +334,72 @@ export default function ClientDetailPage() {
     return () => {
       cancelled = true;
     };
-    // pastApptPageSize / invoicePageSize intentionally excluded — they're for the sub-table effects below
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyTab, id, clientIdNum, t]);
+  }, [id, clientIdNum, t]);
 
-  // Re-fetch past appointments when page/size changes
-  useEffect(() => {
-    if (!historyTab || !id || Number.isNaN(clientIdNum) || pastApptPage === null) return;
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPastApptLoading(true);
-    void listClientAppointmentHistory(clientIdNum, pastApptPageNum, pastApptPageSize).then(
-      (p) => { if (!cancelled) { setPastApptPage(p); setPastApptLoading(false); } },
-      () => { if (!cancelled) setPastApptLoading(false); },
-    );
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pastApptPageNum, pastApptPageSize]);
+  const hasMoreHistory = pastPage + 1 < pastTotalPages || invoicePage + 1 < invoiceTotalPages;
 
-  // Re-fetch invoices when page/size changes
-  useEffect(() => {
-    if (!historyTab || !id || Number.isNaN(clientIdNum) || invoicesPage === null) return;
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setInvoicesLoading(true);
-    void listInvoicesPaged({ clientId: clientIdNum, page: invoicePageNum, size: invoicePageSize }).then(
-      (p) => { if (!cancelled) { setInvoicesPage(p); setInvoicesLoading(false); } },
-      () => { if (!cancelled) setInvoicesLoading(false); },
-    );
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoicePageNum, invoicePageSize]);
+  async function loadMoreHistory() {
+    setLoadingMore(true);
+    try {
+      const wantPast = pastPage + 1 < pastTotalPages;
+      const wantInv = invoicePage + 1 < invoiceTotalPages;
+      const [past, inv] = await Promise.all([
+        wantPast
+          ? listClientAppointmentHistory(clientIdNum, pastPage + 1, HISTORY_PAGE_SIZE)
+          : Promise.resolve(null),
+        wantInv
+          ? listInvoicesPaged({ clientId: clientIdNum, page: invoicePage + 1, size: HISTORY_PAGE_SIZE })
+          : Promise.resolve(null),
+      ]);
+      if (past) {
+        setPastAppts((prev) => [...prev, ...past.content]);
+        setPastPage(pastPage + 1);
+        setPastTotalPages(past.totalPages);
+      }
+      if (inv) {
+        setInvoices((prev) => [...prev, ...inv.content]);
+        setInvoicePage(invoicePage + 1);
+        setInvoiceTotalPages(inv.totalPages);
+      }
+    } catch (e) {
+      setHistoryError(translateApiError(e, t, "femme.clients.historyLoadError"));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
-  // After saving, move the user to the result message so the outcome is seen right away.
+  const nextAppointment = useMemo(
+    () =>
+      [...upcoming].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())[0] ??
+      null,
+    [upcoming],
+  );
+
+  const timeline = useMemo<HistoryEntry[]>(() => {
+    const entries: HistoryEntry[] = [
+      ...pastAppts.map((appt) => ({
+        kind: "appointment" as const,
+        key: `a-${appt.id}`,
+        at: appt.startAt,
+        appt,
+      })),
+      ...invoices.map((invoice) => ({
+        kind: "invoice" as const,
+        key: `i-${invoice.id}`,
+        at: invoice.issuedAt,
+        invoice,
+      })),
+    ];
+    return entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }, [pastAppts, invoices]);
+
   useEffect(() => {
-    if (saveSuccess || saveError) focusMessageBox(saveMessagesRef.current);
-  }, [saveSuccess, saveError]);
+    if (saveError) focusMessageBox(saveMessagesRef.current);
+  }, [saveError]);
 
   async function saveClient() {
     setFieldError(null);
     setSaveError(null);
-    setSaveSuccess(false);
-    setStatusSuccessKind(null);
     const nextErr: NonNullable<typeof fieldError> = {};
 
     if (!fullName.trim()) {
@@ -589,12 +422,14 @@ export default function ClientDetailPage() {
     if (extrasErr.other) nextErr.acquisitionOther = extrasErr.other;
     if (Object.keys(nextErr).length > 0) {
       setFieldError(nextErr);
+      if (nextErr.identityDocumentNumber) setOpenSection("fiscal");
+      else if (nextErr.birthday || nextErr.acquisitionOther) setOpenSection("profile");
       return;
     }
 
     setSaving(true);
     try {
-      const updated = await femmePutJson<Client>(`/api/clients/${id ?? ""}`, {
+      await femmePutJson<Client>(`/api/clients/${id ?? ""}`, {
         fullName: fullName.trim(),
         phone: phone.trim() || null,
         email: email.trim() || null,
@@ -609,18 +444,8 @@ export default function ClientDetailPage() {
         cityName: locality?.cityName ?? null,
         ...profileExtrasPayload(extras),
       });
-      setClient(updated);
-      setFullName(updated.fullName);
-      setPhone(updated.phone ?? "");
-      setEmail(updated.email ?? "");
-      const resolved = resolveIdentityDocumentTypeAndNumber(updated);
-      setIdentityDocumentType(resolved.type);
-      setIdentityDocumentNumber(resolved.number);
-      setTaxpayerType(updated.taxpayerType ?? "PERSONA_FISICA");
-      setAddress(updated.address ?? "");
-      setLocality(localityFromClient(updated));
-      setExtras(profileExtrasFromClient(updated));
-      setSaveSuccess(true);
+      // Saving closes the form: the list shows the success notice.
+      navigate("/app/clients", { state: { notice: "updated" } });
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
     } finally {
@@ -631,13 +456,11 @@ export default function ClientDetailPage() {
   async function confirmDeactivate() {
     if (!deactivateTarget || !id) return;
     setDeactivating(true);
-    setSaveSuccess(false);
-    setStatusSuccessKind(null);
+    setSaveError(null);
     try {
       await femmePostJson<Client>(`/api/clients/${id}/deactivate`, {});
       setDeactivateTarget(null);
-      await load();
-      setStatusSuccessKind("deactivated");
+      navigate("/app/clients", { state: { notice: "deactivated" } });
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
       setDeactivateTarget(null);
@@ -649,12 +472,10 @@ export default function ClientDetailPage() {
   async function activateClient() {
     if (!client || !id) return;
     setReactivating(true);
-    setSaveSuccess(false);
-    setStatusSuccessKind(null);
+    setSaveError(null);
     try {
       await femmePostJson<Client>(`/api/clients/${id}/activate`, {});
-      await load();
-      setStatusSuccessKind("reactivated");
+      navigate("/app/clients", { state: { notice: "activated" } });
     } catch (e) {
       setSaveError(translateApiError(e, t, "femme.clients.saveError"));
     } finally {
@@ -689,331 +510,424 @@ export default function ClientDetailPage() {
     );
   }
 
-  const birthdayParts = {
-    day: client.birthdayDay ?? null,
-    month: client.birthdayMonth ?? null,
-    year: client.birthdayYear ?? null,
-  };
-  const age = ageOn(birthdayParts);
+  const { summary } = summaryState;
+  const usual = summary?.usualProfessionals?.[0] ?? null;
+  const spent = summary?.spentLast12Months;
+  const phoneDigits = client.phone ? client.phone.replace(/[^\d+]/g, "") : "";
+  const hasHistory = timeline.length > 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div data-tour="client-detail-header" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+      <div data-tour="client-detail-header">
         <Button
           type="button"
           variant="ghost"
           onClick={() => navigate("/app/clients")}
-          className="self-start"
+          className="min-h-11 self-start"
         >
           ← {t("femme.clients.backToList")}
         </Button>
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Heading as="h1">{client.fullName}</Heading>
-          {!client.active ? (
-            <Badge variant="secondary">{t("femme.clients.inactive")}</Badge>
-          ) : null}
+          {!client.active ? <Badge variant="secondary">{t("femme.clients.inactive")}</Badge> : null}
           {isBirthdayOn(client.birthdayDay ?? null, client.birthdayMonth ?? null, new Date()) ? (
             <Badge data-testid="client-birthday-today">{t("femme.clients.birthday.today")}</Badge>
           ) : null}
         </div>
-        {/* HU-70 AC1: visits · birthday (age) · acquisition channel on one line. */}
-        <Text variant="muted" data-testid="client-header-facts" className="flex flex-wrap gap-x-1">
+        <Text variant="muted" data-testid="client-header-facts" className="flex flex-wrap gap-x-3">
           <span>{t("femme.clients.visits", { count: client.visitCount })}</span>
-          {client.birthdayDay != null && client.birthdayMonth != null ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span data-testid="client-birthday-display">
-                {t("femme.clients.birthday.display", {
-                  date: formatBirthday(birthdayParts, dateLocale),
-                })}
-                {age != null ? ` · ${t("femme.clients.birthday.age", { count: age })}` : ""}
-              </span>
-            </>
+          {summary?.lastVisitAt ? (
+            <span>
+              {t("femme.clients.lastVisit", { date: formatLongDate(summary.lastVisitAt, dateLocale) })}
+            </span>
           ) : null}
-          {client.acquisitionChannel ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span data-testid="client-acquisition-display">
-                {t("femme.clients.acquisitionChannel.display", {
-                  channel: t(`femme.clients.acquisitionChannel.options.${client.acquisitionChannel}`),
-                })}
-                {client.acquisitionChannel === "OTRO" && client.acquisitionChannelOther
-                  ? ` (${client.acquisitionChannelOther})`
-                  : ""}
-              </span>
-            </>
+          {spent != null && Number(spent) > 0 ? (
+            <span>{t("femme.clients.spent12m", { amount: `Gs. ${formatAmountDecimal(spent)}` })}</span>
           ) : null}
+          {usual ? <span>{t("femme.clients.usualProfessional", { name: usual.fullName })}</span> : null}
         </Text>
+        {client.phone ? (
+          <div className="flex flex-wrap gap-2" data-testid="client-contact-actions">
+            <a
+              href={`tel:${phoneDigits}`}
+              aria-label={t("femme.clients.keyInfo.call", { phone: client.phone })}
+              className="inline-flex min-h-11 items-center rounded-md border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-bg"
+            >
+              {client.phone}
+            </a>
+            <a
+              href={`https://wa.me/${whatsappDigits(client.phone)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-11 items-center rounded-md border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-bg"
+            >
+              {t("femme.clients.whatsapp")}
+            </a>
+          </div>
+        ) : null}
       </div>
 
-      {/* HU-70 AC2: always-visible stats strip. */}
-      <ClientSummaryStats {...summaryState} />
-
       <Tabs data-tour="client-detail-tabs" value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="info" className={TAB_TRIGGER_CLASS}>{t("femme.clients.tabs.info")}</TabsTrigger>
-          <TabsTrigger value="summary" className={TAB_TRIGGER_CLASS}>{t("femme.clients.tabs.summary")}</TabsTrigger>
-          <TabsTrigger value="sheet" className={TAB_TRIGGER_CLASS}>{t("femme.clients.tabs.sheet")}</TabsTrigger>
-          <TabsTrigger value="appointments" className={TAB_TRIGGER_CLASS}>{t("femme.clients.tabs.appointments")}</TabsTrigger>
-          <TabsTrigger value="invoices" className={TAB_TRIGGER_CLASS}>{t("femme.clients.tabs.invoices")}</TabsTrigger>
+        <TabsList className="w-full">
+          <TabsTrigger value="history" className={TAB_TRIGGER_CLASS}>
+            {t("femme.clients.tabs.history")}
+          </TabsTrigger>
+          <TabsTrigger value="sheet" className={TAB_TRIGGER_CLASS}>
+            {t("femme.clients.tabs.sheet")}
+          </TabsTrigger>
+          <TabsTrigger value="data" className={TAB_TRIGGER_CLASS}>
+            {t("femme.clients.tabs.data")}
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="info">
-          <Card data-tour="client-detail-edit" className="p-4 sm:p-6">
-            <div ref={saveMessagesRef} tabIndex={-1} className="outline-none">
-            {saveSuccess ? (
-              <Alert variant="success" title={t("femme.clients.editSuccess")} className="mb-4" />
-            ) : null}
-            {statusSuccessKind ? (
-              <Alert
-                variant="success"
-                title={t(
-                  statusSuccessKind === "deactivated"
-                    ? "femme.clients.deactivateSuccess"
-                    : "femme.clients.reactivateSuccess",
-                )}
-                className="mb-4"
-              />
-            ) : null}
-            {saveError ? (
-              <Alert variant="destructive" title={t("femme.clients.errorTitle")} className="mb-4">
-                {saveError}
+        <TabsContent value="history">
+          <div className="flex flex-col gap-4">
+            {historyError ? (
+              <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
+                {historyError}
               </Alert>
             ) : null}
+            {historyLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6">
+                <Spinner size="md" />
+                <Text>{t("femme.clients.loading")}</Text>
+              </div>
+            ) : null}
+            {!historyLoading && !historyError ? (
+              <>
+                {nextAppointment ? (
+                  <Card className="p-4" data-testid="client-next-appointment">
+                    <Heading as="h2" className="mb-3 text-base">
+                      {t("femme.clients.nextAppointment")}
+                    </Heading>
+                    <div className="flex items-start gap-3">
+                      <div className="w-16 shrink-0 font-semibold text-ink">
+                        {formatShortDate(nextAppointment.startAt, dateLocale)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-ink">{nextAppointment.serviceName}</div>
+                        <div className="text-sm text-ink-3">
+                          {formatTime(nextAppointment.startAt, dateLocale)} ·{" "}
+                          {nextAppointment.professionalName}
+                        </div>
+                      </div>
+                      <StatusBadge status={nextAppointment.status} />
+                    </div>
+                  </Card>
+                ) : null}
+
+                <Card className="p-4" data-testid="client-history">
+                  <Heading as="h2" className="mb-3 text-base">
+                    {t("femme.clients.history")}
+                  </Heading>
+                  {!hasHistory ? (
+                    <Text variant="muted" data-testid="client-history-empty">
+                      {t("femme.clients.noHistory")}
+                    </Text>
+                  ) : (
+                    <ul className="flex flex-col" role="list">
+                      {timeline.map((entry) =>
+                        entry.kind === "appointment" ? (
+                          <li
+                            key={entry.key}
+                            data-testid="client-history-item"
+                            data-kind="appointment"
+                            className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
+                          >
+                            <div className="w-16 shrink-0 font-semibold text-ink">
+                              {formatShortDate(entry.at, dateLocale)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-ink">
+                                <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-ink-3">
+                                  {t("femme.clients.historyKind.appointment")}
+                                </span>
+                                <span className="font-semibold">{entry.appt.serviceName}</span>
+                              </div>
+                              <div className="text-sm text-ink-3">{entry.appt.professionalName}</div>
+                            </div>
+                            <StatusBadge status={entry.appt.status} />
+                          </li>
+                        ) : (
+                          <li
+                            key={entry.key}
+                            data-testid="client-history-item"
+                            data-kind="invoice"
+                            className="flex items-start gap-3 border-t border-line py-3 first:border-t-0"
+                          >
+                            <div className="w-16 shrink-0 font-semibold text-ink">
+                              {formatShortDate(entry.at, dateLocale)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedInvoiceId(entry.invoice.id)}
+                                aria-label={t("femme.clients.openInvoice", {
+                                  number: entry.invoice.invoiceNumberFormatted,
+                                })}
+                                className="min-h-11 text-left text-ink"
+                              >
+                                <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                                  {t("femme.clients.historyKind.invoice")}
+                                </span>
+                                <span className="font-semibold">
+                                  #{entry.invoice.invoiceNumberFormatted}
+                                </span>
+                              </button>
+                              <div>
+                                <InvoiceStatePill invoice={entry.invoice} />
+                              </div>
+                            </div>
+                            <div className="shrink-0 pt-2 font-semibold text-ink">
+                              Gs. {formatAmountDecimal(entry.invoice.total)}
+                            </div>
+                          </li>
+                        ),
+                      )}
+                    </ul>
+                  )}
+                  {hasMoreHistory ? (
+                    <div className="mt-3 flex justify-center">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="min-h-11"
+                        disabled={loadingMore}
+                        data-testid="client-history-more"
+                        onClick={() => void loadMoreHistory()}
+                      >
+                        {loadingMore ? t("femme.clients.loading") : t("femme.clients.historyMore")}
+                      </Button>
+                    </div>
+                  ) : null}
+                </Card>
+              </>
+            ) : null}
+          </div>
+        </TabsContent>
+
+        {/* HU-68 AC5: technical sheet, saved independently of the basic data form. */}
+        <TabsContent value="sheet">
+          <Card className="p-4 sm:p-6">
+            <Heading as="h2" className="mb-3 text-base">
+              {t("femme.clients.technicalSheet.title")}
+            </Heading>
+            <ClientTechnicalSheetForm clientId={client.id} />
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="data">
+          <Card data-tour="client-detail-edit" className="p-4 sm:p-6">
+            <div ref={saveMessagesRef} tabIndex={-1} className="outline-none">
+              {saveError ? (
+                <Alert variant="destructive" title={t("femme.clients.errorTitle")} className="mb-4">
+                  {saveError}
+                </Alert>
+              ) : null}
             </div>
 
-            <div className="flex flex-col gap-5">
-              <ClientKeyInfo client={client} />
-
-              <section
-                aria-labelledby="detail-section-contact"
-                data-testid="client-section-contact"
-                className={`${SECTION_CLASS} border-primary/30 bg-primary/5`}
-              >
-              <ClientSectionHeader
-                id="detail-section-contact"
-                title={t("femme.clients.sections.contact")}
-                hint={t("femme.clients.sectionHints.contact")}
-                emphasis
-              />
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <Label htmlFor="detail-fullname">{t("femme.clients.fullName")}</Label>
-                <Input
-                  id="detail-fullname"
-                  value={fullName}
-                  onChange={(e) => { setFullName(e.target.value); setSaveSuccess(false); }}
-                  aria-invalid={fieldError?.fullName ? "true" : "false"}
-                  aria-describedby={fieldError?.fullName ? "detail-fullname-err" : undefined}
-                />
-                <FieldValidationError id="detail-fullname-err">
-                  {fieldError?.fullName}
-                </FieldValidationError>
-              </div>
-
-              <div>
-                <Label htmlFor="detail-phone">{t("femme.clients.phone")}</Label>
-                <Input
-                  id="detail-phone"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={phone}
-                  onChange={(e) => {
-                    setPhone(formatParaguayPhone(e.target.value));
-                    setSaveSuccess(false);
-                    setFieldError((prev) => (prev ? { ...prev, phone: undefined } : prev));
-                  }}
-                  onBlur={() => {
-                    const trimmed = phone.trim();
-                    if (trimmed && !isCompleteParaguayPhone(trimmed)) {
-                      setFieldError((prev) => ({
-                        ...(prev ?? {}),
-                        phone: t("femme.clients.phoneInvalid"),
-                      }));
-                    }
-                  }}
-                  placeholder={t("femme.clients.phonePlaceholder")}
-                  aria-invalid={fieldError?.phone ? "true" : "false"}
-                  aria-describedby={fieldError?.phone ? "detail-phone-err" : undefined}
-                />
-                <FieldValidationError id="detail-phone-err">{fieldError?.phone}</FieldValidationError>
-              </div>
-
-              <div>
-                <Label htmlFor="detail-email">{t("femme.clients.email")}</Label>
-                <Input
-                  id="detail-email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setSaveSuccess(false);
-                    setFieldError((prev) => (prev ? { ...prev, email: undefined } : prev));
-                  }}
-                  onBlur={() => {
-                    const trimmed = email.trim();
-                    if (trimmed && !isValidEmail(trimmed)) {
-                      setFieldError((prev) => ({
-                        ...(prev ?? {}),
-                        email: t("femme.clients.emailInvalid"),
-                      }));
-                    }
-                  }}
-                  placeholder={t("femme.clients.emailPlaceholder")}
-                  aria-invalid={fieldError?.email ? "true" : "false"}
-                  aria-describedby={fieldError?.email ? "detail-email-err" : undefined}
-                />
-                <FieldValidationError id="detail-email-err">{fieldError?.email}</FieldValidationError>
-              </div>
-              </div>
-              </section>
-
-              <section
-                aria-labelledby="detail-section-fiscal"
-                data-testid="client-section-fiscal"
-                className={`${SECTION_CLASS} border-line`}
-              >
-              <ClientSectionHeader
-                id="detail-section-fiscal"
-                title={t("femme.clients.sections.fiscal")}
-                hint={t("femme.clients.sectionHints.fiscal")}
-              />
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <Label htmlFor="detail-identity-document-type">
-                  {t("femme.clients.identityDocumentType")}
-                </Label>
-                <Select
-                  id="detail-identity-document-type"
-                  value={identityDocumentType}
-                  onChange={(e) => {
-                    setIdentityDocumentType(e.target.value);
-                    setSaveSuccess(false);
-                  }}
-                >
-                  {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {t(opt.labelKey)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {identityDocumentType === "RUC" && (
+            <div className="flex flex-col gap-4">
+              <div data-testid="client-section-contact" className="flex flex-col gap-4">
                 <div>
-                  <Label htmlFor="detail-taxpayer-type">{t("femme.clients.taxpayerType")}</Label>
-                  <Select
-                    id="detail-taxpayer-type"
-                    value={taxpayerType}
-                    onChange={(e) => {
-                      setTaxpayerType(e.target.value);
-                      setSaveSuccess(false);
-                    }}
-                  >
-                    <option value="PERSONA_FISICA">
-                      {t("femme.clients.taxpayerTypePersonaFisica")}
-                    </option>
-                    <option value="PERSONA_JURIDICA">
-                      {t("femme.clients.taxpayerTypePersonaJuridica")}
-                    </option>
-                  </Select>
+                  <Label htmlFor="detail-fullname">{t("femme.clients.fullName")}</Label>
+                  <Input
+                    id="detail-fullname"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    aria-invalid={fieldError?.fullName ? "true" : "false"}
+                    aria-describedby={fieldError?.fullName ? "detail-fullname-err" : undefined}
+                  />
+                  <FieldValidationError id="detail-fullname-err">
+                    {fieldError?.fullName}
+                  </FieldValidationError>
                 </div>
-              )}
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="detail-phone">{t("femme.clients.phone")}</Label>
+                    <Input
+                      id="detail-phone"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(formatParaguayPhone(e.target.value));
+                        setFieldError((prev) => (prev ? { ...prev, phone: undefined } : prev));
+                      }}
+                      onBlur={() => {
+                        const trimmed = phone.trim();
+                        if (trimmed && !isCompleteParaguayPhone(trimmed)) {
+                          setFieldError((prev) => ({
+                            ...(prev ?? {}),
+                            phone: t("femme.clients.phoneInvalid"),
+                          }));
+                        }
+                      }}
+                      placeholder={t("femme.clients.phonePlaceholder")}
+                      aria-invalid={fieldError?.phone ? "true" : "false"}
+                      aria-describedby={fieldError?.phone ? "detail-phone-err" : undefined}
+                    />
+                    <FieldValidationError id="detail-phone-err">
+                      {fieldError?.phone}
+                    </FieldValidationError>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="detail-email">{t("femme.clients.email")}</Label>
+                    <Input
+                      id="detail-email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setFieldError((prev) => (prev ? { ...prev, email: undefined } : prev));
+                      }}
+                      onBlur={() => {
+                        const trimmed = email.trim();
+                        if (trimmed && !isValidEmail(trimmed)) {
+                          setFieldError((prev) => ({
+                            ...(prev ?? {}),
+                            email: t("femme.clients.emailInvalid"),
+                          }));
+                        }
+                      }}
+                      placeholder={t("femme.clients.emailPlaceholder")}
+                      aria-invalid={fieldError?.email ? "true" : "false"}
+                      aria-describedby={fieldError?.email ? "detail-email-err" : undefined}
+                    />
+                    <FieldValidationError id="detail-email-err">
+                      {fieldError?.email}
+                    </FieldValidationError>
+                  </div>
+                </div>
+              </div>
 
               <div>
-                <Label htmlFor="detail-identity-document-number">
-                  {t("femme.clients.identityDocumentNumber")}
-                </Label>
-                <Input
-                  id="detail-identity-document-number"
-                  value={identityDocumentNumber}
-                  onChange={(e) => {
-                    setIdentityDocumentNumber(e.target.value);
-                    setSaveSuccess(false);
-                  }}
-                  placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
-                  disabled={identityDocumentType === "INNOMINADO"}
-                  aria-invalid={fieldError?.identityDocumentNumber ? "true" : "false"}
-                  aria-describedby={
-                    fieldError?.identityDocumentNumber
-                      ? "detail-identity-document-number-err"
-                      : undefined
-                  }
-                />
-                {identityDocumentType === "RUC" && (
-                  <Text variant="muted" className="mt-1 text-sm">
-                    {t("femme.clients.rucHint")}
-                  </Text>
-                )}
-                <FieldValidationError id="detail-identity-document-number-err">
-                  {fieldError?.identityDocumentNumber}
-                </FieldValidationError>
-              </div>
+                <Disclosure
+                  id="detail-fiscal-body"
+                  testId="client-section-fiscal"
+                  label={t("femme.clients.sections.fiscal")}
+                  open={openSection === "fiscal"}
+                  onToggle={() => setOpenSection(openSection === "fiscal" ? null : "fiscal")}
+                >
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <Label htmlFor="detail-identity-document-type">
+                        {t("femme.clients.identityDocumentType")}
+                      </Label>
+                      <Select
+                        id="detail-identity-document-type"
+                        value={identityDocumentType}
+                        onChange={(e) => setIdentityDocumentType(e.target.value)}
+                      >
+                        {IDENTITY_DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {t(opt.labelKey)}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
 
-              <div className="md:col-span-2">
-                <Label htmlFor="detail-address">{t("femme.clients.address")}</Label>
-                <Input
-                  id="detail-address"
-                  value={address}
-                  onChange={(e) => {
-                    setAddress(e.target.value);
-                    setSaveSuccess(false);
-                  }}
-                  placeholder={t("femme.clients.addressPlaceholder")}
-                />
-              </div>
+                    {identityDocumentType === "RUC" && (
+                      <div>
+                        <Label htmlFor="detail-taxpayer-type">
+                          {t("femme.clients.taxpayerType")}
+                        </Label>
+                        <Select
+                          id="detail-taxpayer-type"
+                          value={taxpayerType}
+                          onChange={(e) => setTaxpayerType(e.target.value)}
+                        >
+                          <option value="PERSONA_FISICA">
+                            {t("femme.clients.taxpayerTypePersonaFisica")}
+                          </option>
+                          <option value="PERSONA_JURIDICA">
+                            {t("femme.clients.taxpayerTypePersonaJuridica")}
+                          </option>
+                        </Select>
+                      </div>
+                    )}
 
-              <div className="md:col-span-2">
-                <Label htmlFor="detail-locality">{t("femme.clients.locality")}</Label>
-                <LocalityCombobox
-                  id="detail-locality"
-                  value={locality}
-                  onChange={(next) => {
-                    setLocality(next);
-                    setSaveSuccess(false);
-                  }}
-                  onSearch={localitySearch.search}
-                  options={localitySearch.options}
-                  loading={localitySearch.loading}
-                  placeholder={t("femme.clients.localityPlaceholder")}
-                  noResultsLabel={t("femme.clients.localityNoResults")}
-                />
-                <Text variant="muted" className="mt-1 text-sm">
-                  {t("femme.clients.localityHint")}
-                </Text>
-              </div>
-              </div>
-              </section>
+                    <div>
+                      <Label htmlFor="detail-identity-document-number">
+                        {t("femme.clients.identityDocumentNumber")}
+                      </Label>
+                      <Input
+                        id="detail-identity-document-number"
+                        value={identityDocumentNumber}
+                        onChange={(e) => setIdentityDocumentNumber(e.target.value)}
+                        placeholder={t("femme.clients.identityDocumentNumberPlaceholder")}
+                        disabled={identityDocumentType === "INNOMINADO"}
+                        aria-invalid={fieldError?.identityDocumentNumber ? "true" : "false"}
+                        aria-describedby={
+                          fieldError?.identityDocumentNumber
+                            ? "detail-identity-document-number-err"
+                            : undefined
+                        }
+                      />
+                      {identityDocumentType === "RUC" && (
+                        <Text variant="muted" className="mt-1 text-sm">
+                          {t("femme.clients.rucHint")}
+                        </Text>
+                      )}
+                      <FieldValidationError id="detail-identity-document-number-err">
+                        {fieldError?.identityDocumentNumber}
+                      </FieldValidationError>
+                    </div>
 
-              <section
-                aria-labelledby="detail-section-profile"
-                data-testid="client-section-profile"
-                className={`${SECTION_CLASS} border-line`}
-              >
-              <ClientSectionHeader
-                id="detail-section-profile"
-                title={t("femme.clients.sections.profile")}
-                hint={t("femme.clients.sectionHints.profile")}
-              />
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <ClientProfileExtrasFields
-                idPrefix="detail"
-                alignColumns
-                value={extras}
-                onChange={(next) => {
-                  setExtras(next);
-                  setSaveSuccess(false);
-                }}
-                birthdayError={fieldError?.birthday}
-                otherError={fieldError?.acquisitionOther}
-              />
+                    <div className="md:col-span-2">
+                      <Label htmlFor="detail-address">{t("femme.clients.address")}</Label>
+                      <Input
+                        id="detail-address"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder={t("femme.clients.addressPlaceholder")}
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <Label htmlFor="detail-locality">{t("femme.clients.locality")}</Label>
+                      <LocalityCombobox
+                        id="detail-locality"
+                        value={locality}
+                        onChange={setLocality}
+                        onSearch={localitySearch.search}
+                        options={localitySearch.options}
+                        loading={localitySearch.loading}
+                        placeholder={t("femme.clients.localityPlaceholder")}
+                        noResultsLabel={t("femme.clients.localityNoResults")}
+                      />
+                      <Text variant="muted" className="mt-1 text-sm">
+                        {t("femme.clients.localityHint")}
+                      </Text>
+                    </div>
+                  </div>
+                </Disclosure>
+
+                <Disclosure
+                  id="detail-profile-body"
+                  testId="client-section-profile"
+                  label={t("femme.clients.sections.profile")}
+                  open={openSection === "profile"}
+                  onToggle={() => setOpenSection(openSection === "profile" ? null : "profile")}
+                >
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <ClientProfileExtrasFields
+                      idPrefix="detail"
+                      alignColumns
+                      value={extras}
+                      onChange={setExtras}
+                      birthdayError={fieldError?.birthday}
+                      otherError={fieldError?.acquisitionOther}
+                    />
+                  </div>
+                </Disclosure>
               </div>
-              </section>
 
               <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
                 <Button
@@ -1026,31 +940,6 @@ export default function ClientDetailPage() {
                 >
                   {t("femme.clients.cancel")}
                 </Button>
-                <div data-tour="client-detail-status">
-                  {client.active ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setDeactivateTarget(client)}
-                      disabled={deactivating}
-                      className="min-h-11 w-full text-danger hover:bg-danger/10 sm:w-auto"
-                      data-testid="client-edit-deactivate"
-                    >
-                      {t("femme.clients.deactivate")}
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => void activateClient()}
-                      disabled={reactivating}
-                      className="min-h-11 w-full sm:w-auto"
-                      data-testid="client-edit-reactivate"
-                    >
-                      {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivate")}
-                    </Button>
-                  )}
-                </div>
                 <Button
                   type="button"
                   onClick={() => void saveClient()}
@@ -1060,229 +949,34 @@ export default function ClientDetailPage() {
                   {saving ? t("femme.clients.saving") : t("femme.clients.save")}
                 </Button>
               </div>
+
+              <div data-tour="client-detail-status" className="flex justify-center">
+                {client.active ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setDeactivateTarget(client)}
+                    disabled={deactivating}
+                    className="min-h-11 text-danger hover:bg-danger/10"
+                    data-testid="client-edit-deactivate"
+                  >
+                    {t("femme.clients.deactivateClient")}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void activateClient()}
+                    disabled={reactivating}
+                    className="min-h-11"
+                    data-testid="client-edit-reactivate"
+                  >
+                    {reactivating ? t("femme.clients.reactivating") : t("femme.clients.reactivateClient")}
+                  </Button>
+                )}
+              </div>
             </div>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="summary">
-          <ClientSummaryLists {...summaryState} />
-        </TabsContent>
-
-        {/* HU-68 AC5 / HU-70 AC8: technical sheet, saved independently of the basic data form. */}
-        <TabsContent value="sheet">
-          <Card className="p-4 sm:p-6">
-            <Heading as="h2" className="mb-3 text-base">
-              {t("femme.clients.technicalSheet.title")}
-            </Heading>
-            <ClientTechnicalSheetForm clientId={client.id} />
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="appointments">
-          <div className="flex flex-col gap-4">
-            {historyError ? (
-              <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
-                {historyError}
-              </Alert>
-            ) : null}
-            {historyLoading ? (
-              <div className="flex items-center justify-center gap-2 py-6">
-                <Spinner size="md" />
-                <Text>{t("femme.clients.loading")}</Text>
-              </div>
-            ) : null}
-            {!historyLoading && !historyError ? (
-              <Card className="p-4">
-                <Heading as="h2" className="mb-3 text-base">
-                  {t("femme.clients.appointments")}
-                </Heading>
-                {upcomingAppointments == null && pastApptPage == null ? null : (
-                  <div className="flex flex-col gap-4">
-                    <section data-testid="client-appts-upcoming" aria-labelledby="client-appts-upcoming-title">
-                      <ClientApptSectionHeader
-                        id="client-appts-upcoming-title"
-                        variant="upcoming"
-                        title={t("femme.clients.historyUpcoming")}
-                        count={upcomingAppointments?.length ?? 0}
-                      />
-                      {!upcomingAppointments || upcomingAppointments.length === 0 ? (
-                        <Text variant="muted" className="text-sm">
-                          {t("femme.clients.noAppointments")}
-                        </Text>
-                      ) : (
-                        <ul className="flex flex-col gap-2" role="list">
-                          {upcomingAppointments.map((a) => (
-                            <ClientApptItem key={a.id} appt={a} variant="upcoming" locale={dateLocale} />
-                          ))}
-                        </ul>
-                      )}
-                    </section>
-                    <section
-                      data-testid="client-appts-past"
-                      aria-labelledby="client-appts-past-title"
-                      className="border-t border-line pt-4"
-                    >
-                      <ClientApptSectionHeader
-                        id="client-appts-past-title"
-                        variant="past"
-                        title={t("femme.clients.historyPast")}
-                        count={pastApptPage?.totalElements ?? 0}
-                      />
-                      {pastApptLoading ? (
-                        <Spinner size="sm" />
-                      ) : pastApptPage == null || pastApptPage.totalElements === 0 ? (
-                        <Text variant="muted" className="text-sm">
-                          {t("femme.clients.noAppointments")}
-                        </Text>
-                      ) : (
-                        <>
-                          <ul className="flex flex-col gap-2" role="list">
-                            {pastApptPage.content.map((a) => (
-                              <ClientApptItem key={a.id} appt={a} variant="past" locale={dateLocale} />
-                            ))}
-                          </ul>
-                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                            <PageSizeSelect
-                              value={pastApptPageSize}
-                              label={t("femme.pagination.rowsPerPage")}
-                              onChange={(s) => { setPastApptPageSize(s); setPastApptPageNum(0); }}
-                            />
-                            <Text variant="muted" className="text-sm">
-                              {t("femme.pagination.showingRange", {
-                                from: pastApptPageNum * pastApptPageSize + 1,
-                                to: Math.min((pastApptPageNum + 1) * pastApptPageSize, pastApptPage.totalElements),
-                                total: pastApptPage.totalElements,
-                              })}
-                            </Text>
-                            {pastApptPage.totalPages > 1 && (
-                              <Pagination
-                                page={pastApptPageNum + 1}
-                                pageCount={pastApptPage.totalPages}
-                                onPageChange={(p) => setPastApptPageNum(p - 1)}
-                                previousLabel={t("femme.pagination.previous")}
-                                nextLabel={t("femme.pagination.next")}
-                              />
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </section>
-                  </div>
-                )}
-              </Card>
-            ) : null}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="invoices">
-          <div className="flex flex-col gap-4">
-            {historyError ? (
-              <Alert variant="destructive" title={t("femme.clients.errorTitle")}>
-                {historyError}
-              </Alert>
-            ) : null}
-            {historyLoading ? (
-              <div className="flex items-center justify-center gap-2 py-6">
-                <Spinner size="md" />
-                <Text>{t("femme.clients.loading")}</Text>
-              </div>
-            ) : null}
-            {!historyLoading && !historyError ? (
-              <Card className="p-4">
-                <Heading as="h2" className="mb-3 text-base">
-                  {t("femme.clients.invoices")}
-                </Heading>
-                {invoicesLoading ? (
-                  <Spinner size="sm" />
-                ) : invoicesPage == null || invoicesPage.totalElements === 0 ? (
-                  <Text variant="muted">{t("femme.clients.noInvoices")}</Text>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[320px] text-left text-sm">
-                        <thead>
-                          <tr className="border-b text-xs text-[var(--color-ink-2)]">
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.billing.history.colNumber")}
-                            </th>
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.billing.history.colDate")}
-                            </th>
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.billing.history.colTotal")}
-                            </th>
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.clients.colStatus")}
-                            </th>
-                            <th className="py-2 pr-2 font-medium">
-                              {t("femme.billing.history.colSifenStatus")}
-                            </th>
-                            <th className="py-2 font-medium" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {invoicesPage.content.map((inv) => (
-                            <tr
-                              key={inv.id}
-                              className="border-b border-[var(--color-border)]/60"
-                            >
-                              <td className="py-2 pr-2 align-top font-mono text-xs">
-                                {inv.invoiceNumberFormatted}
-                              </td>
-                              <td className="py-2 pr-2 align-top">
-                                {formatHistoryDateTime(inv.issuedAt, dateLocale)}
-                              </td>
-                              <td className="py-2 pr-2 align-top">
-                                {formatAmountDecimal(inv.total)}
-                              </td>
-                              <td className="py-2 pr-2 align-top">
-                                <HistoryInvoiceStatusPill status={inv.status} />
-                              </td>
-                              <td className="py-2 pr-2 align-top">
-                                <SifenStatusBadge status={inv.sifenSubmissionStatus} />
-                              </td>
-                              <td className="py-2 align-top text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSelectedInvoiceId(inv.id)}
-                                >
-                                  {t("femme.billing.history.viewDetail")}
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <PageSizeSelect
-                        value={invoicePageSize}
-                        label={t("femme.pagination.rowsPerPage")}
-                        onChange={(s) => { setInvoicePageSize(s); setInvoicePageNum(0); }}
-                      />
-                      <Text variant="muted" className="text-sm">
-                        {t("femme.pagination.showingRange", {
-                          from: invoicePageNum * invoicePageSize + 1,
-                          to: Math.min((invoicePageNum + 1) * invoicePageSize, invoicesPage.totalElements),
-                          total: invoicesPage.totalElements,
-                        })}
-                      </Text>
-                      {invoicesPage.totalPages > 1 && (
-                        <Pagination
-                          page={invoicePageNum + 1}
-                          pageCount={invoicesPage.totalPages}
-                          onPageChange={(p) => setInvoicePageNum(p - 1)}
-                          previousLabel={t("femme.pagination.previous")}
-                          nextLabel={t("femme.pagination.next")}
-                        />
-                      )}
-                    </div>
-                  </>
-                )}
-              </Card>
-            ) : null}
-          </div>
         </TabsContent>
       </Tabs>
 
