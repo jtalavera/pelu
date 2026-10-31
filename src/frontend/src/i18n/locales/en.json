@@ -480,7 +480,7 @@
       "catalog": "Catalog",
       "dashboard": "Dashboard",
       "calendar": "Calendar",
-      "dashboards": "Dashboards",
+      "dashboards": "Summary",
       "services": "Services",
       "products": "Products",
       "professionals": "Professionals",
@@ -1066,8 +1066,28 @@
       "save": "Save",
       "noPhone": "No phone"
     },
+    "summary": {
+      "periodLabel": "Period",
+      "period_one": "{{count}} day",
+      "period_other": "{{count}} days",
+      "lastDays_one": "Last {{count}} day",
+      "lastDays_other": "Last {{count}} days",
+      "revenueTitle": "Invoicing",
+      "revenueChartLabel": "Invoiced revenue per day",
+      "noRevenue": "There is no invoicing in this period yet.",
+      "barHint": "Tap a bar to see that day",
+      "legendDaily": "Invoiced per day",
+      "legendAverage": "Average: {{amount}}",
+      "moreDetail": "See more detail",
+      "noData": "There is no data in this period yet.",
+      "topServices": "Most sold services",
+      "noServices": "No services invoiced yet.",
+      "paymentMethods": "Payment methods",
+      "noPayments": "No payments yet.",
+      "appointmentsByDay": "Appointments by day of the week"
+    },
     "dashboardsPage": {
-      "pageTitle": "Dashboards",
+      "pageTitle": "Summary",
       "pageSubtitle": "Business charts and trends at a glance."
     },
     "inactiveClients": {
