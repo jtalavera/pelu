@@ -9,7 +9,7 @@ function load(lang: "es" | "en") {
   // whole translated object. A reviver can't see duplicates, so detect them with a small scanner.
   const stack: Array<Set<string>> = [];
   let i = 0;
-  let expectKey: boolean[] = [];
+  const expectKey: boolean[] = [];
   while (i < text.length) {
     const ch = text[i];
     if (ch === '"') {
