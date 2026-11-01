@@ -73,17 +73,20 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     // checksum) — the shared literal "80000005-6" is also seeded as a client RUC by other spec
     // files (client-identity-document-type, issue-220), and collides with CLIENT_RUC_DUPLICATE
     // when the whole suite shares one tenant across a single run.
+    const ruc = `${Date.now()}-6`;
     const client = await seedClient(
       request,
       token,
       `E2E HU11 conRuc ${Date.now()}-${Math.random()}`,
       undefined,
-      `${Date.now()}-6`,
+      ruc,
     );
+    // The invoice's own RUC (the override) is what makes the receiver "identified": the client's
+    // profile data is never used as a fallback.
     const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
       clientId: client.id,
       clientDisplayName: client.fullName,
-      clientRucOverride: null,
+      clientRucOverride: ruc,
       clientIdentityDocumentOverride: null,
       lines: [
         {
@@ -179,7 +182,9 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await openInvoicePanel(page, "identify");
+    // Not eligible and no history: the "Identify client" entry is not even in the ⋯ menu.
+    await page.getByRole("dialog").last().getByTestId("invoice-more-actions-button").click();
+    await expect(page.getByTestId("invoice-menu-identify")).toHaveCount(0);
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
   });
 
@@ -198,7 +203,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, invoice.invoiceNumberFormatted);
 
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-client-identification-history")).toBeVisible();
   });
 
@@ -214,7 +219,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, invoice.invoiceNumberFormatted);
 
-    await openInvoiceSifenTab(page);
+    await openInvoicePanel(page, "identify");
     const history = page.getByTestId("sifen-client-identification-history");
     await expect(history).toBeVisible();
     await expect(history).toContainText("isabelzymanscki@gmail.com");

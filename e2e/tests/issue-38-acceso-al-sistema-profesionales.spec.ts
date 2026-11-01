@@ -221,8 +221,8 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     const confirm = page.getByRole("dialog", { name: "Change the sign-in email?" });
     await expect(confirm).toBeVisible();
     await confirm.getByRole("button", { name: "Change email" }).click();
-    // Catalog redesign: saving an edit keeps the form open with the success message.
-    await expect(page.getByRole("dialog", { name: "Edit professional" }).getByText("Changes saved successfully.")).toBeVisible();
+    // Catalog redesign: saving an edit closes the form and a notice confirms it on the list.
+    await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toBeVisible();
 
     const after = await getProfessional(request, token, prof.id);
     expect(after.email).toBe(newEmail);
@@ -272,8 +272,8 @@ test.describe("Issue #38 · Acceso al sistema para profesionales", () => {
     await expect(dlg.getByTestId("prof-email-change-warning")).toContainText(/will be deactivated|is deactivated/i);
     await saveDetails(page);
     await page.getByRole("dialog", { name: "Change the sign-in email?" }).getByRole("button", { name: "Change email" }).click();
-    // Catalog redesign: saving an edit keeps the form open with the success message.
-    await expect(page.getByRole("dialog", { name: "Edit professional" }).getByText("Changes saved successfully.")).toBeVisible();
+    // Catalog redesign: saving an edit closes the form and a notice confirms it on the list.
+    await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toBeVisible();
 
     const after = await getProfessional(request, token, prof.id);
     expect(after.accessStatus).toBe("NO_ACCESS");

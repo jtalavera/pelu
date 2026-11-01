@@ -276,16 +276,10 @@ test.describe("Issue #59 · Tables 1 & 2 — Client appointments & invoices", ()
     // HU-70: appointments live in their own "Appointments" tab (no more "History" tab).
     await page.getByRole("tab", { name: "Appointments" }).click();
 
-    // The past-appointments section heading ("Past" / "Anteriores") should be visible
-    const past = page.getByTestId("client-appts-past");
-    await expect(past.getByRole("heading", { name: /past|anteriores/i })).toBeVisible({
-      timeout: 20_000,
-    });
-
-    // With 0 records the empty state renders instead of the list + pagination controls
-    await expect(past.getByText(/no appointments on record/i)).toBeVisible({
-      timeout: 20_000,
-    });
+    // Redesign: one compact list (next appointment highlighted, past ones below) with a
+    // "Show more" button instead of a rows-per-page selector; with 0 records only the empty state.
+    await expect(page.getByTestId("client-appointments-empty")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("client-appointments-more")).toHaveCount(0);
   });
 
   test("#59-T2-1 · Client invoices section shows pagination controls after issuing invoice", async ({
@@ -304,24 +298,11 @@ test.describe("Issue #59 · Tables 1 & 2 — Client appointments & invoices", ()
     // HU-70: invoices live in their own "Invoices" tab.
     await page.getByRole("tab", { name: "Invoices" }).click();
 
-    // Invoice table should show at least one row
-    const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
-
-    // PageSizeSelect should be present
-    const select = page.getByLabel("Rows per page:");
-    await expect(select).toBeVisible();
-    await expect(select).toHaveValue("10");
-
-    // Options 10 / 25 / 50
-    const options = select.locator("option");
-    await expect(options).toHaveCount(3);
-    await expect(options.nth(0)).toHaveText("10");
-    await expect(options.nth(1)).toHaveText("25");
-    await expect(options.nth(2)).toHaveText("50");
-
-    // Range text
-    await expect(page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/)).toBeVisible();
+    // Redesign: compact rows with a "Show more" button (10 per load) instead of a pager.
+    await expect(page.getByTestId("client-invoice-item").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByLabel("Rows per page:")).toHaveCount(0);
+    // A single invoice fits the first load: nothing more to fetch.
+    await expect(page.getByTestId("client-invoices-more")).toHaveCount(0);
   });
 
   test("#59-T2-2 · Client invoices 6-month window — older invoice not returned", async ({
@@ -347,7 +328,7 @@ test.describe("Issue #59 · Tables 1 & 2 — Client appointments & invoices", ()
     });
   });
 
-  test("#59-T1-2 & T2-3 · Page size selector resets to page 1 when changed", async ({
+  test("#59-T1-2 & T2-3 · Show more appends the next page of invoices", async ({
     page,
     request,
   }) => {
@@ -363,14 +344,16 @@ test.describe("Issue #59 · Tables 1 & 2 — Client appointments & invoices", ()
     // HU-70: invoices live in their own "Invoices" tab.
     await page.getByRole("tab", { name: "Invoices" }).click();
 
-    const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
-
-    // Change page size to 25
-    const select = page.getByLabel("Rows per page:");
-    await select.selectOption("25");
-
-    // Range text updates — still 1 record (1–1 of 1)
-    await expect(page.getByText(/1–1 of \d+|1–1 de \d+/)).toBeVisible({ timeout: 10_000 });
+    // 11 invoices: the first load brings 10 and "Show more" appends the remaining one.
+    for (let i = 0; i < 10; i++) await seedApiInvoice(request, token, seed.serviceId, client.id);
+    await page.reload();
+    await page.getByRole("tab", { name: "Invoices" }).click();
+    const items = page.getByTestId("client-invoice-item");
+    await expect(items).toHaveCount(10, { timeout: 30_000 });
+    const more = page.getByTestId("client-invoices-more");
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect(items).toHaveCount(11, { timeout: 10_000 });
+    await expect(more).toHaveCount(0);
   });
 });
