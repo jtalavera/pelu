@@ -10,7 +10,14 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
-import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
+import { setControlledInputValue } from "../fixtures/ui";
+import {
+  clickExportPdf,
+  filterPropinasByProfessional,
+  openWithdrawDialog,
+  propinasBalanceOf,
+  propinasMovements,
+} from "../fixtures/propinas";
 
 test.describe.configure({ mode: "serial" });
 
@@ -81,23 +88,6 @@ async function seedClosedTip(
   return { recordId: record.id, invoiceId: invoice.id };
 }
 
-/** Picks options from the report tab's professional `MultiSelect` filter, one at a time. */
-async function pickMultiSelectOption(
-  page: Page,
-  accessibleName: string,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: accessibleName, exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: accessibleName, exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
-}
-
 test.describe("Issue #120 · Propinas", () => {
   let seed: SeededSalon;
 
@@ -124,7 +114,9 @@ test.describe("Issue #120 · Propinas", () => {
 
     await links.nth(propinasIdx).click();
     await expect(page).toHaveURL(/\/app\/propinas/);
-    await expect(page.getByRole("tab", { name: "Tips report" })).toBeVisible();
+    // Redesign: one screen, no tabs.
+    await expect(page.getByRole("heading", { name: "Tips", exact: true })).toBeVisible();
+    await expect(page.getByTestId("propinas-movements")).toBeVisible();
   });
 
   test("AC2+AC3+AC4+AC9 · el reporte filtra por fecha y profesional, agrupa con subtotal, total general y formato Gs.", async ({
@@ -153,59 +145,32 @@ test.describe("Issue #120 · Propinas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await expect(page.getByRole("tab", { name: "Tips report", selected: true })).toBeVisible();
+    await expect(page.getByTestId("propinas-movements")).toBeVisible();
 
-    // Multi-select filter: restrict to exactly the two professionals seeded by this test, so
-    // tips created by other specs running in the same suite never leak into the assertions.
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      profB.fullName.slice(0, 10),
-      new RegExp(profB.fullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    // Movements list every tip with client, professional and a Gs. amount (dot separator, no
+    // decimals). Narrow to one professional at a time so other specs' tips never leak in.
+    await filterPropinasByProfessional(page, seed.professionalFullName);
+    const rowA = propinasMovements(page).filter({ hasText: clientA.fullName });
+    await expect(rowA).toHaveCount(1, { timeout: 15_000 });
+    await expect(rowA).toContainText("Gs. 5.000");
+    await expect(rowA).toContainText(seed.professionalFullName);
+    await expect(propinasMovements(page).filter({ hasText: clientB.fullName })).toHaveCount(0);
 
-    // AC4: grouped by professional, dot-separator/no-decimals amounts, per-professional subtotal
-    // (two professionals selected) and a grand total row. Row-scoped locators (within the report
-    // table only) avoid ambiguity between a single-tip professional's row amount and their
-    // (identical) subtotal amount.
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    const rowA = reportRows.filter({ hasText: clientA.fullName });
-    await expect(rowA).toBeVisible({ timeout: 15_000 });
-    await expect(rowA.getByText(/^Gs\. 5\.000$/)).toBeVisible();
+    await filterPropinasByProfessional(page, profB.fullName);
+    const rowB = propinasMovements(page).filter({ hasText: clientB.fullName });
+    await expect(rowB).toHaveCount(1);
+    await expect(rowB).toContainText("Gs. 3.000");
+    await expect(propinasMovements(page).filter({ hasText: clientA.fullName })).toHaveCount(0);
+    // The period total follows the filter (this professional's tips only).
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 3.000");
 
-    const rowB = reportRows.filter({ hasText: clientB.fullName });
-    await expect(rowB).toBeVisible();
-    await expect(rowB.getByText(/^Gs\. 3\.000$/)).toBeVisible();
-
-    const subtotalRowA = reportRows.filter({ hasText: `Subtotal — ${seed.professionalFullName}` });
-    await expect(subtotalRowA).toBeVisible();
-    await expect(subtotalRowA.getByText(/^Gs\. 5\.000$/)).toBeVisible();
-
-    const subtotalRowB = reportRows.filter({ hasText: `Subtotal — ${profB.fullName}` });
-    await expect(subtotalRowB).toBeVisible();
-    await expect(subtotalRowB.getByText(/^Gs\. 3\.000$/)).toBeVisible();
-
-    const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-    await expect(grandTotalRow).toBeVisible();
-    await expect(grandTotalRow.getByText(/^Gs\. 8\.000$/)).toBeVisible();
-
-    // AC2: filtering to a future date range (no tips possible yet) yields an empty report.
+    // AC2: a future date range (no tips possible yet) yields an empty list.
     const future = new Date();
     future.setDate(future.getDate() + 3);
     const futureYmd = future.toISOString().slice(0, 10);
     await page.locator("#propinas-filter-from").fill(futureYmd);
     await page.locator("#propinas-filter-to").fill(futureYmd);
-    await page.getByRole("button", { name: "Search", exact: true }).click();
-    await expect(page.getByText("No tips found for the selected filters.")).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(page.getByTestId("propinas-empty")).toBeVisible({ timeout: 15_000 });
   });
 
   test("AC5 · exportar PDF descarga el archivo del reporte", async ({ page, request }) => {
@@ -221,18 +186,12 @@ test.describe("Issue #120 · Propinas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await filterPropinasByProfessional(page, seed.professionalFullName);
     await expect(page.getByText(client.fullName)).toBeVisible({ timeout: 15_000 });
 
     const [download] = await Promise.all([
       page.waitForEvent("download", { timeout: 20_000 }),
-      page.getByRole("button", { name: "Export PDF", exact: true }).click(),
+      clickExportPdf(page),
     ]);
     expect(download.suggestedFilename()).toMatch(/^PROPINAS-\d{8}-\d{8}\.pdf$/);
 
@@ -260,45 +219,43 @@ test.describe("Issue #120 · Propinas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await page.getByRole("tab", { name: "Tip withdrawal" }).click();
-    await expect(page.getByRole("tab", { name: "Tip withdrawal", selected: true })).toBeVisible();
 
-    await pickSearchableOption(
-      page,
-      "Professional",
-      withdrawalProf.fullName.slice(0, 10),
-      new RegExp(withdrawalProf.fullName),
-    );
-
-    // AC6: accumulated (CLOSED-only) balance for the selected professional.
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
+    // AC6: accumulated (CLOSED-only) balance for the professional, in the balances card.
+    await expect(await propinasBalanceOf(page, withdrawalProf.id)).toHaveText("Gs. 10.000", {
+      timeout: 15_000,
+    });
+    await openWithdrawDialog(page, withdrawalProf.id);
+    await expect(page.getByTestId("propinas-dialog-balance")).toHaveText("Gs. 10.000");
 
     // AC7: withdrawing more than the balance is rejected client-side.
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "15000");
     // AC9: masked money input — dot separator, no decimals.
     await expect(amountInput).toHaveValue("15.000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
+    await page.getByTestId("propinas-withdraw-confirm").click();
     await expect(page.getByText("The amount cannot exceed the accumulated tip balance.")).toBeVisible();
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000");
+    await expect(page.getByTestId("propinas-dialog-balance")).toHaveText("Gs. 10.000");
 
     // AC8: a valid withdrawal deducts from the balance immediately.
     await setControlledInputValue(amountInput, "4000");
     await expect(amountInput).toHaveValue("4.000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 6.000");
+    await page.getByTestId("propinas-withdraw-confirm").click();
+    await expect(page.getByTestId("propinas-toast")).toContainText(
+      "Withdrawal completed successfully.",
+      { timeout: 15_000 },
+    );
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(await propinasBalanceOf(page, withdrawalProf.id)).toHaveText("Gs. 6.000");
 
-    // AC10: the withdrawal history list shows the new withdrawal, with the 10/25/50 paging standard.
-    await expect(page.getByRole("heading", { name: "Withdrawal history" })).toBeVisible();
-    const historyRow = page
-      .getByTestId("propinas-withdrawal-history-table")
-      .locator("tbody tr")
-      .filter({ hasText: withdrawalProf.fullName })
+    // AC10: the withdrawal shows up in the movements table (tagged "Withdrawal", minus sign) with
+    // the standard paging (5/10/20 rows per page).
+    await filterPropinasByProfessional(page, withdrawalProf.fullName);
+    const historyRow = propinasMovements(page)
+      .filter({ hasText: "Withdrawal" })
       .filter({ hasText: "4.000" });
-    await expect(historyRow).toBeVisible({ timeout: 15_000 });
-    const pageSizeSelect = page.getByLabel("Rows per page:");
-    await expect(pageSizeSelect.locator("option")).toHaveCount(3);
+    await expect(historyRow).toHaveCount(1, { timeout: 15_000 });
+    await expect(historyRow).toContainText("−");
+    await expect(page.getByLabel("Rows per page:").locator("option")).toHaveCount(3);
   });
 
   test("Acceso restringido · el ítem de navegación Propinas no aparece para profesionales", async ({

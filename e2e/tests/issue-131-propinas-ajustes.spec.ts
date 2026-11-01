@@ -9,7 +9,13 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
+import { setControlledInputValue } from "../fixtures/ui";
+import {
+  filterPropinasByProfessional,
+  openWithdrawDialog,
+  propinasBalanceOf,
+  propinasMovements,
+} from "../fixtures/propinas";
 
 test.describe.configure({ mode: "serial" });
 
@@ -80,23 +86,6 @@ async function seedClosedTip(
   return { recordId: record.id, invoiceId: invoice.id };
 }
 
-/** Picks options from the report tab's professional `MultiSelect` filter, one at a time. */
-async function pickMultiSelectOption(
-  page: Page,
-  accessibleName: string,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: accessibleName, exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: accessibleName, exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
-}
-
 test.describe("Issue #131 · Ajustes en propinas", () => {
   let seed: SeededSalon;
 
@@ -133,27 +122,22 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await expect(page.getByRole("tab", { name: "Tips report", selected: true })).toBeVisible();
 
     // Restrict to a single professional first, so both rows aren't already visible.
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await filterPropinasByProfessional(page, seed.professionalFullName);
+    await expect(propinasMovements(page).filter({ hasText: clientA.fullName })).toHaveCount(1, {
+      timeout: 15_000,
+    });
+    await expect(propinasMovements(page).filter({ hasText: clientB.fullName })).toHaveCount(0);
 
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    await expect(reportRows.filter({ hasText: clientA.fullName })).toBeVisible({ timeout: 15_000 });
-    await expect(reportRows.filter({ hasText: clientB.fullName })).toHaveCount(0);
-
-    // AC1: "Clear" deselects the professional filter AND reloads with all professionals,
-    // with no extra click on "Search" needed.
-    await page.getByRole("button", { name: "Clear", exact: true }).click();
-    await expect(reportRows.filter({ hasText: clientA.fullName })).toBeVisible({ timeout: 15_000 });
-    await expect(reportRows.filter({ hasText: clientB.fullName })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Professional", exact: true })).toHaveValue("");
+    // AC1: picking "All" clears the professional filter and reloads with every professional,
+    // with no extra click needed.
+    await page.locator("#propinas-filter-professional").selectOption("");
+    await expect(propinasMovements(page).filter({ hasText: clientA.fullName })).toHaveCount(1, {
+      timeout: 15_000,
+    });
+    await expect(propinasMovements(page).filter({ hasText: clientB.fullName })).toHaveCount(1);
+    await expect(page.locator("#propinas-filter-professional")).toHaveValue("");
   });
 
   test("AC2 · el reporte omite los registros de propina con monto cero", async ({
@@ -181,27 +165,17 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await filterPropinasByProfessional(page, seed.professionalFullName);
 
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    await expect(reportRows.filter({ hasText: clientNonZero.fullName })).toBeVisible({
+    await expect(propinasMovements(page).filter({ hasText: clientNonZero.fullName })).toHaveCount(1, {
       timeout: 15_000,
     });
-    await expect(reportRows.filter({ hasText: clientZero.fullName })).toHaveCount(0);
-
-    // Grand total only reflects the non-zero tip (a single professional selected renders no
-    // per-professional subtotal row, so the grand total is the relevant net-of-zero assertion).
-    const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-    await expect(grandTotalRow.getByText(/^Gs\. 2\.000$/)).toBeVisible();
+    await expect(propinasMovements(page).filter({ hasText: clientZero.fullName })).toHaveCount(0);
+    // The period total only reflects the non-zero tip.
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 2.000");
   });
 
-  test("AC3 · un retiro de propina se refleja en los totales del reporte al volver a la pestaña", async ({
+  test("AC3 · un retiro de propina se refleja en los totales de movimientos", async ({
     page,
     request,
   }) => {
@@ -217,42 +191,27 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await filterPropinasByProfessional(page, seed.professionalFullName);
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 10.000", { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-withdrawn-total")).toHaveText("Gs. 0");
 
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-    await expect(grandTotalRow.getByText(/^Gs\. 10\.000$/)).toBeVisible({ timeout: 15_000 });
-
-    // Withdraw part of the balance from the Withdrawal tab.
-    await page.getByRole("tab", { name: "Tip withdrawal" }).click();
-    await expect(page.getByRole("tab", { name: "Tip withdrawal", selected: true })).toBeVisible();
-    await pickSearchableOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
-
+    // Withdraw part of the balance from the balances card.
+    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 10.000");
+    await openWithdrawDialog(page, seed.professionalId);
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "1000");
     await expect(amountInput).toHaveValue("1.000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
+    await page.getByTestId("propinas-withdraw-confirm").click();
+    await expect(page.getByTestId("propinas-toast")).toContainText(
+      "Withdrawal completed successfully.",
+      { timeout: 15_000 },
+    );
+    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 9.000");
+
+    // AC3: the movements summary (no manual refresh) shows the withdrawal.
+    await expect(page.getByTestId("propinas-withdrawn-total")).toHaveText("Gs. 1.000", {
       timeout: 15_000,
     });
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 9.000");
-
-    // AC3: switching back to the report tab (no manual "Search" click) shows the updated totals.
-    await page.getByRole("tab", { name: "Tips report" }).click();
-    await expect(page.getByRole("tab", { name: "Tips report", selected: true })).toBeVisible();
-
-    await expect(grandTotalRow.getByText(/^Gs\. 9\.000$/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 10.000");
   });
 });
