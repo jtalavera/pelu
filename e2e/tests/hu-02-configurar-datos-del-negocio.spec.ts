@@ -1,24 +1,33 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemo } from "../fixtures/auth";
-import { setControlledInputValue } from "../fixtures/ui";
+import { openBusinessSection, setControlledInputValue } from "../fixtures/ui";
+
+/** The demo tenant's profile is shared with other specs: make sure the phone is a valid one. */
+async function setValidPhone(page: import("@playwright/test").Page) {
+  await openBusinessSection(page, "contact");
+  await setControlledInputValue(page.getByLabel("Phone"), "0981123456");
+}
 
 test.describe("HU-02 · Configurar datos del negocio", () => {
   test("HU-02 · 1 admin ve datos del tenant cargados desde el servidor", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
-    await expect(page.getByLabel("Business or legal name")).toHaveValue("Demo salon");
+    // The shared demo profile may carry a name set by another spec: it just has to be loaded.
+    await expect(page.getByLabel("Business or legal name")).not.toHaveValue("");
   });
 
   test("HU-02 · 2 guardar cambios persiste y muestra confirmación", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
+    const original = await page.getByLabel("Business or legal name").inputValue();
     const unique = `Demo salon E2E ${Date.now()}`;
+    await setValidPhone(page);
     await page.getByLabel("Business or legal name").fill(unique);
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Your business details were saved.")).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Business or legal name")).toHaveValue(unique);
-    await page.getByLabel("Business or legal name").fill("Demo salon");
+    await page.getByLabel("Business or legal name").fill(original);
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Your business details were saved.")).toBeVisible();
   });
@@ -37,15 +46,18 @@ test.describe("HU-02 · Configurar datos del negocio", () => {
   test("HU-02 · 4 cambios sin guardar no persisten al recargar", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
+    await openBusinessSection(page, "contact");
     const before = await page.getByLabel("Phone").inputValue();
     await page.getByLabel("Phone").fill(`${before}999`);
     await page.reload();
+    await openBusinessSection(page, "contact");
     await expect(page.getByLabel("Phone")).toHaveValue(before);
   });
 
   test("HU-02 · 5 teléfono se formatea con máscara local de Paraguay", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
+    await openBusinessSection(page, "contact");
     const phoneField = page.getByLabel("Phone");
     await setControlledInputValue(phoneField, "0981123456");
     await expect(phoneField).toHaveValue("(0981) 123-456");
@@ -54,6 +66,7 @@ test.describe("HU-02 · Configurar datos del negocio", () => {
   test("HU-02 · 6 email inválido bloquea guardado con mensaje", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
+    await setValidPhone(page);
     await setControlledInputValue(page.getByLabel("Contact email"), "@no-prefix.com");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.locator("#contactEmail-error")).toBeVisible();

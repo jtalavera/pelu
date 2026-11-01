@@ -269,3 +269,13 @@ export async function openManualVoidingForm(page: import("@playwright/test").Pag
   await form.waitFor({ state: "visible" });
   return form;
 }
+
+/** Configuración → Negocio: opens a fold (`general` | `contact` | `sifen` | `logo`) if closed. */
+export async function openBusinessSection(
+  page: import("@playwright/test").Page,
+  id: "general" | "contact" | "sifen" | "logo",
+) {
+  const toggle = page.getByTestId(`business-section-${id}-toggle`);
+  await toggle.waitFor({ state: "visible" });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
