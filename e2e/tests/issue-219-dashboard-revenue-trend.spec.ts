@@ -90,50 +90,27 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
     // its own screen, reached via the "Dashboards" nav item.
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-revenue-trend");
+    // Redesign ("Resumen"): one "Invoicing" bar chart — total of the period, a bar per day, the
+    // best day highlighted — instead of the recharts area chart with its 7-day-average line.
+    const chart = page.getByTestId("summary-revenue-chart");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Invoicing", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("summary-revenue-empty")).toHaveCount(0);
 
-    // Not the empty state, given the invoices seeded above.
-    await expect(page.getByTestId("dashboard-revenue-trend-empty")).toHaveCount(0);
+    // The headline figure sums the 3 seeded invoices (at least: other specs add their own).
+    const revenue = page.getByTestId("summary-kpi-revenue");
+    await expect(revenue).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
 
-    // recharts renders a real <svg> once ResponsiveContainer measures a non-zero size.
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
+    // A bar per plotted day; each bar's aria-label carries "<range>: Gs. <amount>" (dot thousands).
+    const bars = page.locator('[data-testid^="summary-bar-2"]');
+    await expect(bars.first()).toBeVisible();
+    await expect(bars.filter({ has: page.locator("span") }).first()).toHaveAttribute(
+      "aria-label",
+      /Gs\. \d{1,3}(\.\d{3})*$/,
+    );
+    // The tapped day is described under the chart (the best day by default).
+    await expect(page.getByTestId("summary-bar-tip")).toContainText(/Gs\. \d{1,3}(\.\d{3})*/);
 
-    // Y-axis ticks are money labels — must use the dot-thousands / no-decimals Gs. format.
-    await expect(chart.getByText(/^Gs\. \d{1,3}(\.\d{3})*$/).first()).toBeVisible();
-
-    // X-axis ticks include the weekday abbreviation (e.g. "Mon 14/09"), so a revenue dip on a
-    // Saturday/Sunday reads as an expected weekend, not an unexplained anomaly.
-    await expect(chart.getByText(/^[A-Za-z]{3} \d{2}\/\d{2}$/).first()).toBeVisible();
-
-    // The trailing 30-day window always spans several weekends regardless of which days have
-    // invoices, so the shaded weekend bands render unconditionally once the chart has data.
-    await expect(
-      chart.locator('[data-testid="dashboard-revenue-trend-weekend-band"]').first(),
-    ).toBeAttached();
-
-    // Trend line: a 7-day moving average overlays the bars, with a legend distinguishing
-    // "Invoiced" (bars) from "7-day average" (line). Scoped to the legend specifically — recharts
-    // also keeps a (hidden until hover) tooltip entry with the same series names in the DOM,
-    // which would otherwise match too and violate strict mode.
-    await expect(chart.locator(".recharts-line-curve")).toBeAttached();
-    const legend = chart.locator(".recharts-legend-wrapper");
-    await expect(legend.getByText("Invoiced", { exact: true })).toBeVisible();
-    await expect(legend.getByText("7-day average", { exact: true })).toBeVisible();
-
-    // Colour: the trend is the same measure as the bars, so it stays in the same hue — the line in
-    // the full hue (2px) and the daily bars as a recessive tint of it (not a second, rose hue).
-    const line = chart.locator(".recharts-line-curve");
-    await expect(line).toHaveAttribute("stroke", "var(--color-teal)");
-    await expect(line).toHaveAttribute("stroke-width", "2");
-    const bar = chart.locator(".recharts-bar-rectangle path").first();
-    await expect(bar).toHaveAttribute("fill", "var(--color-teal)");
-    await expect(bar).toHaveAttribute("fill-opacity", "0.55");
-
-    // The 7-day average starts on the window's FIRST day: the backend also returns the 6 days
-    // before the window (`revenueTrendLookback`, not plotted as bars) so day 1 already has a full
-    // week behind it, and the line starts over the first bar instead of one week in.
+    // Backend: the trend still carries the 6 look-back days so the average starts on day 1.
     const dashboard = await apiGetJson<{
       revenueTrend: Array<{ date: string; invoiced: string | number }>;
       revenueTrendLookback: Array<{ date: string }>;
@@ -145,32 +122,9 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
       return d.toISOString().slice(0, 10);
     };
     expect(dashboard.revenueTrendLookback[5].date).toBe(dayBefore(dashboard.revenueTrend[0].date));
-    // The line starts over the FIRST plotted day. recharts draws no rectangle for a day with
-    // zero invoicing, so that day's x is its bar's centre — or, for a zero day, the "no invoicing"
-    // marker the chart draws on it (issue #284).
-    const startX = (d: string | null) => Number(/^M\s*([\d.]+)/.exec(d ?? "")?.[1]);
-    const lineStartX = startX(await line.getAttribute("d"));
-    const first = dashboard.revenueTrend[0];
-    let firstDayCenterX: number;
-    if (Number(first.invoiced) === 0) {
-      const marker = chart.locator(`[data-testid="dashboard-revenue-trend-zero-day"][data-date="${first.date}"]`);
-      firstDayCenterX = Number(await marker.getAttribute("cx"));
-    } else {
-      firstDayCenterX = Number(await bar.getAttribute("x")) + Number(await bar.getAttribute("width")) / 2;
-    }
-    expect(Math.abs(lineStartX - firstDayCenterX)).toBeLessThanOrEqual(1);
-    // Every plotted day is visible: a bar when it has invoicing, a marker when it has none
-    // (the lookback days are never drawn).
-    const zeroDays = dashboard.revenueTrend.filter((p) => Number(p.invoiced) === 0).length;
-    await expect(chart.locator(".recharts-bar-rectangle")).toHaveCount(dashboard.revenueTrend.length - zeroDays);
-    await expect(chart.getByTestId("dashboard-revenue-trend-zero-day")).toHaveCount(zeroDays);
-
-    // Direct label: only the line's last point carries a ringed dot with the average's value
-    // (never a number on every point).
-    const endDot = chart.getByTestId("dashboard-revenue-trend-end-dot");
-    await expect(endDot).toHaveCount(1);
-    await expect(endDot.locator("text")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
-    await expect(endDot.locator("circle")).toHaveAttribute("stroke", "var(--color-white)");
+    expect(dashboard.revenueTrend.length).toBe(30);
+    // One bar per plotted day (the chart groups by week only for the 90-day period).
+    await expect(bars).toHaveCount(dashboard.revenueTrend.length);
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
@@ -194,9 +148,9 @@ test.describe("Issue #219 · Dashboard revenue trend", () => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-revenue-trend");
+    const chart = page.getByTestId("summary-revenue-card");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("summary-revenue-chart")).toBeVisible({ timeout: 20_000 });
 
     const box = await chart.boundingBox();
     expect(box).toBeTruthy();

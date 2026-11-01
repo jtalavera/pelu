@@ -298,3 +298,11 @@ export async function stampRowAction(
   // dispatchEvent: the menu of the last row can open below the page end, out of the viewport.
   await page.getByRole("menuitem", { name: action }).dispatchEvent("click");
 }
+
+/** Resumen: opens the folded "Ver más detalle" block (top services, payment methods, weekdays). */
+export async function openSummaryMore(page: import("@playwright/test").Page) {
+  const toggle = page.getByTestId("summary-more-toggle");
+  await toggle.waitFor({ state: "visible" });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await page.getByTestId("summary-more").waitFor({ state: "visible" });
+}

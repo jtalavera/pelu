@@ -18,6 +18,7 @@ import {
 import { DEMO_EMAIL, loginAs, loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
 import { addPaymentMethodRow, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { pdfContainsText, pickServiceLine } from "../fixtures/invoice";
+import { openSummaryMore } from "../fixtures/ui";
 
 // Issue #284 "Ajustes 8-10-26". Ajuste 1 (la categoría del producto viaja a Stock) necesita un
 // control-stock real: vive en tests/stock/issue-284-categoria-del-producto-en-stock.spec.ts y en
@@ -93,24 +94,20 @@ test.describe("Issue #284 · ajuste 2 · días sin facturación en el gráfico",
 
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
-    const chart = page.getByTestId("dashboard-revenue-trend");
-    await expect(chart).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("summary-revenue-chart")).toBeVisible({ timeout: 20_000 });
 
-    // One visible marker per day with no invoicing, on exactly those days.
-    const markers = chart.getByTestId("dashboard-revenue-trend-zero-day");
-    await expect(markers).toHaveCount(zeroDates.length);
-    const markerDates = await markers.evaluateAll((els) => els.map((e) => e.getAttribute("data-date")));
-    expect([...markerDates].sort()).toEqual([...zeroDates].sort());
-    await expect(chart.locator(".recharts-legend-wrapper").getByText("No invoicing", { exact: true })).toBeVisible();
-
-    // The zero days count in the 7-day average: the end dot equals the mean of the last 7 days
-    // of the series INCLUDING its zeros.
-    const series = dashboard.revenueTrend.map((p) => Number(p.invoiced));
-    const last7 = series.slice(-7);
-    const expectedAverage = last7.reduce((a, b) => a + b, 0) / 7;
-    await expect(chart.getByTestId("dashboard-revenue-trend-end-dot")).toContainText(
-      `Gs. ${groupThousands(expectedAverage)}`,
-    );
+    // Redesign ("Resumen"): every plotted day has a bar button; a day with no invoicing is an
+    // empty bar whose label says "Gs. 0" (no separate marker, no moving-average line any more).
+    const bars = page.locator('[data-testid^="summary-bar-2"]');
+    await expect(bars).toHaveCount(dashboard.revenueTrend.length);
+    for (const date of zeroDates) {
+      await expect(page.getByTestId(`summary-bar-${date}`)).toHaveAttribute("aria-label", /Gs\. 0$/);
+    }
+    const invoicedDates = dashboard.revenueTrend.filter((p) => Number(p.invoiced) > 0).map((p) => p.date);
+    expect(invoicedDates.length).toBeGreaterThanOrEqual(2);
+    for (const date of invoicedDates) {
+      await expect(page.getByTestId(`summary-bar-${date}`)).not.toHaveAttribute("aria-label", /Gs\. 0$/);
+    }
   });
 });
 
@@ -257,11 +254,14 @@ test.describe("Issue #284 · ajuste 6 · títulos de los gráficos", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
-    await expect(page.getByTestId("dashboard-revenue-trend")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("summary-revenue-chart")).toBeVisible({ timeout: 20_000 });
+    await openSummaryMore(page);
 
-    await expect(page.getByText("Invoicing", { exact: true })).toBeVisible();
+    // Redesign ("Resumen"): the main chart is "Invoicing"; the detail cards are "Top services",
+    // "Payment methods" and "Appointments by day of week" (Spanish copy: chartTitles.test.ts).
+    await expect(page.getByText("Invoicing per day", { exact: true })).toBeVisible();
     await expect(page.getByText("Payment methods", { exact: true })).toBeVisible();
-    await expect(page.getByText("Most invoiced services", { exact: true })).toBeVisible();
+    await expect(page.getByText("Most sold services", { exact: true })).toBeVisible();
     // The old titles are gone.
     await expect(page.getByText("Revenue trend", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Payment method mix", { exact: true })).toHaveCount(0);

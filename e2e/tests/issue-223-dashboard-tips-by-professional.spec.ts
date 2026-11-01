@@ -9,6 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { filterPropinasByProfessional, propinasMovements } from "../fixtures/propinas";
 
 /**
  * Issue #223 · "Dashboard: gráfico de propinas por profesional" — horizontal bar chart of tip
@@ -103,19 +104,11 @@ async function seedClosedTip(
 }
 
 test.describe("Issue #223 · Dashboard tips-by-professional chart", () => {
-  test("renders the chart with correct per-professional tip totals in the correct money format", async ({
+  test("per-professional tip totals are shown in Propinas (the chart moved off Resumen) in the correct money format", async ({
     page,
     request,
   }) => {
     test.setTimeout(90_000);
-    // Clean slate: the Y-axis only fits so many category ticks before recharts starts hiding
-    // some to avoid overlap (the chart's height is capped — see TipsByProfessionalChart.tsx), so
-    // this test's own two professionals must not have to compete with however many other
-    // professionals' tips the rest of the suite has already contributed to the shared demo
-    // tenant — same rationale as issue #216 AC3's own reset.
-    const resetRes = await request.post(`${API_BASE}/api/admin/seed/reset`);
-    expect(resetRes.ok(), await resetRes.text()).toBeTruthy();
-
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await ensureCashSessionOpenApi(request, token);
@@ -145,56 +138,25 @@ test.describe("Issue #223 · Dashboard tips-by-professional chart", () => {
       tipAmount: tipAmountB,
     });
 
+    // Redesign: the "tips by professional" chart was removed from Resumen on purpose — the same
+    // figures live in Propinas (per-professional filter, period totals, movement amounts).
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
+    await expect(page.getByTestId("dashboard-tips-by-professional")).toHaveCount(0);
 
-    const chart = page.getByTestId("dashboard-tips-by-professional");
-    await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Tips by professional", { exact: true })).toBeVisible();
-
-    // Not the empty state, given the tips seeded above.
-    await expect(page.getByTestId("dashboard-tips-by-professional-empty")).toHaveCount(0);
-
-    // recharts renders a real <svg> once ResponsiveContainer measures a non-zero size.
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
-
-    // X-axis ticks are money labels — must use the dot-thousands / no-decimals Gs. format (same
-    // assertion issue #220's top-services chart makes on its own value axis).
-    await expect(chart.getByText(/^Gs\. \d{1,3}(\.\d{3})*$/).first()).toBeVisible();
-
-    // Both seeded professionals show up as Y-axis category tick labels. Recharts splits a long
-    // category label across multiple <tspan> lines, dropping the whitespace between words in the
-    // flattened DOM text — so compare each tick's full textContent, whitespace-stripped, by exact
-    // equality (not a substring/regex guess) against the same whitespace-stripped expected name
-    // (same technique as issue #220's top-services spec).
-    const normalize = (s: string) => s.replace(/\s+/g, "");
-    const tickLabels = chart.locator(
-      ".recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-label",
+    await page.goto("/app/propinas");
+    await filterPropinasByProfessional(page, profA.fullName);
+    await expect(propinasMovements(page)).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText(
+      `Gs. ${tipAmountA.toLocaleString("es-PY")}`,
     );
-    await expect(tickLabels.first()).toBeVisible({ timeout: 20_000 });
-    const tickTexts = await tickLabels.allTextContents();
-    const normalizedTexts = tickTexts.map(normalize);
+    await expect(propinasMovements(page).first()).toContainText(profA.fullName);
 
-    const idxA = normalizedTexts.indexOf(normalize(profA.fullName));
-    const idxB = normalizedTexts.indexOf(normalize(profB.fullName));
-    expect(idxA, `expected a tick label for "${profA.fullName}"`).toBeGreaterThanOrEqual(0);
-    expect(idxB, `expected a tick label for "${profB.fullName}"`).toBeGreaterThanOrEqual(0);
-
-    // Correct per-professional amounts: hover each professional's bar (same DOM index as its Y-axis
-    // tick, since both the bars and the category ticks render in the same data-array order) and
-    // assert the tooltip shows exactly the tip total seeded for that professional, in the
-    // dot-thousands / no-decimals Gs. format (mirrors issue #221's donut-chart tooltip assertion —
-    // this chart's per-bar value, like that chart's per-slice value, is only shown on hover).
-    const barRectangles = chart.locator(".recharts-bar-rectangle");
-    const tooltipValue = chart.locator(".recharts-tooltip-item-value");
-
-    await barRectangles.nth(idxA).hover();
-    await expect(tooltipValue.first()).toBeVisible({ timeout: 5_000 });
-    await expect(tooltipValue.first()).toHaveText(`Gs. ${tipAmountA.toLocaleString("es-PY")}`);
-
-    await barRectangles.nth(idxB).hover();
-    await expect(tooltipValue.first()).toBeVisible({ timeout: 5_000 });
-    await expect(tooltipValue.first()).toHaveText(`Gs. ${tipAmountB.toLocaleString("es-PY")}`);
+    await filterPropinasByProfessional(page, profB.fullName);
+    await expect(propinasMovements(page)).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText(
+      `Gs. ${tipAmountB.toLocaleString("es-PY")}`,
+    );
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
@@ -220,11 +182,11 @@ test.describe("Issue #223 · Dashboard tips-by-professional chart", () => {
 
     await page.setViewportSize({ width: 400, height: 800 });
     await loginAsDemo(page);
-    await page.goto("/app/dashboards");
+    await page.goto("/app/propinas");
 
-    const chart = page.getByTestId("dashboard-tips-by-professional");
+    // The tips figures now live in Propinas: its movements card fits a phone.
+    const chart = page.getByTestId("propinas-movements");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
 
     const box = await chart.boundingBox();
     expect(box).toBeTruthy();

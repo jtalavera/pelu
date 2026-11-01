@@ -32,15 +32,19 @@ test.describe("HU-03 · Dashboard principal", () => {
   });
 
   test("HU-03 · 4 estado vacío cuando no hay citas hoy", async ({ page }) => {
+    // The shared demo tenant may already hold appointments for today (other specs): serve an empty
+    // appointments list to exercise the empty state.
+    await page.route("**/api/appointments?**", (route) => route.fulfill({ json: [] }));
     await loginAsDemo(page);
     await expect(page.getByText("No appointments today", { exact: true }).first()).toBeVisible();
   });
 
-  test("HU-03 · 5 la semana y el mes se ven en Dashboards", async ({ page }) => {
+  test("HU-03 · 5 la facturación y los clientes del período se ven en Resumen", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
-    await expect(page.getByTestId("dashboards-revenue-week")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
-    await expect(page.getByTestId("dashboards-clients-month")).toHaveText(/^\d+$/);
+    // Resumen: the indicators follow the selected period (30 days by default).
+    await expect(page.getByTestId("summary-kpi-revenue")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
+    await expect(page.getByTestId("summary-kpi-clients")).toHaveText(/^\d+$/);
   });
 
   test("HU-03 · 6 «Más del día» está plegado y en el orden Fichas, Ocupación, Cumpleaños, Inactivos", async ({

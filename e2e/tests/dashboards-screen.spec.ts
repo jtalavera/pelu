@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemo } from "../fixtures/auth";
+import { openSummaryMore } from "../fixtures/ui";
 
 /**
  * "Dashboards" screen — the revenue-trend, top-services, payment-method-mix,
@@ -7,52 +8,40 @@ import { loginAsDemo } from "../fixtures/auth";
  * (`/app`) onto their own screen (`/app/dashboards`), reached via a "Dashboards" nav item placed
  * right below "Calendar" in the sidebar.
  */
-test.describe("Dashboards screen", () => {
-  test("the Dashboards nav item sits right below Calendar and opens the charts screen", async ({
+test.describe("Summary screen (ex Dashboards)", () => {
+  test("the Summary nav item sits right below Calendar and opens the charts screen", async ({
     page,
   }) => {
     await loginAsDemo(page);
 
     const calendarLink = page.getByRole("link", { name: "Calendar" });
-    const dashboardsLink = page.getByRole("link", { name: "Dashboards" });
+    const summaryLink = page.getByRole("link", { name: "Summary" });
     await expect(calendarLink).toBeVisible();
-    await expect(dashboardsLink).toBeVisible();
+    await expect(summaryLink).toBeVisible();
 
-    const [calendarBox, dashboardsBox] = await Promise.all([
+    const [calendarBox, summaryBox] = await Promise.all([
       calendarLink.boundingBox(),
-      dashboardsLink.boundingBox(),
+      summaryLink.boundingBox(),
     ]);
     expect(calendarBox).toBeTruthy();
-    expect(dashboardsBox).toBeTruthy();
+    expect(summaryBox).toBeTruthy();
     // "Right below" — same column, next item down.
-    expect(dashboardsBox!.y).toBeGreaterThan(calendarBox!.y);
+    expect(summaryBox!.y).toBeGreaterThan(calendarBox!.y);
 
-    await dashboardsLink.click();
+    await summaryLink.click();
     await expect(page).toHaveURL(/\/app\/dashboards$/);
-    await expect(page.getByText("Dashboards", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible();
 
-    await expect(page.getByTestId("dashboard-revenue-trend")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("dashboard-top-services")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("dashboard-payment-method-mix")).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByTestId("dashboard-appointments-by-day-of-week")).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByTestId("dashboard-tips-by-professional")).toBeVisible({
-      timeout: 20_000,
-    });
-  });
+    // Redesign: period selector, headline figures and ONE main chart; the rest is folded.
+    for (const days of [7, 30, 90]) {
+      await expect(page.getByTestId(`summary-period-${days}`)).toBeVisible();
+    }
+    await expect(page.getByTestId("summary-kpis")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("summary-revenue-card")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("summary-more")).toHaveCount(0);
 
-  test("the main dashboard no longer renders the revenue-trend, top-services, payment-method-mix, appointments-by-day-of-week or tips-by-professional charts", async ({
-    page,
-  }) => {
-    await loginAsDemo(page);
-
-    await expect(page.getByTestId("dashboard-revenue-trend")).toHaveCount(0);
-    await expect(page.getByTestId("dashboard-top-services")).toHaveCount(0);
-    await expect(page.getByTestId("dashboard-payment-method-mix")).toHaveCount(0);
-    await expect(page.getByTestId("dashboard-appointments-by-day-of-week")).toHaveCount(0);
-    await expect(page.getByTestId("dashboard-tips-by-professional")).toHaveCount(0);
+    await openSummaryMore(page);
+    await expect(page.getByTestId("summary-top-services").or(page.getByTestId("summary-more-empty"))).toBeVisible();
+    await expect(page.getByTestId("summary-weekday-bars").or(page.getByTestId("summary-more-empty"))).toBeVisible();
   });
 });
