@@ -11,6 +11,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { filterPropinasByProfessional, propinasMovements } from "../fixtures/propinas";
 
 // DEMO_TENANT_ID=1 has SIFEN_ELECTRONIC_INVOICING OFF by default in the e2e profile (see
 // hu-33-ajustes-facturacion-electronica.spec.ts's own note) — the "Numeración inutilizada" tab
@@ -20,23 +21,6 @@ import { loginAsDemo } from "../fixtures/auth";
 // would otherwise start requiring a SIFEN certificate).
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
-
-/** Picks options from the report tab's professional `MultiSelect` filter, one at a time. */
-async function pickMultiSelectOption(
-  page: Page,
-  accessibleName: string,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: accessibleName, exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: accessibleName, exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
-}
 
 // Issue #205 "Ajustes en factura electronica 10_09": covers the ACs that are observable through
 // the UI without a live SIFEN round-trip —
@@ -245,7 +229,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await expect(row.getByRole("button", { name: "Submit to SIFEN" })).toHaveCount(0);
   });
 
-  test("Propinas AC · separador visual entre los registros de cada profesional en el reporte", async ({
+  test("Propinas AC · cada movimiento muestra su profesional, sin mezclar los de otra", async ({
     page,
     request,
   }) => {
@@ -293,53 +277,17 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      profBRes.fullName.slice(0, 10),
-      new RegExp(profBRes.fullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    // Redesign: one movements table whose "Professional" column labels every row.
+    await filterPropinasByProfessional(page, seed.professionalFullName);
+    const rowA = propinasMovements(page).filter({ hasText: clientA.fullName });
+    await expect(rowA).toHaveCount(1, { timeout: 15_000 });
+    await expect(rowA).toContainText(seed.professionalFullName);
+    await expect(propinasMovements(page).filter({ hasText: clientB.fullName })).toHaveCount(0);
 
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    const rowA = reportRows.filter({ hasText: clientA.fullName });
-    await expect(rowA).toBeVisible({ timeout: 15_000 });
-
-    // The separator header for each professional must sit directly above their first data row.
-    const allRows = await reportRows.all();
-    const headerAIndex = await findRowIndex(allRows, seed.professionalFullName);
-    const dataAIndex = await findRowIndex(allRows, clientA.fullName);
-    const headerBIndex = await findRowIndex(allRows, profBRes.fullName, clientB.fullName);
-    const dataBIndex = await findRowIndex(allRows, clientB.fullName);
-
-    expect(headerAIndex).toBeGreaterThanOrEqual(0);
-    expect(headerBIndex).toBeGreaterThanOrEqual(0);
-    expect(headerAIndex).toBeLessThan(dataAIndex);
-    expect(headerBIndex).toBeLessThan(dataBIndex);
+    await filterPropinasByProfessional(page, profBRes.fullName);
+    const rowB = propinasMovements(page).filter({ hasText: clientB.fullName });
+    await expect(rowB).toHaveCount(1, { timeout: 15_000 });
+    await expect(rowB).toContainText(profBRes.fullName);
+    await expect(propinasMovements(page).filter({ hasText: clientA.fullName })).toHaveCount(0);
   });
 });
-
-/**
- * Finds the index of the first row containing `text` but not `exclude` — used to distinguish a
- * professional's own separator-header row (name only) from a data row that happens to also
- * contain that professional's name inside another column's text.
- */
-async function findRowIndex(
-  rows: Locator[],
-  text: string,
-  exclude?: string,
-): Promise<number> {
-  for (let i = 0; i < rows.length; i++) {
-    const content = await rows[i].textContent();
-    if (content?.includes(text) && (!exclude || !content.includes(exclude))) {
-      return i;
-    }
-  }
-  return -1;
-}
