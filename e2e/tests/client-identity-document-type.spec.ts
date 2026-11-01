@@ -98,6 +98,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     const fullName = `E2E Cedula ${Date.now()}`;
     await dlg.getByLabel("Full name").fill(fullName);
+    await dlg.getByTestId("client-more-toggle").click();
     await expect(dlg.getByLabel("Document type")).toHaveValue("RUC");
     await dlg.getByLabel("Document type").selectOption("CEDULA_PARAGUAYA");
     await dlg.getByLabel("Document number").fill("4123456");
@@ -125,12 +126,15 @@ test.describe("Selector de tipo de documento de identidad", () => {
   }) => {
     const token = await loginAsDemoApi(request);
     const fullName = `E2E Edit Doc ${Date.now()}`;
-    const client = await seedClient(request, token, fullName, undefined, "80000005-6");
+    // RUC must be unique per tenant: derive it from the clock so reruns never collide.
+    const ruc = `8${String(Date.now()).slice(-6)}-6`;
+    const client = await seedClient(request, token, fullName, undefined, ruc);
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
+    await page.getByTestId("client-section-fiscal-toggle").click();
     await expect(page.locator("#detail-identity-document-type")).toHaveValue("RUC");
-    await expect(page.locator("#detail-identity-document-number")).toHaveValue("80000005-6");
+    await expect(page.locator("#detail-identity-document-number")).toHaveValue(ruc);
 
     await page.locator("#detail-identity-document-type").selectOption("PASAPORTE");
     await page.locator("#detail-identity-document-number").fill("XY987654");
@@ -156,6 +160,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
     const dlg = page.getByRole("dialog");
 
     await dlg.getByLabel("Full name").fill(`E2E Otro ${Date.now()}`);
+    await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Document type").selectOption("OTRO");
     await dlg.getByLabel("Document number").fill("not-a-ruc-format");
     await dlg.getByRole("button", { name: "Save" }).click();

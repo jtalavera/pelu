@@ -23,6 +23,7 @@ test.describe("HU-10 · Crear cliente", () => {
     await page.getByRole("button", { name: "+ New client" }).first().click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill("E2E RUC bad");
+    await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Document number").fill("123");
     await dlg.getByRole("button", { name: "Save" }).click();
     await expect(
