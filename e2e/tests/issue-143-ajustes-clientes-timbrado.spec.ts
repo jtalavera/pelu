@@ -12,6 +12,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openFichaDialog } from "../fixtures/fichas";
 import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
@@ -180,7 +181,7 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     await expect(page.getByText("Stamp deleted successfully.")).toBeVisible();
   });
 
-  test("AC6 · Cancelar aparece junto a Anular ficha y cancela la anulación sin anular la ficha", async ({
+  test("AC6 · al anular aparece Cancelar junto a Confirmar y cancela la anulación sin anular la ficha", async ({
     page,
     request,
   }) => {
@@ -206,31 +207,28 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     );
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#service-record-history-text-filter").fill(client.fullName);
-    await page
-      .locator('tbody tr[role="button"]')
-      .filter({ hasText: client.fullName })
-      .click();
+    const dialog = await openFichaDialog(page, client.fullName);
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    const voidBtn = dialog.getByRole("button", { name: "Void record" });
+    const voidBtn = dialog.getByTestId("service-record-void-open");
     await expect(voidBtn).toBeVisible();
     await voidBtn.click();
 
-    // Cancelar now shows up in the same action row, right next to Anular ficha (which stays
-    // visible but disabled while the void-reason form is open).
-    const cancelBtn = dialog.getByRole("button", { name: "Cancel", exact: true });
+    // Redesign: the reason form opens in place of "Void record", with Cancel right next to
+    // "Confirm void".
+    const form = dialog.getByTestId("service-record-void-form");
+    await expect(form).toBeVisible();
+    const cancelBtn = form.getByRole("button", { name: "Cancel", exact: true });
+    const confirmBtn = dialog.getByTestId("service-record-void-confirm");
     await expect(cancelBtn).toBeVisible();
-    await expect(voidBtn).toBeVisible();
-    await expect(voidBtn).toBeDisabled();
+    await expect(confirmBtn).toBeVisible();
+    const cb = (await cancelBtn.boundingBox())!;
+    const ob = (await confirmBtn.boundingBox())!;
+    expect(Math.abs(cb.y - ob.y)).toBeLessThan(5);
+    expect(cb.x).toBeLessThan(ob.x);
 
     await cancelBtn.click();
-    await expect(dialog.getByText("Void service record")).toHaveCount(0);
-    await expect(voidBtn).toBeEnabled();
+    await expect(form).toHaveCount(0);
+    await expect(voidBtn).toBeVisible();
 
     const refreshed = await request.get(`${API_BASE}/api/service-records/${record.id}`, {
       headers: { Authorization: `Bearer ${token}` },
