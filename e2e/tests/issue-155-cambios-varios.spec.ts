@@ -9,6 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openNewFichaDialog, pickFichaClient, pickLineService } from "../fixtures/fichas";
 import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { bookingAppointmentDialog, professionalFormDialog } from "../fixtures/ui";
 
@@ -94,7 +95,7 @@ test.describe("Issue #155 · Cambios varios", () => {
     expect(created.fullName).toBe(lower.toUpperCase());
   });
 
-  test("AC4 · el mensaje de éxito de la ficha desaparece al cambiar de pestaña y volver a Nueva ficha", async ({
+  test("AC4 · el aviso de éxito de la ficha es pasajero: no queda tras abrir otra vez el formulario", async ({
     page,
     request,
   }) => {
@@ -103,23 +104,18 @@ test.describe("Issue #155 · Cambios varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
-    await page.getByRole("button", { name: client.fullName }).click();
-    await page.getByRole("button", { name: "Add service" }).click();
-    await page.locator("#service-record-line-svc-0").fill(seed.serviceFullName.slice(0, 12));
-    await page.getByRole("button", { name: seed.serviceFullName, exact: false }).click();
-    await page.getByTestId("service-record-submit").click();
+    const dlg = await openNewFichaDialog(page);
+    await pickFichaClient(page, dlg, client.fullName);
+    await pickLineService(page, 0, seed.serviceFullName);
+    await dlg.getByTestId("service-record-submit").click();
 
-    const successAlert = page.getByText("Service record created successfully.", {
-      exact: false,
-    });
-    await expect(successAlert).toBeVisible({ timeout: 15_000 });
+    const toast = page.getByTestId("service-records-toast");
+    await expect(toast).toContainText("Record saved.", { timeout: 15_000 });
 
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(successAlert).not.toBeVisible();
-    await page.getByRole("tab", { name: "New record" }).click();
-    await expect(successAlert).not.toBeVisible();
+    // The toast clears itself (4 s) and a freshly opened form never carries a stale message.
+    await expect(toast).toHaveCount(0, { timeout: 10_000 });
+    await page.getByTestId("service-records-new").click();
+    await expect(page.getByText("Record saved.")).toHaveCount(0);
   });
 
   test("AC5 · el formulario de turno solo muestra clientes activos", async ({

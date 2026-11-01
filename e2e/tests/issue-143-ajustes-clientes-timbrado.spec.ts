@@ -62,8 +62,9 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     await page.locator("#detail-phone").fill(phone);
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
-    const alert = page.getByRole("alert").filter({ hasText: "Client updated successfully." });
-    await expect(alert).toBeVisible();
+    // Redesign: the result is a success toast on the client list.
+    const alert = page.getByTestId("clients-toast");
+    await expect(alert).toContainText("Client updated successfully.");
     await expect(alert).toHaveClass(/success/);
   });
 
