@@ -63,8 +63,8 @@ test.describe("Issue #181 · form hints + report", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("40000");
 
-    // Issue-date legend (inside "More options"): new copy + muted styling.
-    await openMoreOptions(page);
+    // Issue-date legend (shown when the date is changed): new copy + muted styling.
+    await page.getByTestId("billing-issue-date-open").click();
     const legend = page.getByText(
       "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
     );

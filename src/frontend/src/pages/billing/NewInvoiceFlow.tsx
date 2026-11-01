@@ -1329,7 +1329,7 @@ export function NewInvoiceFlow({
               <div className="w-full text-right">
                 <FieldValidationError id="billing-issue-date-err">{issueDateError}</FieldValidationError>
                 {sifenEnabled && (
-                  <Text variant="muted" className="text-xs">
+                  <Text variant="muted" className="text-sm">
                     {t("femme.billing.invoice.issueDateLegend")}
                   </Text>
                 )}
