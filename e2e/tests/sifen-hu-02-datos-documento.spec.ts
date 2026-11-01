@@ -249,6 +249,7 @@ test.describe("SIFEN HU-02 · Completar datos de identificación/timbrado/emisor
     const suffix = `${Date.now()}-${Math.random()}`;
     const fullName = `E2E AC07 ${suffix}`;
     await page.getByLabel("Full name").fill(fullName);
+    await page.getByTestId("client-more-toggle").click();
     await page.getByLabel("Address").fill("Avda. Mcal. López 456");
     await page.getByLabel("Department and city").fill("Fernando de la Mora");
     await expect(page.getByRole("option", { name: /FERNANDO DE LA MORA \(CENTRAL\)/ })).toBeVisible();
