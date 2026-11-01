@@ -9,7 +9,14 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
+import { setControlledInputValue } from "../fixtures/ui";
+import { openNewFichaDialog } from "../fixtures/fichas";
+import {
+  filterPropinasByProfessional,
+  openWithdrawDialog,
+  propinasBalanceOf,
+  propinasMovements,
+} from "../fixtures/propinas";
 
 test.describe.configure({ mode: "serial" });
 
@@ -65,23 +72,6 @@ async function seedClosedTip(
   return { recordId: record.id, invoiceId: invoice.id };
 }
 
-/** Picks options from the report tab's professional `MultiSelect` filter, one at a time. */
-async function pickMultiSelectOption(
-  page: Page,
-  accessibleName: string,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: accessibleName, exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: accessibleName, exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
-}
-
 test.describe("Issue #133 · Ajustes varios", () => {
   let seed: SeededSalon;
 
@@ -92,23 +82,24 @@ test.describe("Issue #133 · Ajustes varios", () => {
     seed = await seedCategoryServiceProfessional(request, token);
   });
 
-  test("1 · el formulario de nueva ficha no muestra una línea de servicio en blanco", async ({
+  test("1 · el formulario de nueva ficha arranca con una sola línea de servicio, vacía", async ({
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await expect(page.getByRole("tab", { name: "New record", exact: true })).toBeVisible();
+    const dlg = await openNewFichaDialog(page);
 
-    // No pre-seeded blank line — only the "Add service" button.
-    await expect(page.locator('[id^="service-record-line-svc-"]')).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Add service" })).toBeVisible();
-
-    // Clicking "Add service" adds exactly one line, on demand.
-    await page.getByRole("button", { name: "Add service" }).click();
+    // Redesign: the dialog opens with exactly one blank line (ignored on save if left empty)
+    // plus the "Add service" action for more.
     await expect(page.locator('[id^="service-record-line-svc-"]')).toHaveCount(1);
+    await expect(page.locator("#service-record-line-svc-0")).toHaveValue("");
+    await expect(dlg.getByTestId("service-record-add-line")).toBeVisible();
+
+    // "Add service" adds one more line, on demand.
+    await dlg.getByTestId("service-record-add-line").click();
+    await expect(dlg.getByTestId("service-record-line")).toHaveCount(2);
   });
 
-  test("2 · el reporte de propinas agrega una línea Retiros manuales que refleja el balance del período", async ({
+  test("2 · los retiros de propina aparecen como movimientos y suman al total retirado del período", async ({
     page,
     request,
   }) => {
@@ -124,49 +115,33 @@ test.describe("Issue #133 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await filterPropinasByProfessional(page, seed.professionalFullName);
 
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    const withdrawalsRow = reportRows.filter({
-      hasText: `Manual withdrawal — ${seed.professionalFullName}`,
+    // Before any withdrawal: no withdrawal movement, the generated tip is the whole total.
+    await expect(propinasMovements(page).filter({ hasText: client.fullName })).toHaveCount(1, {
+      timeout: 15_000,
     });
-    const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
+    await expect(propinasMovements(page).filter({ hasText: "Withdrawal" })).toHaveCount(0);
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 10.000");
 
-    // Before any withdrawal: no withdrawal row yet, grand total is the full generated tip.
-    await expect(withdrawalsRow).toHaveCount(0);
-    await expect(grandTotalRow.getByText(/^Gs\. 10\.000$/)).toBeVisible({ timeout: 15_000 });
-
-    // Withdraw part of the balance from the Withdrawal tab.
-    await page.getByRole("tab", { name: "Tip withdrawal" }).click();
-    await expect(page.getByRole("tab", { name: "Tip withdrawal", selected: true })).toBeVisible();
-    await pickSearchableOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
-
+    // Withdraw part of the balance.
+    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 10.000");
+    await openWithdrawDialog(page, seed.professionalId);
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "3000");
     await expect(amountInput).toHaveValue("3.000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
-      timeout: 15_000,
-    });
+    await page.getByTestId("propinas-withdraw-confirm").click();
+    await expect(page.getByTestId("propinas-toast")).toContainText(
+      "Withdrawal completed successfully.",
+      { timeout: 15_000 },
+    );
 
-    // Back on the report tab, a "Retiro manual" row now shows the withdrawn amount inside the
-    // professional's group, and the grand total = generated tips (10.000) - withdrawals (3.000).
-    await page.getByRole("tab", { name: "Tips report" }).click();
-    await expect(page.getByRole("tab", { name: "Tips report", selected: true })).toBeVisible();
-
-    await expect(withdrawalsRow.getByText(/^Gs\. 3\.000$/)).toBeVisible({ timeout: 15_000 });
-    await expect(grandTotalRow.getByText(/^Gs\. 7\.000$/)).toBeVisible();
+    // A "Withdrawal" movement (minus sign) shows the withdrawn amount; totals follow.
+    const withdrawal = propinasMovements(page).filter({ hasText: "Withdrawal" });
+    await expect(withdrawal).toHaveCount(1, { timeout: 15_000 });
+    await expect(withdrawal).toContainText("Gs. 3.000");
+    await expect(page.getByTestId("propinas-withdrawn-total")).toHaveText("Gs. 3.000");
+    await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 10.000");
+    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 7.000");
   });
 });
