@@ -8,7 +8,8 @@ import {
   voidInvoice,
   type CommissionWorld,
 } from "../fixtures/commissions";
-import { goToBillingHome, goToInvoiceHistory, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
+import { goToBillingHome, openLineMoreOptions, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
+import { openFichaByText } from "../fixtures/ui";
 
 /**
  * Subsección "Propinas" del formulario de comprobante (debajo de "Métodos de pago"): igual que en
@@ -61,12 +62,15 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
 
   await pickServiceLine(page, w.service.name, 0);
   // Without the commissions module the professional is still selectable, with no commission hint.
+  await openLineMoreOptions(page, 0);
   await page.locator("#line-professional-0").selectOption({ label: w.ana.name });
   await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
   await pickServiceLine(page, w.service2.name, 1);
+  await openLineMoreOptions(page, 1);
   await page.locator("#line-professional-1").selectOption({ label: w.bea.name });
   // A product line's seller does not get a tip row.
   await pickServiceLine(page, w.product.name, 2);
+  await openLineMoreOptions(page, 2);
   await page.locator("#line-professional-2").selectOption({ label: w.ana.name });
 
   await expect(page.getByTestId("billing-tips-empty")).toHaveCount(0);
@@ -122,11 +126,8 @@ test("desde una ficha: las propinas se precargan, se pueden corregir y reemplaza
   });
 
   await loginAdminUi(page, w);
-  await page.goto("/app/service-records");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#service-record-history-text-filter").fill("Cliente Propina");
-  await page.locator("tbody tr").filter({ hasText: "CLIENTE PROPINA" }).first().click();
-  await page.getByRole("button", { name: "Generate invoice" }).click();
+  await openFichaByText(page, "Cliente Propina");
+  await page.getByTestId("service-record-generate-invoice").click();
   await expect(page).toHaveURL(/\/app\/billing/);
 
   await openMoreOptions(page);
