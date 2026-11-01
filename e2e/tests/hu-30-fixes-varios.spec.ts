@@ -144,8 +144,8 @@ test.describe("HU-30 · Fixes varios", () => {
     await loginAsDemoApi(request);
     await loginAsDemo(page);
     await page.goto("/app/settings/taxes");
-    // Wait for tax table to load
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 20_000 });
+    // Wait for the taxes list to load (rows, not a table, after the redesign)
+    await expect(page.getByTestId("taxes-list")).toBeVisible({ timeout: 20_000 });
 
     // Should have at least one row with a KebabMenu trigger (⋮ button)
     const firstRowTrigger = page.getByRole("button", { name: "Actions" }).first();

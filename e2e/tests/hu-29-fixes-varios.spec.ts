@@ -10,7 +10,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, openMoreOptions } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, openMoreOptions, openLineMoreOptions } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { setControlledInputValue } from "../fixtures/ui";
 
@@ -56,7 +56,7 @@ test.describe("HU-29 · Fixes varios", () => {
     // No discount yet → field hidden
     await expect(page.getByTestId("line-discounted-total-0")).toHaveCount(0);
 
-    await openMoreOptions(page);
+    await openLineMoreOptions(page, 0);
     await page.locator("#line-disc-toggle-0").check();
     await page.locator("#line-disc-val-0").fill("10");
 
@@ -78,6 +78,7 @@ test.describe("HU-29 · Fixes varios", () => {
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await setControlledInputValue(page.locator("#line-price-0"), "10000");
+    await openLineMoreOptions(page, 0);
     await openMoreOptions(page);
     await page.locator("#line-disc-toggle-0").check();
     await page.locator("#line-disc-val-0").fill("10"); // 10% of 10.000 = 1.000
@@ -106,7 +107,7 @@ test.describe("HU-29 · Fixes varios", () => {
     await page.locator("#line-price-0").fill("10000");
     await fillPaymentAmount(page, "10000");
 
-    await openMoreOptions(page);
+    await openLineMoreOptions(page, 0);
     await page.locator("#line-disc-toggle-0").check();
     await page.locator("#line-disc-val-0").fill("150");
 

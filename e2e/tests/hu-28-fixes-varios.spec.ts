@@ -9,7 +9,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen, goToBillingHome, openMoreOptions } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, openMoreOptions, openLineMoreOptions } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 import { ensureCalendarShowsAppointmentByTestId, pickSearchableOption } from "../fixtures/ui";
 import { openItemMoreOptions } from "../fixtures/catalog";
@@ -209,8 +209,8 @@ test.describe("HU-28 · Fixes varios", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     const priceInput = page.locator("#line-price-0");
     await priceInput.fill("100000");
-    // Per-item discount lives in "More options"; enable it for the first line.
-    await openMoreOptions(page);
+    // Per-item discount lives in the line's "More options"; enable it for the first line.
+    await openLineMoreOptions(page, 0);
     await page.locator("#line-disc-toggle-0").check();
     // Fill 10% discount
     await page.locator("#line-disc-val-0").fill("10");
