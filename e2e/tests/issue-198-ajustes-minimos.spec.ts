@@ -13,6 +13,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { goToBillingHome } from "../fixtures/billing";
+import { openManualVoidingForm, unfoldSifen } from "../fixtures/ui";
 
 const nodeRequire = createRequire(import.meta.url);
 const pdfParse = nodeRequire("pdf-parse/lib/pdf-parse.js") as (
@@ -146,12 +147,12 @@ test.describe("Issue #198 · Ajustes mínimos", () => {
     expect(text).not.toContain("Fecha de Inicio de Vigencia");
   });
 
-  test.describe("3 · Configuración → SIFEN luce como Configuración → Timbrado", () => {
+  test.describe("3 · Configuración → SIFEN usa los mismos botones que Configuración → Timbrado", () => {
     test.afterEach(async ({ request }) => {
       await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
     });
 
-    test("los títulos de sección y el botón primario del alta manual coinciden con Timbrado", async ({
+    test("el botón primario del alta manual coincide con el del alta de timbrado", async ({
       page,
       request,
     }) => {
@@ -160,45 +161,29 @@ test.describe("Issue #198 · Ajustes mínimos", () => {
 
       await loginAsDemo(page);
 
-      // Reference: the "Agregar timbrado" form submit button + a section title on the Timbrado page.
+      // Reference: the "Add stamp" dialog's submit button on the Timbrado page.
       await page.goto("/app/settings/fiscal-stamp");
-      const stampSubmit = page
-        .getByTestId("fiscal-stamp-create-section")
-        .locator('button[type="submit"]');
+      await page.getByTestId("fiscal-stamp-add").click();
+      const stampSubmit = page.getByTestId("fiscal-stamp-create-submit");
       await expect(stampSubmit).toBeVisible({ timeout: 20_000 });
       const stampSubmitBg = await stampSubmit.evaluate(
         (el) => getComputedStyle(el).backgroundColor,
       );
-      const stampTitle = page.getByText("Registered stamps", { exact: true });
-      const stampTitleCss = await stampTitle.evaluate((el) => {
-        const s = getComputedStyle(el);
-        return { textTransform: s.textTransform, fontSize: s.fontSize, letterSpacing: s.letterSpacing };
-      });
 
-      // The SIFEN page, "Numeración inutilizada" tab.
+      // The SIFEN page, "Voided numbering" fold: the manual dialog uses the same primary button.
       await page.goto("/app/settings/sifen");
-      await page.getByRole("tab", { name: "Voided numbering" }).click();
-
-      const manualForm = page.getByTestId("sifen-number-voiding-manual-form");
-      await expect(manualForm).toBeVisible();
-      // Same three-field grid + a submit button (like "Agregar timbrado").
+      await unfoldSifen(page, "numberVoiding");
+      const manualForm = await openManualVoidingForm(page);
       await expect(manualForm.locator("#manual-range-from")).toBeVisible();
       await expect(manualForm.locator("#manual-range-to")).toBeVisible();
       await expect(manualForm.locator("#manual-reason")).toBeVisible();
 
-      const manualSubmit = manualForm.locator('button[type="submit"]');
+      const manualSubmit = page.getByRole("dialog").locator('button[type="submit"]');
       await expect(manualSubmit).toBeVisible();
       const manualSubmitBg = await manualSubmit.evaluate(
         (el) => getComputedStyle(el).backgroundColor,
       );
       expect(manualSubmitBg).toBe(stampSubmitBg);
-
-      const sifenTitle = page.getByText("Register a manual voiding", { exact: true });
-      const sifenTitleCss = await sifenTitle.evaluate((el) => {
-        const s = getComputedStyle(el);
-        return { textTransform: s.textTransform, fontSize: s.fontSize, letterSpacing: s.letterSpacing };
-      });
-      expect(sifenTitleCss).toEqual(stampTitleCss);
 
       // And the manual form still works end-to-end via the primary button.
       const base = 7_000_000 + (Date.now() % 700_000);

@@ -13,6 +13,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
+import { unfoldSifen } from "../fixtures/ui";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -209,7 +210,7 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, true);
     try {
       await page.goto("/app/settings/sifen");
-      await page.getByRole("tab", { name: "Voided numbering" }).click();
+      await unfoldSifen(page, "numberVoiding");
       const voidingRow = page
         .getByTestId("sifen-number-voiding-row")
         .filter({ hasText: `FACTURA ${before.invoiceNumber}` });

@@ -11,6 +11,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
+import { unfoldSifen } from "../fixtures/ui";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -247,7 +248,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
       await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
 
       // Voided-numbers table, with a per-row action column + the submit button in the row.
-      await page.getByRole("tab", { name: "Voided numbering" }).click();
+      await unfoldSifen(page, "numberVoiding");
       const voidingSection = page.getByTestId("sifen-number-voiding-section");
       await expect(voidingSection.getByRole("table")).toBeVisible();
       await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();

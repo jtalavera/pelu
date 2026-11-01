@@ -10,6 +10,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
 import { openTenantSifenAsRoot } from "../fixtures/sifenRoot";
+import { unfoldSifen } from "../fixtures/ui";
 
 // Per-tenant CSC (Código de Seguridad del Contribuyente): the DNIT issues each taxpayer its own CSC
 // and validates every invoice QR with it. It is loaded ONLY by the platform's root user
@@ -225,7 +226,7 @@ test.describe("SIFEN · CSC por salón (cargado solo por el usuario root)", () =
     // … and the salon's administrator only LOOKS.
     await loginAsDemo(page);
     await page.goto("/app/settings/sifen");
-    await page.getByRole("tab", { name: "Security code (CSC)" }).click();
+    await unfoldSifen(page, "csc");
 
     await expect(page.getByTestId("sifen-csc-row-5")).toContainText("Active");
     await expect(page.getByTestId("sifen-csc-row-6")).toContainText("Inactive");

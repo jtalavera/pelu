@@ -12,6 +12,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openManualVoidingForm, unfoldSifen } from "../fixtures/ui";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -36,7 +37,7 @@ type IssuedInvoice = { id: number };
 // (same tab pattern as the Facturación page). Everything RT-25 touches lives under the second one.
 async function openVoidingTab(page: Page) {
   await page.goto("/app/settings/sifen");
-  await page.getByRole("tab", { name: "Voided numbering" }).click();
+  await unfoldSifen(page, "numberVoiding");
 }
 
 async function createInvoice(request: APIRequestContext, token: string): Promise<IssuedInvoice> {
@@ -148,12 +149,12 @@ test.describe("RT-25 · Inutilización de numeración", () => {
 
     await loginAsDemo(page);
     await openVoidingTab(page);
-    const form = page.getByTestId("sifen-number-voiding-manual-form");
+    const form = await openManualVoidingForm(page);
     await expect(form).toBeVisible();
     await form.locator("#manual-range-from").fill(String(from));
     await form.locator("#manual-range-to").fill(String(to));
     await form.getByLabel("Reason").fill("Numeración saltada por un error del sistema");
-    await form.getByRole("button", { name: "Register" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Register", exact: true }).click();
 
     await expect(page.getByTestId("sifen-number-voiding-manual-success")).toBeVisible();
     const row = page
@@ -180,11 +181,11 @@ test.describe("RT-25 · Inutilización de numeración", () => {
 
     await loginAsDemo(page);
     await openVoidingTab(page);
-    const form = page.getByTestId("sifen-number-voiding-manual-form");
+    const form = await openManualVoidingForm(page);
     await form.locator("#manual-range-from").fill(String(from));
     await form.locator("#manual-range-to").fill(String(to));
     await form.getByLabel("Reason").fill("Numeración saltada por un error del sistema");
-    await form.getByRole("button", { name: "Register" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Register", exact: true }).click();
     await expect(page.getByTestId("sifen-number-voiding-manual-success")).toBeVisible();
 
     const row = page
@@ -219,11 +220,11 @@ test.describe("RT-25 · Inutilización de numeración", () => {
 
     await loginAsDemo(page);
     await openVoidingTab(page);
-    const form = page.getByTestId("sifen-number-voiding-manual-form");
+    const form = await openManualVoidingForm(page);
     await form.locator("#manual-range-from").fill(String(detail.invoiceNumber));
     await form.locator("#manual-range-to").fill(String(detail.invoiceNumber));
     await form.getByLabel("Reason").fill("Intento inválido de inutilización");
-    await form.getByRole("button", { name: "Register" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Register", exact: true }).click();
 
     await expect(
       form.getByText("That range includes already-issued invoice numbers; it can't be voided."),

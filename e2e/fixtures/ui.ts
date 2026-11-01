@@ -251,3 +251,21 @@ export async function openSifenSection(
   await fold.waitFor({ state: "visible" });
   if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
 }
+
+/** Opens one SIFEN fold on the Configuración → SIFEN page that is already loaded. */
+export async function unfoldSifen(
+  page: import("@playwright/test").Page,
+  section: "certificate" | "csc" | "numberVoiding",
+) {
+  const fold = page.getByTestId(`sifen-fold-${section}`);
+  await fold.waitFor({ state: "visible" });
+  if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+}
+
+/** Configuración → SIFEN → Voided numbering: opens the manual-voiding dialog; returns its form. */
+export async function openManualVoidingForm(page: import("@playwright/test").Page) {
+  await page.getByTestId("sifen-number-voiding-manual-open").click();
+  const form = page.getByTestId("sifen-number-voiding-manual-form");
+  await form.waitFor({ state: "visible" });
+  return form;
+}
