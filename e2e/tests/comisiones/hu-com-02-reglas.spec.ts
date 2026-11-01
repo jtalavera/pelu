@@ -163,25 +163,22 @@ test("vista de reglas: ítems por categoría con precio, % estándar, excepcione
   await loginAdminUi(page, w);
   await openRules(page);
 
-  await expect(page.getByTestId("rules-count-items")).toHaveText("2 services");
-  await expect(page.getByTestId("rules-count-exceptions")).toHaveText("1 with exceptions");
-  await expect(page.getByTestId("rules-count-professionals")).toHaveText("2 professionals");
+  // The redesigned list has no counters; the base now sits under «More options».
+  await page.getByTestId("rules-options-toggle").click();
   await expect(page.getByText("Calculation base: price excl. VAT.")).toBeVisible();
 
   const table = page.getByTestId("rules-table");
   // No category grouping rows: one row per item, sorted by name.
-  await expect(table.locator("tbody tr", { hasText: "Peluquería" })).toHaveCount(0);
-  await expect(table.locator("tbody tr")).toHaveCount(2);
+  await expect(table.locator("li", { hasText: "Peluquería" })).toHaveCount(0);
+  await expect(table.locator("li")).toHaveCount(2);
   await expect(page.getByTestId(`rules-row-${w.service.id}`)).toContainText("Gs. 110.000");
-  // Item standard differs from the general commission; the professional exception shows its delta.
+  // Item standard on the right; the sub line counts the professional exceptions.
   await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("40 %");
-  await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("≠ general");
-  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText(/ana/i);
-  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("50 %");
-  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("+10");
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("1 exception");
   // Without its own %, the item inherits the general commission.
-  await expect(page.getByTestId(`rules-standard-${w.service2.id}`)).toHaveText("30 %");
-  await expect(page.getByTestId(`rules-exceptions-${w.service2.id}`)).toHaveText("Everyone uses the standard");
+  await expect(page.getByTestId(`rules-standard-${w.service2.id}`)).toContainText("30 %");
+  await expect(page.getByTestId(`rules-standard-${w.service2.id}`)).toContainText("general");
+  await expect(page.getByTestId(`rules-exceptions-${w.service2.id}`)).toHaveText("Gs. 110.000");
 
   // The Switch input is sr-only: dispatch the click on the input itself (see hu-46).
   // Search by item name (case and accent insensitive) at the top of the table.
@@ -192,26 +189,22 @@ test("vista de reglas: ítems por categoría con precio, % estándar, excepcione
   await page.getByTestId("rules-search").fill("zzz-no-existe");
   await expect(page.getByTestId("rules-empty")).toHaveText("No item matches the search.");
   await page.getByTestId("rules-search").fill("");
-  await expect(table.locator("tbody tr")).toHaveCount(2);
+  await expect(table.locator("li")).toHaveCount(2);
 
   await page.getByTestId("rules-only-exceptions").dispatchEvent("click");
   await expect(page.getByTestId("rules-only-exceptions")).toBeChecked();
   await expect(page.getByTestId(`rules-row-${w.service.id}`)).toBeVisible();
   await expect(page.getByTestId(`rules-row-${w.service2.id}`)).toHaveCount(0);
 
-  await page.getByRole("tab", { name: "Products" }).click();
-  await expect(page.getByTestId("rules-count-items")).toHaveText("1 product");
+  await page.getByTestId("rules-kind-PRODUCT").click();
   await expect(page.getByLabel("Search product")).toBeVisible();
-  await expect(page.getByTestId("rules-table").locator("tbody tr", { hasText: "Reventa" })).toHaveCount(0);
+  await expect(page.getByTestId("rules-table").locator("li", { hasText: "Reventa" })).toHaveCount(0);
   await page.getByTestId("rules-search").fill("shamp");
+  // «Only exceptions» stays on when switching kind; the product has none, so turn it off.
+  await page.getByTestId("rules-options-toggle").click();
   await page.getByTestId("rules-only-exceptions").dispatchEvent("click");
   await expect(page.getByTestId("rules-only-exceptions")).not.toBeChecked();
   await expect(page.getByTestId(`rules-row-${w.product.id}`)).toBeVisible();
-
-  // «Editar» on the base goes to the general rules.
-  await page.getByRole("tab", { name: "Services" }).click();
-  await page.getByTestId("rules-edit-base").click();
-  await expect(page.getByTestId("rules-general")).toBeVisible();
 });
 
 test("panel del ítem: estándar con «Cambiar», % y comisión por profesional, «Agregar excepción»; varios cambios se guardan juntos", async ({
@@ -278,8 +271,8 @@ test("panel del ítem: estándar con «Cambiar», % y comisión por profesional,
   await expect(page.getByRole("status").filter({ hasText: "Change applied." })).toBeVisible();
   await expect(page.getByTestId("rules-pending-count")).toHaveCount(0);
   await expect(page.getByTestId(`rules-standard-${w.service2.id}`)).toContainText("45 %");
-  await expect(page.getByTestId(`rules-exceptions-${w.service2.id}`)).toContainText("60 %");
-  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("55 %");
+  await expect(page.getByTestId(`rules-exceptions-${w.service2.id}`)).toContainText("1 exception");
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("1 exception");
 
   // Effective on the next invoices (precedence: professional + item > item > general).
   const inv = await issueInvoice(request, w.adminToken, [
@@ -315,7 +308,7 @@ test("«Descartar» deshace los cambios sin guardar; «Ver historial de cambios�
   await expect(panel).toHaveCount(0);
   await page.getByTestId("rules-discard").click();
   await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("35 %");
-  await expect(page.getByTestId("rules-save")).toBeDisabled();
+  await expect(page.getByTestId("rules-pending-bar")).toHaveCount(0);
 
   await page.getByTestId(`rules-row-${w.service.id}`).click();
   await panel.getByTestId("rules-history").click();
@@ -342,7 +335,7 @@ test("la vista muestra el % vigente a una fecha dada y marca los cambios program
 
   await loginAdminUi(page, w);
   await openRules(page);
-  await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("⏱");
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("⏱");
 });
 
 test("no se puede crear una excepción para un profesional inactivo; la ya existente se puede cerrar", async ({ request }) => {

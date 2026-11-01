@@ -10,6 +10,7 @@ import {
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
+  openCommissionsMore,
 } from "../../fixtures/commissions";
 
 /** HU-COM-03 · Vista previa de la liquidación de un profesional en el periodo abierto. */
@@ -40,7 +41,7 @@ test.beforeEach(async ({ request }) => {
 
 async function openPreview(page: import("@playwright/test").Page) {
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Preview" }).click();
+  await openCommissionsMore(page, "Preview");
   await expect(page.getByTestId("commission-preview")).toBeVisible();
 }
 
@@ -56,13 +57,13 @@ test("muestra cuánto cobraría el profesional en el periodo vigente con las com
   await expect(page.getByTestId("preview-services")).toContainText("40.000");
   await expect(page.getByTestId("preview-products")).toContainText("10.000");
   await expect(page.getByTestId("preview-adjustments")).toContainText("0");
-  await expect(page.getByTestId("preview-entries").locator("tbody tr")).toHaveCount(2);
+  await expect(page.getByTestId("preview-entries").locator("li")).toHaveCount(2);
 
   // Bea only sees her own commissions (her exception: 50 %).
   await page.locator("#preview-professional").selectOption({ label: w.bea.name });
   await page.getByTestId("preview-run").click();
   await expect(page.getByTestId("preview-total")).toContainText("50.000");
-  await expect(page.getByTestId("preview-entries").locator("tbody tr")).toHaveCount(1);
+  await expect(page.getByTestId("preview-entries").locator("li")).toHaveCount(1);
 
   // Nothing persisted: no settlement was created.
   const settlements = await apiGetJson<{ total: number }>(request, w.adminToken, "/api/commissions/settlements");

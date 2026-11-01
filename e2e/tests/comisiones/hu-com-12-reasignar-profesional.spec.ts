@@ -8,6 +8,7 @@ import {
   generateSettlements,
   issueInvoice,
   loginAdminUi,
+  rowMenuAction,
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
@@ -58,7 +59,7 @@ test("desde «Movimientos»: valida profesional y motivo, revierte la comisión 
   await expect(rows.first()).toContainText(w.ana.name);
   await expect(rows.first()).toContainText("40.000");
 
-  await rows.first().getByRole("button", { name: "Change professional" }).click();
+  await rowMenuAction(page, rows.first(), "Change professional");
   const dialog = page.getByTestId("reassign-dialog");
   await expect(dialog).toContainText("The invoice is not modified.");
   await expect(page.getByTestId("reassign-closed-warning")).toHaveCount(0);
@@ -81,7 +82,7 @@ test("desde «Movimientos»: valida profesional y motivo, revierte la comisión 
   await expect(reversal).toContainText("-");
   await expect(rows.filter({ hasText: w.bea.name })).toContainText("50.000");
   // Neither the original (already reversed) nor the reversal can be reassigned again.
-  await expect(rows.getByRole("button", { name: "Change professional" })).toHaveCount(1);
+  await expect(rows.getByRole("button", { name: /actions/i })).toHaveCount(1);
 
   const es = await entries(request, w.adminToken);
   const mine = es.filter((e) => e.invoiceId === invoiceId);
@@ -104,10 +105,10 @@ test("desde el detalle de una liquidación en borrador: la comisión sale del bo
   await page.goto(`/app/commissions/settlements/${draft.id}`);
   const detail = page.getByTestId("commission-settlement-detail");
   await expect(detail.getByTestId("settlement-total")).toContainText("40.000");
-  await detail.getByRole("button", { name: "Change professional" }).click();
+  await rowMenuAction(page, detail.getByTestId("settlement-line").first(), "Change professional");
   await reassignTo(page, w.bea.name, "Asignado por error");
   await expect(detail.getByTestId("settlement-total")).toContainText("Gs. 0");
-  await expect(detail.getByRole("button", { name: "Change professional" })).toHaveCount(0);
+  await expect(detail.getByTestId("settlement-line").first().getByRole("button", { name: /actions/i })).toHaveCount(0);
 
   const preview = await apiGetJson<{ total: number }>(
     request,
@@ -126,7 +127,7 @@ test("si la comisión está en una liquidación aprobada, se avisa; esa liquidac
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
   await page.getByRole("tab", { name: "Movements" }).click();
-  await page.getByTestId("movement-row").first().getByRole("button", { name: "Change professional" }).click();
+  await rowMenuAction(page, page.getByTestId("movement-row").first(), "Change professional");
   await expect(page.getByTestId("reassign-closed-warning")).toBeVisible();
   await reassignTo(page, w.bea.name, "Asignado por error");
 

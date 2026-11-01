@@ -194,7 +194,8 @@ export function MovementsTab() {
                   <div className="flex flex-wrap items-center gap-x-2 text-sm text-ink-3">
                     <span>
                       {formatParaguayDateTime(e.accrualAt, dateLocale)}
-                      {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {movementLabel(e)} · {formatPercent(e.percentApplied)}
+                      {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {movementLabel(e)}
+                      {e.note && e.sourceType !== "ADJUSTMENT" ? ` · ${e.note}` : ""} · {formatPercent(e.percentApplied)}
                     </span>
                     <SettlementStatusBadge status={e.settlementStatus} />
                   </div>

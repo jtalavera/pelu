@@ -310,3 +310,29 @@ export async function professionalWithAccess(
   expect(act.ok(), await act.text()).toBeTruthy();
   return { id: created.id, email };
 }
+
+// ── Redesigned Comisiones screen (3 tabs + «⋯ More» menu) ────────────────────────────────────────
+
+/** Opens a section of the «More» menu (Preview / Reports / Settings) on the Comisiones screen. */
+export async function openCommissionsMore(page: Page, name: "Preview" | "Reports" | "Settings") {
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name }).click();
+}
+
+/** Opens the «Generate settlements» dialog (the form lives in a dialog now). */
+export async function openGenerateSettlements(page: Page) {
+  await page.getByTestId("commission-generate-open").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+}
+
+/** Expands a folded section by its test id when it is collapsed. */
+export async function expandSection(page: Page, toggleTestId: string) {
+  const toggle = page.getByTestId(toggleTestId);
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+
+/** Opens the «⋯» menu of a list row and picks an action by its visible name. */
+export async function rowMenuAction(page: Page, row: ReturnType<Page["locator"]>, action: string) {
+  await row.getByRole("button", { name: /actions/i }).click();
+  await page.getByRole("menuitem", { name: action }).click();
+}

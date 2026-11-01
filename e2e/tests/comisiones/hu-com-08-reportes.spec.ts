@@ -10,6 +10,7 @@ import {
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
+  openCommissionsMore,
 } from "../../fixtures/commissions";
 
 /** HU-COM-08 · Reportes y exportación. */
@@ -41,17 +42,21 @@ test("reportes por profesional, ítem, tipo y periodo con filtros; y líneas sin
 }) => {
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Reports" }).click();
+  await openCommissionsMore(page, "Reports");
   await expect(page.getByTestId("commission-report-total")).toContainText("50.000");
   await expect(page.getByTestId("report-by-professional")).toContainText(w.ana.name);
   await expect(page.getByTestId("report-by-professional")).toContainText(w.bea.name);
+  await page.getByTestId("report-group-byItem").click();
   await expect(page.getByTestId("report-by-item")).toContainText(w.service.name);
+  await page.getByTestId("report-group-byKind").click();
   await expect(page.getByTestId("report-by-kind")).toContainText("Products");
-  await expect(page.getByTestId("report-by-period").locator("tbody tr")).toHaveCount(1);
+  await page.getByTestId("report-group-byPeriod").click();
+  await expect(page.getByTestId("report-by-period").locator("li")).toHaveCount(1);
   await expect(page.getByTestId("report-lines-without-beneficiary")).toContainText(w.service2.name);
   // The «ítems sin % general» section was removed from the report (it added no value).
   await expect(page.getByTestId("report-items-without-rule")).toHaveCount(0);
 
+  await page.getByTestId("report-filters-toggle").click();
   await page.locator("#report-kind").selectOption("PRODUCT");
   await page.getByTestId("commission-report-search").click();
   await expect(page.getByTestId("commission-report-total")).toContainText("10.000");
@@ -88,7 +93,7 @@ test("exportación CSV de entradas (tipo, base y %) y comprobante PDF de liquida
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("settlement-pdf").click()]);
   expect(download.suggestedFilename()).toBe(`liquidacion-${settlementId}.pdf`);
   await page.goto("/app/commissions");
-  await page.getByRole("tab", { name: "Reports" }).click();
+  await openCommissionsMore(page, "Reports");
   const [csvDownload] = await Promise.all([
     page.waitForEvent("download"),
     page.getByTestId("commission-export-entries").click(),

@@ -7,6 +7,7 @@ import {
   generateSettlements,
   issueInvoice,
   loginAdminUi,
+  openGenerateSettlements,
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   todayYmd,
@@ -44,25 +45,29 @@ test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subt
 
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
+  await openGenerateSettlements(page);
   // «Profesionales» is a multi-select: pick Ana only.
   await page.locator("#settle-professional").click();
   await page.getByRole("listbox").getByRole("button", { name: w.ana.name }).click();
-  await page.keyboard.press("Escape");
+  // Escape would close the dialog: click its title to dismiss the list instead.
+  await page.getByRole("dialog").getByRole("heading").first().click();
   await page.getByTestId("commission-generate-settlements").click();
   await expect(page.getByRole("status").filter({ hasText: "1 settlement generated." })).toBeVisible();
   const row = page.getByTestId("commission-settlement-row").first();
   await expect(row).toContainText(w.ana.name);
   await expect(row).toContainText("Draft");
-  await row.getByRole("link", { name: "View" }).click();
+  await row.click();
 
   const detail = page.getByTestId("commission-settlement-detail");
   await expect(detail.getByTestId("settlement-line")).toHaveCount(2);
-  await expect(detail.getByTestId("settlement-line").first()).toContainText("Excluding VAT");
-  await expect(detail.getByTestId("settlement-subtotals-kind")).toContainText("Services: Gs. 40.000");
-  await expect(detail.getByTestId("settlement-subtotals-kind")).toContainText("Products: Gs. 10.000");
+  await expect(detail.getByTestId("settlement-line").first()).toContainText("excl. VAT");
+  await page.getByTestId("settlement-subtotals-toggle").click();
+  await expect(detail.getByTestId("settlement-subtotals-kind")).toContainText(/Services\s*Gs\. 40\.000/);
+  await expect(detail.getByTestId("settlement-subtotals-kind")).toContainText(/Products\s*Gs\. 10\.000/);
   await expect(detail.getByTestId("settlement-total")).toContainText("50.000");
 
-  // Adjustment requires a reason.
+  // Adjustment requires a reason (the form lives in a dialog).
+  await page.getByTestId("settlement-adjustment-open").click();
   await page.locator("#adj-amount").fill("5000");
   await page.getByTestId("settlement-add-adjustment").click();
   await expect(page.locator("#adj-error")).toContainText("reason is required");
@@ -83,11 +88,12 @@ test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subt
   await expect(detail.getByTestId("settlement-status")).toHaveText("Paid");
   await expect(detail).toContainText("Bank transfer");
   await expect(detail).toContainText("OP-778");
+  await page.getByTestId("settlement-history-toggle").click();
   const history = detail.getByTestId("settlement-history");
   await expect(history).toContainText("Draft → Approved");
   await expect(history).toContainText("Approved → Paid");
   await expect(history).toContainText(w.adminEmail);
-  await expect(page.getByTestId("settlement-void")).toHaveCount(0); // never from Paid
+  await expect(page.getByTestId("settlement-more-trigger")).toHaveCount(0); // never void from Paid
 });
 
 test("una entrada se liquida una sola vez; solapamiento rechazado; sin entradas no se genera", async ({ request }) => {
@@ -115,7 +121,8 @@ test("anular una liquidación Borrador libera sus entradas para volver a liquida
   const [s] = await generateSettlements(request, w.adminToken, [w.ana.id]);
   await loginAdminUi(page, w);
   await page.goto(`/app/commissions/settlements/${s.id}`);
-  await page.getByTestId("settlement-void").click();
+  await page.getByTestId("settlement-more-trigger").click();
+  await page.getByTestId("settlement-more-item-void").click();
   await page.getByTestId("settlement-void-confirm").click();
   await expect(page.locator("#void-error")).toContainText("required");
   await page.locator("#void-reason").fill("Periodo mal elegido");
@@ -171,9 +178,10 @@ test("listado paginado y filtrable por profesional, estado y periodo; exportaci�
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
-  await page.locator("#settle-filter-status").selectOption("APPROVED");
+  await page.getByTestId("settlements-chip-APPROVED").click();
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
-  await page.locator("#settle-filter-status").selectOption("");
+  await page.getByTestId("settlements-chip-ALL").click();
+  await page.getByTestId("settlements-filters-toggle").click();
   // The professional filter is a multi-select (several professionals at once).
   await page.locator("#settle-filter-professional").click();
   await page.getByRole("listbox").getByRole("button", { name: w.bea.name }).click();
