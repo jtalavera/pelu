@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToCatalog } from "../fixtures/catalog";
 import { ensureCashSessionOpen, goToBillingHome } from "../fixtures/billing";
 
 test.describe("Issue #157 · Ajustes varios", () => {
-  test("AC1 · el mensaje de éxito de edición se muestra dentro del formulario, sin cerrar el modal", async ({
+  test("AC1 · el mensaje de éxito de edición se muestra una sola vez en la lista tras cerrar el formulario", async ({
     page,
     request,
   }) => {
@@ -12,7 +13,7 @@ test.describe("Issue #157 · Ajustes varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
-    await page.goto("/app/services");
+    await goToCatalog(page, "services");
     await page.locator("#services-list-filter").fill(seed.serviceFullName);
     const card = page.getByTestId(`svc-row-${seed.serviceId}`);
     await expect(card).toBeVisible({ timeout: 20_000 });
@@ -20,13 +21,11 @@ test.describe("Issue #157 · Ajustes varios", () => {
     const dlg = page.getByRole("dialog", { name: "Edit service" });
     await dlg.getByRole("button", { name: "Save" }).click();
 
-    // The success message renders inside the edit form itself — the modal must stay open
-    // and interactive (not close back to the table with the message shown there instead).
-    await expect(dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toBeVisible({
+    // Catalog redesign: the form closes on save and one passing notice confirms it on the list.
+    await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toHaveCount(1, {
       timeout: 10_000,
     });
-    await expect(dlg.getByLabel("Name")).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toHaveCount(1);
+    await expect(dlg).toHaveCount(0);
   });
 
   test("AC2 · el formulario de edición de cliente ya no tiene botón de cerrar (x)", async ({

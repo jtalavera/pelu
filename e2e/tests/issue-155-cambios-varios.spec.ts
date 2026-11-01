@@ -9,6 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToCatalog } from "../fixtures/catalog";
 import { openNewFichaDialog, pickFichaClient, pickLineService } from "../fixtures/fichas";
 import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { bookingAppointmentDialog, professionalFormDialog } from "../fixtures/ui";
@@ -25,18 +26,18 @@ test.describe("Issue #155 · Cambios varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
-    await page.goto("/app/services");
+    await goToCatalog(page, "services");
     await page.locator("#services-list-filter").fill(seed.serviceFullName);
     const card = page.getByTestId(`svc-row-${seed.serviceId}`);
     await expect(card).toBeVisible({ timeout: 20_000 });
     await card.click();
     const dlg = page.getByRole("dialog", { name: "Edit service" });
     await dlg.getByRole("button", { name: "Save" }).click();
-    // Issue #157: the success message shows inside the edit form itself, which stays open.
-    await expect(dlg).toBeVisible();
+    // Catalog redesign: saving closes the form and a passing notice confirms it on the list.
     await expect(
-      dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
+      page.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(dlg).toHaveCount(0);
   });
 
   test("AC1 · guardar una profesional existente muestra mensaje de éxito", async ({
@@ -53,19 +54,18 @@ test.describe("Issue #155 · Cambios varios", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/professionals");
+    await goToCatalog(page, "professionals");
     await page.locator("#professionals-inline-search").fill(prof.fullName);
     const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: prof.fullName }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.click();
     const dlg = professionalFormDialog(page);
     await dlg.getByTestId("prof-save").click();
-    await dlg.getByTestId("prof-save").click();
-    // Issue #157: the success message shows inside the edit form itself, which stays open.
-    await expect(dlg).toBeVisible();
+    // Catalog redesign: saving closes the form and a passing notice confirms it on the list.
     await expect(
-      dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
+      page.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(dlg).toHaveCount(0);
   });
 
   // AC2 (the client-detail "×" close button) was reverted by issue #157 — see
