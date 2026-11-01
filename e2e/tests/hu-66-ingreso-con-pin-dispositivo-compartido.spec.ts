@@ -102,6 +102,8 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/devices");
+    // Redesign: enabling the device is a dialog opened from "Enable this device".
+    await page.getByTestId("activate-shared-device-open").click();
     const form = page.getByTestId("activate-shared-device-form");
     await form.locator("#shared-device-name").fill(`Recepción ${uniq()}`);
     await form.locator("#shared-device-password").fill("not-my-password");
@@ -338,7 +340,8 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
     await loginAsDemo(adminPage);
     await adminPage.goto("/app/settings/devices");
     await expect(adminPage.getByTestId(`shared-device-row-locked-${device.deviceId}`)).toBeVisible();
-    await adminPage.getByTestId(`shared-device-unlock-${device.deviceId}`).click();
+    await adminPage.getByTestId(`shared-device-row-${device.deviceId}`).getByRole("button", { name: /actions/i }).click();
+    await adminPage.getByRole("menuitem", { name: "Unlock" }).click();
     await expect(adminPage.getByTestId(`shared-device-row-locked-${device.deviceId}`)).toHaveCount(0);
     await ctx.close();
 
