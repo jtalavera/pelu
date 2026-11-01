@@ -12,6 +12,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openAddStampDialog, stampRowAction } from "../fixtures/ui";
 
 test.describe.configure({ mode: "serial" });
 
@@ -19,8 +20,8 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
 
   test("HU-02b · 2 formulario Add stamp muestra campos del timbrado", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/settings/fiscal-stamp");
-    await expect(page.getByText("Add stamp", { exact: true }).first()).toBeVisible();
+    await openAddStampDialog(page);
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Add stamp" })).toBeVisible();
     await expect(page.getByLabel("Stamp number", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Validity start", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Validity end", { exact: true })).toBeVisible();
@@ -35,7 +36,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/settings/fiscal-stamp");
+    await openAddStampDialog(page);
     const stampNumber = `2${Date.now().toString().slice(-7)}`;
     await page.getByLabel("Stamp number", { exact: true }).fill(stampNumber);
     const today = new Date();
@@ -48,16 +49,16 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await page.getByLabel("Starting invoice number", { exact: true }).fill("8000000");
     await page.getByLabel("Establishment", { exact: true }).fill("2");
     await page.getByLabel("Expedition point", { exact: true }).fill("3");
-    await page.getByRole("button", { name: "Add stamp" }).click();
+    await page.getByTestId("fiscal-stamp-create-submit").click();
     await expect(page.getByText(stampNumber).first()).toBeVisible();
-    const tableRow = page.locator("tr", { hasText: stampNumber });
-    await expect(tableRow.getByText("002", { exact: true })).toBeVisible();
-    await expect(tableRow.getByText("003", { exact: true })).toBeVisible();
+    const tableRow = page.getByTestId("fiscal-stamp-current-section").locator("li", { hasText: stampNumber });
+    // The row shows the next invoice number as 002-003-xxxxxxx (establishment-expedition-number).
+    await expect(tableRow).toContainText("002-003-");
   });
 
   test("HU-02b · 3 número inicial fuera del rango muestra error", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/settings/fiscal-stamp");
+    await openAddStampDialog(page);
     await page.getByLabel("Stamp number", { exact: true }).fill("87654321");
     const today = new Date();
     const nextYear = new Date(today);
@@ -67,13 +68,13 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await page.getByLabel("Number from", { exact: true }).fill("1");
     await page.getByLabel("Number to", { exact: true }).fill("10");
     await page.getByLabel("Starting invoice number", { exact: true }).fill("99");
-    await page.getByRole("button", { name: "Add stamp" }).click();
+    await page.getByTestId("fiscal-stamp-create-submit").click();
     await expect(page.getByText(/Must be between 1 and 10 \(inclusive\)/)).toBeVisible();
   });
 
   test("HU-02b · 4 fin de vigencia anterior al inicio muestra error", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/settings/fiscal-stamp");
+    await openAddStampDialog(page);
     const today = isoDateLocal(new Date());
     await page.getByLabel("Stamp number", { exact: true }).fill("87654322");
     await page.getByLabel("Validity start", { exact: true }).fill(today);
@@ -81,7 +82,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await page.getByLabel("Number from", { exact: true }).fill("1");
     await page.getByLabel("Number to", { exact: true }).fill("10");
     await page.getByLabel("Starting invoice number", { exact: true }).fill("1");
-    await page.getByRole("button", { name: "Add stamp" }).click();
+    await page.getByTestId("fiscal-stamp-create-submit").click();
     await expect(
       page.getByText("The end of validity must be after the start date.", { exact: true }),
     ).toBeVisible();
@@ -185,7 +186,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     const stampRow = page.getByTestId(`fiscal-stamp-row-${created.id}`);
     await expect(stampRow).toBeVisible({ timeout: 30_000 });
     await stampRow.scrollIntoViewIfNeeded();
-    await stampRow.getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ }).click();
+    await stampRowAction(page, stampRow, /^(Edit|Editar)/);
     const dlg = page.getByRole("dialog");
     await expect(
       dlg.getByRole("heading", { name: /^(Edit stamp|Editar timbrado)$/ }),
@@ -262,9 +263,7 @@ test.describe("HU-02b · Configurar timbrado fiscal", () => {
     await page.goto("/app/settings/fiscal-stamp");
     const stampRow = page.getByTestId(`fiscal-stamp-row-${created.id}`);
     await expect(stampRow).toBeVisible({ timeout: 30_000 });
-    const editButton = stampRow.getByRole("button", { name: /^(Edit stamp|Editar timbrado)$/ });
-    await expect(editButton).toBeVisible();
-    await editButton.click();
+    await stampRowAction(page, stampRow, /^(Edit|Editar)/);
 
     const dlg = page.getByRole("dialog");
     const startInput = dlg.getByLabel(/Starting invoice number|Número de inicio de emisión/);

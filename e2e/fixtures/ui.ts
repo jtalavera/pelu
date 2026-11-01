@@ -279,3 +279,20 @@ export async function openBusinessSection(
   await toggle.waitFor({ state: "visible" });
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
 }
+
+/** Configuración → Timbrado: opens the "Add stamp" dialog and waits for its form. */
+export async function openAddStampDialog(page: import("@playwright/test").Page) {
+  await page.goto("/app/settings/fiscal-stamp");
+  await page.getByTestId("fiscal-stamp-add").click();
+  await page.getByLabel("Stamp number", { exact: true }).waitFor({ state: "visible" });
+}
+
+/** Clicks an item (`/^Edit/`, `/^Activate/`, `/^Deactivate/`, `/^Delete/`) of a stamp row's ⋯ menu. */
+export async function stampRowAction(
+  page: import("@playwright/test").Page,
+  row: import("@playwright/test").Locator,
+  action: RegExp,
+) {
+  await row.getByRole("button", { name: /actions|acciones/i }).click();
+  await page.getByRole("menuitem", { name: action }).click();
+}
