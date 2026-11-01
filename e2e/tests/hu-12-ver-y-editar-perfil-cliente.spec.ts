@@ -33,8 +33,10 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
     await page.getByPlaceholder("Search by name, phone, or RUC…").first().fill(name);
     // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case sent here.
     await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
-    await expect(page.getByText(phone, { exact: true })).toBeVisible();
-    await expect(page.getByText("No RUC", { exact: true }).first()).toBeVisible();
+    // The row shows "phone · last visit" in a single secondary line.
+    await expect(page.locator('[data-testid^="client-row-"]').filter({ hasText: phone })).toContainText(
+      "No visits",
+    );
   });
 
   test("HU-12 · 3 perfil e historial (pestañas)", async ({ page, request }) => {
@@ -52,12 +54,9 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
     await expect(page.getByRole("heading", { name: /E2E Tabs/i })).toBeVisible();
     // HU-70: appointments and invoices live in their own tabs.
     await page.getByRole("tab", { name: "Appointments" }).click();
-    await expect(page.getByText("Upcoming", { exact: true })).toBeVisible();
-    await expect(page.getByText("Past", { exact: true })).toBeVisible();
-    const emptyApt = page.getByText("No appointments on record.", { exact: true });
-    await expect(emptyApt).toHaveCount(2);
+    await expect(page.getByTestId("client-appointments-empty")).toBeVisible();
     await page.getByRole("tab", { name: "Invoices" }).click();
-    await expect(page.getByText("No invoices on record.", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("client-invoices-empty")).toBeVisible();
   });
 
   test("HU-12 / HU-25 historial con turno (próximo) y comprobante emitido al cliente", async ({
@@ -100,16 +99,12 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
     await loginAsDemo(page);
     await page.goto(`/app/clients/${c.id}`);
     await page.getByRole("tab", { name: "Appointments" }).click();
-    await expect(page.getByText(seed.serviceFullName, { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId("client-next-appointment")).toContainText(seed.serviceFullName);
     await page.getByRole("tab", { name: "Invoices" }).click();
-    await expect(
-      page.getByRole("table").getByText(inv.invoiceNumberFormatted, { exact: true }),
-    ).toBeVisible();
+    const item = page.getByTestId("client-invoice-item");
+    await expect(item).toContainText(inv.invoiceNumberFormatted);
     // Invoice total (25.000) must display with dot separator, no decimals
-    await expect(page.getByRole("table").getByText("25.000", { exact: true })).toBeVisible();
-    await expect(
-      page.getByText("Issued", { exact: true }).first(),
-    ).toBeVisible();
+    await expect(item).toContainText("Gs. 25.000");
   });
 
   test("HU-12 · 4 edición con validación RUC", async ({ page, request }) => {
@@ -123,6 +118,7 @@ test.describe("HU-12 · Ver y editar perfil de cliente", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${c.id}`);
+    await page.getByTestId("client-section-fiscal-toggle").click();
     await page.locator("#detail-identity-document-number").fill("bad");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
