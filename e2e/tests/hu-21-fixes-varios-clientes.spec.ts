@@ -178,6 +178,8 @@ test.describe("HU-21 · Fixes varios clientes", () => {
       .click();
     await expect(page.getByText("Client deactivated successfully.", { exact: true })).toBeVisible();
 
+    // Wait for the list to reload before flipping it back (reactivating is direct).
+    await expect(page.getByTestId(`client-switch-${created.id}`)).not.toBeChecked();
     await page.getByTestId(`client-switch-${created.id}`).dispatchEvent("click");
     await expect(page.getByText("Client activated successfully.", { exact: true })).toBeVisible();
   });
