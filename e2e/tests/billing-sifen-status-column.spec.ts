@@ -170,7 +170,7 @@ test.describe("Estado SIFEN en las listas de facturas", () => {
     await expect(row.getByTestId("invoice-row-sifen-sent")).toHaveCount(0);
   });
 
-  test("Client detail page's invoice list shows the SIFEN status badge", async ({
+  test("Client detail page's invoice list shows the SIFEN status pill", async ({
     page,
     request,
   }) => {
@@ -196,10 +196,8 @@ test.describe("Estado SIFEN en las listas de facturas", () => {
     await page.goto(`/app/clients/${client.id}`);
     await page.getByRole("tab", { name: "Invoices" }).click();
 
-    await expect(page.getByRole("columnheader", { name: "SIFEN status", exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    const row = page.locator("table tbody").getByRole("row").first();
+    // Redesign: compact rows (date · number + status pill · amount); the pill carries the status.
+    const row = page.getByTestId("client-invoice-item").first();
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row.getByText("Approved", { exact: true })).toBeVisible();
   });

@@ -111,7 +111,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
 
-    const form = page.getByRole("dialog", { name: "Correct and resend" });
+    const form = page.getByRole("dialog", { name: /^Correct and resend/ });
     // AC3 — number next to the title, same shape as the detail modal ("Invoice #0001038").
     await expect(
       form.getByRole("heading", { name: /Correct and resend — Invoice #\d+/ }),
@@ -154,7 +154,7 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
 
-    const form = page.getByRole("dialog", { name: "Correct and resend" });
+    const form = page.getByRole("dialog", { name: /^Correct and resend/ });
     // AC5 — the hint about the SIFEN restriction is always one tap away under "More information".
     await form.getByTestId("sifen-correct-resend-info-toggle").click();
     await expect(form.getByTestId("sifen-correct-resend-window-hint")).toBeVisible();
@@ -242,17 +242,14 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
       // Certificates table (issue #194: now under the "Certificate" tab, the default one).
       const certSection = page.getByTestId("sifen-certificate-list-section");
-      await expect(certSection.getByRole("table")).toBeVisible();
-      await expect(certSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
-      await expect(certSection.getByRole("columnheader", { name: "Status" })).toBeVisible();
+      // Redesign: the certificates are rows (name, upload date, status), not a table.
+      await expect(certSection).toBeVisible();
       await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
 
       // Voided-numbers table, with a per-row action column + the submit button in the row.
       await unfoldSifen(page, "numberVoiding");
       const voidingSection = page.getByTestId("sifen-number-voiding-section");
-      await expect(voidingSection.getByRole("table")).toBeVisible();
-      await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();
-      await expect(voidingSection.getByRole("columnheader", { name: "Action" })).toBeVisible();
+      await expect(voidingSection).toBeVisible();
       const row = page.getByTestId("sifen-number-voiding-row").first();
       await expect(row).toBeVisible();
       await expect(row.getByLabel("Reason")).toBeVisible();

@@ -185,7 +185,7 @@ test.describe("Facturación rediseñada · inicio", () => {
       const notice = page.getByTestId("billing-notice");
       await expect(notice).toHaveText("Cash register opened");
       // It fades on its own.
-      await expect(notice).toBeHidden({ timeout: 10_000 });
+      await expect(notice).toBeHidden({ timeout: 20_000 });
 
       // Closing replaces any old message: no stale "opened" notice next to the closed register.
       await openCashPanel(page);

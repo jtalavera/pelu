@@ -449,8 +449,8 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
   await page.goto(`/app/clients/${client.id}`);
   await page.getByRole("tab", { name: "Invoices" }).click();
 
-  // The comprobantes section should show the "View" (femme.billing.history.viewDetail) button
-  const verBtn = page.getByRole("button", { name: /view/i }).first();
+  // The comprobantes list shows each invoice as a row that opens its detail (no separate "View" button).
+  const verBtn = page.getByTestId("client-invoice-item").first();
   await expect(verBtn).toBeVisible({ timeout: 15_000 });
   await verBtn.click();
 
@@ -579,9 +579,10 @@ test("Issue #40 · guardar horario con cero días seleccionados no lanza error",
   const resp = await scheduleResp;
   expect(resp.ok(), await resp.text()).toBeTruthy();
 
-  // On edit, the dialog stays open and shows an inline success message instead of
-  // closing (issue-157) — no error alert appears.
-  await expect(dlg.getByText("Changes saved successfully.")).toBeVisible({ timeout: 10_000 });
+  // Catalog redesign: on edit the form closes and a notice confirms it on the list — no error.
+  await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toBeVisible({
+    timeout: 10_000,
+  });
 });
 
 // ─── Issue #51 ────────────────────────────────────────────────────────────────

@@ -226,16 +226,17 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await loginAsDemo(page);
     await openNewInvoiceForm(page);
 
-    await openMoreOptions(page);
+    // Redesign: the date is a header line ("Today · date · Change"); the field only appears once
+    // the user chooses to change it.
     const dateField = page.locator("#billing-issue-date");
-    await expect(dateField).toBeDisabled();
+    await expect(dateField).toHaveCount(0);
+    await expect(page.getByTestId("billing-issue-date-label")).toBeVisible();
+    await page.getByTestId("billing-issue-date-open").click();
+    await expect(dateField).toBeEnabled();
     // Issue #181: the legend copy was shortened.
     await expect(
       page.getByText(/30 days in the past or 5 days in the future/),
     ).toBeVisible();
-
-    await page.getByLabel("Edit the issue date").check();
-    await expect(dateField).toBeEnabled();
 
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();

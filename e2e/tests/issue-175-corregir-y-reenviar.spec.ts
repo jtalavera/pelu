@@ -164,9 +164,9 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
 
     // Correction form — prefilled from the rejected invoice; fix the unit price.
-    const form = page.getByRole("dialog", { name: "Correct and resend" });
-    // Issue #186 · AC4 — the correction form matches the ficha-de-servicio detail modal size.
-    await expect(form).toHaveClass(/max-w-4xl/);
+    const form = page.getByRole("dialog", { name: /^Correct and resend/ });
+    // Issue #186 · AC4 — the correction form matches the ficha-de-servicio detail dialog size (max-w-xl after the redesign).
+    await expect(form).toHaveClass(/max-w-xl/);
     // Issue #190 — the invoice number is in the title, and the emission date shows read-only.
     await expect(form.getByRole("heading", { name: /Correct and resend — Invoice #\d+/ })).toBeVisible();
     await expect(form.getByTestId("sifen-correct-resend-emission-date")).toBeVisible();
@@ -217,8 +217,8 @@ test.describe("Issue #175 · SIFEN — corregir y reenviar una factura rechazada
       await expect(voidingRow).toBeVisible();
       await expect(voidingRow.getByText("Cancelled", { exact: true })).toBeVisible();
       await expect(voidingRow.getByText("Pending submission")).toHaveCount(0);
-      // Range | Deadline | Status | Action — deadline is the 2nd column, no countdown once cancelled.
-      await expect(voidingRow.locator("td").nth(1)).toHaveText("—");
+      // No deadline countdown once cancelled.
+      await expect(voidingRow.getByText(/days? left|overdue/i)).toHaveCount(0);
       await expect(voidingRow.getByRole("button", { name: "Submit to SIFEN" })).toHaveCount(0);
     } finally {
       await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);

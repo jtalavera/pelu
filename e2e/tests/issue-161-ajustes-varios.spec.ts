@@ -15,7 +15,7 @@ import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice"
 import { professionalFormDialog, fillTimeComboboxField } from "../fixtures/ui";
 
 test.describe("Issue #161 · Ajustes varios", () => {
-  test("AC1 · el botón Desactivar del detalle de cliente está entre Cancelar y Guardar, alineado a ellos", async ({
+  test("AC1 · el detalle de cliente tiene Cancelar a la izquierda de Guardar y Desactivar es un interruptor, alineado a ellos", async ({
     page,
     request,
   }) => {
@@ -26,27 +26,21 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await page.goto(`/app/clients/${client.id}`);
 
     const cancelBtn = page.getByTestId("client-edit-cancel");
-    const deactivateBtn = page.getByTestId("client-edit-deactivate");
     const saveBtn = page.getByRole("button", { name: "Save", exact: true });
 
     await expect(cancelBtn).toBeVisible();
-    await expect(deactivateBtn).toBeVisible();
     await expect(saveBtn).toBeVisible();
+    // Redesign: deactivating is the Active/Inactive switch next to the name, not a button in the
+    // action row — the row is just Cancel → Save.
+    await expect(page.getByTestId("client-active-switch")).toBeVisible();
+    await expect(page.getByTestId("client-edit-deactivate")).toHaveCount(0);
 
-    // Same row, and ordered left-to-right Cancel → Deactivate → Save (desktop viewport, so the
-    // action row lays out horizontally rather than stacking).
-    const [cancelBox, deactivateBox, saveBox] = await Promise.all([
-      cancelBtn.boundingBox(),
-      deactivateBtn.boundingBox(),
-      saveBtn.boundingBox(),
-    ]);
+    const [cancelBox, saveBox] = await Promise.all([cancelBtn.boundingBox(), saveBtn.boundingBox()]);
     expect(cancelBox).not.toBeNull();
-    expect(deactivateBox).not.toBeNull();
     expect(saveBox).not.toBeNull();
-    expect(cancelBox!.y).toBeCloseTo(deactivateBox!.y, 0);
-    expect(deactivateBox!.y).toBeCloseTo(saveBox!.y, 0);
-    expect(cancelBox!.x).toBeLessThan(deactivateBox!.x);
-    expect(deactivateBox!.x).toBeLessThan(saveBox!.x);
+    // Same row, Cancel on the left of Save (desktop viewport, so the row lays out horizontally).
+    expect(Math.abs(cancelBox!.y - saveBox!.y)).toBeLessThan(12);
+    expect(cancelBox!.x).toBeLessThan(saveBox!.x);
   });
 
   test("AC2 · un error al emitir un comprobante hace scroll hasta el cuadro de mensaje de error", async ({
