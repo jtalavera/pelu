@@ -8,6 +8,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openWeekWithAppointment } from "../fixtures/ui";
 
 // Flowbit rebrand — look & feel from the brand manual (flowbit-website/branding).
 // Palette: teal #0E767E, tinta noche #0A1F33, durazno #F3C6AE, lino #F6F4EF; Nunito (titles) and
@@ -145,7 +146,7 @@ test.describe("Flowbit · identidad de marca", () => {
     expect(apiBaseUrl()).toBeTruthy();
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar?view=week");
+    await openWeekWithAppointment(page, id);
     const block = page.getByTestId(`calendar-appt-${id}`);
     await expect(block).toBeVisible({ timeout: 15_000 });
     const bg = await block.evaluate((el) => getComputedStyle(el).backgroundColor);

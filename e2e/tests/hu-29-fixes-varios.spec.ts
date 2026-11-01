@@ -171,14 +171,14 @@ test.describe("HU-29 · Fixes varios", () => {
 
   // AC8 — table options menu overlays the table (rendered in a portal on document.body).
   test("HU-29 · 8 menú de opciones de tabla se superpone (portal)", async ({ page, request }) => {
-    const token = await loginAsDemoApi(request);
-    const name = `E2E HU29 Kebab ${Date.now()}`;
-    const client = await seedClient(request, token, name);
+    await loginAsDemoApi(request);
     await loginAsDemo(page);
-    await page.goto("/app/clients");
-    // Search by name so the new client is on page 1 regardless of total count (server-side pagination).
-    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name);
-    const trigger = page.getByTestId(`clients-row-${client.id}-trigger`);
+    // Redesign: the clients list uses a switch, so the kebab menu is checked on the stamp rows.
+    await page.goto("/app/settings/fiscal-stamp");
+    const trigger = page
+      .getByTestId("fiscal-stamp-current-section")
+      .getByRole("button", { name: /actions/i })
+      .first();
     await expect(trigger).toBeVisible({ timeout: 20_000 });
     await trigger.click();
 
@@ -195,6 +195,9 @@ test.describe("HU-29 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
     await expect(page.getByTestId("fiscal-stamp-current-section")).toBeVisible({ timeout: 20_000 });
+    // The new-stamp form lives in its own dialog, opened from "+ Add stamp".
+    await expect(page.getByTestId("fiscal-stamp-create-section")).toHaveCount(0);
+    await page.getByTestId("fiscal-stamp-add").click();
     await expect(page.getByTestId("fiscal-stamp-create-section")).toBeVisible();
   });
 
