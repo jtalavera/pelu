@@ -293,6 +293,7 @@ export async function stampRowAction(
   row: import("@playwright/test").Locator,
   action: RegExp,
 ) {
+  await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await row.getByRole("button", { name: /actions|acciones/i }).click();
   await page.getByRole("menuitem", { name: action }).click();
 }

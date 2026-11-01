@@ -91,26 +91,24 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
 
-    await expect(page.getByRole("columnheader", { name: "Stamp no." })).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByRole("columnheader", { name: "Validity start" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Validity end" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "No. from" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "No. to" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Starting invoice no." })).toBeVisible();
-
-    const firstRow = page.locator("tbody tr").first();
-    await expect(firstRow.getByText(active!.stampNumber, { exact: true })).toBeVisible();
+    // Redesign: stamps are rows ("Stamp N · status" + "validity · next number") with a ⋯ menu.
+    const firstRow = page.locator('[data-testid^="fiscal-stamp-row-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 20_000 });
+    await expect(firstRow.getByText(active!.stampNumber)).toBeVisible();
     await expect(firstRow.getByText("Active", { exact: true })).toBeVisible();
 
     const inactiveRow = page.getByTestId(`fiscal-stamp-row-${inactive.id}`);
-    await expect(inactiveRow.getByRole("button", { name: "Activate", exact: true })).toBeEnabled();
-    await expect(inactiveRow.getByRole("button", { name: "Deactivate" })).toBeDisabled();
+    await expect(inactiveRow).toContainText("Inactive");
+    await inactiveRow.getByRole("button", { name: /actions/i }).click();
+    await expect(page.getByRole("menuitem", { name: "Activate", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Deactivate" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     const activeRow = page.getByTestId(`fiscal-stamp-row-${active!.id}`);
-    await expect(activeRow.getByRole("button", { name: "Activate", exact: true })).toBeDisabled();
-    await expect(activeRow.getByRole("button", { name: "Deactivate" })).toBeEnabled();
+    await activeRow.getByRole("button", { name: /actions/i }).click();
+    await expect(page.getByRole("menuitem", { name: "Deactivate" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Activate", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
   });
 
   test("AC5 · Borrar solo aparece y funciona para timbrados sin facturas asociadas", async ({
@@ -170,11 +168,16 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     const usedRow = page.getByTestId(`fiscal-stamp-row-${usedStamp.id}`);
     await expect(usedRow).toBeVisible({ timeout: 30_000 });
-    await expect(usedRow.getByRole("button", { name: "Delete" })).toHaveCount(0);
+    await usedRow.getByRole("button", { name: /actions/i }).click();
+    await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     const freeRow = page.getByTestId(`fiscal-stamp-row-${freeStamp.id}`);
     await expect(freeRow).toBeVisible();
-    await freeRow.getByRole("button", { name: "Delete" }).click();
+    // Centre the row so its menu opens fully inside the viewport.
+    await freeRow.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await freeRow.getByRole("button", { name: /actions/i }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).dispatchEvent("click");
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
 
     await expect(page.getByTestId(`fiscal-stamp-row-${freeStamp.id}`)).toHaveCount(0);
