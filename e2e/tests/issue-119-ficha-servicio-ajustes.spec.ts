@@ -8,7 +8,14 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { setControlledInputValue } from "../fixtures/ui";
-import { goToInvoiceHistory } from "../fixtures/billing";
+import {
+  expandFichaLine,
+  openFichaDialog,
+  openNewFichaDialog,
+  pickFichaClient,
+  pickLineProfessional,
+  pickLineService,
+} from "../fixtures/fichas";
 
 test.describe.configure({ mode: "serial" });
 
@@ -55,29 +62,6 @@ async function createServiceRecordApi(
   });
 }
 
-async function pickLineService(page: Page, idx: number, serviceFullName: string): Promise<void> {
-  await page.locator(`#service-record-line-svc-${idx}`).fill(serviceFullName.slice(0, 12));
-  await page.getByRole("button", { name: serviceFullName, exact: false }).click();
-}
-
-async function pickLineProfessional(page: Page, idx: number, fullName: string): Promise<void> {
-  const input = page.locator(`#service-record-line-prof-${idx}`);
-  await input.click();
-  await input.fill(fullName.slice(0, 10));
-  await page
-    .locator(`#service-record-line-prof-${idx}-listbox`)
-    .getByRole("button", { name: fullName, exact: false })
-    .click();
-}
-
-/** Opens the History tab and filters by free-text query; returns the matching row. */
-async function findHistoryRow(page: Page, query: string) {
-  await page.goto("/app/service-records");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#service-record-history-text-filter").fill(query);
-  return page.locator("tbody tr").filter({ hasText: query }).first();
-}
-
 test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () => {
   let seed: SeededSalon;
   let secondProfessional: { id: number; fullName: string };
@@ -96,18 +80,16 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     const client = await seedClient(request, token, `E2E119 Client ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
+    const dlg = await openNewFichaDialog(page);
 
-    const submit = page.getByTestId("service-record-submit");
+    const submit = dlg.getByTestId("service-record-submit");
     await expect(submit).toBeDisabled();
 
-    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
     await expect(submit).toBeDisabled();
 
-    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
-    await page.getByRole("button", { name: client.fullName, exact: false }).click();
+    await pickFichaClient(page, dlg, client.fullName);
     await expect(submit).toBeEnabled();
   });
 
@@ -115,27 +97,24 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
+    const dlg = await openNewFichaDialog(page);
 
-    const clientName = `E2E119 Qty ${Date.now()}`;
-    await page.getByLabel("Search or select client").fill(clientName.slice(0, 8));
-
-    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
 
     // Defaults from the picked service: unit price = service price, quantity = 1.
     await expect(page.locator("#service-record-line-price-0")).toHaveValue("50.000");
     await expect(page.locator("#service-record-line-qty-0")).toHaveValue("1");
-    await expect(page.getByText(/^50\.000$/)).toBeVisible();
+    const total = dlg.getByTestId("service-record-total");
+    await expect(total).toContainText("50.000");
 
     // Editing quantity recomputes the total.
     await setControlledInputValue(page.locator("#service-record-line-qty-0"), "3");
-    await expect(page.getByText(/^150\.000$/)).toBeVisible();
+    await expect(total).toContainText("150.000");
 
     // Editing the unit price directly also recomputes the total.
     await setControlledInputValue(page.locator("#service-record-line-price-0"), "40000");
-    await expect(page.getByText(/^120\.000$/)).toBeVisible();
+    await expect(total).toContainText("120.000");
   });
 
   test("AC3+AC4+AC5 · al guardar una ficha nueva, la pantalla sube arriba, se limpia y muestra el nuevo mensaje", async ({
@@ -146,31 +125,25 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     const client = await seedClient(request, token, `E2E119 Reset ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
+    const dlg = await openNewFichaDialog(page);
 
-    // No manual "+ New record" button anymore (issue #119 AC5).
-    await expect(page.getByRole("button", { name: "+ New record" })).toHaveCount(0);
-
-    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
-    await page.getByRole("button", { name: client.fullName, exact: false }).click();
-    await page.getByRole("button", { name: "Add service" }).click();
+    await pickFichaClient(page, dlg, client.fullName);
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
+    await dlg.getByTestId("service-record-submit").click();
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.getByRole("button", { name: "Save record" }).click();
-
-    await expect(
-      page.getByRole("alert").filter({
-        hasText:
-          "Service record created successfully. You can check it on the Dashboard or in the Service record history.",
-      }),
-    ).toBeVisible({ timeout: 15_000 });
-
+    // Redesign: saving closes the dialog and a toast confirms it on the list.
+    await expect(page.getByTestId("service-records-toast")).toContainText("Record saved.", {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(10);
-    await expect(page.getByLabel("Search or select client")).toHaveValue("");
-    // Issue #133: the reset "New record" form shows no blank line, only "Add service".
-    await expect(page.locator('[id^="service-record-line-svc-"]')).toHaveCount(0);
+
+    // Reopening the dialog starts from a clean form: no client and a single blank service line.
+    await page.getByTestId("service-records-new").click();
+    await expect(page.getByRole("dialog").getByLabel("Search or select client")).toHaveValue("");
+    await expect(page.locator('[id^="service-record-line-svc-"]')).toHaveCount(1);
+    await expect(page.locator("#service-record-line-svc-0")).toHaveValue("");
   });
 
   test("AC6 · el detalle de una ficha muestra Cantidad y Precio unitario editables en el mismo orden", async ({
@@ -185,27 +158,21 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     });
 
     await loginAsDemo(page);
-    const row = await findHistoryRow(page, client.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-
-    // The underlying page (History table row, hidden "New record" tab) stays mounted behind
-    // the modal, so scope to the dialog to avoid duplicate-match ambiguity on shared line ids.
-    const dialog = page.getByRole("dialog", { name: "Service record detail" });
+    const dialog = await openFichaDialog(page, client.fullName);
     const priceInput = dialog.locator("#service-record-line-price-0");
     const qtyInput = dialog.locator("#service-record-line-qty-0");
     await expect(priceInput).toHaveValue("50.000");
     await expect(qtyInput).toHaveValue("2");
 
-    // Column order left-to-right: Service, Professional, Unit price, Quantity.
+    // Layout: the service spans the full width and, below it, Professional · Qty · Price in a row.
     const svcBox = await dialog.locator("#service-record-line-svc-0").boundingBox();
     const profBox = await dialog.locator("#service-record-line-prof-0").boundingBox();
     const priceBox = await priceInput.boundingBox();
     const qtyBox = await qtyInput.boundingBox();
     expect(svcBox && profBox && priceBox && qtyBox).toBeTruthy();
-    expect(svcBox!.x).toBeLessThan(profBox!.x);
-    expect(profBox!.x).toBeLessThanOrEqual(priceBox!.x);
-    expect(priceBox!.x).toBeLessThanOrEqual(qtyBox!.x);
+    expect(svcBox!.y).toBeLessThan(profBox!.y);
+    expect(profBox!.x).toBeLessThanOrEqual(qtyBox!.x);
+    expect(qtyBox!.x).toBeLessThanOrEqual(priceBox!.x);
   });
 
   test("AC7 · quitar un servicio de una ficha abierta y guardar persiste el cambio", async ({
@@ -223,64 +190,40 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
     });
 
     await loginAsDemo(page);
-    const row = await findHistoryRow(page, client.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    // The underlying page (History table row, hidden "New record" tab) stays mounted behind
-    // the modal, so scope to the dialog to avoid duplicate-match ambiguity.
-    const dialog = page.getByRole("dialog", { name: "Service record detail" });
-    await expect(dialog.getByText(/^100\.000$/)).toBeVisible();
+    const dialog = await openFichaDialog(page, client.fullName);
+    await expect(dialog.getByTestId("service-record-total")).toContainText("100.000");
 
-    await dialog.getByRole("button", { name: "Remove" }).first().click();
-    await dialog.getByRole("button", { name: "Save changes" }).click();
-    await expect(dialog.getByRole("alert").filter({ hasText: "Changes saved." })).toBeVisible({
+    await expandFichaLine(dialog, 0);
+    await dialog.getByTestId("service-record-line-remove").click();
+    await dialog.getByTestId("service-record-submit").click();
+    await expect(page.getByTestId("service-records-toast")).toContainText("Changes saved.", {
       timeout: 15_000,
     });
-    await expect(dialog.getByText(/^50\.000$/)).toBeVisible();
 
     // Reload fresh from the server and confirm the removed line really is gone.
-    const row2 = await findHistoryRow(page, client.fullName);
-    await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.click();
-    await expect(dialog.getByText(/^50\.000$/)).toBeVisible({ timeout: 15_000 });
-    await expect(dialog.locator('[id^="service-record-line-svc-"]')).toHaveCount(1);
+    const dialog2 = await openFichaDialog(page, client.fullName);
+    await expect(dialog2.getByTestId("service-record-total")).toContainText("50.000", {
+      timeout: 15_000,
+    });
+    await expect(dialog2.getByTestId("service-record-line")).toHaveCount(1);
   });
 
-  test("AC7 · cambiar el cliente de una ficha abierta y guardar persiste el cambio", async ({
+  // Redesign: an existing ficha keeps its client (one read-only "CLIENTE · name" line); the old
+  // "change client" action was removed on purpose, so the spec now guards that.
+  test("AC7 · una ficha existente muestra su cliente y ya no permite cambiarlo", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    const originalClient = await seedClient(request, token, `E2E119 OrigClient ${Date.now()}`);
-    const newClient = await seedClient(request, token, `E2E119 NewClient ${Date.now()}`);
+    const client = await seedClient(request, token, `E2E119 OrigClient ${Date.now()}`);
     await createServiceRecordApi(request, token, {
-      clientId: originalClient.id,
+      clientId: client.id,
       lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId }],
     });
 
     await loginAsDemo(page);
-    const row = await findHistoryRow(page, originalClient.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    // The underlying page (History table row, hidden "New record" tab) stays mounted behind
-    // the modal, so scope to the dialog to avoid duplicate-match ambiguity.
-    const dialog = page.getByRole("dialog", { name: "Service record detail" });
-
-    await dialog.getByLabel("Search or select client").fill(newClient.fullName.slice(0, 8));
-    // The suggestion dropdown is rendered in a portal outside the dialog's DOM subtree.
-    await page.getByRole("button", { name: newClient.fullName, exact: false }).click();
-    await dialog.getByRole("button", { name: "Save changes" }).click();
-    await expect(dialog.getByRole("alert").filter({ hasText: "Changes saved." })).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Reload fresh from the server and confirm the new client really persisted.
-    const row2 = await findHistoryRow(page, newClient.fullName);
-    await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.click();
-    await expect(dialog.getByText(newClient.fullName)).toBeVisible({ timeout: 15_000 });
-
-    const oldClientGone = await findHistoryRow(page, originalClient.fullName);
-    await expect(oldClientGone).toHaveCount(0);
+    const dialog = await openFichaDialog(page, client.fullName);
+    await expect(dialog).toContainText(client.fullName.toUpperCase());
+    await expect(dialog.getByLabel("Search or select client")).toHaveCount(0);
   });
 });
