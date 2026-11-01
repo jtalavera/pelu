@@ -10,6 +10,7 @@ import {
 } from "../fixtures/api";
 import { loginAs, loginAsDemo } from "../fixtures/auth";
 import { openDashboardMore } from "../fixtures/dashboard";
+import { openWeekWithAppointment } from "../fixtures/ui";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
 
 /**
@@ -66,6 +67,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     await page.getByRole("button", { name: "+ New client" }).first().click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(name);
+    await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Day").selectOption("15");
     await dlg.getByLabel("Month").selectOption({ label: "August" });
     // AC9: fixed options.
@@ -90,23 +92,23 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
 
     await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name);
     await page.getByText(name.toUpperCase(), { exact: true }).first().click();
-    // AC11 + AC4 (display).
-    await expect(page.getByTestId("client-birthday-display")).toHaveText("Birthday: August 15");
-    await expect(page.getByTestId("client-acquisition-display")).toHaveText(
-      "Found us through: Other (Feria de belleza)",
-    );
+    // AC11 + AC4: the profile section shows what was saved (no year yet).
+    await page.getByTestId("client-section-profile-toggle").click();
+    const profile = page.getByTestId("client-section-profile");
+    await expect(profile.getByLabel("Day")).toHaveValue("15");
+    await expect(profile.getByLabel("Month")).toHaveValue("8");
+    await expect(profile.getByLabel("Year (optional)")).toHaveValue("");
+    await expect(profile.getByLabel("How did they find us?")).toHaveValue("OTRO");
+    await expect(profile.getByLabel("Details (optional)")).toHaveValue("Feria de belleza");
 
-    // Edit: add the year → the age shows up; switching language translates the option.
-    await page.getByLabel("Year (optional)").fill("1990");
+    // Edit: add the year; saving returns to the list.
+    await profile.getByLabel("Year (optional)").fill("1990");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Client updated successfully.")).toBeVisible();
-    await expect(page.getByTestId("client-birthday-display")).toContainText("Birthday: August 15, 1990 · ");
-    await expect(page.getByTestId("client-birthday-display")).toContainText("years old");
-    await page.getByRole("button", { name: "ES", exact: true }).click();
-    await expect(page.getByTestId("client-acquisition-display")).toHaveText(
-      "Nos conoció por: Otro (Feria de belleza)",
-    );
-    await page.getByRole("button", { name: "EN", exact: true }).click();
+    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name);
+    await page.getByText(name.toUpperCase(), { exact: true }).first().click();
+    await page.getByTestId("client-section-profile-toggle").click();
+    await expect(page.getByTestId("client-section-profile").getByLabel("Year (optional)")).toHaveValue("1990");
   });
 
   test("AC2, AC3 · validación de fecha (UI y API) y 29/02 aceptado", async ({ page, request }) => {
@@ -116,6 +118,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(`E2E69 Invalida ${uniq()}`);
     // 31/04 doesn't exist.
+    await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Day").selectOption("31");
     await dlg.getByLabel("Month").selectOption({ label: "April" });
     await dlg.getByRole("button", { name: "Save" }).click();
@@ -214,8 +217,12 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     await expect(page).toHaveURL(new RegExp(`/app/clients/${todayClient.id}$`));
     await expect(page.getByTestId("client-birthday-today")).toHaveText("🎂 Birthday today");
     await page.goto(`/app/clients/${soonClient.id}`);
-    await expect(page.getByTestId("client-birthday-display")).toBeVisible();
+    await expect(page.getByRole("heading", { name: new RegExp(soonClient.fullName, "i") })).toBeVisible();
     await expect(page.getByTestId("client-birthday-today")).toHaveCount(0);
+    await page.getByTestId("client-section-profile-toggle").click();
+    await expect(page.getByTestId("client-section-profile").getByLabel("Day")).toHaveValue(
+      String(inThree.day),
+    );
   });
 
   test("AC5 · sin cumpleaños próximos: mensaje vacío", async ({ page, request }) => {
@@ -271,7 +278,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
 
     // Admin.
     await loginAsDemo(page);
-    await page.goto("/app/calendar?view=week");
+    await openWeekWithAppointment(page, withBirthday.id);
     const badge = page.getByTestId(`birthday-badge-${withBirthday.id}`);
     await expect(badge).toBeVisible();
     await expect(badge).toHaveAttribute("aria-label", "Client's birthday");
@@ -281,7 +288,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     await page.context().clearCookies();
     await page.evaluate(() => sessionStorage.clear());
     await loginAs(page, pro.email, PASSWORD);
-    await page.goto("/app/calendar?view=week");
+    await openWeekWithAppointment(page, withBirthday.id);
     await expect(page.getByTestId(`birthday-badge-${withBirthday.id}`)).toBeVisible();
     await page.getByTestId(`calendar-appt-${withBirthday.id}`).click();
     const detail = page.getByRole("dialog", { name: "Appointment detail" });

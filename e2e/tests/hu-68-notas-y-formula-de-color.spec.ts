@@ -11,7 +11,7 @@ import {
 } from "../fixtures/api";
 import { DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
-import { pickSearchableOption } from "../fixtures/ui";
+import { openWeekWithAppointment, pickSearchableOption } from "../fixtures/ui";
 
 /**
  * HU-68 · Notas y fórmula de color de la cliente ("Ficha técnica"): editable by the admin from the
@@ -189,8 +189,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     ).find((p) => p.id === pro.id)!.fullName;
 
     await loginAs(page, pro.email, PASSWORD);
-    await page.goto("/app/calendar?view=week");
-    await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
+    await openWeekWithAppointment(page, ownAppt.id);
 
     // AC6: own appointment → "Technical sheet".
     await page.getByTestId(`calendar-appt-${ownAppt.id}`).click();
@@ -372,6 +371,10 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
 
     // The Agenda opens on the Day view: the seeded turno may be on another day of the week.
     await page.getByTestId("calendar-view-week").click();
+    for (let i = 0; i < 3 && !(await page.getByTestId(`calendar-appt-${appt.id}`).isVisible()); i++) {
+      await page.getByRole("button", { name: "Next week" }).click();
+      await page.waitForTimeout(500);
+    }
     await page.getByTestId(`calendar-appt-${appt.id}`).click();
     await page.getByTestId("calendar-more-actions").click();
     await page.getByRole("button", { name: "Technical sheet", exact: true }).click();

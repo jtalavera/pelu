@@ -3303,7 +3303,7 @@
       },
       "clientDetail": {
         "header": { "title": "Encabezado del cliente", "content": "Muestra el nombre del cliente, cantidad de visitas y un botón para volver a la lista." },
-        "tabs": { "title": "Pestañas de información", "content": "Datos para editar contacto, datos fiscales y perfil; Resumen con los últimos servicios y productos; Ficha técnica con notas y fórmula de color; y los Turnos y Comprobantes de la cliente." },
+        "tabs": { "title": "Pestañas de información", "content": "Datos para editar contacto, datos fiscales y perfil; los Turnos y Comprobantes de la cliente; Ficha técnica con notas y fórmula de color; e Historial con sus visitas, gasto y servicios habituales." },
         "editInfo": { "title": "Editar datos del cliente", "content": "Actualizá la información de contacto del cliente aquí y hacé clic en Guardar para confirmar los cambios." },
         "status": { "title": "Activar / desactivar", "content": "Desactivá un cliente para ocultarlo de las reservas, o reactivalo cuando vuelva." }
       },

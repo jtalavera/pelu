@@ -3303,7 +3303,7 @@
       },
       "clientDetail": {
         "header": { "title": "Client header", "content": "Shows the client's name, visit count, and a back button to return to the full list." },
-        "tabs": { "title": "Info tabs", "content": "Details to edit contact, tax and profile data; Summary with the latest services and products; Technical sheet with notes and color formula; and the client's Appointments and Invoices." },
+        "tabs": { "title": "Info tabs", "content": "Details to edit contact, tax and profile data; the client's Appointments and Invoices; Technical sheet with notes and color formula; and History with their visits, spending and usual services." },
         "editInfo": { "title": "Edit client info", "content": "Update the client's contact details here and click Save to confirm the changes." },
         "status": { "title": "Activate / deactivate", "content": "Deactivate a client to hide them from booking, or reactivate them when they return." }
       },

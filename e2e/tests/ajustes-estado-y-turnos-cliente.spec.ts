@@ -113,39 +113,14 @@ test.describe("Ajustes · estado de servicio y turnos de la cliente", () => {
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}?tab=appointments`);
 
-    const upcoming = page.getByTestId("client-appts-upcoming");
-    const previous = page.getByTestId("client-appts-past");
-    await expect(upcoming.getByRole("heading", { name: /Upcoming\s*1/ })).toBeVisible();
-    await expect(previous.getByRole("heading", { name: /Past\s*1/ })).toBeVisible();
-
-    const upcomingItem = upcoming.getByTestId("client-appt-item");
-    const pastItem = previous.getByTestId("client-appt-item");
-    await expect(upcomingItem).toHaveCount(1);
-    await expect(upcomingItem).toHaveAttribute("data-variant", "upcoming");
-    await expect(upcomingItem).toContainText(salon.serviceFullName);
+    // Redesign: one compact list — the next appointment is highlighted, past ones follow as rows.
+    const next = page.getByTestId("client-next-appointment");
+    const pastItem = page.getByTestId("client-appointment-item");
+    await expect(next).toHaveCount(1);
+    await expect(next).toContainText(salon.serviceFullName);
     await expect(pastItem).toHaveCount(1);
-    await expect(pastItem).toHaveAttribute("data-variant", "past");
     await expect(pastItem).toContainText("PAST SERVICE");
-
-    const style = (el: Element) => {
-      const cs = getComputedStyle(el);
-      return {
-        bg: cs.backgroundColor,
-        accent: cs.borderLeftColor,
-        accentWidth: parseFloat(cs.borderLeftWidth),
-      };
-    };
-    const up = await upcomingItem.evaluate(style);
-    const pa = await pastItem.evaluate(style);
-    expect(up.accentWidth).toBeGreaterThanOrEqual(4);
-    expect(pa.accentWidth).toBeGreaterThanOrEqual(4);
-    expect(up.bg).not.toBe(pa.bg);
-    expect(up.accent).not.toBe(pa.accent);
-
-    // The two section headings use different colors too.
-    const headColor = (el: Element) => getComputedStyle(el).color;
-    const upHead = await upcoming.getByRole("heading").evaluate(headColor);
-    const paHead = await previous.getByRole("heading").evaluate(headColor);
-    expect(upHead).not.toBe(paHead);
+    const bg = (el: Element) => getComputedStyle(el).backgroundColor;
+    expect(await next.evaluate(bg)).not.toBe(await pastItem.evaluate(bg));
   });
 });

@@ -3,13 +3,14 @@ import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 
 /**
- * HU-70 · Ficha de la cliente organizada en pestañas: compact header, always-visible stats strip
- * and five tabs (Details · Summary · Technical sheet · Appointments · Invoices), Details by
- * default, active tab in the URL, history loaded only when its tab opens.
+ * HU-70 · Ficha de la cliente organizada en pestañas (rediseño minimalista): encabezado simple
+ * y cinco pestañas (Details · Appointments · Invoices · Technical sheet · History), Details por
+ * defecto, pestaña activa en la URL, historial de turnos/comprobantes cargado solo al abrir su
+ * pestaña. El resumen (visitas, gasto, ticket, servicios) vive ahora en la pestaña History.
  */
 test.describe.configure({ mode: "serial" });
 
-const TABS = ["Details", "Summary", "Technical sheet", "Appointments", "Invoices"];
+const TABS = ["Details", "Appointments", "Invoices", "Technical sheet", /History/];
 
 function uniq(): string {
   return `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -30,44 +31,33 @@ async function seedClient(page: Page) {
 }
 
 test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
-  test("AC1–AC6 · encabezado compacto, indicadores, cinco pestañas en orden y Datos por defecto", async ({
+  test("AC1–AC6 · encabezado simple, cinco pestañas en orden y Datos por defecto", async ({
     page,
   }) => {
     const client = await seedClient(page);
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
 
-    // AC1: visits · birthday (age) · channel on one line.
+    // AC1: compact header — visits on one line.
     const facts = page.getByTestId("client-header-facts");
     await expect(facts).toContainText("0 visits");
-    await expect(facts).toContainText("Birthday: August 15, 1990 · ");
-    await expect(facts).toContainText("Found us through: Instagram");
-    const factsBox = await facts.boundingBox();
-    expect(factsBox!.height).toBeLessThan(40);
-
-    // AC2/AC3: four stats in one row on desktop, above the tabs.
-    const stats = ["usual", "last-visit", "spent", "average"].map((k) =>
-      page.getByTestId(`client-summary-${k}`),
-    );
-    const ys = await Promise.all(stats.map(async (s) => (await s.boundingBox())!.y));
-    expect(new Set(ys.map(Math.round)).size).toBe(1);
-    const tablistBox = await page.getByRole("tablist").boundingBox();
-    expect(ys[0]).toBeLessThan(tablistBox!.y);
+    expect((await facts.boundingBox())!.height).toBeLessThan(40);
 
     // AC4/AC5: order and default.
     await expect(page.getByRole("tab")).toHaveText(TABS);
     await expect(page.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
 
-    // AC6: three titled blocks with their fields.
-    const contact = page.getByRole("region", { name: "Contact" });
-    await expect(contact.getByLabel("Full name")).toBeVisible();
-    await expect(contact.getByLabel("Phone")).toBeVisible();
-    await expect(contact.getByLabel("Email")).toBeVisible();
-    const fiscal = page.getByRole("region", { name: "Tax details" });
+    // AC6: contact always visible; tax details and profile fold away and carry their fields.
+    await expect(page.locator("#detail-fullname")).toBeVisible();
+    await expect(page.locator("#detail-phone")).toBeVisible();
+    await expect(page.locator("#detail-email")).toBeVisible();
+    await page.getByTestId("client-section-fiscal-toggle").click();
+    const fiscal = page.getByTestId("client-section-fiscal");
     await expect(fiscal.getByLabel("Document type")).toBeVisible();
     await expect(fiscal.locator("#detail-address")).toBeVisible();
     await expect(fiscal.locator("#detail-locality")).toBeVisible();
-    const profile = page.getByRole("region", { name: "Profile" });
+    await page.getByTestId("client-section-profile-toggle").click();
+    const profile = page.getByTestId("client-section-profile");
     await expect(profile.getByLabel("Day")).toHaveValue("15");
     await expect(profile.getByLabel("How did they find us?")).toHaveValue("INSTAGRAM");
     // Side by side, the channel select lines up with the day/month/year inputs (not their labels).
@@ -76,10 +66,10 @@ test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
     expect(Math.abs(channelBox.y - dayBox.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(channelBox.height - dayBox.height)).toBeLessThanOrEqual(1);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
-    await expect(page.getByTestId("client-edit-deactivate")).toBeVisible();
+    await expect(page.getByTestId("client-active-switch")).toBeVisible();
   });
 
-  test("AC2, AC7–AC10, AC13 · contenido de cada pestaña; indicadores siempre visibles; turnos y comprobantes se cargan al abrir su pestaña", async ({
+  test("AC7–AC10, AC13 · contenido de cada pestaña; turnos y comprobantes se cargan al abrir su pestaña", async ({
     page,
   }) => {
     const client = await seedClient(page);
@@ -93,32 +83,26 @@ test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
     await loginAsDemo(page);
     historyRequests.length = 0;
     await page.goto(`/app/clients/${client.id}`);
-    await expect(page.getByTestId("client-summary-usual")).toBeVisible();
+    await expect(page.locator("#detail-fullname")).toBeVisible();
     await page.waitForLoadState("networkidle");
     // AC13: nothing about appointments / invoices on open.
     expect(historyRequests).toEqual([]);
 
-    // AC7
-    await page.getByRole("tab", { name: "Summary" }).click();
-    await expect(page.getByTestId("client-summary-services")).toContainText("No services performed yet");
-    await expect(page.getByTestId("client-summary-products")).toContainText("No products purchased yet");
-    await expect(page.getByTestId("client-summary-usual")).toBeVisible();
+    // AC7: History (summary of the client).
+    await page.getByRole("tab", { name: /History/ }).click();
+    await expect(page.getByTestId("client-radiography-empty")).toBeVisible();
+    await expect(page.getByTestId("client-radiography-visits")).toBeVisible();
     // AC8
     await page.getByRole("tab", { name: "Technical sheet" }).click();
     await expect(page.getByTestId("client-technical-sheet").getByLabel("Notes")).toBeVisible();
-    await expect(page.getByTestId("client-summary-usual")).toBeVisible();
     expect(historyRequests).toEqual([]);
     // AC9 (+AC13: now they load)
     await page.getByRole("tab", { name: "Appointments" }).click();
-    await expect(page.getByText("Upcoming", { exact: true })).toBeVisible();
-    await expect(page.getByText("Past", { exact: true })).toBeVisible();
-    await expect(page.getByText("No appointments on record.", { exact: true })).toHaveCount(2);
+    await expect(page.getByTestId("client-appointments-empty")).toBeVisible();
     expect(historyRequests.some((p) => p.startsWith("/api/appointments"))).toBe(true);
-    await expect(page.getByTestId("client-summary-usual")).toBeVisible();
     // AC10
     await page.getByRole("tab", { name: "Invoices" }).click();
-    await expect(page.getByText("No invoices on record.", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("client-summary-usual")).toBeVisible();
+    await expect(page.getByTestId("client-invoices-empty")).toBeVisible();
   });
 
   test("AC11 · la pestaña queda en la URL: recarga, Atrás y valor desconocido", async ({ page }) => {
@@ -145,7 +129,7 @@ test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
     await expect(page.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
   });
 
-  test("AC3, AC12, AC14 · celular en tema oscuro: indicadores 2×2, pestañas desplazables, sin scroll de página", async ({
+  test("AC12, AC14 · celular en tema oscuro: pestañas desplazables, sin scroll de página", async ({
     page,
   }) => {
     const client = await seedClient(page);
@@ -155,14 +139,7 @@ test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
     // nav drawer, so switch on desktop first, then shrink to a phone.
     await page.getByRole("button", { name: "Switch to dark mode" }).click();
     await page.setViewportSize({ width: 375, height: 800 });
-
-    const stats = ["usual", "last-visit", "spent", "average"].map((k) =>
-      page.getByTestId(`client-summary-${k}`),
-    );
-    const boxes = await Promise.all(stats.map(async (s) => (await s.boundingBox())!));
-    expect(Math.round(boxes[0].y)).toBe(Math.round(boxes[1].y));
-    expect(Math.round(boxes[2].y)).toBe(Math.round(boxes[3].y));
-    expect(boxes[2].y).toBeGreaterThan(boxes[0].y);
+    await expect(page.locator("#detail-fullname")).toBeVisible();
 
     // Page never scrolls sideways; the tab bar scrolls inside itself.
     const overflow = await page.evaluate(
@@ -174,19 +151,19 @@ test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
     const invoicesTab = page.getByRole("tab", { name: "Invoices" });
     await invoicesTab.scrollIntoViewIfNeeded();
     await invoicesTab.click();
-    await expect(page.getByText("No invoices on record.", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("client-invoices-empty")).toBeVisible();
     // Touch target ≥ 44 px.
-    for (const name of TABS) {
+    for (const name of ["Details", "Appointments", "Invoices", "Technical sheet", /History/]) {
       expect((await page.getByRole("tab", { name }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
 
-    // AC14: dark theme actually applied to the stat cards.
-    const bg = await stats[0].evaluate((el) => getComputedStyle(el).backgroundColor);
+    // AC14: dark theme actually applied.
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     const [r, g, b] = bg.match(/\d+/g)!.map(Number);
     expect(r + g + b).toBeLessThan(200);
   });
 
-  test("AC15 · el tour guiado describe las pestañas nuevas", async ({ page }) => {
+  test("AC15 · el tour guiado describe las pestañas", async ({ page }) => {
     const client = await seedClient(page);
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);

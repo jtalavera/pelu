@@ -123,7 +123,7 @@ async function seedCatalogItem(
 }
 
 test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
-  test("AC1, AC4, AC6, AC7, AC9, AC11 · cliente sin historial muestra el resumen con estados vacíos", async ({
+  test("AC1, AC4, AC6, AC7, AC9, AC11 · cliente sin historial muestra el Historial con estados vacíos", async ({
     page,
     request,
   }) => {
@@ -131,27 +131,13 @@ test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
     const client = await seedClient(request, token, `E2E67 Vacia ${Date.now()}`);
 
     await loginAsDemo(page);
-    // HU-70: stats strip always visible; the lists live in the "Summary" tab.
-    await page.goto(`/app/clients/${client.id}?tab=summary`);
-    const summary = page.getByTestId("client-summary");
-    await expect(summary).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("client-summary-usual")).toContainText(
-      "No services in the last 12 months",
-    );
-    await expect(page.getByTestId("client-summary-last-visit")).toContainText("No visits");
-    await expect(page.getByTestId("client-summary-spent")).toContainText("—");
-    await expect(page.getByTestId("client-summary-average")).toContainText("—");
-    await expect(page.getByTestId("client-summary-services")).toContainText(
-      "No services performed yet",
-    );
-    await expect(page.getByTestId("client-summary-products")).toContainText(
-      "No products purchased yet",
-    );
-    // The stats strip sits above the tabs.
-    const summaryBox = await summary.boundingBox();
-    const tabsBox = await page.getByRole("tab", { name: "Details" }).boundingBox();
-    expect(summaryBox && tabsBox && summaryBox.y < tabsBox.y).toBeTruthy();
+    // Redesign: the summary lives in the "History" tab of the profile.
+    await page.goto(`/app/clients/${client.id}?tab=radiography`);
+    await expect(page.getByTestId("client-radiography")).toBeVisible();
+    await expect(page.getByTestId("client-radiography-visits")).toContainText("0");
+    await expect(page.getByTestId("client-radiography-spent")).toContainText("Gs. 0");
+    await expect(page.getByTestId("client-radiography-ticket")).toContainText("Gs. 0");
+    await expect(page.getByTestId("client-radiography-empty")).toBeVisible();
   });
 
   test("AC1 · el resumen se ve en celular y en tema oscuro sin scroll horizontal de página", async ({
@@ -163,8 +149,8 @@ test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.addInitScript(() => localStorage.setItem("femme-theme", "dark"));
     await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}`);
-    await expect(page.getByTestId("client-summary")).toBeVisible();
+    await page.goto(`/app/clients/${client.id}?tab=radiography`);
+    await expect(page.getByTestId("client-radiography")).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
@@ -229,44 +215,39 @@ test.describe("HU-67 · Resumen e historial en la ficha de la cliente", () => {
     expect(deact.ok(), await deact.text()).toBeTruthy();
 
     await loginAsDemo(page);
-    await page.goto(`/app/clients/${client.id}?tab=summary`);
+    await page.goto(`/app/clients/${client.id}?tab=radiography`);
 
-    // AC2 + AC3: both tied professionals, alphabetical, with their counts; Charlie excluded.
-    const usual = page.getByTestId("client-summary-usual").getByRole("listitem");
-    await expect(usual).toHaveCount(2);
-    await expect(usual.nth(0)).toHaveText(`${alpha.fullName} · 1 service`);
-    await expect(usual.nth(1)).toHaveText(`${bravo.fullName} (inactive) · 1 service`);
-    await expect(page.getByTestId("client-summary-usual")).not.toContainText(charlie.fullName);
+    // AC2 + AC3: professionals ranking by services performed (closed records only).
+    const pros = page.getByTestId("client-radiography-professionals");
+    await expect(pros).toContainText(alpha.fullName);
+    await expect(pros).toContainText(bravo.fullName);
 
-    // AC6: last visit is today's record, not "No visits".
-    await expect(page.getByTestId("client-summary-last-visit")).not.toContainText("No visits");
-
-    // AC7: only the two in-window CLOSED records.
+    // AC7: spent and average ticket count only the two in-window CLOSED records.
     const spent = r1.totalAmount + r2.totalAmount;
-    await expect(page.getByTestId("client-summary-spent")).toContainText(moneyFmt.format(spent));
-    await expect(page.getByTestId("client-summary-average")).toContainText(
+    await expect(page.getByTestId("client-radiography-spent")).toContainText(moneyFmt.format(spent));
+    await expect(page.getByTestId("client-radiography-ticket")).toContainText(
       moneyFmt.format(Math.round(spent / 2)),
     );
+    await expect(page.getByTestId("client-radiography-visits")).toContainText("3");
 
-    // AC8: last 5 services, newest first, no window (Charlie's old ones still listed), capped at 5.
-    const serviceRows = page.getByTestId("client-summary-services").locator("tbody tr");
-    await expect(serviceRows).toHaveCount(5);
-    await expect(serviceRows.nth(0)).toContainText(cutName);
-    await expect(serviceRows.nth(0)).toContainText(bravo.fullName);
-    await expect(serviceRows.nth(1)).toContainText(colorName);
-    await expect(serviceRows.nth(1)).toContainText(alpha.fullName);
-    await expect(serviceRows.nth(1)).toContainText(moneyFmt.format(250_000));
+    // Most frequent services: the services performed, never the product.
+    const top = page.getByTestId("client-radiography-services");
+    await expect(top).toContainText(cutName);
+    await expect(top).toContainText(colorName);
+    await expect(top).not.toContainText(shampooName);
+
+    // AC8: last services, newest first, capped at 5 (Charlie's old ones still listed).
+    const last = page.getByTestId("client-radiography-last").getByRole("listitem");
+    await expect(last).toHaveCount(5);
+    await expect(last.nth(0)).toContainText(cutName);
+    await expect(last.nth(0)).toContainText(bravo.fullName);
+    await expect(last.nth(1)).toContainText(colorName);
+    await expect(last.nth(1)).toContainText(alpha.fullName);
+    await expect(last.nth(1)).toContainText(moneyFmt.format(250_000));
     for (const i of [2, 3, 4]) {
-      await expect(serviceRows.nth(i)).toContainText(charlie.fullName);
+      await expect(last.nth(i)).toContainText(charlie.fullName);
     }
-
-    // AC10: products with quantity and unit price; the product never shows as a service.
-    const productRows = page.getByTestId("client-summary-products").locator("tbody tr");
-    await expect(productRows).toHaveCount(1);
-    await expect(productRows.nth(0)).toContainText(shampooName);
-    await expect(productRows.nth(0)).toContainText("2");
-    await expect(productRows.nth(0)).toContainText(moneyFmt.format(45_000));
-    await expect(page.getByTestId("client-summary-services")).not.toContainText(shampooName);
+    await expect(page.getByTestId("client-radiography-last")).not.toContainText(shampooName);
   });
 
   test("AC13 · el resumen de una cliente inexistente en el tenant responde 404", async ({

@@ -105,10 +105,9 @@ test.describe("Visitas de la cliente", () => {
     // Client list: visits and last visit columns.
     await page.goto("/app/clients");
     await page.locator("#clients-inline-search").fill(`E2E Visitas Regular ${suffix}`);
-    const row = page.locator("tbody tr").filter({ hasText: regular.fullName });
-    await expect(row).toContainText("2 visits");
-    // "Last visit" shows a date (e.g. "Oct 22, 2026") instead of "—".
-    await expect(row).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{4}/);
+    // Rows show "phone · Last visit <date>" (the visit count lives in the profile header).
+    const row = page.locator('[data-testid^="client-row-"]').filter({ hasText: regular.fullName });
+    await expect(row).toContainText(/Last visit [A-Z][a-z]{2} \d{1,2}, \d{4}/);
 
     // "New this month" = registered since the 1st of this month — visits don't matter. A client
     // registered 40 days ago (always last month or earlier) is excluded.
@@ -125,10 +124,10 @@ test.describe("Visitas de la cliente", () => {
     await page.reload();
     // All three share the run suffix in their names.
     await page.locator("#clients-inline-search").fill(String(suffix));
-    await expect(page.locator("tbody tr").filter({ hasText: old.fullName })).toBeVisible();
-    await page.getByRole("button", { name: "New this month" }).click();
-    await expect(page.locator("tbody tr").filter({ hasText: fresh.fullName })).toBeVisible();
-    await expect(page.locator("tbody tr").filter({ hasText: regular.fullName })).toBeVisible();
-    await expect(page.locator("tbody tr").filter({ hasText: old.fullName })).toHaveCount(0);
+    await expect(page.locator('[data-testid^="client-row-"]').filter({ hasText: old.fullName })).toBeVisible();
+    await page.getByTestId("clients-filter-new").click();
+    await expect(page.locator('[data-testid^="client-row-"]').filter({ hasText: fresh.fullName })).toBeVisible();
+    await expect(page.locator('[data-testid^="client-row-"]').filter({ hasText: regular.fullName })).toBeVisible();
+    await expect(page.locator('[data-testid^="client-row-"]').filter({ hasText: old.fullName })).toHaveCount(0);
   });
 });
